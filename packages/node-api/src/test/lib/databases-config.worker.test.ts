@@ -45,7 +45,7 @@ describe("mobile databases.toml", () => {
     test("reading a config that does not exist yields empty lists", async () => {
         // A fresh install has no file, and that must read as "no databases" rather than fail.
         const result = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
-        expect(result).toEqual({ databases: [], recentDatabaseNames: [] });
+        expect(result).toEqual({ databases: [], recentDatabaseNames: [], lastDatabase: undefined });
     });
 
     test("writing then reading round-trips the databases and recents", async () => {
@@ -56,6 +56,7 @@ describe("mobile databases.toml", () => {
                 { name: "Holiday", description: "Trip photos", path: "holiday" },
             ],
             recentDatabaseNames: ["Holiday", "50-assets"],
+            lastDatabase: undefined,
         }, context);
 
         const result = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
@@ -79,6 +80,7 @@ describe("mobile databases.toml", () => {
                 geocodingKey: "default:geo",
             }],
             recentDatabaseNames: ["Encrypted"],
+            lastDatabase: undefined,
         }, context);
 
         // Parsed as plain TOML, so this asserts the on-disk keys rather than trusting the reader to
@@ -133,6 +135,7 @@ describe("mobile databases.toml", () => {
             configPath: "databases.toml",
             databases: [{ name: "Plain", description: "", path: "plain" }],
             recentDatabaseNames: [],
+            lastDatabase: undefined,
         }, context);
 
         const raw = await fs.readFile(path.join(tempDir, "databases.toml"), "utf8");
@@ -150,11 +153,13 @@ describe("mobile databases.toml", () => {
             configPath: "databases.toml",
             databases: [{ name: "First", description: "", path: "first" }],
             recentDatabaseNames: ["First"],
+            lastDatabase: undefined,
         }, context);
         await writeDatabasesConfigHandler({
             configPath: "databases.toml",
             databases: [{ name: "Second", description: "", path: "second" }],
             recentDatabaseNames: [],
+            lastDatabase: undefined,
         }, context);
 
         const result = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
@@ -165,7 +170,7 @@ describe("mobile databases.toml", () => {
     test("a missing configPath is rejected", async () => {
         await expect(readDatabasesConfigHandler({ configPath: "" }, context))
             .rejects.toThrow("configPath is required");
-        await expect(writeDatabasesConfigHandler({ configPath: "", databases: [], recentDatabaseNames: [] }, context))
+        await expect(writeDatabasesConfigHandler({ configPath: "", databases: [], recentDatabaseNames: [], lastDatabase: undefined }, context))
             .rejects.toThrow("configPath is required");
     });
 });
@@ -261,13 +266,14 @@ describe("buildDatabasesConfigToml", () => {
         const toml = parseToml(buildDatabasesConfigToml(
             [{ name: "Alpha", description: "", path: "alpha", encryptionKey: "alpha-key" }],
             ["Alpha"],
+            undefined,
         )) as any;
         expect(toml.databases).toEqual([{ name: "Alpha", description: "", path: "alpha", encryption_key: "alpha-key" }]);
         expect(toml.recent_database_names).toEqual(["Alpha"]);
     });
 
     test("renders empty lists for a config with nothing in it", () => {
-        const toml = parseToml(buildDatabasesConfigToml([], [])) as any;
+        const toml = parseToml(buildDatabasesConfigToml([], [], undefined)) as any;
         expect(toml.databases).toEqual([]);
         expect(toml.recent_database_names).toEqual([]);
     });
@@ -275,10 +281,56 @@ describe("buildDatabasesConfigToml", () => {
     test("the result is readable by the handler that reads it on device", async () => {
         await fs.writeFile(
             path.join(tempDir, "databases.toml"),
-            buildDatabasesConfigToml([{ name: "Alpha", description: "", path: "alpha" }], ["Alpha"]),
+            buildDatabasesConfigToml([{ name: "Alpha", description: "", path: "alpha" }], ["Alpha"], undefined),
             "utf8");
         const read = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
         expect(read.databases).toEqual([{ name: "Alpha", description: "", path: "alpha" }]);
         expect(read.recentDatabaseNames).toEqual(["Alpha"]);
+    });
+});
+
+//
+// The database the app reopens on start.
+//
+// It lives in this file rather than in the WebView's local storage because local storage is written
+// to disk when the WebView gets round to it and Android kills an app without waiting: a phone that
+// stopped the app a second after a database was opened came back with nothing open.
+//
+describe("the last opened database", () => {
+
+    test("is absent from a file that names none", async () => {
+        await fs.writeFile(
+            path.join(tempDir, "databases.toml"),
+            buildDatabasesConfigToml([{ name: "Alpha", description: "", path: "alpha" }], ["Alpha"], undefined),
+            "utf8");
+
+        const read = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
+
+        expect(read.lastDatabase).toBeUndefined();
+    });
+
+    test("is written and read back as the path it was given", async () => {
+        await writeDatabasesConfigHandler({
+            configPath: "databases.toml",
+            databases: [{ name: "Alpha", description: "", path: "alpha" }],
+            recentDatabaseNames: ["Alpha"],
+            lastDatabase: "alpha",
+        }, context);
+
+        const read = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
+
+        expect(read.lastDatabase).toEqual("alpha");
+    });
+
+    test("survives a test fixture being registered beside it", async () => {
+        // The deploy script rewrites the whole file to add its fixture, so anything it does not
+        // carry through it deletes.
+        const existing = buildDatabasesConfigToml([{ name: "Alpha", description: "", path: "alpha" }], ["Alpha"], "alpha");
+
+        const rewritten = registerDatabaseInConfig(existing, "50-assets");
+
+        await fs.writeFile(path.join(tempDir, "databases.toml"), rewritten, "utf8");
+        const read = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
+        expect(read.lastDatabase).toEqual("alpha");
     });
 });

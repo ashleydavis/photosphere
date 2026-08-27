@@ -29,6 +29,7 @@ export * from "./context/config-context";
 export * from "./lib/clipboard";
 export * from "./lib/bug-report";
 export * from "./lib/auto-import-config";
+export * from "./lib/last-database-config";
 export * from "./lib/recent-arrivals";
 export * from "./lib/test-driver";
 export * from "./lib/test-driver-ws";

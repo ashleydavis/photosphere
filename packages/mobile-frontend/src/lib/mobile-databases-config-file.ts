@@ -38,6 +38,9 @@ interface IReadDatabasesConfigOutputs {
 
     // Recently opened database names, most recent first.
     recentDatabaseNames?: string[];
+
+    // Path of the database to open again on the next start, absent when the file names none.
+    lastDatabase?: string;
 }
 
 //
@@ -74,6 +77,7 @@ export const mobileDatabasesConfigFile: IDatabasesConfigFile = {
         return {
             databases: outputs.databases ?? [],
             recentDatabaseNames: outputs.recentDatabaseNames ?? [],
+            lastDatabase: outputs.lastDatabase,
         };
     },
 
@@ -85,6 +89,7 @@ export const mobileDatabasesConfigFile: IDatabasesConfigFile = {
             configPath: DATABASES_CONFIG_PATH,
             databases: config.databases,
             recentDatabaseNames: config.recentDatabaseNames,
+            lastDatabase: config.lastDatabase,
         });
     },
 };

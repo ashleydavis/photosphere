@@ -102,7 +102,8 @@ describe("record-default-database", () => {
             path.join(tempDir, DATABASES_CONFIG_PATH),
             buildDatabasesConfigToml(
                 [{ name: "Holiday", description: "Trip photos", path: "holiday" }],
-                ["Holiday"]),
+                ["Holiday"],
+                undefined),
             "utf8");
 
         await recordDefaultDatabaseHandler({ databasePath: "photosphere-default" }, context);

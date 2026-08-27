@@ -283,3 +283,46 @@ Two things worth taking from this beyond the fix. A counter on the remainder sho
 | 5 | export | 2.9% | not attempted |
 
 `databaseLookup` opens storage, builds a database object and runs an index query once per photo, to ask whether a hash is already in the database. It scales with database size: 373 ms per file early in a run, 4.3 seconds per file by the end of this one. The orchestrator already tracks the same information in memory in `hashesQueuedForImport`, so this looks removable rather than merely optimisable.
+
+### databaseLookup, attempt 1: ask the database once per run instead of once per file. KEPT.
+
+Every `hash-file` task built its own storage, its own database object and its own collection to ask one question: is this hash already here. A fresh collection has a fresh sort index cache, so each of those questions read the whole hash index again, and the read grew as the database filled: 373 milliseconds a file early in a run, 4.3 seconds a file by the end of one.
+
+The import already holds one collection for the life of the run. It now reads every hash in the database into a map when the run starts and answers from that, and `hash-file` no longer looks at the database at all: it hashes the file and says what the hash is. The question and its answer are unchanged, and so is what gets written.
+
+| | Before | After |
+| --- | --- | --- |
+| databaseLookup | 69.3% of the import | not asked |
+| Wall clock per item, cold | 3.39 s | 1.84 s |
+| Files in a cold pass | 177 in 600 s | 344 in 633 s |
+
+**1.84 times more photos in the same time.** Measured twice on the Pixel 6, at 1.80 and 1.84 seconds an item. Kept.
+
+The fields the task used to fill (`filesAlreadyAdded`, `existingAssetId`, and the three counters that timed the lookup) are gone rather than left reporting false and zero, so nothing can read an answer this task no longer gives.
+
+### The perf harness was switching its own warm pass off
+
+Worth recording because the run said PASS on a pass that measured nothing. A pass ends by force-stopping the app, which leaves the automatic import setting exactly as it was, so the warm pass opened an app that started importing by itself, and the harness's click then turned it off. The warm pass ran for eighteen seconds and reported a library it had never looked at. It now turns the import on only when the app has not already started it.
+
+### The leaderboard after this
+
+| Rank | Stage | Share of a cold pass | Status |
+| --- | --- | --- | --- |
+| 1 | databaseWrite | 52.5% | done three times, back at the top |
+| 2 | display | 17.0% | attempt 1 failed |
+| 3 | probe | 10.2% | not attempted |
+| 4 | hash | 9.7% | done |
+| 5 | thumbnail | 9.2% | done |
+| 6 | photoMetadata | 8.3% | done |
+| 7 | videoMetadata | 7.6% | not attempted |
+| 8 | export | 4.0% | not attempted |
+
+**`databaseWrite` is not merely the largest, it is the one that grows.** The two passes of this run are the same import continued, and they show the cost climbing with the size of the database rather than with the number of photos:
+
+| | Cold pass (database 0 to 300) | Warm pass (300 to 600) |
+| --- | --- | --- |
+| databaseWrite | 332.6 s over 6 batches | 415.7 s over 3 batches |
+| Per batch | 55 s | 138 s |
+| Wall clock per item | 1.84 s | 5.05 s |
+
+A per-item cost that climbs like that does not extrapolate to a two hour import of the whole library however fast the first few hundred go, so this is the next target and everything below it can wait.

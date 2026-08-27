@@ -35,10 +35,16 @@ jest.mock('storage', () => ({
     loadEncryptionKeysFromPem: jest.fn().mockResolvedValue({ options: {} }),
 }));
 
-jest.mock('bdb', () => ({
+// Records the mocked database already holds, which the import loads once at the start of a run to
+// answer whether a hash is already there. A test that wants a photo to look already imported puts
+// its hash in here.
+const mockExistingDatabaseRecords: Array<{ _id: string; hash: string }> = [];
+
+jest.mock("bdb", () => ({
     BsonDatabase: jest.fn().mockImplementation(() => ({
         collection: jest.fn().mockReturnValue({
             insertOne: jest.fn().mockResolvedValue(undefined),
+            getAll: jest.fn().mockImplementation(async () => ({ records: mockExistingDatabaseRecords, next: undefined })),
             sortIndex: jest.fn().mockReturnValue({
                 findByValue: jest.fn().mockResolvedValue([]),
             }),
@@ -241,6 +247,11 @@ describe('importAssetsHandler', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        // The default hash-file result below reports a zero hash, and the default expectation is that
+        // it is already in the database so no upload is queued and the run can finish. That used to
+        // be said by the task result; the import reads it from the database now, so it is said here.
+        mockExistingDatabaseRecords.length = 0;
+        mockExistingDatabaseRecords.push({ _id: "default-existing", hash: Buffer.from(new Uint8Array(3)).toString("hex") });
         mockBackend = new MockBackend();
         // Auto-complete hash-file tasks as "already added" by default so awaitAllTasks resolves.
         mockBackend.setTaskResult('hash-file', (data, taskId) => ({
@@ -248,7 +259,7 @@ describe('importAssetsHandler', () => {
             type: 'hash-file',
             inputs: data,
             status: TaskStatus.Succeeded,
-            outputs: { hash: new Uint8Array(3), hashFromCache: false, filesAlreadyAdded: true } as IHashFileResult,
+            outputs: { hash: new Uint8Array(3), hashFromCache: false } as IHashFileResult,
         }));
         setQueueBackend(mockBackend);
     });
@@ -268,7 +279,6 @@ describe('importAssetsHandler', () => {
             outputs: {
                 hash: new Uint8Array(Buffer.from(hashData.logicalPath.padEnd(6, '0').slice(0, 6), 'utf8')),
                 hashFromCache: false,
-                filesAlreadyAdded: false,
             } as IHashFileResult,
         }));
         mockBackend.setTaskResult('upload-asset', (uploadData: IUploadAssetData, taskId) => ({
@@ -333,7 +343,7 @@ describe('importAssetsHandler', () => {
             type: 'hash-file',
             inputs: hashData,
             status: TaskStatus.Succeeded,
-            outputs: { hash: new Uint8Array(3), hashFromCache: false, filesAlreadyAdded: true } as IHashFileResult,
+            outputs: { hash: new Uint8Array(3), hashFromCache: false } as IHashFileResult,
         }));
         setQueueBackend(secondBackend);
 
@@ -381,7 +391,7 @@ describe('importAssetsHandler', () => {
             type: 'hash-file',
             inputs: { ..._data, assetId },
             status: TaskStatus.Succeeded,
-            outputs: { hash: hashBuffer, hashFromCache: false, filesAlreadyAdded: false } as IHashFileResult,
+            outputs: { hash: hashBuffer, hashFromCache: false } as IHashFileResult,
         }));
 
         const assetData: IAssetDatabaseData = {
@@ -445,7 +455,11 @@ describe('importAssetsHandler', () => {
         const { BsonDatabase } = require('bdb');
         const mockInsertOne = jest.fn().mockResolvedValue(undefined);
         BsonDatabase.mockImplementation(() => ({
-            collection: jest.fn().mockReturnValue({ insertOne: mockInsertOne }),
+            collection: jest.fn().mockReturnValue({
+                insertOne: mockInsertOne,
+                getAll: jest.fn().mockImplementation(async () => ({ records: mockExistingDatabaseRecords, next: undefined })),
+                sortIndex: jest.fn().mockReturnValue({ findByValue: jest.fn().mockResolvedValue([]) }),
+            }),
             flush: jest.fn().mockResolvedValue(undefined),
             commit: jest.fn().mockResolvedValue(undefined),
         }));
@@ -458,7 +472,7 @@ describe('importAssetsHandler', () => {
             type: 'hash-file',
             inputs: { ..._data, assetId },
             status: TaskStatus.Succeeded,
-            outputs: { hash: hashBuffer, hashFromCache: false, filesAlreadyAdded: false } as IHashFileResult,
+            outputs: { hash: hashBuffer, hashFromCache: false } as IHashFileResult,
         }));
 
         const assetRecord = { _id: assetId } as any;
@@ -509,7 +523,7 @@ describe('importAssetsHandler', () => {
             type: 'hash-file',
             inputs: { ..._data, assetId },
             status: TaskStatus.Succeeded,
-            outputs: { hash: hashBuffer, hashFromCache: false, filesAlreadyAdded: false } as IHashFileResult,
+            outputs: { hash: hashBuffer, hashFromCache: false } as IHashFileResult,
         }));
 
         const assetData: IAssetDatabaseData = {
@@ -645,13 +659,10 @@ describe('importAssetsHandler', () => {
         const hashResult: IHashFileResult = {
             hash: new Uint8Array(hashBuffer),
             hashFromCache: false,
-            filesAlreadyAdded: false,
-            existingAssetId: undefined,
             hashMs: 0,
             cacheLookupMs: 0,
             taskMs: 0,
             cacheLoadMs: 0,
-            databaseLookupMs: 0,
             bytesHashed: 0,
         };
 
@@ -701,6 +712,10 @@ describe('importAssetsHandler', () => {
 
     test('sends import-skipped message when hash already in database', async () => {
         const assetId = 'test-asset-uuid';
+
+        // The database already holds this hash. The import loads that once at the start of a run,
+        // rather than asking per file, so this is where a photo becomes already-imported.
+        mockExistingDatabaseRecords.push({ _id: 'existing-asset', hash: Buffer.from('aabbcc', 'hex').toString('hex') });
         mockBackend.setTaskResult('hash-file', (data: IHashFileData, taskId) => ({
             taskId,
             type: 'hash-file',
@@ -709,7 +724,6 @@ describe('importAssetsHandler', () => {
             outputs: {
                 hash: new Uint8Array(Buffer.from('aabbcc', 'hex')),
                 hashFromCache: false,
-                filesAlreadyAdded: true,
             } as IHashFileResult,
         }));
 
@@ -776,8 +790,6 @@ describe('importAssetsHandler', () => {
             outputs: {
                 hash: new Uint8Array(Buffer.from('aabbcc', 'hex')),
                 hashFromCache: false,
-                filesAlreadyAdded: false,
-                existingAssetId: undefined,
             } as IHashFileResult,
         }));
     }
@@ -915,6 +927,9 @@ describe('importAssetsHandler', () => {
     });
 
     test('records the id of an asset the database already held, so it is not looked up again', async () => {
+        // The database holds this hash, which is what makes it already-imported. The import reads
+        // that from the map it builds when the run starts, not from the task result.
+        mockExistingDatabaseRecords.push({ _id: "asset-already-there", hash: Buffer.from("aabbcc", "hex").toString("hex") });
         const hashCache = watchHashCache();
         mockBackend.setTaskResult('hash-file', (hashData: IHashFileData, taskId) => ({
             taskId,
@@ -924,8 +939,6 @@ describe('importAssetsHandler', () => {
             outputs: {
                 hash: new Uint8Array(Buffer.from('aabbcc', 'hex')),
                 hashFromCache: false,
-                filesAlreadyAdded: true,
-                existingAssetId: 'asset-already-there',
             } as IHashFileResult,
         }));
         autoImportScannerPushesOneItem();
@@ -994,6 +1007,9 @@ describe('importAssetsHandler', () => {
     });
 
     test("releases a file the database already held", async () => {
+        // The database holds this hash, which is what makes it already-imported. The import reads
+        // that from the map it builds when the run starts, not from the task result.
+        mockExistingDatabaseRecords.push({ _id: "existing-asset", hash: Buffer.from("aabbcc", "hex").toString("hex") });
         const { release } = autoImportScannerPushesOneItem();
         mockBackend.setTaskResult('hash-file', (hashData: IHashFileData, taskId) => ({
             taskId,
@@ -1003,8 +1019,6 @@ describe('importAssetsHandler', () => {
             outputs: {
                 hash: new Uint8Array(Buffer.from('aabbcc', 'hex')),
                 hashFromCache: false,
-                filesAlreadyAdded: true,
-                existingAssetId: 'asset-already-there',
             } as IHashFileResult,
         }));
 
@@ -1096,6 +1110,7 @@ describe('importAssetsHandler', () => {
         expect(result.imported).toHaveLength(1);
         expect(result.timings.databaseBatches).toBe(1);
     });
+
 
     test("does not save the hash cache while the scanner still has work to hand over", async () => {
         const hashCache = watchHashCache();

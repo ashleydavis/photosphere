@@ -69,6 +69,11 @@ export interface ITomlDatabasesConfig {
 
     // Recently opened database names.
     recent_database_names?: string[];
+
+    // Path of the database that was open when the app last closed, so it opens again on the next
+    // start. Absent when no database is open. Named to match the desktop config's last_database,
+    // which holds the same thing for the same reason.
+    last_database?: string;
 }
 
 //

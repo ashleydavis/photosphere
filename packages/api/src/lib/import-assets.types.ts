@@ -108,10 +108,8 @@ export interface IImportTimings {
     // Time spent asking the hash cache about a file, summed over every file, hit or miss.
     cacheLookupMs: number;
 
-    // Time spent loading the hash cache, and asking the database whether a hash is already there.
-    // Both are paid once per file by every hash-file task.
+    // Time spent loading the hash cache, paid once per file by every hash-file task.
     cacheLoadMs: number;
-    databaseLookupMs: number;
 
     // Time spent in every child task the import ran, summed the same way as hashMs. This is what
     // hashMs is a share of.

@@ -18,6 +18,7 @@ import { useToast } from "./toast-context";
 import { useUuidGenerator } from "./uuid-generator-context";
 import { useConfig } from "./config-context";
 import { markRecentArrival } from "../lib/recent-arrivals";
+import { LAST_DATABASE_KEY } from "../lib/last-database-config";
 
 //
 // How many times an asset request is attempted, and how long apart.
@@ -502,7 +503,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         // It used to be written by the Electron main process instead, which is why it only ever
         // worked on the desktop: nothing obliged a new platform to write it and nothing noticed when
         // it did not, so the read simply returned nothing and the app started with nothing open.
-        await config.set('lastDatabase', dbPath);
+        await config.set(LAST_DATABASE_KEY, dbPath);
 
         await platform.notifyDatabaseOpened(dbPath);
     }
@@ -523,7 +524,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         onReset.current.invoke();
 
         // Forgotten, so a database the user closed is not reopened for them on the next start.
-        await config.clear('lastDatabase');
+        await config.clear(LAST_DATABASE_KEY);
 
         await platform.notifyDatabaseClosed();
     }

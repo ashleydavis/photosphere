@@ -1,12 +1,9 @@
-import { createStorage, loadEncryptionKeysFromPem } from "storage";
 import type { ITaskContext } from "task-queue";
-import { createMediaFileDatabase } from "./media-file-database";
 import { HashCache } from "./hash-cache";
 import { getHashFromCache, validateAndHash } from "./hash";
 import { IFileStat } from "./file-scanner";
 import { IDatabaseDescriptor } from "api";
 import { IFileCacheIdentity } from "api/src/lib/import-assets.types";
-import { resolveStorageCredentials } from "./resolve-storage-credentials";
 
 //
 // Payload for the hash-file task. Contains everything needed to compute the content
@@ -61,14 +58,6 @@ export interface IHashFileResult {
     // True if the hash was retrieved from the local cache (not freshly computed).
     hashFromCache: boolean;
 
-    // True if a record with this hash already exists in the database.
-    filesAlreadyAdded: boolean;
-
-    // The id of the record that already holds this hash, when there is one. Reported so the import
-    // can record it in the hash cache: the next run then knows the file is in the database without
-    // asking the database at all.
-    existingAssetId: string | undefined;
-
     // How long the hashing itself took, in milliseconds. Zero when the cache answered, because then
     // nothing was hashed. The import sums this across every file so hashing can be accounted for
     // separately from everything else the import does.
@@ -86,22 +75,17 @@ export interface IHashFileResult {
     // before it can ask about one file, and the cache grows as the import runs.
     cacheLoadMs: number;
 
-    // How long opening storage and asking the database whether this hash is already there took.
-    // Every one of these tasks opens the database and runs an index query, for one file.
-    databaseLookupMs: number;
-
     // How many bytes were hashed: the file's length when it was hashed, zero when the cache answered.
     bytesHashed: number;
 }
 
 //
-// Handler for the hash-file task. Computes or retrieves from cache the SHA-256 hash
-// of a file and checks whether an asset with that hash already exists in the database.
-// Does not queue any downstream tasks; the orchestrator (import-assets) handles that.
+// Handler for the hash-file task. Computes the SHA-256 hash of a file, or takes it from the local
+// hash cache. Says nothing about the database and queues nothing; the orchestrator (import-assets)
+// does both.
 //
 export async function hashFileHandler(data: IHashFileData, context: ITaskContext): Promise<IHashFileResult> {
-    const { filePath, fileStat, contentType, storageDescriptor, hashCacheDir, logicalPath, cacheIdentity } = data;
-    const { uuidGenerator, timestampProvider } = context;
+    const { filePath, fileStat, contentType, hashCacheDir, logicalPath, cacheIdentity } = data;
 
     // When this task started, so the whole of it can be reported alongside the part of it that was
     // hashing. Read here rather than in the caller because the caller only sees when the task was
@@ -142,26 +126,19 @@ export async function hashFileHandler(data: IHashFileData, context: ITaskContext
         bytesHashed = fileStat.length;
     }
 
-    // Check whether this hash is already present in the database.
-    const databaseLookupStartedAt = Date.now();
-    const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
-    const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
-    const { storage } = createStorage(storageDescriptor.databasePath, s3Config, storageOptions);
-    const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
-    const hashHex = hashBuffer.toString("hex");
-    const existingRecords = await database.metadataCollection.sortIndex("hash", "asc").findByValue(hashHex);
-    const databaseLookupMs = Date.now() - databaseLookupStartedAt;
-
+    // This task hashes the file and says nothing about whether the database already holds that hash.
+    //
+    // It used to answer that too, and doing so was 69% of an import on a Pixel 6: the task built its
+    // own database object per file, so the collection's sort index cache was fresh every time and
+    // the whole hash index was read again to answer one question. The import asks it instead, from
+    // the one collection it holds for the life of the run, where the index is read once.
     return {
         hash: new Uint8Array(hashBuffer),
         hashFromCache,
-        filesAlreadyAdded: existingRecords.length > 0,
-        existingAssetId: existingRecords.length > 0 ? existingRecords[0]._id : undefined,
         hashMs,
         cacheLookupMs,
         taskMs: Date.now() - taskStartedAt,
         cacheLoadMs,
-        databaseLookupMs,
         bytesHashed,
     };
 }

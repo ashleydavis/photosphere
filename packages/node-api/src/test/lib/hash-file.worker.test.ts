@@ -128,7 +128,6 @@ describe('hashFileHandler', () => {
         expect(mockValidateAndHash).not.toHaveBeenCalled();
         expect(result.hashFromCache).toBe(true);
         expect(result.hash).toEqual(new Uint8Array(Buffer.from('aabbcc', 'hex')));
-        expect(result.filesAlreadyAdded).toBe(false);
     });
 
     test('computes hash via validateAndHash when not in cache', async () => {
@@ -157,7 +156,12 @@ describe('hashFileHandler', () => {
         expect(result.hash).toEqual(new Uint8Array(Buffer.from('ddeeff', 'hex')));
     });
 
-    test('returns filesAlreadyAdded true when hash exists in database', async () => {
+    test('does not ask the database whether the hash is already there', async () => {
+        // That question is answered by the orchestrator now, from a map it builds once when the run
+        // starts. Asked here it was answered by an index query per file, against a database object
+        // built per file, so the collection's sort index cache never survived to be used twice: 69%
+        // of an import on a Pixel 6, growing from 373 milliseconds a file to 4.3 seconds as the
+        // database filled.
         const context = makeContext();
         const data = makeData();
         const hash = { hash: Buffer.from('aabbcc', 'hex'), length: 1000, lastModified: new Date('2024-01-01') };
@@ -170,9 +174,10 @@ describe('hashFileHandler', () => {
             metadataCollection: mockMetadataCollection as any,
         } as any);
 
-        const result = await hashFileHandler(data, context);
+        await hashFileHandler(data, context);
 
-        expect(result.filesAlreadyAdded).toBe(true);
+        expect(mockMetadataCollection.sortIndex).not.toHaveBeenCalled();
+        expect(mockCreateMediaFileDatabase).not.toHaveBeenCalled();
     });
 
     test('throws when validateAndHash returns undefined', async () => {
@@ -202,7 +207,6 @@ describe('hashFileHandler', () => {
         const resultDryRun = await hashFileHandler(makeData({ dryRun: true }), context);
 
         expect(resultDryRun.hash).toEqual(resultNoDryRun.hash);
-        expect(resultDryRun.filesAlreadyAdded).toEqual(resultNoDryRun.filesAlreadyAdded);
         expect(resultDryRun.hashFromCache).toEqual(resultNoDryRun.hashFromCache);
     });
 
@@ -237,31 +241,6 @@ describe('hashFileHandler', () => {
         expect(mockGetHashFromCache).toHaveBeenCalledWith(data.filePath, data.fileStat, expect.anything(), undefined);
     });
 
-    test('reports the id of the record that already holds the hash, so the import can cache it', async () => {
-        const context = makeContext();
-        const data = makeData();
-
-        mockGetHashFromCache.mockResolvedValue({ hash: Buffer.from('aabbcc', 'hex'), length: 1000, lastModified: new Date('2024-01-01') } as any);
-        setupStorageMock();
-        mockCreateMediaFileDatabase.mockReturnValue({ metadataCollection: makeMockMetadataCollection([{ _id: 'existing-asset' }]) as any } as any);
-
-        const result = await hashFileHandler(data, context);
-
-        expect(result.existingAssetId).toBe('existing-asset');
-    });
-
-    test('reports no existing asset id when the database does not hold the hash', async () => {
-        const context = makeContext();
-        const data = makeData();
-
-        mockGetHashFromCache.mockResolvedValue({ hash: Buffer.from('aabbcc', 'hex'), length: 1000, lastModified: new Date('2024-01-01') } as any);
-        setupStorageMock();
-        mockCreateMediaFileDatabase.mockReturnValue({ metadataCollection: makeMockMetadataCollection([]) as any } as any);
-
-        const result = await hashFileHandler(data, context);
-
-        expect(result.existingAssetId).toBeUndefined();
-    });
 
     test('does not send any messages', async () => {
         const context = makeContext();

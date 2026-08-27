@@ -25,6 +25,7 @@ import { createCapacitorSecureStore } from "./secure-store-plugin";
 import { importSharePayload as importReceivedShare, type IReceivedSharePayload } from "./mobile-share-receive";
 import { MobileSyncScheduler, SYNC_TASK_TYPE } from "./mobile-sync-scheduler";
 import { mobileDatabasesConfigFile } from "./mobile-databases-config-file";
+import { LAST_DATABASE_KEY } from "user-interface/src/lib/last-database-config";
 import type { IConflictResolution } from "lan-share-core";
 
 //
@@ -718,6 +719,9 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             if (isAutoImportFileKey(key)) {
                 return getAutoImportFileValue(mobileAutoImportConfigFile, key);
             }
+            if (key === LAST_DATABASE_KEY) {
+                return configStore.getLastDatabase(mobileDatabasesConfigFile);
+            }
             return configStore.getConfigValue(persistentStore, key);
         },
         async (key, value) => {
@@ -729,6 +733,10 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
                 if (autoImportChangedRef.current) {
                     autoImportChangedRef.current();
                 }
+                return;
+            }
+            if (key === LAST_DATABASE_KEY) {
+                await configStore.setLastDatabase(mobileDatabasesConfigFile, value as string | undefined);
                 return;
             }
             configStore.setConfigValue(persistentStore, key, value);

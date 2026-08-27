@@ -32,6 +32,7 @@ import { OpenDatabaseModal } from "./components/open-database-modal";
 import { CreateDatabaseModal } from "./components/create-database-modal";
 import { AddDatabaseModal } from "./components/add-database-modal";
 import { openBugReport } from "./lib/bug-report";
+import { LAST_DATABASE_KEY } from "./lib/last-database-config";
 
 export interface IMainProps {
     //
@@ -260,7 +261,7 @@ function __Main({ initialTheme }: IMainProps) {
             }
 
             try {
-                const lastDatabase = await config.get<string>('lastDatabase');
+                const lastDatabase = await config.get<string>(LAST_DATABASE_KEY);
                 if (lastDatabase) {
                     await openDatabase(lastDatabase);
                 }

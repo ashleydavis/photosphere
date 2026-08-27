@@ -31,9 +31,9 @@ interface IMemoryStore {
 // reads and writes on a device.
 //
 function memoryConfigFile(): IDatabasesConfigFile {
-    let config: IDatabasesConfig = { databases: [], recentDatabaseNames: [] };
+    let config: IDatabasesConfig = { databases: [], recentDatabaseNames: [], lastDatabase: undefined };
     return {
-        read: async () => ({ databases: [...config.databases], recentDatabaseNames: [...config.recentDatabaseNames] }),
+        read: async () => ({ databases: [...config.databases], recentDatabaseNames: [...config.recentDatabaseNames], lastDatabase: undefined }),
         write: async (updated: IDatabasesConfig) => { config = updated; },
     };
 }

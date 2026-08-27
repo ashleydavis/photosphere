@@ -58,5 +58,9 @@ export async function recordDefaultDatabaseHandler(data: IRecordDefaultDatabaseD
             },
         ],
         recentDatabaseNames: databasesConfig.recentDatabaseNames,
+
+        // Carried through rather than dropped: this rewrites the whole file to add one entry, and
+        // writing undefined here would close the database the user had open.
+        lastDatabase: databasesConfig.lastDatabase,
     }, context);
 }

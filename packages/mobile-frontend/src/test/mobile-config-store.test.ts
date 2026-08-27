@@ -20,6 +20,8 @@ import {
     databaseBasename,
     getConfigValue,
     setConfigValue,
+    getLastDatabase,
+    setLastDatabase,
 } from "../lib/mobile-config-store";
 
 //
@@ -39,9 +41,9 @@ function memoryStore(): IKeyValueStore {
 // reads and writes on a device.
 //
 function memoryConfigFile(): IDatabasesConfigFile {
-    let config: IDatabasesConfig = { databases: [], recentDatabaseNames: [] };
+    let config: IDatabasesConfig = { databases: [], recentDatabaseNames: [], lastDatabase: undefined };
     return {
-        read: async () => ({ databases: [...config.databases], recentDatabaseNames: [...config.recentDatabaseNames] }),
+        read: async () => ({ databases: [...config.databases], recentDatabaseNames: [...config.recentDatabaseNames], lastDatabase: config.lastDatabase }),
         write: async (updated: IDatabasesConfig) => { config = updated; },
     };
 }
@@ -146,7 +148,7 @@ describe("mobile-config-store databases", () => {
         // The smoke-test harness establishes this state by writing databases.toml into the app's
         // storage sandbox before launch, so the app must take the file as it finds it.
         const configFile = memoryConfigFile();
-        await configFile.write({ databases: [entry("Seed", "s")], recentDatabaseNames: ["Seed"] });
+        await configFile.write({ databases: [entry("Seed", "s")], recentDatabaseNames: ["Seed"], lastDatabase: undefined });
         expect((await getDatabases(configFile)).map(database => database.name)).toEqual(["Seed"]);
         expect((await getRecentDatabases(configFile)).map(database => database.name)).toEqual(["Seed"]);
     });
@@ -237,7 +239,7 @@ describe("mobile-config-store recent databases", () => {
         // The harness can write any recents list into databases.toml, so the resolve-against-the-
         // configured-list rule has to hold for a file it never wrote itself.
         const configFile = memoryConfigFile();
-        await configFile.write({ databases: [entry("Alpha", "a")], recentDatabaseNames: ["Alpha", "Gone"] });
+        await configFile.write({ databases: [entry("Alpha", "a")], recentDatabaseNames: ["Alpha", "Gone"], lastDatabase: undefined });
         expect((await getRecentDatabases(configFile)).map(database => database.name)).toEqual(["Alpha"]);
     });
 });
@@ -253,7 +255,7 @@ describe("mobile-config-store concurrent operations", () => {
     //
     test("changing the databases list and the recents list together keeps both changes", async () => {
         const configFile = memoryConfigFile();
-        await configFile.write({ databases: [entry("Alpha", "a")], recentDatabaseNames: ["Alpha"] });
+        await configFile.write({ databases: [entry("Alpha", "a")], recentDatabaseNames: ["Alpha"], lastDatabase: undefined });
         await Promise.all([
             addDatabase(configFile, entry("Beta", "b")),
             removeRecentDatabase(configFile, "Alpha"),
@@ -288,5 +290,45 @@ describe("mobile-config-store concurrent operations", () => {
         await expect(rejected).rejects.toThrow("write failed");
         await queued;
         expect((await getDatabases(configFile)).map(database => database.name)).toEqual(["Kept"]);
+    });
+});
+
+describe("the last opened database", () => {
+
+    test("is absent before any database has been opened", async () => {
+        const configFile = memoryConfigFile();
+
+        expect(await getLastDatabase(configFile)).toBeUndefined();
+    });
+
+    test("is read back as the path that was recorded", async () => {
+        const configFile = memoryConfigFile();
+
+        await setLastDatabase(configFile, "photos/holiday");
+
+        expect(await getLastDatabase(configFile)).toEqual("photos/holiday");
+    });
+
+    test("is cleared by recording undefined, which is what closing a database does", async () => {
+        const configFile = memoryConfigFile();
+        await setLastDatabase(configFile, "photos/holiday");
+
+        await setLastDatabase(configFile, undefined);
+
+        expect(await getLastDatabase(configFile)).toBeUndefined();
+    });
+
+    test("survives the database list being changed around it", async () => {
+        // It shares databases.toml with the lists, and every write there rewrites the whole file, so
+        // a write that did not carry this field would quietly close the user's database.
+        const configFile = memoryConfigFile();
+        await setLastDatabase(configFile, "photos/holiday");
+
+        await addDatabase(configFile, entry("Holiday", "photos/holiday"));
+        await addRecentDatabase(configFile, entry("Holiday", "photos/holiday"));
+        await addDatabase(configFile, entry("Other", "photos/other"));
+        await removeDatabase(configFile, "Other");
+
+        expect(await getLastDatabase(configFile)).toEqual("photos/holiday");
     });
 });

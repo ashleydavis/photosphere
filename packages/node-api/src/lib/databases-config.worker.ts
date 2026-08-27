@@ -37,6 +37,9 @@ export interface IWriteDatabasesConfigData {
 
     // The recently opened database names to write, most recent first.
     recentDatabaseNames: string[];
+
+    // Path of the database to open on the next start, or undefined when none should be.
+    lastDatabase: string | undefined;
 }
 
 //
@@ -48,6 +51,9 @@ export interface IReadDatabasesConfigResult {
 
     // The recently opened database names, empty when the file does not exist yet.
     recentDatabaseNames: string[];
+
+    // Path of the database to open on the next start, absent when the file names none.
+    lastDatabase: string | undefined;
 }
 
 //
@@ -63,12 +69,12 @@ export async function readDatabasesConfigHandler(data: IReadDatabasesConfigData,
 
     const storage = new FileStorage("fs:");
     if (!await storage.fileExists(data.configPath)) {
-        return { databases: [], recentDatabaseNames: [] };
+        return { databases: [], recentDatabaseNames: [], lastDatabase: undefined };
     }
 
     const contents = await storage.read(data.configPath);
     if (!contents) {
-        return { databases: [], recentDatabaseNames: [] };
+        return { databases: [], recentDatabaseNames: [], lastDatabase: undefined };
     }
 
     const toml = parseToml(contents.toString("utf8")) as ITomlDatabasesConfig;
@@ -78,7 +84,8 @@ export async function readDatabasesConfigHandler(data: IReadDatabasesConfigData,
     const recentDatabaseNames = Array.isArray(toml.recent_database_names)
         ? toml.recent_database_names
         : [];
-    return { databases, recentDatabaseNames };
+    const lastDatabase = typeof toml.last_database === "string" ? toml.last_database : undefined;
+    return { databases, recentDatabaseNames, lastDatabase };
 }
 
 //
@@ -89,7 +96,7 @@ export async function writeDatabasesConfigHandler(data: IWriteDatabasesConfigDat
         throw new Error("configPath is required");
     }
 
-    const contents = buildDatabasesConfigToml(data.databases, data.recentDatabaseNames);
+    const contents = buildDatabasesConfigToml(data.databases, data.recentDatabaseNames, data.lastDatabase);
     const storage = new FileStorage("fs:");
     await storage.write(data.configPath, "application/toml", Buffer.from(contents, "utf8"));
 }
@@ -128,10 +135,15 @@ export function registerDatabaseInConfig(existingToml: string, databasePath: str
     let databases: ITomlDatabaseEntry[] = [];
     let recentDatabaseNames: string[] = [];
 
+    // Carried through untouched. This rewrites the whole file to add one fixture, so anything it
+    // does not carry it deletes, and deleting this one would drop the user back to no database open.
+    let lastDatabase: string | undefined = undefined;
+
     if (existingToml.trim().length > 0) {
         const parsed = parseToml(existingToml) as ITomlDatabasesConfig;
         databases = parsed.databases ?? [];
         recentDatabaseNames = parsed.recent_database_names ?? [];
+        lastDatabase = typeof parsed.last_database === "string" ? parsed.last_database : undefined;
     }
 
     databases = databases.filter(entry => !isTestDatabaseName(entry.name ?? ""));
@@ -139,7 +151,7 @@ export function registerDatabaseInConfig(existingToml: string, databasePath: str
 
     databases.push({ name: TEST_DATABASE_PREFIX + databasePath, description: "", path: databasePath });
 
-    return buildDatabasesConfigToml(databases.map(tomlEntryToDatabaseEntry), recentDatabaseNames);
+    return buildDatabasesConfigToml(databases.map(tomlEntryToDatabaseEntry), recentDatabaseNames, lastDatabase);
 }
 
 //
@@ -152,10 +164,16 @@ export function registerDatabaseInConfig(existingToml: string, databasePath: str
 // apps/smoke-tests/lib/write-databases-config.ts), which is how a mobile test establishes the state
 // desktop tests establish by pre-writing ~/.config/photosphere/databases.toml.
 //
-export function buildDatabasesConfigToml(databases: IDatabaseEntry[], recentDatabaseNames: string[]): string {
+export function buildDatabasesConfigToml(databases: IDatabaseEntry[], recentDatabaseNames: string[], lastDatabase: string | undefined): string {
     const toml: ITomlDatabasesConfig = {
         recent_database_names: recentDatabaseNames,
         databases: databases.map(databaseEntryToToml),
     };
+
+    // Only written when there is one. A TOML serialiser given undefined either writes a key with no
+    // value or throws, and an absent key is what "no database was open" has always looked like.
+    if (lastDatabase !== undefined) {
+        toml.last_database = lastDatabase;
+    }
     return stringifyToml(toml) + "\n";
 }

@@ -24,7 +24,6 @@ function hashedFile(hashMs: number, cacheLookupMs: number, taskMs: number, bytes
         taskMs,
         bytesHashed,
         cacheLoadMs: 0,
-        databaseLookupMs: 0,
         hashFromCache: false,
     };
 }
@@ -60,7 +59,6 @@ function cachedFile(cacheLookupMs: number, taskMs: number): IHashFileTiming {
         taskMs,
         bytesHashed: 0,
         cacheLoadMs: 0,
-        databaseLookupMs: 0,
         hashFromCache: true,
     };
 }

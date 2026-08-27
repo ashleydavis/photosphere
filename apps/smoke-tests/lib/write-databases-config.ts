@@ -36,13 +36,13 @@ function parseJsonList<ItemT>(variableName: string): ItemT[] {
 }
 
 //
-// Renders the config from the DATABASES and RECENT environment variables into the file named by the
-// last argument.
+// Renders the config from the DATABASES, RECENT and LAST_DATABASE environment variables into the
+// file named by the last argument.
 //
 function main(): void {
     const outputPath = process.argv[process.argv.length - 1];
     if (!outputPath || outputPath.endsWith("write-databases-config.ts")) {
-        throw new Error("usage: DATABASES=<json> RECENT=<json> write-databases-config.ts <output-file>");
+        throw new Error("usage: DATABASES=<json> RECENT=<json> [LAST_DATABASE=<path>] write-databases-config.ts <output-file>");
     }
 
     // Descriptions are optional at the call site (a smoke test seeding a name and a path is the
@@ -53,7 +53,12 @@ function main(): void {
     }));
     const recentDatabaseNames = parseJsonList<string>("RECENT");
 
-    writeFileSync(outputPath, buildDatabasesConfigToml(databases, recentDatabaseNames));
+    // Seeds the database the app opens on start. A test that wants none leaves it unset, which is
+    // the state of a device where no database has ever been opened.
+    const rawLastDatabase = process.env.LAST_DATABASE;
+    const lastDatabase = rawLastDatabase && rawLastDatabase.trim().length > 0 ? rawLastDatabase : undefined;
+
+    writeFileSync(outputPath, buildDatabasesConfigToml(databases, recentDatabaseNames, lastDatabase));
 }
 
 main();

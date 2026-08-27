@@ -227,6 +227,35 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     const bsonDatabase = new BsonDatabase(storage, ".db/bson", uuidGenerator, timestampProvider);
     const metadataCollection = bsonDatabase.collection<IAsset>("metadata");
 
+    // Every hash the database already holds, and the asset it belongs to.
+    //
+    // Built once, here, rather than asked per file. The question is "have I already got this photo",
+    // and it used to be answered by an index query inside every hash-file task, each of which built
+    // its own database object so the collection's sort index cache never survived to be used twice.
+    // On a Pixel 6 that was 69% of an import, and it grew as the database did: 373 milliseconds a
+    // file early in a run, 4.3 seconds a file by the end of one.
+    //
+    // A snapshot taken at the start is enough, because anything added during the run is added to
+    // hashesQueuedForImport below, which is checked as well.
+    //
+    const existingAssetIdsByHash = new Map<string, string>();
+
+    async function loadExistingHashes(): Promise<void> {
+        let next: string | undefined = undefined;
+        do {
+            const page = await metadataCollection.getAll(next);
+            for (const record of page.records) {
+                if (record.hash) {
+                    existingAssetIdsByHash.set(record.hash, record._id);
+                }
+            }
+            next = page.next;
+        }
+        while (next !== undefined);
+    }
+
+    await loadExistingHashes();
+
     const localHashCache = new HashCache(hashCacheDir);
     await localHashCache.load();
 
@@ -560,13 +589,29 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                     await flushCacheIfDue();
                 }
 
+                // Whether the database already holds this hash, answered from a map built once when
+                // the run started.
+                //
+                // Asked synchronously, and that is not incidental. This is a task completion
+                // callback, and anything awaited here lets the end of the run arrive before the
+                // callback has finished recording what the child did: an upload whose database write
+                // had not been queued yet is dropped on the floor. The comment further down says the
+                // same thing about the upload branch, and it was learned the same way.
+                //
+                // The query this replaces ran inside the hash-file task, which built its own
+                // database object per file, so the collection's sort index cache was fresh every
+                // time and the whole hash index was loaded again to answer one question. That
+                // measured 69% of an import on a Pixel 6.
+                const existingAssetId = existingAssetIdsByHash.get(Buffer.from(hashResult.hash).toString("hex"));
+                const filesAlreadyAdded = existingAssetId !== undefined;
+
                 // The database already holds this file, and now the cache says so too, which is what
                 // lets the next run skip it without asking the database at all.
-                if (hashResult.existingAssetId !== undefined) {
-                    localHashCache.setAssetId(cacheKeyOfPath(hashFileData.filePath), hashResult.existingAssetId);
+                if (existingAssetId !== undefined) {
+                    localHashCache.setAssetId(cacheKeyOfPath(hashFileData.filePath), existingAssetId);
                 }
 
-                if (hashResult.filesAlreadyAdded) {
+                if (filesAlreadyAdded) {
                     result.skipped.push({
                         logicalPath: hashFileData.logicalPath,
                         contentHash: Buffer.from(hashResult.hash).toString("hex"),

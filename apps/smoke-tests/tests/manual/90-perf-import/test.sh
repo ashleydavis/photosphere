@@ -180,6 +180,46 @@ wait_for_log "$TMP_DIR" "Automatic import settings loaded" || exit 1
 # Nothing is lost by killing the app. The import reports where its time has gone with every progress
 # report, so the measurement is whatever the last one said.
 #
+# Whether the app has already begun importing since this pass opened it.
+#
+# The automatic import setting is remembered across runs, so an app opened with it on starts
+# importing without being asked. Answered by waiting a short while for the line the import writes
+# when it starts, rather than by asking the interface, because the setting is the app's and the log
+# is the only thing that says what it did with it. Returns 0 when it has started and 1 when it has
+# not, so a caller can turn it on itself.
+#
+# Shares wait_for_log's cursor so a match here is not seen again by a later wait, and leaves the
+# cursor alone when nothing matched.
+#
+already_importing() {
+    local cursor_file="$TMP_DIR/.log-cursor"
+    local start_line=0
+    if [ -f "$cursor_file" ]; then
+        start_line=$(cat "$cursor_file")
+    fi
+
+    local ticks=$((AUTO_START_WAIT_SECONDS * POLL_TICKS_PER_SECOND))
+    while [ "$ticks" -gt 0 ]; do
+        local matched_line
+        matched_line=$(awk -v start="$start_line" '
+            NR > start && index($0, "Starting automatic import.") > 0 { print NR; exit }
+        ' "$TMP_DIR/app.log" 2>/dev/null)
+        if [ -n "$matched_line" ]; then
+            echo "$matched_line" > "$cursor_file"
+            return 0
+        fi
+        sleep "$POLL_INTERVAL_SECONDS"
+        ticks=$((ticks - 1))
+    done
+
+    return 1
+}
+
+# How long to give an app that was opened with the setting already on to start importing by itself.
+# Only ever waited out in full on a pass that then turns the import on, which is the cold pass and
+# any pass whose app was left with the setting off.
+AUTO_START_WAIT_SECONDS=15
+
 # Usage: run_one_pass <label>
 #
 run_one_pass() {
@@ -204,8 +244,16 @@ run_one_pass() {
     # lasts minutes, and expires by itself, so the phone is left as it was found.
     adb shell cmd deviceidle tempwhitelist -d 900000 "$APP_ID" >/dev/null 2>&1 || true
 
-    send_command "$APP_PORT" click '{"dataId":"auto-import-toggle"}' || return 1
-    wait_for_log "$TMP_DIR" "Starting automatic import." || return 1
+    # Turned on only when it is not on already. A pass ends by force-stopping the app, which leaves
+    # the setting exactly as it was, so the warm pass opens an app that starts importing by itself
+    # and a click here would switch that off. That is what it did: the warm pass ran for eighteen
+    # seconds, was switched off by its own harness, and reported a library it had never looked at.
+    if already_importing; then
+        log_info "$label pass: the app started importing on its own, so the toggle is left alone."
+    else
+        send_command "$APP_PORT" click '{"dataId":"auto-import-toggle"}' || return 1
+        wait_for_log "$TMP_DIR" "Starting automatic import." || return 1
+    fi
 
     log_info "$label pass running for ${PERF_IMPORT_SECONDS}s..."
     sleep "$PERF_IMPORT_SECONDS"

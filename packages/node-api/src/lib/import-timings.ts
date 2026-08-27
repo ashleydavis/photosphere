@@ -35,9 +35,8 @@ export interface IHashFileTiming {
     // How many bytes were hashed, zero when the cache answered.
     bytesHashed: number;
 
-    // How long loading the hash cache took, and how long the database lookup took.
+    // How long loading the hash cache took.
     cacheLoadMs: number;
-    databaseLookupMs: number;
 
     // Whether the cache answered, so no hashing was needed.
     hashFromCache: boolean;
@@ -88,7 +87,6 @@ export function createEmptyImportTimings(): IImportTimings {
         hashMs: 0,
         cacheLookupMs: 0,
         cacheLoadMs: 0,
-        databaseLookupMs: 0,
         childTaskMs: 0,
         filesHashed: 0,
         filesFromCache: 0,
@@ -134,7 +132,6 @@ export function addHashFileTiming(timings: IImportTimings, hashFileTiming: IHash
         hashMs: timings.hashMs + hashFileTiming.hashMs,
         cacheLookupMs: timings.cacheLookupMs + hashFileTiming.cacheLookupMs,
         cacheLoadMs: timings.cacheLoadMs + hashFileTiming.cacheLoadMs,
-        databaseLookupMs: timings.databaseLookupMs + hashFileTiming.databaseLookupMs,
         childTaskMs: timings.childTaskMs + hashFileTiming.taskMs,
         filesHashed: timings.filesHashed + (hashFileTiming.hashFromCache ? 0 : 1),
         filesFromCache: timings.filesFromCache + (hashFileTiming.hashFromCache ? 1 : 0),
@@ -320,7 +317,6 @@ export function rankImportStages(timings: IImportTimings): IImportStageCost[] {
         { name: "databaseWrite", totalMs: timings.databaseWriteMs, sharePercent: 0 },
         { name: "cacheLookup", totalMs: timings.cacheLookupMs, sharePercent: 0 },
         { name: "cacheLoad", totalMs: timings.cacheLoadMs, sharePercent: 0 },
-        { name: "databaseLookup", totalMs: timings.databaseLookupMs, sharePercent: 0 },
     ].filter(stage => stage.totalMs > 0);
 
     const measuredMs = stages.reduce((runningTotal, stage) => runningTotal + stage.totalMs, 0);
@@ -346,7 +342,6 @@ export function formatImportTimings(timings: IImportTimings): string {
         hashMs: timings.hashMs,
         cacheLookupMs: timings.cacheLookupMs,
         cacheLoadMs: timings.cacheLoadMs,
-        databaseLookupMs: timings.databaseLookupMs,
         filesHashed: timings.filesHashed,
         filesFromCache: timings.filesFromCache,
         skippedBeforeOpening: timings.skippedBeforeOpening,

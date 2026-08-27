@@ -110,7 +110,7 @@ class RecordingBackend implements IQueueBackend {
 describe("mobileDatabasesConfigFile", () => {
 
     test("reads the config as interactive, because nothing can be listed or opened until it returns", async () => {
-        const backend = new RecordingBackend({ databases: [], recentDatabaseNames: [] });
+        const backend = new RecordingBackend({ databases: [], recentDatabaseNames: [], lastDatabase: undefined });
         setQueueBackend(backend);
 
         await mobileDatabasesConfigFile.read();
@@ -124,7 +124,7 @@ describe("mobileDatabasesConfigFile", () => {
         const backend = new RecordingBackend({});
         setQueueBackend(backend);
 
-        await mobileDatabasesConfigFile.write({ databases: [], recentDatabaseNames: ["one"] });
+        await mobileDatabasesConfigFile.write({ databases: [], recentDatabaseNames: ["one"], lastDatabase: undefined });
 
         expect(backend.addedTasks).toHaveLength(1);
         expect(backend.addedTasks[0].type).toBe("write-databases-config");
@@ -132,7 +132,7 @@ describe("mobileDatabasesConfigFile", () => {
     });
 
     test("names the sandbox-relative config path in the task data", async () => {
-        const backend = new RecordingBackend({ databases: [], recentDatabaseNames: [] });
+        const backend = new RecordingBackend({ databases: [], recentDatabaseNames: [], lastDatabase: undefined });
         setQueueBackend(backend);
 
         await mobileDatabasesConfigFile.read();

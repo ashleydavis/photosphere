@@ -55,6 +55,9 @@ export interface IDatabasesConfig {
 
     // Recently opened database names, most recent first.
     recentDatabaseNames: string[];
+
+    // Path of the database to open again on the next start, or undefined when none should be.
+    lastDatabase: string | undefined;
 }
 
 //
@@ -160,7 +163,7 @@ export async function updateDatabase(configFile: IDatabasesConfigFile, originalN
         const recentDatabaseNames = namesMatch(entry.name, originalName)
             ? config.recentDatabaseNames
             : config.recentDatabaseNames.map(recentName => namesMatch(recentName, originalName) ? entry.name : recentName);
-        await configFile.write({ databases, recentDatabaseNames });
+        await configFile.write({ ...config, databases, recentDatabaseNames });
     });
 }
 
@@ -172,6 +175,7 @@ export async function removeDatabase(configFile: IDatabasesConfigFile, name: str
     return withConfigLock(async () => {
         const config = await configFile.read();
         await configFile.write({
+            ...config,
             databases: config.databases.filter(existing => !namesMatch(existing.name, name)),
             recentDatabaseNames: config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name)),
         });
@@ -233,6 +237,7 @@ export async function addRecentDatabase(configFile: IDatabasesConfigFile, entry:
         const known = config.databases.find(existing => namesMatch(existing.name, entry.name));
         const databases = known ? config.databases : [...config.databases, entry];
         await configFile.write({
+            ...config,
             databases,
             recentDatabaseNames: [
                 entry.name,
@@ -371,3 +376,31 @@ export function setConfigValue<ValueT>(store: IKeyValueStore, key: string, value
     store.setItem(CONFIG_KEY_PREFIX + key, JSON.stringify(value));
 }
 
+
+//
+// The path of the database to open again next time the app starts, or undefined when none should be.
+//
+export async function getLastDatabase(configFile: IDatabasesConfigFile): Promise<string | undefined> {
+    const config = await configFile.read();
+    return config.lastDatabase;
+}
+
+//
+// Records the database to open again next time the app starts. undefined clears it, which is what
+// closing a database does.
+//
+// This is kept in databases.toml rather than in the WebView's local storage, which is where it used
+// to be. Local storage is flushed to disk when the WebView gets round to it, and Android kills an
+// app without waiting for that: a phone that stopped the app a second after a database was opened
+// came back with nothing open, and the user was returned to an empty app holding no clue why. The
+// file is written through the worker, which has finished writing when it says it has.
+//
+export async function setLastDatabase(configFile: IDatabasesConfigFile, lastDatabase: string | undefined): Promise<void> {
+    return withConfigLock(async () => {
+        const config = await configFile.read();
+        await configFile.write({
+            ...config,
+            lastDatabase,
+        });
+    });
+}
