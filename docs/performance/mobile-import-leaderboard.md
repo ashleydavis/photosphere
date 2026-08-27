@@ -206,3 +206,46 @@ They are now produced largest first, each from the one before it: display from t
 This is the candidate the plan proposed before anything had been measured, and which the baseline dismissed as worth 6.9%. It was worth 32.3% by the time it was reached, because the stages above it had gone. A candidate rejected on an early measurement is worth re-ranking, not discarding.
 
 **`databaseWrite` came back to the top at 41%** in this pass, on 6 batches rather than the 4 of the pass before. Its cost scales with the number of batches, so that is the next thing to attack, and it is the same entry that has already had one attempt.
+
+### databaseWrite, attempt 2: a batch of a hundred. FAILED, and could not be measured honestly.
+
+The breakdown after the derivative work showed `databaseWrite` back at the top on 41%, with commit costing 6.4 seconds for the first batch of a run and 10.2 by the fifth, against an item count that did not change. So the cost is per commit and per database size rather than per asset, and fewer commits is the lever.
+
+A batch of a hundred could not be judged. No batch of a hundred completes inside the ten minute pass every other figure here was taken over, so the first attempt wrote nothing to the database at all and the warm pass then failed for want of a hash cache, which flushes at a hundred too. A thirty minute pass long enough to fill one gave this:
+
+| Per item | Batch 20, 600 s | Batch 100, 1800 s |
+| --- | --- | --- |
+| databaseWrite | 906 ms | 421 ms |
+| export | 297 ms | 360 ms |
+| display | 322 ms | 331 ms |
+| Total | 5.60 s | 6.84 s |
+
+The stage it targets improved 2.15x and **the total got worse**, along with export and display, which the change does not touch. A phone doing sustained image work for half an hour throttles, so a thirty minute pass is not comparable with a ten minute one. Not kept: the rule is that the total must fall, and this cannot show that it does.
+
+### databaseWrite, attempt 3: a batch of fifty. KEPT.
+
+Fifty fills inside the same ten minute window every other figure here was taken over, so the comparison is against like.
+
+| | Batch 20 | Batch 50 |
+| --- | --- | --- |
+| databaseWrite | 96.9 s | 58.6 s |
+| Batches | 5 | 2 |
+| Per item, databaseWrite | 906 ms | 528 ms |
+| Items in the pass | 107 | 111 |
+| Videos in the pass | 6 | 6 |
+| Wall clock per item | 5.60 s | 5.39 s |
+
+**Projected for the library: about 3.27 hours.** Still over the two hour target.
+
+**What a larger batch costs, and it is not only gallery latency.** A run interrupted before a batch fills loses the assets in it from the database, having already paid to upload and process them: the files are on disk with no record of them. Fifty is half again the exposure of twenty and a fifth of what a hundred would have been.
+
+### The leaderboard after this
+
+| Rank | Stage | Share | Status |
+| --- | --- | --- | --- |
+| 1 | databaseWrite | 28.3% | **done**, twice, third attempt kept |
+| 2 | display | 16.8% | not attempted |
+| 3 | export | 14.8% | not attempted |
+| 4 | videoMetadata | 12.4% | not attempted |
+| 5 | photoMetadata | ~10% | done |
+| 6 | hash | ~9% | done |

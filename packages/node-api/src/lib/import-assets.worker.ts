@@ -41,12 +41,24 @@ export const CACHE_FLUSH_SIZE = 100;
 //
 // How many finished assets pile up before they are written to the database as one batch.
 //
-// Every batch pays for a full database commit whatever its size, and on a phone an asset takes over
-// ten seconds to become ready, so a purely time-based trigger gave every asset a batch of its own.
-// Twenty is chosen so a batch is worth committing while a photo still reaches the gallery within a
-// few minutes of being taken in.
+// Every batch pays for a full database commit, and that commit costs more as the database grows:
+// measured on a Pixel 6 it went from 6.4 seconds for the first batch to 10.2 seconds by the fifth,
+// against an item count that did not change. So the cost is per commit and per database size, not
+// per asset, and the way to reduce it is fewer commits.
 //
-export const DATABASE_BATCH_SIZE = 20;
+// Fifty rather than twenty for that reason, and not the hundred that was tried first: a hundred is
+// more commits saved, but it could not be measured against the other figures here, because no batch
+// of a hundred completes inside the ten minute pass they were all taken over, and a thirty minute
+// pass long enough to fill one makes the phone throttle and every other stage drift with it.
+//
+// The cost is that a photo waits longer to appear in
+// the gallery during a bulk backfill, and that a run interrupted before a batch fills loses the
+// assets in it from the database, having already paid to upload and process them. That
+// is the right trade for a first backup of a whole library, which is what this number is for; the
+// scanner's caught-up escape means a phone that has finished backfilling still writes a photo it has
+// just taken without waiting for forty-nine more.
+//
+export const DATABASE_BATCH_SIZE = 50;
 
 //
 // Payload for the import-assets task. Contains the paths to scan plus the configuration
