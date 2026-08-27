@@ -140,6 +140,17 @@ export interface IUploadAssetResult {
     // How long working out the dominant colour took.
     dominantColorMs: number;
 
+    // Time this task spent on things none of the counters above name. Reported rather than left to
+    // be inferred: the counters accounted for a fifth of the child task time, and a gap that large
+    // is the most important number in the measurement.
+    otherMs: number;
+
+    // Opening storage, which every one of these tasks does before it can write anything.
+    openStorageMs: number;
+
+    // Asking the media tool for the image dimensions, which spawns it once per file.
+    probeMs: number;
+
     // Whether this item was a video rather than a photo.
     isVideo: boolean;
 }
@@ -172,7 +183,9 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
 
     const expectedHashBuffer = Buffer.from(data.expectedHash);
 
+    const openStorageStartedAt = Date.now();
     const { storage } = await openStorage(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
+    const openStorageMs = Date.now() - openStorageStartedAt;
 
     const assetTempDir = path.join(getProcessTmpDir(), `photosphere`, `assets`, uuidGenerator.generate());
     await ensureDir(assetTempDir);
@@ -397,6 +410,9 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                 uploadMs,
                 geocodeMs,
                 dominantColorMs,
+                openStorageMs,
+                probeMs: assetDetails?.detailTimings?.probeMs ?? 0,
+                otherMs: Math.max(0, (Date.now() - taskStartedAt) - ((assetDetails?.detailTimings?.probeMs ?? 0) + (assetDetails?.detailTimings?.metadataMs ?? 0) + (assetDetails?.detailTimings?.microMs ?? 0) + (assetDetails?.detailTimings?.thumbnailMs ?? 0) + (assetDetails?.detailTimings?.displayMs ?? 0) + uploadMs + geocodeMs + dominantColorMs + openStorageMs)),
                 isVideo: contentType?.startsWith("video") === true,
             };
         }

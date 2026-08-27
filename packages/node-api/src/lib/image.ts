@@ -27,7 +27,9 @@ export async function getImageDetails(filePath: string, tempDir: string, content
     // filePath is always a valid file (already extracted if from zip)
     let imagePath = filePath;
 
+    const probeStartedAt = Date.now();
     const assetInfo = await getFileInfo(imagePath, contentType);
+    const probeMs = Date.now() - probeStartedAt;
     if (!assetInfo) {
         throw new Error(`Unsupported file type: ${contentType}`);
     }
@@ -77,6 +79,7 @@ export async function getImageDetails(filePath: string, tempDir: string, content
         displayContentType: "image/jpeg",
         detailTimings: {
             metadataMs,
+            probeMs,
             microMs,
             thumbnailMs,
             displayMs,

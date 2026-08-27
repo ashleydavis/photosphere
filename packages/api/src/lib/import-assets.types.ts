@@ -108,6 +108,11 @@ export interface IImportTimings {
     // Time spent asking the hash cache about a file, summed over every file, hit or miss.
     cacheLookupMs: number;
 
+    // Time spent loading the hash cache, and asking the database whether a hash is already there.
+    // Both are paid once per file by every hash-file task.
+    cacheLoadMs: number;
+    databaseLookupMs: number;
+
     // Time spent in every child task the import ran, summed the same way as hashMs. This is what
     // hashMs is a share of.
     childTaskMs: number;
@@ -161,6 +166,13 @@ export interface IImportTimings {
 
     // Time spent working out an asset's dominant colour from its thumbnail.
     dominantColorMs: number;
+
+    // Time inside a child task that none of the other counters name, and the media tool probe.
+    otherMs: number;
+    probeMs: number;
+
+    // Opening storage, once per child task.
+    openStorageMs: number;
 
     // Time spent writing a batch of finished assets to the database under the write lock.
     databaseWriteMs: number;

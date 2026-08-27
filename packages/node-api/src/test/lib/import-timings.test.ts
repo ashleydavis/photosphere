@@ -23,6 +23,8 @@ function hashedFile(hashMs: number, cacheLookupMs: number, taskMs: number, bytes
         cacheLookupMs,
         taskMs,
         bytesHashed,
+        cacheLoadMs: 0,
+        databaseLookupMs: 0,
         hashFromCache: false,
     };
 }
@@ -41,6 +43,9 @@ function uploadedItem(taskMs: number): IUploadAssetTiming {
         uploadMs: 0,
         geocodeMs: 0,
         dominantColorMs: 0,
+        otherMs: 0,
+        probeMs: 0,
+        openStorageMs: 0,
         isVideo: false,
     };
 }
@@ -54,6 +59,8 @@ function cachedFile(cacheLookupMs: number, taskMs: number): IHashFileTiming {
         cacheLookupMs,
         taskMs,
         bytesHashed: 0,
+        cacheLoadMs: 0,
+        databaseLookupMs: 0,
         hashFromCache: true,
     };
 }
@@ -166,6 +173,9 @@ describe("import timings", () => {
             uploadMs: 500,
             geocodeMs: 60,
             dominantColorMs: 70,
+            otherMs: 0,
+            probeMs: 0,
+            openStorageMs: 0,
             isVideo: false,
         });
         timings = addUploadAssetTiming(timings, {
@@ -177,6 +187,9 @@ describe("import timings", () => {
             uploadMs: 50,
             geocodeMs: 6,
             dominantColorMs: 7,
+            otherMs: 0,
+            probeMs: 0,
+            openStorageMs: 0,
             isVideo: true,
         });
 
@@ -220,6 +233,9 @@ describe("import timings", () => {
             uploadMs: 300,
             geocodeMs: 0,
             dominantColorMs: 0,
+            otherMs: 0,
+            probeMs: 0,
+            openStorageMs: 0,
             isVideo: false,
         });
         timings = addHashFileTiming(timings, hashedFile(200, 0, 250, 1_000));
@@ -250,6 +266,9 @@ describe("import timings", () => {
             uploadMs: 0,
             geocodeMs: 0,
             dominantColorMs: 0,
+            otherMs: 0,
+            probeMs: 0,
+            openStorageMs: 0,
             isVideo: false,
         });
 

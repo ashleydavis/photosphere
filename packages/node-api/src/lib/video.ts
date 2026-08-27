@@ -94,6 +94,7 @@ export async function getVideoDetails(filePath: string, tempDir: string, content
             // images, because it is not one: it is what a video has to do before there is any image
             // to resize at all, and it is the expensive part of taking a video in.
             metadataMs: metadataMs + screenshotMs,
+            probeMs: 0,
             microMs,
             thumbnailMs,
             displayMs: 0,

@@ -650,6 +650,8 @@ describe('importAssetsHandler', () => {
             hashMs: 0,
             cacheLookupMs: 0,
             taskMs: 0,
+            cacheLoadMs: 0,
+            databaseLookupMs: 0,
             bytesHashed: 0,
         };
 

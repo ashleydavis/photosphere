@@ -183,6 +183,9 @@ export interface IAddSummary {
 // size original today, and whether that is worth changing is a question only the numbers answer.
 //
 export interface IAssetDetailTimings {
+    // Asking the media tool for the image dimensions, which spawns it once per file.
+    probeMs: number;
+
     // Reading the item's own metadata: the EXIF block on a photo, the probe on a video.
     metadataMs: number;
 

@@ -9,6 +9,17 @@ import { log } from "utils";
 import { IFileCacheIdentity } from "api/src/lib/import-assets.types";
 
 //
+// A readable stream that knows the path of the file it is reading.
+//
+// Node's `fs.ReadStream` carries this, and so does the mobile worker's shim of it. It is what lets
+// a hash of a file that is being read as a stream be taken natively instead.
+//
+interface IPathBearingStream {
+    // The path the stream was opened from, absent on a stream that is not reading a file.
+    path?: string;
+}
+
+//
 // Computes a hash from a stream.
 //
 export function computeHash(inputStream: NodeJS.ReadableStream): Promise<Buffer> {
@@ -80,9 +91,25 @@ export async function computeFileHash(filePath: string, hashFileNatively: ((file
 //
 export async function computeAssetHash(stream: NodeJS.ReadableStream, fileStat: IFileStat): Promise<IHashedData> {
     //
-    // Compute the hash of the file.
+    // Hashed natively when the stream is reading a file and a native hasher is available, and by
+    // streaming it through a JS hash otherwise.
     //
-    const hash = await computeHash(stream);
+    // This is the same choice `computeFileHash` makes, and it is here for the same reason it is
+    // there. Every asset written to storage is read back and hashed to put its hash in the merkle
+    // tree, three times per photo for the original, the thumbnail and the display version. On a
+    // phone that was the pure-JS SHA-256 over bytes fetched across the engine bridge as base64: it
+    // was 54% of an import, and it was invisible until the unmeasured remainder was given a counter.
+    //
+    // Both paths produce the same digest, which is what makes choosing between them safe: these are
+    // the hashes recorded in the merkle tree, and one that differed by a byte would make the tree
+    // disagree with the files it describes.
+    //
+    const sourcePath = (stream as IPathBearingStream).path;
+    const hashFileNatively = getNativeFileHasher();
+    const hash = typeof sourcePath === "string" && hashFileNatively !== undefined
+        ? hashFileNatively(sourcePath)
+        : await computeHash(stream);
+
     return {
         hash,
         lastModified: fileStat.lastModified,

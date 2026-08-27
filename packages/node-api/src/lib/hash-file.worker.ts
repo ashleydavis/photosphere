@@ -82,6 +82,14 @@ export interface IHashFileResult {
     // which several tasks are running inside at once.
     taskMs: number;
 
+    // How long loading the hash cache took. Every one of these tasks loads the whole cache from disk
+    // before it can ask about one file, and the cache grows as the import runs.
+    cacheLoadMs: number;
+
+    // How long opening storage and asking the database whether this hash is already there took.
+    // Every one of these tasks opens the database and runs an index query, for one file.
+    databaseLookupMs: number;
+
     // How many bytes were hashed: the file's length when it was hashed, zero when the cache answered.
     bytesHashed: number;
 }
@@ -101,8 +109,10 @@ export async function hashFileHandler(data: IHashFileData, context: ITaskContext
     const taskStartedAt = Date.now();
 
     // Load the hash cache in read-only mode.
+    const cacheLoadStartedAt = Date.now();
     const localHashCache = new HashCache(hashCacheDir, true);
     await localHashCache.load();
+    const cacheLoadMs = Date.now() - cacheLoadStartedAt;
 
     // Try to retrieve the hash from the cache first.
     const cacheLookupStartedAt = Date.now();
@@ -133,12 +143,14 @@ export async function hashFileHandler(data: IHashFileData, context: ITaskContext
     }
 
     // Check whether this hash is already present in the database.
+    const databaseLookupStartedAt = Date.now();
     const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
     const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
     const { storage } = createStorage(storageDescriptor.databasePath, s3Config, storageOptions);
     const database = createMediaFileDatabase(storage, uuidGenerator, timestampProvider);
     const hashHex = hashBuffer.toString("hex");
     const existingRecords = await database.metadataCollection.sortIndex("hash", "asc").findByValue(hashHex);
+    const databaseLookupMs = Date.now() - databaseLookupStartedAt;
 
     return {
         hash: new Uint8Array(hashBuffer),
@@ -148,6 +160,8 @@ export async function hashFileHandler(data: IHashFileData, context: ITaskContext
         hashMs,
         cacheLookupMs,
         taskMs: Date.now() - taskStartedAt,
+        cacheLoadMs,
+        databaseLookupMs,
         bytesHashed,
     };
 }

@@ -249,3 +249,37 @@ Fifty fills inside the same ten minute window every other figure here was taken 
 | 4 | videoMetadata | 12.4% | not attempted |
 | 5 | photoMetadata | ~10% | done |
 | 6 | hash | ~9% | done |
+
+### display, attempt 1: ask the JPEG decoder for a smaller image. FAILED.
+
+`-define jpeg:size=WxH` before the input makes libjpeg decode at a reduced DCT scale, so a large photo is never fully decoded on the way to a small one. Measured, display went from 335 ms per photo to 351 and micro got worse. The total fell 6%, but the stage the change targets did not move, so the drop is not attributable to it and was not banked. Reverted.
+
+### The unmeasured remainder, which turned out to be the whole problem
+
+Every stage with a counter on it summed to 1.90 seconds per item against 8.63 seconds of child task time. **Roughly 80% of the import was in code with no counter on it.** Giving that remainder a name (`otherMs`, computed as the task's own time minus everything it reports) was worth more than every optimisation before it.
+
+What it found: every upload task writes each file and then **reads it back and hashes it again** to record its hash in the merkle tree, three times per photo for the original, the thumbnail and the display version. `validateAndHash` had been given the native hasher; `computeAssetHash` had not, so that re-hash was still the pure-JS SHA-256 at well under a megabyte a second, over bytes fetched back across the engine bridge as base64.
+
+`computeAssetHash` now takes the native path when the stream it is given carries a file path, which is the same choice `computeFileHash` makes and uses the same hasher. Both paths produce identical digests, so the merkle tree records exactly the values it always did.
+
+| | Before | After |
+| --- | --- | --- |
+| other | 629.9 s (54%) | 4.8 s (0.4%) |
+| Items in a 600 s pass | 119 | 177 |
+| Wall clock per item | 4.99 s | 3.34 s |
+
+**49% more photos in the same ten minutes. Projected for the library: about 2.03 hours**, from about 3.27.
+
+Two things worth taking from this beyond the fix. A counter on the remainder should have existed from the first measurement, not the seventh. And the candidates the plan named before anything was measured (one decode for three derivatives, native video thumbnails, raising concurrency) were all real but small; nothing in that list was the actual problem, and the actual problem had no name until it was given one.
+
+### The leaderboard after this
+
+| Rank | Stage | Share | Status |
+| --- | --- | --- | --- |
+| 1 | databaseLookup | 69.3% | not attempted |
+| 2 | databaseWrite | 7.9% | done, three attempts |
+| 3 | display | 4.9% | attempt 1 failed |
+| 4 | videoMetadata | 3.4% | not attempted |
+| 5 | export | 2.9% | not attempted |
+
+`databaseLookup` opens storage, builds a database object and runs an index query once per photo, to ask whether a hash is already in the database. It scales with database size: 373 ms per file early in a run, 4.3 seconds per file by the end of this one. The orchestrator already tracks the same information in memory in `hashesQueuedForImport`, so this looks removable rather than merely optimisable.

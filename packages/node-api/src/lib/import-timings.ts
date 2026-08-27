@@ -35,6 +35,10 @@ export interface IHashFileTiming {
     // How many bytes were hashed, zero when the cache answered.
     bytesHashed: number;
 
+    // How long loading the hash cache took, and how long the database lookup took.
+    cacheLoadMs: number;
+    databaseLookupMs: number;
+
     // Whether the cache answered, so no hashing was needed.
     hashFromCache: boolean;
 }
@@ -64,6 +68,13 @@ export interface IUploadAssetTiming {
     // How long working out the dominant colour took.
     dominantColorMs: number;
 
+    // Opening storage, once per task.
+    openStorageMs: number;
+
+    // What the task spent on things none of the other counters name, and the media tool probe.
+    otherMs: number;
+    probeMs: number;
+
     // Whether this item was a video rather than a photo.
     isVideo: boolean;
 }
@@ -76,6 +87,8 @@ export function createEmptyImportTimings(): IImportTimings {
         totalMs: 0,
         hashMs: 0,
         cacheLookupMs: 0,
+        cacheLoadMs: 0,
+        databaseLookupMs: 0,
         childTaskMs: 0,
         filesHashed: 0,
         filesFromCache: 0,
@@ -91,6 +104,9 @@ export function createEmptyImportTimings(): IImportTimings {
         uploadMs: 0,
         geocodeMs: 0,
         dominantColorMs: 0,
+        otherMs: 0,
+        probeMs: 0,
+        openStorageMs: 0,
         databaseWriteMs: 0,
         databaseBatches: 0,
         databaseFlushMs: 0,
@@ -117,6 +133,8 @@ export function addHashFileTiming(timings: IImportTimings, hashFileTiming: IHash
         ...timings,
         hashMs: timings.hashMs + hashFileTiming.hashMs,
         cacheLookupMs: timings.cacheLookupMs + hashFileTiming.cacheLookupMs,
+        cacheLoadMs: timings.cacheLoadMs + hashFileTiming.cacheLoadMs,
+        databaseLookupMs: timings.databaseLookupMs + hashFileTiming.databaseLookupMs,
         childTaskMs: timings.childTaskMs + hashFileTiming.taskMs,
         filesHashed: timings.filesHashed + (hashFileTiming.hashFromCache ? 0 : 1),
         filesFromCache: timings.filesFromCache + (hashFileTiming.hashFromCache ? 1 : 0),
@@ -140,6 +158,9 @@ export function addUploadAssetTiming(timings: IImportTimings, uploadTiming: IUpl
         uploadMs: timings.uploadMs + uploadTiming.uploadMs,
         geocodeMs: timings.geocodeMs + uploadTiming.geocodeMs,
         dominantColorMs: timings.dominantColorMs + uploadTiming.dominantColorMs,
+        otherMs: timings.otherMs + uploadTiming.otherMs,
+        probeMs: timings.probeMs + uploadTiming.probeMs,
+        openStorageMs: timings.openStorageMs + uploadTiming.openStorageMs,
         photosSeen: timings.photosSeen + (uploadTiming.isVideo ? 0 : 1),
         videosSeen: timings.videosSeen + (uploadTiming.isVideo ? 1 : 0),
     };
@@ -293,8 +314,13 @@ export function rankImportStages(timings: IImportTimings): IImportStageCost[] {
         { name: "upload", totalMs: timings.uploadMs, sharePercent: 0 },
         { name: "geocode", totalMs: timings.geocodeMs, sharePercent: 0 },
         { name: "dominantColor", totalMs: timings.dominantColorMs, sharePercent: 0 },
+        { name: "probe", totalMs: timings.probeMs, sharePercent: 0 },
+        { name: "openStorage", totalMs: timings.openStorageMs, sharePercent: 0 },
+        { name: "other", totalMs: timings.otherMs, sharePercent: 0 },
         { name: "databaseWrite", totalMs: timings.databaseWriteMs, sharePercent: 0 },
         { name: "cacheLookup", totalMs: timings.cacheLookupMs, sharePercent: 0 },
+        { name: "cacheLoad", totalMs: timings.cacheLoadMs, sharePercent: 0 },
+        { name: "databaseLookup", totalMs: timings.databaseLookupMs, sharePercent: 0 },
     ].filter(stage => stage.totalMs > 0);
 
     const measuredMs = stages.reduce((runningTotal, stage) => runningTotal + stage.totalMs, 0);
@@ -319,6 +345,8 @@ export function formatImportTimings(timings: IImportTimings): string {
         childTaskMs: timings.childTaskMs,
         hashMs: timings.hashMs,
         cacheLookupMs: timings.cacheLookupMs,
+        cacheLoadMs: timings.cacheLoadMs,
+        databaseLookupMs: timings.databaseLookupMs,
         filesHashed: timings.filesHashed,
         filesFromCache: timings.filesFromCache,
         skippedBeforeOpening: timings.skippedBeforeOpening,
@@ -333,6 +361,9 @@ export function formatImportTimings(timings: IImportTimings): string {
         uploadMs: timings.uploadMs,
         geocodeMs: timings.geocodeMs,
         dominantColorMs: timings.dominantColorMs,
+        otherMs: timings.otherMs,
+        probeMs: timings.probeMs,
+        openStorageMs: timings.openStorageMs,
         databaseWriteMs: timings.databaseWriteMs,
         databaseBatches: timings.databaseBatches,
         databaseFlushMs: timings.databaseFlushMs,
