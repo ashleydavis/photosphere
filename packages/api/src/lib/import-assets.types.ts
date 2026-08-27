@@ -186,6 +186,17 @@ export interface IImportTimings {
     databaseLockWaitMs: number;
     databaseTreeLoadMs: number;
     databaseAddItemsMs: number;
+
+    // That loop split three ways: the merkle tree adds, the record inserts with their sort indexes,
+    // and the rest of what the loop does per item.
+    databaseMerkleAddMs: number;
+    databaseRecordInsertMs: number;
+
+    // That insert split again: the collection insert, and the hash cache entry the asset id is
+    // written into.
+    databaseCollectionInsertMs: number;
+    databaseHashCacheAssetIdMs: number;
+    databasePerItemOtherMs: number;
     databaseTreeSaveMs: number;
     databaseCommitMs: number;
     databaseStampMs: number;

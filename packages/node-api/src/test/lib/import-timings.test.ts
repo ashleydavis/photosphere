@@ -1,6 +1,7 @@
 import {
     addHashFileTiming,
     addDatabaseWriteTiming,
+    addDatabaseWriteBreakdown,
     addUploadAssetTiming,
     rankImportStages,
     withExportMs,
@@ -12,6 +13,7 @@ import {
     withTotalMs,
     IHashFileTiming,
     IUploadAssetTiming,
+    IDatabaseWriteBreakdown,
 } from "../../lib/import-timings";
 
 //
@@ -322,5 +324,56 @@ describe("import timings", () => {
         expect(summary.skippedBeforeOpening).toBe(0);
         expect(summary.bytesHashed).toBe(10 * 1024 * 1024);
         expect(summary.hashMbPerSecond).toBe(5);
+    });
+});
+
+describe("addDatabaseWriteBreakdown", () => {
+
+    //
+    // One batch's breakdown, with every part given a distinct value so a field summed into the wrong
+    // total is visible rather than hidden by two numbers that happen to match.
+    //
+    function batchBreakdown(): IDatabaseWriteBreakdown {
+        return {
+            flushMs: 1,
+            lockWaitMs: 2,
+            treeLoadMs: 3,
+            addItemsMs: 100,
+            merkleAddMs: 40,
+            recordInsertMs: 50,
+            collectionInsertMs: 44,
+            hashCacheAssetIdMs: 6,
+            perItemOtherMs: 10,
+            treeSaveMs: 4,
+            commitMs: 5,
+            stampMs: 6,
+        };
+    }
+
+    test("counts the batch and sums every part of it", () => {
+        const timings = addDatabaseWriteBreakdown(createEmptyImportTimings(), batchBreakdown());
+
+        expect(timings.databaseBatches).toBe(1);
+        expect(timings.databaseAddItemsMs).toBe(100);
+        expect(timings.databaseMerkleAddMs).toBe(40);
+        expect(timings.databaseRecordInsertMs).toBe(50);
+        expect(timings.databaseCollectionInsertMs).toBe(44);
+        expect(timings.databaseHashCacheAssetIdMs).toBe(6);
+        expect(timings.databasePerItemOtherMs).toBe(10);
+        expect(timings.databaseCommitMs).toBe(5);
+    });
+
+    test("accumulates across batches, which is what makes a per-batch cost visible", () => {
+        // The whole point of counting batches beside the totals: a cost that grows with the size of
+        // the database rather than the size of the batch only shows as a rising cost per batch.
+        let timings = addDatabaseWriteBreakdown(createEmptyImportTimings(), batchBreakdown());
+        timings = addDatabaseWriteBreakdown(timings, batchBreakdown());
+
+        expect(timings.databaseBatches).toBe(2);
+        expect(timings.databaseMerkleAddMs).toBe(80);
+        expect(timings.databaseRecordInsertMs).toBe(100);
+        expect(timings.databaseCollectionInsertMs).toBe(88);
+        expect(timings.databaseHashCacheAssetIdMs).toBe(12);
+        expect(timings.databasePerItemOtherMs).toBe(20);
     });
 });

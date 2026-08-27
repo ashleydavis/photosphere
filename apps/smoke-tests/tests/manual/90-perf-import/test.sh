@@ -220,6 +220,24 @@ already_importing() {
 # any pass whose app was left with the setting off.
 AUTO_START_WAIT_SECONDS=15
 
+#
+# The phone's battery temperature in degrees, as a decimal. Android reports it in tenths.
+#
+# Recorded with every pass because it decides whether two measurements can be compared at all. Half
+# an hour of sustained image work warms this phone by several degrees, and a pass started warm is
+# slower than the same pass started cool by about as much as the changes being measured are worth.
+#
+device_temperature() {
+    local tenths
+    tenths=$(adb shell dumpsys battery 2>/dev/null | sed -n 's/.*temperature: \([0-9-]*\).*/\1/p' | head -1)
+    if [ -z "$tenths" ]; then
+        echo "unknown"
+        return 0
+    fi
+
+    echo "$((tenths / 10)).$((tenths % 10))"
+}
+
 # Usage: run_one_pass <label>
 #
 run_one_pass() {
@@ -255,6 +273,7 @@ run_one_pass() {
         wait_for_log "$TMP_DIR" "Starting automatic import." || return 1
     fi
 
+    log_info "$label pass starting at $(device_temperature) degrees."
     log_info "$label pass running for ${PERF_IMPORT_SECONDS}s..."
     sleep "$PERF_IMPORT_SECONDS"
 

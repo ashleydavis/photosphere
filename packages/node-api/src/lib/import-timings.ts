@@ -111,6 +111,11 @@ export function createEmptyImportTimings(): IImportTimings {
         databaseLockWaitMs: 0,
         databaseTreeLoadMs: 0,
         databaseAddItemsMs: 0,
+        databaseMerkleAddMs: 0,
+        databaseRecordInsertMs: 0,
+        databaseCollectionInsertMs: 0,
+        databaseHashCacheAssetIdMs: 0,
+        databasePerItemOtherMs: 0,
         databaseTreeSaveMs: 0,
         databaseCommitMs: 0,
         databaseStampMs: 0,
@@ -199,8 +204,21 @@ export interface IDatabaseWriteBreakdown {
     // Loading the whole merkle tree.
     treeLoadMs: number;
 
-    // Adding this batch's items to the tree and inserting their records.
+    // Adding this batch.'s items to the tree and inserting their records.
     addItemsMs: number;
+
+    // That loop split three ways, because it is the largest part of a database write and its cost
+    // grows with the size of the database rather than with the size of the batch: adding the items
+    // to the merkle tree, inserting the records with their sort indexes, and everything else the
+    // loop does per item.
+    merkleAddMs: number;
+    recordInsertMs: number;
+
+    // That insert split again: putting the record in the collection, and writing the asset id into
+    // the hash cache entry for the file it came from.
+    collectionInsertMs: number;
+    hashCacheAssetIdMs: number;
+    perItemOtherMs: number;
 
     // Saving the whole merkle tree back.
     treeSaveMs: number;
@@ -223,6 +241,11 @@ export function addDatabaseWriteBreakdown(timings: IImportTimings, breakdown: ID
         databaseLockWaitMs: timings.databaseLockWaitMs + breakdown.lockWaitMs,
         databaseTreeLoadMs: timings.databaseTreeLoadMs + breakdown.treeLoadMs,
         databaseAddItemsMs: timings.databaseAddItemsMs + breakdown.addItemsMs,
+        databaseMerkleAddMs: timings.databaseMerkleAddMs + breakdown.merkleAddMs,
+        databaseRecordInsertMs: timings.databaseRecordInsertMs + breakdown.recordInsertMs,
+        databaseCollectionInsertMs: timings.databaseCollectionInsertMs + breakdown.collectionInsertMs,
+        databaseHashCacheAssetIdMs: timings.databaseHashCacheAssetIdMs + breakdown.hashCacheAssetIdMs,
+        databasePerItemOtherMs: timings.databasePerItemOtherMs + breakdown.perItemOtherMs,
         databaseTreeSaveMs: timings.databaseTreeSaveMs + breakdown.treeSaveMs,
         databaseCommitMs: timings.databaseCommitMs + breakdown.commitMs,
         databaseStampMs: timings.databaseStampMs + breakdown.stampMs,
@@ -365,6 +388,11 @@ export function formatImportTimings(timings: IImportTimings): string {
         databaseLockWaitMs: timings.databaseLockWaitMs,
         databaseTreeLoadMs: timings.databaseTreeLoadMs,
         databaseAddItemsMs: timings.databaseAddItemsMs,
+        databaseMerkleAddMs: timings.databaseMerkleAddMs,
+        databaseRecordInsertMs: timings.databaseRecordInsertMs,
+        databaseCollectionInsertMs: timings.databaseCollectionInsertMs,
+        databaseHashCacheAssetIdMs: timings.databaseHashCacheAssetIdMs,
+        databasePerItemOtherMs: timings.databasePerItemOtherMs,
         databaseTreeSaveMs: timings.databaseTreeSaveMs,
         databaseCommitMs: timings.databaseCommitMs,
         databaseStampMs: timings.databaseStampMs,

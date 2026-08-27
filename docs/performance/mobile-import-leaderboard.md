@@ -326,3 +326,90 @@ Worth recording because the run said PASS on a pass that measured nothing. A pas
 | Wall clock per item | 1.84 s | 5.05 s |
 
 A per-item cost that climbs like that does not extrapolate to a two hour import of the whole library however fast the first few hundred go, so this is the next target and everything below it can wait.
+
+### databaseWrite, attempt 4: stop asking storage which indexes exist, once per record. FAILED.
+
+The write loop had no breakdown, so it got one first: the merkle tree adds, the record inserts, and everything else the loop does per item. That answered one question outright and raised a better one.
+
+| Inside the write loop, cold pass | Total | Per record |
+| --- | --- | --- |
+| merkle adds | 0.109 s | 0.3 ms |
+| record inserts | 119.6 s | 338 ms |
+| the rest of the loop | 34.7 s | 98 ms |
+
+**The merkle tree costs nothing.** A tenth of a second across a whole run, against two minutes for the inserts. Every earlier guess about this stage had the tree in it somewhere.
+
+The inserts also grow: 338 ms a record in the cold pass, 904 ms in the warm pass that continued it, against a batch size that does not change. So does commit: 55 s a batch, then 66 s.
+
+A benchmark of the same inserts on a desktop (`bun run --filter=bdb perf`, added for this) runs them at 0.04 ms a record, three thousand times faster, so whatever the phone is paying for is not arithmetic. That benchmark also counts what each insert asks of storage, and found the same two calls every time, forever: a `dirExists` and a `listDirs`, asking which sort indexes the collection has, per record.
+
+Remembering that answer removed both calls, which the benchmark confirms. On the device it changed nothing:
+
+| Cold pass | Before | After |
+| --- | --- | --- |
+| record inserts, per record | 338 ms | 392 ms |
+| commit | 165.5 s | 185.1 s |
+| Wall clock per item | 1.82 s | 1.90 s |
+
+Not kept, and reverted. The two calls were not what an insert was paying for, and a change that cannot show an improvement does not get to stay on the grounds that it removes work.
+
+What it did establish: the cost is not the merkle tree, not arithmetic, and not those two calls. The next thing to rule out is what an insert does that a desktop does not, which is why the insert is now counted apart from the hash cache write that follows it.
+
+### The phone gets hotter as the measurements go on, and that has been in the numbers
+
+Three cold passes were run back to back, each half an hour of sustained image work, and the phone was 26.7 °C at the start of the first and 33.4 °C by the end of the third. Wall clock per item across those three: 1.82 s, 1.90 s, 2.03 s. The two changes measured in the second and third are both small, and a seven degree rise on this phone is enough to account for a drift of that size on its own.
+
+So neither of those two runs proves what it looked like it proved. Both changes are unproven rather than disproven, and unproven does not earn a commit either, so both were reverted. What it does mean is that any two measurements taken half an hour apart are not comparable unless the phone started them at the same temperature.
+
+From here every measurement records the phone's temperature beside it, and a comparison is only made between passes that started within a couple of degrees of each other.
+
+### databaseWrite, attempt 5: stop dropping the database's cached pages before every batch
+
+Before each batch the import called `flush()` on the database, dropping every cached shard and index page. The desktop benchmark says what that costs, by running the same inserts with and without it:
+
+| Per record | Caches kept | Caches dropped each batch |
+| --- | --- | --- |
+| storage reads | 0.0 | 1.7 |
+
+Those reads are not small: an index page holds every record in the index, so what a batch reads back grows with the database, which is what the growth in the device numbers looks like (338 ms an insert in a cold pass, 904 ms in the warm pass that continued it).
+
+The drop was also in the wrong place to do what it was for. It ran before the write lock was taken, so another writer could change the database in the moment between, leaving exactly the stale caches it was meant to prevent.
+
+It now runs under the lock, and only when the database's own modified stamp differs from the one this run last wrote. Every writer updates that stamp under the same lock, so a stamp that has not moved means nothing has written since. One small read replaces the re-reading of everything.
+
+**KEPT.** Measured on the Pixel 6, and the stage it targets is unmistakable:
+
+| Cold pass | Before | After |
+| --- | --- | --- |
+| Collection inserts | 136.7 s | 19.2 s |
+| Per record | 397 ms | 56 ms |
+| The whole write loop | 175.4 s | 58.2 s |
+| databaseWrite | 369.1 s | 241.8 s |
+| Wall clock per item | 2.03 s | 1.52 s |
+
+**Seven times less time spent inserting records.** The after pass started at 31.6 degrees against 26.7 for the earliest baseline, so it was measured on a hotter phone than the numbers it beats.
+
+`commit` is now what a database write mostly is: 178.6 s of the 241.8 s, and about a third of the whole import.
+
+The warm pass that continued it, starting at 32.9 degrees:
+
+| Warm pass | Before | After |
+| --- | --- | --- |
+| Collection inserts, per record | 904 ms | 303 ms |
+| Wall clock per item | 4.86 s | 4.06 s |
+
+The insert still costs more as the database grows, but three times less than it did.
+
+### The leaderboard after this
+
+| Rank | Stage of a cold pass | Share | Status |
+| --- | --- | --- | --- |
+| 1 | commit (inside databaseWrite) | 34% | not attempted |
+| 2 | display | 13% | attempt 1 failed |
+| 3 | probe | 12% | not attempted |
+| 4 | hash | 11% | done |
+| 5 | thumbnail | 10% | done |
+| 6 | photoMetadata | 10% | done |
+| 7 | videoMetadata | 9% | not attempted |
+
+Committing is now most of what writing to the database costs. What a commit does is write one file per dirty shard and one per shard merkle tree, and a batch of fifty records lands in about forty of the hundred shards, so it writes about eighty files. That count comes from how records are spread across shards, which is part of the on-disk layout and cannot be changed.

@@ -12,6 +12,7 @@ import { BsonDatabase } from "bdb";
 import { addItem, BufferSet } from "merkle-tree";
 import throttle from "lodash/throttle";
 import { acquireWriteLock, releaseWriteLock } from "api";
+import { loadDatabaseState } from "api";
 import { loadMerkleTree, saveMerkleTree, stampDatabaseModified } from "./tree";
 import { getHashCacheDir, HashCache } from "./hash-cache";
 import { IImportScanner } from "./import-scanner";
@@ -346,19 +347,41 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     // Writes a batch of completed uploads to the Merkle tree and BSON database under the write lock.
     // Returns true on success, false if the write lock could not be acquired.
     //
+    // The modified stamp this run last wrote, so the next batch can tell its own writes apart from
+    // somebody else.'s. Undefined until the first batch commits, which is why the first batch of a run
+    // always drops its caches: it cannot know what happened before it started.
+    let lastModifiedAtWrittenByThisRun: string | undefined = undefined;
+
     async function processPendingDatabaseUpdates(itemsToProcess: IPendingDatabaseUpdate[]): Promise<boolean> {
         if (itemsToProcess.length === 0) {
             return true;
         }
 
         const databaseWriteStartedAt = Date.now();
-        await bsonDatabase.flush();
-        const flushedAt = Date.now();
 
         if (!await acquireWriteLock(rawStorage, sessionId, 1)) {
             return false;
         }
         const lockedAt = Date.now();
+
+        // The cached shards and index pages are dropped only when somebody else has written to the
+        // database since this run last did.
+        //
+        // Dropping them unconditionally, which is what this used to do, makes every batch read back
+        // what it already had: about one and three quarter reads per record, against none when the
+        // caches are kept, and those reads grow with the database because an index page holds every
+        // record in it. On a phone each one crosses the embedded engine bridge.
+        //
+        // The check is the database.'s own modified stamp, which every writer updates under this
+        // same lock, compared against what this run wrote when it last held the lock. It is read here
+        // rather than before the lock because a database read outside the lock says nothing: another
+        // writer can change it in the moment between.
+        const stateBeforeWriting = await loadDatabaseState(rawStorage);
+        const databaseChangedElsewhere = stateBeforeWriting?.lastModifiedAt !== lastModifiedAtWrittenByThisRun;
+        if (databaseChangedElsewhere) {
+            await bsonDatabase.flush();
+        }
+        const flushedAt = Date.now();
 
         log.verbose(`Have write lock, processing ${itemsToProcess.length} items.`);
 
@@ -369,8 +392,17 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             }
             const treeLoadedAt = Date.now();
 
+            // The loop below is the largest part of a database write and its cost grows with the
+            // size of the database, so what it spends where is counted rather than guessed at.
+            let merkleAddMs = 0;
+            let recordInsertMs = 0;
+            let collectionInsertMs = 0;
+            let hashCacheAssetIdMs = 0;
+
             for (const item of itemsToProcess) {
                 const { assetData, logicalPath } = item;
+
+                const merkleAddStartedAt = Date.now();
 
                 merkleTree = addItem(merkleTree, {
                     name: assetData.assetPath,
@@ -397,8 +429,13 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                     });
                 }
 
+                merkleAddMs += Date.now() - merkleAddStartedAt;
+
+                const recordInsertStartedAt = Date.now();
+
                 if (!dryRun) {
                     await metadataCollection.insertOne(assetData.assetRecord);
+                    const recordWrittenAt = Date.now();
 
                     // Recorded only here, on the far side of the write, so an id in the cache always
                     // means the asset really is in the database rather than that an import once
@@ -406,7 +443,15 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                     // asking the database. A dry run records nothing, because it wrote nothing: an id
                     // from a dry run would make the next real import skip a file it never took in.
                     localHashCache.setAssetId(item.cacheKey, assetData.assetId);
+
+                    // Counted apart from the insert because they are two different things that could
+                    // each account for the cost: putting the record in the database, and finding the
+                    // file.'s entry in the hash cache to write the id into it.
+                    collectionInsertMs += recordWrittenAt - recordInsertStartedAt;
+                    hashCacheAssetIdMs += Date.now() - recordWrittenAt;
                 }
+
+                recordInsertMs += Date.now() - recordInsertStartedAt;
 
                 log.verbose(`Added file "${logicalPath}" to the database with ID "${assetData.assetId}".`);
                 result.imported.push({ assetId: assetData.assetId, logicalPath, asset: assetData.assetRecord });
@@ -451,15 +496,28 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
 
                 await stampDatabaseModified(storage, rawStorage);
 
+                // Read back rather than guessed at, so the next batch compares against exactly what
+                // is on disk. The stamp is a timestamp this run did not choose, and a value that
+                // merely looks like it would make the next batch think somebody else had written.
+                lastModifiedAtWrittenByThisRun = (await loadDatabaseState(rawStorage))?.lastModifiedAt;
+
                 // What this batch cost, split by what it was doing. The batch count matters as much
                 // as the times: the merkle tree is loaded and saved whole every batch, so a run that
                 // writes in small batches pays for the whole tree over and over, and only the count
                 // beside the totals shows that.
                 result.timings = addDatabaseWriteBreakdown(result.timings, {
-                    flushMs: flushedAt - databaseWriteStartedAt,
-                    lockWaitMs: lockedAt - flushedAt,
-                    treeLoadMs: treeLoadedAt - lockedAt,
+                    lockWaitMs: lockedAt - databaseWriteStartedAt,
+                    flushMs: flushedAt - lockedAt,
+                    treeLoadMs: treeLoadedAt - flushedAt,
                     addItemsMs: itemsAddedAt - treeLoadedAt,
+                    merkleAddMs,
+                    recordInsertMs,
+                    collectionInsertMs,
+                    hashCacheAssetIdMs,
+
+                    // What the loop spent on everything else: recording the outcome, telling the
+                    // gallery, and the bookkeeping between the two timed parts.
+                    perItemOtherMs: Math.max(0, (itemsAddedAt - treeLoadedAt) - merkleAddMs - recordInsertMs),
                     treeSaveMs: treeSavedAt - itemsAddedAt,
                     commitMs: committedAt - treeSavedAt,
                     stampMs: Date.now() - committedAt,

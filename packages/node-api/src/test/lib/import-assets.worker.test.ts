@@ -1,4 +1,4 @@
-import { importAssetsHandler, IMPORT_RECORD_FLUSH_SIZE } from '../../lib/import-assets.worker';
+import { importAssetsHandler, IMPORT_RECORD_FLUSH_SIZE, DATABASE_BATCH_SIZE } from '../../lib/import-assets.worker';
 import type { IImportAssetsData } from '../../lib/import-assets.worker';
 import type { ITaskContext, IQueueBackend, ITaskResult, WorkerTaskCompletionCallback, UnsubscribeFn } from 'task-queue';
 import { TaskStatus, setQueueBackend } from 'task-queue';
@@ -40,6 +40,14 @@ jest.mock('storage', () => ({
 // its hash in here.
 const mockExistingDatabaseRecords: Array<{ _id: string; hash: string }> = [];
 
+// What the database's state file says, which is how the import tells its own writes apart from
+// another writer's. A test that wants the database to look changed by somebody else puts a
+// different stamp in here between batches.
+let mockDatabaseState: { lastModifiedAt?: string } | undefined = undefined;
+
+// Makes each stamp different from the last, the way a real timestamp is.
+let stampCounter = 0;
+
 jest.mock("bdb", () => ({
     BsonDatabase: jest.fn().mockImplementation(() => ({
         collection: jest.fn().mockReturnValue({
@@ -78,12 +86,17 @@ jest.mock("api", () => ({
     acquireWriteLock: jest.fn().mockResolvedValue(true),
     releaseWriteLock: jest.fn().mockResolvedValue(undefined),
     updateDatabaseConfig: jest.fn().mockResolvedValue(undefined),
+    loadDatabaseState: jest.fn().mockImplementation(async () => mockDatabaseState),
 }));
 
 jest.mock('../../lib/tree', () => ({
     loadMerkleTree: jest.fn().mockResolvedValue({ nodes: [], databaseMetadata: { filesImported: 0 } }),
     saveMerkleTree: jest.fn().mockResolvedValue(undefined),
-    stampDatabaseModified: jest.fn().mockResolvedValue(undefined),
+    // Behaves like the real stamp: it writes a new modified time into the database state, which is
+    // what tells the next batch that the last writer was this run.
+    stampDatabaseModified: jest.fn().mockImplementation(async () => {
+        mockDatabaseState = { lastModifiedAt: `stamp-${stampCounter += 1}` };
+    }),
 }));
 
 jest.mock('merkle-tree', () => ({
@@ -250,6 +263,8 @@ describe('importAssetsHandler', () => {
         // The default hash-file result below reports a zero hash, and the default expectation is that
         // it is already in the database so no upload is queued and the run can finish. That used to
         // be said by the task result; the import reads it from the database now, so it is said here.
+        mockDatabaseState = undefined;
+        stampCounter = 0;
         mockExistingDatabaseRecords.length = 0;
         mockExistingDatabaseRecords.push({ _id: "default-existing", hash: Buffer.from(new Uint8Array(3)).toString("hex") });
         mockBackend = new MockBackend();
@@ -1122,5 +1137,56 @@ describe('importAssetsHandler', () => {
 
         // Only the save at the end of the run, which every import does.
         expect(hashCache.save).toHaveBeenCalledTimes(1);
+    });
+
+    //
+    // Dropping the database's cached shards and index pages before a batch is written.
+    //
+    // Dropping them makes the batch read back what it already had: about one and three quarter reads
+    // per record against none when they are kept, and those reads grow with the database because an
+    // index page holds every record in it. They are dropped only when the database's own modified
+    // stamp differs from the one this run last wrote, which is what says somebody else has written.
+    //
+    function importOneBatchOfNewFiles(): { flush: jest.Mock; commit: jest.Mock } {
+        const { BsonDatabase } = require("bdb");
+        const databaseFlush = jest.fn().mockResolvedValue(undefined);
+        const databaseCommit = jest.fn().mockResolvedValue(undefined);
+        BsonDatabase.mockImplementation(() => ({
+            collection: jest.fn().mockReturnValue({
+                insertOne: jest.fn().mockResolvedValue(undefined),
+                getAll: jest.fn().mockImplementation(async () => ({ records: mockExistingDatabaseRecords, next: undefined })),
+                sortIndex: jest.fn().mockReturnValue({ findByValue: jest.fn().mockResolvedValue([]) }),
+            }),
+            flush: databaseFlush,
+            commit: databaseCommit,
+        }));
+
+        hashFileReportsNewFile();
+        uploadSucceeds();
+        scanFindsOneFile('/test/photos/img1.jpg');
+
+        return { flush: databaseFlush, commit: databaseCommit };
+    }
+
+    test("drops the database's cached pages when the database was last written by something else", async () => {
+        watchHashCache();
+        const database = importOneBatchOfNewFiles();
+        mockDatabaseState = { lastModifiedAt: 'written-by-an-earlier-run' };
+
+        await importAssetsHandler(makeData(), makeContext());
+
+        expect(database.commit).toHaveBeenCalledTimes(1);
+        expect(database.flush).toHaveBeenCalled();
+    });
+
+    test("keeps the database's cached pages when nothing has written to it", async () => {
+        watchHashCache();
+        const database = importOneBatchOfNewFiles();
+        mockDatabaseState = undefined;
+
+        await importAssetsHandler(makeData(), makeContext());
+
+        expect(database.commit).toHaveBeenCalledTimes(1);
+        expect(database.flush).not.toHaveBeenCalled();
     });
 });

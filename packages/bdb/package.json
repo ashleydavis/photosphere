@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "t": "bun run test",
+    "perf": "bun run perf-tests/run.ts",
     "tw": "bun run test:watch",
     "test": "jest",
     "test:coverage": "jest --coverage",
