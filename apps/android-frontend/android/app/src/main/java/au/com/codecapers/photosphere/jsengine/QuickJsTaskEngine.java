@@ -92,6 +92,29 @@ public final class QuickJsTaskEngine implements TaskEngine {
     private QuickJSContext context;
 
     //
+    // How many tasks this context has run since it was built.
+    //
+    // The context is thrown away and built again once it passes the limit below, because it stops
+    // working after enough of them: an import of a real photo library ran about three hundred photos
+    // in and then failed every single one after that, each with a QuickJS stack overflow raised one
+    // frame deep, on the same thread, for files that import perfectly well in a fresh process.
+    // Restarting the app cleared it every time and let another three hundred through, which is what
+    // says the state that breaks it belongs to the context rather than to the photos or the device.
+    //
+    // What accumulates has not been found. This keeps imports working while it is looked for, and it
+    // is a workaround rather than a fix: something in the engine is being filled up and nobody knows
+    // what.
+    //
+    private int tasksRunOnContext = 0;
+
+    //
+    // How many tasks a context runs before it is replaced. Well inside the three hundred or so that
+    // used to break it, and high enough that rebuilding costs little: a rebuild re-evaluates the
+    // worker bundle, which takes a moment, against thousands of photos an import puts through.
+    //
+    private static final int MAX_TASKS_PER_CONTEXT = 100;
+
+    //
     // The host bridge installed into the context, reused across tasks (its current-task field is
     // updated per task). Accessed only from the worker thread.
     //
@@ -191,6 +214,7 @@ public final class QuickJsTaskEngine implements TaskEngine {
         try {
             ensureContext(callbacks);
             hostBridge.setCurrentTask(task);
+            tasksRunOnContext++;
 
             // Reset per-task subtask state: this engine context is reused across tasks, so clear any
             // stray child events and the outstanding-children count from a previous (e.g. cancelled) run.
@@ -429,10 +453,22 @@ public final class QuickJsTaskEngine implements TaskEngine {
     //
     private void ensureContext(EngineCallbacks callbacks) throws IOException {
         if (context != null) {
-            return;
+            if (tasksRunOnContext < MAX_TASKS_PER_CONTEXT) {
+                return;
+            }
+
+            Log.i(LOG_TAG, "Rebuilding the QuickJS context after " + tasksRunOnContext + " tasks.");
+            try {
+                context.destroy();
+            }
+            catch (Throwable error) {
+                Log.e(LOG_TAG, "Error destroying a QuickJS context that had run its tasks.", error);
+            }
+            context = null;
         }
 
         context = QuickJSContext.create();
+        tasksRunOnContext = 0;
         QuickJSLoader.initConsoleLog(context);
         hostBridge = new HostBridge(callbacks, cancellationState, sessionId, storageRoot, androidContext);
 

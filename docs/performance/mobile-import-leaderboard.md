@@ -413,3 +413,29 @@ The insert still costs more as the database grows, but three times less than it 
 | 7 | videoMetadata | 9% | not attempted |
 
 Committing is now most of what writing to the database costs. What a commit does is write one file per dirty shard and one per shard merkle tree, and a batch of fifty records lands in about forty of the hundred shards, so it writes about eighty files. That count comes from how records are spread across shards, which is part of the on-disk layout and cannot be changed.
+
+### An import of a real library could not finish at all
+
+Every measurement above was taken over a time-boxed pass of fifteen minutes or less, and that box ends just short of where the interesting thing happens. Run without one, an import took in about three hundred photos and then failed every single photo after that, thousands of them, each with `InternalError: stack overflow` raised by QuickJS one frame deep inside `getFileInfo`.
+
+It was not caused by any of the work here: the commit before this one fails identically. Nothing had ever run long enough to see it.
+
+What it is not: not the photos (the same files import in a fresh process), not the thread (the engine's worker thread never changes), not file descriptors (362 open against a limit of 32768), not the device (a restart of the app clears it completely and lets another three hundred through). What it is: something that accumulates in the QuickJS context as it runs tasks. The app's native heap climbs by roughly 170 KB a photo while it happens.
+
+Two attempts at the cause failed. ImageMagick was calling `MagickWandGenesis` and `MagickWandTerminus` around every invocation, which is the wrong pattern for a long-lived process and a documented leaker; starting it once changed neither the heap nor the failure. The engine's worker thread was checked in case it had been replaced, which would leave QuickJS measuring its stack against a thread that had gone; it never changes.
+
+**What fixes it: the engine throws its context away and builds a new one every hundred tasks.** That is a workaround and is written down as one in the code: it keeps imports working while what fills the context up is still unknown.
+
+| A single uninterrupted import | Before | After |
+| --- | --- | --- |
+| Photos taken in | 302, then every one failed | 1,422 in 150 minutes, none failed |
+
+### Where that leaves the two hour target
+
+Not met, and the reason is now clear. `commit` is what a database write mostly is, and its cost grows with the size of the database: 51% of an import by a thousand photos in, with the cost of a batch three and a half times what it was at three hundred.
+
+The reason is the sort indexes. A leaf page holds every record in it, so a commit rewrites every record in the index however few were added. That makes a bulk import quadratic in the number of photos. Page size is part of the on-disk layout, which cannot change, so what is left is how often a commit happens.
+
+Batches of two hundred and fifty were tried for that. Over the first seventy minutes they were well ahead: 1,389 photos against 1,061 for batches of fifty, with commit down from 51% of the import to 22%. Then it collapsed, taking eighty minutes to add thirty-three more photos, which is what a single commit of two hundred and fifty records against a database of fourteen hundred looks like while it holds the write lock and every upload waits behind it. Reverted.
+
+So the import is no longer broken, and it is no longer slow for the first several hundred photos, but a whole library of a couple of thousand still takes hours, and the next thing standing in the way is inside the database's index rather than anywhere in the import.
