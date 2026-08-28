@@ -479,3 +479,13 @@ Reverted.
 | export | 0 | not attempted |
 
 `commit` is what is left and it is the largest thing on the list, but what it costs is decided by the sort index page holding every record, which is part of the on-disk layout. Nothing in the import can change that. Two hours for a first import of a couple of thousand photos needs that page format to change, or the index to be built once at the end of a bulk import rather than maintained through it.
+
+### export: measured, and deliberately not attempted
+
+Copying an item out of the photo library into the app's sandbox costs 72 ms a photo and 1.9 seconds a video, which is about 4% of a cold pass and more of one that is mostly videos. The copy exists because a library item is not a file: the hasher and the media tools both need a path they can open.
+
+The device does offer one. `content query --uri content://media/external/images/media --projection _data` returns real filesystem paths, and an app holding the media permissions can generally open them. Handing the import the original's own path would remove the copy entirely.
+
+It is not being done, and the reason is what closing an item does: it deletes the copy the open made. Point the import at the original and that delete is pointed at the user's own photo. The guard is one line, and one line is exactly the kind of thing that is right until somebody edits around it, at which point the failure is somebody's photos rather than a slow import. Four percent is not worth putting a delete anywhere near a photo library that is not ours.
+
+If it is wanted, the safe shape is for the close to refuse any path outside the sandbox rather than to remember whether it made a copy, so that forgetting cannot delete anything.
