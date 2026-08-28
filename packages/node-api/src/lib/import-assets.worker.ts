@@ -47,19 +47,20 @@ export const CACHE_FLUSH_SIZE = 100;
 // against an item count that did not change. So the cost is per commit and per database size, not
 // per asset, and the way to reduce it is fewer commits.
 //
-// Fifty rather than twenty for that reason, and not the hundred that was tried first: a hundred is
-// more commits saved, but it could not be measured against the other figures here, because no batch
-// of a hundred completes inside the ten minute pass they were all taken over, and a thirty minute
-// pass long enough to fill one makes the phone throttle and every other stage drift with it.
+// A hundred, measured over a seventy minute import of a real library rather than the ten minute
+// passes the earlier numbers came from: 1,416 photos taken in against 1,061 for fifty, with commit
+// falling from 51% of the import to 39%. Two hundred and fifty saves more commits again and was
+// ahead for seventy minutes, then stopped dead: a commit of that many records against a database of
+// fourteen hundred holds the write lock long enough that every upload queues behind it, and eighty
+// minutes added thirty-three photos. A hundred holds a steady rate the whole way.
 //
-// The cost is that a photo waits longer to appear in
-// the gallery during a bulk backfill, and that a run interrupted before a batch fills loses the
-// assets in it from the database, having already paid to upload and process them. That
-// is the right trade for a first backup of a whole library, which is what this number is for; the
-// scanner's caught-up escape means a phone that has finished backfilling still writes a photo it has
-// just taken without waiting for forty-nine more.
+// The cost is that a photo waits longer to appear in the gallery during a bulk backfill, and that a
+// run interrupted before a batch fills loses the assets in it from the database, having already paid
+// to upload and process them. That is the right trade for a first backup of a whole library, which
+// is what this number is for; the scanner's caught-up escape means a phone that has finished
+// backfilling still writes a photo it has just taken without waiting for the rest of a batch.
 //
-export const DATABASE_BATCH_SIZE = 50;
+export const DATABASE_BATCH_SIZE = 100;
 
 //
 // Payload for the import-assets task. Contains the paths to scan plus the configuration
