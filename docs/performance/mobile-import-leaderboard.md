@@ -439,3 +439,43 @@ The reason is the sort indexes. A leaf page holds every record in it, so a commi
 Batches of two hundred and fifty were tried for that. Over the first seventy minutes they were well ahead: 1,389 photos against 1,061 for batches of fifty, with commit down from 51% of the import to 22%. Then it collapsed, taking eighty minutes to add thirty-three more photos, which is what a single commit of two hundred and fifty records against a database of fourteen hundred looks like while it holds the write lock and every upload waits behind it. Reverted.
 
 So the import is no longer broken, and it is no longer slow for the first several hundred photos, but a whole library of a couple of thousand still takes hours, and the next thing standing in the way is inside the database's index rather than anywhere in the import.
+
+### probe, attempt 1: read the dimensions without the EXIF. COULD NOT BE MEASURED.
+
+Validating a photo asks for its whole file info, which runs ImageMagick twice: once for the width and height and again for the EXIF. Validation looks only at the dimensions. Asking for just those makes it one run, and a unit test pins that it runs ImageMagick once rather than twice.
+
+It could not be measured on the device. Three passes in a row, of fifteen, thirty and seventy minutes, reached only videos: the scan puts them first and there are enough of them, at several seconds each, that no pass got to a photo. The change touches images only, so a pass with no photos in it says nothing. Reverted rather than committed on a mechanism alone.
+
+### videoMetadata, attempt 1: seek before reading the input, not after. FAILED.
+
+`ffmpeg -i file -ss T` is an output seek: ffmpeg decodes the video from its start up to T and throws every frame away to keep one, so a frame from the middle of a video costs half the video. `ffmpeg -ss T -i file` jumps to the nearest keyframe first. That is a real difference and the reason this looked promising.
+
+Measured against the same code with the seek moved back, on the same phone within a few degrees:
+
+| Per video | Seek after the input | Seek before it |
+| --- | --- | --- |
+| videoMetadata | 2,965 ms | 3,393 ms |
+
+Slower, not faster. Two things explain it. The videos in this library are short, so the decode an output seek does is short too, while a keyframe seek has its own cost. And what a pass spends per video depends far more on which videos it happened to reach than on the seek: across the runs here the same code produced 2,676, 2,965, 3,934 and 4,834 ms a video. That spread is wider than the change being looked for, which makes this stage hard to measure at all without pinning the set of videos.
+
+Reverted.
+
+### Where the leaderboard stands
+
+| Stage | Attempts | Outcome |
+| --- | --- | --- |
+| hash | done | native hashing, then native hashing of written assets |
+| databaseLookup | 1 | removed entirely |
+| databaseWrite: cached pages | 1 | kept, inserts seven times faster |
+| databaseWrite: batch size | 3 | fifty kept; a hundred unmeasurable, two hundred and fifty worse at scale |
+| databaseWrite: index list | 1 | no effect, reverted |
+| databaseWrite: directory memo | 1 | no effect, reverted |
+| photoMetadata | done | EXIF header instead of the whole photo |
+| the derivative images | done | each made from the one before it |
+| upload | done | native file copies |
+| display | 1 | failed |
+| probe | 1 | could not be measured |
+| videoMetadata | 1 | failed |
+| export | 0 | not attempted |
+
+`commit` is what is left and it is the largest thing on the list, but what it costs is decided by the sort index page holding every record, which is part of the on-disk layout. Nothing in the import can change that. Two hours for a first import of a couple of thousand photos needs that page format to change, or the index to be built once at the end of a bulk import rather than maintained through it.
