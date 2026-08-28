@@ -52,7 +52,16 @@ public final class MediaLibraryHost {
     // Newest first, so a backfill that is interrupted has brought in the photos the user is most
     // likely to want first.
     //
-    private static final String SORT_NEWEST_FIRST = MediaStore.Files.FileColumns.DATE_ADDED + " DESC";
+    // Newest first, with the id breaking ties.
+    //
+    // The id is not decoration. Pages are asked for with a limit and an offset, and date added is
+    // not unique: a burst of photos, or a batch copied onto the device, all carry the same second.
+    // Rows that compare equal have no defined order between one query and the next, so a page could
+    // return a row an earlier page had already returned and leave another out altogether. Those left
+    // out were never imported and nothing said so: an import of a 2,307 item library walked to the
+    // end and stopped having taken in about 1,400 of them, reporting itself caught up. The id makes
+    // the order total, so every row is returned by exactly one page.
+    private static final String SORT_NEWEST_FIRST = MediaStore.Files.FileColumns.DATE_ADDED + " DESC, " + MediaStore.Files.FileColumns._ID + " DESC";
 
     //
     // Presents the system confirmation for deleting media the app does not own, and reports what the
@@ -137,7 +146,7 @@ public final class MediaLibraryHost {
             queryArgs.putString(ContentResolver.QUERY_ARG_SQL_SELECTION, mediaSelection());
             queryArgs.putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, mediaSelectionArgs());
             queryArgs.putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS,
-                new String[] { MediaStore.Files.FileColumns.DATE_ADDED });
+                new String[] { MediaStore.Files.FileColumns.DATE_ADDED, MediaStore.Files.FileColumns._ID });
             queryArgs.putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION, ContentResolver.QUERY_SORT_DIRECTION_DESCENDING);
             queryArgs.putInt(ContentResolver.QUERY_ARG_LIMIT, limit);
             queryArgs.putInt(ContentResolver.QUERY_ARG_OFFSET, offset);

@@ -86,7 +86,7 @@ describe("media-commands argv builders", () => {
             quality: 90,
             format: "jpeg",
         })).toEqual([
-            "/cache/sample.jpg", "-resize", "300x300", "-quality", "90", "+profile", "!icc,icm,*", "jpeg:/cache/out.jpg",
+            "/cache/sample.jpg", "-resize", "300x300", "-quality", "90", "+profile", "xmp", "jpeg:/cache/out.jpg",
         ]);
     });
 
@@ -105,7 +105,7 @@ describe("media-commands argv builders", () => {
         });
 
         expect(argv).toContain("+profile");
-        expect(argv[argv.indexOf("+profile") + 1]).toEqual("!icc,icm,*");
+        expect(argv[argv.indexOf("+profile") + 1]).toEqual("xmp");
     });
 
     test("buildSaveArgs produces the save/convert argv", () => {
