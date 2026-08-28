@@ -347,6 +347,9 @@ describe("addDatabaseWriteBreakdown", () => {
             treeSaveMs: 4,
             commitMs: 5,
             stampMs: 6,
+            writes: 7,
+            writeBytes: 8,
+            writeCallMs: 9,
         };
     }
 
@@ -361,6 +364,8 @@ describe("addDatabaseWriteBreakdown", () => {
         expect(timings.databaseHashCacheAssetIdMs).toBe(6);
         expect(timings.databasePerItemOtherMs).toBe(10);
         expect(timings.databaseCommitMs).toBe(5);
+        expect(timings.databaseWrites).toBe(7);
+        expect(timings.databaseWriteBytes).toBe(8);
     });
 
     test("accumulates across batches, which is what makes a per-batch cost visible", () => {

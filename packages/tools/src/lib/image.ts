@@ -253,8 +253,15 @@ export class Image {
             geometry = `x${height}`;
         }
 
-        // Build the convert command
-        let command = `${Image.convertCommand} "${this.filePath}" -resize ${geometry}`;
+        // Build the convert command.
+        //
+        // Everything but the colour profile is dropped from the copy. A resize otherwise carries the
+        // original's profiles into it, and a photo from a modern phone brings an XMP block of tens of
+        // kilobytes: the forty pixel thumbnail stored inside every asset record was coming out at
+        // fifty kilobytes of somebody else's metadata, which the database then wrote into both of its
+        // sort index pages and rewrote whole on every commit. The colour profile is kept because
+        // without it a wide gamut photo renders dull, and the original keeps everything regardless.
+        let command = `${Image.convertCommand} "${this.filePath}" -resize ${geometry} +profile "!icc,icm,*"`;
 
         // Add quality if specified
         if (quality !== undefined) {

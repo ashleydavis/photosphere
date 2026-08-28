@@ -119,6 +119,9 @@ export function createEmptyImportTimings(): IImportTimings {
         databaseTreeSaveMs: 0,
         databaseCommitMs: 0,
         databaseStampMs: 0,
+        databaseWrites: 0,
+        databaseWriteBytes: 0,
+        databaseWriteCallMs: 0,
         photosSeen: 0,
         videosSeen: 0,
     };
@@ -228,6 +231,12 @@ export interface IDatabaseWriteBreakdown {
 
     // Stamping the database as modified.
     stampMs: number;
+
+    // What the writes underneath all of that moved and cost: how many, how many bytes, and how long
+    // the platform spent taking them. Running totals for the whole run, not this batch.
+    writes: number;
+    writeBytes: number;
+    writeCallMs: number;
 }
 
 //
@@ -249,6 +258,9 @@ export function addDatabaseWriteBreakdown(timings: IImportTimings, breakdown: ID
         databaseTreeSaveMs: timings.databaseTreeSaveMs + breakdown.treeSaveMs,
         databaseCommitMs: timings.databaseCommitMs + breakdown.commitMs,
         databaseStampMs: timings.databaseStampMs + breakdown.stampMs,
+        databaseWrites: breakdown.writes,
+        databaseWriteBytes: breakdown.writeBytes,
+        databaseWriteCallMs: breakdown.writeCallMs,
     };
 }
 
@@ -396,6 +408,9 @@ export function formatImportTimings(timings: IImportTimings): string {
         databaseTreeSaveMs: timings.databaseTreeSaveMs,
         databaseCommitMs: timings.databaseCommitMs,
         databaseStampMs: timings.databaseStampMs,
+        databaseWrites: timings.databaseWrites,
+        databaseWriteBytes: timings.databaseWriteBytes,
+        databaseWriteCallMs: timings.databaseWriteCallMs,
         photosSeen: timings.photosSeen,
         videosSeen: timings.videosSeen,
         hashSharePercent: hashSharePercent(timings),

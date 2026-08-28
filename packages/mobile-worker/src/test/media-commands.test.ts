@@ -86,8 +86,26 @@ describe("media-commands argv builders", () => {
             quality: 90,
             format: "jpeg",
         })).toEqual([
-            "/cache/sample.jpg", "-resize", "300x300", "-quality", "90", "jpeg:/cache/out.jpg",
+            "/cache/sample.jpg", "-resize", "300x300", "-quality", "90", "+profile", "!icc,icm,*", "jpeg:/cache/out.jpg",
         ]);
+    });
+
+    test("buildResizeArgs drops every profile but the colour one", () => {
+        // A resize carries the original.'s profiles into the copy, and a photo from a modern phone
+        // brings an XMP block of tens of kilobytes. The forty pixel thumbnail that goes inside every
+        // asset record was coming out at fifty kilobytes of it, which the database then wrote into
+        // both sort index pages and rewrote whole on every commit. The colour profile stays, because
+        // without it a wide gamut photo renders dull.
+        const argv = buildResizeArgs({
+            inputPath: "/cache/sample.jpg",
+            outputPath: "/cache/out.jpg",
+            geometry: "40x40",
+            quality: 75,
+            format: "jpeg",
+        });
+
+        expect(argv).toContain("+profile");
+        expect(argv[argv.indexOf("+profile") + 1]).toEqual("!icc,icm,*");
     });
 
     test("buildSaveArgs produces the save/convert argv", () => {

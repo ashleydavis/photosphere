@@ -201,6 +201,12 @@ export interface IImportTimings {
     databaseCommitMs: number;
     databaseStampMs: number;
 
+    // The writes underneath the database work: how many, how many bytes, and how long the platform
+    // spent taking them.
+    databaseWrites: number;
+    databaseWriteBytes: number;
+    databaseWriteCallMs: number;
+
     // How many photos and how many videos the run dealt with. Kept apart because a stage that is
     // slow only for video is a different problem from one that is slow for everything, and a
     // library's mix of the two is what decides which of those matters.

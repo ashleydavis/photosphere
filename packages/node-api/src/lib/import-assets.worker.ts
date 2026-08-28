@@ -1,7 +1,7 @@
 import * as os from "os";
 import * as path from "path";
 import { ensureDir, remove, getProcessTmpDir } from "node-utils";
-import { createStorage, loadEncryptionKeysFromPem } from "storage";
+import { createStorage, loadEncryptionKeysFromPem, IStorage } from "storage";
 import { IAutoImportSource, IDatabaseDescriptor } from "api";
 import { resolveStorageCredentials } from "./resolve-storage-credentials";
 import type { ITaskContext, ITaskResult } from "task-queue";
@@ -226,7 +226,33 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     const { s3Config, encryptionKeyPems } = await resolveStorageCredentials(storageDescriptor.databasePath, storageDescriptor.encryptionKey);
     const { options: storageOptions } = await loadEncryptionKeysFromPem(encryptionKeyPems);
     const { storage, rawStorage } = createStorage(storageDescriptor.databasePath, s3Config, storageOptions);
-    const bsonDatabase = new BsonDatabase(storage, ".db/bson", uuidGenerator, timestampProvider);
+
+    // What the database writes, counted where it happens.
+    //
+    // Committing is the largest thing a database write does and the least understood: removing
+    // storage calls from it twice over changed nothing, which says the cost is not the number of
+    // calls. What is left is how many bytes it moves and how long the platform takes to take them,
+    // and neither has been measured.
+    let databaseWrites = 0;
+    let databaseWriteBytes = 0;
+    let databaseWriteCallMs = 0;
+    const countedStorage = new Proxy(storage, {
+        get(target: IStorage, property: string | symbol) {
+            const value = (target as any)[property];
+            if (property !== "write" || typeof value !== "function") {
+                return typeof value === "function" ? value.bind(target) : value;
+            }
+            return async (filePath: string, contentType: string | undefined, data: Buffer): Promise<void> => {
+                const startedAt = Date.now();
+                await value.call(target, filePath, contentType, data);
+                databaseWriteCallMs += Date.now() - startedAt;
+                databaseWriteBytes += data.length;
+                databaseWrites += 1;
+            };
+        },
+    });
+
+    const bsonDatabase = new BsonDatabase(countedStorage, ".db/bson", uuidGenerator, timestampProvider);
     const metadataCollection = bsonDatabase.collection<IAsset>("metadata");
 
     // Every hash the database already holds, and the asset it belongs to.
@@ -522,6 +548,9 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                     treeSaveMs: treeSavedAt - itemsAddedAt,
                     commitMs: committedAt - treeSavedAt,
                     stampMs: Date.now() - committedAt,
+                    writes: databaseWrites,
+                    writeBytes: databaseWriteBytes,
+                    writeCallMs: databaseWriteCallMs,
                 });
             }
 

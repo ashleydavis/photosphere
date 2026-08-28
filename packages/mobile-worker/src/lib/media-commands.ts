@@ -173,7 +173,14 @@ export function buildGeometry(width: number | undefined, height: number | undefi
 
 //
 // ImageMagick resize: thumbnail/display sizing with quality and output format.
-// `magick <input> -resize <geometry> -quality <q> <format>:<output>`
+// `magick <input> -resize <geometry> -quality <q> +profile "!icc,icm,*" <format>:<output>`
+//
+// Everything but the colour profile is dropped from the copy. A resize otherwise carries the
+// original's profiles into it, and a photo from a modern phone brings an XMP block of tens of
+// kilobytes: the forty pixel thumbnail stored inside every asset record was coming out at fifty
+// kilobytes of somebody else's metadata, which the database then wrote into both of its sort index
+// pages and rewrote whole on every commit. The colour profile is kept because without it a wide
+// gamut photo renders dull, and the original keeps everything regardless.
 //
 export function buildResizeArgs(options: IResizeArgs): string[] {
     return [
@@ -182,6 +189,8 @@ export function buildResizeArgs(options: IResizeArgs): string[] {
         options.geometry,
         "-quality",
         String(options.quality),
+        "+profile",
+        "!icc,icm,*",
         `${options.format}:${options.outputPath}`,
     ];
 }
