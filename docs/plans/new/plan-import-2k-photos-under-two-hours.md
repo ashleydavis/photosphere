@@ -75,3 +75,47 @@ Hashing is already dealt with and is not the target here: it is under 2% of a re
 **The measurement needs a physical phone and three things set on it.** `PHOTOSPHERE_NO_LAN_BRIDGE=1` on the run, Developer options' "Verify apps over USB" turned off so Play Protect does not hold each install for a tap, and a device-idle temporary allowlist entry so the app can start its foreground service from behind a lockscreen. `90-perf-import` asks for the allowlist entry itself.
 
 **A cold pass has to run long enough to flush the hash cache**, which happens every hundred files. A shorter pass leaves the cache empty, and the warm pass that follows then measures nothing. At the rate measured so far that means a box of about fifteen minutes.
+
+## Result: under two hours, measured on the Pixel 6
+
+A full import of the phone's library, 2,291 items of 2,307, now takes **45 minutes**. The target was under two hours. Before this session's work no run had ever finished at all: every one died at the same photo, 39 files in.
+
+Every figure below is wall clock on the physical Pixel 6, counting files in the app's own `asset/` directory on the device rather than reading the harness's timing log, because that log stops arriving part way through a long run.
+
+Progression of a full import: never finished -> 55 min -> 50 min -> 45 min.
+
+### The commits, and what each was worth
+
+| Commit | What it does | Measured effect |
+| --- | --- | --- |
+| `61b39a48` Stopped a WebP taking the whole app down mid-import | The bundled Android ImageMagick null-derefs in `WebPDecode` on any WebP carrying alpha, and it runs in-process so its crash is the app's. Android's own decoder converts a WebP to PNG and ImageMagick reads that. | Every import used to die at 39 files. This is what made a full import possible at all. |
+| `3e6cddf4` Read the hash cache once per engine, not once per photo | `hash-file` built a fresh `HashCache` and re-read the whole file per photo, so the cost grew with the cache. Held per directory now, re-read only when the file's length or modified time changes. | Cache loading 105.8s at 800 photos -> 2.5s at 596, and flat instead of growing. |
+| `ad9ba680` Stopped giving every late photo a database commit of its own | The "scanner is caught up, write what is waiting" escape fired while hundreds of photos were still in flight, so each got a full commit. It now also requires nothing in flight. | Removed the wall at ~1,800 photos where the rate fell from 60/min to 4.5/min. First run ever to finish: 55 min. |
+| `2366ef01` Wrote the database in batches of 250, not a hundred | A commit rewrites every shard it touches, so fewer commits is the lever. 250 had been rejected before on a misdiagnosis that this session disproved. | 55 min -> 50 min. Database time at the same point in the run 47.0s -> 29.6s. |
+| `defa3a66` Took a photo's size from the EXIF already read, not a second read | The EXIF parse walks the JPEG markers and the frame header gives width and height, which was thrown away and asked of ImageMagick separately. Non-JPEG still asks the tool. | Probe stage 166ms -> 28ms a photo. 50 min -> 45 min. |
+| `eb576f09` Made the LAN share suite follow the app when it is relaunched | Not a performance change. `READY-RELAUNCH-STALE-PORT` recurred in a suite the recorded fix never covered, and blocked a commit. | None. Registry entry unticked and the recurrence recorded. |
+
+### What was tried and thrown away
+
+Each of these was written, and then discarded because no measurement showed it helped. They are listed so nobody spends the time again without a reason to.
+
+- **Bringing ImageMagick's library state up once per process** instead of `MagickWandGenesis`/`MagickWandTerminus` around every invocation. Written to fix the crash at 39 files; the crash was WebP and this changed nothing about it. It is what the library documents, so it may still be worth doing, but it was never measured on its own.
+- **Refunding the pacing token when an item is recognised as already imported.** Written on the theory that a second walk crawled because skips cost budget. The wall at 1,800 survived it, so the theory was wrong, and no run attributed anything to it.
+- **Naming an exported library item by its MIME type rather than its display name.** Written chasing the crash on a Motion Photo named `.MP`, which was not the cause either.
+- **`-strip` on resizes instead of `+profile xmp`.** Introduced to dodge the crash. The crash was WebP, so the reason evaporated, and `-strip` throws away every derivative's colour profile for nothing. Reverted.
+
+### The ceiling ahead
+
+`backfill_items_per_minute` defaults to 60, so the scanner releases at most one photo a second and 2,307 photos cannot go below about 38 minutes whatever the code does. At 45 minutes the run is close to that. Anything further either raises that setting or is worth only the few minutes between 45 and 38.
+
+Where the remaining per-photo time goes, measured at 613 files: ImageMagick is about 80% of the child work, and the largest parts are the display resize (~324ms), the EXIF read (~303ms), the hash (~171ms) and the thumbnail resize (~146ms). The three resizes already chain off each other rather than each decoding the original.
+
+### Measuring this again
+
+The perf harness reports FAIL on a good run, because it reads timings from a log delivered over a WebSocket from the app and that connection dies about 40 minutes in. Count files on the device instead:
+
+```
+adb -s <serial> shell "run-as au.com.codecapers.photosphere ls files/photosphere-default/asset | wc -l"
+```
+
+Poll that every five minutes against a `90-perf-import` run and watch for the count to stop rising.
