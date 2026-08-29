@@ -47,12 +47,14 @@ export const CACHE_FLUSH_SIZE = 100;
 // against an item count that did not change. So the cost is per commit and per database size, not
 // per asset, and the way to reduce it is fewer commits.
 //
-// A hundred, measured over a seventy minute import of a real library rather than the ten minute
+// A hundred was measured over a seventy minute import of a real library rather than the ten minute
 // passes the earlier numbers came from: 1,416 photos taken in against 1,061 for fifty, with commit
-// falling from 51% of the import to 39%. Two hundred and fifty saves more commits again and was
-// ahead for seventy minutes, then stopped dead: a commit of that many records against a database of
-// fourteen hundred holds the write lock long enough that every upload queues behind it, and eighty
-// minutes added thirty-three photos. A hundred holds a steady rate the whole way.
+// falling from 51% of the import to 39%. Two hundred and fifty was tried at the same time and was
+// ahead for seventy minutes before stopping dead, which was put down to a commit of that many
+// records holding the write lock long enough for every upload to queue behind it. That was wrong: a
+// hundred stops dead in the same way, and the cause was the caught-up escape in
+// shouldWriteDatabaseBatch giving every remaining photo a commit of its own. With that fixed, two
+// hundred and fifty took a full import from 55 minutes to 50 and held a steady rate to the end.
 //
 // The cost is that a photo waits longer to appear in the gallery during a bulk backfill, and that a
 // run interrupted before a batch fills loses the assets in it from the database, having already paid
@@ -60,7 +62,7 @@ export const CACHE_FLUSH_SIZE = 100;
 // is what this number is for; the scanner's caught-up escape means a phone that has finished
 // backfilling still writes a photo it has just taken without waiting for the rest of a batch.
 //
-export const DATABASE_BATCH_SIZE = 100;
+export const DATABASE_BATCH_SIZE = 250;
 
 //
 // Whether the assets waiting to go into the database should be written now.
