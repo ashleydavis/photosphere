@@ -349,7 +349,7 @@ test_cli_to_desktop_secret() {
     # local so a later launch in the suite cannot change the port this test is talking to.
     start_app "$test_tmp/desktop" 0 || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; return; }
     app_port="$APP_PORT"
-    wait_for_ready "$app_port" || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
+    wait_for_ready "$app_port" app_port || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
 
     send_command "$app_port" navigate '{"page":"secrets"}'
     wait_for_log "$test_tmp/desktop" "Secrets page loaded" || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
@@ -409,7 +409,7 @@ test_cli_to_desktop_database() {
     # local so a later launch in the suite cannot change the port this test is talking to.
     start_app "$test_tmp/desktop" 0 || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; return; }
     app_port="$APP_PORT"
-    wait_for_ready "$app_port" || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
+    wait_for_ready "$app_port" app_port || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
 
     send_command "$app_port" navigate '{"page":"databases"}'
     wait_for_log "$test_tmp/desktop" "Databases page loaded" || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
@@ -470,7 +470,7 @@ test_desktop_to_cli_secret() {
     # local so a later launch in the suite cannot change the port this test is talking to.
     start_app "$test_tmp/desktop" 0 || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; return; }
     app_port="$APP_PORT"
-    wait_for_ready "$app_port" || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
+    wait_for_ready "$app_port" app_port || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
 
     send_command "$app_port" navigate '{"page":"secrets"}'
     wait_for_log "$test_tmp/desktop" "Secrets page loaded" || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
@@ -535,7 +535,7 @@ test_desktop_to_cli_database() {
     # local so a later launch in the suite cannot change the port this test is talking to.
     start_app "$test_tmp/desktop" 0 || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; return; }
     app_port="$APP_PORT"
-    wait_for_ready "$app_port" || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
+    wait_for_ready "$app_port" app_port || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
 
     send_command "$app_port" navigate '{"page":"databases"}'
     wait_for_log "$test_tmp/desktop" "Databases page loaded" || { mark_fail "$test_name" "$test_tmp/desktop/app.log"; stop_app "$app_port" "$test_tmp/desktop"; return; }
