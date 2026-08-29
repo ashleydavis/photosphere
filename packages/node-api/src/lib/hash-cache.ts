@@ -990,3 +990,77 @@ export class HashCache {
     }
 }
 
+
+//
+// A read-only hash cache already in hand, and what the file it came from looked like when it was
+// read.
+//
+interface ILoadedHashCache {
+    // The cache itself, loaded and ready to be asked for a hash.
+    cache: HashCache;
+
+    // The size of the cache file when it was read, in bytes.
+    fileLength: number;
+
+    // When the cache file was last modified when it was read, in milliseconds since the epoch.
+    fileLastModifiedMs: number;
+}
+
+//
+// The read-only cache held for each directory, so a second reader of the same cache does not read
+// the file again.
+//
+const loadedHashCaches = new Map<string, ILoadedHashCache>();
+
+//
+// Returns a read-only hash cache for a directory, reading the file only when it has changed.
+//
+// Loading a hash cache reads and decodes the whole file, and hashing a file asked for a fresh one
+// per file. The cost of that grows with the cache, and an import puts every photo it has already
+// done into the cache, so the price per photo rose as the import went on: on a Pixel 6 against a
+// real library it was 210ms a photo at four hundred photos and 651ms at sixteen hundred, which is
+// most of what made a long import slow down the longer it ran.
+//
+// The file's length and modification time are what decide whether the copy in hand is still the
+// file. Anything written by this process or another one changes both, so a writer's entries are
+// picked up; a change too small and too quick to move either only costs the reader a hash it could
+// have found, which is the same answer it would have given before the entry was written.
+//
+export async function loadSharedHashCache(cacheDir: string): Promise<HashCache> {
+    const cachePath = path.join(cacheDir, "hash-cache-x.dat");
+
+    let fileLength = -1;
+    let fileLastModifiedMs = -1;
+    if (await pathExists(cachePath)) {
+        const cacheFileStat = await fs.stat(cachePath);
+        fileLength = cacheFileStat.size;
+        fileLastModifiedMs = cacheFileStat.mtimeMs;
+    }
+
+    const alreadyLoaded = loadedHashCaches.get(cacheDir);
+    if (alreadyLoaded !== undefined
+        && alreadyLoaded.fileLength === fileLength
+        && alreadyLoaded.fileLastModifiedMs === fileLastModifiedMs) {
+        return alreadyLoaded.cache;
+    }
+
+    const cache = new HashCache(cacheDir, true);
+    await cache.load();
+    loadedHashCaches.set(cacheDir, {
+        cache,
+        fileLength,
+        fileLastModifiedMs,
+    });
+
+    return cache;
+}
+
+//
+// Forgets every cache held, so the next reader loads from the file again.
+//
+// Exported for tests, which need each one to start from nothing rather than from what the test
+// before it left behind.
+//
+export function forgetSharedHashCaches(): void {
+    loadedHashCaches.clear();
+}

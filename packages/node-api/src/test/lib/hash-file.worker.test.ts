@@ -10,9 +10,7 @@ jest.mock('../../lib/hash', () => ({
 }));
 
 jest.mock('../../lib/hash-cache', () => ({
-    HashCache: jest.fn().mockImplementation(() => ({
-        load: jest.fn().mockResolvedValue(undefined),
-    })),
+    loadSharedHashCache: jest.fn().mockResolvedValue({}),
 }));
 
 jest.mock('storage', () => ({

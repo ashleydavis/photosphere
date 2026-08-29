@@ -1,5 +1,5 @@
 import type { ITaskContext } from "task-queue";
-import { HashCache } from "./hash-cache";
+import { loadSharedHashCache } from "./hash-cache";
 import { getHashFromCache, validateAndHash } from "./hash";
 import { IFileStat } from "./file-scanner";
 import { IDatabaseDescriptor } from "api";
@@ -92,10 +92,10 @@ export async function hashFileHandler(data: IHashFileData, context: ITaskContext
     // queued, which on a busy import is a different thing entirely.
     const taskStartedAt = Date.now();
 
-    // Load the hash cache in read-only mode.
+    // The hash cache, read-only and shared with every other file this engine hashes: reading it is
+    // proportional to how much is in it, and this task used to read the whole thing per file.
     const cacheLoadStartedAt = Date.now();
-    const localHashCache = new HashCache(hashCacheDir, true);
-    await localHashCache.load();
+    const localHashCache = await loadSharedHashCache(hashCacheDir);
     const cacheLoadMs = Date.now() - cacheLoadStartedAt;
 
     // Try to retrieve the hash from the cache first.
