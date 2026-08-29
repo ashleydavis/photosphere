@@ -111,11 +111,26 @@ public class ImageMagickRunner implements MediaToolRunner {
             argv[0] = "magick";
             System.arraycopy(args, 0, argv, 1, args.length);
 
+            // The bundled build takes the app down on a WebP, so Android's decoder converts one to a
+            // PNG first and ImageMagick reads that instead. See WebPInput.
+            File converted = null;
+            int inputIndex = WebPInput.inputPathIndex(args);
+            if (inputIndex >= 0) {
+                File input = new File(args[inputIndex]);
+                if (input.isFile() && WebPInput.isWebP(input)) {
+                    converted = WebPInput.decodeToPng(input, cacheDir);
+                    argv[inputIndex + 1] = converted.getAbsolutePath();
+                }
+            }
+
             String capturePath = new File(cacheDir, "magick-capture-" + callCounter + ".txt").getAbsolutePath();
             Object[] result = nativeMagick(argv, capturePath);
             int exit = (result != null && result[0] instanceof Integer) ? (Integer) result[0] : 1;
             String output = (result != null && result[1] instanceof String) ? (String) result[1] : "";
             new File(capturePath).delete();
+            if (converted != null) {
+                converted.delete();
+            }
             return new ToolResult(exit, output);
         }
     }
