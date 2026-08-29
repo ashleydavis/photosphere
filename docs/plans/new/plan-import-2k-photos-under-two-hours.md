@@ -82,7 +82,7 @@ A full import of the phone's library, 2,291 items of 2,307, now takes **45 minut
 
 Every figure below is wall clock on the physical Pixel 6, counting files in the app's own `asset/` directory on the device rather than reading the harness's timing log, because that log stops arriving part way through a long run.
 
-Progression of a full import: never finished -> 55 min -> 50 min -> 45 min.
+Progression of a full import: never finished -> 55 min -> 50 min -> 45 min. Confirmed at 45 minutes again on the final committed code.
 
 ### The commits, and what each was worth
 
@@ -93,6 +93,7 @@ Progression of a full import: never finished -> 55 min -> 50 min -> 45 min.
 | `ad9ba680` Stopped giving every late photo a database commit of its own | The "scanner is caught up, write what is waiting" escape fired while hundreds of photos were still in flight, so each got a full commit. It now also requires nothing in flight. | Removed the wall at ~1,800 photos where the rate fell from 60/min to 4.5/min. First run ever to finish: 55 min. |
 | `2366ef01` Wrote the database in batches of 250, not a hundred | A commit rewrites every shard it touches, so fewer commits is the lever. 250 had been rejected before on a misdiagnosis that this session disproved. | 55 min -> 50 min. Database time at the same point in the run 47.0s -> 29.6s. |
 | `defa3a66` Took a photo's size from the EXIF already read, not a second read | The EXIF parse walks the JPEG markers and the frame header gives width and height, which was thrown away and asked of ImageMagick separately. Non-JPEG still asks the tool. | Probe stage 166ms -> 28ms a photo. 50 min -> 45 min. |
+| `14017f28` Stripped derivatives properly, because +profile xmp does nothing on Android | `+profile xmp` silently fails on the bundled Android ImageMagick, so every derivative kept the original's metadata. Only `-strip` works. | Thumbnail 116 KB -> ~1.4 KB in the record. Database 194 MB at 928 photos -> 26 MB at 2,291. Database write time 958s -> 30s. |
 | `eb576f09` Made the LAN share suite follow the app when it is relaunched | Not a performance change. `READY-RELAUNCH-STALE-PORT` recurred in a suite the recorded fix never covered, and blocked a commit. | None. Registry entry unticked and the recurrence recorded. |
 
 ### What was tried and thrown away
@@ -102,7 +103,7 @@ Each of these was written, and then discarded because no measurement showed it h
 - **Bringing ImageMagick's library state up once per process** instead of `MagickWandGenesis`/`MagickWandTerminus` around every invocation. Written to fix the crash at 39 files; the crash was WebP and this changed nothing about it. It is what the library documents, so it may still be worth doing, but it was never measured on its own.
 - **Refunding the pacing token when an item is recognised as already imported.** Written on the theory that a second walk crawled because skips cost budget. The wall at 1,800 survived it, so the theory was wrong, and no run attributed anything to it.
 - **Naming an exported library item by its MIME type rather than its display name.** Written chasing the crash on a Motion Photo named `.MP`, which was not the cause either.
-- **`-strip` on resizes instead of `+profile xmp`.** Introduced to dodge the crash. The crash was WebP, so the reason evaporated, and `-strip` throws away every derivative's colour profile for nothing. Reverted.
+Note that `-strip` was thrown away too, and putting it back is the `14017f28` commit above. It had been introduced to dodge the crash, the crash turned out to be WebP, so the reason written on it evaporated and it was reverted for costing every derivative its colour profile. The next run showed what that reasoning missed: the flag was doing a second job nobody had written down, because the `+profile xmp` it replaced does nothing at all on this build. A change whose stated reason is wrong is not the same as a change that does nothing, and the way to tell them apart is to measure rather than to reason about the comment.
 
 ### The ceiling ahead
 
@@ -119,3 +120,39 @@ adb -s <serial> shell "run-as au.com.codecapers.photosphere ls files/photosphere
 ```
 
 Poll that every five minutes against a `90-perf-import` run and watch for the count to stop rising.
+
+## The database format is unchanged
+
+**No change was made to the database format.** Checked three ways:
+
+- No commit in this work touches `packages/bdb` (the database engine), the asset record type in `packages/api`, or `upload-asset.worker.ts` / `media-file-database.ts`, which are what build a record. `git diff --stat` over the whole range returns nothing for any of them.
+- The one change that goes anywhere near a record is where a photo's width and height come from: the EXIF read the import had already done, rather than a second read by an image tool. It writes the same two fields it always wrote. The `dimensions` the EXIF read now returns is destructured out before the rest is spread into the asset details, so it cannot reach a record.
+- Read back from the imported database on the device, the fields present across all 2,291 records are exactly: `_id, color, contentType, description, duration, fileDate, hash, height, labels, micro, origFileName, origPath, photoDate, properties, uploadDate, width`. No field added, none missing.
+
+One field's **contents** got smaller, which is not a format change and is the point of the `-strip` commit: the `micro` thumbnail inside each record now averages 1,370 bytes instead of carrying tens of kilobytes of the original photo's metadata.
+
+## Verified: the import really did the work
+
+Checked after a full import on the Pixel 6, because a faster import that quietly skips work is worse than a slow one.
+
+**Every item on the device is accounted for.** The library holds 2,307 items (2,187 images, 120 videos, counted from MediaStore).
+
+| | Count |
+| --- | --- |
+| Imported as assets | 2,291 |
+| Duplicates: content already stored under another library item | 14 |
+| Failed, and reported as failed | 2 |
+| **Total** | **2,307** |
+
+The 14 duplicates are the import doing its job: each was hashed, its content found already in the database, and no second copy stored. Confirmed by cross-referencing the hash cache against the database: every one of their hashes is present under another asset. All 2,291 stored hashes are distinct.
+
+The 2 failures are both files nothing could have imported, and both were counted as failures rather than silently dropped:
+
+- `1728013234744.gif`, an **animated** GIF. A resize of one writes a file per frame (`out-0.jpg`, `out-1.jpg`, ...), so the single output path the import expects never exists. Pre-existing: reproduced on the device with the bundled ImageMagick under both the old flags and the new, with identical results.
+- `received_376344457763121.mp4`, 794 bytes. Not a playable video.
+
+**The derivatives are real.** 2,291 assets, 2,291 thumbnails, 2,172 display images, no zero-length file anywhere. The 119 without a display are the videos: `video.ts` makes a thumbnail and a micro for a video and no display, by design, and that file was not touched. Twelve thumbnails and twelve display images sampled at random and decoded: every one a valid JPEG, thumbnails at the 300px minimum and displays at the 1000px minimum, aspect ratios preserved.
+
+**The records are complete.** All 2,291 have a hash, a content type, a width and height greater than zero, a photo date and a micro image. Content types: 1,981 JPEG, 176 PNG, 119 MP4, 11 WebP, 4 HEIC.
+
+**Sizes are sane.** Database 26 MB, originals 7.8 GB, display images 994 MB, thumbnails 94 MB.
