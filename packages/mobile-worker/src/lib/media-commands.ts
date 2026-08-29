@@ -173,18 +173,20 @@ export function buildGeometry(width: number | undefined, height: number | undefi
 
 //
 // ImageMagick resize: thumbnail/display sizing with quality and output format.
-// `magick <input> -resize <geometry> -quality <q> +profile xmp <format>:<output>`
+// `magick <input> -resize <geometry> -quality <q> -strip <format>:<output>`
 //
-// The XMP block is dropped from the copy. A resize otherwise carries the original's profiles into
-// it, and a photo from a modern phone brings an XMP block of tens of kilobytes: the forty pixel
-// thumbnail stored inside every asset record was coming out at fifty kilobytes of somebody else's
-// metadata, which the database then wrote into both of its sort index pages and rewrote whole on
-// every commit.
+// The original's metadata is dropped from the copy. A resize otherwise carries it in, and a photo
+// from a modern phone brings an XMP block of tens of kilobytes: the forty pixel thumbnail stored
+// inside every asset record was coming out at fifty kilobytes of somebody else's metadata, which
+// the database then wrote into both of its sort index pages and rewrote whole on every commit.
 //
-// Named rather than matched. The obvious spelling of "everything but the colour profile" is
-// `+profile "!icc,icm,*"`, and that form segfaults the bundled ImageMagick: it took the app down
-// forty seconds into an import. XMP is where the kilobytes are, and naming it leaves EXIF and the
-// colour profile alone, which is what a viewable copy wants anyway.
+// Stripped rather than picked at, because on the ImageMagick bundled for Android the surgical forms
+// do not work. `+profile "!icc,icm,*"` was tried first; `+profile xmp` after it, which reads as
+// though it does exactly what is wanted and silently does nothing there. Measured on a Pixel 6 with
+// `+profile xmp`: a thumbnail came out at 116 KB, the database reached 194 MB at 928 photos and its
+// hash index page 51 MB, and writing the database took 958 seconds of a run. With -strip, 21 MB at
+// 1,850 photos, a 3.2 MB index page, and 30 seconds of writing. The cost is that a derivative loses
+// its colour profile too, which is why the original is stored untouched and keeps everything.
 //
 export function buildResizeArgs(options: IResizeArgs): string[] {
     return [
@@ -193,8 +195,7 @@ export function buildResizeArgs(options: IResizeArgs): string[] {
         options.geometry,
         "-quality",
         String(options.quality),
-        "+profile",
-        "xmp",
+        "-strip",
         `${options.format}:${options.outputPath}`,
     ];
 }

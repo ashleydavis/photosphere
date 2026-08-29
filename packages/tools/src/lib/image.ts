@@ -261,10 +261,15 @@ export class Image {
         // somebody else's metadata, which the database then wrote into both of its sort index pages
         // and rewrote whole on every commit. The original is stored untouched and keeps everything.
         //
-        // Named rather than matched: `+profile "!icc,icm,*"` segfaults the ImageMagick bundled on
-        // Android. XMP is where the kilobytes are, and naming it leaves EXIF and the colour profile
-        // alone, which is what a viewable copy wants anyway.
-        let command = `${Image.convertCommand} "${this.filePath}" -resize ${geometry} +profile xmp`;
+        // Stripped rather than picked at, because on the ImageMagick bundled for Android the
+        // surgical forms do not work. `+profile "!icc,icm,*"` was tried first; `+profile xmp` after
+        // it, which reads as though it does exactly what is wanted and silently does nothing there.
+        // Measured on a Pixel 6 with `+profile xmp`: a thumbnail came out at 116 KB, the database
+        // reached 194 MB at 928 photos and its hash index page 51 MB, and writing the database took
+        // 958 seconds of a run. With -strip, 21 MB at 1,850 photos, a 3.2 MB index page, and 30
+        // seconds of writing. The cost is that a derivative loses its colour profile too, which is
+        // why the original is stored untouched and keeps everything.
+        let command = `${Image.convertCommand} "${this.filePath}" -resize ${geometry} -strip`;
 
         // Add quality if specified
         if (quality !== undefined) {

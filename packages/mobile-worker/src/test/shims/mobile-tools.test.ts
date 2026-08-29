@@ -211,7 +211,7 @@ describe("mobile tools Image", () => {
         expect(outputPath).toBe("/cache/temp_resize_uuid-1.jpg");
         const resizeCall = calls.find(call => call.argv.includes("-resize"));
         expect(resizeCall!.argv).toEqual([
-            "/cache/a.jpg", "-resize", "300x300", "-quality", "90", "+profile", "xmp", "jpeg:/cache/temp_resize_uuid-1.jpg",
+            "/cache/a.jpg", "-resize", "300x300", "-quality", "90", "-strip", "jpeg:/cache/temp_resize_uuid-1.jpg",
         ]);
     });
 

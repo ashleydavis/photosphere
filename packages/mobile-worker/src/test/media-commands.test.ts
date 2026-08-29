@@ -86,16 +86,17 @@ describe("media-commands argv builders", () => {
             quality: 90,
             format: "jpeg",
         })).toEqual([
-            "/cache/sample.jpg", "-resize", "300x300", "-quality", "90", "+profile", "xmp", "jpeg:/cache/out.jpg",
+            "/cache/sample.jpg", "-resize", "300x300", "-quality", "90", "-strip", "jpeg:/cache/out.jpg",
         ]);
     });
 
-    test("buildResizeArgs drops every profile but the colour one", () => {
-        // A resize carries the original.'s profiles into the copy, and a photo from a modern phone
+    test("buildResizeArgs strips the original's metadata from the copy", () => {
+        // A resize carries the original's metadata into the copy, and a photo from a modern phone
         // brings an XMP block of tens of kilobytes. The forty pixel thumbnail that goes inside every
         // asset record was coming out at fifty kilobytes of it, which the database then wrote into
-        // both sort index pages and rewrote whole on every commit. The colour profile stays, because
-        // without it a wide gamut photo renders dull.
+        // both sort index pages and rewrote whole on every commit. It has to be -strip: the
+        // surgical `+profile xmp` reads as though it does exactly this and silently does nothing on
+        // the ImageMagick bundled for Android.
         const argv = buildResizeArgs({
             inputPath: "/cache/sample.jpg",
             outputPath: "/cache/out.jpg",
@@ -104,8 +105,7 @@ describe("media-commands argv builders", () => {
             format: "jpeg",
         });
 
-        expect(argv).toContain("+profile");
-        expect(argv[argv.indexOf("+profile") + 1]).toEqual("xmp");
+        expect(argv).toContain("-strip");
     });
 
     test("buildSaveArgs produces the save/convert argv", () => {
