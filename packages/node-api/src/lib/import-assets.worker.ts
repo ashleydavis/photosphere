@@ -63,6 +63,33 @@ export const CACHE_FLUSH_SIZE = 100;
 export const DATABASE_BATCH_SIZE = 100;
 
 //
+// Whether the assets waiting to go into the database should be written now.
+//
+// A batch's worth is the usual answer, because every write pays for a full database commit whatever
+// its size, and a commit rewrites every shard it touches, so it costs more as the database grows.
+//
+// The other answer is a run that has genuinely finished with everything: an automatic import that
+// brought in a handful of photos and then went quiet has to write those few rather than hold them
+// for a batch that may be hours away. That is only true when nothing is in flight as well. The
+// scanner reports itself caught up the moment it has read the library to the end, which on a
+// backfill happens while hundreds of the photos it handed over are still being hashed and uploaded,
+// and writing on that alone gave every one of those photos a full commit to itself: measured on a
+// Pixel 6 against a real library, an import ran at sixty photos a minute until the scanner finished
+// its walk and then fell to four and a half a minute, one twenty-six second commit per photo.
+//
+export function shouldWriteDatabaseBatch(pendingCount: number, scannerHasNothingLeft: boolean, hasWorkInFlight: boolean): boolean {
+    if (pendingCount === 0) {
+        return false;
+    }
+
+    if (pendingCount >= DATABASE_BATCH_SIZE) {
+        return true;
+    }
+
+    return scannerHasNothingLeft && !hasWorkInFlight;
+}
+
+//
 // Payload for the import-assets task. Contains the paths to scan plus the configuration
 // needed by downstream hash-file and upload-asset tasks.
 //
@@ -312,6 +339,17 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     // How many hash-file and upload-asset tasks this import currently has in flight. Never allowed
     // above maxConcurrentChildTasks.
     let childTasksInFlight = 0;
+
+    //
+    // Whether the import still has a file it has not finished with.
+    //
+    // That is a task running, a file waiting to be hashed, or an asset waiting to be uploaded. The
+    // scanner being caught up says only that it has nothing left to hand over, which on a backfill
+    // happens while hundreds of the photos it already handed over are still being worked on.
+    //
+    function hasWorkInFlight(): boolean {
+        return childTasksInFlight > 0 || filesAwaitingHash.length > 0 || assetsAwaitingUpload.length > 0;
+    }
 
     //
     // What one file's hash cache entry is filed under: the identity the scanner gave it, or its own
@@ -589,8 +627,8 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
         //
         // The end of the run is covered without this: the final drain below calls
         // processPendingDatabaseUpdates directly rather than going through here, so nothing is left
-        // stranded in a part-filled batch.
-        if (pendingDatabaseUpdates.length < DATABASE_BATCH_SIZE && !scannerHasNothingLeft) {
+        // stranded in a part-filled batch. The rule itself is in shouldWriteDatabaseBatch.
+        if (!shouldWriteDatabaseBatch(pendingDatabaseUpdates.length, scannerHasNothingLeft, hasWorkInFlight())) {
             return;
         }
 
@@ -829,6 +867,15 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
         // loop instead. Both writes cost nothing when nothing has changed, so repeating it on every
         // idle tick is free.
         scannerHasNothingLeft = scannerProgress.caughtUp;
+
+        if (scannerProgress.caughtUp) {
+            // Nudged from here because the escape above waits for the work in flight to finish, and
+            // the last of that work finishes inside a completion callback that has already asked the
+            // queue whether it should write. Without this an automatic import that brought in a
+            // handful of photos and then went quiet would leave them in a part-filled batch, unwritten
+            // until something else happened to arrive.
+            throttledProcessQueue();
+        }
 
         if (scannerProgress.caughtUp && !flushing) {
 

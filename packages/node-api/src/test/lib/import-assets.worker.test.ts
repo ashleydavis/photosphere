@@ -1127,6 +1127,50 @@ describe('importAssetsHandler', () => {
     });
 
 
+
+    test("does not give every photo its own database commit once the scanner is caught up", async () => {
+        // The scanner says it is caught up the moment it has read the library to the end, which on a
+        // backfill happens while the photos it already handed over are still being hashed and
+        // uploaded. Writing then, because "what is waiting is all there is", gave each of those
+        // remaining photos a full database commit to itself, and a commit rewrites every shard it
+        // touches, so it costs more the bigger the database is.
+        // A hash per file rather than one for all of them, so all five are new files rather than
+        // four duplicates of the first.
+        mockBackend.setTaskResult("hash-file", (hashData: IHashFileData, taskId) => ({
+            taskId,
+            type: "hash-file",
+            inputs: hashData,
+            status: TaskStatus.Succeeded,
+            outputs: {
+                hash: new Uint8Array(Buffer.from("aabbc" + hashData.filePath.slice(-1), "hex")),
+                hashFromCache: false,
+            } as IHashFileResult,
+        }));
+        uploadSucceeds();
+
+        const release = jest.fn().mockResolvedValue(undefined);
+        mockCreateAutoImportScanner.mockImplementation(async (options: any) => ({
+            scan: async (visitFile: any) => {
+                options.onProgress({ backfillRemaining: 0, backfillComplete: true, currentItem: "a photo", skippedAsAlreadyImported: 0, caughtUp: true });
+                for (let photoNumber = 0; photoNumber < 5; photoNumber += 1) {
+                    await visitFile({
+                        filePath: `${EXPORTED_PATH}-${photoNumber}`,
+                        fileStat: { length: 1000, lastModified: new Date(5000) },
+                        contentType: 'image/jpeg',
+                        labels: [],
+                        logicalPath: `${EXPORTED_PATH}-${photoNumber}`,
+                        cacheIdentity: { key: `100000004${photoNumber}`, length: 4096, lastModified: 1700000000000 },
+                    });
+                }
+            },
+            release,
+        }) as any);
+
+        const result = await importAssetsHandler(autoImportData(), makeContext());
+
+        expect(result.imported).toHaveLength(5);
+        expect(result.timings.databaseBatches).toBe(1);
+    });
     test("does not save the hash cache while the scanner still has work to hand over", async () => {
         const hashCache = watchHashCache();
         hashFileReportsNewFile();
