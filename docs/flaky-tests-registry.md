@@ -738,3 +738,14 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 - Ruled out so far: the working tree it failed on passes the same test on an emulator when run again, so it is not deterministic in that tree. It is not the phone-library case below either: this run was on an emulator, which holds only the photos the test puts there.
 - Root cause: unknown. What is known is that the third photo reached the app's storage as a file, and the reload that should have brought it into the gallery started and never reported finishing.
 - Note for anyone reproducing it: this test cannot pass against a phone holding a real photo library. It waits for the gallery to hold exactly the three photos it seeded, and automatic import takes in everything the library holds, so on a phone with thousands of photos the count runs past three and the wait times out with a different signature (`Import: 51 imported` and rising in `app.log`). Run it on the emulator pool, which is what an ordinary run does.
+
+### S3-IMPORT-SLOWER-THAN-THE-DEFAULT-WAIT
+
+- [ ] Not fixed yet. The longer wait has landed (this commit) and is waiting on repeated green Release runs before the box is ticked.
+- Suite: mobile smoke tests (`bun run test:and`), test 41 (s3-database-lifecycle), on the CI emulator only.
+- Pattern: `Timed out waiting for log pattern: 2 assets imported`
+- Distinguishing evidence (this mode): `app.log` ends at `test-click: clicking element data-id="import-files-button"` with nothing after it and no error anywhere, and the kept logcat shows the import still working when the app was force-stopped. The bucket in the uploaded artifact holds both assets with their thumb and display renditions.
+- First seen: 2026-08-31, Release run 33381031802 on the `mobile` branch, job `android-smoke-tests`, `/tmp/photosphere-tests/41-s3-database-lifecycle-wq4H3g/`.
+- Recurrences: none yet. The same test passed on the two Release runs before it, at about 82s against the 159s of the failing one.
+- Root cause: **the wait was given the 120 second default and the import genuinely takes longer than that on a NAT-only CI emulator.** From the logcat: the `import-assets` task was added at 10:21:18.814, the two hashes finished at 10:22:57.9, both `save-asset` tasks succeeded at 10:23:06.4 (8.5s each, 2.6s of it uploading), and task messages were still arriving at 10:23:16.4 and 10:23:19.4 when the wait ran out and the app was force-stopped at 10:23:21.9. Nothing was stuck and nothing had errored: the step had seconds left to run. The create step in the same test was failing the same way for the same reason and was given 300 seconds; the import step was left on the default.
+- Evidence: run 33381031802, artifact `android-smoke-test-logs`, `logcat.txt` at the timestamps above, and `41-s3-database-lifecycle-wq4H3g/s3/data/photosphere-smoke-test/mobile-lifecycle/` holding `asset/`, `thumb/` and `display/` for both asset ids.
