@@ -13,18 +13,28 @@ description: >
 
   imagemagick and tree still come from Chocolatey, because they resolve.
 
+  It used to take the build from a dated autobuild tag with the build hash in the asset name, and that
+  is what failed the build-windows and build-desktop (windows-latest) jobs of the release run on
+  2026-08-31: "release not found", from `gh release download autobuild-2026-08-13-17-03`. BtbN keeps
+  only a rolling couple of weeks of those tags and deletes the rest, so a dated tag is not a pin, it
+  is a deadline. The `latest` release is permanent and its asset names carry no build hash, so the
+  version line is still pinned (n8.1, GPL, win64) while the tag and the file go on existing.
+
 inputs:
   release-tag:
-    description: The BtbN/FFmpeg-Builds release tag to take the build from.
+    description: >
+      The BtbN/FFmpeg-Builds release tag to take the build from. `latest`, not a dated
+      `autobuild-*` tag: those are deleted upstream after about two weeks and the download then
+      fails with "release not found".
     required: false
-    default: autobuild-2026-08-13-17-03
+    default: latest
 
   asset:
     description: >
-      The release asset to download. Pinned by exact name, build hash included, so a rebuild upstream
-      cannot silently change what the tests run against.
+      The release asset to download. Pinned to the n8.1 GPL win64 line by name; the `latest` release
+      rebuilds that file in place, so the name has no build hash in it to go stale.
     required: false
-    default: ffmpeg-n8.1.2-34-g9b6c8969e0-win64-gpl-8.1.zip
+    default: ffmpeg-n8.1-latest-win64-gpl-8.1.zip
 
 runs:
   using: composite
