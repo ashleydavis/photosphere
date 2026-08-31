@@ -6,9 +6,9 @@ Photosphere can take photos in from where they arrive, on its own, and push them
 
 Point Photosphere at one or more places where photos turn up and it will:
 
-- import anything that is already there, slowly, so backfilling years of photos does not make the machine unusable;
+- import anything that is already there, as fast as the machine manages;
 - import anything new on its next pass, a short while after the last one ended;
-- push what it imported to a remote database, when one is configured;
+- push what it imported to a remote database, when one is configured (implemented, but the sync loop runs in the WebView, so on mobile nothing is pushed until the app is opened);
 - optionally delete the source file once the photo is confirmed in the local database;
 - optionally drop local originals the remote already holds, so the local database can stay small.
 
@@ -61,9 +61,9 @@ The cost of a pass is a listing plus one hash cache lookup per item, because a p
 
 The consequence to know about is latency. A photo that arrives is imported by the next pass rather than the moment it lands, so the wait is up to one interval plus however long the pass takes.
 
-## Pacing
+## Nothing is paced
 
-Items are released at a fixed rate, 60 per minute by default, so backfilling years of photos does not make the machine unusable. The budget is capped at one minute's worth, so a run that waited does not then release a backlog all at once.
+Items are imported as fast as the machine manages. There used to be a rate limit, 60 items a minute by default, on the reasoning that backfilling years of photos would otherwise make the machine unusable. It was removed: nothing had ever measured the machine being made unusable, and the limit was the only thing setting the length of a full import. Measured on a Pixel 6 against a real library of 2,291 items, a full import took 45 minutes with it and 40 without.
 
 A run that is cancelled part way, by the app quitting or the setting being switched off, simply stops. Nothing is written down about where it had reached: the next run starts at the beginning of the listing again and the hash cache is what stops it re-importing anything.
 
@@ -83,7 +83,7 @@ Once a local database is connected to a remote it is a partial replica of it, wh
 
 Dropping them is a setting the app turns on, not something the CLI offers: a one-shot command must never silently delete someone's local files, and it is not a use case on the desktop machines where the CLI is used. Only the original and the transcoded display copy go; the thumbnail and the micro thumbnail stay, which is what keeps the gallery browsable with no network at all. An original the origin does not hold with a matching hash is never dropped, whatever else is going on.
 
-Which originals go is decided by a retention policy. Four are implemented, exported and unit tested in `packages/api/src/lib/retention-policy.ts`:
+Which originals go is decided by a retention policy. They are implemented, exported and unit tested in `packages/api/src/lib/retention-policy.ts`:
 
 | Policy | What it keeps |
 |---|---|
@@ -92,7 +92,7 @@ Which originals go is decided by a retention policy. Four are implemented, expor
 | `FreeSpaceRetentionPolicy` | Enough free space on the device, dropping the oldest confirmed until there is. |
 | `DropWhenConfirmedRetentionPolicy` | No confirmed originals at all: the smallest possible local database. |
 
-The active one is `ACTIVE_RETENTION_POLICY` at the bottom of that file, set to a two gigabyte size budget. The other three are written out directly beneath it and commented out, so switching policy is uncommenting one line.
+The active one is `ACTIVE_RETENTION_POLICY` at the bottom of that file. The others are written out beneath it and commented out, so switching policy is uncommenting one line.
 
 `localOriginalBudgetBytes` on the eviction task overrides the cap for one run without changing the code, which is what lets the unit tests exercise eviction with ordinary-sized photos rather than needing more than two gigabytes of test data.
 
@@ -131,7 +131,8 @@ Losing it costs nothing but the history: an unreadable record reads as empty, an
 |---|---|---|---|
 | Import from folders | Yes | Yes | Not applicable |
 | Import from the device photo library | No | No | Yes |
-| Pacing, cleanup, eviction | Yes | Yes | Yes |
+| Cleanup | Yes | Yes | Yes |
+| Eviction | Yes | Yes | No (the task exists but nothing on mobile queues it) |
 | Consolidation | Yes | Yes | No |
 
 The engine is platform-neutral and lives in `packages/api`, with the Node-side parts in `packages/node-api`. The only platform-specific part is the media source: `FolderMediaSource` covers folders on a filesystem and `DeviceMediaSource` covers the device photo library. The scanner itself talks only to `IMediaSource` and knows about neither.
@@ -140,7 +141,7 @@ On the desktop the settings live on the configuration dialog and the settings pa
 
 On mobile the same thing happens and the user does the same thing: switch the toggle on, and the app makes its private database, asks for the photo permission, walks the device photo library and imports what it finds, including photos taken while it is running. It runs the same `import-assets` task the CLI and the desktop run, reading the photo library through the same host bridge the rest of the worker code uses. The only difference is which media source is registered underneath.
 
-The `import-assets` task holds an engine slot for as long as the run lasts, and the `hash-file` and `upload-asset` tasks it queues hold more. On a phone that chain has to fit inside `EnginePool.POOL_SIZE`, which is five. It used to be worse: a separate `auto-import` task sat in a slot of its own for as long as the setting was on, and started an `import-assets` in a second slot, which is what deadlocked the pool at three, silently, with the setting on, the task running and the counts at zero forever. That task is gone and the run now ends, but the pool is still sized for the chain that remains. See [Mobile background tasks](mobile-background-tasks.md) before changing anything about that.
+The `import-assets` task holds an engine slot for as long as the run lasts, and the `hash-file` and `upload-asset` tasks it queues hold more. On a phone that chain has to fit inside `EnginePool.POOL_SIZE`. It used to be worse: a separate `auto-import` task sat in a slot of its own for as long as the setting was on, and started an `import-assets` in a second slot, which is what deadlocked the pool at three, silently, with the setting on, the task running and the counts at zero forever. That task is gone and the run now ends, but the pool is still sized for the chain that remains. See [Mobile background tasks](mobile-background-tasks.md) before changing anything about that.
 
 ## While the app is not on screen
 
@@ -169,55 +170,9 @@ All of it is opt-in and stays opt-in. Until the user switches automatic import o
 
 One more thing had to change for any of this to work: the engine pool used to be torn down when the WebView was destroyed, which is precisely when the service needs it. It is now torn down by whichever of the two goes last.
 
-## Where the code is
-
-| File | What it holds |
-|---|---|
-| `packages/api/src/lib/auto-import-settings.ts` | The settings, and the normalisation that makes a hand-edited settings blob safe to read. |
-| `packages/api/src/lib/retention-policy.ts` | The four retention policies and the active one. |
-| `packages/node-utils/src/lib/photo-folders.ts` | The operating system's photo folders. |
-| `packages/api/src/lib/media-source.ts` | The source abstraction the scanner reads through. |
-| `packages/api/src/lib/auto-import-queue.ts` | The queue and the pacing, with no I/O in it at all. |
-| `packages/api/src/lib/source-cleanup.ts` | Choosing and deleting confirmed source files. |
-| `packages/api/src/lib/import-record.ts` | What a database imported, capped and newest first. |
-| `packages/node-api/src/lib/import-record-storage.ts` | Reading and writing that record, deliberately outside the merkle tree so it never travels. |
-| `packages/node-api/src/lib/get-import-record.worker.ts` | Reading it for the interface, which cannot open the database itself. |
-| `packages/node-api/src/lib/media-source-registry.ts` | How a platform registers the source kinds it can serve. |
-| `packages/node-api/src/lib/folder-media-source.ts` | Folders on a filesystem, listed a page at a time. |
-| `packages/node-api/src/lib/auto-import-scanner.ts` | The scanner that feeds one run: reads the source, paces what it releases, ends when the listing is done. |
-| `packages/node-api/src/lib/create-auto-import-scanner.ts` | Building that scanner, and everything it needs from the database. |
-| `packages/node-api/src/lib/import-scanner.ts`, `manual-import-scanner.ts` | The interface the import reads files through, and the one-shot walk a manual import uses. |
-| `packages/node-api/src/lib/cleanup-sources.worker.ts` | The task behind the "free up space" button. |
-| `packages/node-api/src/lib/evict-originals.worker.ts` | Dropping local originals the origin holds. |
-| `packages/node-api/src/lib/consolidate.ts` | Joining a standalone database to a remote that already has content. |
-| `packages/node-api/src/lib/auto-import-desktop.ts` | What the desktop app should do about automatic import, worked out from its config. |
-| `packages/api/src/lib/auto-import-mobile.ts` | The same for mobile, plus what the settings file holds and the gap between background passes. |
-| `packages/api/src/lib/mobile-config-paths.ts` | Where `databases.toml` and `auto-import.toml` live in the app's storage sandbox. |
-| `packages/node-api/src/lib/auto-import-config-format.ts` | The contents of `auto-import.toml` and the conversion to and from it. |
-| `packages/node-api/src/lib/auto-import-config.worker.ts` | Reading and writing that file, for a caller with no filesystem of its own. |
-| `packages/mobile-worker/src/lib/plan-auto-import.worker.ts` | What a background pass should do, and the tasks it consists of. |
-| `packages/mobile-worker/src/lib/record-default-database.worker.ts` | Recording a database a pass has just created, so the next pass does not create it again. |
-| `packages/mobile-frontend/src/lib/mobile-auto-import-file.ts` | Reading and writing the settings from the WebView, one config key at a time. |
-| `packages/mobile-frontend/src/lib/mobile-auto-import-config-file.ts` | Reaching that file through the embedded worker. |
-| `apps/android-frontend/.../jsengine/AutoImportDriver.java`, `AutoImportPlan.java` | The loop and the single serialised pass, with no Android in them. |
-| `apps/android-frontend/.../jsengine/AutoImportService.java` | The foreground service that hosts the loop, its notification and its wake lock. |
-| `apps/ios-frontend/.../JsEngine/AutoImportDriver.swift` | The same loop and the same single pass on iOS. |
-| `apps/ios-frontend/ios/App/App/AppDelegate.swift` | Registering and asking for the background processing task. |
-| `packages/user-interface/src/lib/auto-import-config.ts` | Reading and writing the settings through the app's config store. |
-| `packages/user-interface/src/components/auto-import-settings.tsx` | The "Automatic import" card. |
-| `packages/user-interface/src/components/consolidate-database-dialog.tsx` | Joining a database to a remote so the two can sync. |
-| `packages/mobile-worker/src/lib/device-media-source.ts` | The device photo library as a media source. |
-| `packages/mobile-worker/src/shims/media-library.ts` | Typed access to the native photo library host functions. |
-| `packages/mobile-frontend/src/lib/mobile-media-permission.ts` | What to do when the photo permission is refused. |
-| `packages/mobile-frontend/src/lib/mobile-media-cleanup.ts` | Batching the device deletes the system asks the user to confirm. |
-| `apps/android-frontend/.../jsengine/MediaLibrary.java`, `MediaLibraryHost.java` | The Android photo library: paging, copying out and delete over `MediaStore`. |
-| `apps/android-frontend/.../jsengine/MediaPermissions.java`, `MediaDeleteBroker.java` | The per-version photo permission, and the staged delete confirmation. |
-| `apps/ios-frontend/.../MediaLibrary.swift`, `MediaLibraryHost.swift` | The same for iOS, over the Photos framework. |
-| `apps/cli/src/cmd/add.ts`, `apps/cli/src/cmd/connect.ts` | The import command, with and without `--watch`, and joining a database to a remote. |
-
 ## Tests
 
-Unit tests sit beside each of those files under `src/test/`. The end-to-end behaviour is covered by CLI smoke tests:
+Unit tests sit beside the code under `src/test/`. The end-to-end behaviour is covered by CLI smoke tests:
 
 | Test | What it proves |
 |---|---|
@@ -244,7 +199,7 @@ And by a mobile smoke test, which drives the real app on an Android emulator:
 | `48-auto-import-no-permission` | Switching the toggle on without the photo permission switches it back off, says why, and creates no database. The permission is refused from outside the app by revoking it and marking it user-fixed, which is what Android does when a user chooses "Don't allow" and means it, so the request is answered without a dialog a test cannot tap. |
 | `49-background-import` | A photo put into the device library while the app is backgrounded is imported, and so is one put there while the screen is off. Both are measured by counting originals in the database on disk through `run-as` rather than by anything the app says, because a backgrounded WebView may have its socket to the harness suspended, which is the exact moment the test cares about. It also checks the foreground service is running throughout and gone once the toggle is switched off. |
 
-All three are Android only. The iOS simulator has no supported way to remove a seeded photo, and a test that leaves one behind poisons every run after it. What test 49 covers is untestable on iOS for a second reason as well: a `BGProcessingTask` is scheduled by the system and the only way to force one is an lldb command against a running app, which this harness cannot issue on Xcode 14.2. That gap is written down in `apps/smoke-tests/tests/49-background-import/IOS-NOT-COVERED.md` rather than left as an absence nobody notices.
+Those are Android only. The iOS simulator has no supported way to remove a seeded photo, and a test that leaves one behind poisons every run after it. What test 49 covers is untestable on iOS for a second reason as well: a `BGProcessingTask` is scheduled by the system and the only way to force one is an lldb command against a running app, which this harness cannot issue on Xcode 14.2. That gap is written down in `apps/smoke-tests/tests/49-background-import/IOS-NOT-COVERED.md` rather than left as an absence nobody notices.
 
 Test 47 is the one that caught the engine-pool deadlock, and the one that would catch it again. It waits for the photo to arrive rather than for the task to start, because a deadlocked import looks exactly like a working one from outside: the setting is on, the task is running, and the counts sit at zero forever.
 
