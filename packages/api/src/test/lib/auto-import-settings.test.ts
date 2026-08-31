@@ -25,7 +25,6 @@ describe("auto-import-settings", () => {
                 { type: "folder", path: "/home/someone/Pictures", recurse: false },
                 { type: "device-album", albumId: "camera-roll" },
             ],
-            backfillItemsPerMinute: 120,
         };
 
         expect(normaliseAutoImportSettings(stored)).toEqual(stored);
@@ -37,7 +36,6 @@ describe("auto-import-settings", () => {
         expect(normalised).toEqual({
             enabled: true,
             sources: [],
-            backfillItemsPerMinute: DEFAULT_AUTO_IMPORT_SETTINGS.backfillItemsPerMinute,
         });
     });
 
@@ -46,17 +44,6 @@ describe("auto-import-settings", () => {
         const normalised = normaliseAutoImportSettings(stored);
 
         expect(normalised.enabled).toBe(false);
-    });
-
-    test("replaces pacing numbers that cannot be used", () => {
-        for (const badValue of [0, -30, Number.NaN, Number.POSITIVE_INFINITY, "60"]) {
-            const stored = {
-                backfillItemsPerMinute: badValue,
-            } as any;
-            const normalised = normaliseAutoImportSettings(stored);
-
-            expect(normalised.backfillItemsPerMinute).toBe(DEFAULT_AUTO_IMPORT_SETTINGS.backfillItemsPerMinute);
-        }
     });
 
     test("drops malformed sources and keeps the good ones", () => {

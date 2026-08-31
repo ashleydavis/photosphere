@@ -81,9 +81,9 @@ export async function addPaths(
         options,
     });
 
-    // Ctrl-C has to reach the task, not just this process: the task is what holds the watchers and
-    // the temporary directory, and shutting the queue down is what tells it to stop. A watching
-    // import only ends this way; a one-shot import ends on its own and never needs it.
+    // Ctrl-C has to reach the task, not just this process: the task is what holds the temporary
+    // directory, and shutting the queue down is what tells it to stop. An automatic import only ends
+    // this way; a one-shot import ends on its own and never needs it.
     registerTerminationCallback(async () => {
         queue.shutdown();
     });

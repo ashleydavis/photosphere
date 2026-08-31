@@ -73,7 +73,7 @@ export async function createAutoImportScanner(options: ICreateAutoImportScannerO
 
     // Every run reads the source from the beginning. Nothing is carried over from the last one, so
     // a photo that arrived since is found, and one already imported costs a hash cache lookup.
-    const queue = new AutoImportQueue(settings.backfillItemsPerMinute);
+    const queue = new AutoImportQueue();
 
     const source = buildMediaSource(settings.sources, {
         sessionTempDir: options.sessionTempDir,
@@ -149,7 +149,6 @@ export async function createAutoImportScanner(options: ICreateAutoImportScannerO
         source,
         queue,
         isCancelled: () => options.context.isCancelled(),
-        nowMs: () => Date.now(),
         sleep: milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)),
         sessionTempDir: options.sessionTempDir,
         uuidGenerator: options.context.uuidGenerator,

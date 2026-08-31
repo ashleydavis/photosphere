@@ -96,12 +96,6 @@ describe("planDesktopAutoImport", () => {
         expect(plan.isNewDefault).toBe(true);
         expect(plan.databasePath).toBe(path.join(APP_DATA_PATH, DEFAULT_DATABASE_FOLDER_NAME));
     });
-
-    test("the pacing is the shared default, not something the config invented", () => {
-        const plan = planDesktopAutoImport({ autoImportEnabled: true }, PHOTO_FOLDERS, APP_DATA_PATH);
-
-        expect(plan.settings.backfillItemsPerMinute).toBe(60);
-    });
 });
 
 describe("foldersAsSources", () => {

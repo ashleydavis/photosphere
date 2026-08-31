@@ -74,12 +74,6 @@ describe("planMobileAutoImport", () => {
         expect(plan.databasePath).toBe(DEFAULT_DATABASE_FOLDER_NAME);
     });
 
-    test("the pacing is the shared default, not something the settings invented", () => {
-        const plan = planMobileAutoImport(settingsWith({}), undefined);
-
-        expect(plan.settings.backfillItemsPerMinute).toBe(60);
-    });
-
     test("the default database has the same name as the desktop one", () => {
         // A user with both should see the same database name, and a support answer about one should
         // apply to the other.

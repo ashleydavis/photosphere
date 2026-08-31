@@ -127,9 +127,6 @@ export interface IImportOptions {
     // The places that are watched for new media.
     sources: IAutoImportSource[];
 
-    // How many items the run is allowed to release per minute, so taking in a whole photo library
-    // does not monopolise the phone.
-    backfillItemsPerMinute: number;
 }
 
 //

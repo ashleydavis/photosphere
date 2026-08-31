@@ -46,7 +46,6 @@ class FakeAutoImportConfigFile implements IAutoImportConfigFile {
                 settings: {
                     enabled: false,
                     sources: [],
-                    backfillItemsPerMinute: 60,
                 },
                 defaultDatabasePath: undefined,
                 pauseBetweenRunsMs: DEFAULT_AUTO_IMPORT_PAUSE_MS,
@@ -84,7 +83,6 @@ describe("mobile automatic import settings file", () => {
             settings: {
                 enabled: true,
                 sources: [{ type: "device-album", albumId: "all" }],
-                backfillItemsPerMinute: 120,
             },
             defaultDatabasePath: "photosphere-default",
             pauseBetweenRunsMs: 4000,
@@ -94,7 +92,6 @@ describe("mobile automatic import settings file", () => {
 
         expect(contents.settings.enabled).toBe(true);
         expect(contents.settings.sources).toEqual([{ type: "device-album", albumId: "all" }]);
-        expect(contents.settings.backfillItemsPerMinute).toBe(120);
         expect(contents.defaultDatabasePath).toBe("photosphere-default");
         expect(contents.pauseBetweenRunsMs).toBe(4000);
     });
@@ -107,7 +104,6 @@ describe("mobile automatic import settings file", () => {
             settings: {
                 enabled: "yes please" as any,
                 sources: [{ type: "nonsense" } as any],
-                backfillItemsPerMinute: -5,
             },
             defaultDatabasePath: undefined,
             pauseBetweenRunsMs: 0,
@@ -117,7 +113,6 @@ describe("mobile automatic import settings file", () => {
 
         expect(contents.settings.enabled).toBe(false);
         expect(contents.settings.sources).toEqual([]);
-        expect(contents.settings.backfillItemsPerMinute).toBe(60);
         expect(contents.pauseBetweenRunsMs).toBe(DEFAULT_AUTO_IMPORT_PAUSE_MS);
     });
 

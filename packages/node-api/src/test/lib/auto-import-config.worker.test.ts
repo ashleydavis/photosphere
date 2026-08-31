@@ -61,7 +61,6 @@ describe("mobile auto-import.toml", () => {
 
         expect(result.settings.enabled).toBe(false);
         expect(result.settings.sources).toEqual([]);
-        expect(result.settings.backfillItemsPerMinute).toBe(DEFAULT_AUTO_IMPORT_SETTINGS.backfillItemsPerMinute);
         expect(result.defaultDatabasePath).toBeUndefined();
         expect(result.pauseBetweenRunsMs).toBe(DEFAULT_AUTO_IMPORT_PAUSE_MS);
     });
@@ -94,7 +93,6 @@ describe("mobile auto-import.toml", () => {
                         recurse: false,
                     },
                 ],
-                backfillItemsPerMinute: 120,
             },
             defaultDatabasePath: "photosphere-default",
             pauseBetweenRunsMs: 5000,
@@ -103,7 +101,6 @@ describe("mobile auto-import.toml", () => {
         const result = await readAutoImportConfigHandler({ configPath: CONFIG_PATH }, context);
 
         expect(result.settings.enabled).toBe(true);
-        expect(result.settings.backfillItemsPerMinute).toBe(120);
         expect(result.settings.sources).toEqual([
             {
                 type: "device-album",
@@ -133,7 +130,6 @@ describe("mobile auto-import.toml", () => {
                         albumId: "all",
                     },
                 ],
-                backfillItemsPerMinute: 60,
             },
             defaultDatabasePath: "photosphere-default",
             pauseBetweenRunsMs: 30000,
@@ -142,7 +138,6 @@ describe("mobile auto-import.toml", () => {
         const toml: any = parseToml(await fs.readFile(path.join(tempDir, CONFIG_PATH), "utf8"));
 
         expect(toml.enabled).toBe(true);
-        expect(toml.backfill_items_per_minute).toBe(60);
         expect(toml.default_database_path).toBe("photosphere-default");
         expect(toml.pause_between_runs_ms).toBe(30000);
         expect(toml.sources).toEqual([
@@ -207,7 +202,6 @@ describe("mobile auto-import.toml", () => {
             settings: {
                 enabled: true,
                 sources: [],
-                backfillItemsPerMinute: 60,
             },
             defaultDatabasePath: undefined,
             pauseBetweenRunsMs: 1000,

@@ -50,7 +50,6 @@ describe("record-default-database", () => {
                 settings: {
                     enabled: true,
                     sources: [{ type: "device-album", albumId: "all" }],
-                    backfillItemsPerMinute: 60,
                 },
                 defaultDatabasePath: undefined,
                 pauseBetweenRunsMs: 5000,
@@ -81,7 +80,6 @@ describe("record-default-database", () => {
                 settings: {
                     enabled: true,
                     sources: [{ type: "device-album", albumId: "holiday-album" }],
-                    backfillItemsPerMinute: 120,
                 },
                 defaultDatabasePath: undefined,
                 pauseBetweenRunsMs: 1500,
@@ -93,7 +91,6 @@ describe("record-default-database", () => {
         const settings = await readAutoImportConfigHandler({ configPath: AUTO_IMPORT_CONFIG_PATH }, context);
         expect(settings.settings.enabled).toBe(true);
         expect(settings.settings.sources).toEqual([{ type: "device-album", albumId: "holiday-album" }]);
-        expect(settings.settings.backfillItemsPerMinute).toBe(120);
         expect(settings.pauseBetweenRunsMs).toBe(1500);
     });
 

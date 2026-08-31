@@ -54,7 +54,6 @@ async function writeSettingsFile(enabled: boolean, defaultDatabasePath: string |
         settings: {
             enabled,
             sources,
-            backfillItemsPerMinute: 60,
         },
         defaultDatabasePath,
         pauseBetweenRunsMs,
@@ -177,7 +176,6 @@ describe("plan-auto-import", () => {
         expect(importData.dryRun).toBe(false);
         expect(importData.sessionId).toBe("test-session-id");
         expect(importData.options.auto).toBe(true);
-        expect(importData.options.backfillItemsPerMinute).toBe(60);
     });
 
     test("carries the gap between passes from the settings file", async () => {

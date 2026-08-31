@@ -74,7 +74,6 @@ describe("cleanupSourcesHandler", () => {
         return {
             enabled: true,
             sources: [{ type: "folder", path: photosDir, recurse: true }],
-            backfillItemsPerMinute: 60,
         };
     }
 

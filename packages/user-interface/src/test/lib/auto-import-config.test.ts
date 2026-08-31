@@ -91,7 +91,6 @@ describe("auto-import settings in the config store", () => {
         const settings = await loadAutoImportSettings(config);
 
         expect(settings.enabled).toBe(true);
-        expect(settings.backfillItemsPerMinute).toBe(DEFAULT_AUTO_IMPORT_SETTINGS.backfillItemsPerMinute);
     });
 
     test("initial settings switch automatic import on with the given places", () => {

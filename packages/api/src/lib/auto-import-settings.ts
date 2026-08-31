@@ -58,19 +58,14 @@ export interface IAutoImportSettings {
     // The places that are watched for new media.
     sources: IAutoImportSource[];
 
-    // How many already-existing items the backfill lane is allowed to release per minute. The fast
-    // lane, which carries items the watcher reported since the task started, is not paced by this.
-    backfillItemsPerMinute: number;
-
 }
 
 //
-// Auto-import off, and a backfill rate of 60 items per minute.
+// Auto-import off, watching nothing.
 //
 export const DEFAULT_AUTO_IMPORT_SETTINGS: IAutoImportSettings = {
     enabled: false,
     sources: [],
-    backfillItemsPerMinute: 60,
 };
 
 //
@@ -101,9 +96,6 @@ export interface IRawAutoImportSettings {
     // The places that are watched, each still unchecked.
     sources?: IRawAutoImportSource[];
 
-    // The backfill pacing in items per minute.
-    backfillItemsPerMinute?: number;
-
 }
 
 //
@@ -111,14 +103,6 @@ export interface IRawAutoImportSettings {
 //
 function isBoolean(value: boolean | undefined): boolean {
     return value === true || value === false;
-}
-
-//
-// True when the value is a number that can actually be used for pacing: finite and greater than
-// zero. A zero or negative rate would stall or reverse the backfill.
-//
-function isPositiveNumber(value: number | undefined): boolean {
-    return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
 //
@@ -184,6 +168,5 @@ export function normaliseAutoImportSettings(rawSettings: IRawAutoImportSettings 
     return {
         enabled: isBoolean(rawSettings.enabled) ? rawSettings.enabled as boolean : DEFAULT_AUTO_IMPORT_SETTINGS.enabled,
         sources,
-        backfillItemsPerMinute: isPositiveNumber(rawSettings.backfillItemsPerMinute) ? rawSettings.backfillItemsPerMinute as number : DEFAULT_AUTO_IMPORT_SETTINGS.backfillItemsPerMinute,
     };
 }

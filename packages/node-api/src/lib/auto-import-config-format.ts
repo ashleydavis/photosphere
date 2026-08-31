@@ -42,8 +42,6 @@ export interface ITomlAutoImportConfig {
     // Whether automatic import runs at all.
     enabled?: boolean;
 
-    // How many already-existing items the backfill lane may release per minute.
-    backfill_items_per_minute?: number;
 
     // The sandbox-relative path of the database automatic import writes to.
     default_database_path?: string;
@@ -109,7 +107,6 @@ export function tomlToAutoImportFile(toml: ITomlAutoImportConfig | undefined): I
     const rawSettings: IRawAutoImportSettings = {
         enabled: toml.enabled,
         sources: rawSources,
-        backfillItemsPerMinute: toml.backfill_items_per_minute,
     };
 
     const defaultDatabasePath = typeof toml.default_database_path === "string" && toml.default_database_path.length > 0
@@ -129,7 +126,6 @@ export function tomlToAutoImportFile(toml: ITomlAutoImportConfig | undefined): I
 export function autoImportFileToToml(contents: IAutoImportFile): ITomlAutoImportConfig {
     const toml: ITomlAutoImportConfig = {
         enabled: contents.settings.enabled,
-        backfill_items_per_minute: contents.settings.backfillItemsPerMinute,
         pause_between_runs_ms: contents.pauseBetweenRunsMs,
         sources: contents.settings.sources.map(sourceToToml),
     };

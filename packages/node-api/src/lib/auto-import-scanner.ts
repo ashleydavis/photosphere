@@ -25,10 +25,10 @@ import { IImportScanner, IScannedImportFile } from "./import-scanner";
 export const AUTO_IMPORT_TICK_MS = 250;
 
 //
-// How many items are fetched from the source per backfill page. The pacing decides how quickly they
-// are released; this only decides how often the source is asked.
+// How many items are fetched from the source at a time. Only decides how often the source is asked,
+// not how quickly what it returns is imported.
 //
-export const BACKFILL_PAGE_SIZE = 50;
+export const SOURCE_PAGE_SIZE = 50;
 
 //
 // What the scanner is doing, reported so the user interface can show it.
@@ -60,16 +60,13 @@ export interface IAutoImportScannerDeps {
     // Where media arrives, already built for the configured sources.
     source: IMediaSource;
 
-    // The two lanes and the pacing, already positioned at the persisted backfill cursor.
+    // The items this run has been offered and not yet handed to the import.
     queue: AutoImportQueue;
 
     // True once the caller wants the scan to stop.
     isCancelled: () => boolean;
 
-    // The current time in milliseconds since the epoch. Injected so the pacing is testable.
-    nowMs: () => number;
-
-    // Waits for the given number of milliseconds. Injected for the same reason.
+    // Waits for the given number of milliseconds. Injected so a test does not wait for real time.
     sleep: (milliseconds: number) => Promise<void>;
 
     // Where a zip's contents are extracted to, and where the source materialises its copies.
@@ -89,7 +86,7 @@ export interface IAutoImportScannerDeps {
 
     // Reports every source id the library holds, after a walk that read the whole listing.
     //
-    // Called only when the walk reached the end and the backfill was already complete, so what it
+    // Called only when the walk reached the end, so what it
     // reports really is the whole library rather than the part of it read so far. The platform uses
     // it to drop what it recorded about photos that have since left the device.
     onLibraryWalked: (liveSourceIds: Set<string>) => Promise<void>;
@@ -160,18 +157,18 @@ export class AutoImportScanner implements IImportScanner {
     // Pushes photos until the source has been read to the end, then returns.
     //
     // One pass and no more. A photo that arrives after this run has read past it is found by the
-    // next run, which the app starts a short while after this one ends. That is what keeps the
-    // scanner off the timers and the filesystem watchers it used to hold.
+    // next run, which the app starts a short while after this one ends. Nothing here watches the
+    // filesystem or holds a timer: re-reading the source from the start is what finds new photos.
     //
     async scan(visitFile: (result: IScannedImportFile) => Promise<void>, onProgress: ScanProgressCallback): Promise<void> {
         const { deps } = this;
 
         while (!deps.isCancelled() && !this.hasNothingLeftToPush()) {
-            if (this.queueNeedsBackfillPage()) {
-                await this.fetchBackfillPage();
+            if (this.queueNeedsAPage()) {
+                await this.fetchAPage();
             }
 
-            const item = deps.queue.nextItem(deps.nowMs());
+            const item = deps.queue.nextItem();
             if (item !== undefined) {
                 await this.pushItem(item, visitFile, onProgress);
             }
@@ -186,7 +183,7 @@ export class AutoImportScanner implements IImportScanner {
 
             if (item === undefined) {
                 // Nothing was released, so wait rather than spinning. A tick after an item was
-                // released would only slow the import down: the pacing already decides the rate.
+                // released would only slow the import down, since the next one is ready to go.
                 await deps.sleep(AUTO_IMPORT_TICK_MS);
             }
         }
@@ -301,25 +298,25 @@ export class AutoImportScanner implements IImportScanner {
     // Reads one page of the source listing.
     //
     private async listSourcePage(cursor: string | undefined): Promise<IMediaSourceListPage> {
-        return await this.deps.source.listPage(cursor, BACKFILL_PAGE_SIZE);
+        return await this.deps.source.listPage(cursor, SOURCE_PAGE_SIZE);
     }
 
     //
-    // Whether the backfill lane has run dry and there is another page of the library to fetch.
+    // Whether the queue has run dry and there is another page of the library to fetch.
     //
-    private queueNeedsBackfillPage(): boolean {
-        return !this.listingFinished && !this.deps.queue.hasPendingBackfill();
+    private queueNeedsAPage(): boolean {
+        return !this.listingFinished && !this.deps.queue.hasPending();
     }
 
     //
-    // Fetches the next page of the existing library into the backfill lane.
+    // Fetches the next page of the existing library into the queue.
     //
-    private async fetchBackfillPage(): Promise<void> {
+    private async fetchAPage(): Promise<void> {
         const { deps } = this;
         const page = await this.listSourcePage(this.nextPageCursor);
         this.nextPageCursor = page.nextCursor;
         this.listingFinished = page.nextCursor === undefined;
-        const accepted = deps.queue.addBackfillItems(page.items);
+        const accepted = deps.queue.addItems(page.items);
         deps.logInfo(`Automatic import found ${page.items.length} item(s) in the source, ${accepted} of them new.`);
 
         for (const item of page.items) {
@@ -335,10 +332,9 @@ export class AutoImportScanner implements IImportScanner {
     }
 
     //
-    // True when there is nothing left to push: the library has been walked and both lanes are empty.
+    // True when there is nothing left to push: the library has been walked and the queue is empty.
     //
     private hasNothingLeftToPush(): boolean {
-        const { queue } = this.deps;
-        return this.listingFinished && !queue.hasPendingBackfill() && !queue.hasPendingFastLane();
+        return this.listingFinished && !this.deps.queue.hasPending();
     }
 }

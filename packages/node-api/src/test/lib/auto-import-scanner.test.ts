@@ -92,18 +92,6 @@ function makeItem(sourceId: string, createdAtMs: number): IMediaItem {
 //
 const TEST_START_MS = 1700000000000;
 
-//
-// A clock that reads one minute later each time it is asked.
-//
-function makeAdvancingClock(): () => number {
-    let readings = 0;
-    return () => {
-        const now = TEST_START_MS + readings * 60000;
-        readings += 1;
-        return now;
-    };
-}
-
 describe("AutoImportScanner", () => {
 
     let tempDir: string;
@@ -118,15 +106,12 @@ describe("AutoImportScanner", () => {
     // already imported, with each hook overridable.
     //
     function makeDeps(source: IMediaSource, overrides: Partial<IAutoImportScannerDeps>): IAutoImportScannerDeps {
-        const queue = new AutoImportQueue(1000000);
+        const queue = new AutoImportQueue();
 
         const deps: IAutoImportScannerDeps = {
             source,
             queue,
             isCancelled: () => false,
-            // A clock that walks forward a minute per reading. The backfill earns its budget from
-            // elapsed time, so a clock that stands still would release nothing and the scan would spin.
-            nowMs: makeAdvancingClock(),
             sleep: async () => { /* nothing to wait for once the library has been walked. */ },
             sessionTempDir: tempDir,
             uuidGenerator: new RandomUuidGenerator(),
@@ -260,7 +245,7 @@ describe("AutoImportScanner", () => {
         const walkedLibraries: Set<string>[] = [];
 
         await runScan(new AutoImportScanner(makeDeps(source, {
-            queue: new AutoImportQueue(1000000),
+            queue: new AutoImportQueue(),
             onLibraryWalked: async liveSourceIds => {
                 walkedLibraries.push(new Set(liveSourceIds));
             },
@@ -287,7 +272,7 @@ describe("AutoImportScanner", () => {
 
     test("a photo that arrives after the run has ended is taken in by the next run", async () => {
         const source = sourceWith([makeItem("existing", 1)]);
-        const queue = new AutoImportQueue(6000);
+        const queue = new AutoImportQueue();
 
         await runScan(new AutoImportScanner(makeDeps(source, { queue })));
         expect(source.exportedIds).toEqual(["existing"]);
@@ -298,7 +283,7 @@ describe("AutoImportScanner", () => {
             ["", { items: [makeItem("existing", 1), makeItem("just-taken", TEST_START_MS + 3600000)], nextCursor: undefined }],
         ]));
 
-        const nextRun = new AutoImportQueue(6000);
+        const nextRun = new AutoImportQueue();
         await runScan(new AutoImportScanner(makeDeps(source, { queue: nextRun })));
 
         expect(source.exportedIds).toContain("just-taken");
