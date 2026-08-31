@@ -1281,8 +1281,16 @@ jobs:
   ios-smoke-tests:
     # Higher than the other mobile jobs because `bun run test:ios` resolves the FFmpegKit Swift
     # Package on a clean checkout and, whenever the ImageMagick cache below misses, builds
-    # ImageMagick from source as well. That build has taken 37 minutes on a slow runner.
-    timeout-minutes: 90
+    # ImageMagick from source as well.
+    #
+    # 125 rather than the 90 it was, because 90 could not hold a cache miss on a slow runner and so
+    # killed a run that was going to pass. Run 33439567066, the first run on a new branch, which is
+    # the case that always misses the cache: the step started at 21:06:49, the ImageMagick build ran
+    # from 21:08:06 to 22:01:54 (55 minutes, not the 37 this comment used to quote), the frontend
+    # build took another 14, and xcodebuild was still going when the step's cap ended it at 22:22:08
+    # with the tests never reached. A warm cache does the whole job in 15 to 27 minutes and is
+    # untouched by this.
+    timeout-minutes: 125
     runs-on: macos-14
     steps:
       - name: Checkout code
@@ -1338,13 +1346,15 @@ jobs:
 
       # run.sh boots an iOS simulator and builds/installs the app via xcrun/xcodebuild.
       #
-      # 75 rather than something closer to how long this usually takes, because when the ImageMagick
-      # cache misses this step builds ImageMagick from source, and that build alone has taken 37
+      # 110 rather than something closer to how long this usually takes, because when the ImageMagick
+      # cache misses this step builds ImageMagick from source, and that build alone has taken 55
       # minutes on a slow runner. A cap sized on a cache hit kills a cache miss that was going to
       # succeed: 40 did exactly that to the stories-ios job on run 31369570348, 40 minutes after it
-      # started "Building iOS ImageMagick from source". The job's own budget is 90.
+      # started "Building iOS ImageMagick from source", and 75 did it again to this step on run
+      # 33439567066, where the build took 55 minutes and the frontend build another 14. The job's own
+      # budget is 125.
       - name: Run iOS smoke tests
-        timeout-minutes: 75
+        timeout-minutes: 110
         run: bun run test:ios
 
   build-desktop:

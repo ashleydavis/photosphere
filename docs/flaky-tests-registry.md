@@ -749,3 +749,14 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 - Recurrences: none yet. The same test passed on the two Release runs before it, at about 82s against the 159s of the failing one.
 - Root cause: **the wait was given the 120 second default and the import genuinely takes longer than that on a NAT-only CI emulator.** From the logcat: the `import-assets` task was added at 10:21:18.814, the two hashes finished at 10:22:57.9, both `save-asset` tasks succeeded at 10:23:06.4 (8.5s each, 2.6s of it uploading), and task messages were still arriving at 10:23:16.4 and 10:23:19.4 when the wait ran out and the app was force-stopped at 10:23:21.9. Nothing was stuck and nothing had errored: the step had seconds left to run. The create step in the same test was failing the same way for the same reason and was given 300 seconds; the import step was left on the default.
 - Evidence: run 33381031802, artifact `android-smoke-test-logs`, `logcat.txt` at the timestamps above, and `41-s3-database-lifecycle-wq4H3g/s3/data/photosphere-smoke-test/mobile-lifecycle/` holding `asset/`, `thumb/` and `display/` for both asset ids.
+
+### IOS-SMOKE-STEP-CAP-KILLS-A-COLD-IMAGEMAGICK-BUILD
+
+- [ ] Not fixed yet. The bigger budgets have landed (this commit) and are waiting on a run that misses the cache to prove them.
+- Suite: Release workflow, job `ios-smoke-tests` on `macos-14`.
+- Pattern: `The action 'Run iOS smoke tests' has timed out after \d+ minutes`
+- Distinguishing evidence (this mode): the step's own log carries `Cache not found for input keys: macOS-ios-imagemagick-` and `Building iOS ImageMagick from source`, and the step is killed with the smoke tests never started. A run whose cache hit does the whole job in 15 to 27 minutes.
+- First seen: 2026-08-31, Release run 33439567066, the first run on a new branch.
+- Recurrences: the same sizing killed the `stories-ios` job on run 31369570348 at a 40 minute cap, which is why the cap was 75.
+- Root cause: **the ImageMagick source build is the whole job when the cache misses, and it costs far more than the cap was sized for.** ImageMagick has no prebuilt iOS release, so a cache miss compiles it for both slices in this step: 21:08:06 to 22:01:54, 55 minutes, where the comment sizing the cap said 37. With the frontend build's 14 minutes on top, xcodebuild was still running when the 75 minute cap ended the step at 22:22:08. The cache key is the hash of `apps/ios-frontend/ios/build-imagemagick.sh` and caches are branch-scoped, so the first run on any new branch misses it, which is exactly when the workflow is being fixed. `ios-unit-tests` shares the key and saves the cache, which is why the next run on the same branch hit it ten minutes later and passed.
+- Evidence: run 33439567066, job 99644180585. Compare `ios-smoke-tests` in runs 33440035517 (27m, cache hit) and 33443071372 (15m, cache hit) on the same branch.
