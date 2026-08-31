@@ -82,7 +82,7 @@ A full import of the phone's library, 2,291 items of 2,307, now takes **45 minut
 
 Every figure below is wall clock on the physical Pixel 6, counting files in the app's own `asset/` directory on the device rather than reading the harness's timing log, because that log stops arriving part way through a long run.
 
-Progression of a full import: never finished -> 55 min -> 50 min -> 45 min. Confirmed at 45 minutes again on the final committed code.
+Progression of a full import through the perf harness: never finished -> 55 min -> 50 min -> 45 min, confirmed at 45 again on the final committed code. Switched on by hand on the phone, the same library came in in 25 minutes: see the note on the pacing below.
 
 ### The commits, and what each was worth
 
@@ -107,7 +107,11 @@ Note that `-strip` was thrown away too, and putting it back is the `14017f28` co
 
 ### The ceiling ahead
 
-`backfill_items_per_minute` defaults to 60, so the scanner releases at most one photo a second and 2,307 photos cannot go below about 38 minutes whatever the code does. At 45 minutes the run is close to that. Anything further either raises that setting or is worth only the few minutes between 45 and 38.
+`backfill_items_per_minute` defaults to 60, so the **backfill** lane releases at most one photo a second, and every measurement in this plan was taken through that lane, which is why they sit near 45 minutes.
+
+That is not the floor for a real first import. Switching automatic import on by hand and letting the library arrive took **25 minutes for the same 2,291 items**, running at 73 a minute, because the fast lane carries what the watcher reports and is not paced at all. So the pacing bounds a backfill of a library the app has already walked past, not a phone taking in its photos for the first time.
+
+Worth knowing before optimising further: a measurement taken through the perf harness is paced and a real first import is not, so the harness understates what a user sees, and the remaining per-photo cost matters more than the 45 minute figure suggests.
 
 Where the remaining per-photo time goes, measured at 613 files: ImageMagick is about 80% of the child work, and the largest parts are the display resize (~324ms), the EXIF read (~303ms), the hash (~171ms) and the thumbnail resize (~146ms). The three resizes already chain off each other rather than each decoding the original.
 
