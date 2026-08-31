@@ -218,6 +218,24 @@ bun run emu:and:down           # stops only your own emulator
 
 Each pool emulator runs on a writable clone of your base AVD, about 8KB each, because two emulators cannot share one AVD. Set `PHOTOSPHERE_EMULATOR_COUNT` to change the pool size. Pin a run to particular devices with `PHOTOSPHERE_ANDROID_DEVICES="emulator-5556 emulator-5558"`, for example to leave your hand-testing emulator out of it.
 
+### The mobile tests wipe the app's data, and will not do it to a real phone
+
+Every mobile test starts by clearing the app's stored data, because a test that ran on state an earlier one left behind would pass or fail for reasons that have nothing to do with it. That wipe takes the storage sandbox with it: every database the app holds and everything imported into them.
+
+On an emulator that costs nothing, since a pool emulator holds only what a test put there. On a real phone it is somebody's photo library, and importing one takes the best part of an hour, so **the harness refuses to wipe a real device**. A run that needs the wipe and cannot have it fails and says so rather than testing against whatever was already there.
+
+Set `PHOTOSPHERE_ALLOW_DEVICE_WIPE=1` to say the phone's data is yours to destroy:
+
+```bash
+PHOTOSPHERE_ALLOW_DEVICE_WIPE=1 PHOTOSPHERE_ANDROID_DEVICES="<serial>" bun run test:and
+```
+
+That is what the import performance test needs, since it measures an import starting from an empty database. Without the flag, a mobile test run against a real phone stops at the first test that wants a clean app.
+
+Anything reached by `adb connect` counts as a real device and is protected the same way. Only a local `emulator-<port>` target is wiped without asking.
+
+`bun run and` never wipes anything: it installs over the top and leaves the app's data alone, so it is the way to put a new build on a phone whose database you want to keep. Passing a fixture (`bun run and 50`, `and1`, `and0`) does replace that one fixture database, and nothing else.
+
 Tests are dispatched in the order they are numbered, and nothing reorders or serialises them: there are no scheduling markers, so any test may run beside any other. The LAN-share tests are safe in company because discovery is disambiguated by the pairing code rather than by scheduling. See [apps/smoke-tests/tests/README.md](../../apps/smoke-tests/tests/README.md).
 
 Every run ends with a timing block: where the wall clock went (build, install, loop, total), how many seconds of test work were done across how many workers, the packing efficiency (test work as a share of the emulators' available time, so a low number means they sat idle rather than that the tests are slow), and the ten slowest tests. That block is how to tell whether a change made the suite faster, and it is where to look for the test that is setting the length of a run.

@@ -60,6 +60,34 @@ android_hardware_devices() {
 }
 
 #
+# Refuses to wipe the app's data on a real phone unless this run was told it may.
+#
+# Every way this harness clears app data goes through here first. On an emulator it always allows it:
+# a pool emulator holds nothing but what a test put there. On a real phone it holds whatever the
+# person who owns the phone imported, and an import of a whole photo library takes the best part of
+# an hour, so wiping one because a test happened to pick that device is not a cost the harness gets
+# to impose. Set PHOTOSPHERE_ALLOW_DEVICE_WIPE=1 to say the phone is yours to wipe.
+#
+# Returns 0 when clearing is allowed, 1 when it is not. A caller that cannot run on dirty state must
+# treat 1 as a failure and say so, rather than carrying on and reporting a result it did not earn.
+#
+android_may_wipe_app_data() {
+    local serial="${ANDROID_SERIAL:-}"
+
+    case "$serial" in
+        ""|emulator-*)
+            return 0
+            ;;
+    esac
+
+    if [ "${PHOTOSPHERE_ALLOW_DEVICE_WIPE:-}" = "1" ]; then
+        return 0
+    fi
+
+    return 1
+}
+
+#
 # Refuses the whole run when the machine has almost no memory left, before anything is built or
 # installed.
 #
@@ -783,6 +811,15 @@ android_seed_databases_config() {
 #
 android_reset_app_state() {
     local result
+
+    # A test cannot run on state left by an earlier one, so being refused the wipe is a failure and
+    # is reported as one. See android_may_wipe_app_data.
+    if ! android_may_wipe_app_data; then
+        log_error "Refusing to wipe the app's data on ${ANDROID_SERIAL:-this device}, which is a real phone and may hold an imported library."
+        log_error "Run this against the emulator pool, or set PHOTOSPHERE_ALLOW_DEVICE_WIPE=1 if the phone's data is yours to destroy."
+        return 1
+    fi
+
     result="$(adb shell pm clear "$APP_ID" 2>&1 | tr -d '\r')"
     # `pm clear` prints "Success" and exits 0; a failure is reported in its output, so the text is
     # what has to be checked. Failing here rather than carrying on is deliberate: a test that ran on
@@ -1082,6 +1119,9 @@ android_grant_notification_permission() {
 # passing test into a failing one, and there is nothing here worth a line in the runner's output.
 #
 android_clean_after_test() {
+    if ! android_may_wipe_app_data; then
+        return 0
+    fi
     adb shell pm clear "$APP_ID" >/dev/null 2>&1 || true
 }
 
@@ -1125,6 +1165,11 @@ android_wait_for_file() {
 # out of storage and the next install fails with INSTALL_FAILED_INSUFFICIENT_STORAGE.
 #
 android_cleanup() {
+    if ! android_may_wipe_app_data; then
+        log_info "Left the app's data alone on ${ANDROID_SERIAL:-this device}: it is a real phone and PHOTOSPHERE_ALLOW_DEVICE_WIPE is not set."
+        adb shell rm -rf /data/local/tmp/50-assets >/dev/null 2>&1 || true
+        return 0
+    fi
     adb shell run-as "$APP_ID" rm -rf files >/dev/null 2>&1 || true
     adb shell rm -rf /data/local/tmp/50-assets >/dev/null 2>&1 || true
     log_info "Cleared the app's data from the device"
