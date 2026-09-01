@@ -1487,10 +1487,16 @@ jobs:
       # than written, so that hang left nothing to read. The build itself costs between 107 and 156
       # seconds across the four matrix legs (see the cache note below), so 20 minutes is far more than
       # it can legitimately need.
+      #
+      # The cap keeps the log but still loses the run, which it did again on run 33458818750, the
+      # fourth sighting of WINDOWS-ELECTRON-BUILD-HANGS-ON-NPM-LIST. The script caps each attempt at
+      # seven minutes and retries a stall once, and passes a genuine build failure straight through on
+      # the first attempt. This cap stays as the outer limit.
       - name: Build Electron app
         if: runner.os != 'macOS'
         timeout-minutes: 20
-        run: bun run build
+        shell: bash
+        run: bash ./scripts/build-electron-retry-on-stall.sh
 
       # macOS packages a DMG, and building one means mounting a volume, laying the app out on it and
       # ejecting it again. Run 31921700592 failed build-desktop (macos-15-intel) on that eject:
