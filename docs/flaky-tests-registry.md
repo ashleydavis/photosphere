@@ -652,15 +652,17 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 
 ### WINDOWS-CLI-SUITE-HANG
 
-- [ ] Not fixed. Seen twice; the cause is not established, because both sightings destroyed their own logs.
+- [ ] Not fixed. Seen three times; the cause is not established, because every sighting destroyed its own log.
 - Suite: `build-windows`, the `Run smoke tests` step (`./smoke-tests.sh --binary`).
 - Pattern: the job is `cancelled` with `Run smoke tests` still `in_progress` and the log API returns `BlobNotFound` / HTTP 404 for it.
-- Distinguishing evidence (this mode): healthy runs of the step take 14 to 15 minutes; these ran 27 and 40. GitHub's step `timeout-minutes` did not fire in either case, so the job timeout killed the job, and GitHub discards the log of a job it kills.
+- Distinguishing evidence (this mode): healthy runs of the step take 14 to 15 minutes; these ran 27, 40 and 32. GitHub's step `timeout-minutes` did not fire in any of them, so the job timeout killed the job, and GitHub discards the log of a job it kills.
 - Fix commit: none. `ee8c314d` gives the suite a 25 minute ceiling of its own so the next occurrence fails from inside and keeps its log, but that is diagnosability, not a fix.
 - First seen: 2026-08-14, Release run 31803430871.
-- Recurrences: 2026-08-14, run 31806443909, after the job cap was raised from 30 to 40 minutes. That change was made on the theory that the step cap could then fire first; it did not fire at 24 minutes either time, which disproved the theory, and the commit was removed.
+- Recurrences:
+  - 2026-08-14, run 31806443909, after the job cap was raised from 30 to 40 minutes. That change was made on the theory that the step cap could then fire first; it did not fire at 24 minutes either time, which disproved the theory, and the commit was removed.
+  - 2026-08-31, run 33450001083, job 99677562044, the first sighting since the suite ceiling landed, and the ceiling did not save the log either. The step started at 23:20:07 and was still `in_progress` when the job was killed at 23:52:23, 32 minutes later, past both the 24 minute step cap and the 25 minute suite ceiling. **The ceiling was set above the step cap, so it could not have been the first thing to act on this job**, which is what the fix below corrects. Every other job in the run passed.
 - Root cause: **not established.** Capping each test did not catch it: Git Bash ships no `timeout(1)`, so `run_test_with_timeout` falls back to killing the test's process tree and waiting on it, and a kill that does not take leaves that wait blocked for good. That is a candidate, not a finding.
-- Next step if it recurs: the suite ceiling now ends the step normally, so the log survives with the `RUN` line of whichever test never reported back. That names the test, which is the thing neither sighting could supply.
+- Next step if it recurs: `build-windows` now sets `PHOTOSPHERE_SUITE_TIMEOUT` to 18 minutes on the step, below both the 24 minute step cap and the 30 minute job cap, so the suite's own ceiling gets to act while there is still time for its report and its kill to land. If a fourth sighting still leaves no log, the ceiling is not being reached either and the next thing to establish is whether the watchdog fires at all on Git Bash, rather than whether it fires in time.
 
 ### BUN-PANIC-ON-EXIT-AFTER-VERIFY
 
