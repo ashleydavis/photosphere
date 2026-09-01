@@ -91,7 +91,14 @@ log_success "Partial replica opened with 1 asset"
 
 # Full replication. Navigate away and back to force the databases page to remount
 # (re-entering the same route doesn't trigger "Databases page loaded" again).
+#
+# The wait on the secrets page is what makes the trip away real. Without it the two navigations are
+# dispatched back to back and the app can go straight back to the route it was already on, which
+# remounts nothing and emits nothing, and the wait below then times out with the app perfectly
+# healthy: app.log ends "Navigated to /secrets", "Navigated to /databases" and no page-loaded line
+# after either. Every other test that visits the secrets page waits on this line.
 send_command "$APP_PORT" navigate '{"page":"secrets"}'
+wait_for_log "$TMP_DIR" "Secrets page loaded"
 send_command "$APP_PORT" navigate '{"page":"databases"}'
 wait_for_log "$TMP_DIR" "Databases page loaded"
 

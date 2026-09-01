@@ -762,3 +762,14 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 - Recurrences: the same sizing killed the `stories-ios` job on run 31369570348 at a 40 minute cap, which is why the cap was 75.
 - Root cause: **the ImageMagick source build is the whole job when the cache misses, and it costs far more than the cap was sized for.** ImageMagick has no prebuilt iOS release, so a cache miss compiles it for both slices in this step: 21:08:06 to 22:01:54, 55 minutes, where the comment sizing the cap said 37. With the frontend build's 14 minutes on top, xcodebuild was still running when the 75 minute cap ended the step at 22:22:08. The cache key is the hash of `apps/ios-frontend/ios/build-imagemagick.sh` and caches are branch-scoped, so the first run on any new branch misses it, which is exactly when the workflow is being fixed. `ios-unit-tests` shares the key and saves the cache, which is why the next run on the same branch hit it ten minutes later and passed.
 - Evidence: run 33439567066, job 99644180585. Compare `ios-smoke-tests` in runs 33440035517 (27m, cache hit) and 33443071372 (15m, cache hit) on the same branch.
+
+### REPLICATE-REMOUNT-NAVIGATIONS-COALESCE
+
+- [ ] Not fixed yet. The wait on the secrets page has landed (this commit) and is waiting on repeated clean runs of the suite.
+- Suite: Electron smoke tests (`bun run test:electron`), test 17 (replicate-database).
+- Pattern: `Timed out waiting for log pattern: Databases page loaded`, in the step after the partial replica is opened.
+- Distinguishing evidence (this mode): everything before it passed, including `Partial replica opened with 1 asset`, and `app.log` ends with `Navigated to /secrets` and `Navigated to /databases` with no page-loaded line after either. The app is healthy and answering commands; it simply never remounted the page. Not the relaunch modes above, which end at a `curl failed (exit 56)` and a fresh port.
+- First seen: 2026-08-31, pre-commit hook on the `fix-ci-ffmpeg-tag` worktree, `/tmp/photosphere-tests/replicate-database-adu2U7/`, on a commit that touched only CI timeouts. The suite passed on the next run of it.
+- Recurrences: none yet.
+- Root cause: **two navigations dispatched back to back, where the test needs the first one to have happened.** The test leaves for the secrets page and returns to the databases page to force a remount, because re-entering a route the app is already on emits nothing. It sends both commands without waiting for the first, so the app can coalesce them and never leave the databases route at all, which remounts nothing and emits nothing. Waiting for `Secrets page loaded` between them is what every other test that visits that page already does.
+- Evidence: `/tmp/photosphere-tests/replicate-database-adu2U7/test-run.log` and its `app.log` tail.
