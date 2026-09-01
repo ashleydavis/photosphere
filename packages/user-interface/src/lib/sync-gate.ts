@@ -1,55 +1,12 @@
 //
-// The kind of network connection currently in use. "unknown" is reported by
-// platforms that cannot distinguish wired/wifi/cellular (desktop and web
-// browsers); it is treated as allowed so those platforms sync whenever online.
+// The sync gate, re-exported from where it now lives.
 //
-export type NetworkConnectionType = "wifi" | "cellular" | "none" | "unknown";
-
+// The rule moved to packages/api because the mobile background sync loop asks the same question and
+// runs in the embedded worker, which cannot reach this package's React code. One implementation
+// answers both, so the loop and the interface cannot decide differently about whether an automatic
+// sync is permitted, and the failure when they drift is somebody's mobile data bill.
 //
-// Inputs to the sync gate: the two persisted user toggles plus the current
-// network state. Used to decide whether an automatic sync may run right now.
+// It is re-exported here rather than every caller being repointed, because this package's barrel
+// exports it and the browser build imports it by module path.
 //
-export interface ISyncGateInputs {
-    //
-    // Master switch: whether the user has syncing enabled at all.
-    //
-    syncEnabled: boolean;
-
-    //
-    // Whether the user has restricted automatic syncing to Wi-Fi connections.
-    //
-    syncOnlyOnWifi: boolean;
-
-    //
-    // Whether the device currently has a network connection.
-    //
-    connected: boolean;
-
-    //
-    // The current connection type used to enforce the Wi-Fi-only restriction.
-    //
-    connectionType: NetworkConnectionType;
-}
-
-//
-// Computes whether an automatic sync is currently allowed. Returns false when
-// syncing is disabled, when offline, or when the Wi-Fi-only restriction is on
-// and the connection is cellular. A connectionType of "wifi" or "unknown" is
-// permitted under the Wi-Fi-only restriction (desktop/web cannot detect
-// cellular, so they report "unknown" and remain allowed).
-//
-export function computeSyncAllowed(inputs: ISyncGateInputs): boolean {
-    if (!inputs.syncEnabled) {
-        return false;
-    }
-    if (!inputs.connected) {
-        return false;
-    }
-    if (inputs.connectionType === "none") {
-        return false;
-    }
-    if (inputs.syncOnlyOnWifi && inputs.connectionType === "cellular") {
-        return false;
-    }
-    return true;
-}
+export { computeSyncAllowed, type ISyncGateInputs, type NetworkConnectionType } from "api/src/lib/sync-gate";

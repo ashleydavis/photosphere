@@ -40,6 +40,7 @@
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>au.com.codecapers.photosphere.auto-import</string>
+		<string>au.com.codecapers.photosphere.background-sync</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>

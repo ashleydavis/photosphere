@@ -13,6 +13,17 @@ import BackgroundTasks
 let autoImportBackgroundTaskIdentifier = "au.com.codecapers.photosphere.auto-import"
 
 //
+// The identifier of the background processing task that lets syncing catch up while the app is not on
+// screen.
+//
+// Its own task rather than a second thing the import's task does, because the two are separately
+// useful: a phone with nothing new to import may still have edits to push, and a phone with no origin
+// has photos to import and nothing to sync. It must match the entry in Info.plist's
+// BGTaskSchedulerPermittedIdentifiers for the same reason the import's must.
+//
+let backgroundSyncBackgroundTaskIdentifier = "au.com.codecapers.photosphere.background-sync"
+
+//
 // The earliest the system is asked to run the next background pass, in seconds.
 //
 // A request, not a schedule. iOS runs a processing task when it decides to, typically while the phone
@@ -34,6 +45,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         if #available(iOS 13.0, *) {
             BGTaskScheduler.shared.register(forTaskWithIdentifier: autoImportBackgroundTaskIdentifier, using: nil) { task in
                 AppDelegate.runAutoImportBackgroundTask(task)
+            }
+            BGTaskScheduler.shared.register(forTaskWithIdentifier: backgroundSyncBackgroundTaskIdentifier, using: nil) { task in
+                AppDelegate.runBackgroundSyncTask(task)
             }
         }
 
@@ -90,17 +104,69 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         }
     }
 
+    //
+    // Runs exactly one background sync pass on behalf of the system, and asks for the next one.
+    //
+    // One pass, because the system decides when this runs and how long it may take: a handler that
+    // tried to loop would be killed part way through. The expiration handler stops the driver, which
+    // cancels the sync through the same path switching syncing off uses.
+    //
+    // Unlike the import's, this never withdraws its own request. A pass that syncs nothing is the
+    // ordinary case (nothing changed, no Wi-Fi, syncing switched off for now), and every one of those
+    // reasons can be gone by the next pass. The request is withdrawn when automatic import is switched
+    // off, which is what takes the whole background feature away.
+    //
+    @available(iOS 13.0, *)
+    private static func runBackgroundSyncTask(_ task: BGTask) {
+        // Asked for before the work starts, not after: a handler killed on expiry never reaches the
+        // end, and without this there would be no next request and background syncing would stop for
+        // good.
+        scheduleBackgroundSyncTask()
+
+        task.expirationHandler = {
+            JsEnginePlugin.stopSync()
+        }
+
+        DispatchQueue.global(qos: .background).async {
+            JsEnginePlugin.runOneBackgroundSyncPass()
+            task.setTaskCompleted(success: true)
+        }
+    }
+
+    //
+    // Asks the system to run a background sync pass when it next sees fit.
+    //
+    @available(iOS 13.0, *)
+    static func scheduleBackgroundSyncTask() {
+        let request = BGProcessingTaskRequest(identifier: backgroundSyncBackgroundTaskIdentifier)
+
+        // Unlike the import's request, this one asks for a network. A sync with no network reaches
+        // the origin's state file and stops, which is a pass that cost a wake-up and did nothing.
+        request.requiresNetworkConnectivity = true
+        request.requiresExternalPower = false
+        request.earliestBeginDate = Date(timeIntervalSinceNow: autoImportBackgroundTaskEarliestDelay)
+
+        do {
+            try BGTaskScheduler.shared.submit(request)
+        }
+        catch {
+            print("[BackgroundSync] Could not ask for a background pass: \(error)")
+        }
+    }
+
     func applicationWillResignActive(_ application: UIApplication) {
         // The foreground loop stops as the app leaves the screen, and the system is asked for a
         // background pass instead. A pass already in flight is left to finish or to be cancelled by
         // expiry, rather than raced against a second one: the driver's single entry point is what
         // makes that impossible rather than merely unlikely.
         JsEnginePlugin.stopForegroundAutoImport()
+        JsEnginePlugin.stopForegroundSync()
 
         // Only when the user has switched automatic import on. A phone that has not asks the system
         // for nothing.
         if #available(iOS 13.0, *), JsEnginePlugin.autoImportOptedIn {
             AppDelegate.scheduleAutoImportBackgroundTask()
+            AppDelegate.scheduleBackgroundSyncTask()
         }
     }
 
@@ -120,6 +186,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // that. Starting a loop that is already running does nothing.
         if JsEnginePlugin.autoImportOptedIn {
             JsEnginePlugin.startForegroundAutoImport()
+            JsEnginePlugin.startForegroundSync()
         }
     }
 

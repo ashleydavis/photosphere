@@ -160,6 +160,10 @@ export interface IHost {
 
     // Asks to delete the named items from the photo library, and returns the outcome as JSON.
     mediaLibraryDelete: (itemIdsJson: string) => string;
+
+    // Returns the current connection type as "wifi", "cellular", "none" or "unknown". Read by the
+    // background sync loop, which cannot ask the WebView because there may not be one.
+    networkConnectionType: () => string;
 }
 
 //
@@ -212,6 +216,7 @@ export const EXPECTED_HOST_FUNCTIONS: string[] = [
     "mediaLibraryOpen",
     "mediaLibraryClose",
     "mediaLibraryDelete",
+    "networkConnectionType",
 ];
 
 //

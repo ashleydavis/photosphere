@@ -25,3 +25,15 @@ export const DATABASES_CONFIG_PATH = "databases.toml";
 // on.
 //
 export const AUTO_IMPORT_CONFIG_PATH = "auto-import.toml";
+
+//
+// Sandbox-relative path of sync.toml, which holds the two automatic syncing settings and the pacing
+// of the background sync loop.
+//
+// A separate file from auto-import.toml because these are separate features: switching automatic
+// import off must not switch syncing off, and a user who opens one of these files to change a
+// setting should not find the other feature's settings in it. The database that is synced is not
+// recorded here either, for the same reason: it is the one automatic import writes to, and that is
+// recorded in auto-import.toml alone.
+//
+export const SYNC_CONFIG_PATH = "sync.toml";

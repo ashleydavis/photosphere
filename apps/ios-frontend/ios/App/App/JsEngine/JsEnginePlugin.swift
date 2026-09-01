@@ -63,6 +63,21 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     private static let planAutoImportTask = "plan-auto-import"
 
     //
+    // The source tag the background sync queues its tasks under.
+    //
+    // Its own tag rather than the import's, so stopping one does not cancel the other: tasks are
+    // cancelled by source, and a sync cancelled because an import was switched off would be a sync
+    // that stopped for no reason the user could see. Matches BACKGROUND_SYNC_TASK_SOURCE in
+    // JsEnginePlugin.java.
+    //
+    static let backgroundSyncTaskSource = "background-sync"
+
+    //
+    // The task type that says whether a background sync pass should run.
+    //
+    private static let planSyncTask = "plan-sync"
+
+    //
     // The plugin instance the background import reaches the engine pool through. Set when the plugin
     // loads: the background processing task the system schedules has no plugin call of its own.
     //
@@ -86,6 +101,42 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     // Guards the driver and the loop thread above.
     //
     private static let autoImportLock = NSLock()
+
+    //
+    // The one sync driver for the life of the app, and the thread its foreground loop runs on.
+    //
+    // The same arrangement as the import driver's, and for the same reason: two callers (the
+    // foreground loop and the system's background processing task) and one serialised entry point
+    // between them.
+    //
+    private static var syncDriver: SyncDriver?
+
+    //
+    // The thread the foreground sync loop runs on, so it never blocks the WebView's.
+    //
+    private static var syncLoopThread: Thread?
+
+    //
+    // Guards the sync driver and its loop thread above.
+    //
+    private static let syncLock = NSLock()
+
+    //
+    // What keeps an import pass and a sync pass from running at the same time. One instance, shared
+    // by both drivers: an import holds the database write lock and a chain of engine slots for the
+    // length of a run, and a sync waiting inside that is what deadlocked the engine pool once
+    // already. See docs/mobile-background-tasks.md.
+    //
+    private static let sharedPassLock = BackgroundPassLock()
+
+    //
+    // The host the sync driver talks to the engine pool through.
+    //
+    // Its own object rather than the plugin itself, which is what the import driver uses: the two
+    // protocols name the same methods, and one type answering both would have a sync's log lines
+    // saying "AutoImport" and a sync's wait ending when the import loop stopped.
+    //
+    private static let syncDriverHost = SyncPluginHost()
 
     //
     // True once the user has switched automatic import on, and false again as soon as they switch it
@@ -115,7 +166,7 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     //
     // One background task something is waiting on.
     //
-    private final class BackgroundTaskWaiter {
+    fileprivate final class BackgroundTaskWaiter {
 
         //
         // Signalled when the task finishes, either way.
@@ -334,6 +385,12 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     @objc func startBackgroundImport(_ call: CAPPluginCall) {
         JsEnginePlugin.autoImportOptedIn = true
         JsEnginePlugin.startForegroundAutoImport()
+
+        // The sync loop starts with the import loop and stops with it, exactly as the two loops share
+        // one foreground service on Android. Whether a sync actually runs is the plan-sync task's
+        // decision, pass by pass, and it says no while syncing is switched off: starting the loop is
+        // not the same as syncing being on.
+        JsEnginePlugin.startForegroundSync()
         call.resolve()
     }
 
@@ -346,11 +403,13 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     @objc func stopBackgroundImport(_ call: CAPPluginCall) {
         JsEnginePlugin.autoImportOptedIn = false
         JsEnginePlugin.stopAutoImport()
+        JsEnginePlugin.stopSync()
 
-        // Switching automatic import off has to leave nothing behind, so a background pass the system
-        // is still holding a request for is withdrawn as well.
+        // Switching automatic import off has to leave nothing behind, so the background passes the
+        // system is still holding requests for are withdrawn as well.
         if #available(iOS 13.0, *) {
             BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: autoImportBackgroundTaskIdentifier)
+            BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: backgroundSyncBackgroundTaskIdentifier)
         }
 
         call.resolve()
@@ -518,9 +577,102 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
             return nil
         }
 
-        let created = AutoImportDriver(host: plugin)
+        let created = AutoImportDriver(host: plugin, sharedPassLock: sharedPassLock)
         autoImportDriver = created
         return created
+    }
+
+    //
+    // Returns the one sync driver for the life of the app, creating it on first use.
+    //
+    static func sharedSyncDriver() -> SyncDriver? {
+        syncLock.lock()
+        defer { syncLock.unlock() }
+
+        if let existing = syncDriver {
+            return existing
+        }
+
+        guard activeInstance != nil else {
+            return nil
+        }
+
+        let created = SyncDriver(host: syncDriverHost, sharedPassLock: sharedPassLock)
+        syncDriver = created
+        return created
+    }
+
+    //
+    // Starts the loop that runs sync passes while the app is foregrounded.
+    //
+    // Starting it again while it is running does nothing, for the same reason the import loop refuses
+    // a second start: two loops would take turns running passes back to back with no gap between
+    // them.
+    //
+    static func startForegroundSync() {
+        guard let driver = sharedSyncDriver() else {
+            return
+        }
+
+        driver.resume()
+
+        syncLock.lock()
+        if let existing = syncLoopThread, !existing.isFinished {
+            syncLock.unlock()
+            return
+        }
+
+        let thread = Thread {
+            driver.runLoop()
+        }
+        thread.name = "photosphere-background-sync"
+        syncLoopThread = thread
+        syncLock.unlock()
+
+        thread.start()
+    }
+
+    //
+    // Stops the foreground sync loop, leaving any pass in flight to finish or be cancelled.
+    //
+    static func stopForegroundSync() {
+        syncLock.lock()
+        let driver = syncDriver
+        syncLock.unlock()
+
+        driver?.stop()
+    }
+
+    //
+    // Stops the background sync outright and cancels the sync in flight.
+    //
+    static func stopSync() {
+        stopForegroundSync()
+
+        guard let plugin = activeInstance else {
+            return
+        }
+
+        plugin.lock.lock()
+        let currentPool = plugin.pool
+        plugin.lock.unlock()
+
+        currentPool?.cancelTasks(source: backgroundSyncTaskSource)
+    }
+
+    //
+    // Runs exactly one sync pass, for the background processing task the system schedules.
+    //
+    // One pass, not a loop: the system decides when this runs and how long it may take, and a handler
+    // that tried to loop would be killed part way through.
+    //
+    static func runOneBackgroundSyncPass() {
+        guard let driver = sharedSyncDriver() else {
+            return
+        }
+
+        driver.resume()
+        driver.runOnePass()
     }
 
     //
@@ -608,7 +760,7 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     // takes, and a wait that gave up part way would have the driver start a second import beside the
     // first.
     //
-    private func runBackgroundTask(type: String, dataJson: String) throws -> BackgroundTaskWaiter {
+    fileprivate func runBackgroundTask(type: String, dataJson: String, source: String, isStopped: () -> Bool) throws -> BackgroundTaskWaiter {
         let taskId = UUID().uuidString
         let waiter = BackgroundTaskWaiter()
 
@@ -630,12 +782,12 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
             taskId: taskId,
             type: type,
             dataJson: dataJson,
-            source: JsEnginePlugin.autoImportTaskSource,
+            source: source,
             priority: TaskPriority.background))
 
         while waiter.finished.wait(timeout: .now() + 0.5) == .timedOut {
-            if JsEnginePlugin.sharedAutoImportDriver()?.isStopped != false {
-                currentPool.cancelTasks(source: JsEnginePlugin.autoImportTaskSource)
+            if isStopped() {
+                currentPool.cancelTasks(source: source)
                 throw AutoImportError.stopped
             }
         }
@@ -845,7 +997,11 @@ extension JsEnginePlugin: AutoImportDriverHost {
     // Asks the plan-auto-import task what the next pass should do.
     //
     func readPlan() throws -> AutoImportPlan {
-        let waiter = try runBackgroundTask(type: JsEnginePlugin.planAutoImportTask, dataJson: "{}")
+        let waiter = try runBackgroundTask(
+            type: JsEnginePlugin.planAutoImportTask,
+            dataJson: "{}",
+            source: JsEnginePlugin.autoImportTaskSource,
+            isStopped: { JsEnginePlugin.sharedAutoImportDriver()?.isStopped != false })
         if !waiter.succeeded {
             throw AutoImportError.taskFailed(waiter.errorMessage ?? "plan-auto-import failed")
         }
@@ -861,7 +1017,11 @@ extension JsEnginePlugin: AutoImportDriverHost {
     // Runs one of the plan's steps on the engine pool and waits for it to finish.
     //
     func runStep(_ step: AutoImportPlan.Step) throws -> Bool {
-        let waiter = try runBackgroundTask(type: step.type, dataJson: step.dataJson)
+        let waiter = try runBackgroundTask(
+            type: step.type,
+            dataJson: step.dataJson,
+            source: JsEnginePlugin.autoImportTaskSource,
+            isStopped: { JsEnginePlugin.sharedAutoImportDriver()?.isStopped != false })
         return waiter.succeeded
     }
 
@@ -1059,5 +1219,142 @@ extension JsEnginePlugin: PHPickerViewControllerDelegate {
                 call.reject("Failed to import picked files: \(error.localizedDescription)")
             }
         }
+    }
+}
+
+//
+// The plugin as the background sync's way to the engine pool.
+//
+// A separate extension from the import's because the two run under different source tags and stop
+// independently: a sync cancelled because an import was switched off would be a sync that stopped for
+// no reason the user could see.
+//
+extension JsEnginePlugin {
+
+    //
+    // Queues one background sync task and waits for it, ending the wait if the sync driver is
+    // stopped.
+    //
+    fileprivate static func runSyncBackgroundTask(type: String, dataJson: String) throws -> BackgroundTaskWaiter {
+        guard let plugin = activeInstance else {
+            throw AutoImportError.stopped
+        }
+
+        return try plugin.runBackgroundTask(
+            type: type,
+            dataJson: dataJson,
+            source: backgroundSyncTaskSource,
+            isStopped: { sharedSyncDriver()?.isStopped != false })
+    }
+
+    //
+    // Asks the plan-sync task whether a sync should run, and against which database.
+    //
+    fileprivate static func readSyncPlan() throws -> SyncPlan {
+        let waiter = try runSyncBackgroundTask(type: planSyncTask, dataJson: "{}")
+        if !waiter.succeeded {
+            throw AutoImportError.taskFailed(waiter.errorMessage ?? "plan-sync failed")
+        }
+
+        guard let outputsJson = waiter.outputsJson else {
+            throw AutoImportError.malformedPlan
+        }
+
+        return try parseSyncPlan(outputsJson)
+    }
+
+    //
+    // Turns the plan-sync task's outputs into the plan the sync driver runs.
+    //
+    // Every field defaults to the answer that does nothing, so outputs that arrive malformed refuse a
+    // sync rather than running one on a guess.
+    //
+    static func parseSyncPlan(_ outputsJson: String) throws -> SyncPlan {
+        guard let data = outputsJson.data(using: .utf8),
+              let outputs = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw AutoImportError.malformedPlan
+        }
+
+        var steps: [SyncPlan.Step] = []
+        if let stepsJson = outputs["steps"] as? [[String: Any]] {
+            for stepJson in stepsJson {
+                guard let type = stepJson["type"] as? String,
+                      let stepData = stepJson["data"],
+                      let stepDataJson = try? JSONSerialization.data(withJSONObject: stepData),
+                      let stepDataString = String(data: stepDataJson, encoding: .utf8) else {
+                    throw AutoImportError.malformedPlan
+                }
+                steps.append(SyncPlan.Step(type: type, dataJson: stepDataString))
+            }
+        }
+
+        // The plan carries the gap in milliseconds, because that is what the Android side takes; iOS
+        // waits in seconds.
+        let pauseMs = outputs["pauseBetweenRunsMs"] as? Double ?? 0
+
+        return SyncPlan(
+            shouldRun: outputs["shouldRun"] as? Bool ?? false,
+            databasePath: outputs["databasePath"] as? String ?? "",
+            reason: outputs["reason"] as? String ?? "",
+            pauseBetweenRuns: pauseMs / 1000,
+            steps: steps)
+    }
+}
+
+//
+// What the sync driver talks to the engine pool through.
+//
+// Its own type rather than the plugin itself, which is what the import driver uses. The two driver
+// protocols name the same methods, and one type answering both would leave a sync's log lines saying
+// "AutoImport" and a sync's wait between passes ending when the import loop was stopped.
+//
+final class SyncPluginHost: SyncDriverHost {
+
+    //
+    // Asks the plan-sync task whether a sync should run, and against which database.
+    //
+    func readPlan() throws -> SyncPlan {
+        return try JsEnginePlugin.readSyncPlan()
+    }
+
+    //
+    // Runs one of the plan's steps on the engine pool and waits for it to finish.
+    //
+    func runStep(_ step: SyncPlan.Step) throws -> Bool {
+        let waiter = try JsEnginePlugin.runSyncBackgroundTask(type: step.type, dataJson: step.dataJson)
+        return waiter.succeeded
+    }
+
+    //
+    // Waits between passes, ending early when the sync driver is stopped.
+    //
+    // Woken every second rather than parked for the whole gap, so switching syncing off, or the app
+    // leaving the foreground, is noticed within a second instead of at the end of the gap. The gap
+    // between sync passes is minutes, which makes that difference a large one.
+    //
+    func pause(_ seconds: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            if JsEnginePlugin.sharedSyncDriver()?.isStopped != false {
+                return false
+            }
+            Thread.sleep(forTimeInterval: min(1, deadline.timeIntervalSinceNow))
+        }
+
+        return JsEnginePlugin.sharedSyncDriver()?.isStopped == false
+    }
+
+    //
+    // Says what the background sync is doing.
+    //
+    func report(_ message: String) {
+        print("[BackgroundSync] \(message)")
+    }
+
+    //
+    // Says what went wrong.
+    //
+    func reportError(_ message: String) {
+        print("[BackgroundSync] ERROR: \(message)")
     }
 }

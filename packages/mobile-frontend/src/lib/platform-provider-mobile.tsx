@@ -17,13 +17,15 @@ import type { IAutoImportSource } from "api/src/lib/auto-import-settings";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
 import { getAutoImportFileValue, isAutoImportFileKey, readAutoImportFile, setAutoImportFileValue } from "./mobile-auto-import-file";
 import { mobileAutoImportConfigFile } from "./mobile-auto-import-config-file";
+import { getSyncFileValue, isSyncFileKey, seedSyncSettingsFile, setSyncFileValue } from "./mobile-sync-file";
+import { mobileSyncConfigFile } from "./mobile-sync-config-file";
 import { readPermissionState, resolveMediaPermission } from "./mobile-media-permission";
 import { JsEngine } from "./js-engine-plugin";
 import * as configStore from "./mobile-config-store";
 import { MobileSecretStore } from "./mobile-secure-store";
 import { createCapacitorSecureStore } from "./secure-store-plugin";
 import { importSharePayload as importReceivedShare, type IReceivedSharePayload } from "./mobile-share-receive";
-import { MobileSyncScheduler, SYNC_TASK_TYPE } from "./mobile-sync-scheduler";
+import { shouldSyncAfterEdit, SYNC_TASK_TYPE } from "./mobile-edit-sync";
 import { mobileDatabasesConfigFile } from "./mobile-databases-config-file";
 import { LAST_DATABASE_KEY } from "user-interface/src/lib/last-database-config";
 import type { IConflictResolution } from "lan-share-core";
@@ -157,8 +159,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     const syncStartedCallbacksRef = useRef<Set<() => void>>(new Set());
     const syncCompletedCallbacksRef = useRef<Set<() => void>>(new Set());
 
-    // The mobile background-sync scheduler (debounce + periodic + gate), created once. It enqueues
-    // sync-database tasks onto the embedded worker queue when the gate permits.
     // Whether this provider has told the native side to start the background import, so a settings
     // write that changes nothing about it does not start it again.
     const autoImportStartedRef = useRef<boolean>(false);
@@ -167,15 +167,19 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     // to start or stop straight away rather than finding out later.
     const autoImportChangedRef = useRef<(() => void) | undefined>(undefined);
 
-    const syncSchedulerRef = useRef<MobileSyncScheduler | null>(null);
-    const getSyncScheduler = useCallback((): MobileSyncScheduler => {
-        if (!syncSchedulerRef.current) {
-            syncSchedulerRef.current = new MobileSyncScheduler((type, data, source) => {
-                getQueueBackend().addTask(type, data, source);
-            });
-        }
-        return syncSchedulerRef.current;
-    }, []);
+    // Whether an automatic sync is currently permitted, pushed in by the sync context. The native
+    // loop asks the same question for itself, through the plan-sync task; this copy is only for the
+    // edit-triggered sync below, which the native loop cannot make.
+    const syncAllowedRef = useRef<boolean>(false);
+
+    // The path of the open database, or undefined when none is open. This is the database an edit
+    // syncs, which is not necessarily the one the background loop pushes: that one is whichever
+    // automatic import writes to.
+    const openDatabasePathRef = useRef<string | undefined>(undefined);
+
+    // Whether a sync started by an edit is still running, so a second edit does not queue a sync
+    // behind the first one holding an engine slot.
+    const syncInFlightRef = useRef<boolean>(false);
 
     const openDatabase = useCallback(async (): Promise<void> => {
         // No-op: no native database picker on mobile yet.
@@ -199,17 +203,19 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         const name = known?.name ?? configStore.databaseBasename(databasePath);
         await configStore.addRecentDatabase(mobileDatabasesConfigFile, known ?? { name, description: "", path: databasePath });
         log.info(`Database opened: ${configStore.databaseBasename(databasePath)}`);
-        // Point the sync scheduler at the newly opened database and start its periodic timer, so
-        // subsequent edits and the periodic interval enqueue syncs for this database.
-        const scheduler = getSyncScheduler();
-        scheduler.setDatabasePath(databasePath);
-        scheduler.start();
+        // Remember which database an edit made from here syncs. Nothing periodic starts with it: the
+        // loop that syncs on its own lives on the native side and pushes the database automatic
+        // import writes to, whether or not this one is open.
+        openDatabasePathRef.current = databasePath;
         // Notify the database-opened subscribers (the app-context reload and the sidebar's recent-database
         // refresh). This is the real production trigger; TEST_OPEN_DATABASE_EVENT is the test-only path.
         openedCallbacksRef.current.forEach(callback => callback(databasePath));
-    }, [getSyncScheduler]);
+    }, []);
 
     const notifyDatabaseClosed = useCallback(async (): Promise<void> => {
+        // Nothing is open, so an edit has nothing to sync. Cleared rather than left, because a stale
+        // path here would queue a sync for a database the app has closed.
+        openDatabasePathRef.current = undefined;
     }, []);
 
     const onThemeChanged = useCallback((_callback: (theme: 'light' | 'dark' | 'system') => void): (() => void) => {
@@ -261,9 +267,10 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             const result = (event as CustomEvent<string | null>).detail ?? null;
             setInjectedPickFolderResult(result);
         };
-        // Test setup: schedule the debounced background sync, as a real edit through the UI would.
+        // Test setup: start the sync an edit through the UI would start. The same function the
+        // interface calls, so what a test exercises is the real path and not a copy of it.
         const handleNotifyDatabaseEdited = () => {
-            getSyncScheduler().notifyDatabaseEdited();
+            notifyDatabaseEdited();
         };
         window.addEventListener(TEST_MENU_EVENT, handleMenu);
         window.addEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
@@ -289,9 +296,22 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, []);
 
     const notifyDatabaseEdited = useCallback((): void => {
-        // Debounced background sync after an edit (mirrors desktop's notify-database-edited).
-        getSyncScheduler().notifyDatabaseEdited();
-    }, [getSyncScheduler]);
+        // One sync for the database the edit was made in, now. There is no timer behind this and
+        // nothing periodic: the loop that syncs on its own runs natively and pushes the database
+        // automatic import writes to, which is not necessarily the one on screen. This is what gets
+        // an edit to a database the user opened by hand out to its origin.
+        if (!shouldSyncAfterEdit({
+            syncAllowed: syncAllowedRef.current,
+            databasePath: openDatabasePathRef.current,
+            syncInFlight: syncInFlightRef.current,
+        })) {
+            return;
+        }
+
+        const databasePath = openDatabasePathRef.current!;
+        syncInFlightRef.current = true;
+        getQueueBackend().addTask(SYNC_TASK_TYPE, { databasePath }, databasePath);
+    }, []);
 
     const copyToClipboard = useCallback(async (_blob: Blob, _contentType: string): Promise<void> => {
         // No-op: native clipboard image support is not wired up on mobile yet.
@@ -382,17 +402,17 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         return unsubscribe;
     }, []);
 
-    // Settle the sync scheduler when the sync task itself finishes, mirroring desktop's syncStopped in
-    // the task-complete handler. Settling on the sync-completed *message* instead would leave the
-    // scheduler stuck believing a sync was still running whenever the sync skipped early or failed,
-    // because neither path sends that message, and no later sync would ever be enqueued.
+    // Let the next edit start a sync once this one's task has finished, mirroring desktop's
+    // syncStopped in the task-complete handler. Clearing it on the sync-completed *message* instead
+    // would leave the app believing a sync was still running whenever the sync skipped early or
+    // failed, because neither path sends that message, and no later edit would ever sync again.
     useEffect(() => {
         const unsubscribe = subscribeMobileTaskComplete((_taskId, result) => {
             const completed = result as unknown as ICompletedTaskResult;
             if (completed.type !== SYNC_TASK_TYPE) {
                 return;
             }
-            getSyncScheduler().onSyncSettled();
+            syncInFlightRef.current = false;
             log.event(`Sync task finished: ${completed.status}`);
             if (completed.status !== TaskStatus.Succeeded) {
                 // The spinner was turned on by sync-started but no sync-completed will arrive, so
@@ -401,7 +421,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             }
         });
         return unsubscribe;
-    }, [getSyncScheduler]);
+    }, []);
 
     const onDatabasesChanged = useCallback((_callback: () => void): (() => void) => {
         return () => {};
@@ -642,13 +662,19 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, [getNetworkStatus]);
 
     //
-    // Pushes the shared sync gate's decision to the scheduler. When sync becomes allowed the scheduler
-    // schedules a catch-up sync; when disallowed it cancels any pending debounce, so no automatic sync
-    // is enqueued while the gate is closed (matches desktop's set-sync-allowed behaviour).
+    // Records whether an automatic sync is permitted, for the sync an edit starts.
+    //
+    // The log line keeps the wording the desktop main process uses, because the Electron test
+    // 24-sync-settings waits on that exact text and both platforms answer the same question.
+    //
+    // It reaches nothing else. The background loop that syncs on its own runs natively and asks the
+    // same question for itself, through the plan-sync task, because it runs while there is no WebView
+    // to be told anything: this value would be whatever it was when the app was last on screen.
     //
     const setSyncAllowed = useCallback((allowed: boolean): void => {
-        getSyncScheduler().setSyncAllowed(allowed);
-    }, [getSyncScheduler]);
+        syncAllowedRef.current = allowed;
+        log.info(`Sync gate set to ${allowed}`);
+    }, []);
 
     const platformContext: IPlatformContext = {
         openDatabase,
@@ -710,14 +736,17 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     // survive app restarts, matching how databases and secrets are persisted.
     //
     // The automatic import keys are the exception: they go to auto-import.toml in the storage
-    // sandbox instead. Local storage belongs to the WebView and nothing else can read it, and the
-    // background import runs while there is no WebView. The settings card is unchanged and still
-    // writes the same three keys on every platform; the routing is here because where they are kept
-    // is a platform's business.
+    // sandbox instead, and the two syncing keys go to sync.toml beside it. Local storage belongs to
+    // the WebView and nothing else can read it, and both background loops run while there is no
+    // WebView. The settings card is unchanged and still writes the same keys on every platform; the
+    // routing is here because where they are kept is a platform's business.
     const config = createConfig(
         async (key) => {
             if (isAutoImportFileKey(key)) {
                 return getAutoImportFileValue(mobileAutoImportConfigFile, key);
+            }
+            if (isSyncFileKey(key)) {
+                return getSyncFileValue(mobileSyncConfigFile, key);
             }
             if (key === LAST_DATABASE_KEY) {
                 return configStore.getLastDatabase(mobileDatabasesConfigFile);
@@ -733,6 +762,10 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
                 if (autoImportChangedRef.current) {
                     autoImportChangedRef.current();
                 }
+                return;
+            }
+            if (isSyncFileKey(key)) {
+                await setSyncFileValue(mobileSyncConfigFile, key, value as boolean | undefined);
                 return;
             }
             if (key === LAST_DATABASE_KEY) {
@@ -767,6 +800,18 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         return () => {
             document.removeEventListener("visibilitychange", onVisibilityChange);
         };
+    }, []);
+
+    // Writes the syncing settings a fresh installation starts from, if nobody has written them yet.
+    //
+    // The background sync loop reads sync.toml, and a file it cannot read means syncing off, which
+    // is the safe answer for a loop that would otherwise push photos over a metered connection on a
+    // guess. That leaves a new phone with the two toggles showing syncing on and a file saying
+    // nothing, so the app writes what the toggles say the first time it runs. A file that is already
+    // there is left alone: rewriting it would put syncing back on for somebody who switched it off.
+    useEffect(() => {
+        seedSyncSettingsFile(mobileSyncConfigFile)
+            .catch(error => log.exception("Failed to write the initial syncing settings", error as Error));
     }, []);
 
     // Starts the background automatic import when it is switched on, and stops it when it is

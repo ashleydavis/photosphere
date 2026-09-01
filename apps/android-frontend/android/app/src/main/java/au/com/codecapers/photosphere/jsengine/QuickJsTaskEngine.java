@@ -582,6 +582,12 @@ public final class QuickJsTaskEngine implements TaskEngine {
         host.setProperty("mediaLibraryDelete", (JSCallFunction) args -> safeString(() ->
             hostBridge.mediaLibraryDelete((String) args[0])));
 
+        // What kind of connection the phone has, for the background sync's Wi-Fi-only setting. The
+        // WebView has its own network status and cannot be asked for this: the loop that needs it
+        // runs while the app is off screen, when there may be no WebView at all.
+        host.setProperty("networkConnectionType", (JSCallFunction) args -> safeString(() ->
+            hostBridge.networkConnectionType()));
+
         // Native-backed UDP functions: LAN-share discovery binds a datagram socket and broadcasts /
         // receives through these. Inbound datagrams are pushed into the engine via globalThis.__udpEvent.
         host.setProperty("udpBind", (JSCallFunction) args -> safeString(() ->

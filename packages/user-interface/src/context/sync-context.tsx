@@ -2,18 +2,8 @@ import React, { ReactNode, createContext, useContext, useEffect, useState } from
 import { usePlatform, type INetworkStatus } from "./platform-context";
 import { useConfig } from "./config-context";
 import { computeSyncAllowed } from "../lib/sync-gate";
+import { SYNC_ENABLED_CONFIG_KEY, SYNC_ONLY_ON_WIFI_CONFIG_KEY } from "../lib/sync-config";
 import { log } from "utils";
-
-//
-// Config persistence key for the master sync-enabled flag. Defaults to true.
-//
-const SYNC_ENABLED_CONFIG_KEY = "syncEnabled";
-
-//
-// Config persistence key for the Wi-Fi-only sync flag. Defaults to true so
-// syncing is restricted to Wi-Fi out of the box.
-//
-const SYNC_ONLY_ON_WIFI_CONFIG_KEY = "syncOnlyOnWifi";
 
 //
 // Reactive sync configuration: whether syncing is enabled at all and whether it

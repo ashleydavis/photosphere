@@ -49,14 +49,37 @@ public final class AutoImportService extends Service {
     private static final String WAKE_LOCK_TAG = "photosphere:auto-import";
 
     //
-    // The thread the driver's loop runs on, so the service's main thread is never blocked.
+    // The thread the import driver's loop runs on, so the service's main thread is never blocked.
     //
     private Thread loopThread;
 
     //
-    // The driver running the passes, or null when the service has not started one.
+    // The driver running the import passes, or null when the service has not started one.
     //
     private AutoImportDriver driver;
+
+    //
+    // The thread the sync driver's loop runs on.
+    //
+    // A second thread rather than a second service. The platform requires a foreground service to
+    // post an ongoing notification, and two services would mean two notifications for one feature,
+    // which is a visible product change nobody asked for. The two loops start and stop together with
+    // this service, under the one notification and the one wake lock.
+    //
+    private Thread syncLoopThread;
+
+    //
+    // The driver running the sync passes, or null when the service has not started one.
+    //
+    private SyncDriver syncDriver;
+
+    //
+    // What keeps an import pass and a sync pass from running at the same time. One instance, shared
+    // by both drivers: an import holds the database write lock and a chain of engine slots for the
+    // length of a run, and a sync waiting inside that is what deadlocked the engine pool once
+    // already. See docs/mobile-background-tasks.md.
+    //
+    private final BackgroundPassLock passLock = new BackgroundPassLock();
 
     //
     // The wake lock held while a pass is in flight.
@@ -98,7 +121,7 @@ public final class AutoImportService extends Service {
             return START_NOT_STICKY;
         }
 
-        final AutoImportDriver startedDriver = new AutoImportDriver(new ServiceHost());
+        final AutoImportDriver startedDriver = new AutoImportDriver(new ServiceHost(), passLock);
         driver = startedDriver;
 
         loopThread = new Thread(new Runnable() {
@@ -108,6 +131,20 @@ public final class AutoImportService extends Service {
             }
         }, "photosphere-auto-import");
         loopThread.start();
+
+        // The sync loop starts with the import loop and stops with it. Whether a sync actually runs
+        // is the plan-sync task's decision, pass by pass, and it says no while syncing is switched
+        // off: this service starting one is not the same as syncing being on.
+        final SyncDriver startedSyncDriver = new SyncDriver(new SyncServiceHost(), passLock);
+        syncDriver = startedSyncDriver;
+
+        syncLoopThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                startedSyncDriver.runLoop();
+            }
+        }, "photosphere-background-sync");
+        syncLoopThread.start();
 
         return START_NOT_STICKY;
     }
@@ -122,8 +159,12 @@ public final class AutoImportService extends Service {
             driver.stop();
         }
 
-        // Wake whatever is waiting between passes, so the loop ends now rather than at the end of the
-        // gap it was part way through.
+        if (syncDriver != null) {
+            syncDriver.stop();
+        }
+
+        // Wake whatever is waiting between passes, so the loops end now rather than at the end of the
+        // gap they were part way through.
         synchronized (pauseLock) {
             pauseLock.notifyAll();
         }
@@ -132,9 +173,9 @@ public final class AutoImportService extends Service {
 
         JsEnginePlugin.releaseBackgroundImportHold();
 
-        // The driver and the thread are deliberately not cleared. The loop thread is still reading
-        // the driver to find out it has been stopped, and a service that is started again gets a
-        // fresh instance of this class with fresh fields anyway.
+        // The drivers and the threads are deliberately not cleared. The loop threads are still
+        // reading their driver to find out it has been stopped, and a service that is started again
+        // gets a fresh instance of this class with fresh fields anyway.
 
         super.onDestroy();
     }
@@ -281,6 +322,74 @@ public final class AutoImportService extends Service {
         public void onStopped() {
             Log.i(LOG_TAG, "Automatic import is switched off, stopping the background import.");
             stopSelf();
+        }
+    }
+
+    //
+    // Everything the sync driver needs that is Android's business. The same list as the import
+    // driver's, minus stopping the service: the sync loop never ends itself, because every reason a
+    // sync is refused can go away without the app being touched.
+    //
+    private final class SyncServiceHost implements SyncDriver.Host {
+
+        //
+        // Asks the plan-sync task whether a sync should run, and against which database.
+        //
+        @Override
+        public SyncPlan readPlan() throws Exception {
+            return JsEnginePlugin.readBackgroundSyncPlan();
+        }
+
+        //
+        // Runs one of the plan's steps on the engine pool and waits for it to finish.
+        //
+        @Override
+        public boolean runStep(SyncPlan.Step step) throws Exception {
+            return JsEnginePlugin.runBackgroundSyncStep(step);
+        }
+
+        //
+        // Waits between passes, ending early when the service is stopped.
+        //
+        @Override
+        public boolean pause(long millis) throws InterruptedException {
+            synchronized (pauseLock) {
+                pauseLock.wait(millis);
+            }
+            return syncDriver != null && !syncDriver.isStopped();
+        }
+
+        //
+        // Keeps the CPU running for the length of a pass.
+        //
+        // The same wake lock the import uses, which is safe because the two never hold it at once:
+        // the shared pass lock means only one pass of either kind is ever in flight, so one loop can
+        // never release the lock out from under the other.
+        //
+        @Override
+        public void holdAwake(boolean awake) {
+            if (awake) {
+                acquireWakeLock();
+            }
+            else {
+                releaseWakeLock();
+            }
+        }
+
+        //
+        // Says what the background sync is doing, in logcat.
+        //
+        @Override
+        public void report(String message) {
+            Log.i(LOG_TAG, message);
+        }
+
+        //
+        // Says what went wrong, in logcat.
+        //
+        @Override
+        public void reportError(String message) {
+            Log.e(LOG_TAG, message);
         }
     }
 }

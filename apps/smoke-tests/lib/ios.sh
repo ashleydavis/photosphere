@@ -246,6 +246,57 @@ ios_seed_databases_config() {
 }
 
 #
+# Writes the app's auto-import.toml into its Documents directory.
+#
+# The iOS counterpart of android_seed_auto_import_config. The simulator's container is an ordinary
+# directory on this machine, so the harness renders straight into it.
+# Usage: ios_seed_auto_import_config <enabled true|false> [default_database_path] [pause_ms]
+#
+ios_seed_auto_import_config() {
+    local enabled="$1"
+    local default_database_path="${2:-}"
+    local pause_ms="${3:-}"
+    local container
+    container="$(ios_app_container)"
+    if [ -z "$container" ]; then
+        log_error "Could not resolve iOS app data container for $BUNDLE_ID (is the app installed?)"
+        return 1
+    fi
+    mkdir -p "$container/Documents"
+    if ! ENABLED="$enabled" DEFAULT_DATABASE_PATH="$default_database_path" PAUSE_MS="$pause_ms" \
+        bun "$LIB_DIR/write-auto-import-config.ts" "$container/Documents/$AUTO_IMPORT_CONFIG_FILE"; then
+        log_error "Could not render the app's automatic import settings (see the error above)."
+        return 1
+    fi
+    log_info "Wrote the app's automatic import settings to Documents/$AUTO_IMPORT_CONFIG_FILE (enabled=$enabled)"
+}
+
+#
+# Writes the app's sync.toml into its Documents directory.
+#
+# The iOS counterpart of android_seed_sync_config.
+# Usage: ios_seed_sync_config <enabled true|false> <only_on_wifi true|false> [pause_ms]
+#
+ios_seed_sync_config() {
+    local enabled="$1"
+    local only_on_wifi="$2"
+    local pause_ms="${3:-}"
+    local container
+    container="$(ios_app_container)"
+    if [ -z "$container" ]; then
+        log_error "Could not resolve iOS app data container for $BUNDLE_ID (is the app installed?)"
+        return 1
+    fi
+    mkdir -p "$container/Documents"
+    if ! ENABLED="$enabled" ONLY_ON_WIFI="$only_on_wifi" PAUSE_MS="$pause_ms" \
+        bun "$LIB_DIR/write-sync-config.ts" "$container/Documents/$SYNC_CONFIG_FILE"; then
+        log_error "Could not render the app's syncing settings (see the error above)."
+        return 1
+    fi
+    log_info "Wrote the app's syncing settings to Documents/$SYNC_CONFIG_FILE (enabled=$enabled, onlyOnWifi=$only_on_wifi)"
+}
+
+#
 # Wipes everything the app has stored on the simulator: its storage sandbox (Documents), the WebKit
 # website data the WebView's localStorage lives in (Library), and the simulator keychain holding the
 # secrets.

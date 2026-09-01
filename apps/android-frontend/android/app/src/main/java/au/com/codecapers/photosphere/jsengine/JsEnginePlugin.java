@@ -131,6 +131,20 @@ public final class JsEnginePlugin extends Plugin {
     private static final String PLAN_AUTO_IMPORT_TASK = "plan-auto-import";
 
     //
+    // The source tag every background sync task is queued under.
+    //
+    // Its own tag rather than the import's, so stopping one does not cancel the other: tasks are
+    // cancelled by source, and a sync cancelled because an import was switched off would be a sync
+    // that stopped for no reason the user could see.
+    //
+    private static final String BACKGROUND_SYNC_TASK_SOURCE = "background-sync";
+
+    //
+    // The task type that says whether a background sync pass should run.
+    //
+    private static final String PLAN_SYNC_TASK = "plan-sync";
+
+    //
     // How long a wait for a background task is parked for before it checks whether the background
     // import has been stopped, in milliseconds.
     //
@@ -155,6 +169,12 @@ public final class JsEnginePlugin extends Plugin {
     // needs.
     //
     private static volatile boolean backgroundImportRunning = false;
+
+    //
+    // True when the platform refused the last request for the foreground service, so the next resume
+    // asks again. See startAutoImportService.
+    //
+    private static volatile boolean serviceStartRefused = false;
 
     //
     // The engine pool that runs tasks. Created lazily on first use so the Android context and
@@ -889,6 +909,12 @@ public final class JsEnginePlugin extends Plugin {
     //
     // Starts the service and takes the hold that keeps the engine pool alive without the WebView.
     //
+    // A refusal by the platform is caught, and it is not a theoretical case: from Android 12 an app
+    // that is not in the foreground may not start a foreground service, and the app asks for one as
+    // it launches, before the system considers it foreground. Uncaught, that exception killed the app
+    // outright on a Pixel 6 every time it was opened with automatic import already on. The service is
+    // asked for again when the activity resumes, which is a moment the platform does allow.
+    //
     private void startAutoImportService() {
         backgroundImportRunning = true;
 
@@ -897,14 +923,43 @@ public final class JsEnginePlugin extends Plugin {
         ensurePool();
 
         Intent intent = new Intent(getContext(), AutoImportService.class);
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            getContext().startForegroundService(intent);
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                getContext().startForegroundService(intent);
+            }
+            else {
+                getContext().startService(intent);
+            }
         }
-        else {
-            getContext().startService(intent);
+        catch (RuntimeException refused) {
+            // ForegroundServiceStartNotAllowedException on API 31+, which is a subclass of
+            // IllegalStateException; caught as RuntimeException so this compiles against the older
+            // API levels the project still builds for and covers whatever else the platform raises
+            // for the same reason.
+            serviceStartRefused = true;
+            Log.w(LOG_TAG, "The platform refused to start the background import service, which happens when the app is not foreground yet. It will be asked for again when the app resumes: " + refused);
+            return;
         }
 
+        serviceStartRefused = false;
         Log.i(LOG_TAG, "Started the background automatic import.");
+    }
+
+    //
+    // Asks for the service again if the platform refused it while the app was still starting.
+    //
+    // Nothing else would: the WebView asks once, when it reads the settings at startup, and it has no
+    // reason to ask a second time. Without this, opening the app with automatic import switched on
+    // leaves it switched on in the interface and doing nothing at all.
+    //
+    @Override
+    protected void handleOnResume() {
+        super.handleOnResume();
+
+        if (serviceStartRefused && backgroundImportRunning) {
+            Log.i(LOG_TAG, "Asking for the background import service again now the app is resumed.");
+            startAutoImportService();
+        }
     }
 
     //
@@ -919,9 +974,18 @@ public final class JsEnginePlugin extends Plugin {
     public void stopBackgroundImport(PluginCall call) {
         backgroundImportRunning = false;
 
+        // Switched off, so a refused start is no longer something to retry: asking again on the next
+        // resume would start a service the user has just turned off.
+        serviceStartRefused = false;
+
         synchronized (this) {
             if (enginePool != null) {
                 enginePool.cancelTasks(AUTO_IMPORT_TASK_SOURCE);
+
+                // The sync in flight goes with it. The two loops live in the one service, so
+                // stopping the service stops both, and a sync task left queued would hold an engine
+                // slot for a service that is going away.
+                enginePool.cancelTasks(BACKGROUND_SYNC_TASK_SOURCE);
             }
         }
 
@@ -953,12 +1017,49 @@ public final class JsEnginePlugin extends Plugin {
             throw new IllegalStateException("The JsEngine plugin is not loaded, so the background import cannot ask what to do.");
         }
 
-        BackgroundTaskWaiter waiter = plugin.runBackgroundTask(PLAN_AUTO_IMPORT_TASK, "{}");
+        BackgroundTaskWaiter waiter = plugin.runBackgroundTask(PLAN_AUTO_IMPORT_TASK, "{}", AUTO_IMPORT_TASK_SOURCE);
         if (!waiter.succeeded) {
             throw new IllegalStateException("plan-auto-import failed: " + waiter.errorMessage);
         }
 
         return parseAutoImportPlan(waiter.outputsJson);
+    }
+
+    //
+    // Asks the plan-sync task whether a background sync should run, and against which database.
+    //
+    // Static for the same reason the import's is: the service runs with no Activity and no plugin
+    // call of its own.
+    //
+    public static SyncPlan readBackgroundSyncPlan() throws Exception {
+        JsEnginePlugin plugin = activeInstance;
+        if (plugin == null) {
+            throw new IllegalStateException("The JsEngine plugin is not loaded, so the background sync cannot ask what to do.");
+        }
+
+        BackgroundTaskWaiter waiter = plugin.runBackgroundTask(PLAN_SYNC_TASK, "{}", BACKGROUND_SYNC_TASK_SOURCE);
+        if (!waiter.succeeded) {
+            throw new IllegalStateException("plan-sync failed: " + waiter.errorMessage);
+        }
+
+        return parseSyncPlan(waiter.outputsJson);
+    }
+
+    //
+    // Runs one step of a background sync pass and waits for it to finish, reporting whether it
+    // succeeded.
+    //
+    public static boolean runBackgroundSyncStep(SyncPlan.Step step) throws Exception {
+        JsEnginePlugin plugin = activeInstance;
+        if (plugin == null) {
+            throw new IllegalStateException("The JsEngine plugin is not loaded, so the background sync cannot run.");
+        }
+
+        BackgroundTaskWaiter waiter = plugin.runBackgroundTask(step.type, step.dataJson, BACKGROUND_SYNC_TASK_SOURCE);
+        if (!waiter.succeeded) {
+            Log.e(LOG_TAG, "Background sync task \"" + step.type + "\" failed: " + waiter.errorMessage);
+        }
+        return waiter.succeeded;
     }
 
     //
@@ -971,7 +1072,7 @@ public final class JsEnginePlugin extends Plugin {
             throw new IllegalStateException("The JsEngine plugin is not loaded, so the background import cannot run.");
         }
 
-        BackgroundTaskWaiter waiter = plugin.runBackgroundTask(step.type, step.dataJson);
+        BackgroundTaskWaiter waiter = plugin.runBackgroundTask(step.type, step.dataJson, AUTO_IMPORT_TASK_SOURCE);
         if (!waiter.succeeded) {
             Log.e(LOG_TAG, "Background import task \"" + step.type + "\" failed: " + waiter.errorMessage);
         }
@@ -1028,24 +1129,58 @@ public final class JsEnginePlugin extends Plugin {
     }
 
     //
+    // Turns the plan-sync task's outputs into the plan the sync driver runs.
+    //
+    // Every field defaults to the answer that does nothing, so outputs that arrive malformed refuse a
+    // sync rather than running one on a guess.
+    //
+    private static SyncPlan parseSyncPlan(String outputsJson) throws JSONException {
+        if (outputsJson == null) {
+            throw new JSONException("plan-sync returned nothing.");
+        }
+
+        JSONObject outputs = new JSONObject(outputsJson);
+        List<SyncPlan.Step> steps = new ArrayList<>();
+
+        JSONArray stepsJson = outputs.optJSONArray("steps");
+        if (stepsJson != null) {
+            for (int stepIndex = 0; stepIndex < stepsJson.length(); stepIndex++) {
+                JSONObject stepJson = stepsJson.getJSONObject(stepIndex);
+                steps.add(new SyncPlan.Step(
+                    stepJson.getString("type"),
+                    stepJson.getJSONObject("data").toString()));
+            }
+        }
+
+        return new SyncPlan(
+            outputs.optBoolean("shouldRun", false),
+            outputs.optString("databasePath", ""),
+            outputs.optString("reason", ""),
+            outputs.optLong("pauseBetweenRunsMs", 0),
+            steps);
+    }
+
+    //
     // Queues one background task and blocks until it finishes.
     //
     // The wait ends when the task completes or when the background import is stopped, whichever
     // comes first. A stop also cancels the task, so nothing is left running behind a wait that has
     // been abandoned.
     //
-    private BackgroundTaskWaiter runBackgroundTask(String type, String dataJson) throws Exception {
+    private BackgroundTaskWaiter runBackgroundTask(String type, String dataJson, String source) throws Exception {
         String taskId = UUID.randomUUID().toString();
         BackgroundTaskWaiter waiter = new BackgroundTaskWaiter();
         backgroundWaitersByTaskId.put(taskId, waiter);
 
         try {
-            ensurePool().addTask(new PooledTask(taskId, type, dataJson, AUTO_IMPORT_TASK_SOURCE, TaskPriority.BACKGROUND));
+            ensurePool().addTask(new PooledTask(taskId, type, dataJson, source, TaskPriority.BACKGROUND));
 
             while (!waiter.finished.await(BACKGROUND_TASK_POLL_MS, TimeUnit.MILLISECONDS)) {
                 if (!backgroundImportRunning) {
-                    ensurePool().cancelTasks(AUTO_IMPORT_TASK_SOURCE);
-                    throw new InterruptedException("The background import was stopped while \"" + type + "\" was running.");
+                    // The flag covers both loops: it is the service that is running or not, and the
+                    // service hosts the import loop and the sync loop together.
+                    ensurePool().cancelTasks(source);
+                    throw new InterruptedException("The background service was stopped while \"" + type + "\" was running.");
                 }
             }
 

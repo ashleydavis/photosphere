@@ -8,7 +8,7 @@ Point Photosphere at one or more places where photos turn up and it will:
 
 - import anything that is already there, as fast as the machine manages;
 - import anything new on its next pass, a short while after the last one ended;
-- push what it imported to a remote database, when one is configured (implemented, but the sync loop runs in the WebView, so on mobile nothing is pushed until the app is opened);
+- push what it imported to a remote database, when one is configured, including while the app is not on screen (see [Syncing](syncing.md), which is the other half of this feature and describes it in full);
 - optionally delete the source file once the photo is confirmed in the local database;
 - optionally drop local originals the remote already holds, so the local database can stay small.
 
@@ -147,6 +147,8 @@ The `import-assets` task holds an engine slot for as long as the run lasts, and 
 
 The loop that starts one pass after another lives on the native side of the mobile apps, not in the WebView. It used to be a `setInterval` in the WebView, and that is exactly why automatic import stopped the moment the app was backgrounded: the operating system throttles and then stops a WebView's timers, and photos taken after that were backed up only when the app was next opened, with nothing anywhere saying so. Nothing in the WebView queues an import on any platform now.
 
+Syncing works the same way and for the same reason, in a loop of its own beside this one, so a photo imported while the app is off screen reaches the remote without the app being opened. [Syncing](syncing.md) describes that half: what it costs to ask whether there is anything to push, the two settings and where they live, and why the two loops never run a pass at the same time.
+
 The settings moved for the same reason. They used to be in the WebView's `localStorage`, which nothing outside the WebView can read, so a service that woke up had no way to find out whether automatic import was switched on or what it should be reading. They live in `auto-import.toml` in the app's storage sandbox, beside `databases.toml`.
 
 The native side does not parse that file. It asks the `plan-auto-import` worker task, which reads the settings, decides whether a pass should run, and hands back the tasks the pass consists of, already built: `create-database` and `record-default-database` the first time, and `import-assets` every time. Native code forwards each one to the engine pool unchanged and never assembles a payload of its own, so what a pass does is decided once, in TypeScript, and cannot drift between the two platforms.
@@ -160,11 +162,13 @@ What differs between them is only what keeps the loop alive:
 | While the screen is off | Keeps importing, holding a wake lock for the length of a pass | The system runs a pass when it chooses |
 | What the user sees | An ongoing notification for as long as automatic import is on | Nothing |
 
-**On Android** it is a foreground service (`AutoImportService`). The platform requires one to post an ongoing notification, so switching automatic import on means a permanent notification while it is on: that is a visible product change and not something the app can opt out of. The service holds a `PARTIAL_WAKE_LOCK` only while a pass is actually running and releases it in between, because a foreground service keeps the process alive but does not by itself keep the CPU awake once the screen is off, and a lock held all night flattens the phone.
+**On Android** it is a foreground service (`AutoImportService`), which hosts the sync loop as well as this one, on a thread each, under the one notification and the one wake lock. The platform refuses to start a foreground service for an app that is not itself in the foreground, which an app launched behind a lock screen is not, so a refusal is caught and the service asked for again when the app resumes. Uncaught, that exception killed the app outright every time it was opened with automatic import already on. The platform requires a foreground service to post an ongoing notification, so switching automatic import on means a permanent notification while it is on: that is a visible product change and not something the app can opt out of. A second service for syncing would mean a second notification for one feature, which is why there is not one. The service holds a `PARTIAL_WAKE_LOCK` only while a pass is actually running and releases it in between, because a foreground service keeps the process alive but does not by itself keep the CPU awake once the screen is off, and a lock held all night flattens the phone.
 
 **On iOS** the loop runs while the app is foregrounded, and what happens when it is not is the system's decision. The app registers a `BGProcessingTask` and asks for one after each pass; iOS runs it when it sees fit, typically while the phone is charging and idle, and may kill it part way. The honest description is that iOS catches up when the system allows, not that it backs up continuously, and the settings card says so. A phone in a pocket all day may import nothing until the app is opened. There is no way round that short of doing the work on a server rather than on the phone, which is a different feature.
 
 Two passes at once is unreachable rather than unlikely. There is one driver for the life of the app, with one entry point that runs a pass, and it is serialised: asked to run while a pass is in flight, it waits for that pass and returns its outcome rather than starting a second. On Android only the service's loop asks; on iOS both the foreground loop and the system's background task do, and neither knows about the other because neither has to.
+
+An import pass and a sync pass do not overlap either. Both loops take one shared lock around a pass, and a loop that cannot take it skips its pass and tries again after its usual gap. An import holds the database write lock and a chain of engine slots for the length of a run, and a sync waiting inside that is the arrangement that deadlocked the pool once already.
 
 All of it is opt-in and stays opt-in. Until the user switches automatic import on there is no service, no background task request, no wake lock, no notification and no permission prompt, and switching it off takes all of them away again: the Android service stops and its notification goes with it, and the iOS background request is withdrawn.
 

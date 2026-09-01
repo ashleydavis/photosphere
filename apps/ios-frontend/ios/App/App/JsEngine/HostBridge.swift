@@ -644,6 +644,14 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: mediaLibraryDelete, in: context), forProperty: "mediaLibraryDelete")
 
+        // networkConnectionType(): "wifi", "cellular", "none" or "unknown", for the background sync's
+        // Wi-Fi-only setting. The WebView has its own network status and cannot be asked for this:
+        // the loop that needs it runs while the app is off screen, when there may be no WebView.
+        let networkConnectionType: @convention(block) () -> JSValue = {
+            return JSValue(object: NetworkHost.connectionType(), in: context)
+        }
+        host.setValue(JSValue(object: networkConnectionType, in: context), forProperty: "networkConnectionType")
+
         context.globalObject.setValue(host, forProperty: "host")
     }
 

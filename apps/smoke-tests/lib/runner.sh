@@ -300,6 +300,24 @@ device_can_reach_host() {
 }
 
 #
+# What a device is probed for, named for the log. An emulator is asked whether it can reach this host
+# on the LAN bridge; a real device is asked whether adb can still reach it, because the reverses adb
+# sets up over USB are how it reaches this host and the bridge address means nothing to it.
+# Usage: device_health_target <serial>
+#
+device_health_target() {
+    local serial="$1"
+    case "$serial" in
+        emulator-*|"")
+            echo "$DEVICE_HEALTH_HOST"
+            ;;
+        *)
+            echo "adb"
+            ;;
+    esac
+}
+
+#
 # Withdraws a device from service, recording when.
 # Usage: quarantine_device <serial> <reason>
 #
@@ -795,9 +813,11 @@ run_worker() {
 
             if [ "$requeues" -lt "$MAX_DEVICE_REQUEUES_PER_TEST" ]; then
                 echo $((requeues + 1)) > "$requeue_file"
-                local why="it could not reach $DEVICE_HEALTH_HOST when $name failed on it"
+                local health_target
+                health_target="$(device_health_target "$ACQUIRED_DEVICE")"
+                local why="it could not reach $health_target when $name failed on it"
                 if [ -f "$health_marker" ]; then
-                    why="it lost $DEVICE_HEALTH_HOST while $name was running (first seen $(cat "$health_marker" 2>/dev/null))"
+                    why="it lost $health_target while $name was running (first seen $(cat "$health_marker" 2>/dev/null))"
                 fi
                 quarantine_device "$ACQUIRED_DEVICE" "$why"
                 printf "${BLUE}RETRY${NC} %-32s  discarded: %s could not reach the host (attempt %s of %s)\n" \

@@ -95,6 +95,7 @@ function createMockHost(sessionId: string): IMockHost {
         mediaLibraryOpen: () => "",
         mediaLibraryClose: () => { /* no-op */ },
         mediaLibraryDelete: () => JSON.stringify({ deletedIds: [], failedIds: [] }),
+        networkConnectionType: () => "wifi",
     };
 
     return mockHost;

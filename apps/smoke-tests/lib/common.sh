@@ -64,6 +64,21 @@ BUNDLE_ID="au.com.codecapers.photosphere"
 # packages/mobile-frontend/src/lib/mobile-databases-config-file.ts, which is what the app reads.
 DATABASES_CONFIG_FILE="databases.toml"
 
+# Name of the automatic import settings file inside the app's storage sandbox. Must match
+# AUTO_IMPORT_CONFIG_PATH in packages/api/src/lib/mobile-config-paths.ts, which is what the app and
+# the background import both read.
+AUTO_IMPORT_CONFIG_FILE="auto-import.toml"
+
+# Name of the syncing settings file inside the app's storage sandbox. Must match SYNC_CONFIG_PATH in
+# packages/api/src/lib/mobile-config-paths.ts, which is what the app and the background sync both
+# read.
+SYNC_CONFIG_FILE="sync.toml"
+
+# Where the Android app's secrets live, relative to its data directory. Must match PREFS_FILE_NAME in
+# apps/android-frontend/.../jsengine/SecureStore.java. A test that adds a secret to a real phone saves
+# this file first and puts it back afterwards, because the app has no way to delete one.
+SECURE_STORE_FILE="shared_prefs/photosphere_secure_store.xml"
+
 # The address every host-side command uses to reach the control bridge. This is the literal IPv4
 # loopback address and must never be the name "localhost".
 #

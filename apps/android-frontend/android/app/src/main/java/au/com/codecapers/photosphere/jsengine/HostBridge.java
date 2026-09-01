@@ -129,6 +129,35 @@ public final class HostBridge {
     }
 
     //
+    // The reporter of what kind of connection the phone has, built on first use.
+    //
+    private NetworkHost networkHost;
+
+    //
+    // Returns the connection reporter, creating it on first use.
+    //
+    private synchronized NetworkHost network() {
+        if (networkHost == null) {
+            if (androidContext == null) {
+                throw new RuntimeException("Reading the connection type needs an Android context, and this engine was created without one.");
+            }
+            networkHost = new NetworkHost(androidContext);
+        }
+        return networkHost;
+    }
+
+    //
+    // host.networkConnectionType(): "wifi", "cellular", "none" or "unknown".
+    //
+    // Asked for by the background sync, which cannot ask the WebView because there may not be one.
+    // A bridge with no Android context throws rather than answering "unknown": "unknown" is a value
+    // the sync gate permits, so guessing it would push photos over a connection nobody identified.
+    //
+    public String networkConnectionType() {
+        return network().connectionType();
+    }
+
+    //
     // The native TCP socket layer behind the host.tcp* functions. Owned per engine context; the
     // engine drains its inbound event queue on the worker thread. Public so the engine run loop can
     // poll inbound events and check whether a server is still listening.

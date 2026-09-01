@@ -28,7 +28,9 @@ import { syncDatabaseHandler } from "node-api/src/lib/sync-database.worker";
 import { listS3DirsHandler } from "node-api/src/lib/list-s3-dirs.worker";
 import { readDatabasesConfigHandler, writeDatabasesConfigHandler } from "node-api/src/lib/databases-config.worker";
 import { readAutoImportConfigHandler, writeAutoImportConfigHandler } from "node-api/src/lib/auto-import-config.worker";
+import { readSyncConfigHandler, writeSyncConfigHandler } from "node-api/src/lib/sync-config.worker";
 import { planAutoImportHandler } from "./src/lib/plan-auto-import.worker";
+import { planSyncHandler } from "./src/lib/plan-sync.worker";
 import { recordDefaultDatabaseHandler } from "./src/lib/record-default-database.worker";
 import { evictOriginalsHandler } from "node-api/src/lib/evict-originals.worker";
 import { cleanupSourcesHandler } from "node-api/src/lib/cleanup-sources.worker";
@@ -128,6 +130,12 @@ registerHandler("write-databases-config", writeDatabasesConfigHandler);
 registerHandler("read-auto-import-config", readAutoImportConfigHandler);
 registerHandler("write-auto-import-config", writeAutoImportConfigHandler);
 
+// Register the sync.toml handlers, for the same reason: the two syncing settings live in a file in
+// the storage sandbox rather than in the WebView's config store, because the background sync loop
+// runs while the app is off screen and has to be able to read them.
+registerHandler("read-sync-config", readSyncConfigHandler);
+registerHandler("write-sync-config", writeSyncConfigHandler);
+
 // Register the background import's two decisions. plan-auto-import says whether a pass should run,
 // what it imports into and what it watches; record-default-database records a database the pass has
 // just created, so the next pass does not create it again. Both are asked for by the native
@@ -135,6 +143,12 @@ registerHandler("write-auto-import-config", writeAutoImportConfigHandler);
 // these files itself: the format is defined once, here, in TypeScript.
 registerHandler("plan-auto-import", planAutoImportHandler);
 registerHandler("record-default-database", recordDefaultDatabaseHandler);
+
+// Register the background sync's one decision. plan-sync says whether a sync should run right now
+// and against which database, applying the same gate the interface applies and checking the database
+// has an origin to push to. Asked for by the native background sync (the Android foreground
+// service's loop, the iOS driver), which must not read these files or build this payload itself.
+registerHandler("plan-sync", planSyncHandler);
 
 // Register the device photo library as a media source. The automatic import scanner only ever talks
 // to the IMediaSource interface, so registering this here is what lets the same import task that

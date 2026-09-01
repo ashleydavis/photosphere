@@ -106,7 +106,7 @@ psi sync --db ./photos --watch           # push to the remote as the database ch
 psi consolidate --db ./photos ./backup   # join this database to a remote
 ```
 
-The desktop and mobile apps do the same thing from a toggle in the settings, watching this machine's photo folders or the device's photo library. All of them run one `import-assets` task fed by a scanner that watches; only the media source underneath differs. See [Automatic photo backup](automatic-photo-backup.md) for the two import lanes, how re-importing is avoided, the retention policies and how to switch the active one, what consolidation does, and what each platform supports.
+The desktop and mobile apps do the same thing from a toggle in the settings, watching this machine's photo folders or the device's photo library. All of them run one `import-assets` task fed by a scanner that watches; only the media source underneath differs. See [Automatic photo backup](automatic-photo-backup.md) for the two import lanes, how re-importing is avoided, the retention policies and how to switch the active one, what consolidation does, and what each platform supports, and [Syncing](syncing.md) for the other half: what a sync moves, how it knows whether there is anything to do, and when each platform runs one.
 
 ## Checking how the UI looks
 
@@ -140,6 +140,7 @@ The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why t
 - [Testing](testing/README.md) - Running the tests, the manual e2e scripts, and the stories.
 - [Git hooks](git-hooks.md) - The local commit and push gate, and how to install it.
 - [Automatic photo backup](automatic-photo-backup.md) - Watching for new photos, importing them, and keeping a remote copy.
+- [Syncing](syncing.md) - What a sync moves, when each platform runs one, and how it keeps working while the app is not on screen.
 - [Background tasks](background-tasks.md) - Adding a new background task type.
 - [Mobile background tasks](mobile-background-tasks.md) - The mobile engine pool: what a slot is, what holds one, and why running out hangs the app.
 - [Mobile native media tools](mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired up.

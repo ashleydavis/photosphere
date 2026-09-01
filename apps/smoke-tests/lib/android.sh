@@ -402,6 +402,23 @@ android_can_reach_host() {
     if [ "${PHOTOSPHERE_NO_LAN_BRIDGE:-}" = "1" ]; then
         return 0
     fi
+
+    # A real device is not on the LAN bridge and never will be: it reaches this host through the
+    # port reverses adb sets up over USB, which is why android_host_address hands it loopback. Pinging
+    # the bridge address would fail on a perfectly healthy phone, and a failed probe here does not
+    # merely mislead: the runner takes it as proof the device could not run the test at all, discards
+    # whatever the test found, and withdraws the device. Every real-device result would be thrown
+    # away, including the passes. So a device is asked whether adb can still reach it, which is the
+    # thing that has to be true for the reverses to carry anything.
+    case "$serial" in
+        emulator-*)
+            ;;
+        *)
+            timeout "$DEVICE_HEALTH_TIMEOUT_SECONDS" adb -s "$serial" shell true >/dev/null 2>&1
+            return $?
+            ;;
+    esac
+
     timeout "$DEVICE_HEALTH_TIMEOUT_SECONDS" adb -s "$serial" shell \
         "ping -c 1 -W 1 $DEVICE_HEALTH_HOST" >/dev/null 2>&1
 }
@@ -800,6 +817,165 @@ android_seed_databases_config() {
 }
 
 #
+# Copies a file the harness rendered on the host into the app's private files directory.
+#
+# The same route android_seed_databases_config takes, and for the same reason: adb push cannot write
+# app-private storage, so the file goes through the world-readable temp directory and run-as copies
+# it in. Factored out because three settings files now take it.
+# Usage: android_seed_sandbox_file <host_file> <file_name_under_files>
+#
+android_seed_sandbox_file() {
+    local host_file="$1"
+    local file_name="$2"
+
+    adb push "$host_file" "/data/local/tmp/$file_name" >/dev/null
+    adb shell run-as "$APP_ID" mkdir -p files
+    adb shell run-as "$APP_ID" cp "/data/local/tmp/$file_name" "files/$file_name"
+    adb shell rm -f "/data/local/tmp/$file_name" >/dev/null 2>&1 || true
+}
+
+#
+# Copies one of the app's settings files off the device, so a test can put it back afterwards.
+#
+# This is what lets a test run against a real phone without wiping it. `pm clear` is the clean start
+# an emulator gets, and it is not available on a phone that holds somebody's photo library: the
+# settings that would be destroyed are the ones saying which database their photos are backed up to.
+# So a device run borrows the settings instead, and hands them back.
+#
+# Writes the file to the given local path, or removes that path when the device has no such file, so
+# the caller can tell "there was one" from "there was not" by whether the file exists afterwards.
+# Usage: android_save_sandbox_file <file_name_under_files> <local_path>
+#
+android_save_sandbox_file() {
+    android_save_app_data_file "files/$1" "$2"
+}
+
+#
+# The same, for a file anywhere in the app's data directory rather than under files/.
+#
+# The secrets live in shared_prefs/, not in the sandbox, and a device run has to hand those back too:
+# the credentials a test adds must not be left in somebody's keychain, and the app offers no way to
+# delete one.
+# Usage: android_save_app_data_file <path_under_app_data_dir> <local_path>
+#
+android_save_app_data_file() {
+    local device_path="$1"
+    local local_path="$2"
+    local staged="/data/local/tmp/psphere-saved-$(basename "$device_path")"
+
+    rm -f "$local_path"
+    adb shell rm -f "$staged" >/dev/null 2>&1 || true
+
+    if ! adb shell run-as "$APP_ID" cp "$device_path" "$staged" >/dev/null 2>&1; then
+        log_info "The device has no $device_path to save"
+        return 0
+    fi
+
+    adb pull "$staged" "$local_path" >/dev/null 2>&1 || true
+    adb shell rm -f "$staged" >/dev/null 2>&1 || true
+
+    if [ -f "$local_path" ]; then
+        log_info "Saved the device's $device_path, to be put back at the end of the test"
+    fi
+}
+
+#
+# Puts back a file saved by android_save_app_data_file, or removes the one this run left when the
+# device had none.
+# Usage: android_restore_app_data_file <path_under_app_data_dir> <local_path>
+#
+android_restore_app_data_file() {
+    local device_path="$1"
+    local local_path="$2"
+    local staged="/data/local/tmp/psphere-restore-$(basename "$device_path")"
+
+    if [ -f "$local_path" ]; then
+        adb push "$local_path" "$staged" >/dev/null
+        adb shell run-as "$APP_ID" mkdir -p "$(dirname "$device_path")"
+        adb shell run-as "$APP_ID" cp "$staged" "$device_path"
+        adb shell rm -f "$staged" >/dev/null 2>&1 || true
+        log_info "Put the device's own $device_path back"
+        return 0
+    fi
+
+    adb shell run-as "$APP_ID" rm -f "$device_path" >/dev/null 2>&1 || true
+    log_info "Removed $device_path, which the device did not have before this test"
+}
+
+#
+# Puts back a settings file saved by android_save_sandbox_file.
+#
+# When the saved copy is not there the device had no such file, so the one this test wrote is removed
+# rather than left behind: a phone that had no syncing settings must not end up with a test's.
+# Usage: android_restore_sandbox_file <file_name_under_files> <local_path>
+#
+android_restore_sandbox_file() {
+    android_restore_app_data_file "files/$1" "$2"
+}
+
+#
+# Writes the app's auto-import.toml into its private files directory.
+#
+# This is how a test starts with automatic import already on, writing into a database it seeded
+# itself. Switching the toggle on through the settings card makes the app create its own database
+# instead, which is the right thing for the tests that are about that and no use to one that needs
+# the database to have an origin.
+#
+# An album id restricts the import to that one album, which is what makes this test runnable against
+# a phone with a real photo library: without it every pass walks and imports the whole library.
+# Usage: android_seed_auto_import_config <enabled true|false> [default_database_path] [pause_ms] [album_id]
+#
+android_seed_auto_import_config() {
+    local enabled="$1"
+    local default_database_path="${2:-}"
+    local pause_ms="${3:-}"
+    local album_id="${4:-}"
+    local tmp_local
+    tmp_local="$(mktemp)"
+
+    if ! ENABLED="$enabled" DEFAULT_DATABASE_PATH="$default_database_path" PAUSE_MS="$pause_ms" ALBUM_ID="$album_id" \
+        bun "$LIB_DIR/write-auto-import-config.ts" "$tmp_local"; then
+        log_error "Could not render the app's automatic import settings (see the error above)."
+        rm -f "$tmp_local"
+        return 1
+    fi
+
+    android_seed_sandbox_file "$tmp_local" "$AUTO_IMPORT_CONFIG_FILE"
+    rm -f "$tmp_local"
+
+    log_info "Wrote the app's automatic import settings to files/$AUTO_IMPORT_CONFIG_FILE (enabled=$enabled)"
+}
+
+#
+# Writes the app's sync.toml into its private files directory.
+#
+# The background sync reads this file rather than anything in the WebView, so this is how a test
+# establishes the two syncing settings before the app starts. It is also how a test switches syncing
+# off without driving the settings card, which matters while the app is off screen.
+#
+# Usage: android_seed_sync_config <enabled true|false> <only_on_wifi true|false> [pause_ms]
+#
+android_seed_sync_config() {
+    local enabled="$1"
+    local only_on_wifi="$2"
+    local pause_ms="${3:-}"
+    local tmp_local
+    tmp_local="$(mktemp)"
+
+    if ! ENABLED="$enabled" ONLY_ON_WIFI="$only_on_wifi" PAUSE_MS="$pause_ms" \
+        bun "$LIB_DIR/write-sync-config.ts" "$tmp_local"; then
+        log_error "Could not render the app's syncing settings (see the error above)."
+        rm -f "$tmp_local"
+        return 1
+    fi
+
+    android_seed_sandbox_file "$tmp_local" "$SYNC_CONFIG_FILE"
+    rm -f "$tmp_local"
+
+    log_info "Wrote the app's syncing settings to files/$SYNC_CONFIG_FILE (enabled=$enabled, onlyOnWifi=$only_on_wifi)"
+}
+
+#
 # Wipes everything the app has stored on the device: its storage sandbox (the seeded databases and
 # databases.toml), the WebView's localStorage (the news feed and the generic config values) and the
 # Keystore-backed keychain the secrets live in.
@@ -845,14 +1021,19 @@ ANDROID_MEDIA_DIR="/sdcard/DCIM/Camera"
 # scan_file method, which is. Whichever is used has to be confirmed against the image the pool runs
 # rather than assumed, because the available route differs by API level.
 #
-# Usage: android_seed_media <host_file> <remote_name>
+# A directory can be named to put the photo somewhere other than the camera folder. MediaStore groups
+# items into albums by the directory they sit in, so a test that gives its photos their own directory
+# gets its own album, and can point automatic import at that album alone. On a phone holding somebody
+# else's photo library that is the difference between importing two photos and importing all of them.
+# Usage: android_seed_media <host_file> <remote_name> [remote_dir]
 #
 android_seed_media() {
     local host_src="$1"
     local remote_name="$2"
-    local remote_path="$ANDROID_MEDIA_DIR/$remote_name"
+    local remote_dir="${3:-$ANDROID_MEDIA_DIR}"
+    local remote_path="$remote_dir/$remote_name"
 
-    adb shell mkdir -p "$ANDROID_MEDIA_DIR" >/dev/null 2>&1 || true
+    adb shell mkdir -p "$remote_dir" >/dev/null 2>&1 || true
     adb push "$host_src" "$remote_path" >/dev/null || return 1
 
     local scan_result
@@ -947,6 +1128,26 @@ android_media_store_row() {
 }
 
 #
+# Prints the album id MediaStore has filed a seeded photo under, or nothing when it has none.
+#
+# An album on Android is a bucket, and a bucket is the directory its items sit in: MediaStore derives
+# BUCKET_ID from the path, so every directory is its own album and there is no separate album to
+# create. This is what a test asks after seeding its first photo into a directory of its own, so it
+# can point automatic import at that album and nothing else.
+# Usage: android_media_album_id <remote_name>
+#
+android_media_album_id() {
+    local remote_name="$1"
+
+    # The same no --where reasoning as android_media_store_row above: the filtering is a grep here
+    # because a where clause the provider misparses is a filter that is not applied.
+    adb shell content query --uri content://media/external/file \
+        --projection _display_name:bucket_id \
+        2>&1 | tr -d '\r' | grep "^Row:" | grep "_display_name=$remote_name," \
+        | sed 's/.*bucket_id=\([-0-9][0-9]*\).*/\1/' | head -1
+}
+
+#
 # Whether MediaStore holds the photo as media the app can import: present, and typed as an image (1)
 # or a video (3) rather than as an untyped file.
 # Usage: android_media_store_has <remote_name>
@@ -958,11 +1159,17 @@ android_media_store_has() {
 
 #
 # Removes a photo this test put into the device photo library, so the next run starts clean.
-# Usage: android_remove_media <remote_name>
+#
+# The directory must be given when the photo was seeded into one, and getting that wrong is not a
+# quiet failure: the row goes from MediaStore and the file stays on disk, so the next scan of the
+# volume puts it back. Nine photos left that way once broke tests 47 and 49, which count what an
+# import pass takes in and had three runs' worth of another test's photos to take in as well.
+# Usage: android_remove_media <remote_name> [remote_dir]
 #
 android_remove_media() {
     local remote_name="$1"
-    adb shell rm -f "$ANDROID_MEDIA_DIR/$remote_name" >/dev/null 2>&1 || true
+    local remote_dir="${2:-$ANDROID_MEDIA_DIR}"
+    adb shell rm -f "$remote_dir/$remote_name" >/dev/null 2>&1 || true
     adb shell content delete --uri content://media/external/file --where "_display_name='$remote_name'" >/dev/null 2>&1 || true
 }
 
@@ -1015,7 +1222,8 @@ android_refuse_media_permission() {
 #
 android_remove_media_matching() {
     local prefix="$1"
-    adb shell "rm -f $ANDROID_MEDIA_DIR/$prefix*" >/dev/null 2>&1 || true
+    local remote_dir="${2:-$ANDROID_MEDIA_DIR}"
+    adb shell "rm -f $remote_dir/$prefix*" >/dev/null 2>&1 || true
     adb shell content delete --uri content://media/external/file --where "_display_name LIKE '$prefix%'" >/dev/null 2>&1 || true
 }
 
