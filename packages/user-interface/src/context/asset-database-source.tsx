@@ -19,6 +19,7 @@ import { useUuidGenerator } from "./uuid-generator-context";
 import { useConfig } from "./config-context";
 import { markRecentArrival } from "../lib/recent-arrivals";
 import { LAST_DATABASE_KEY } from "../lib/last-database-config";
+import { planOpenDatabase } from "../lib/open-database-plan";
 
 //
 // How many times an asset request is attempted, and how long apart.
@@ -475,27 +476,29 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
             return;
         }
 
-        // Reopening the database already open leaves a load that is already running for it alone.
-        // closeDatabase cancels that load, and putting the same path straight back does not change
-        // databasePath, so what happens next is decided by whether React has flushed the render for
-        // the undefined it was set to in between. Neither outcome is right. If it has not, the effect
-        // that loads on a path change never re-runs and nothing replaces the load that was just
-        // cancelled, so the gallery waits for ever. If it has, a replacement load starts, and then the
-        // cancelled load's completion arrives: the completion callback tells loads apart by database
-        // path alone, so it takes that one for the replacement's, unsubscribes, and the replacement
-        // finishes with nobody listening, leaving the gallery empty.
-        //
-        // The app restores its last database at startup and starts loading it, so opening that same
-        // database from the list a moment later is exactly this case, and it is why desktop smoke test
-        // 26 fails both ways. A database whose load has already finished is still closed and reopened
-        // as before, because that reload is what several smoke tests wait to see.
-        const loadAlreadyRunningForThisDatabase = databasePath === dbPath && loadingDatabasePath.current === dbPath;
+        // What to do about the database already on screen is decided by planOpenDatabase, which
+        // carries the reasoning and the tests. The short of it: a database being reopened while its
+        // own load is still running is left alone, and one being reopened after its load has finished
+        // is closed and then reloaded from here, because setting the path to the value it already
+        // holds does not re-run the effect that loads on a path change.
+        const plan = planOpenDatabase({
+            openDatabasePath: databasePath,
+            requestedDatabasePath: dbPath,
+            loadingDatabasePath: loadingDatabasePath.current,
+        });
 
-        if (databasePath && !loadAlreadyRunningForThisDatabase) {
+        if (plan.closeFirst) {
             await closeDatabase();
         }
 
         setDatabasePath(dbPath);
+
+        if (plan.startLoadDirectly) {
+            loadAssets(dbPath)
+                .catch(err => {
+                    log.exception(`Failed to load assets:`, err as Error);
+                });
+        }
 
         // Remembered here, in the one place every platform opens a database through, so the app
         // reopens it next time it starts. main.tsx reads this key on mount.
