@@ -624,15 +624,17 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 
 ### WINDOWS-ELECTRON-BUILD-HANGS-ON-NPM-LIST
 
-- [ ] Not fixed. Seen three times; the cause is not established.
+- [ ] Not fixed. Seen four times; the cause is not established. The stall is now bounded and retried, which keeps it from failing a run, and says nothing about why it stalls.
 - Suite: `build-desktop (windows-latest)`, the `Build Electron app` step.
 - Pattern: `The action 'Build Electron app' has timed out after \d+ minutes`
 - Distinguishing evidence (this mode): the step's last line is always `note: bun does not support any CLI for dependency tree extraction, utilizing NPM node module collector instead`, and nothing follows it. Healthy runs of the same step take 1m58s to 2m31s.
-- Fix commit: none.
+- Fix commit: none. `scripts/build-electron-retry-on-stall.sh` caps each packaging attempt at seven minutes and retries a stall once, which is a workaround and not a fix: a build that fails rather than stalls is still reported on its first attempt.
 - First seen: 2026-08-14, Release run 31764332178.
-- Recurrences: 2026-08-14, runs 31794000474 and one earlier sighting recorded before this registry entry was written.
+- Recurrences:
+  - 2026-08-14, runs 31794000474 and one earlier sighting recorded before this registry entry was written.
+  - 2026-09-01, Release run 33458818750, job 99704451831. Identical last line, killed by the step's 20 minute cap after 20m05s, with every other job in the run green.
 - Root cause: **not established.** What is known: electron-builder 26.4.0 has no dependency-tree reader for bun, so `BunNodeModulesCollector` delegates to `NpmNodeModulesCollector`, which spawns `npm list -a --include prod --include optional --omit dev --json --long --silent` in the repository root. That child has no timeout of its own and the retry above it only fires on a process that exits, so a stall there is unbounded. Whether the stall is npm walking a large `node_modules` on Windows, or something else, has not been measured.
-- Next step if it recurs: the step is capped at 20 minutes and fails normally, so its log survives. What is missing is any output from inside `npm list`. Running it with `--timing` or capturing the process tree at the point of the hang would say where it is stuck.
+- Next step if it recurs: the retry now turns a stall into a killed attempt and a second one, so a recurrence shows as "Packaging attempt 1 produced nothing for 420s and was killed" in the step's log rather than as a lost job. If the second attempt stalls too, that is new: every sighting so far has been a first attempt with nothing else in the job wrong. What is still missing is any output from inside `npm list`. Running it with `--timing` or capturing the process tree at the point of the stall would say where it is stuck.
 
 ### S3-LIFECYCLE-GALLERY-EMPTY-AFTER-LOAD
 
