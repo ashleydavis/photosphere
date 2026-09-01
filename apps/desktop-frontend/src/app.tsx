@@ -20,6 +20,7 @@ import { PlatformProviderElectron } from "./lib/platform-provider-electron";
 import type { IElectronAPI } from "./lib/electron-ipc";
 import { setLog } from "utils";
 import { createRendererLog } from "./lib/renderer-log";
+import { isTestMode } from "./lib/test-mode";
 import { McpToolHandler } from "./lib/mcp-tool-handler";
 import { PreviewBanner } from "./lib/preview-banner";
 
@@ -34,7 +35,7 @@ interface IAppProps {
 
 export function App({ electronAPI }: IAppProps) {
     // Initialize renderer logging to forward logs to main process
-    const rendererLog = createRendererLog(electronAPI);
+    const rendererLog = createRendererLog(electronAPI, isTestMode());
     setLog(rendererLog);
 
     // Extract query parameters

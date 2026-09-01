@@ -9,12 +9,39 @@ class RendererLog implements ILog {
     readonly verboseEnabled: boolean = false;
     private electronAPI: IElectronAPI;
 
-    constructor(electronAPI: IElectronAPI) {
+    //
+    // Whether something else is already forwarding this renderer's console output to the main
+    // process. Test mode patches console.log, console.warn and console.error to do exactly that, so
+    // when it is on, writing to the console here as well puts every message into app.log twice: once
+    // as the patched console's info line and once as this class's own IPC line at its real level.
+    //
+    // A duplicate line there is not cosmetic. wait_for_log in the smoke tests keeps a cursor and
+    // moves it on by one line per match, so a second wait for the same pattern is answered at once by
+    // the previous event's second copy, and the test carries on before the thing it was waiting for
+    // has happened. That is what made Electron test 35 press the source cleanup button a third time
+    // after a count had turned it into "Delete 1 photo(s)", and it deleted the file the test was
+    // about to check was still there.
+    //
+    private consoleAlreadyForwarded: boolean;
+
+    constructor(electronAPI: IElectronAPI, consoleAlreadyForwarded: boolean) {
         this.electronAPI = electronAPI;
+        this.consoleAlreadyForwarded = consoleAlreadyForwarded;
+    }
+
+    //
+    // Writes to the browser console, unless something else is already forwarding the console to the
+    // main process, in which case this message would reach the log twice.
+    //
+    private writeToConsole(write: (message: string) => void, message: string): void {
+        if (this.consoleAlreadyForwarded) {
+            return;
+        }
+        write(message);
     }
 
     info(message: string): void {
-        console.log(message);
+        this.writeToConsole(text => console.log(text), message);
         this.electronAPI.log({
             level: 'info',
             message,
@@ -23,7 +50,7 @@ class RendererLog implements ILog {
 
     verbose(message: string): void {
         if (this.verboseEnabled) {
-            console.log(message);
+            this.writeToConsole(text => console.log(text), message);
             this.electronAPI.log({
                 level: 'verbose',
                 message,
@@ -32,7 +59,7 @@ class RendererLog implements ILog {
     }
 
     error(message: string): void {
-        console.error(message);
+        this.writeToConsole(text => console.error(text), message);
         this.electronAPI.log({
             level: 'error',
             message,
@@ -40,8 +67,8 @@ class RendererLog implements ILog {
     }
 
     exception(message: string, error: Error): void {
-        console.error(message);
-        console.error(error.stack || error.message || error);
+        this.writeToConsole(text => console.error(text), message);
+        this.writeToConsole(text => console.error(text), String(error.stack || error.message || error));
         this.electronAPI.log({
             level: 'exception',
             message,
@@ -50,7 +77,7 @@ class RendererLog implements ILog {
     }
 
     warn(message: string): void {
-        console.warn(message);
+        this.writeToConsole(text => console.warn(text), message);
         this.electronAPI.log({
             level: 'warn',
             message,
@@ -58,7 +85,7 @@ class RendererLog implements ILog {
     }
 
     debug(message: string): void {
-        console.debug(message);
+        this.writeToConsole(text => console.debug(text), message);
         this.electronAPI.log({
             level: 'debug',
             message,
@@ -67,10 +94,10 @@ class RendererLog implements ILog {
 
     tool(tool: string, data: { stdout?: string; stderr?: string }): void {
         if (data.stdout) {
-            console.log(`== ${tool} stdout ==\n${data.stdout}`);
+            this.writeToConsole(text => console.log(text), `== ${tool} stdout ==\n${data.stdout}`);
         }
         if (data.stderr) {
-            console.log(`== ${tool} stderr ==\n${data.stderr}`);
+            this.writeToConsole(text => console.log(text), `== ${tool} stderr ==\n${data.stderr}`);
         }
         this.electronAPI.log({
             level: 'tool',
@@ -80,7 +107,7 @@ class RendererLog implements ILog {
     }
 
     event(message: string): void {
-        console.log(`[EVENT] ${message}`);
+        this.writeToConsole(text => console.log(text), `[EVENT] ${message}`);
         this.electronAPI.log({
             level: 'event',
             message,
@@ -97,8 +124,11 @@ class RendererLog implements ILog {
 }
 
 //
-// Create and initialize the renderer log
+// Create and initialize the renderer log.
 //
-export function createRendererLog(electronAPI: IElectronAPI): ILog {
-    return new RendererLog(electronAPI);
+// consoleAlreadyForwarded says whether the console has been patched to forward to the main process,
+// which test mode does, and which makes this class's own console writes a second copy of everything.
+//
+export function createRendererLog(electronAPI: IElectronAPI, consoleAlreadyForwarded: boolean): ILog {
+    return new RendererLog(electronAPI, consoleAlreadyForwarded);
 }
