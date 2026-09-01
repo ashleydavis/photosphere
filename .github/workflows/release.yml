@@ -653,10 +653,20 @@ jobs:
       # "failed to move executable to D:\a\photosphere\photosphere\apps\cli\bin\x64\win\psi.exe:
       # EPERM", 1.6 seconds after the version step had executed that file. Building each executable
       # once, with nothing having run it, leaves nothing holding it open to refuse the move.
+      # PHOTOSPHERE_SUITE_TIMEOUT is 18 minutes here rather than the 25 the library defaults to,
+      # because on this job the default is above both caps below it and so can never be the first
+      # thing to act. That is what happened on run 33450001083, the third sighting of the CLI suite
+      # hanging on Windows: the step ran 32 minutes, GitHub's own 24 minute step cap did not end it,
+      # the job cap did, and GitHub discards the log of a job it kills, so the hang left nothing to
+      # read for the third time running. The suite's own ceiling is the only one of the three that
+      # has ever been seen to work, and it needs to fire while there is still time for its report and
+      # its kill to take effect. 18 is clear of the 15 minute healthy run and well short of both caps.
       - name: Run smoke tests
         timeout-minutes: 24
         working-directory: ./apps/cli
         shell: bash
+        env:
+          PHOTOSPHERE_SUITE_TIMEOUT: 1080
         run: |
           mkdir -p smoke-test-logs
           ./smoke-tests.sh --binary 2>&1 | tee smoke-test-logs/smoke-tests-output.log

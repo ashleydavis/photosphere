@@ -44,8 +44,13 @@ PHOTOSPHERE_PER_TEST_TIMEOUT="${PHOTOSPHERE_PER_TEST_TIMEOUT:-600}"
 # it to start_suite_watchdog. Capping each test is not the same thing: on Git Bash there is no
 # timeout(1), so the per-test cap falls back to killing the test's process tree and waiting for it,
 # and a kill that does not take leaves that wait blocked for good. The CLI suite normally finishes in
-# 15 minutes on windows-latest and has twice run past 27 and 40, so 25 minutes is well clear of a
-# slow run and well short of the job budget that used to absorb the hang without a log.
+# 15 minutes on windows-latest and has run past 27, 40 and 32.
+#
+# A ceiling only earns its keep if it fires before every cap above it, and those caps differ by job:
+# the CLI suite runs under step caps of 14, 24 and 25 minutes across the build jobs, so no single
+# number here can sit under all of them. This default suits the jobs whose own caps are above it, and
+# a job that needs a lower one sets PHOTOSPHERE_SUITE_TIMEOUT in the workflow beside the caps it has
+# to fit inside. `build-windows` does, and the note there says what it cost not to.
 PHOTOSPHERE_SUITE_TIMEOUT="${PHOTOSPHERE_SUITE_TIMEOUT:-1500}"
 
 # The exit code a timed-out test reports. 124 is what GNU timeout uses, so the value is the same
@@ -158,13 +163,12 @@ run_test_function_with_timeout() {
     rm -f "$timeout_marker"
 
     (
-        local waited=0
-        while [ "$waited" -lt "$PHOTOSPHERE_PER_TEST_TIMEOUT" ]; do
+        local started_at=$SECONDS
+        while [ "$((SECONDS - started_at))" -lt "$PHOTOSPHERE_PER_TEST_TIMEOUT" ]; do
             if ! kill -0 "$script_pid" 2>/dev/null; then
                 exit 0
             fi
             sleep 1
-            waited=$((waited + 1))
         done
         : > "$timeout_marker"
         local child
@@ -233,13 +237,16 @@ start_suite_watchdog() {
         # one would be left running whenever a script replaced the trap, and would later fire against
         # a pid the kernel had given to something else. Watching for the parent to disappear means it
         # cleans itself up whatever the script does with its traps.
-        local waited=0
-        while [ "$waited" -lt "$ceiling" ]; do
+        #
+        # Measured against the clock rather than by counting iterations. An iteration is a sleep plus
+        # a fork, so counting them can only ever overshoot the ceiling, never undershoot it, and this
+        # ceiling now has to land inside a window bounded by the caps above it.
+        local started_at=$SECONDS
+        while [ "$((SECONDS - started_at))" -lt "$ceiling" ]; do
             if ! kill -0 "$script_pid" 2>/dev/null; then
                 exit 0
             fi
             sleep 1
-            waited=$((waited + 1))
         done
 
         report_test_timeout "$suite_name" "$ceiling" "" "$limit_variable" >&2
