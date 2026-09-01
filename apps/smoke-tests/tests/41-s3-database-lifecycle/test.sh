@@ -125,18 +125,21 @@ wait_for_log "$TMP_DIR" "Import page ready"
 send_command "$APP_PORT" pick-files "{\"paths\":[\".import-tmp/test-1.jpeg\",\".import-tmp/test-2.png\"]}" || exit 1
 send_command "$APP_PORT" click '{"dataId":"import-files-button"}' || exit 1
 
-# Importing to S3 is given longer than the 120 second default, for the reason the create step above
-# already is: every write is a round trip to the host, and the CI emulator is on NAT.
+# Given the same room the create step above is given, and for the same reason: every asset this
+# writes is a round trip to the host, and on the NAT-only emulator the workflow runs they are slow.
+# Locally, on a bridged emulator, the whole test takes 20 seconds.
 #
-# This is the step the test failed on in the release run of 2026-08-31, and again it read as a hang
-# rather than as slowness, because app.log stopped at the click on import-files-button. The logcat
-# kept by scripts/android-smoke-tests-ci.sh says what really happened. The import-assets task was
-# added at 10:21:18.814, the two hashes finished at 10:22:57.9, both save-asset tasks succeeded at
-# 10:23:06.4 (8.5s each, 2.6s of that uploading), and the worker was still emitting task messages at
-# 10:23:16.4 and 10:23:19.4 when the 120 second wait ran out and the app was force-stopped at
-# 10:23:21.9. Both assets are in the artifact's bucket, with their thumb and display renditions, and
-# no error was logged anywhere: the import had not finished and had a few seconds left to run.
-S3_IMPORT_TIMEOUT=240
+# Twice the default budget was still close enough to what the work takes to make this a coin flip
+# rather than a check. In the release run of 2026-08-31 the step read as a hang rather than as
+# slowness, because app.log stopped at the click on import-files-button: the logcat kept by
+# scripts/android-smoke-tests-ci.sh shows the import-assets task added at 10:21:18.814, the two
+# hashes finished at 10:22:57.9, both save-asset tasks succeeded at 10:23:06.4 (8.5s each, 2.6s of
+# that uploading), and the worker still emitting task messages at 10:23:19.4 when the wait ran out
+# and the app was force-stopped at 10:23:21.9. Both assets were in the artifact's bucket with their
+# thumb and display renditions and nothing had errored: the import simply had seconds left to run.
+# On 2026-09-01 03:33 it passed with the import taking 135 seconds, and two runs later the same step,
+# on a branch that had done nothing to it, timed out at 124.
+S3_IMPORT_TIMEOUT=300
 wait_for_log "$TMP_DIR" "2 assets imported" "$S3_IMPORT_TIMEOUT"
 
 # --- 4. The gallery reads the assets back out of the bucket. ---
