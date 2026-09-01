@@ -5,6 +5,7 @@ import '@fortawesome/fontawesome-free/css/all.css';
 import './tailwind.css';
 import type { IElectronAPI, LogLevel } from "./lib/electron-ipc";
 import { installTestDriver, getValue } from "user-interface";
+import { isTestMode } from "./lib/test-mode";
 import type { ITestTransport, ITestCommandPayload } from "user-interface";
 
 declare global {
@@ -29,8 +30,7 @@ if (!electronAPI) {
 //
 // Whether the app is running in test mode (set via ?testMode=1 query param by main process).
 //
-const isTestMode = typeof window !== 'undefined'
-    && new URLSearchParams(window.location.search).get('testMode') === '1';
+const testMode = isTestMode();
 
 //
 // Handle uncaught errors in the renderer process
@@ -73,7 +73,7 @@ window.addEventListener('unhandledrejection', (event) => {
 // In test mode, patch console to forward output to main process via electronAPI.log
 // so raw renderer console output appears in app.log.
 //
-if (isTestMode && electronAPI) {
+if (testMode && electronAPI) {
     const originalLog = console.log.bind(console);
     const originalWarn = console.warn.bind(console);
     const originalError = console.error.bind(console);
@@ -96,7 +96,7 @@ if (isTestMode && electronAPI) {
 // test control server can drive UI elements by their data-id attribute. The DOM-action
 // logic lives in user-interface's test-driver so it is shared with the mobile WebView.
 //
-if (isTestMode && electronAPI) {
+if (testMode && electronAPI) {
     const transport: ITestTransport = {
         onCommand(handler: (command: string, payload: ITestCommandPayload) => Promise<string | undefined>): void {
             electronAPI.onMessage('test-click', (data: ITestCommandPayload) => { void handler('click', data); });
