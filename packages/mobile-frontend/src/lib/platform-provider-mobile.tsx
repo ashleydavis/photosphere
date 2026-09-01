@@ -25,7 +25,7 @@ import * as configStore from "./mobile-config-store";
 import { MobileSecretStore } from "./mobile-secure-store";
 import { createCapacitorSecureStore } from "./secure-store-plugin";
 import { importSharePayload as importReceivedShare, type IReceivedSharePayload } from "./mobile-share-receive";
-import { shouldSyncAfterEdit, SYNC_TASK_TYPE } from "./mobile-edit-sync";
+import { shouldSyncAfterEdit, SYNC_AFTER_EDIT_DELAY_MS, SYNC_TASK_TYPE } from "./mobile-edit-sync";
 import { mobileDatabasesConfigFile } from "./mobile-databases-config-file";
 import { LAST_DATABASE_KEY } from "user-interface/src/lib/last-database-config";
 import type { IConflictResolution } from "lan-share-core";
@@ -181,6 +181,10 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     // behind the first one holding an engine slot.
     const syncInFlightRef = useRef<boolean>(false);
 
+    // The pending wait between the last edit and the sync it starts, or undefined when none is
+    // waiting. Reset by every edit, so a run of them coalesces into one sync.
+    const syncAfterEditTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+
     const openDatabase = useCallback(async (): Promise<void> => {
         // No-op: no native database picker on mobile yet.
     }, []);
@@ -296,21 +300,36 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, []);
 
     const notifyDatabaseEdited = useCallback((): void => {
-        // One sync for the database the edit was made in, now. There is no timer behind this and
-        // nothing periodic: the loop that syncs on its own runs natively and pushes the database
-        // automatic import writes to, which is not necessarily the one on screen. This is what gets
-        // an edit to a database the user opened by hand out to its origin.
-        if (!shouldSyncAfterEdit({
-            syncAllowed: syncAllowedRef.current,
-            databasePath: openDatabasePathRef.current,
-            syncInFlight: syncInFlightRef.current,
-        })) {
-            return;
+        // One sync for the database the edit was made in, a few seconds after the edits stop.
+        //
+        // Nothing periodic hangs off this: the loop that syncs on its own runs natively and pushes
+        // the database automatic import writes to, which is not necessarily the one on screen. This
+        // is what gets an edit to a database the user opened by hand out to its origin.
+        //
+        // The wait is what makes it one sync rather than a stream of them. An import announces every
+        // operation it persists, so starting on the first announcement runs a sync beside the import
+        // still making them, and each sync opens the origin's storage. It also keeps the enqueue out
+        // of this caller's stack: this runs inside the code persisting the edit, and a failure to
+        // queue a sync must not surface as the edit failing.
+        if (syncAfterEditTimerRef.current !== undefined) {
+            clearTimeout(syncAfterEditTimerRef.current);
         }
 
-        const databasePath = openDatabasePathRef.current!;
-        syncInFlightRef.current = true;
-        getQueueBackend().addTask(SYNC_TASK_TYPE, { databasePath }, databasePath);
+        syncAfterEditTimerRef.current = setTimeout(() => {
+            syncAfterEditTimerRef.current = undefined;
+
+            if (!shouldSyncAfterEdit({
+                syncAllowed: syncAllowedRef.current,
+                databasePath: openDatabasePathRef.current,
+                syncInFlight: syncInFlightRef.current,
+            })) {
+                return;
+            }
+
+            const databasePath = openDatabasePathRef.current!;
+            syncInFlightRef.current = true;
+            getQueueBackend().addTask(SYNC_TASK_TYPE, { databasePath }, databasePath);
+        }, SYNC_AFTER_EDIT_DELAY_MS);
     }, []);
 
     const copyToClipboard = useCallback(async (_blob: Blob, _contentType: string): Promise<void> => {

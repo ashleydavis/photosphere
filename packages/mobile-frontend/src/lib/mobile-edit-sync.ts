@@ -20,6 +20,17 @@
 export const SYNC_TASK_TYPE = "sync-database";
 
 //
+// How long after an edit the sync is started, in milliseconds.
+//
+// The same ten seconds the desktop waits, and it is not decoration. One user action writes many
+// edits: an import persists its operations as it goes and announces every one of them, so a sync
+// started on the first announcement runs beside the import that is still making them. It also keeps
+// the enqueue out of the caller's stack, where a failure to queue would surface as the edit itself
+// failing rather than as a sync that did not happen.
+//
+export const SYNC_AFTER_EDIT_DELAY_MS = 10_000;
+
+//
 // The input payload for a sync-database task. Only the database path is needed; the worker resolves
 // the origin from the database config itself.
 //
