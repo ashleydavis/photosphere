@@ -131,6 +131,23 @@ export class FileStorage implements IStorage {
     }
     
     //
+    // Writes the stream, ignoring the hash: a filesystem has nothing to check it against and keeps
+    // no record of it.
+    //
+    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength: number, sha256: Buffer): Promise<boolean> {
+        await this.writeStream(filePath, contentType, inputStream);
+        return false;
+    }
+
+    //
+    // Always undefined: a filesystem keeps no hash of what it holds, so the only way to answer would
+    // be to read the whole file, which is what the caller does anyway when this says it cannot.
+    //
+    async storedHash(filePath: string): Promise<Buffer | undefined> {
+        return undefined;
+    }
+
+    //
     // Gets info about a file.
     //
     async info(filePath: string): Promise<IFileInfo | undefined> {

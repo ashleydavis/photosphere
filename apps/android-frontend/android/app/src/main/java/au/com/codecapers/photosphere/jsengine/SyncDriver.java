@@ -18,19 +18,22 @@ package au.com.codecapers.photosphere.jsengine;
 // Android only the loop asks; on iOS the foreground loop and the system's background task both ask,
 // and neither knows about the other, because they do not have to.
 //
-// A pass also takes the shared BackgroundPassLock, so a sync and an import never run at once. A pass
-// that cannot take it is skipped and tried again after the usual gap.
+// A sync pass runs whether or not an import pass is running, and that is a correction rather than an
+// oversight. This loop used to take a lock the import loop also took, so a sync never ran during an
+// import. Measured against a real library on a Pixel 6, 2,292 assets, that meant no sync at all: one
+// import pass took over half an hour and the next started thirty seconds after it, so the sync loop
+// skipped every pass and pushed nothing, forever.
+//
+// What the lock was protecting is already protected, and more finely. The database's own write lock
+// is taken per batch of imported items rather than for a whole run, so a sync gets in between
+// batches, and when it does not it fails fast and the next pass tries again. The engine pool cannot
+// deadlock on this either: a sync task queues no children and waits for nothing, so it always
+// finishes and gives its slot back, which is not the arrangement that deadlocked the pool before.
 //
 // Nothing in this class touches Android, which is why the decisions it makes can be unit tested. The
 // service supplies everything that does through the Host interface below.
 //
 public final class SyncDriver {
-
-    //
-    // The name this driver takes the shared pass lock under, so a skipped pass can say what it is
-    // waiting behind.
-    //
-    public static final String PASS_LOCK_OWNER = "sync";
 
     //
     // The gap between passes when no plan has said what it should be, in milliseconds.
@@ -110,11 +113,6 @@ public final class SyncDriver {
     private final Host host;
 
     //
-    // The lock that keeps a sync pass and an import pass apart.
-    //
-    private final BackgroundPassLock sharedPassLock;
-
-    //
     // Guards the pass bookkeeping below, and is what a second caller waits on while a pass runs.
     //
     private final Object passLock = new Object();
@@ -142,11 +140,10 @@ public final class SyncDriver {
     private volatile long pauseMs = FALLBACK_PAUSE_MS;
 
     //
-    // Constructs a driver over the given host, sharing the given pass lock with the import driver.
+    // Constructs a driver over the given host.
     //
-    public SyncDriver(Host host, BackgroundPassLock sharedPassLock) {
+    public SyncDriver(Host host) {
         this.host = host;
-        this.sharedPassLock = sharedPassLock;
     }
 
     //
@@ -255,47 +252,34 @@ public final class SyncDriver {
             return PassOutcome.RAN;
         }
 
-        if (!sharedPassLock.tryAcquire(PASS_LOCK_OWNER)) {
-            // An import pass is in flight. Skipped rather than waited for: an import of a whole photo
-            // library runs for the better part of an hour, and the sync it is holding up is one that
-            // will be asked for again in a few minutes anyway.
-            host.report("Not syncing yet: an import pass is running.");
-            return PassOutcome.RAN;
-        }
-
+        host.holdAwake(true);
         try {
-            host.holdAwake(true);
-            try {
-                host.report("Syncing \"" + plan.databasePath + "\".");
+            host.report("Syncing \"" + plan.databasePath + "\".");
 
-                for (SyncPlan.Step step : plan.steps) {
-                    if (stopped) {
-                        return PassOutcome.RAN;
-                    }
-
-                    boolean succeeded;
-                    try {
-                        succeeded = host.runStep(step);
-                    }
-                    catch (Exception error) {
-                        host.reportError("Sync step \"" + step.type + "\" failed: " + error);
-                        return PassOutcome.RAN;
-                    }
-
-                    if (!succeeded) {
-                        // The rest of the pass is abandoned, not the loop, and the next pass starts
-                        // from the plan again rather than from where this one gave up.
-                        host.reportError("Sync step \"" + step.type + "\" did not succeed.");
-                        return PassOutcome.RAN;
-                    }
+            for (SyncPlan.Step step : plan.steps) {
+                if (stopped) {
+                    return PassOutcome.RAN;
                 }
-            }
-            finally {
-                host.holdAwake(false);
+
+                boolean succeeded;
+                try {
+                    succeeded = host.runStep(step);
+                }
+                catch (Exception error) {
+                    host.reportError("Sync step \"" + step.type + "\" failed: " + error);
+                    return PassOutcome.RAN;
+                }
+
+                if (!succeeded) {
+                    // The rest of the pass is abandoned, not the loop, and the next pass starts
+                    // from the plan again rather than from where this one gave up.
+                    host.reportError("Sync step \"" + step.type + "\" did not succeed.");
+                    return PassOutcome.RAN;
+                }
             }
         }
         finally {
-            sharedPassLock.release(PASS_LOCK_OWNER);
+            host.holdAwake(false);
         }
 
         return PassOutcome.RAN;

@@ -186,6 +186,14 @@ public final class HostBridge {
     }
 
     //
+    // host.tcpWriteFile(connectionId, path, offset, length): sends a range of a sandboxed file to a
+    // connection, straight from disk, without the bytes entering the engine.
+    //
+    public String tcpWriteFile(String connectionId, String path, long offset, long length) {
+        return tcp.tcpWriteFile(storageRoot, connectionId, path, offset, length);
+    }
+
+    //
     // host.tcpClose(connectionId): closes one accepted connection.
     //
     public String tcpClose(String connectionId) {

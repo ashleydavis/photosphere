@@ -16,6 +16,14 @@ import { Buffer } from "buffer";
 import { callHost } from "./host-access";
 
 //
+// How long a native file send has to take before it is worth saying how long it took.
+//
+// A quick send says nothing, so it says nothing. A slow one is the only measurement anywhere of how
+// fast the bytes actually leave the phone, which is the thing no code above this can change.
+//
+const SLOW_SEND_MS = 1000;
+
+//
 // The `AddressInfo` type, used only in type position by find-available-port.
 //
 export class AddressInfo {}
@@ -34,6 +42,10 @@ export interface ITcpHost {
 
     // Writes base64-encoded bytes to an accepted connection.
     tcpWrite: (connectionId: string, base64: string) => string | null;
+
+    // Writes a range of a file straight from disk to a connection, without the bytes entering the
+    // engine. Returns null on success or an error envelope.
+    tcpWriteFile: (connectionId: string, path: string, offset: number, length: number) => string | null;
 
     // Closes one accepted connection.
     tcpClose: (connectionId: string) => string | null;
@@ -216,6 +228,34 @@ export class Socket extends TinyEmitter {
         const buffer = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : Buffer.from(chunk);
         const host = getTcpHost();
         callHost(() => host.tcpWrite(this.connectionId, buffer.toString("base64")));
+        return true;
+    }
+
+    //
+    // Sends a range of a file to the connection, read and written natively.
+    //
+    // The bytes never enter the engine. Everything else here crosses the host bridge as base64: a
+    // third larger than the bytes it carries, built on one side and decoded on the other, both in an
+    // interpreter. Measured on a Pixel 6, a file being uploaded went through that twice, once to read
+    // it and once to send it, and the phone managed about three megabytes a minute; the network was
+    // idle nine tenths of the time.
+    //
+    writeFile(path: string, offset: number, length: number): boolean {
+        if (this.closed) {
+            return false;
+        }
+        const host = getTcpHost();
+        const startedAt = Date.now();
+        callHost(() => host.tcpWriteFile(this.connectionId, path, offset, length));
+
+        // A send that took a noticeable time says how fast the network really is, which is the one
+        // thing no code above this can change and the one thing nothing else here measures: a sync's
+        // own timings cover a whole upload, and an upload is the request, the body and the server's
+        // answer. A send that was quick says nothing, so it says nothing.
+        const elapsedMs = Date.now() - startedAt;
+        if (elapsedMs >= SLOW_SEND_MS) {
+            console.log(`Sent ${length} bytes in ${elapsedMs}ms, ${Math.round(length / 1024 / elapsedMs)}MB/s.`);
+        }
         return true;
     }
 

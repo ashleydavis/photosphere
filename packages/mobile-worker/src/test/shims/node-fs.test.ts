@@ -18,6 +18,27 @@ describe("node-fs shim", () => {
             fsReadFile: (path: string): string | null => {
                 return files[path] ? files[path].toString("base64") : null;
             },
+            // The real host has both of these, and a read stream needs them: it walks a file a chunk
+            // at a time rather than asking for all of it at once.
+            fsReadFileRange: (path: string, start: number, length: number): string | null => {
+                const file = files[path];
+                if (!file) {
+                    return null;
+                }
+                return file.subarray(start, start + length).toString("base64");
+            },
+            fsStat: (path: string): string | null => {
+                const file = files[path];
+                if (!file) {
+                    return null;
+                }
+                return JSON.stringify({
+                    size: file.length,
+                    mtimeMs: 0,
+                    isFile: true,
+                    isDirectory: false,
+                });
+            },
         };
     });
 
@@ -64,12 +85,130 @@ describe("node-fs shim", () => {
             fsAccess: (path: string): boolean => {
                 return path in files;
             },
-            fsReadFile: (path: string): string | null => files[path] ? files[path].toString("base64") : null,
+            fsReadFileRange: (path: string, start: number, length: number): string | null =>
+                files[path] ? files[path].subarray(start, start + length).toString("base64") : null,
+            fsStat: (path: string): string | null => files[path]
+                ? JSON.stringify({ size: files[path].length, mtimeMs: 0, isFile: true, isDirectory: false })
+                : null,
             fsWriteFile: (path: string, base64: string) => { writes[path] = Buffer.from(base64, "base64"); },
         };
 
         await pipeline(createReadStream("db/src"), createWriteStream("db/dest"));
         expect(writes["db/dest"].toString("utf8")).toBe("copy me");
+    });
+
+    test("a file larger than one chunk crosses the bridge in pieces rather than all at once", async () => {
+        // A whole file used to come back in a single call, and base64 is a third bigger again than
+        // the bytes it carries. That is survivable for a photo and fatal for a video: syncing a real
+        // library from a Pixel 6 died on a 100MB video with "Failed to allocate a 105478648 byte
+        // allocation ... growth limit 268435456", and every pass after it died the same way on the
+        // same file, so nothing beyond that video ever reached the origin.
+        const contents = Buffer.alloc(10 * 1024 * 1024, 7);
+        const files: Record<string, Buffer> = { "db/big": contents };
+        const requestedLengths: number[] = [];
+        (globalThis as any).host = {
+            platform: "android",
+            fsAccess: (path: string): boolean => {
+                return path in files;
+            },
+            fsReadFile: (): string | null => {
+                throw new Error("a whole file must never be fetched in one call");
+            },
+            fsReadFileRange: (path: string, start: number, length: number): string | null => {
+                requestedLengths.push(length);
+                return files[path].subarray(start, start + length).toString("base64");
+            },
+            fsStat: (path: string): string | null => JSON.stringify({
+                size: files[path].length,
+                mtimeMs: 0,
+                isFile: true,
+                isDirectory: false,
+            }),
+        };
+
+        const chunks: Buffer[] = [];
+        const stream = createReadStream("db/big");
+        await new Promise<void>((resolve, reject) => {
+            stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+            stream.on("end", () => resolve());
+            stream.on("error", reject);
+        });
+
+        expect(Buffer.concat(chunks).length).toBe(contents.length);
+        expect(Buffer.concat(chunks).equals(contents)).toBe(true);
+        expect(requestedLengths.length).toBeGreaterThan(1);
+        expect(Math.max(...requestedLengths)).toBeLessThanOrEqual(4 * 1024 * 1024);
+    });
+
+    test("a file piped into a request is handed over rather than read", async () => {
+        // An upload is a file piped into an HTTP request, and the request can have the bytes sent
+        // from disk to the socket natively. Read here instead, they cross the host bridge as base64,
+        // a third larger than the bytes they carry and decoded in an interpreter, and then cross it
+        // again on the way out: measured on a Pixel 6 that was about three megabytes a minute, with
+        // the network idle nine tenths of the time.
+        const files: Record<string, Buffer> = { "db/photo": Buffer.alloc(3 * 1024 * 1024, 4) };
+        let readCount = 0;
+        (globalThis as any).host = {
+            platform: "android",
+            fsAccess: (path: string): boolean => path in files,
+            fsReadFileRange: (path: string, start: number, length: number): string | null => {
+                readCount += 1;
+                return files[path].subarray(start, start + length).toString("base64");
+            },
+            fsStat: (path: string): string | null => JSON.stringify({
+                size: files[path].length,
+                mtimeMs: 0,
+                isFile: true,
+                isDirectory: false,
+            }),
+        };
+
+        const handedOver: Array<{ path: string, offset: number, length: number }> = [];
+        const destination = {
+            writeFileBody: (path: string, offset: number, length: number): boolean => {
+                handedOver.push({ path, offset, length });
+                return true;
+            },
+            write: (): boolean => {
+                throw new Error("the bytes must not be written in one at a time");
+            },
+            end: (): void => {},
+        };
+
+        createReadStream("db/photo").pipe(destination as any);
+
+        expect(handedOver).toEqual([{ path: "db/photo", offset: 0, length: 3 * 1024 * 1024 }]);
+        expect(readCount).toBe(0);
+    });
+
+    test("a file is read the ordinary way when the destination cannot take one", async () => {
+        const files: Record<string, Buffer> = { "db/photo": Buffer.from("some-bytes", "utf8") };
+        (globalThis as any).host = {
+            platform: "android",
+            fsAccess: (path: string): boolean => path in files,
+            fsReadFileRange: (path: string, start: number, length: number): string | null =>
+                files[path].subarray(start, start + length).toString("base64"),
+            fsStat: (path: string): string | null => JSON.stringify({
+                size: files[path].length,
+                mtimeMs: 0,
+                isFile: true,
+                isDirectory: false,
+            }),
+        };
+
+        const written: Buffer[] = [];
+        const destination = {
+            write: (chunk: Buffer): boolean => {
+                written.push(chunk);
+                return true;
+            },
+            end: (): void => {},
+        };
+
+        createReadStream("db/photo").pipe(destination as any);
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        expect(Buffer.concat(written).toString("utf8")).toBe("some-bytes");
     });
 
     test("createReadStream returns a ReadStream carrying the path it was opened from", () => {
@@ -90,9 +229,20 @@ describe("node-fs shim", () => {
             fsAccess: (path: string): boolean => {
                 return path in files;
             },
-            fsReadFile: (path: string): string | null => {
+            fsReadFileRange: (path: string, start: number, length: number): string | null => {
                 readCount += 1;
-                return files[path] ? files[path].toString("base64") : null;
+                return files[path] ? files[path].subarray(start, start + length).toString("base64") : null;
+            },
+            fsStat: (path: string): string | null => {
+                if (!files[path]) {
+                    return null;
+                }
+                return JSON.stringify({
+                    size: files[path].length,
+                    mtimeMs: 0,
+                    isFile: true,
+                    isDirectory: false,
+                });
             },
         };
 

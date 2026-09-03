@@ -411,6 +411,16 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: tcpWrite, in: context), forProperty: "tcpWrite")
 
+        let tcpWriteFile: @convention(block) (String, String, Int, Int) -> JSValue = { [weak self] connectionId, path, offset, length in
+            guard let self = self else { return JSValue(nullIn: context) }
+            if let envelope = self.tcp.tcpWriteFile(storageRoot: self.storageRoot, connectionId: connectionId,
+                                                    path: path, offset: offset, length: length) {
+                return JSValue(object: envelope, in: context)
+            }
+            return JSValue(nullIn: context)
+        }
+        host.setValue(JSValue(object: tcpWriteFile, in: context), forProperty: "tcpWriteFile")
+
         let tcpClose: @convention(block) (String) -> JSValue = { [weak self] connectionId in
             guard let self = self else { return JSValue(nullIn: context) }
             if let envelope = self.tcp.tcpClose(connectionId: connectionId) {

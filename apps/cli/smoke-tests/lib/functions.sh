@@ -451,8 +451,12 @@ test_detect_deleted_file() {
     fi
 
     # Run verify and capture output - should detect the missing file
+    #
+    # Exit 1, because the database is broken and verify says so. It used to exit 0 whatever it found,
+    # so the result lived only in the words on the screen and anything reading the exit code was told
+    # a broken database was fine.
     local verify_output
-    invoke_command "Verify database with deleted file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "verify_output"
+    invoke_command "Verify database with deleted file" "$(get_cli_command) verify --db $test_copy_dir --yes" 1 "verify_output"
 
     # Check that verify detected the removed file
     expect_output_value "$verify_output" "New:" "0" "No new files"
@@ -516,7 +520,8 @@ test_detect_modified_file() {
 
     # Run verify and capture output - should detect the modified file
     local verify_output
-    invoke_command "Verify database with modified file" "$(get_cli_command) verify --db $test_copy_dir --yes" 0 "verify_output"
+    # Exit 1: the file's bytes no longer match its hash, which is what verify is for.
+    invoke_command "Verify database with modified file" "$(get_cli_command) verify --db $test_copy_dir --yes" 1 "verify_output"
 
     # Check that verify detected the modified file
     expect_output_value "$verify_output" "New:" "0" "No new files"
@@ -1019,7 +1024,9 @@ test_repair_damaged_database() {
     # Run verify to detect the damage
     log_info "Running verify to detect damage..."
     local verify_output
-    invoke_command "Verify damaged database" "$(get_cli_command) verify --db $damaged_dir --yes --full" 0 "verify_output"
+    # Exit 1: the database has just been damaged on purpose. The verify after the repair below still
+    # expects 0, and that pair is what makes the exit code worth anything.
+    invoke_command "Verify damaged database" "$(get_cli_command) verify --db $damaged_dir --yes --full" 1 "verify_output"
 
     # Verify should detect issues (asset and/or database file problems)
     expect_output_string "$verify_output" "verification found issues" "Verify detects damage"

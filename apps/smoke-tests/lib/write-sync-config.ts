@@ -9,7 +9,7 @@
 // The rendering is buildSyncConfigToml in node-api, the same function the app writes the file
 // through on device, so the harness and the app cannot drift on the format.
 //
-// Usage: ENABLED=true ONLY_ON_WIFI=false [PAUSE_MS=5000] bun write-sync-config.ts <output-file>
+// Usage: ENABLED=true ONLY_ON_WIFI=false [PAUSE_MS=5000] [DATABASE_PATH=my-db] bun write-sync-config.ts <output-file>
 //
 
 import { writeFileSync } from "fs";
@@ -46,11 +46,17 @@ function main(): void {
     const rawPauseMs = process.env.PAUSE_MS;
     const pauseBetweenRunsMs = resolveSyncPauseMs(rawPauseMs ? Number(rawPauseMs) : undefined);
 
+    // The database to sync is optional here: a test that seeds one is saying the background loop has
+    // something to push without waiting for the app to open a database and record it.
+    const rawDatabasePath = process.env.DATABASE_PATH;
+    const databasePath = rawDatabasePath && rawDatabasePath.trim().length > 0 ? rawDatabasePath : undefined;
+
     writeFileSync(outputPath, buildSyncConfigToml({
         settings: {
             enabled: readBoolean("ENABLED"),
             onlyOnWifi: readBoolean("ONLY_ON_WIFI"),
         },
+        databasePath,
         pauseBetweenRunsMs,
     }));
 }

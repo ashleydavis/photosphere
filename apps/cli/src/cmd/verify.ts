@@ -5,7 +5,29 @@ import { clearProgressMessage, writeProgress } from '../lib/terminal-utils';
 import { loadDatabase, IBaseCommandOptions, ICommandContext } from "../lib/init-cmd";
 import { formatBytes } from "../lib/format";
 import type { IDatabaseDescriptor } from "api";
-import { verify, verifyDatabaseFiles, IDatabaseFileVerifyResult } from "node-api";
+import { verify, verifyDatabaseFiles, IDatabaseFileVerifyResult, IVerifyResult } from "node-api";
+
+//
+// Whether a verification found anything wrong with the database.
+//
+// One reading of the result, used both to choose what the command prints and to decide what it exits
+// with, so the words on the screen and the exit code cannot disagree. They did: the command always
+// exited 0, so anything reading the exit code was told the database was fine while the same run
+// printed that 180 assets had no record.
+//
+// A file that is modified, new, removed or unreadable is a problem with the files themselves. A
+// record mismatch is an asset whose file is there and whose database record is missing or does not
+// describe it, which is what an interrupted sync leaves behind: the files are pushed first and the
+// records that describe them follow.
+//
+export function verifyFoundProblems(result: IVerifyResult, databaseFiles: IDatabaseFileVerifyResult | undefined): boolean {
+    return (databaseFiles?.invalidFiles.length ?? 0) > 0
+        || result.modified.length > 0
+        || result.new.length > 0
+        || result.removed.length > 0
+        || result.numFailures > 0
+        || (result.recordMismatches?.length ?? 0) > 0;
+}
 
 export interface IVerifyCommandOptions extends IBaseCommandOptions {
     //
@@ -154,7 +176,7 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
     // Show follow-up commands
     log.info('');
     log.info(pc.bold('Next steps:'));
-    const hasProblems = (dbFileResult?.invalidFiles.length ?? 0) > 0 || result.modified.length > 0 || result.new.length > 0 || result.removed.length > 0 || result.numFailures > 0 || (result.recordMismatches?.length ?? 0) > 0;
+    const hasProblems = verifyFoundProblems(result, dbFileResult);
     if (hasProblems) {
         log.info(`    # Fix database issues by restoring from source`);
         log.info(`    psi repair --source <backup-db-path>`);
@@ -174,5 +196,13 @@ export async function verifyCommand(context: ICommandContext, options: IVerifyCo
         log.info(`    psi summary`);
     }
 
-    await exit(0);
+    // A verification that failed exits non-zero, like any other command that did not do what it was
+    // asked.
+    //
+    // It used to exit 0 whatever it found, so the only place the result appeared was the words on the
+    // screen. Anything reading the exit code, a script, a hook, a CI job, was told the database was
+    // fine while the command was printing that 180 assets had no record: measured against a real
+    // 2,292 asset library synced from a phone, where exactly that happened and the run reported a
+    // pass.
+    await exit(hasProblems ? 1 : 0);
 }

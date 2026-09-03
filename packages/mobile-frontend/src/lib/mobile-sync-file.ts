@@ -32,6 +32,9 @@ export interface ISyncFileContents {
     // The settings, already filled from the defaults by the reader.
     settings: ISyncSettings;
 
+    // The database the background sync pushes, or undefined when none has been opened yet.
+    databasePath: string | undefined;
+
     // The gap between background sync passes, in milliseconds.
     pauseBetweenRunsMs: number;
 
@@ -110,6 +113,36 @@ export async function seedSyncSettingsFile(configFile: ISyncConfigFile): Promise
 
         await configFile.write({
             settings: { ...INITIAL_SYNC_SETTINGS },
+            databasePath: existing.databasePath,
+            pauseBetweenRunsMs: resolveSyncPauseMs(existing.pauseBetweenRunsMs),
+        });
+    });
+}
+
+//
+// Records the database the background sync pushes.
+//
+// Called when a database is opened, which is what makes background syncing work for the database the
+// user is actually using. Without it the loop would have nothing to push until automatic import had
+// been switched on and made one, which would tie two features together that are switched on
+// separately.
+//
+// Writing the same path again is skipped rather than rewritten: a database is opened on every launch
+// and on every switch between databases, and there is no reason to rewrite a file to say what it
+// already says.
+//
+export async function recordSyncDatabase(configFile: ISyncConfigFile, databasePath: string): Promise<void> {
+    return withFileLock(async () => {
+        const existing = await configFile.read();
+        if (existing.databasePath === databasePath) {
+            return;
+        }
+
+        await configFile.write({
+            settings: existing.exists
+                ? normaliseSyncSettings(existing.settings)
+                : { ...INITIAL_SYNC_SETTINGS },
+            databasePath,
             pauseBetweenRunsMs: resolveSyncPauseMs(existing.pauseBetweenRunsMs),
         });
     });
@@ -166,6 +199,7 @@ export async function setSyncFileValue(configFile: ISyncConfigFile, key: string,
 
         await configFile.write({
             settings,
+            databasePath: existing.databasePath,
             pauseBetweenRunsMs: resolveSyncPauseMs(existing.pauseBetweenRunsMs),
         });
     });

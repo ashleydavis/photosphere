@@ -87,8 +87,10 @@ test_s3_verify_repair() {
     log_info "Deleting asset object from the bucket: $victim_key"
     s3_object delete --key "$victim_key"
 
+    # Exit 1: an object the database expects is gone from the bucket. The verify after the repair
+    # below still expects 0, and that pair is what makes the exit code worth anything.
     local verify_deleted_output
-    invoke_command "Verify after deleting an asset object" "$(get_cli_command) verify --db \"$s3_db\" --yes" 0 "verify_deleted_output"
+    invoke_command "Verify after deleting an asset object" "$(get_cli_command) verify --db \"$s3_db\" --yes" 1 "verify_deleted_output"
     expect_output_value "$verify_deleted_output" "Removed:" "1" "Verify reports the deleted asset object as removed"
     expect_output_value "$verify_deleted_output" "Modified:" "0" "Verify reports no modified files after the deletion"
 
@@ -106,8 +108,9 @@ test_s3_verify_repair() {
     log_info "Overwriting asset object in the bucket with different bytes: $victim_key"
     s3_object put --key "$victim_key" --body "these are not the bytes the database recorded"
 
+    # Exit 1: the object in the bucket no longer hashes to what the database recorded.
     local verify_modified_output
-    invoke_command "Fully verify after overwriting an asset object" "$(get_cli_command) verify --db \"$s3_db\" --full --yes" 0 "verify_modified_output"
+    invoke_command "Fully verify after overwriting an asset object" "$(get_cli_command) verify --db \"$s3_db\" --full --yes" 1 "verify_modified_output"
     expect_output_value "$verify_modified_output" "Modified:" "1" "A full verify reports the overwritten asset object as modified"
 
     invoke_command "Repair the overwritten object from the local replica" \

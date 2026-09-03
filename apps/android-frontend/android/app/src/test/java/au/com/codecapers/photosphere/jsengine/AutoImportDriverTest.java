@@ -147,7 +147,7 @@ public final class AutoImportDriverTest {
         RecordingHost host = new RecordingHost(
             Collections.singletonList(stoppedPlan()),
             Collections.<String>emptyList());
-        AutoImportDriver driver = new AutoImportDriver(host, new BackgroundPassLock());
+        AutoImportDriver driver = new AutoImportDriver(host);
 
         driver.runLoop();
 
@@ -169,7 +169,7 @@ public final class AutoImportDriverTest {
         RecordingHost host = new RecordingHost(
             Collections.singletonList(plan),
             Collections.<String>emptyList());
-        AutoImportDriver driver = new AutoImportDriver(host, new BackgroundPassLock());
+        AutoImportDriver driver = new AutoImportDriver(host);
 
         assertEquals(AutoImportDriver.PassOutcome.RAN, driver.runOnePass());
 
@@ -189,7 +189,7 @@ public final class AutoImportDriverTest {
                     new AutoImportPlan.Step("create-database", "{}"),
                     new AutoImportPlan.Step("import-assets", "{}")))),
             Collections.singletonList("create-database"));
-        AutoImportDriver driver = new AutoImportDriver(host, new BackgroundPassLock());
+        AutoImportDriver driver = new AutoImportDriver(host);
         host.driverToStopWhilePaused = driver;
 
         driver.runLoop();
@@ -214,7 +214,7 @@ public final class AutoImportDriverTest {
                 throw new IllegalStateException("the engine is not there");
             }
         };
-        AutoImportDriver driver = new AutoImportDriver(host, new BackgroundPassLock());
+        AutoImportDriver driver = new AutoImportDriver(host);
         host.driverToStopWhilePaused = driver;
 
         driver.runLoop();
@@ -229,7 +229,7 @@ public final class AutoImportDriverTest {
         RecordingHost host = new RecordingHost(
             Collections.singletonList(runningPlan(5)),
             Collections.<String>emptyList());
-        AutoImportDriver driver = new AutoImportDriver(host, new BackgroundPassLock());
+        AutoImportDriver driver = new AutoImportDriver(host);
         host.driverToStopWhilePaused = driver;
 
         driver.runLoop();
@@ -246,7 +246,7 @@ public final class AutoImportDriverTest {
         RecordingHost host = new RecordingHost(
             Collections.singletonList(runningPlan(1234)),
             Collections.<String>emptyList());
-        AutoImportDriver driver = new AutoImportDriver(host, new BackgroundPassLock());
+        AutoImportDriver driver = new AutoImportDriver(host);
         host.driverToStopWhilePaused = driver;
 
         driver.runLoop();
@@ -259,7 +259,7 @@ public final class AutoImportDriverTest {
         RecordingHost host = new RecordingHost(
             Collections.singletonList(runningPlan(1)),
             Collections.<String>emptyList());
-        AutoImportDriver driver = new AutoImportDriver(host, new BackgroundPassLock());
+        AutoImportDriver driver = new AutoImportDriver(host);
 
         driver.runOnePass();
 
@@ -291,7 +291,7 @@ public final class AutoImportDriverTest {
             }
         };
 
-        final AutoImportDriver driver = new AutoImportDriver(host, new BackgroundPassLock());
+        final AutoImportDriver driver = new AutoImportDriver(host);
 
         Thread firstCaller = new Thread(new Runnable() {
             @Override

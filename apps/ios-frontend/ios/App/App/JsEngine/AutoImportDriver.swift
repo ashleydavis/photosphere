@@ -119,12 +119,6 @@ protocol AutoImportDriverHost: AnyObject {
 final class AutoImportDriver {
 
     //
-    // The name this driver takes the shared pass lock under, so a skipped pass can say what it is
-    // waiting behind.
-    //
-    static let passLockOwner = "import"
-
-    //
     // The gap between passes when no plan has said what it should be, in seconds.
     //
     // Only reached when the very first plan read fails, because every plan carries a gap the settings
@@ -138,13 +132,6 @@ final class AutoImportDriver {
     // Everything the driver needs that it cannot do itself.
     //
     private weak var host: AutoImportDriverHost?
-
-    //
-    // The lock that keeps an import pass and a sync pass apart. An import holds the database write
-    // lock and a chain of engine slots for the length of a run, and a sync waiting inside that is
-    // what deadlocked the engine pool once already.
-    //
-    private let sharedPassLock: BackgroundPassLock
 
     //
     // Guards the pass bookkeeping below, and is what a second caller waits on while a pass runs.
@@ -178,11 +165,10 @@ final class AutoImportDriver {
     private var pauseBetweenPasses: TimeInterval = AutoImportDriver.fallbackPause
 
     //
-    // Constructs a driver over the given host, sharing the given pass lock with the sync driver.
+    // Constructs a driver over the given host.
     //
-    init(host: AutoImportDriverHost, sharedPassLock: BackgroundPassLock) {
+    init(host: AutoImportDriverHost) {
         self.host = host
-        self.sharedPassLock = sharedPassLock
     }
 
     //
@@ -304,15 +290,6 @@ final class AutoImportDriver {
             host.report("Automatic import is switched off.")
             return .stop
         }
-
-        if !sharedPassLock.tryAcquire(AutoImportDriver.passLockOwner) {
-            // A sync pass is in flight. Skipped rather than waited for, so this loop stays free to
-            // notice automatic import being switched off; the next pass starts after the usual gap.
-            host.report("Not importing yet: a sync pass is running.")
-            return .ran
-        }
-
-        defer { sharedPassLock.release(AutoImportDriver.passLockOwner) }
 
         host.report("Automatic import running into \"\(plan.databasePath)\".")
 

@@ -19,12 +19,6 @@ package au.com.codecapers.photosphere.jsengine;
 public final class AutoImportDriver {
 
     //
-    // The name this driver takes the shared pass lock under, so a skipped pass can say what it is
-    // waiting behind.
-    //
-    public static final String PASS_LOCK_OWNER = "import";
-
-    //
     // The gap between passes when no plan has said what it should be, in milliseconds.
     //
     // Only reached when the very first plan read fails, because every plan carries a gap that the
@@ -110,13 +104,6 @@ public final class AutoImportDriver {
     private final Host host;
 
     //
-    // The lock that keeps an import pass and a sync pass apart. An import holds the database write
-    // lock and a chain of engine slots for the length of a run, and a sync waiting inside that is
-    // what deadlocked the engine pool once already.
-    //
-    private final BackgroundPassLock sharedPassLock;
-
-    //
     // Guards the pass bookkeeping below, and is what a second caller waits on while a pass runs.
     //
     private final Object passLock = new Object();
@@ -144,11 +131,10 @@ public final class AutoImportDriver {
     private volatile long pauseMs = FALLBACK_PAUSE_MS;
 
     //
-    // Constructs a driver over the given host, sharing the given pass lock with the sync driver.
+    // Constructs a driver over the given host.
     //
-    public AutoImportDriver(Host host, BackgroundPassLock sharedPassLock) {
+    public AutoImportDriver(Host host) {
         this.host = host;
-        this.sharedPassLock = sharedPassLock;
     }
 
     //
@@ -263,47 +249,35 @@ public final class AutoImportDriver {
             return PassOutcome.STOP;
         }
 
-        if (!sharedPassLock.tryAcquire(PASS_LOCK_OWNER)) {
-            // A sync pass is in flight. Skipped rather than waited for, so this thread stays free to
-            // notice automatic import being switched off; the next pass starts after the usual gap.
-            host.report("Not importing yet: a sync pass is running.");
-            return PassOutcome.RAN;
-        }
-
+        host.holdAwake(true);
         try {
-            host.holdAwake(true);
-            try {
-                host.report("Automatic import running into \"" + plan.databasePath + "\".");
+            host.report("Automatic import running into \"" + plan.databasePath + "\".");
 
-                for (AutoImportPlan.Step step : plan.steps) {
-                    if (stopped) {
-                        return PassOutcome.RAN;
-                    }
-
-                    boolean succeeded;
-                    try {
-                        succeeded = host.runStep(step);
-                    }
-                    catch (Exception error) {
-                        host.reportError("Automatic import step \"" + step.type + "\" failed: " + error);
-                        return PassOutcome.RAN;
-                    }
-
-                    if (!succeeded) {
-                        // The rest of the pass is abandoned, not the loop: an import into a database
-                        // that could not be created has nothing to import into, and the next pass
-                        // starts from the plan again rather than from where this one gave up.
-                        host.reportError("Automatic import step \"" + step.type + "\" did not succeed.");
-                        return PassOutcome.RAN;
-                    }
+            for (AutoImportPlan.Step step : plan.steps) {
+                if (stopped) {
+                    return PassOutcome.RAN;
                 }
-            }
-            finally {
-                host.holdAwake(false);
+
+                boolean succeeded;
+                try {
+                    succeeded = host.runStep(step);
+                }
+                catch (Exception error) {
+                    host.reportError("Automatic import step \"" + step.type + "\" failed: " + error);
+                    return PassOutcome.RAN;
+                }
+
+                if (!succeeded) {
+                    // The rest of the pass is abandoned, not the loop: an import into a database
+                    // that could not be created has nothing to import into, and the next pass
+                    // starts from the plan again rather than from where this one gave up.
+                    host.reportError("Automatic import step \"" + step.type + "\" did not succeed.");
+                    return PassOutcome.RAN;
+                }
             }
         }
         finally {
-            sharedPassLock.release(PASS_LOCK_OWNER);
+            host.holdAwake(false);
         }
 
         return PassOutcome.RAN;

@@ -464,23 +464,102 @@ log_success "The app and its service are still running with syncing switched off
 wait_for_origin_growth "$ORIGIN_FILES_AT_START" "The photo imported while the app was backgrounded reached the origin" || exit 1
 ORIGIN_FILES_AFTER_FIRST="$(origin_file_count)"
 
-# --- 6. And again with the screen off, which is the harder case. ---
+# --- 6. Syncing carries on with automatic import switched off. ---
+#
+# The two features are switched on separately and share one service, and tying them together would
+# mean somebody who imports by hand and syncs gets no background syncing at all. Automatic import goes
+# off here and the sync loop has to keep running: the service stays up, and it goes on asking whether
+# a sync should run.
+#
+# Before the screen goes off, deliberately. A phone with a secure lock screen locks itself when the
+# screen goes off, and an app relaunched behind a lock screen is refused its foreground service by the
+# platform, so everything after that point is untestable there. Nothing about this case needs the
+# screen off.
+"${PLATFORM}_seed_auto_import_config" "false" "$DB_NAME" "5000" "$TEST_ALBUM_ID" || exit 1
 
-# A foreground service keeps the process alive but does not by itself keep the CPU awake; the wake
-# lock the service takes for the length of a pass is what makes this work.
-log_info "Turning the screen off"
-adb shell input keyevent KEYCODE_POWER || exit 1
-sleep 2
+# Restarted because a settings file changed from outside is only read at launch: the app notices its
+# own writes, not the harness's.
+adb shell am force-stop "$APP_ID" >/dev/null 2>&1 || true
+"${PLATFORM}_launch" "$APP_PORT" || exit 1
+wait_for_ready "$APP_PORT"
 
-"${PLATFORM}_seed_media" "$SCREEN_OFF_PHOTO_SOURCE" "$SCREEN_OFF_PHOTO_NAME" "$TEST_ALBUM_DIR" || exit 1
+SERVICE_UP=0
+for _ in $(seq 1 30); do
+    if auto_import_service_running; then
+        SERVICE_UP=1
+        break
+    fi
+    sleep 1
+done
 
-wait_for_asset_count 3 || exit 1
-wait_for_origin_growth "$ORIGIN_FILES_AFTER_FIRST" "The photo taken with the screen off reached the origin" || exit 1
+if [ "$SERVICE_UP" -ne 1 ]; then
+    log_error "The foreground service is not running with automatic import off and syncing on. Background syncing needs it, and the two features are switched on separately."
+    adb shell dumpsys activity services "$APP_ID" 2>/dev/null | tr -d '\r' | head -30 || true
+    exit 1
+fi
 
-log_info "Turning the screen back on"
-adb shell input keyevent KEYCODE_WAKEUP || exit 1
-adb shell input keyevent KEYCODE_MENU >/dev/null 2>&1 || true
-sleep 2
+# The service being up is not the same as the sync loop asking. Logcat is where the loop says what it
+# is doing, and it keeps working with the app off screen, which is why it is read rather than app.log.
+adb logcat -c >/dev/null 2>&1 || true
+adb shell input keyevent KEYCODE_HOME || exit 1
+
+SYNC_PASS_SEEN=0
+for _ in $(seq 1 30); do
+    if adb logcat -d -s "AutoImportService:*" 2>/dev/null | tr -d '\r' | grep -qE "Syncing \"|Not syncing"; then
+        SYNC_PASS_SEEN=1
+        break
+    fi
+    sleep 2
+done
+
+if [ "$SYNC_PASS_SEEN" -ne 1 ]; then
+    log_error "The sync loop stopped when automatic import was switched off. It has to carry on: the two are switched on separately."
+    adb logcat -d -s "AutoImportService:*" 2>/dev/null | tail -30 || true
+    exit 1
+fi
+log_success "Syncing carries on in the background with automatic import switched off"
+
+# Automatic import goes back on for the screen-off case below, which is about the import and the sync
+# together.
+#
+# Waited for on the app's own word rather than on a sleep, and with the app left on screen: the photo
+# permission is asked for as the loop starts, and that is a round trip to the platform which a
+# backgrounded app has no reason to answer promptly. Sending it away before it has finished starting
+# is how this step first failed, silently, with nothing importing for the rest of the test. The screen
+# going off below is what backgrounds it, which is the state the case is about anyway.
+"${PLATFORM}_seed_auto_import_config" "true" "$DB_NAME" "5000" "$TEST_ALBUM_ID" || exit 1
+adb shell am force-stop "$APP_ID" >/dev/null 2>&1 || true
+"${PLATFORM}_launch" "$APP_PORT" || exit 1
+wait_for_ready "$APP_PORT"
+wait_for_log "$TMP_DIR" "Starting automatic import." 120 || exit 1
+
+# --- 7. And again with the screen off, which is the harder case. ---
+
+# Emulators only, and not because the case is uninteresting: it is the one the wake lock exists for.
+#
+# Turning the screen off on a phone with a secure lock screen locks it, and nothing a test may do can
+# unlock it again: no test should know somebody's PIN. The phone is then left locked for whoever picks
+# it up next, and every later run of this test refuses to start on it. An emulator has no lock screen,
+# so it runs there every time, including in the release workflow.
+if [ "$IS_REAL_DEVICE" -eq 1 ]; then
+    log_info "SKIP (the screen-off case): turning the screen off would leave this phone locked, and a test cannot unlock it. It runs on every emulator."
+else
+    # A foreground service keeps the process alive but does not by itself keep the CPU awake; the wake
+    # lock the service takes for the length of a pass is what makes this work.
+    log_info "Turning the screen off"
+    adb shell input keyevent KEYCODE_POWER || exit 1
+    sleep 2
+
+    "${PLATFORM}_seed_media" "$SCREEN_OFF_PHOTO_SOURCE" "$SCREEN_OFF_PHOTO_NAME" "$TEST_ALBUM_DIR" || exit 1
+
+    wait_for_asset_count 3 || exit 1
+    wait_for_origin_growth "$ORIGIN_FILES_AFTER_FIRST" "The photo taken with the screen off reached the origin" || exit 1
+
+    log_info "Turning the screen back on"
+    adb shell input keyevent KEYCODE_WAKEUP || exit 1
+    adb shell input keyevent KEYCODE_MENU >/dev/null 2>&1 || true
+    sleep 2
+fi
 
 # The app was never opened between the photo landing and it reaching the bucket, which is the whole
 # claim of this test. Bringing it back now is only so the log can be checked for errors.

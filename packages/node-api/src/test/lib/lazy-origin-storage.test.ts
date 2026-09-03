@@ -14,6 +14,14 @@ function makeMockStorage(files: Map<string, Buffer> = new Map()): IStorage {
             throw new Error("not implemented");
         },
 
+        async storedHash(_filePath: string): Promise<Buffer | undefined> {
+            throw new Error("not implemented");
+        },
+
+        async writeStreamHashed(_filePath: string, _contentType: string | undefined, _inputStream: NodeJS.ReadableStream, _contentLength: number, _sha256: Buffer): Promise<boolean> {
+            throw new Error("not implemented");
+        },
+
         async listFiles(_path: string, _max: number, _next?: string): Promise<IListResult> {
             throw new Error("not implemented");
         },

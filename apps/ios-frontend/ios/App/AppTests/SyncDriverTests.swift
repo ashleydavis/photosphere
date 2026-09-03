@@ -127,7 +127,7 @@ final class SyncDriverTests: XCTestCase {
 
     func testAPassRunsTheStepsThePlanAsksFor() {
         let host = RecordingHost(plan: runningPlan(pause: 1))
-        let driver = SyncDriver(host: host, sharedPassLock: BackgroundPassLock())
+        let driver = SyncDriver(host: host)
 
         driver.runOnePass()
 
@@ -136,7 +136,7 @@ final class SyncDriverTests: XCTestCase {
 
     func testARefusedPassRunsNothingAndSaysWhy() {
         let host = RecordingHost(plan: refusedPlan(reason: "syncing is switched off", pause: 1))
-        let driver = SyncDriver(host: host, sharedPassLock: BackgroundPassLock())
+        let driver = SyncDriver(host: host)
 
         driver.runOnePass()
 
@@ -148,7 +148,7 @@ final class SyncDriverTests: XCTestCase {
         // Every reason a sync is refused can go away without the app being touched: a phone moves
         // onto Wi-Fi, a network comes back, the user switches syncing on again.
         let host = RecordingHost(plan: refusedPlan(reason: "the connection is \"cellular\"", pause: 1))
-        let driver = SyncDriver(host: host, sharedPassLock: BackgroundPassLock())
+        let driver = SyncDriver(host: host)
         host.driverToStopWhilePaused = driver
 
         driver.runLoop()
@@ -162,7 +162,7 @@ final class SyncDriverTests: XCTestCase {
         // briefly unreachable, an expired credential.
         let host = RecordingHost(plan: runningPlan(pause: 1))
         host.stepFails = true
-        let driver = SyncDriver(host: host, sharedPassLock: BackgroundPassLock())
+        let driver = SyncDriver(host: host)
         host.driverToStopWhilePaused = driver
 
         driver.runLoop()
@@ -173,7 +173,7 @@ final class SyncDriverTests: XCTestCase {
     func testAStepThatThrowsDoesNotEndTheLoop() {
         let host = RecordingHost(plan: runningPlan(pause: 1))
         host.stepThrows = true
-        let driver = SyncDriver(host: host, sharedPassLock: BackgroundPassLock())
+        let driver = SyncDriver(host: host)
         host.driverToStopWhilePaused = driver
 
         driver.runLoop()
@@ -184,7 +184,7 @@ final class SyncDriverTests: XCTestCase {
     func testAPlanThatCannotBeReadDoesNotEndTheLoop() {
         let host = RecordingHost(plan: runningPlan(pause: 1))
         host.planReadThrows = true
-        let driver = SyncDriver(host: host, sharedPassLock: BackgroundPassLock())
+        let driver = SyncDriver(host: host)
         host.driverToStopWhilePaused = driver
 
         driver.runLoop()
@@ -194,7 +194,7 @@ final class SyncDriverTests: XCTestCase {
 
     func testStoppingEndsTheLoop() {
         let host = RecordingHost(plan: runningPlan(pause: 1))
-        let driver = SyncDriver(host: host, sharedPassLock: BackgroundPassLock())
+        let driver = SyncDriver(host: host)
         host.driverToStopWhilePaused = driver
 
         driver.runLoop()
@@ -205,7 +205,7 @@ final class SyncDriverTests: XCTestCase {
 
     func testTheGapComesFromThePlanRatherThanFromTheDriver() {
         let host = RecordingHost(plan: runningPlan(pause: 90))
-        let driver = SyncDriver(host: host, sharedPassLock: BackgroundPassLock())
+        let driver = SyncDriver(host: host)
         host.driverToStopWhilePaused = driver
 
         driver.runLoop()
@@ -217,60 +217,12 @@ final class SyncDriverTests: XCTestCase {
         // A gap of zero is a loop with no gap at all: it would ask for a pass the instant the last
         // one ended, which on a phone is a flat battery rather than a fast backup.
         let host = RecordingHost(plan: runningPlan(pause: 0))
-        let driver = SyncDriver(host: host, sharedPassLock: BackgroundPassLock())
+        let driver = SyncDriver(host: host)
         host.driverToStopWhilePaused = driver
 
         driver.runLoop()
 
         XCTAssertGreaterThan(host.pauses.first ?? 0, 0, "the gap must have been replaced with a real one")
-    }
-
-    func testAPassIsSkippedWhileAnImportHoldsThePassLock() {
-        // An import holds the database write lock and a chain of engine slots for the length of a
-        // run. A sync started inside that would take a slot of its own and wait for a lock the import
-        // is not going to release, which is what deadlocked the engine pool once already.
-        let passLock = BackgroundPassLock()
-        XCTAssertTrue(passLock.tryAcquire(AutoImportDriver.passLockOwner))
-
-        let host = RecordingHost(plan: runningPlan(pause: 1))
-        let driver = SyncDriver(host: host, sharedPassLock: passLock)
-
-        driver.runOnePass()
-
-        XCTAssertTrue(host.stepsRun.isEmpty, "no sync step may run while an import pass is in flight")
-    }
-
-    func testThePassLockIsGivenBackWhenAPassFinishes() {
-        let passLock = BackgroundPassLock()
-        let host = RecordingHost(plan: runningPlan(pause: 1))
-        let driver = SyncDriver(host: host, sharedPassLock: passLock)
-
-        driver.runOnePass()
-
-        XCTAssertFalse(passLock.isHeld, "a pass that finished must not still hold the lock")
-    }
-
-    func testThePassLockIsGivenBackWhenAStepFails() {
-        // A lock a failed pass kept would stop every import from then on, silently.
-        let passLock = BackgroundPassLock()
-        let host = RecordingHost(plan: runningPlan(pause: 1))
-        host.stepFails = true
-        let driver = SyncDriver(host: host, sharedPassLock: passLock)
-
-        driver.runOnePass()
-
-        XCTAssertFalse(passLock.isHeld)
-    }
-
-    func testThePassLockIsGivenBackWhenAStepThrows() {
-        let passLock = BackgroundPassLock()
-        let host = RecordingHost(plan: runningPlan(pause: 1))
-        host.stepThrows = true
-        let driver = SyncDriver(host: host, sharedPassLock: passLock)
-
-        driver.runOnePass()
-
-        XCTAssertFalse(passLock.isHeld)
     }
 
     func testASecondRequestWaitsForThePassInFlightRatherThanStartingAnother() {
@@ -346,7 +298,7 @@ final class SyncDriverTests: XCTestCase {
         }
 
         let host = BlockingHost(plan: runningPlan(pause: 1), stepStarted: stepStarted, stepMayFinish: stepMayFinish)
-        let driver = SyncDriver(host: host, sharedPassLock: BackgroundPassLock())
+        let driver = SyncDriver(host: host)
 
         let firstFinished = expectation(description: "the first caller has finished")
         DispatchQueue.global().async {
@@ -371,5 +323,74 @@ final class SyncDriverTests: XCTestCase {
         wait(for: [firstFinished, secondFinished], timeout: 5)
 
         XCTAssertEqual(1, host.stepsRunCount(), "only one pass may ever have run")
+    }
+
+    func testASyncPassRunsWhileAnImportPassIsInFlight() {
+        // The two loops used to take one shared lock around a whole pass, so a sync skipped its pass
+        // whenever an import was running. Measured against a real library on a Pixel 6, 2,292 assets,
+        // that meant no sync at all: one import pass ran for over half an hour and the next started
+        // seconds after it, so the sync loop skipped every pass and pushed nothing.
+        let importStepStarted = expectation(description: "the import pass has started")
+        let importStepMayFinish = DispatchSemaphore(value: 0)
+
+        final class HeldImportHost: AutoImportDriverHost {
+
+            //
+            // Signalled when the import's step starts.
+            //
+            let stepStarted: XCTestExpectation
+
+            //
+            // Waited on inside the import's step, so the import pass can be held open.
+            //
+            let stepMayFinish: DispatchSemaphore
+
+            init(stepStarted: XCTestExpectation, stepMayFinish: DispatchSemaphore) {
+                self.stepStarted = stepStarted
+                self.stepMayFinish = stepMayFinish
+            }
+
+            func readPlan() throws -> AutoImportPlan {
+                return AutoImportPlan(
+                    shouldRun: true,
+                    databasePath: "photosphere-default",
+                    pauseBetweenRuns: 1,
+                    steps: [AutoImportPlan.Step(type: "import-assets", dataJson: "{}")])
+            }
+
+            func runStep(_ step: AutoImportPlan.Step) throws -> Bool {
+                stepStarted.fulfill()
+                return stepMayFinish.wait(timeout: .now() + 5) == .success
+            }
+
+            func pause(_ seconds: TimeInterval) -> Bool {
+                return false
+            }
+
+            func report(_ message: String) {
+            }
+
+            func reportError(_ message: String) {
+            }
+        }
+
+        let importHost = HeldImportHost(stepStarted: importStepStarted, stepMayFinish: importStepMayFinish)
+        let importDriver = AutoImportDriver(host: importHost)
+
+        DispatchQueue.global().async {
+            importDriver.runOnePass()
+        }
+
+        wait(for: [importStepStarted], timeout: 5)
+
+        // The import pass is held open at its step, and the sync pass runs to completion anyway.
+        let syncHost = RecordingHost(plan: runningPlan(pause: 1))
+        let syncDriver = SyncDriver(host: syncHost)
+
+        syncDriver.runOnePass()
+
+        XCTAssertEqual(["sync-database"], syncHost.stepsRun, "the sync must have run its step while the import pass was still in flight")
+
+        importStepMayFinish.signal()
     }
 }

@@ -16,6 +16,23 @@ export default {
         "dist",
         "build",
     ],
+    // A test that imports a command reaches node-api, which reaches mime, which ships as ESM only.
+    // The ts-jest preset transforms TypeScript alone and jest leaves node_modules alone by default,
+    // so that package arrives as an untransformed `import` statement and jest refuses the whole
+    // suite before a single test runs. Sending .js through ts-jest too, and exempting mime from the
+    // node_modules exclusion, runs the real package rather than a stand-in for it. This is what
+    // packages/vault already does for serialize-error.
+    // Scoped to mime alone, not to every .js. The mocks in __mocks__ are already CommonJS and pass
+    // through untransformed; sending them through ts-jest as well only produced a warning per file
+    // per suite. allowJs lives here rather than in tsconfig.json so the build is not asked to
+    // compile JavaScript it never compiles.
+    transform: {
+        '^.+\\.tsx?$': 'ts-jest',
+        'node_modules[\\\\/]mime[\\\\/].+\\.js$': [ 'ts-jest', { tsconfig: { allowJs: true } } ],
+    },
+    transformIgnorePatterns: [
+        "node_modules/(?!(mime)/)",
+    ],
     moduleNameMapper: {
         '^wrap-ansi$': '<rootDir>/__mocks__/wrap-ansi.js',
         '^is-unicode-supported$': '<rootDir>/__mocks__/is-unicode-supported.js',

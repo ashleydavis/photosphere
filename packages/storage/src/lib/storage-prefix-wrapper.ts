@@ -66,6 +66,20 @@ export class StoragePrefixWrapper implements IStorage {
     }
 
     //
+    // Writes a stream whose SHA-256 the caller already knows.
+    //
+    writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength: number, sha256: Buffer): Promise<boolean> {
+        return this.storage.writeStreamHashed(this.makeFullPath(filePath), contentType, inputStream, contentLength, sha256);
+    }
+
+    //
+    // The SHA-256 the store kept of a file, when it can say without sending the bytes back.
+    //
+    storedHash(filePath: string): Promise<Buffer | undefined> {
+        return this.storage.storedHash(this.makeFullPath(filePath));
+    }
+
+    //
     // Gets info about a file.
     //
     info(filePath: string): Promise<IFileInfo | undefined> {

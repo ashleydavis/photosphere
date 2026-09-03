@@ -122,14 +122,6 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     private static let syncLock = NSLock()
 
     //
-    // What keeps an import pass and a sync pass from running at the same time. One instance, shared
-    // by both drivers: an import holds the database write lock and a chain of engine slots for the
-    // length of a run, and a sync waiting inside that is what deadlocked the engine pool once
-    // already. See docs/mobile-background-tasks.md.
-    //
-    private static let sharedPassLock = BackgroundPassLock()
-
-    //
     // The host the sync driver talks to the engine pool through.
     //
     // Its own object rather than the plugin itself, which is what the import driver uses: the two
@@ -577,7 +569,7 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
             return nil
         }
 
-        let created = AutoImportDriver(host: plugin, sharedPassLock: sharedPassLock)
+        let created = AutoImportDriver(host: plugin)
         autoImportDriver = created
         return created
     }
@@ -597,7 +589,7 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
             return nil
         }
 
-        let created = SyncDriver(host: syncDriverHost, sharedPassLock: sharedPassLock)
+        let created = SyncDriver(host: syncDriverHost)
         syncDriver = created
         return created
     }

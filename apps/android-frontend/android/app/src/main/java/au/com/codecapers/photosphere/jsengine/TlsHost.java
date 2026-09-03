@@ -247,8 +247,19 @@ public final class TlsHost {
         }
         finally {
             // Drop the closed connection so hasLiveConnections stops counting it (the engine uses that
-            // to keep a client-request task alive only while its connection is actually open).
+            // to keep a client-request task alive only while its connection is actually open), and
+            // close the socket here rather than leaving it to the engine.
+            //
+            // Dropping it without closing it was worse than doing nothing: the socket sat in
+            // CLOSE_WAIT holding its file descriptor, and once it was out of the map nothing could
+            // ever close it. The same fault in TcpHost left an Android phone holding 646 sockets
+            // while syncing a real photo library, after which every upload timed out.
             connections.remove(connectionId);
+            try {
+                socket.close();
+            }
+            catch (IOException ignored) {
+            }
             enqueue("{\"kind\":\"close\",\"connectionId\":\"" + connectionId + "\"}");
         }
     }

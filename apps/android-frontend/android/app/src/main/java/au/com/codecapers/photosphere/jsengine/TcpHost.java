@@ -1,5 +1,7 @@
 package au.com.codecapers.photosphere.jsengine;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -131,6 +133,17 @@ public final class TcpHost {
             // Remote closed or reset; fall through to the close event.
         }
         finally {
+            // The socket is closed here, by the side that has just finished reading it, rather than
+            // left for the engine to close from JavaScript.
+            //
+            // A connection the remote has closed and this side has not sits in CLOSE_WAIT and holds
+            // its file descriptor for the life of the process. Nothing closed them: the JS net shim
+            // marks its Socket closed when this close event arrives and never calls back down. That
+            // is invisible until something makes thousands of requests, and syncing a real photo
+            // library to S3 is exactly that: measured on a Pixel 6, the app was holding 646 sockets
+            // in CLOSE_WAIT, and once they had built up every upload timed out after thirty seconds
+            // and no further file ever reached the bucket.
+            tcpClose(connectionId);
             enqueue("{\"kind\":\"close\",\"connectionId\":\"" + connectionId + "\"}");
         }
     }
@@ -174,6 +187,67 @@ public final class TcpHost {
         try {
             OutputStream output = socket.getOutputStream();
             output.write(HostFunctions.base64Decode(base64));
+            output.flush();
+            return null;
+        }
+        catch (IOException error) {
+            return HostFunctions.hostErrorEnvelope(error);
+        }
+    }
+
+    //
+    // host.tcpWriteFile(connectionId, path, offset, length): sends a range of a file to a connection,
+    // read from disk and written to the socket here, without the bytes entering the engine.
+    //
+    // This is what makes uploading from a phone possible. Everything else crosses the bridge as
+    // base64: a third larger than the bytes it carries, built here and decoded in an interpreter on
+    // the other side. An upload paid that twice, once to read the file and once to send it, and a
+    // Pixel 6 managed about three megabytes a minute with the network idle nine tenths of the time.
+    //
+    // The file is the one the engine asked for by path, resolved inside the sandbox like every other
+    // file call, so this cannot be used to send something outside it.
+    //
+    public String tcpWriteFile(File storageRoot, String connectionId, String candidatePath, long offset, long length) {
+        Socket socket = connections.get(connectionId);
+        if (socket == null) {
+            return HostFunctions.hostErrorEnvelope(new IOException("No such connection to write a file to: " + connectionId));
+        }
+
+        File target;
+        try {
+            target = PathSandbox.resolveWithin(storageRoot, candidatePath);
+        }
+        catch (SecurityException refused) {
+            return HostFunctions.hostErrorEnvelope(refused);
+        }
+
+        if (!target.exists() || !target.isFile()) {
+            return HostFunctions.hostErrorEnvelope(new IOException("No such file to send: " + candidatePath));
+        }
+
+        try (FileInputStream input = new FileInputStream(target)) {
+            long skipped = 0;
+            while (skipped < offset) {
+                long justSkipped = input.skip(offset - skipped);
+                if (justSkipped <= 0) {
+                    return HostFunctions.hostErrorEnvelope(new IOException("Could not seek to " + offset + " in " + candidatePath));
+                }
+                skipped += justSkipped;
+            }
+
+            OutputStream output = socket.getOutputStream();
+            byte[] buffer = new byte[64 * 1024];
+            long remaining = length;
+            while (remaining > 0) {
+                int wanted = (int)Math.min(buffer.length, remaining);
+                int bytesRead = input.read(buffer, 0, wanted);
+                if (bytesRead == -1) {
+                    return HostFunctions.hostErrorEnvelope(new IOException(
+                        "The file ended " + remaining + " bytes before the " + length + " asked for: " + candidatePath));
+                }
+                output.write(buffer, 0, bytesRead);
+                remaining -= bytesRead;
+            }
             output.flush();
             return null;
         }
@@ -238,6 +312,20 @@ public final class TcpHost {
     //
     public boolean hasLiveListeners() {
         return !listeners.isEmpty();
+    }
+
+    //
+    // Returns true while any connection is still open. The engine uses this to park on the inbound
+    // queue while a task waits for a reply, since a task that only makes requests binds no listener.
+    //
+    // Without it the run loop had nothing to wait on and fell through to a one millisecond sleep,
+    // taken again and again for as long as a request was outstanding. Measured on a Pixel 6 mid
+    // sync, the loop went round about seventeen hundred times in five seconds and spent nearly two
+    // of those five parked in those sleeps, which is a third of the syncing thread spent asking
+    // whether the answer had arrived yet.
+    //
+    public boolean hasLiveConnections() {
+        return !connections.isEmpty();
     }
 
     //

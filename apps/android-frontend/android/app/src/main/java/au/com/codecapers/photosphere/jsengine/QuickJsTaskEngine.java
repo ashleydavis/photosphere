@@ -56,9 +56,18 @@ public final class QuickJsTaskEngine implements TaskEngine {
 
     //
     // The longest a run-loop iteration parks waiting for a pending virtual-clock timer to come due
-    // before re-checking inbound work, in milliseconds. Matches the 50ms bound used for socket waits.
+    // before re-checking inbound work, in milliseconds.
     //
-    private static final long TIMER_IDLE_SLEEP_MAX_MS = 50;
+    // One millisecond, not the fifty it was. This park happens whenever a timer is pending and not
+    // yet due, and something almost always has one: the AWS SDK arms a request timeout around every
+    // call it makes. The loop advances the task's promises one step per iteration, so the park is
+    // paid per `await`, and an S3 request is hundreds of them.
+    //
+    // Measured on a Pixel 6 syncing a real library: a file took nineteen seconds, of which the
+    // upload was under two tenths of a second. Forty files copied 44MB in seven seconds of actual
+    // work and thirteen minutes of parking.
+    //
+    private static final long TIMER_IDLE_SLEEP_MAX_MS = 1;
 
     //
     // The Android context used to open the bundle asset.
@@ -246,7 +255,32 @@ public final class QuickJsTaskEngine implements TaskEngine {
             // the JS setTimeout/setInterval timers by the real ms elapsed since the previous pump, so
             // the virtual clock tracks real time, matching iOS's scheduleTimerPump.
             long lastPumpNanos = System.nanoTime();
+
+            // Where the run loop's own time goes, reported every few seconds while a task runs.
+            //
+            // A task that is slow for reasons outside its own code is otherwise invisible: the work
+            // it does can be measured from JavaScript, and the loop that carries it cannot.
+            long loopIterations = 0;
+            long nanosPumping = 0;
+            long nanosWaitingForEvents = 0;
+            long nanosParked = 0;
+            long lastReportNanos = System.nanoTime();
+
             while (true) {
+                loopIterations++;
+                if (System.nanoTime() - lastReportNanos > 5_000_000_000L) {
+                    Log.i(LOG_TAG, "Run loop for " + task.type + ": " + loopIterations + " iterations, "
+                        + (nanosPumping / 1_000_000L) + "ms pumping, "
+                        + (nanosWaitingForEvents / 1_000_000L) + "ms waiting for events, "
+                        + (nanosParked / 1_000_000L) + "ms parked, over "
+                        + ((System.nanoTime() - lastReportNanos) / 1_000_000L) + "ms");
+                    loopIterations = 0;
+                    nanosPumping = 0;
+                    nanosWaitingForEvents = 0;
+                    nanosParked = 0;
+                    lastReportNanos = System.nanoTime();
+                }
+
                 Object result = globalObject.getProperty("__ptResult");
                 if (result instanceof String) {
                     outputsJson = (String) result;
@@ -324,6 +358,7 @@ public final class QuickJsTaskEngine implements TaskEngine {
                 }
                 boolean pumped = false;
                 long nextTimerMs = -1;
+                final long pumpStartedAt = System.nanoTime();
                 while (true) {
                     context.evaluate("globalThis.__ptPumped = (typeof globalThis.__pumpTimers === 'function') ? globalThis.__pumpTimers(" + budgetMs + ") : false;");
                     boolean fired = Boolean.TRUE.equals(globalObject.getProperty("__ptPumped"));
@@ -348,6 +383,16 @@ public final class QuickJsTaskEngine implements TaskEngine {
                     }
                 }
 
+                // Give the engine's promise jobs a chance to run.
+                //
+                // A task's `await` resumes when its promise job runs, and the wrapper runs every
+                // pending job each time the host evaluates. Asking two hundred times over instead of
+                // once was tried on a Pixel 6 against a real library and made no difference at all,
+                // because the first call had already emptied the queue.
+                context.evaluate("void 0;");
+
+                nanosPumping += System.nanoTime() - pumpStartedAt;
+
                 // A live "port" is any bound TCP listener, TLS listener, or UDP socket. The asset-server
                 // task keeps a TCP listener; a LAN-share receiver keeps a TLS listener plus a broadcasting
                 // UDP socket; a LAN-share sender's discovery keeps a UDP socket. While any is live the task
@@ -355,10 +400,16 @@ public final class QuickJsTaskEngine implements TaskEngine {
                 // limit. Prefer the TLS queue (the receiver's HTTPS request) for the lowest latency.
                 boolean tlsLive = hostBridge.tls.hasLiveListeners() || hostBridge.tls.hasLiveConnections();
                 boolean anyPortLive = hostBridge.tcp.hasLiveListeners()
+                    || hostBridge.tcp.hasLiveConnections()
                     || tlsLive
                     || hostBridge.udp.hasLiveSockets();
                 if (anyPortLive) {
-                    if (!deliveredEvent) {
+                    final long waitStartedAt = System.nanoTime();
+                    // Only when this iteration did nothing. A fired timer is the task getting on
+                    // with its work (the AWS SDK drives a request through them), and blocking on the
+                    // inbound queue after one would hold that work back fifty milliseconds a step for
+                    // as long as the connection stayed open.
+                    if (!deliveredEvent && !pumped) {
                         String waited = null;
                         if (tlsLive) {
                             waited = hostBridge.tls.awaitInboundEvent(50);
@@ -382,6 +433,7 @@ public final class QuickJsTaskEngine implements TaskEngine {
                             context.evaluate("void 0;");
                         }
                     }
+                    nanosWaitingForEvents += System.nanoTime() - waitStartedAt;
                     idleAttempts = 0;
                 }
                 else if (outstandingChildren > 0) {
@@ -408,7 +460,9 @@ public final class QuickJsTaskEngine implements TaskEngine {
                     // is legitimately waiting on the virtual clock, not stuck. Park (bounded, so other
                     // inbound work is still re-checked promptly) without counting an idle attempt,
                     // which would otherwise fail a genuinely-waiting long task as "did not settle".
+                    final long parkedAt = System.nanoTime();
                     sleepQuietly(Math.min(nextTimerMs, TIMER_IDLE_SLEEP_MAX_MS));
+                    nanosParked += System.nanoTime() - parkedAt;
                     idleAttempts = 0;
                 }
                 else {
@@ -548,6 +602,9 @@ public final class QuickJsTaskEngine implements TaskEngine {
             hostBridge.tcpConnect((String) args[0], ((Number) args[1]).intValue())));
         host.setProperty("tcpWrite", (JSCallFunction) args -> safeString(() ->
             hostBridge.tcpWrite((String) args[0], (String) args[1])));
+        host.setProperty("tcpWriteFile", (JSCallFunction) args -> safeString(() ->
+            hostBridge.tcpWriteFile((String) args[0], (String) args[1],
+                ((Number) args[2]).longValue(), ((Number) args[3]).longValue())));
         host.setProperty("tcpClose", (JSCallFunction) args -> safeString(() ->
             hostBridge.tcpClose((String) args[0])));
         host.setProperty("tcpStopListening", (JSCallFunction) args -> safeString(() ->

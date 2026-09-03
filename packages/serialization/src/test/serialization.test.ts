@@ -19,6 +19,15 @@ class MockStorage implements IStorage {
         return this.files.size === 0;
     }
 
+    async storedHash(filePath: string): Promise<Buffer | undefined> {
+        return undefined;
+    }
+
+    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength: number, sha256: Buffer): Promise<boolean> {
+        await this.writeStream(filePath, contentType, inputStream, contentLength);
+        return false;
+    }
+
     async listFiles(path: string, max: number, next?: string): Promise<{ names: string[]; next?: string }> {
         const names = Array.from(this.files.keys()).filter(key => key.startsWith(path));
         return { names, next: undefined };

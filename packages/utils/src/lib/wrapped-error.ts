@@ -30,6 +30,12 @@ export function formatErrorChain(error: any): string {
 //
 export class WrappedError extends Error {
     constructor(message: string, public options: { cause: Error }) {
-        super(message, { cause: options.cause });
+        // The cause's message is folded into this one as well as kept as the cause.
+        //
+        // Somewhere a cause is all there is to go on, and the message is all that survives: the
+        // embedded mobile engine hands a failed task's `error.message` to native and nothing else, so
+        // a background sync on a phone reported "Failed to copy file asset/0178e5ff..." over and over
+        // with no way to find out what went wrong with it.
+        super(options.cause?.message ? `${message}: ${options.cause.message}` : message, { cause: options.cause });
     }
 }

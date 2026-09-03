@@ -95,6 +95,40 @@ export interface IStorage {
     info(filePath: string): Promise<IFileInfo | undefined>;
 
     //
+    // Writes a stream whose SHA-256 the caller already knows, so nothing has to compute it.
+    //
+    // A store that can check the bytes against it does (S3 is handed the hash and refuses a write
+    // whose body does not match it, which is a stronger guarantee than checking afterwards), and one
+    // that cannot ignores it and writes the stream as usual.
+    //
+    // It exists because computing the hash is the expensive part on a phone. The AWS SDK hashes
+    // whatever it is asked to checksum in the embedded engine's pure JavaScript SHA-256, which runs
+    // at well under a megabyte a second: measured on a Pixel 6, one 100MB video held the upload for
+    // over a quarter of an hour without a byte reaching the server. The sync already knows every
+    // file's hash, because it is what the merkle tree is made of.
+    //
+    // Returns true when the store checked the bytes against the hash as it wrote them, so the caller
+    // needs nothing further to know the copy is right. False when it could not, and the caller checks
+    // the copy itself.
+    //
+    writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength: number, sha256: Buffer): Promise<boolean>;
+
+    //
+    // The SHA-256 of a stored file, when the store can say what it is without sending the file's
+    // bytes back. Undefined when it cannot, and undefined for a file that is not there.
+    //
+    // This exists so a copy can be checked without being read back. S3 computes and keeps a SHA-256
+    // of every object written through here, and answers with it in a HEAD request, so comparing a
+    // copy against what was sent costs one small request instead of the whole file again. A store
+    // with no such answer says so, and the caller reads the file back and hashes it as before.
+    //
+    // On a phone that difference is the difference between working and not: the sync's verification
+    // read-back downloads every file a second time and hashes it with the embedded engine's pure
+    // JavaScript SHA-256, which runs at well under a megabyte a second.
+    //
+    storedHash(filePath: string): Promise<Buffer | undefined>;
+
+    //
     // Reads a file from storage.
     // Returns undefined if the file doesn't exist.
     //

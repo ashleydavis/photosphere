@@ -1,10 +1,10 @@
 import { WrappedError, formatErrorChain } from "../../lib/wrapped-error";
 
 describe("WrappedError", () => {
-    test("should set message", () => {
+    test("the message carries the context and the cause, because somewhere the message is all that survives", () => {
         const cause = new Error("original");
         const error = new WrappedError("context", { cause });
-        expect(error.message).toBe("context");
+        expect(error.message).toBe("context: original");
     });
 
     test("should set cause on the standard cause property", () => {

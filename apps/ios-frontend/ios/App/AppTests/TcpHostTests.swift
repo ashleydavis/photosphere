@@ -150,4 +150,47 @@ final class TcpHostTests: XCTestCase {
     func testPollInboundEventReturnsNilWhenIdle() {
         XCTAssertNil(tcpHost.pollInboundEvent())
     }
+
+    func testAConnectionTheRemoteClosesIsClosedOnThisSideToo() {
+        // A socket the remote has closed and this side has not holds its file descriptor for as long
+        // as the process lives. Nothing else closes it: the JS net shim marks its own Socket closed
+        // when the close event arrives and never calls back down. Measured on an Android phone
+        // syncing a real photo library to S3, the app was holding 646 of them, and once they had
+        // built up every upload timed out and no further file reached the bucket. The counterpart of
+        // aConnectionTheRemoteClosesIsClosedOnThisSideToo in TcpHostTest.java.
+        //
+        // The client here half-closes, sending FIN without closing its own end, so that whether this
+        // side closes its socket is something the test can observe: the client's own read returns 0
+        // only once the other end is closed.
+        let listen = tcpHost.tcpListen(host: "127.0.0.1", port: 0)
+        let port = parse(listen)["port"] as? Int ?? 0
+        XCTAssertTrue(port > 0, "bound to an OS-assigned port")
+
+        let client = connectClient(port: port)
+        defer { close(client) }
+
+        guard let connectionEvent = waitForEvent() else {
+            return XCTFail("a connection event arrived")
+        }
+        XCTAssertEqual(parse(connectionEvent)["kind"] as? String, "connection")
+
+        // FIN to the host, with this end still open for reading.
+        XCTAssertEqual(shutdown(client, SHUT_WR), 0, "half-closing the client end")
+
+        guard let closeEvent = waitForEvent() else {
+            return XCTFail("a close event arrived")
+        }
+        XCTAssertEqual(parse(closeEvent)["kind"] as? String, "close")
+
+        // The read returns 0 only when the host has closed its end as well. A host that leaks the
+        // socket leaves this blocking until the timeout below.
+        var timeout = timeval(tv_sec: 5, tv_usec: 0)
+        setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+
+        var buffer = [UInt8](repeating: 0, count: 1)
+        let bytesRead = buffer.withUnsafeMutableBytes { rawBuffer in
+            Foundation.read(client, rawBuffer.baseAddress, rawBuffer.count)
+        }
+        XCTAssertEqual(bytesRead, 0, "the host must have closed its end of the connection")
+    }
 }

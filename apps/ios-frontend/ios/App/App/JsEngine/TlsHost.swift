@@ -288,9 +288,14 @@ final class TlsHost {
             return
         }
         lock.lock()
-        let existed = connections.removeValue(forKey: connectionId) != nil
+        let closedConnection = connections.removeValue(forKey: connectionId)
         lock.unlock()
-        if existed {
+        if let closedConnection = closedConnection {
+            // Cancelled here rather than only dropped. A connection that is let go of without being
+            // cancelled keeps its socket, and once it is out of the map nothing can ever cancel it.
+            // The same fault in the plain TCP host left an Android phone holding 646 sockets in
+            // CLOSE_WAIT while syncing a real photo library, after which every upload timed out.
+            closedConnection.cancel()
             enqueue("{\"kind\":\"close\",\"connectionId\":\"\(connectionId)\"}")
         }
     }

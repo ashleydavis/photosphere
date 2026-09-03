@@ -28,7 +28,6 @@
 		D0000000000000000000B103 /* ImportPickerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A103 /* ImportPickerTests.swift */; };
 		D0000000000000000000B104 /* MediaLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A104 /* MediaLibraryTests.swift */; };
 		D0000000000000000000B105 /* SyncDriverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A105 /* SyncDriverTests.swift */; };
-		D0000000000000000000B106 /* BackgroundPassLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A106 /* BackgroundPassLockTests.swift */; };
 		D0000000000000000000B107 /* NetworkHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A107 /* NetworkHostTests.swift */; };
 		73F80B325942FD7BAAC99376 /* NotImplementedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07855680FE24064B7769CBB4 /* NotImplementedTests.swift */; };
 		A1B2C3D4E5F600000000FF21 /* PickFilesCopyFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000FF22 /* PickFilesCopyFailureTests.swift */; };
@@ -64,7 +63,6 @@
 		D0000000000000000000B202 /* MediaDeleteStaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A202 /* MediaDeleteStaging.swift */; };
 		D0000000000000000000B302 /* AutoImportDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A302 /* AutoImportDriver.swift */; };
 		D0000000000000000000B303 /* SyncDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A303 /* SyncDriver.swift */; };
-		D0000000000000000000B304 /* BackgroundPassLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A304 /* BackgroundPassLock.swift */; };
 		D0000000000000000000B305 /* NetworkHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0000000000000000000A305 /* NetworkHost.swift */; };
 		D000000000000000000000F5 /* ImageMagickRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000E5 /* ImageMagickRunner.swift */; };
 		D000000000000000000000F6 /* FfmpegKitRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D000000000000000000000E6 /* FfmpegKitRunner.swift */; };
@@ -142,11 +140,9 @@
 		D0000000000000000000A202 /* MediaDeleteStaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaDeleteStaging.swift; sourceTree = "<group>"; };
 		D0000000000000000000A302 /* AutoImportDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoImportDriver.swift; sourceTree = "<group>"; };
 		D0000000000000000000A303 /* SyncDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncDriver.swift; sourceTree = "<group>"; };
-		D0000000000000000000A304 /* BackgroundPassLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundPassLock.swift; sourceTree = "<group>"; };
 		D0000000000000000000A305 /* NetworkHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkHost.swift; sourceTree = "<group>"; };
 		D0000000000000000000A104 /* MediaLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryTests.swift; sourceTree = "<group>"; };
 		D0000000000000000000A105 /* SyncDriverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncDriverTests.swift; sourceTree = "<group>"; };
-		D0000000000000000000A106 /* BackgroundPassLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundPassLockTests.swift; sourceTree = "<group>"; };
 		D0000000000000000000A107 /* NetworkHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkHostTests.swift; sourceTree = "<group>"; };
 		D000000000000000000000E5 /* ImageMagickRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageMagickRunner.swift; sourceTree = "<group>"; };
 		D000000000000000000000E6 /* FfmpegKitRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FfmpegKitRunner.swift; sourceTree = "<group>"; };
@@ -265,7 +261,6 @@
 				D0000000000000000000A103 /* ImportPickerTests.swift */,
 				D0000000000000000000A104 /* MediaLibraryTests.swift */,
 				D0000000000000000000A105 /* SyncDriverTests.swift */,
-				D0000000000000000000A106 /* BackgroundPassLockTests.swift */,
 				D0000000000000000000A107 /* NetworkHostTests.swift */,
 				B36CD9CADF6F132C9A9BAAE5 /* WorkerBundleParityTests.swift */,
 			);
@@ -302,7 +297,6 @@
 				D0000000000000000000A202 /* MediaDeleteStaging.swift */,
 				D0000000000000000000A302 /* AutoImportDriver.swift */,
 				D0000000000000000000A303 /* SyncDriver.swift */,
-				D0000000000000000000A304 /* BackgroundPassLock.swift */,
 				D0000000000000000000A305 /* NetworkHost.swift */,
 				D000000000000000000000E5 /* ImageMagickRunner.swift */,
 				D000000000000000000000E6 /* FfmpegKitRunner.swift */,
@@ -497,7 +491,6 @@
 				D0000000000000000000B103 /* ImportPickerTests.swift in Sources */,
 				D0000000000000000000B104 /* MediaLibraryTests.swift in Sources */,
 				D0000000000000000000B105 /* SyncDriverTests.swift in Sources */,
-				D0000000000000000000B106 /* BackgroundPassLockTests.swift in Sources */,
 				D0000000000000000000B107 /* NetworkHostTests.swift in Sources */,
 				13E4EC3C45DA72EF0950953D /* WorkerBundleParityTests.swift in Sources */,
 			);
@@ -536,7 +529,6 @@
 				D0000000000000000000B202 /* MediaDeleteStaging.swift in Sources */,
 				D0000000000000000000B302 /* AutoImportDriver.swift in Sources */,
 				D0000000000000000000B303 /* SyncDriver.swift in Sources */,
-				D0000000000000000000B304 /* BackgroundPassLock.swift in Sources */,
 				D0000000000000000000B305 /* NetworkHost.swift in Sources */,
 				D000000000000000000000F5 /* ImageMagickRunner.swift in Sources */,
 				D000000000000000000000F6 /* FfmpegKitRunner.swift in Sources */,

@@ -9,6 +9,16 @@ import { serialize as bsonSerialize, deserialize as bsonDeserialize } from 'bson
 import { retry } from 'utils';
 
 //
+// How long one read or write of a serialised file may take before it is retried.
+//
+// Thirty seconds, the retry default, is a desktop's idea of a long time. These files cross the same
+// link as everything else, and on a phone pushing about seven megabytes a minute through the engine
+// bridge a database shard written to S3 can take longer than that, which showed up as a background
+// sync that failed every pass with a timeout naming nothing at all.
+//
+const SERIALIZED_FILE_TIMEOUT_MS = 10 * 60 * 1000;
+
+//
 // Interface for writing binary data during serialization
 //
 export interface ISerializer {
@@ -557,7 +567,7 @@ export async function save<T>(
     const checksum = createHash('sha256').update(serializedData).digest();
     const finalBuffer = Buffer.concat([serializedData, checksum]);
 
-    await retry(() => storage.write(filePath, undefined, finalBuffer));
+    await retry(() => storage.write(filePath, undefined, finalBuffer), 3, 1_000, 2, SERIALIZED_FILE_TIMEOUT_MS, `Failed to write ${filePath}`);
 }
 
 //
@@ -572,7 +582,7 @@ export async function load<T>(
     targetVersion?: number
 ): Promise<T | undefined> {
 
-    const buffer = await retry(() => storage.read(filePath));
+    const buffer = await retry(() => storage.read(filePath), 3, 1_000, 2, SERIALIZED_FILE_TIMEOUT_MS, `Failed to read ${filePath}`);
     if (!buffer) {
         return undefined;
     }
@@ -709,7 +719,7 @@ export async function verify(
     storage: IStorage,
     filePath: string
 ): Promise<IVerifyResult> {
-    const buffer = await retry(() => storage.read(filePath));
+    const buffer = await retry(() => storage.read(filePath), 3, 1_000, 2, SERIALIZED_FILE_TIMEOUT_MS, `Failed to read ${filePath}`);
     if (!buffer) {
         return { valid: false, size: 0, error: "File not found or empty" };
     }

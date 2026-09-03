@@ -36,6 +36,9 @@ export interface IWriteSyncConfigData {
     // The settings to write.
     settings: ISyncSettings;
 
+    // The database the background sync pushes, or undefined when none has been opened yet.
+    databasePath?: string;
+
     // The gap between background sync passes, in milliseconds.
     pauseBetweenRunsMs: number;
 }
@@ -46,6 +49,9 @@ export interface IWriteSyncConfigData {
 export interface IReadSyncConfigResult {
     // The settings, filled from the defaults when the file does not exist or cannot be read.
     settings: ISyncSettings;
+
+    // The database the background sync pushes, absent when none has been opened yet.
+    databasePath?: string;
 
     // The gap between background sync passes, in milliseconds.
     pauseBetweenRunsMs: number;
@@ -102,11 +108,15 @@ export async function readSyncConfigHandler(data: IReadSyncConfigData, _context:
     const exists = await storage.fileExists(data.configPath);
     const contents = await readSyncConfigFile(data.configPath);
 
-    return {
+    const result: IReadSyncConfigResult = {
         settings: contents.settings,
         pauseBetweenRunsMs: contents.pauseBetweenRunsMs,
         exists,
     };
+    if (contents.databasePath !== undefined) {
+        result.databasePath = contents.databasePath;
+    }
+    return result;
 }
 
 //
@@ -122,6 +132,7 @@ export async function writeSyncConfigHandler(data: IWriteSyncConfigData, _contex
 
     const contents = buildSyncConfigToml({
         settings: data.settings,
+        databasePath: data.databasePath,
         pauseBetweenRunsMs: resolveSyncPauseMs(data.pauseBetweenRunsMs),
     });
     const storage = new FileStorage("fs:");

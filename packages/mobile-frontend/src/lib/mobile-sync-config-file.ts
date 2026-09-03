@@ -29,6 +29,9 @@ interface IReadSyncConfigOutputs {
     // The settings, already filled from the defaults by the handler.
     settings?: ISyncSettings;
 
+    // The database the background sync pushes.
+    databasePath?: string;
+
     // The gap between background sync passes, in milliseconds.
     pauseBetweenRunsMs?: number;
 
@@ -69,6 +72,7 @@ export const mobileSyncConfigFile: ISyncConfigFile = {
         const outputs = await runSyncConfigTask("read-sync-config", { configPath: SYNC_CONFIG_PATH });
         return {
             settings: normaliseSyncSettings(outputs.settings),
+            databasePath: outputs.databasePath,
             pauseBetweenRunsMs: resolveSyncPauseMs(outputs.pauseBetweenRunsMs),
             exists: outputs.exists === true,
         };
@@ -81,6 +85,7 @@ export const mobileSyncConfigFile: ISyncConfigFile = {
         await runSyncConfigTask("write-sync-config", {
             configPath: SYNC_CONFIG_PATH,
             settings: contents.settings,
+            databasePath: contents.databasePath,
             pauseBetweenRunsMs: contents.pauseBetweenRunsMs,
         });
     },

@@ -861,22 +861,34 @@ android_save_sandbox_file() {
 android_save_app_data_file() {
     local device_path="$1"
     local local_path="$2"
-    local staged="/data/local/tmp/psphere-saved-$(basename "$device_path")"
 
     rm -f "$local_path"
-    adb shell rm -f "$staged" >/dev/null 2>&1 || true
 
-    if ! adb shell run-as "$APP_ID" cp "$device_path" "$staged" >/dev/null 2>&1; then
+    # Asked for separately, because "there is no such file" and "the file could not be copied" want
+    # opposite treatment and used to look identical here. A copy that failed was read as an absent
+    # file, and the restore then DELETED the file the device came with. On a phone running Android 13
+    # that is not a rare case: the app cannot write to the shared temp directory at all, so every
+    # save of a real file failed and was recorded as there being none.
+    if ! adb shell run-as "$APP_ID" test -f "$device_path" >/dev/null 2>&1; then
         log_info "The device has no $device_path to save"
         return 0
     fi
 
-    adb pull "$staged" "$local_path" >/dev/null 2>&1 || true
-    adb shell rm -f "$staged" >/dev/null 2>&1 || true
-
-    if [ -f "$local_path" ]; then
-        log_info "Saved the device's $device_path, to be put back at the end of the test"
+    # Straight to this machine through adb's stdout, rather than through a file in the shared temp
+    # directory that the app may not be allowed to write.
+    if ! adb exec-out run-as "$APP_ID" cat "$device_path" > "$local_path" 2>/dev/null; then
+        rm -f "$local_path"
+        log_error "Could not save $device_path from the device, and it is there. Refusing to carry on: this run would have nothing to put back."
+        return 1
     fi
+
+    if [ ! -s "$local_path" ]; then
+        rm -f "$local_path"
+        log_error "Saving $device_path from the device produced an empty file, and it is not empty there."
+        return 1
+    fi
+
+    log_info "Saved the device's $device_path, to be put back at the end of the test"
 }
 
 #
@@ -953,16 +965,20 @@ android_seed_auto_import_config() {
 # establishes the two syncing settings before the app starts. It is also how a test switches syncing
 # off without driving the settings card, which matters while the app is off screen.
 #
-# Usage: android_seed_sync_config <enabled true|false> <only_on_wifi true|false> [pause_ms]
+# A database path says which database the background sync pushes, which the app otherwise records for
+# itself when one is opened. Seeding it is how a test gives the loop something to push without
+# driving the app through opening a database first.
+# Usage: android_seed_sync_config <enabled true|false> <only_on_wifi true|false> [pause_ms] [database_path]
 #
 android_seed_sync_config() {
     local enabled="$1"
     local only_on_wifi="$2"
     local pause_ms="${3:-}"
+    local database_path="${4:-}"
     local tmp_local
     tmp_local="$(mktemp)"
 
-    if ! ENABLED="$enabled" ONLY_ON_WIFI="$only_on_wifi" PAUSE_MS="$pause_ms" \
+    if ! ENABLED="$enabled" ONLY_ON_WIFI="$only_on_wifi" PAUSE_MS="$pause_ms" DATABASE_PATH="$database_path" \
         bun "$LIB_DIR/write-sync-config.ts" "$tmp_local"; then
         log_error "Could not render the app's syncing settings (see the error above)."
         rm -f "$tmp_local"

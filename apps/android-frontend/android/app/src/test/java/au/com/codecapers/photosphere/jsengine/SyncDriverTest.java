@@ -170,7 +170,7 @@ public final class SyncDriverTest {
     @Test
     public void aPassRunsTheStepsThePlanAsksFor() throws Exception {
         RecordingHost host = hostAnswering(runningPlan(1000));
-        SyncDriver driver = new SyncDriver(host, new BackgroundPassLock());
+        SyncDriver driver = new SyncDriver(host);
 
         driver.runOnePass();
 
@@ -180,7 +180,7 @@ public final class SyncDriverTest {
     @Test
     public void aRefusedPassRunsNothingAndSaysWhy() throws Exception {
         RecordingHost host = hostAnswering(refusedPlan("syncing is switched off", 1000));
-        SyncDriver driver = new SyncDriver(host, new BackgroundPassLock());
+        SyncDriver driver = new SyncDriver(host);
 
         driver.runOnePass();
 
@@ -194,7 +194,7 @@ public final class SyncDriverTest {
         // onto Wi-Fi, a network comes back, the user switches syncing on again. A loop that ended
         // here would need something to notice each of those and start it again.
         RecordingHost host = hostAnswering(refusedPlan("the connection is \"cellular\"", 1000));
-        SyncDriver driver = new SyncDriver(host, new BackgroundPassLock());
+        SyncDriver driver = new SyncDriver(host);
         host.driverToStopWhilePaused = driver;
 
         driver.runLoop();
@@ -211,7 +211,7 @@ public final class SyncDriverTest {
             Collections.singletonList(runningPlan(1000)),
             Collections.singletonList("sync-database"),
             Collections.<String>emptyList());
-        SyncDriver driver = new SyncDriver(host, new BackgroundPassLock());
+        SyncDriver driver = new SyncDriver(host);
         host.driverToStopWhilePaused = driver;
 
         driver.runLoop();
@@ -225,7 +225,7 @@ public final class SyncDriverTest {
             Collections.singletonList(runningPlan(1000)),
             Collections.<String>emptyList(),
             Collections.singletonList("sync-database"));
-        SyncDriver driver = new SyncDriver(host, new BackgroundPassLock());
+        SyncDriver driver = new SyncDriver(host);
         host.driverToStopWhilePaused = driver;
 
         driver.runLoop();
@@ -237,7 +237,7 @@ public final class SyncDriverTest {
     public void aPlanThatCannotBeReadDoesNotEndTheLoop() throws Exception {
         RecordingHost host = hostAnswering(runningPlan(1000));
         host.planReadThrows = true;
-        SyncDriver driver = new SyncDriver(host, new BackgroundPassLock());
+        SyncDriver driver = new SyncDriver(host);
         host.driverToStopWhilePaused = driver;
 
         driver.runLoop();
@@ -248,7 +248,7 @@ public final class SyncDriverTest {
     @Test
     public void stoppingEndsTheLoop() throws Exception {
         RecordingHost host = hostAnswering(runningPlan(1000));
-        SyncDriver driver = new SyncDriver(host, new BackgroundPassLock());
+        SyncDriver driver = new SyncDriver(host);
         host.driverToStopWhilePaused = driver;
 
         driver.runLoop();
@@ -260,7 +260,7 @@ public final class SyncDriverTest {
     @Test
     public void theGapComesFromThePlanRatherThanFromTheDriver() throws Exception {
         RecordingHost host = hostAnswering(runningPlan(90000));
-        SyncDriver driver = new SyncDriver(host, new BackgroundPassLock());
+        SyncDriver driver = new SyncDriver(host);
         host.driverToStopWhilePaused = driver;
 
         driver.runLoop();
@@ -273,7 +273,7 @@ public final class SyncDriverTest {
         // Object.wait(0) never ends, so a plan asking for no gap at all would park the loop forever
         // rather than making it fast.
         RecordingHost host = hostAnswering(runningPlan(0));
-        SyncDriver driver = new SyncDriver(host, new BackgroundPassLock());
+        SyncDriver driver = new SyncDriver(host);
         host.driverToStopWhilePaused = driver;
 
         driver.runLoop();
@@ -284,7 +284,7 @@ public final class SyncDriverTest {
     @Test
     public void theWakeLockIsHeldForThePassAndGivenBackAfterIt() throws Exception {
         RecordingHost host = hostAnswering(runningPlan(1000));
-        SyncDriver driver = new SyncDriver(host, new BackgroundPassLock());
+        SyncDriver driver = new SyncDriver(host);
 
         driver.runOnePass();
 
@@ -296,82 +296,11 @@ public final class SyncDriverTest {
     public void aRefusedPassDoesNotTakeTheWakeLock() throws Exception {
         // A phone that is not syncing must not be kept awake to find that out.
         RecordingHost host = hostAnswering(refusedPlan("syncing is switched off", 1000));
-        SyncDriver driver = new SyncDriver(host, new BackgroundPassLock());
+        SyncDriver driver = new SyncDriver(host);
 
         driver.runOnePass();
 
         assertEquals(0, host.wakeLocksTaken.get());
-    }
-
-    @Test
-    public void aPassIsSkippedWhileAnImportHoldsThePassLock() throws Exception {
-        // An import holds the database write lock and a chain of engine slots for the length of a
-        // run. A sync started inside that would take a slot of its own and wait for a lock the import
-        // is not going to release, which is what deadlocked the engine pool once already.
-        BackgroundPassLock passLock = new BackgroundPassLock();
-        assertTrue(passLock.tryAcquire(AutoImportDriver.PASS_LOCK_OWNER));
-
-        RecordingHost host = hostAnswering(runningPlan(1000));
-        SyncDriver driver = new SyncDriver(host, passLock);
-
-        driver.runOnePass();
-
-        assertTrue("no sync step may run while an import pass is in flight", host.stepsRun.isEmpty());
-        assertEquals("the skipped pass must not take the wake lock", 0, host.wakeLocksTaken.get());
-    }
-
-    @Test
-    public void aSkippedPassDoesNotEndTheLoop() throws Exception {
-        BackgroundPassLock passLock = new BackgroundPassLock();
-        assertTrue(passLock.tryAcquire(AutoImportDriver.PASS_LOCK_OWNER));
-
-        RecordingHost host = hostAnswering(runningPlan(1000));
-        SyncDriver driver = new SyncDriver(host, passLock);
-        host.driverToStopWhilePaused = driver;
-
-        driver.runLoop();
-
-        assertTrue("the loop must go on to try again after the import finishes", host.pauses.size() >= 1);
-    }
-
-    @Test
-    public void thePassLockIsGivenBackWhenAPassFinishes() throws Exception {
-        BackgroundPassLock passLock = new BackgroundPassLock();
-        RecordingHost host = hostAnswering(runningPlan(1000));
-        SyncDriver driver = new SyncDriver(host, passLock);
-
-        driver.runOnePass();
-
-        assertFalse("a pass that finished must not still hold the lock", passLock.isHeld());
-    }
-
-    @Test
-    public void thePassLockIsGivenBackWhenAStepFails() throws Exception {
-        // A lock a failed pass kept would stop every import from then on, silently.
-        BackgroundPassLock passLock = new BackgroundPassLock();
-        RecordingHost host = new RecordingHost(
-            Collections.singletonList(runningPlan(1000)),
-            Collections.singletonList("sync-database"),
-            Collections.<String>emptyList());
-        SyncDriver driver = new SyncDriver(host, passLock);
-
-        driver.runOnePass();
-
-        assertFalse(passLock.isHeld());
-    }
-
-    @Test
-    public void thePassLockIsGivenBackWhenAStepThrows() throws Exception {
-        BackgroundPassLock passLock = new BackgroundPassLock();
-        RecordingHost host = new RecordingHost(
-            Collections.singletonList(runningPlan(1000)),
-            Collections.<String>emptyList(),
-            Collections.singletonList("sync-database"));
-        SyncDriver driver = new SyncDriver(host, passLock);
-
-        driver.runOnePass();
-
-        assertFalse(passLock.isHeld());
     }
 
     @Test
@@ -400,7 +329,7 @@ public final class SyncDriverTest {
             }
         };
 
-        final SyncDriver driver = new SyncDriver(host, new BackgroundPassLock());
+        final SyncDriver driver = new SyncDriver(host);
 
         Thread firstCaller = new Thread(new Runnable() {
             @Override
@@ -440,5 +369,83 @@ public final class SyncDriverTest {
         secondCaller.join(5000);
 
         assertEquals("only one pass may ever have run", 1, host.stepsRun.size());
+    }
+
+    @Test
+    public void aSyncPassRunsWhileAnImportPassIsInFlight() throws Exception {
+        // The two loops used to take one shared lock around a whole pass, so a sync skipped its pass
+        // whenever an import was running. Measured against a real library on a Pixel 6, 2,292 assets,
+        // that meant no sync at all: one import pass ran for over half an hour and the next started
+        // seconds after it, so the sync loop skipped every pass and pushed nothing.
+        final CountDownLatch importStepStarted = new CountDownLatch(1);
+        final CountDownLatch importStepMayFinish = new CountDownLatch(1);
+
+        AutoImportDriver.Host importHost = new AutoImportDriver.Host() {
+
+            @Override
+            public AutoImportPlan readPlan() {
+                return new AutoImportPlan(
+                    true,
+                    "photosphere-default",
+                    1000,
+                    Collections.singletonList(new AutoImportPlan.Step("import-assets", "{}")));
+            }
+
+            @Override
+            public boolean runStep(AutoImportPlan.Step step) throws Exception {
+                importStepStarted.countDown();
+                return importStepMayFinish.await(5, TimeUnit.SECONDS);
+            }
+
+            @Override
+            public boolean pause(long millis) {
+                return false;
+            }
+
+            @Override
+            public void holdAwake(boolean awake) {
+            }
+
+            @Override
+            public void report(String message) {
+            }
+
+            @Override
+            public void reportError(String message) {
+            }
+
+            @Override
+            public void onStopped() {
+            }
+        };
+
+        final AutoImportDriver importDriver = new AutoImportDriver(importHost);
+
+        Thread importThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    importDriver.runOnePass();
+                }
+                catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        });
+        importThread.start();
+
+        assertTrue("the import pass should have started", importStepStarted.await(5, TimeUnit.SECONDS));
+
+        // The import pass is held open at its step, and the sync pass runs to completion anyway.
+        RecordingHost syncHost = hostAnswering(runningPlan(1000));
+        SyncDriver syncDriver = new SyncDriver(syncHost);
+
+        syncDriver.runOnePass();
+
+        assertEquals("the sync must have run its step while the import pass was still in flight",
+            Arrays.asList("sync-database"), syncHost.stepsRun);
+
+        importStepMayFinish.countDown();
+        importThread.join(5000);
     }
 }

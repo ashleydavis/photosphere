@@ -4,10 +4,30 @@ import type { ISyncChange } from "api";
 import { deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, upsertItem, buildMerkleTree } from "merkle-tree";
 import { IStorage, pathJoin } from "storage";
 import { IDatabaseMetadata } from "./media-file-database";
-import { acquireWriteLock, releaseWriteLock, loadDatabaseState } from "api";
+import { acquireWriteLock, releaseWriteLock, loadDatabaseState, LARGE_FILE_TIMEOUT } from "api";
 import { loadMerkleTree, saveMerkleTree, stampDatabaseState } from "./tree";
-import { retry, log, FatalError } from "utils";
-import { computeHash } from "./hash";
+import { retry, retryOnce, log, FatalError, WrappedError } from "utils";
+
+//
+// How long one step of a sync may take before the pass gives up on it.
+//
+// Generous, because these steps are slow on a phone and there is no harm in a long one finishing. It
+// exists to put a floor under a step that will never finish at all: a pass that fails is ordinary and
+// the loop runs another, while a pass that hangs stops syncing until the app is restarted.
+//
+const SYNC_STEP_TIMEOUT_MS = 30 * 60 * 1000;
+
+//
+// Runs one step of a sync under a deadline, naming it if the deadline passes.
+//
+async function retryOnceNamed<ReturnT>(step: () => Promise<ReturnT>, description: string): Promise<ReturnT> {
+    try {
+        return await retryOnce(step, SYNC_STEP_TIMEOUT_MS);
+    }
+    catch (error: any) {
+        throw new WrappedError(`Sync gave up while ${description}`, { cause: error });
+    }
+}
 
 //
 // Result of a sync operation.
@@ -59,15 +79,25 @@ export async function syncDatabases(
     try {
         // Push files from target to source (effectively pulls files from target into source).
         // We are pulling files into the sourceDb, so need the write lock on the source db.
-        await pushFiles(targetAssetStorage, sourceAssetStorage, sourceBsonDatabase);
-        const sourceMerkleTree = await retry(() => loadMerkleTree(sourceAssetStorage));
+        // Each step is given a deadline and a name.
+        //
+        // A step that never finishes used to stop the sync for good, silently: measured on a Pixel 6,
+        // a pass sat for nearly three hours at no CPU at all, having written nothing and logged
+        // nothing, because the record merge and the commit had no timeout anywhere around them. A
+        // pass that fails is ordinary and the loop runs another one; a pass that hangs is the end of
+        // syncing until the app is restarted.
+        await retryOnceNamed(() => pushFiles(targetAssetStorage, sourceAssetStorage, sourceBsonDatabase),
+            "pulling files from the origin");
+        const sourceMerkleTree = await retry(() => loadMerkleTree(sourceAssetStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to load the source merkle tree");
         const sourceDeletedIds = new Set(sourceMerkleTree?.databaseMetadata?.deletedAssetIds || []);
-        await syncDatabase(targetBsonDatabase, sourceBsonDatabase, sourceDeletedIds, onLocalChange);
-        await sourceBsonDatabase.commit();
+        await retryOnceNamed(() => syncDatabase(targetBsonDatabase, sourceBsonDatabase, sourceDeletedIds, onLocalChange),
+            "merging the origin's records into this database");
+        await retryOnceNamed(() => sourceBsonDatabase.commit(), "committing this database");
 
         // Refresh the source state file under the write lock we already hold (records the new content
         // hash and sync time), avoiding a second lock acquisition after the block.
-        await stampDatabaseState(sourceAssetStorage, sourceRawStorage, { lastSyncedAt: syncedAt });
+        await retryOnceNamed(() => stampDatabaseState(sourceAssetStorage, sourceRawStorage, { lastSyncedAt: syncedAt }),
+            "stamping this database's state");
     }
     finally {
         await releaseWriteLock(sourceRawStorage);
@@ -85,15 +115,22 @@ export async function syncDatabases(
     try {
         // Push files from source to target.
         // Need the write lock in the target database.
+        // No deadline on this one, unlike every other step: it is the whole point of a sync, it
+        // copies every file the origin is missing, and on a phone with a real library that is hours
+        // of work. The copies inside it have their own deadline, one per file, which is where a
+        // stuck upload is caught. A deadline here caught nothing but honest progress: thirty minutes
+        // in it gave up on a push that was uploading steadily.
         await pushFiles(sourceAssetStorage, targetAssetStorage, targetBsonDatabase);
-        const targetMerkleTree = await retry(() => loadMerkleTree(targetAssetStorage));
+        const targetMerkleTree = await retry(() => loadMerkleTree(targetAssetStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to load the target merkle tree");
         const targetDeletedIds = new Set(targetMerkleTree?.databaseMetadata?.deletedAssetIds || []);
-        await syncDatabase(sourceBsonDatabase, targetBsonDatabase, targetDeletedIds);
-        await targetBsonDatabase.commit();
+        await retryOnceNamed(() => syncDatabase(sourceBsonDatabase, targetBsonDatabase, targetDeletedIds),
+            "merging this database's records into the origin");
+        await retryOnceNamed(() => targetBsonDatabase.commit(), "committing the origin");
 
         // Refresh the target state file under the write lock we already hold. Both sides now hold the
         // same (merged) content, so their content hashes match and the next sync can early-out.
-        await stampDatabaseState(targetAssetStorage, targetRawStorage, { lastSyncedAt: syncedAt });
+        await retryOnceNamed(() => stampDatabaseState(targetAssetStorage, targetRawStorage, { lastSyncedAt: syncedAt }),
+            "stamping the origin's state");
     }
     finally {
         await releaseWriteLock(targetRawStorage);
@@ -129,12 +166,12 @@ async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage: IStor
     //
     // Load the merkle tree.
     //
-    const sourceMerkleTree = await retry(() => loadMerkleTree(sourceAssetStorage));
+    const sourceMerkleTree = await retry(() => loadMerkleTree(sourceAssetStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to load the source merkle tree to push from");
     if (!sourceMerkleTree) {
         throw new Error("Failed to load source merkle tree.");
     }
 
-    let targetMerkleTree = await retry(() => loadMerkleTree(targetAssetStorage));
+    let targetMerkleTree = await retry(() => loadMerkleTree(targetAssetStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to load the target merkle tree to push into");
     if (!targetMerkleTree) {
         throw new Error("Failed to load target merkle tree.");
     }
@@ -162,11 +199,35 @@ async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage: IStor
    
     let filesCopied = 0;
 
+    // Files that could not be copied this pass. They stay missing at the far end, so the next pass
+    // finds them in the difference and tries them again.
+    let filesLeftBehind = 0;
+
+    // Where the time goes, in milliseconds, reported every so often while a push runs.
+    //
+    // Without it a slow sync is a number of files a minute and nothing else. The import path has the
+    // same thing for the same reason: its unmeasured remainder turned out to be 54% of an import.
+    let millisecondsAskingAboutTheSource = 0;
+    let millisecondsWriting = 0;
+    let millisecondsUpdatingTheTree = 0;
+    let millisecondsSavingTheTree = 0;
+    let millisecondsDiffingTheTrees = 0;
+    let millisecondsDecidingWhetherToCopy = 0;
+    let millisecondsInsideCopyFile = 0;
+    let millisecondsOpeningTheSource = 0;
+    let leavesVisited = 0;
+    let nodesVisited = 0;
+    let millisecondsLogging = 0;
+    let bytesCopied = 0;
+    const pushStartedAt = Date.now();
+
     // 
     // Copies a single file if necessary.
     //
     const copyFile = async (fileName: string, sourceHash: Buffer): Promise<void> => {
-        
+        const decidingStartedAt = Date.now();
+        leavesVisited++;
+
         // Check if target database is partial - if so, only copy thumb directory files and root-level files
         const isTargetPartial = targetMerkleTree?.databaseMetadata?.isPartial === true;
         if (isTargetPartial) {
@@ -196,36 +257,72 @@ async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage: IStor
         if (targetFileInfo && Buffer.compare(targetFileInfo.hash, sourceHash) === 0) {
             // File already exists with correct hash, skip copying.
             // This assumes the file is non-corrupted. To find corrupted files, a verify would be needed.
+            millisecondsDecidingWhetherToCopy += Date.now() - decidingStartedAt;
             return;
         }
+        millisecondsDecidingWhetherToCopy += Date.now() - decidingStartedAt;
 
         // Get file info from source.
+        const askedAboutTheSourceAt = Date.now();
         const sourceFileInfo = await sourceAssetStorage.info(fileName);
         if (!sourceFileInfo) {
             throw new Error(`Failed to find file ${fileName} in source database.`);
         }
-        
+        millisecondsAskingAboutTheSource += Date.now() - askedAboutTheSourceAt;
+
         // Copy file from source to target.
+        // The hash goes up with the file. It is already known, because it is what the merkle tree is
+        // made of, and handing it over means nothing has to compute it: S3 checks the body against it
+        // and refuses a write that does not match, while a store that cannot check it writes the
+        // stream as usual. On a phone that is the difference between a sync and a stalled one, since
+        // the SDK would otherwise hash every byte in the embedded engine's pure JavaScript SHA-256.
+        const openedAt = Date.now();
         const readStream = await sourceAssetStorage.readStream(fileName);
-        await targetAssetStorage.writeStream(fileName, sourceFileInfo.contentType, readStream);
+        millisecondsOpeningTheSource += Date.now() - openedAt;
+        // A store that checked the bytes against the hash as it wrote them has already told us
+        // everything a check afterwards could, so nothing else is asked of it.
+        //
+        // Asking cost two more round trips per file, on top of the write: one to learn the file is
+        // there and how long it is, another to read back the hash the server had just verified. On a
+        // phone, where every request is a fresh connection and a response crosses the engine bridge,
+        // those two were a large part of the time a file took. A store that cannot check (a
+        // filesystem, or encrypted storage, whose stored bytes are ciphertext and hash to something
+        // else) is still asked, and the copy is checked by its length. `psi verify` is the deep
+        // check, and it reads everything deliberately rather than as a side effect of every sync.
+        const writeStartedAt = Date.now();
+        const verifiedByTheStore = await targetAssetStorage.writeStreamHashed(fileName, sourceFileInfo.contentType, readStream, sourceFileInfo.length, sourceHash);
+        millisecondsWriting += Date.now() - writeStartedAt;
+        bytesCopied += sourceFileInfo.length;
 
-        const copiedFileInfo = await targetAssetStorage.info(fileName);
-        if (!copiedFileInfo) {
-            throw new Error(`Failed to copy ${fileName} to target db.`);
+        if (!verifiedByTheStore) {
+            const copiedFileInfo = await targetAssetStorage.info(fileName);
+            if (!copiedFileInfo) {
+                throw new Error(`Failed to copy ${fileName} to target db.`);
+            }
+
+            const storedHash = await targetAssetStorage.storedHash(fileName);
+            if (storedHash !== undefined) {
+                if (Buffer.compare(storedHash, sourceHash) !== 0) {
+                    throw new Error(`Hash of copied file ${fileName} is different to the source hash.`);
+                }
+            }
+            else if (copiedFileInfo.length !== sourceFileInfo.length) {
+                throw new Error(`Copied file ${fileName} is ${copiedFileInfo.length} bytes at the target and ${sourceFileInfo.length} at the source.`);
+            }
         }
 
-        const copiedFileHash = await computeHash(await targetAssetStorage.readStream(fileName));
-        if (Buffer.compare(copiedFileHash, sourceHash) !== 0) {
-            throw new Error(`Hash of copied file ${fileName} is different to the source hash.`);            
-        }
-        
-        // Add or update file in target merkle tree.
+        // Add or update file in target merkle tree, under what the source recorded: the copy has just
+        // been checked against that hash, so the two describe the same bytes, and the length and time
+        // are the source's for the same reason. Reading them back off the target would be another
+        // request per file to be told what was just sent.
+        const treeStartedAt = Date.now();
         targetMerkleTree = upsertItem(targetMerkleTree!, {
             name: fileName,
-            hash: copiedFileHash,
-            length: copiedFileInfo.length,
-            lastModified: copiedFileInfo.lastModified,
+            hash: sourceHash,
+            length: sourceFileInfo.length,
+            lastModified: sourceFileInfo.lastModified,
         });
+        millisecondsUpdatingTheTree += Date.now() - treeStartedAt;
 
         filesCopied++;
         
@@ -242,7 +339,9 @@ async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage: IStor
         //
         // Find differences between source and target merkle trees.
         //
+        const diffStartedAt = Date.now();
         const diff = findMerkleTreeDifferences(sourceMerkleTree.merkle, targetMerkleTree.merkle);
+        millisecondsDiffingTheTrees += Date.now() - diffStartedAt;
         
         //
         // Collect nodes to process - only the differing MerkleNode roots from source.
@@ -259,14 +358,69 @@ async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage: IStor
     // Process files from MerkleNode differences.
     //
     const processMerkleNode = async (merkleNode: MerkleNode): Promise<void> => {
+        nodesVisited++;
         if (!merkleNode.left && !merkleNode.right) {
             // Leaf node - process the file directly
             if (merkleNode.name && merkleNode.hash) {
-                await retry(() => copyFile(merkleNode.name!, merkleNode.hash));
+                // The long timeout is the one the import path already uses for streaming large files
+                // to S3. Left at retry's thirty second default, every copy of a file that takes
+                // longer than that was abandoned and tried again from the start: on a Pixel 6, which
+                // pushes about seven megabytes a minute through the engine bridge, that is anything
+                // over about three megabytes, so a library with a video in it never finished syncing
+                // and the same file was uploaded over and over for ever.
+                // A file that will not copy is left behind rather than taken as the end of the sync.
+                //
+                // The rest of the library has nothing to do with it, and abandoning the pass on the
+                // first bad file means everything after that file in the tree never goes anywhere:
+                // measured on a Pixel 6 against a real library, one video that the server kept
+                // refusing held up all 2,292 assets, pass after pass, for as long as it was left
+                // running. The file stays missing at the far end, so the next pass finds it in the
+                // difference and tries it again.
+                try {
+                    const copyStartedAt = Date.now();
+                    await retry(() => copyFile(merkleNode.name!, merkleNode.hash), 3, 1_000, 2, LARGE_FILE_TIMEOUT,
+                        `Failed to copy file ${merkleNode.name}`);
+                    millisecondsInsideCopyFile += Date.now() - copyStartedAt;
+                }
+                catch (error: any) {
+                    filesLeftBehind++;
+                    log.exception(`Failed to copy ${merkleNode.name}, carrying on with the rest of the sync`, error);
+                    return;
+                }
 
                 if (filesCopied % 100 === 0) {
                     // Save the target merkle tree periodically
-                    await retry(() => saveMerkleTree(targetMerkleTree!, targetAssetStorage));
+                    const savedAt = Date.now();
+                    await retry(() => saveMerkleTree(targetMerkleTree!, targetAssetStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to save the target merkle tree part way through a push");
+                    millisecondsSavingTheTree += Date.now() - savedAt;
+                }
+
+                // Where the time went, said out loud often enough to be useful and rarely enough to
+                // be readable. A sync that is slow is otherwise just a number of files a minute.
+                if (filesCopied % 20 === 0) {
+                    const loggedAt = Date.now();
+                    const elapsed = Date.now() - pushStartedAt;
+                    const unaccounted = elapsed - millisecondsAskingAboutTheSource - millisecondsWriting
+                        - millisecondsUpdatingTheTree - millisecondsSavingTheTree
+                        - millisecondsDiffingTheTrees - millisecondsDecidingWhetherToCopy - millisecondsLogging;
+                    log.info(`Sync timings: ${JSON.stringify({
+                        filesCopied,
+                        leavesVisited,
+                        nodesVisited,
+                        bytesCopied,
+                        elapsedMs: elapsed,
+                        copyFileMs: millisecondsInsideCopyFile,
+                        diffMs: millisecondsDiffingTheTrees,
+                        decideMs: millisecondsDecidingWhetherToCopy,
+                        openSourceMs: millisecondsOpeningTheSource,
+                        sourceInfoMs: millisecondsAskingAboutTheSource,
+                        writeMs: millisecondsWriting,
+                        treeUpdateMs: millisecondsUpdatingTheTree,
+                        treeSaveMs: millisecondsSavingTheTree,
+                        loggingMs: millisecondsLogging,
+                        unaccountedMs: unaccounted,
+                    })}`);
+                    millisecondsLogging += Date.now() - loggedAt;
                 }
             }
         } else {
@@ -336,9 +490,9 @@ async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage: IStor
     }
     
     // Save the target merkle tree one final time.
-    await retry(() => saveMerkleTree(targetMerkleTree!, targetAssetStorage)); //TODO: This doesn't really need to be done unless something changed.
+    await retry(() => saveMerkleTree(targetMerkleTree!, targetAssetStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to save the target merkle tree after a push"); //TODO: This doesn't really need to be done unless something changed.
     
-    log.info(`Push completed: ${filesCopied} files copied, ${assetsDeleted} deleted from target`);
+    log.info(`Push completed: ${filesCopied} files copied, ${filesLeftBehind} left behind for the next pass, ${assetsDeleted} deleted from target`);
 }
 
 //

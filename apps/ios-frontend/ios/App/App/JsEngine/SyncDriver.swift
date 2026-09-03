@@ -112,12 +112,6 @@ protocol SyncDriverHost: AnyObject {
 final class SyncDriver {
 
     //
-    // The name this driver takes the shared pass lock under, so a skipped pass can say what it is
-    // waiting behind.
-    //
-    static let passLockOwner = "sync"
-
-    //
     // The gap between passes when no plan has said what it should be, in seconds.
     //
     // Only reached when the very first plan read fails, because every plan carries a gap the settings
@@ -131,11 +125,6 @@ final class SyncDriver {
     // Everything the driver needs that it cannot do itself.
     //
     private weak var host: SyncDriverHost?
-
-    //
-    // The lock that keeps a sync pass and an import pass apart.
-    //
-    private let sharedPassLock: BackgroundPassLock
 
     //
     // Guards the pass bookkeeping below, and is what a second caller waits on while a pass runs.
@@ -164,11 +153,10 @@ final class SyncDriver {
     private var pauseBetweenPasses: TimeInterval = SyncDriver.fallbackPause
 
     //
-    // Constructs a driver over the given host, sharing the given pass lock with the import driver.
+    // Constructs a driver over the given host.
     //
-    init(host: SyncDriverHost, sharedPassLock: BackgroundPassLock) {
+    init(host: SyncDriverHost) {
         self.host = host
-        self.sharedPassLock = sharedPassLock
     }
 
     //
@@ -281,16 +269,6 @@ final class SyncDriver {
             host.report("Not syncing: \(plan.reason)")
             return
         }
-
-        if !sharedPassLock.tryAcquire(SyncDriver.passLockOwner) {
-            // An import pass is in flight. Skipped rather than waited for: an import of a whole photo
-            // library runs for the better part of an hour, and the sync it is holding up is one that
-            // will be asked for again in a few minutes anyway.
-            host.report("Not syncing yet: an import pass is running.")
-            return
-        }
-
-        defer { sharedPassLock.release(SyncDriver.passLockOwner) }
 
         host.report("Syncing \"\(plan.databasePath)\".")
 

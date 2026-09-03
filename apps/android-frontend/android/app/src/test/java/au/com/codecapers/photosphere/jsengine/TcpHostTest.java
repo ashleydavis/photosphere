@@ -1,214 +1,287 @@
 package au.com.codecapers.photosphere.jsengine;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import org.junit.After;
 import org.junit.Test;
 
+import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 //
-// Plain-JVM unit tests for the native TCP host. Real loopback sockets (java.net is a full JDK here,
-// and TcpHost uses the portable HostFunctions base64 codec rather than android.util.Base64) exercise
-// the listen, accept, inbound-data, outbound-write, and close paths with no Android stubs and no
-// device.
+// Plain-JVM tests for the native TCP socket layer, run against real loopback sockets rather than a
+// stand-in for one: what is being tested is what the operating system does with a file descriptor,
+// which nothing but a real socket can show.
 //
 public final class TcpHostTest {
 
     //
-    // The host under test; shut down after each test to release listeners and connections.
+    // Reads the connection id out of the JSON tcpConnect answers with.
     //
-    private final TcpHost tcpHost = new TcpHost();
-
-    @After
-    public void tearDown() {
-        tcpHost.shutdown();
-    }
-
-    //
-    // Extracts a string field's value from one of the flat JSON envelopes TcpHost emits.
-    //
-    private static String stringField(String json, String field) {
-        String marker = "\"" + field + "\":\"";
-        int start = json.indexOf(marker) + marker.length();
-        int end = json.indexOf("\"", start);
+    private static String connectionIdFrom(String json) {
+        int start = json.indexOf("\"connectionId\":\"");
+        assertTrue("tcpConnect must answer with a connection id, said: " + json, start >= 0);
+        start += "\"connectionId\":\"".length();
+        int end = json.indexOf('"', start);
         return json.substring(start, end);
     }
 
-    //
-    // Extracts an integer field's value from one of the flat JSON envelopes TcpHost emits.
-    //
-    private static int intField(String json, String field) {
-        String marker = "\"" + field + "\":";
-        int start = json.indexOf(marker) + marker.length();
-        int end = start;
-        while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-')) {
-            end++;
-        }
-        return Integer.parseInt(json.substring(start, end));
-    }
-
     @Test
-    public void listenAcceptDataAndCloseFlowThroughEvents() throws Exception {
-        String listen = tcpHost.tcpListen("127.0.0.1", 0);
-        assertFalse("listen is not an error envelope", listen.startsWith("@@HOSTERR@@"));
-        int port = intField(listen, "port");
-        assertTrue("bound to an OS-assigned port", port > 0);
+    public void aConnectionTheRemoteClosesIsClosedOnThisSideToo() throws Exception {
+        // A socket the remote has closed and this side has not sits in CLOSE_WAIT and holds its file
+        // descriptor for as long as the process lives. Nothing else closes it: the JS net shim marks
+        // its own Socket closed when the close event arrives and never calls back down. Measured on a
+        // Pixel 6 syncing a real photo library to S3, the app was holding 646 of them, and once they
+        // had built up every upload timed out and no further file reached the bucket.
+        //
+        // The server here half-closes, sending FIN without closing its own end, so that whether this
+        // side closes its socket is something the test can actually observe: the server's own read
+        // returns -1 only once the client end is closed.
+        ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
+        TcpHost host = new TcpHost();
 
-        Socket client = new Socket();
-        client.connect(new InetSocketAddress("127.0.0.1", port), 2000);
-        client.setSoTimeout(3000);
+        final CountDownLatch serverSawTheClose = new CountDownLatch(1);
+        final AtomicInteger serverReadResult = new AtomicInteger(Integer.MIN_VALUE);
 
-        // The accept loop enqueues a connection event before starting the read thread.
-        String connectionEvent = tcpHost.awaitInboundEvent(3000);
-        assertNotNull("a connection event arrived", connectionEvent);
-        assertTrue(connectionEvent.contains("\"kind\":\"connection\""));
-        String connectionId = stringField(connectionEvent, "connectionId");
+        Thread serverThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Socket accepted = server.accept();
+                    accepted.setSoTimeout(10000);
 
-        // Client -> server: bytes arrive as a base64 data event.
-        byte[] fromClient = "hello-from-client".getBytes(StandardCharsets.UTF_8);
-        OutputStream clientOut = client.getOutputStream();
-        clientOut.write(fromClient);
-        clientOut.flush();
+                    // FIN to the client, with this end still open for reading.
+                    accepted.shutdownOutput();
 
-        String dataEvent = tcpHost.awaitInboundEvent(3000);
-        assertNotNull("a data event arrived", dataEvent);
-        assertTrue(dataEvent.contains("\"kind\":\"data\""));
-        assertEquals(connectionId, stringField(dataEvent, "connectionId"));
-        String base64 = stringField(dataEvent, "base64");
-        assertEquals("hello-from-client", new String(Base64.getDecoder().decode(base64), StandardCharsets.UTF_8));
+                    InputStream input = accepted.getInputStream();
+                    serverReadResult.set(input.read());
+                    serverSawTheClose.countDown();
 
-        // Server -> client: tcpWrite reaches the client socket.
-        byte[] fromServer = "hello-from-server".getBytes(StandardCharsets.UTF_8);
-        String writeResult = tcpHost.tcpWrite(connectionId, Base64.getEncoder().encodeToString(fromServer));
-        assertNull("tcpWrite returns null on success", writeResult);
-
-        InputStream clientIn = client.getInputStream();
-        byte[] received = new byte[fromServer.length];
-        int offset = 0;
-        while (offset < received.length) {
-            int read = clientIn.read(received, offset, received.length - offset);
-            assertTrue("stream did not close early", read != -1);
-            offset += read;
-        }
-        assertEquals("hello-from-server", new String(received, StandardCharsets.UTF_8));
-
-        // Client close -> server emits a close event for the connection.
-        client.close();
-        String closeEvent = tcpHost.awaitInboundEvent(3000);
-        assertNotNull("a close event arrived", closeEvent);
-        assertTrue(closeEvent.contains("\"kind\":\"close\""));
-        assertEquals(connectionId, stringField(closeEvent, "connectionId"));
-    }
-
-    @Test
-    public void hasLiveListenersReflectsOpenListeners() throws Exception {
-        assertFalse(tcpHost.hasLiveListeners());
-        String listen = tcpHost.tcpListen("127.0.0.1", 0);
-        String listenerId = stringField(listen, "listenerId");
-        assertTrue(tcpHost.hasLiveListeners());
-        tcpHost.tcpStopListening(listenerId);
-        assertFalse(tcpHost.hasLiveListeners());
-    }
-
-    //
-    // The outbound half of the socket layer. This is what makes an `http://` endpoint reachable as
-    // plain HTTP with no TLS in the path, so it is covered against a real loopback server socket.
-    //
-    @Test
-    public void connectSendsAndReceivesOverAnOutboundConnection() throws Exception {
-        try (ServerSocket peer = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
-            String connect = tcpHost.tcpConnect("127.0.0.1", peer.getLocalPort());
-            assertFalse("connect is not an error envelope", connect.startsWith("@@HOSTERR@@"));
-            String connectionId = stringField(connect, "connectionId");
-            assertTrue("a connection id was allocated", connectionId.length() > 0);
-
-            Socket accepted = peer.accept();
-            accepted.setSoTimeout(3000);
-
-            // Worker -> peer: tcpWrite reaches the remote end.
-            byte[] request = "GET / HTTP/1.1\r\n\r\n".getBytes(StandardCharsets.UTF_8);
-            assertNull(tcpHost.tcpWrite(connectionId, Base64.getEncoder().encodeToString(request)));
-
-            InputStream acceptedIn = accepted.getInputStream();
-            byte[] received = new byte[request.length];
-            int offset = 0;
-            while (offset < received.length) {
-                int read = acceptedIn.read(received, offset, received.length - offset);
-                assertTrue("stream did not close early", read != -1);
-                offset += read;
+                    accepted.close();
+                }
+                catch (IOException error) {
+                    // A read that fails rather than returning -1 still means the client end went
+                    // away, which is what this is watching for.
+                    serverReadResult.set(-1);
+                    serverSawTheClose.countDown();
+                }
             }
-            assertEquals("GET / HTTP/1.1\r\n\r\n", new String(received, StandardCharsets.UTF_8));
+        }, "tcp-host-test-server");
+        serverThread.setDaemon(true);
+        serverThread.start();
 
-            // Peer -> worker: the read loop turns inbound bytes into a base64 data event.
-            OutputStream acceptedOut = accepted.getOutputStream();
-            acceptedOut.write("HTTP/1.1 200 OK\r\n\r\n".getBytes(StandardCharsets.UTF_8));
-            acceptedOut.flush();
+        try {
+            String connectResult = host.tcpConnect("127.0.0.1", server.getLocalPort());
+            String connectionId = connectionIdFrom(connectResult);
 
-            String dataEvent = tcpHost.awaitInboundEvent(3000);
-            assertNotNull("a data event arrived", dataEvent);
-            assertTrue(dataEvent.contains("\"kind\":\"data\""));
-            assertEquals(connectionId, stringField(dataEvent, "connectionId"));
-            assertEquals("HTTP/1.1 200 OK\r\n\r\n",
-                new String(Base64.getDecoder().decode(stringField(dataEvent, "base64")), StandardCharsets.UTF_8));
+            assertTrue("the server must have seen this side close its socket, and did not within ten seconds",
+                serverSawTheClose.await(10, TimeUnit.SECONDS));
+            assertEquals("the server's read must have ended rather than returned data", -1, serverReadResult.get());
 
-            // Peer close -> the worker sees a close event for that connection.
-            accepted.close();
-            String closeEvent = tcpHost.awaitInboundEvent(3000);
-            assertNotNull("a close event arrived", closeEvent);
-            assertTrue(closeEvent.contains("\"kind\":\"close\""));
-            assertEquals(connectionId, stringField(closeEvent, "connectionId"));
+            // The engine is still told about the close, because the JS net shim ends its own socket
+            // and emits `end` and `close` on the strength of this event.
+            String event = host.awaitInboundEvent(5000);
+            assertNotNull("a close event must still reach the engine", event);
+            assertTrue("the close event must name the connection, said: " + event,
+                event.contains("\"kind\":\"close\"") && event.contains(connectionId));
         }
-    }
-
-    //
-    // A refused connection must report the failure rather than hand back a connection id that never
-    // carries any bytes.
-    //
-    @Test
-    public void connectToAClosedPortReturnsAnErrorEnvelope() throws Exception {
-        ServerSocket peer = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
-        int closedPort = peer.getLocalPort();
-        peer.close();
-
-        String connect = tcpHost.tcpConnect("127.0.0.1", closedPort);
-
-        assertTrue("connect reports an error envelope", connect.startsWith("@@HOSTERR@@"));
-    }
-
-    //
-    // Closing an outbound connection releases it, so a later write to the same id is a no-op rather
-    // than reaching a socket that should be gone.
-    //
-    @Test
-    public void closeReleasesAnOutboundConnection() throws Exception {
-        try (ServerSocket peer = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
-            String connectionId = stringField(tcpHost.tcpConnect("127.0.0.1", peer.getLocalPort()), "connectionId");
-            peer.accept();
-
-            assertNull(tcpHost.tcpClose(connectionId));
-            assertNull(tcpHost.tcpWrite(connectionId, Base64.getEncoder().encodeToString("x".getBytes(StandardCharsets.UTF_8))));
+        finally {
+            host.shutdown();
+            server.close();
         }
     }
 
     @Test
-    public void tcpWriteToUnknownConnectionReturnsNull() {
-        assertNull(tcpHost.tcpWrite("C999", Base64.getEncoder().encodeToString("x".getBytes(StandardCharsets.UTF_8))));
+    public void aFileIsSentToTheRemoteWithoutItsBytesEnteringTheEngine() throws Exception {
+        // This is what makes uploading from a phone possible. Every other write crosses the bridge as
+        // base64, a third larger than the bytes it carries and decoded in an interpreter on the other
+        // side; an upload paid that twice, once to read the file and once to send it, and a Pixel 6
+        // managed about three megabytes a minute with the network idle nine tenths of the time.
+        File storageRoot = java.nio.file.Files.createTempDirectory("psphere-tcp-file").toFile();
+        File sourceFile = new File(storageRoot, "photo.jpg");
+
+        byte[] contents = new byte[300 * 1024];
+        for (int index = 0; index < contents.length; index++) {
+            contents[index] = (byte)(index % 251);
+        }
+        java.nio.file.Files.write(sourceFile.toPath(), contents);
+
+        ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
+        TcpHost host = new TcpHost();
+
+        final CountDownLatch received = new CountDownLatch(1);
+        final byte[] readBack = new byte[contents.length];
+
+        Thread serverThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Socket accepted = server.accept();
+                    accepted.setSoTimeout(10000);
+                    InputStream input = accepted.getInputStream();
+                    int filled = 0;
+                    while (filled < readBack.length) {
+                        int bytesRead = input.read(readBack, filled, readBack.length - filled);
+                        if (bytesRead == -1) {
+                            break;
+                        }
+                        filled += bytesRead;
+                    }
+                    received.countDown();
+                    accepted.close();
+                }
+                catch (IOException ignored) {
+                    received.countDown();
+                }
+            }
+        }, "tcp-host-test-file-receiver");
+        serverThread.setDaemon(true);
+        serverThread.start();
+
+        try {
+            String connectionId = connectionIdFrom(host.tcpConnect("127.0.0.1", server.getLocalPort()));
+
+            assertEquals("sending a file must succeed", null,
+                host.tcpWriteFile(storageRoot, connectionId, "photo.jpg", 0, contents.length));
+
+            assertTrue("the remote must have received the file", received.await(10, TimeUnit.SECONDS));
+            assertArrayEquals("the bytes the remote received must be the file's own", contents, readBack);
+        }
+        finally {
+            host.shutdown();
+            server.close();
+        }
     }
 
     @Test
-    public void pollInboundEventReturnsNullWhenIdle() {
-        assertNull(tcpHost.pollInboundEvent());
+    public void sendingAFileFromOutsideTheSandboxIsRefused() throws Exception {
+        File storageRoot = java.nio.file.Files.createTempDirectory("psphere-tcp-sandbox").toFile();
+
+        ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
+        TcpHost host = new TcpHost();
+
+        Thread serverThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    server.accept();
+                }
+                catch (IOException ignored) {
+                }
+            }
+        }, "tcp-host-test-sandbox");
+        serverThread.setDaemon(true);
+        serverThread.start();
+
+        try {
+            String connectionId = connectionIdFrom(host.tcpConnect("127.0.0.1", server.getLocalPort()));
+
+            String result = host.tcpWriteFile(storageRoot, connectionId, "../outside.txt", 0, 10);
+
+            assertTrue("a path outside the sandbox must be refused, said: " + result,
+                result != null && result.length() > 0);
+        }
+        finally {
+            host.shutdown();
+            server.close();
+        }
+    }
+
+    @Test
+    public void bytesWrittenReachTheRemoteAndBytesSentBackReachTheEngine() throws Exception {
+        // The close above must not be bought at the price of a connection that no longer carries
+        // anything, so this covers the ordinary round trip on the same code path.
+        ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
+        TcpHost host = new TcpHost();
+
+        Thread serverThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Socket accepted = server.accept();
+                    accepted.setSoTimeout(10000);
+                    int first = accepted.getInputStream().read();
+                    accepted.getOutputStream().write(first + 1);
+                    accepted.getOutputStream().flush();
+                    accepted.close();
+                }
+                catch (IOException ignored) {
+                }
+            }
+        }, "tcp-host-test-echo");
+        serverThread.setDaemon(true);
+        serverThread.start();
+
+        try {
+            String connectionId = connectionIdFrom(host.tcpConnect("127.0.0.1", server.getLocalPort()));
+
+            assertEquals("writing to an open connection must succeed",
+                null, host.tcpWrite(connectionId, HostFunctions.base64Encode(new byte[] { 41 })));
+
+            String dataEvent = host.awaitInboundEvent(5000);
+            assertNotNull("the reply must reach the engine", dataEvent);
+            assertTrue("the reply must arrive as a data event, said: " + dataEvent,
+                dataEvent.contains("\"kind\":\"data\""));
+        }
+        finally {
+            host.shutdown();
+            server.close();
+        }
+    }
+
+    //
+    // An outgoing connection with a request on it counts as live work.
+    //
+    // The engine's run loop asks this to decide whether to block on the inbound queue or fall
+    // through to a one millisecond sleep and go round again. A task that only makes requests binds
+    // no listener, so before this it looked idle for as long as a reply was outstanding: measured on
+    // a Pixel 6 mid sync, the loop went round about seventeen hundred times in five seconds and
+    // spent nearly two of those five in those sleeps.
+    //
+    @Test
+    public void anOpenConnectionCountsAsLiveWorkAndAClosedOneDoesNot() throws Exception {
+        ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
+        TcpHost host = new TcpHost();
+
+        Thread serverThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Socket accepted = server.accept();
+                    accepted.setSoTimeout(10000);
+                    accepted.getInputStream().read();
+                    accepted.close();
+                }
+                catch (IOException ignored) {
+                }
+            }
+        }, "tcp-host-test-live");
+        serverThread.setDaemon(true);
+        serverThread.start();
+
+        try {
+            assertTrue("a host with no connection at all must not claim live work",
+                !host.hasLiveConnections());
+
+            String connectionId = connectionIdFrom(host.tcpConnect("127.0.0.1", server.getLocalPort()));
+            assertTrue("an open outgoing connection must count as live work", host.hasLiveConnections());
+
+            host.tcpClose(connectionId);
+            assertTrue("a closed connection must stop counting as live work, or the loop would park for ever",
+                !host.hasLiveConnections());
+        }
+        finally {
+            host.shutdown();
+            server.close();
+        }
     }
 }

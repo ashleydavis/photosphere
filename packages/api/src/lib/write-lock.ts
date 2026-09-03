@@ -2,6 +2,18 @@ import { IStorage } from "storage";
 import { log, retry, sleep } from "utils";
 
 //
+// How long one request against the lock file may take before it is retried.
+//
+// Thirty seconds, the retry default, is a desktop's idea of a long time. The lock file lives beside
+// the database, so on a phone syncing to S3 it is a network request queued behind whatever else that
+// connection is carrying. Every background sync pass on a Pixel 6 died with "Operation timed out
+// after 30000ms: () => rawStorage.releaseWriteLock(...)", thrown from the release in a finally
+// block, which killed the pass before it reached the half that pushes files. The library never went
+// up, and the reason was the lock being let go of rather than anything to do with the photos.
+//
+const LOCK_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
+
+//
 // Acquires the write lock for the database.
 // Only needed for writing to:
 // - the merkle tree file (files.dat).
@@ -55,12 +67,14 @@ export async function acquireWriteLock(rawStorage: IStorage, sessionId: string, 
 // Refreshes the write lock to prevent timeout.
 //
 export async function refreshWriteLock(rawStorage: IStorage, sessionId: string): Promise<void> {
-    await retry(() => rawStorage.refreshWriteLock(".db/write.lock", sessionId));
+    await retry(() => rawStorage.refreshWriteLock(".db/write.lock", sessionId), 3, 1_000, 2, LOCK_REQUEST_TIMEOUT_MS,
+        "Failed to refresh the database write lock");
 }
 
 //
 // Releases the write lock for the database.
 //
 export async function releaseWriteLock(rawStorage: IStorage): Promise<void> {
-    await retry(() => rawStorage.releaseWriteLock(".db/write.lock"));
+    await retry(() => rawStorage.releaseWriteLock(".db/write.lock"), 3, 1_000, 2, LOCK_REQUEST_TIMEOUT_MS,
+        "Failed to release the database write lock");
 }

@@ -61,6 +61,20 @@ export class LazyOriginStorage implements IStorage {
     }
 
     //
+    // Writes a stream whose SHA-256 the caller already knows, into the local store.
+    //
+    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength: number, sha256: Buffer): Promise<boolean> {
+        return this.local.writeStreamHashed(filePath, contentType, inputStream, contentLength, sha256);
+    }
+
+    //
+    // The SHA-256 the local store kept of a file, when it can say without sending the bytes back.
+    //
+    async storedHash(filePath: string): Promise<Buffer | undefined> {
+        return this.local.storedHash(filePath);
+    }
+
+    //
     // Reads a file from local storage. If the file is absent locally, fetches it from
     // origin, caches it locally, and returns the data.
     //

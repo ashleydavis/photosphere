@@ -239,7 +239,12 @@ wait_for_ready "$APP_PORT"
 # proven.
 wait_for_log "$TMP_DIR" "Gallery loaded: 3 assets" 240 || exit 1
 
-# Switching automatic import off has to leave nothing behind: no service, and with it no notification.
+# Switching automatic import off stops the import, and leaves the service up for syncing.
+#
+# The service hosts both loops and the two features are switched on separately, so it stops when
+# NEITHER is on and not before. Syncing is on by default and this test has opened a database, which
+# is what gives the sync loop something to push, so this first toggle must not take the service down:
+# doing so would stop background syncing for somebody who only switched automatic import off.
 #
 # The settings card is still on screen from when the toggle was switched on: nothing in this test
 # closed the configuration dialog, and it is drawn over whatever page the app is on rather than
@@ -248,6 +253,19 @@ wait_for_log "$TMP_DIR" "Gallery loaded: 3 assets" 240 || exit 1
 # and this would wait for it until it gave up.
 send_command "$APP_PORT" click '{"dataId":"auto-import-toggle"}' || exit 1
 wait_for_log "$TMP_DIR" "Stopping automatic import." || exit 1
+
+sleep 3
+if ! auto_import_service_running; then
+    log_error "The foreground service stopped when automatic import was switched off, taking background syncing down with it. They are switched on separately and only both being off may stop it."
+    adb shell dumpsys activity services "$APP_ID" 2>/dev/null | tr -d '\r' | head -30 || true
+    exit 1
+fi
+log_info "The foreground service is still running for syncing, with automatic import switched off"
+
+# Now with syncing switched off as well, nothing is left to run: no service, and with it no
+# notification.
+send_command "$APP_PORT" click '{"dataId":"sync-enabled-toggle"}' || exit 1
+wait_for_log "$TMP_DIR" "Stopping background syncing." || exit 1
 
 STOPPED=0
 for _ in 1 2 3 4 5 6 7 8 9 10; do
@@ -259,11 +277,11 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
 done
 
 if [ "$STOPPED" -ne 1 ]; then
-    log_error "The foreground service is still running after automatic import was switched off. Its notification stays up and the phone keeps scanning its photo library."
+    log_error "The foreground service is still running with both automatic import and syncing switched off. Its notification stays up and the phone keeps working for nothing."
     adb shell dumpsys activity services "$APP_ID" 2>/dev/null | tr -d '\r' | head -30 || true
     exit 1
 fi
-log_info "The foreground service stopped when automatic import was switched off"
+log_info "The foreground service stopped once neither automatic import nor syncing was on"
 
 check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1
 

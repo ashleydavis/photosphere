@@ -17,7 +17,7 @@ import type { IAutoImportSource } from "api/src/lib/auto-import-settings";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
 import { getAutoImportFileValue, isAutoImportFileKey, readAutoImportFile, setAutoImportFileValue } from "./mobile-auto-import-file";
 import { mobileAutoImportConfigFile } from "./mobile-auto-import-config-file";
-import { getSyncFileValue, isSyncFileKey, seedSyncSettingsFile, setSyncFileValue } from "./mobile-sync-file";
+import { getSyncFileValue, isSyncFileKey, recordSyncDatabase, seedSyncSettingsFile, setSyncFileValue } from "./mobile-sync-file";
 import { mobileSyncConfigFile } from "./mobile-sync-config-file";
 import { readPermissionState, resolveMediaPermission } from "./mobile-media-permission";
 import { JsEngine } from "./js-engine-plugin";
@@ -26,6 +26,7 @@ import { MobileSecretStore } from "./mobile-secure-store";
 import { createCapacitorSecureStore } from "./secure-store-plugin";
 import { importSharePayload as importReceivedShare, type IReceivedSharePayload } from "./mobile-share-receive";
 import { shouldSyncAfterEdit, SYNC_AFTER_EDIT_DELAY_MS, SYNC_TASK_TYPE } from "./mobile-edit-sync";
+import { planBackgroundWork } from "./background-work";
 import { mobileDatabasesConfigFile } from "./mobile-databases-config-file";
 import { LAST_DATABASE_KEY } from "user-interface/src/lib/last-database-config";
 import type { IConflictResolution } from "lan-share-core";
@@ -159,9 +160,15 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     const syncStartedCallbacksRef = useRef<Set<() => void>>(new Set());
     const syncCompletedCallbacksRef = useRef<Set<() => void>>(new Set());
 
-    // Whether this provider has told the native side to start the background import, so a settings
+    // Whether this provider has told the native side to start the background work, so a settings
     // write that changes nothing about it does not start it again.
-    const autoImportStartedRef = useRef<boolean>(false);
+    const backgroundWorkStartedRef = useRef<boolean>(false);
+
+    // What each feature was last known to be doing, so a change in either is said out loud once
+    // rather than on every settings write. They change independently: automatic import can be
+    // switched off while syncing carries on, and the service stays up for it.
+    const importRunningRef = useRef<boolean>(false);
+    const syncRunningRef = useRef<boolean>(false);
 
     // Called when one of the automatic import settings is written, so the background import is told
     // to start or stop straight away rather than finding out later.
@@ -207,10 +214,19 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         const name = known?.name ?? configStore.databaseBasename(databasePath);
         await configStore.addRecentDatabase(mobileDatabasesConfigFile, known ?? { name, description: "", path: databasePath });
         log.info(`Database opened: ${configStore.databaseBasename(databasePath)}`);
-        // Remember which database an edit made from here syncs. Nothing periodic starts with it: the
-        // loop that syncs on its own lives on the native side and pushes the database automatic
-        // import writes to, whether or not this one is open.
+        // Remember which database an edit made from here syncs, and record it where the native loop
+        // can read it, which is what makes background syncing work for the database the user is
+        // actually using rather than only for the one automatic import made.
         openDatabasePathRef.current = databasePath;
+        recordSyncDatabase(mobileSyncConfigFile, databasePath)
+            .then(() => {
+                // Opening a database can be the first thing that gives the background sync something
+                // to push, so the decision about whether to run it is worth taking again.
+                if (autoImportChangedRef.current) {
+                    autoImportChangedRef.current();
+                }
+            })
+            .catch(error => log.exception("Failed to record the database to sync", error as Error));
         // Notify the database-opened subscribers (the app-context reload and the sidebar's recent-database
         // refresh). This is the real production trigger; TEST_OPEN_DATABASE_EVENT is the test-only path.
         openedCallbacksRef.current.forEach(callback => callback(databasePath));
@@ -785,6 +801,14 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             }
             if (isSyncFileKey(key)) {
                 await setSyncFileValue(mobileSyncConfigFile, key, value as boolean | undefined);
+
+                // Switching syncing on is a reason to start the background work, and switching it
+                // off may be a reason to stop it, so the same callback the import settings use is
+                // rung here. Without it, syncing switched on while automatic import is off would
+                // wait for the next launch to have any effect.
+                if (autoImportChangedRef.current) {
+                    autoImportChangedRef.current();
+                }
                 return;
             }
             if (key === LAST_DATABASE_KEY) {
@@ -877,38 +901,40 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
 
         const ensureAutoImportOnce = async (): Promise<void> => {
             const contents = await readAutoImportFile(mobileAutoImportConfigFile);
-            const plan = planMobileAutoImport(contents.settings, contents.defaultDatabasePath);
+            const importPlan = planMobileAutoImport(contents.settings, contents.defaultDatabasePath);
+            const syncSettings = await mobileSyncConfigFile.read();
 
             if (cancelled) {
                 return;
             }
 
-            if (!plan.shouldRun) {
-                if (autoImportStartedRef.current) {
-                    log.info("Stopping automatic import.");
-                    autoImportStartedRef.current = false;
+            // Either feature is a reason to run the background work. They are switched on
+            // separately, and syncing must not need automatic import switched on as well: somebody
+            // who imports by hand and wants their edits pushed is not asking for their photo library
+            // to be scanned.
+            const syncEnabled = syncSettings.exists && syncSettings.settings.enabled;
+            const syncDatabasePath = syncSettings.databasePath ?? contents.defaultDatabasePath;
+            const decision = planBackgroundWork({
+                autoImportEnabled: importPlan.shouldRun,
+                syncEnabled,
+                hasDatabaseToSync: syncDatabasePath !== undefined && syncDatabasePath.length > 0,
+            });
+
+            const syncWanted = decision.shouldRun && syncEnabled;
+            let importWanted = importPlan.shouldRun;
+
+            // The photo permission, for automatic import only, and before anything is said about it
+            // starting: without it the library reads nothing, and the setting has to go back off
+            // rather than looking as though photos are being backed up when none can even be seen.
+            // Syncing never asks, because it moves what is already in the database.
+            if (decision.needsMediaPermission && !importRunningRef.current) {
+                const permission = readPermissionState(await JsEngine.requestMediaPermission());
+                const outcome = resolveMediaPermission(permission);
+                if (!outcome.enabled) {
+                    importWanted = false;
+                    await setAutoImportFileValue(mobileAutoImportConfigFile, AUTO_IMPORT_ENABLED_KEY, false);
+                    log.info(`Automatic import switched off: ${outcome.message}`);
                 }
-
-                // Asked for unconditionally rather than only when this provider started it: the
-                // service outlives the WebView, so a fresh WebView that finds the setting off has to
-                // be able to stop a service left running by the one before it.
-                await JsEngine.stopBackgroundImport();
-                return;
-            }
-
-            if (autoImportStartedRef.current) {
-                return;
-            }
-
-            // Asking for the permission before anything else: without it the library reads nothing,
-            // and the setting has to go back off rather than looking as though photos are being
-            // backed up when none can even be seen.
-            const permission = readPermissionState(await JsEngine.requestMediaPermission());
-            const outcome = resolveMediaPermission(permission);
-            if (!outcome.enabled) {
-                await setAutoImportFileValue(mobileAutoImportConfigFile, AUTO_IMPORT_ENABLED_KEY, false);
-                log.info(`Automatic import switched off: ${outcome.message}`);
-                return;
             }
 
             // Checked again here, not only at the top: the permission request takes a while, and the
@@ -917,13 +943,44 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
                 return;
             }
 
+            // Each feature's own change is said out loud, whether or not the service itself starts
+            // or stops, because they change independently: switching automatic import off while
+            // syncing carries on is a real event and this is the only place it is visible. Said only
+            // once a refused permission has had its say, so nothing claims an import is starting
+            // that is about to be switched off.
+            //
+            // The wording of the import's two lines is unchanged, because the mobile smoke tests
+            // wait on them and they still mean exactly what they did.
+            if (importWanted !== importRunningRef.current) {
+                importRunningRef.current = importWanted;
+                log.info(importWanted ? "Starting automatic import." : "Stopping automatic import.");
+            }
+            if (syncWanted !== syncRunningRef.current) {
+                syncRunningRef.current = syncWanted;
+                log.info(syncWanted ? "Starting background syncing." : "Stopping background syncing.");
+            }
+
+            if (!importWanted && !syncWanted) {
+                backgroundWorkStartedRef.current = false;
+
+                // Asked for unconditionally rather than only when this provider started it: the
+                // service outlives the WebView, so a fresh WebView that finds both settings off has
+                // to be able to stop a service left running by the one before it.
+                await JsEngine.stopBackgroundImport();
+                return;
+            }
+
             // The native side works out the rest for itself, pass by pass, by asking the
-            // plan-auto-import task: which database to import into, whether it has to be created
-            // first, and how long to wait between passes. None of that is decided here, because none
-            // of it can be while the app is off screen.
+            // plan-auto-import and plan-sync tasks: which database each one works on, whether it
+            // should run at all, and how long to wait between passes. None of that is decided here,
+            // because none of it can be while the app is off screen.
+            //
+            // Asked for every time either feature is wanted, not only the first time. A loop that
+            // ended, which is what the import's does when it is switched off, has to be started
+            // again when its feature comes back, and the service is what does that: starting one
+            // that is already running does nothing.
             await JsEngine.startBackgroundImport();
-            autoImportStartedRef.current = true;
-            log.info("Starting automatic import.");
+            backgroundWorkStartedRef.current = true;
         };
 
         // The progress line last written to the log, so the same one is not written again.

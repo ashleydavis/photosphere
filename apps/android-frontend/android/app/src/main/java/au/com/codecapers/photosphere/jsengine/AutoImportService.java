@@ -74,14 +74,6 @@ public final class AutoImportService extends Service {
     private SyncDriver syncDriver;
 
     //
-    // What keeps an import pass and a sync pass from running at the same time. One instance, shared
-    // by both drivers: an import holds the database write lock and a chain of engine slots for the
-    // length of a run, and a sync waiting inside that is what deadlocked the engine pool once
-    // already. See docs/mobile-background-tasks.md.
-    //
-    private final BackgroundPassLock passLock = new BackgroundPassLock();
-
-    //
     // The wake lock held while a pass is in flight.
     //
     private PowerManager.WakeLock wakeLock;
@@ -114,14 +106,19 @@ public final class AutoImportService extends Service {
             return START_NOT_STICKY;
         }
 
-        if (loopThread != null) {
+        if (loopThread != null && loopThread.isAlive()) {
             // Already running. Starting it again must not start a second loop: two loops would ask
             // for a pass each, and while the driver would refuse to run them at once, they would take
             // turns running passes back to back with no gap between them.
+            //
+            // A loop that has ENDED is a different case and is started again below. The import loop
+            // ends on its own when automatic import is switched off, and the service stays up for
+            // the sync loop; switching automatic import back on has to bring its loop back, and
+            // nothing else would.
             return START_NOT_STICKY;
         }
 
-        final AutoImportDriver startedDriver = new AutoImportDriver(new ServiceHost(), passLock);
+        final AutoImportDriver startedDriver = new AutoImportDriver(new ServiceHost());
         driver = startedDriver;
 
         loopThread = new Thread(new Runnable() {
@@ -132,19 +129,23 @@ public final class AutoImportService extends Service {
         }, "photosphere-auto-import");
         loopThread.start();
 
-        // The sync loop starts with the import loop and stops with it. Whether a sync actually runs
-        // is the plan-sync task's decision, pass by pass, and it says no while syncing is switched
-        // off: this service starting one is not the same as syncing being on.
-        final SyncDriver startedSyncDriver = new SyncDriver(new SyncServiceHost(), passLock);
-        syncDriver = startedSyncDriver;
+        // The sync loop runs beside the import loop, on its own thread, under the one notification
+        // and the one wake lock. Whether a sync actually runs is the plan-sync task's decision, pass
+        // by pass, and it says no while syncing is switched off: this service starting a loop is not
+        // the same as syncing being on. Started only if it is not already running, for the same
+        // reason as the import loop above.
+        if (syncLoopThread == null || !syncLoopThread.isAlive()) {
+            final SyncDriver startedSyncDriver = new SyncDriver(new SyncServiceHost());
+            syncDriver = startedSyncDriver;
 
-        syncLoopThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                startedSyncDriver.runLoop();
-            }
-        }, "photosphere-background-sync");
-        syncLoopThread.start();
+            syncLoopThread = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    startedSyncDriver.runLoop();
+                }
+            }, "photosphere-background-sync");
+            syncLoopThread.start();
+        }
 
         return START_NOT_STICKY;
     }
@@ -169,7 +170,7 @@ public final class AutoImportService extends Service {
             pauseLock.notifyAll();
         }
 
-        releaseWakeLock();
+        releaseWakeLockCompletely();
 
         JsEnginePlugin.releaseBackgroundImportHold();
 
@@ -211,9 +212,13 @@ public final class AutoImportService extends Service {
             ? new Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
             : new Notification.Builder(this);
 
+        // The wording covers both loops, because either one alone can be the reason this service is
+        // up: automatic import takes photos in, syncing pushes them out, and they are switched on
+        // separately. Saying "importing new photos" while only the sync loop is running would be a
+        // permanent notification telling the user something that is not happening.
         return builder
             .setContentTitle("Backing up your photos")
-            .setContentText("Photosphere is importing new photos in the background.")
+            .setContentText("Photosphere is backing up your photos in the background.")
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setOngoing(true)
             .build();
@@ -229,25 +234,38 @@ public final class AutoImportService extends Service {
                 return;
             }
             wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG);
-            wakeLock.setReferenceCounted(false);
+
+            // Reference counted, because the import loop and the sync loop each take this lock for
+            // the length of their own pass and the two passes overlap. Without counting, whichever
+            // pass finished first would drop the lock out from under the one still running, and the
+            // CPU would be free to sleep in the middle of it with the screen off.
+            wakeLock.setReferenceCounted(true);
         }
 
-        if (!wakeLock.isHeld()) {
-            // Held for as long as the pass takes, with no timeout on it. A first backup of a phone's
-            // whole photo library is over an hour of hashing (see docs/performance/mobile-auto-import-scan.md),
-            // and a timed lock would expire in the middle of it and let the CPU sleep with the screen
-            // off, which is the one thing this service exists to prevent. There is nothing to guard
-            // against by timing it out: a wake lock belongs to the process, so a process killed mid
-            // pass has its lock released by the platform.
-            wakeLock.acquire();
+        // Held for as long as the pass takes, with no timeout on it. A first backup of a phone's
+        // whole photo library is over an hour of hashing (see docs/performance/mobile-auto-import-scan.md),
+        // and a timed lock would expire in the middle of it and let the CPU sleep with the screen
+        // off, which is the one thing this service exists to prevent. There is nothing to guard
+        // against by timing it out: a wake lock belongs to the process, so a process killed mid
+        // pass has its lock released by the platform.
+        wakeLock.acquire();
+    }
+
+    //
+    // Gives back one hold on the wake lock, letting the phone sleep once the last one is given back.
+    //
+    private void releaseWakeLock() {
+        if (wakeLock != null && wakeLock.isHeld()) {
+            wakeLock.release();
         }
     }
 
     //
-    // Lets the phone sleep again.
+    // Gives back every hold on the wake lock, for when the service is going away and the loops that
+    // took them are not going to give them back themselves.
     //
-    private void releaseWakeLock() {
-        if (wakeLock != null && wakeLock.isHeld()) {
+    private void releaseWakeLockCompletely() {
+        while (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();
         }
     }
@@ -315,13 +333,16 @@ public final class AutoImportService extends Service {
         }
 
         //
-        // Automatic import has been switched off, so the service takes its notification down and
-        // stops. Nothing is left behind, which is what "switching it off leaves no trace" means.
+        // Automatic import has been switched off, so its loop has ended.
+        //
+        // The service is NOT stopped here. It hosts the sync loop as well, and the two features are
+        // switched on separately: stopping the service because the import was switched off would
+        // stop background syncing for somebody who never asked for that. The app stops the service
+        // when neither feature is on, which is the only moment nothing is left to run.
         //
         @Override
         public void onStopped() {
-            Log.i(LOG_TAG, "Automatic import is switched off, stopping the background import.");
-            stopSelf();
+            Log.i(LOG_TAG, "Automatic import is switched off. The sync loop carries on; the app stops this service when neither is on.");
         }
     }
 

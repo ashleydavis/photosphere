@@ -37,6 +37,10 @@ There are two costs, and they are far apart.
 
 The second cost is proportional to what changed rather than to the size of the database, which is what makes a frequent sync cheaper than a rare one: the same work is done either way, in smaller pieces.
 
+Every file that moves is checked against the hash of what was sent, and nothing has to compute that hash: it is already in the merkle tree, which is what the tree is made of. It goes up with the file, S3 checks the body against it and refuses a write that does not match, and it is then there to be read back in a HEAD request. A store that cannot check a hash (a filesystem, or encrypted storage, whose stored bytes are ciphertext and hash to something else) ignores it, and the file is read back and hashed as before.
+
+That matters most on a phone. The embedded engine's SHA-256 is pure JavaScript and runs at well under a megabyte a second, so a sync that hashed what it uploaded, or read every file back to hash it, spent almost all of its time hashing: measured on a Pixel 6, a single 100MB video held one upload for over a quarter of an hour without a byte reaching the server.
+
 The consequence to know about is that the cheap case is not free. A pass over a metered connection is a small network request, and a loop that asked every few seconds would spend a phone's battery and data allowance finding out that nothing had happened. That is what sets the gap between passes, not the cost of the sync itself.
 
 ## The command
@@ -63,7 +67,7 @@ Run it beside `psi add --watch` to get both halves. Each is separately useful an
 
 The desktop's debounce is what makes an edit reach the remote promptly without a sync per keystroke: rapid edits coalesce into one.
 
-Mobile has no debounce and nothing periodic in the app. The loop that runs one pass after another is native, and the only sync the app itself starts is the one after an edit: no timer, no interval, just the database that edit was made in, synced once. That is what stops an edit sitting on the phone until the loop's next pass, and it is the only way a database the user opened by hand reaches its origin at all, because the native loop pushes a different one (see below).
+Mobile waits the same ten seconds and has nothing periodic in the app. The loop that runs one pass after another is native, and the only sync the app itself starts is the one after the edits stop: no interval, just the database that edit was made in, synced once. The wait is what makes it one sync rather than a stream of them, because one user action writes many edits, and it keeps the enqueue out of the code that is persisting them.
 
 ## The two settings
 
@@ -83,8 +87,11 @@ The file holds the two toggles and the gap between passes:
 ```toml
 enabled = true
 only_on_wifi = true
+database_path = "photosphere-default"
 pause_between_runs_ms = 300000
 ```
+
+`database_path` is not a setting the user chooses: it is the database the app last opened, written as it is opened, so the background loop knows what to push.
 
 A gap of zero, a negative gap, or anything that is not a number falls back to the default, because a gap of zero is a loop with no gap at all.
 
@@ -109,13 +116,13 @@ The mobile background loop cannot ask the WebView what the connection is, becaus
 
 ## What gets synced in the background on mobile
 
-The database automatic import writes to, and only that one. It is the database that gains photos while the app is off screen, which is the whole point of syncing in the background, and its path is recorded in `auto-import.toml` where the native side can already read it.
+The database the app last opened, recorded in `sync.toml` as it is opened. Failing that, the one automatic import writes to, from `auto-import.toml`.
 
-Three consequences follow, and all three are limits rather than oversights:
+The opened one comes first because it is what the user is actually using, and because syncing must not need automatic import switched on to have anything to push. The import's database is the fallback for a phone that has been importing in the background without anybody opening it.
 
-- A phone with no default database recorded syncs nothing in the background. There is nothing to sync: the default database is created the first time automatic import runs.
-- A database opened by hand in the app is not pushed by the background loop, even when it has an origin. An edit made in it is synced at the moment it is made, and that is the whole of it: nothing pushes it on a timer, and nothing pushes it once the app is off screen.
-- **Background syncing on mobile runs only while automatic import is on.** The two loops live in one Android foreground service and start and stop together, because the platform requires a service to post an ongoing notification and a second service would mean a second notification for one feature. A phone with automatic import switched off syncs when the app is open and an edit is made, and not otherwise.
+One consequence follows: a phone that has never opened a database syncs nothing in the background, because there is nothing to push yet. Opening one is what records it.
+
+**Syncing does not need automatic import.** The two are switched on separately and either one is a reason for the background work to run: a phone that imports by hand and syncs gets background syncing, and switching automatic import off leaves the sync loop running. They share one Android foreground service, because the platform requires a service to post an ongoing notification and a second service would mean a second notification for one feature, but sharing a service is not sharing a switch. The service stops when neither is on.
 
 ## While the app is not on screen
 
@@ -142,13 +149,15 @@ Two sync passes at once is unreachable rather than unlikely, by the same constru
 
 It is all opt-in and stays opt-in. Switching syncing off stops the loop, and on iOS the background request is withdrawn rather than left with the system.
 
-## A sync and an import never overlap
+## A sync runs while an import is running
 
-An import pass holds the database write lock for as long as it runs, and it holds engine slots: `import-assets` holds one for the whole run and the `hash-file` and `upload-asset` tasks it queues hold more, all inside `EnginePool.POOL_SIZE`. A sync started in the middle of one would sit in a slot of its own waiting for a write lock the import is not going to release for a while, which is the arrangement that once deadlocked the pool silently, with the feature switched on and the counts at zero forever. See [Mobile background tasks](mobile-background-tasks.md) for what a slot is and why running out is a hang rather than a slowdown.
+The two background loops are independent and their passes overlap. That is the point: a first backup of a whole photo library is a single import pass lasting the better part of an hour, and syncing has to push what that pass has already imported rather than wait for the end of it.
 
-So the two background loops take a single lock around a pass, and a loop that cannot take it skips its pass and tries again after its usual gap. Skipping rather than waiting is what keeps a sync from queueing behind a long import: a first backup of a whole photo library takes the better part of an hour, and a sync thread parked on a lock for that long is a thread that cannot notice the app being switched off.
+The two loops did once take a single lock around a whole pass, so a sync skipped its pass whenever an import was running. Measured against a real library on a Pixel 6, 2,292 assets, that meant no sync at all: the import pass ran for over half an hour, the next one started a few seconds after it, and the sync loop skipped every pass and pushed nothing.
 
-The consequence to know about is that a phone doing its first full import pushes nothing until that import pass ends. After that, import passes are short and the two loops interleave.
+What the two contend on is the database write lock, and neither holds it for a whole pass. `import-assets` takes it per batch of imported assets and releases it in a `finally`, and `syncDatabases` takes it around the pull and again around the push. A sync that finds the lock held retries for a few seconds and then fails that pass with the reason in the log; the loop waits its usual gap and asks again, and the pass after that lands in one of the gaps between the import's batches. Neither loop can be starved by the other for good, because neither holds the lock for anything like the length of a pass.
+
+Engine slots are not contended either. A sync pass queues one `sync-database` task and that task queues no children, so it occupies one slot of `EnginePool.POOL_SIZE` for its own length and cannot exhaust the pool underneath an import. See [Mobile background tasks](mobile-background-tasks.md) for what a slot is and why running out is a hang rather than a slowdown.
 
 ## What each platform can do
 
@@ -156,7 +165,7 @@ The consequence to know about is that a phone doing its first full import pushes
 |---|---|---|---|
 | Sync on demand | Yes | Yes | Yes |
 | Sync on a timer | With `--watch` | Yes | Yes |
-| Sync while the app is not on screen | Not applicable | Not applicable | While automatic import is on: Android continuously, iOS when the system allows |
+| Sync while the app is not on screen | Not applicable | Not applicable | Android continuously, iOS when the system allows |
 | Enable syncing and Wi-Fi-only settings | No, the command decides | Yes | Yes |
 | Refuse over cellular | No connection type is reported | No connection type is reported | Yes |
 | Consolidate an unrelated remote | Yes | Yes | No |
@@ -182,8 +191,7 @@ Unit tests sit beside the code under `src/test/`.
 | `packages/mobile-worker/src/test/lib/plan-sync.worker.test.ts` | What the background loop is told to do: every way a sync is refused, and the way it runs. |
 | `packages/mobile-worker/src/test/shims/network-status.test.ts` | The connection type crossing from native into that rule, and an unrecognised one becoming "unknown" rather than stopping syncing. |
 | `packages/mobile-frontend/src/test/mobile-edit-sync.test.ts` | The sync an edit starts, and that it still asks whether syncing is permitted. |
-| `apps/android-frontend/.../BackgroundPassLockTest.java` | The lock that keeps a sync pass and an import pass apart. |
-| `apps/android-frontend/android/app/src/test/java/au/com/codecapers/photosphere/jsengine/SyncDriverTest.java` | The Android loop's decisions on the JVM, with no device: a plan saying stop ends it, a failed pass does not, and a second pass cannot start while one is in flight. |
+| `apps/android-frontend/android/app/src/test/java/au/com/codecapers/photosphere/jsengine/SyncDriverTest.java` | The Android loop's decisions on the JVM, with no device: a plan saying stop ends it, a failed pass does not, a second pass cannot start while one is in flight, and a sync pass runs while an import pass is held open. |
 | `apps/ios-frontend/ios/App/AppTests/` | The same decisions for the iOS driver, and the connection-type reporting. |
 
 End to end:

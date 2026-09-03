@@ -110,13 +110,19 @@ export async function planSyncHandler(_data: object, _context: ITaskContext): Pr
         return refuse(`the connection is "${connectionType}" and syncing is not allowed on it`, settings, pauseBetweenRunsMs);
     }
 
-    // The database automatic import writes to, which is the one that gains photos while the app is
-    // off screen. It is recorded in auto-import.toml rather than in the syncing settings, because a
-    // fact recorded in two files is a fact that goes out of step.
+    // The database the app last opened, and failing that the one automatic import writes to.
+    //
+    // The opened one comes first because it is what the user is actually using, and because syncing
+    // must not need automatic import switched on to have anything to push: the two are switched on
+    // separately. The import's database is the fallback for a phone that has imported in the
+    // background without anybody opening it.
     const autoImportConfig = await readAutoImportConfigFile(AUTO_IMPORT_CONFIG_PATH);
-    const databasePath = autoImportConfig.defaultDatabasePath;
+    const recordedPath = syncConfig.databasePath;
+    const databasePath = recordedPath !== undefined && recordedPath.length > 0
+        ? recordedPath
+        : autoImportConfig.defaultDatabasePath;
     if (databasePath === undefined || databasePath.length === 0) {
-        return refuse("no default database has been created yet", settings, pauseBetweenRunsMs);
+        return refuse("no database has been opened to sync", settings, pauseBetweenRunsMs);
     }
 
     // A database with no origin has nowhere to sync to. The sync task itself would skip it, having

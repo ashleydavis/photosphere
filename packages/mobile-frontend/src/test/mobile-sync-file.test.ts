@@ -44,12 +44,14 @@ class FakeSyncConfigFile implements ISyncConfigFile {
         if (!this.contents) {
             return {
                 settings: { ...DEFAULT_SYNC_SETTINGS },
+                databasePath: undefined,
                 pauseBetweenRunsMs: DEFAULT_SYNC_PAUSE_MS,
                 exists: false,
             };
         }
         return {
             settings: { ...this.contents.settings },
+            databasePath: this.contents.databasePath,
             pauseBetweenRunsMs: this.contents.pauseBetweenRunsMs,
             exists: true,
         };

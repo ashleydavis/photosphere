@@ -84,3 +84,79 @@ describe("outbound request body timing", () => {
         expect(wire.indexOf("payload")).toBeGreaterThan(wire.indexOf("\r\n\r\n"));
     });
 });
+
+//
+// A file handed over as the body must reach the wire whenever the caller hands it over, exactly as a
+// body written in bytes must.
+//
+// This is the same defect as above in the other half of the pair, and it was missed because the two
+// halves were written apart. `write` sends straight to the transport once the head has gone;
+// `writeFileBody` only recorded the file for `sendRequest` to send, and `sendRequest` had already
+// run. The AWS SDK pipes a PutObject body after the head (it waits for the server's 100-continue
+// first), so a photo uploaded from a phone went out as a PUT declaring its Content-Length over no
+// body at all. The server then held its lock on the object waiting for bytes that were never coming
+// and refused the upload with "A timeout occurred while trying to lock a resource, please reduce
+// your request rate": measured against MinIO, about one photo in eight, each costing three attempts
+// and a minute and a half of a sync that had nothing else wrong with it. Videos were never hit,
+// because a multipart upload sends its parts as bytes through `write`.
+//
+describe("outbound request file body timing", () => {
+    let filesSent: string[];
+
+    beforeEach(() => {
+        filesSent = [];
+        (globalThis as any).host = {
+            platform: "android",
+            tcpConnect: () => JSON.stringify({ connectionId: "C-file" }),
+            tcpWrite: (): null => null,
+            tcpWriteFile: (_connectionId: string, path: string, offset: number, length: number): null => {
+                filesSent.push(`${path}:${offset}:${length}`);
+                return null;
+            },
+            tcpClose: (): null => null,
+        };
+    });
+
+    afterEach(() => {
+        delete (globalThis as any).host;
+    });
+
+    //
+    // Drains pending microtasks, which is when the head is written.
+    //
+    async function flushMicrotasks(times: number): Promise<void> {
+        for (let index = 0; index < times; index++) {
+            await Promise.resolve();
+        }
+    }
+
+    test("a file handed over before the head goes out reaches the wire", async () => {
+        const outboundRequest: any = request({ hostname: "minio.test", port: 9000, path: "/obj", method: "PUT", headers: { "content-length": "2700292" } });
+        expect(outboundRequest.writeFileBody("/photos/one.jpg", 0, 2700292)).toBe(true);
+
+        await flushMicrotasks(20);
+        expect(filesSent).toEqual([ "/photos/one.jpg:0:2700292" ]);
+    });
+
+    test("a file handed over after the head goes out still reaches the wire", async () => {
+        const outboundRequest: any = request({ hostname: "minio.test", port: 9000, path: "/obj", method: "PUT", headers: { "content-length": "2700292" } });
+
+        // A real tick, so the head has certainly gone before the file is handed over. This is the AWS
+        // SDK's ordering when it pipes a PutObject body.
+        await new Promise(resolve => globalThis.setTimeout(resolve, 5));
+        expect(outboundRequest.writeFileBody("/photos/one.jpg", 0, 2700292)).toBe(true);
+
+        await flushMicrotasks(20);
+        expect(filesSent).toEqual([ "/photos/one.jpg:0:2700292" ]);
+    });
+
+    test("a file handed over after the head goes out is sent once, not twice", async () => {
+        const outboundRequest: any = request({ hostname: "minio.test", port: 9000, path: "/obj", method: "PUT", headers: { "content-length": "2700292" } });
+
+        await new Promise(resolve => globalThis.setTimeout(resolve, 5));
+        outboundRequest.writeFileBody("/photos/one.jpg", 0, 2700292);
+
+        await flushMicrotasks(20);
+        expect(filesSent.length).toBe(1);
+    });
+});

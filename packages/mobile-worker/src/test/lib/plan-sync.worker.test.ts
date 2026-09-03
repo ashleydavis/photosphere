@@ -70,6 +70,7 @@ async function writeSyncSettings(enabled: boolean, onlyOnWifi: boolean): Promise
             enabled,
             onlyOnWifi,
         },
+        databasePath: undefined,
         pauseBetweenRunsMs: DEFAULT_SYNC_PAUSE_MS,
     });
     await fs.writeFile(path.join(tempDir, SYNC_CONFIG_PATH), contents, "utf8");
@@ -249,6 +250,7 @@ describe("plan-sync", () => {
                 enabled: true,
                 onlyOnWifi: false,
             },
+            databasePath: undefined,
             pauseBetweenRunsMs: 90000,
         });
         await fs.writeFile(path.join(tempDir, SYNC_CONFIG_PATH), contents, "utf8");

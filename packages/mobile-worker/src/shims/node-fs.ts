@@ -21,6 +21,20 @@ export const promises = fsPromisesModule;
 // `ReadStream` exposes and what the AWS SDK's body-length helper reads to size a file-backed body.
 //
 //
+// How much of a file is fetched across the engine bridge at a time.
+//
+// A file used to come back in a single call, whatever its size, and a base64 string is a third
+// bigger again than the bytes it carries. That is survivable for a photo and fatal for a video:
+// syncing a real library from a Pixel 6 died on a 100MB video with "Failed to allocate a 105478648
+// byte allocation ... growth limit 268435456", and every pass after it died the same way on the same
+// file, so nothing beyond that video ever reached the origin.
+//
+// Four megabytes is a chunk small enough that its base64 copy is nothing against the heap, and large
+// enough that a large file does not cost thousands of trips across the bridge.
+//
+const CHUNK_BYTES = 4 * 1024 * 1024;
+
+//
 // Options accepted by createReadStream: a byte range to read rather than the whole file.
 //
 export interface IReadStreamOptions {
@@ -43,9 +57,20 @@ export class ReadStream extends Readable {
     private readonly range: IReadStreamOptions;
 
     //
-    // True once the bytes have been read and pushed, so they are read once and only once.
+    // True once every byte asked for has been pushed, so the end is only declared once.
     //
     private hasReadFile = false;
+
+    //
+    // The next byte to read, moving through the file a chunk at a time.
+    //
+    private nextOffset: number | undefined = undefined;
+
+    //
+    // The last byte to read, inclusive. Worked out on the first read, from the range or the file's
+    // own size.
+    //
+    private lastOffset = 0;
 
     //
     // Builds a stream over the file at the given path, WITHOUT reading it.
@@ -66,23 +91,83 @@ export class ReadStream extends Readable {
     //
     // Reads the file, or the range of it that was asked for, the first time the stream is consumed.
     //
+    //
+    // Hands the file itself to a destination that can take one, rather than reading it.
+    //
+    // An upload is a file piped into an HTTP request, and the request shim can have the bytes sent
+    // from disk to the socket natively. Everything else crosses the host bridge as base64, a third
+    // larger than the bytes it carries, built on one side and decoded on the other: measured on a
+    // Pixel 6, an upload paid that twice, once here and once on the way out, and managed about three
+    // megabytes a minute with the network idle nine tenths of the time.
+    //
+    // A destination that cannot take a file (anything but the http shim's request) is piped the
+    // ordinary way, chunk by chunk.
+    //
+    pipe(destination: any): any {
+        if (destination && typeof destination.writeFileBody === "function") {
+            const start = this.range.start ?? 0;
+            const end = this.range.end !== undefined ? this.range.end : statSync(this.path).size - 1;
+            if (destination.writeFileBody(this.path, start, end - start + 1)) {
+                this.hasReadFile = true;
+                this.emit("end");
+                if (typeof destination.end === "function") {
+                    destination.end();
+                }
+                return destination;
+            }
+        }
+
+        return super.pipe(destination);
+    }
+
     protected _read(): void {
         if (this.hasReadFile) {
             return;
         }
-        this.hasReadFile = true;
 
-        const base64 = this.range.end === undefined
-            ? callHost(() => getFsHost().fsReadFile(this.path))
-            : callHost(() => getFsHost().fsReadFileRange(this.path, this.range.start ?? 0, (this.range.end as number) - (this.range.start ?? 0) + 1));
+        if (this.nextOffset === undefined) {
+            this.nextOffset = this.range.start ?? 0;
+
+            if (this.range.end !== undefined) {
+                this.lastOffset = this.range.end;
+            }
+            else {
+                let size: number;
+                try {
+                    size = statSync(this.path).size;
+                }
+                catch (error) {
+                    this.hasReadFile = true;
+                    this.emit("error", error);
+                    return;
+                }
+                this.lastOffset = size - 1;
+            }
+        }
+
+        const remaining = this.lastOffset - this.nextOffset + 1;
+        if (remaining <= 0) {
+            this.hasReadFile = true;
+            this.push(null);
+            return;
+        }
+
+        const length = Math.min(remaining, CHUNK_BYTES);
+        const base64 = callHost(() => getFsHost().fsReadFileRange(this.path, this.nextOffset as number, length));
 
         if (base64 === null || base64 === undefined) {
+            this.hasReadFile = true;
             this.emit("error", codedError("ENOENT", `ENOENT: no such file or directory, open '${this.path}'`));
             return;
         }
 
+        this.nextOffset += length;
         this.push(base64ToBuffer(base64));
-        this.push(null);
+
+        if (this.nextOffset > this.lastOffset) {
+            this.hasReadFile = true;
+            this.push(null);
+        }
     }
 }
 

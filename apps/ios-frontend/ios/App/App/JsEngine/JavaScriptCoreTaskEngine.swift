@@ -8,7 +8,12 @@ import JavaScriptCore
 // newly-armed short timer from waiting a full long interval and bounds an idle long-running task's
 // re-check latency.
 //
-let TIMER_PUMP_MAX_DELAY_MS = 200
+// One millisecond, not the two hundred it was. This delay is paid whenever a timer is pending, and
+// something almost always has one: the AWS SDK arms a request timeout around every call it makes,
+// and the loop advances the task's promises a step at a time. Measured on the Android engine, whose
+// loop works the same way, a file took nineteen seconds of which the upload was under two tenths of
+// a second, and the rest was the loop parking between awaits.
+let TIMER_PUMP_MAX_DELAY_MS = 1
 
 //
 // Errors raised while standing up or running a JavaScriptCore engine. These become the task's

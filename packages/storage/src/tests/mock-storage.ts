@@ -6,7 +6,14 @@ export class MockStorage implements IStorage {
     private files: Map<string, { data: Buffer, contentType?: string }> = new Map();
     private directories: Set<string> = new Set();
     private locks: Map<string, IWriteLockInfo> = new Map();
-    
+
+    //
+    // What storedHash answers for a path, empty unless a test puts something here. A store that
+    // keeps no hash of its own (a filesystem) answers undefined, which is what an empty map does.
+    //
+    public storedHashes: Map<string, Buffer> = new Map();
+
+
     constructor(public readonly location: string = "memory://mock", public readonly isReadonly: boolean = false) {}
 
     async isEmpty(path: string): Promise<boolean> {
@@ -136,12 +143,29 @@ export class MockStorage implements IStorage {
         if (!file) {
             return undefined;
         }
-        
+
         return {
             contentType: file.contentType,
             length: file.data.length,
             lastModified: new Date()
         };
+    }
+
+    //
+    // Writes the stream and remembers the hash it was given, so storedHash can answer with it the
+    // way a store that keeps one does.
+    //
+    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength: number, sha256: Buffer): Promise<boolean> {
+        await this.writeStream(filePath, contentType, inputStream, contentLength);
+        this.storedHashes.set(filePath, sha256);
+        return true;
+    }
+
+    //
+    // The hash the store kept, when it kept one.
+    //
+    async storedHash(filePath: string): Promise<Buffer | undefined> {
+        return this.storedHashes.get(filePath);
     }
 
     async readStream(filePath: string): Promise<Readable> {

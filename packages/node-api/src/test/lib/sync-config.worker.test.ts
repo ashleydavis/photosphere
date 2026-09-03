@@ -190,6 +190,7 @@ describe("mobile sync.toml", () => {
                 enabled: true,
                 onlyOnWifi: false,
             },
+            databasePath: "photosphere-default",
             pauseBetweenRunsMs: 120000,
         });
 
@@ -199,6 +200,7 @@ describe("mobile sync.toml", () => {
 
         expect(contents.settings.enabled).toBe(true);
         expect(contents.settings.onlyOnWifi).toBe(false);
+        expect(contents.databasePath).toBe("photosphere-default");
         expect(contents.pauseBetweenRunsMs).toBe(120000);
     });
 

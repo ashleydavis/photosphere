@@ -87,6 +87,15 @@ export interface ISyncFile {
     // The settings automatic syncing runs with.
     settings: ISyncSettings;
 
+    // The sandbox-relative path of the database the background sync pushes, or undefined when no
+    // database has been opened yet.
+    //
+    // Recorded when a database is opened, so background syncing works for whatever the user is
+    // actually using rather than only for the one automatic import made. Without it the background
+    // sync would have nothing to push until automatic import had been switched on at least once,
+    // which would tie two features together that are switched on separately.
+    databasePath: string | undefined;
+
     // The gap between background sync passes, in milliseconds. Already resolved, so a file asking
     // for zero or a negative gap comes back holding the default.
     pauseBetweenRunsMs: number;

@@ -18,6 +18,38 @@ import { Buffer } from "buffer";
 import { connect as netConnect, createServer as netCreateServer, type Server as NetServer, type Socket } from "./node-net";
 
 //
+// How much of a request body is handed to the transport at a time.
+//
+// Each write crosses the host bridge as a base64 string, a third larger than the bytes it carries and
+// held whole while it is handed over, so the size of a write is the size of the allocation it costs.
+// One megabyte is small against the engine's heap and large enough that a big upload is not thousands
+// of trips.
+//
+const OUTBOUND_BODY_CHUNK_BYTES = 1024 * 1024;
+
+//
+// How long a request has to take before it is worth saying where its time went.
+//
+// A quick request has nothing to explain. A slow one is the only place a sync's cost can be split
+// into the part that is the network and the part that is everything else.
+//
+const SLOW_REQUEST_MS = 1000;
+
+//
+// A range of a file to be sent as a request body, straight from disk.
+//
+export interface IFileBody {
+    // The path of the file to send.
+    path: string;
+
+    // The first byte to send.
+    offset: number;
+
+    // How many bytes to send.
+    length: number;
+}
+
+//
 // A registered event listener.
 //
 type HttpListener = (...args: any[]) => void;
@@ -723,6 +755,10 @@ export interface IClientTransport {
     // Sends bytes over the connection.
     write(chunk: Buffer | Uint8Array | string): boolean;
 
+    // Sends a range of a file over the connection, read from disk natively so the bytes never enter
+    // the engine. Absent from a transport that cannot do it, which is why it is optional.
+    writeFile?(path: string, offset: number, length: number): boolean;
+
     // Closes the connection.
     destroy(): void;
 
@@ -836,6 +872,28 @@ export class ClientRequest extends HttpEmitter {
     private bodyChunks: Buffer[] = [];
 
     //
+    // A file to send as the body instead of buffered chunks, when the source of the body is a file
+    // on disk. Undefined for an ordinary request.
+    //
+    private fileBody: IFileBody | undefined = undefined;
+
+    //
+    // Events this request has already raised, so a listener attached afterwards is still told.
+    //
+    // This shim sends the request as soon as it has it, where Node waits to be told to send the body,
+    // so a reply can arrive before the caller has finished attaching its listeners. The AWS SDK
+    // attaches `continue` and `response` listeners after writing the request and then waits up to six
+    // seconds for one of them: measured on a Pixel 6, every request paid that wait in full, which was
+    // nearly all of the nineteen seconds a file took to sync.
+    //
+    private readonly eventsAlreadyRaised: Set<string> = new Set();
+
+    //
+    // The response that was dispatched, handed to a `response` listener attached after the event.
+    //
+    private lastResponse: any = undefined;
+
+    //
     // True once the request has been aborted via destroy().
     //
     private aborted = false;
@@ -856,6 +914,24 @@ export class ClientRequest extends HttpEmitter {
     // straight out rather than onto bodyChunks, which nothing reads again.
     //
     private headSent = false;
+
+    //
+    // When this request was made, when its head finished going out, and when its body did. Read only
+    // by the one line that says where a slow request's time went.
+    //
+    private readonly startedAt: number = Date.now();
+
+    // When the request line and headers had been handed to the transport.
+    private headWrittenAt: number = Date.now();
+
+    // When the body had been handed to the transport, which for a file is when it had all gone.
+    private bodyWrittenAt: number = Date.now();
+
+    // The method and path, kept for that same line, since the options are not held anywhere else.
+    private methodForLogging: string = "";
+
+    // The path this request asked for, kept for the same reason.
+    private pathForLogging: string = "";
 
     //
     // Opens the connection and schedules the send. `socket` and, for TLS, `secureConnect` are raised on
@@ -905,11 +981,81 @@ export class ClientRequest extends HttpEmitter {
         if (this.headSent) {
             if (!this.aborted) {
                 this.transport.write(buffer);
+                this.bodyWrittenAt = Date.now();
                 this.restartInactivityTimer();
             }
             return true;
         }
         this.bodyChunks.push(buffer);
+        return true;
+    }
+
+    //
+    // Sends a range of a file as the body, rather than bytes written in.
+    //
+    // Called by the fs shim's read stream when it is piped into a request, which is what an upload
+    // of a file is. The bytes then go from disk to the socket natively and never enter the engine:
+    // everything else crosses the host bridge as base64, a third larger than the bytes it carries,
+    // built on one side and decoded on the other. Measured on a Pixel 6, an upload paid that twice,
+    // once to read the file and once to send it, and managed about three megabytes a minute.
+    //
+    // Returns false when this request cannot send a file that way, so the caller pipes the bytes in
+    // as it otherwise would. A TLS connection is one such case: the file would have to be encrypted
+    // on the way out, which is work only the engine can do.
+    //
+    //
+    // Registers a listener, telling it straight away about an event this request has already raised.
+    //
+    on(eventName: string, listener: (...args: any[]) => void): this {
+        super.on(eventName, listener);
+
+        if ((eventName === "continue" || eventName === "response") && this.eventsAlreadyRaised.has(eventName)) {
+            Promise.resolve().then(() => listener(this.lastResponse));
+        }
+
+        return this;
+    }
+
+    //
+    // Raises an event and remembers that it happened, for a listener attached later.
+    //
+    emit(eventName: string, ...args: any[]): boolean {
+        if (eventName === "continue" || eventName === "response") {
+            this.eventsAlreadyRaised.add(eventName);
+            if (eventName === "response") {
+                this.lastResponse = args[0];
+            }
+        }
+        return super.emit(eventName, ...args);
+    }
+
+    writeFileBody(path: string, offset: number, length: number): boolean {
+        if (this.transport.writeFile === undefined) {
+            return false;
+        }
+
+        // Straight out once the head has gone, and buffered until then, exactly as `write` above
+        // does with bytes. Both are needed for the same reason: the head is written on a fixed chain
+        // of microtasks from the constructor, and the AWS SDK pipes a PutObject body after that,
+        // because it waits for the server's 100-continue first. Recording the file for `sendRequest`
+        // alone meant `sendRequest` had already run and nothing ever read it, so a photo went out as
+        // a PUT declaring its Content-Length over no body at all. The server held its lock on the
+        // object waiting for bytes that were never coming and refused the upload with "A timeout
+        // occurred while trying to lock a resource, please reduce your request rate".
+        if (this.headSent) {
+            if (!this.aborted) {
+                this.transport.writeFile(path, offset, length);
+                this.bodyWrittenAt = Date.now();
+                this.restartInactivityTimer();
+            }
+            return true;
+        }
+
+        this.fileBody = {
+            path,
+            offset,
+            length,
+        };
         return true;
     }
 
@@ -939,7 +1085,14 @@ export class ClientRequest extends HttpEmitter {
         if (callback) {
             this.on("timeout", callback);
         }
-        this.inactivityTimeoutMs = timeoutMs;
+
+        // Zero means no timeout, as it does in Node, and it is what the AWS SDK asks for when no
+        // socket timeout is configured. Taken literally it is a timer that fires the moment traffic
+        // pauses, which is every request: measured on a Pixel 6 syncing photos to S3, each upload
+        // reached the bucket whole and was then thrown away by a timeout raised while waiting for
+        // the response, reported as "the request socket timed out after 0 ms of inactivity". The
+        // sync retried the same file for ever and the library never went up.
+        this.inactivityTimeoutMs = timeoutMs > 0 ? timeoutMs : undefined;
         this.restartInactivityTimer();
         return this;
     }
@@ -1026,11 +1179,29 @@ export class ClientRequest extends HttpEmitter {
 
         this.setupResponseParsing(callback, method);
 
+        this.methodForLogging = method;
+        this.pathForLogging = options.path || "/";
         this.transport.write(Buffer.from(head, "utf8"));
         this.headSent = true;
-        if (body.length > 0) {
-            this.transport.write(body);
+        this.headWrittenAt = Date.now();
+
+        // The body goes out in pieces rather than in one call.
+        //
+        // Every write crosses the host bridge as a base64 string, which is a third larger again than
+        // the bytes it carries, and it is built and held whole while the engine hands it over. A 79MB
+        // video written in one call is a 105MB string on a heap that tops out at 256MB: the upload
+        // crawled or died, and the server, left waiting on a body that arrived in fits, refused it
+        // with "A timeout occurred while trying to lock a resource, please reduce your request rate".
+        if (this.fileBody !== undefined && this.transport.writeFile !== undefined) {
+            this.transport.writeFile(this.fileBody.path, this.fileBody.offset, this.fileBody.length);
         }
+        else {
+            for (let offset = 0; offset < body.length; offset += OUTBOUND_BODY_CHUNK_BYTES) {
+                this.transport.write(body.subarray(offset, Math.min(offset + OUTBOUND_BODY_CHUNK_BYTES, body.length)));
+            }
+        }
+
+        this.bodyWrittenAt = Date.now();
 
         // The request is on the wire, so the idle clock starts here.
         this.restartInactivityTimer();
@@ -1072,14 +1243,49 @@ export class ClientRequest extends HttpEmitter {
                 return;
             }
             buffer = Buffer.concat([buffer, chunk]);
-            const terminator = buffer.indexOf("\r\n\r\n");
-            if (terminator === -1) {
+
+            // Interim 1xx responses are skipped over: they are not the answer, and the real one
+            // follows.
+            //
+            // The AWS SDK asks for "Expect: 100-continue" on every streamed upload, so a server that
+            // honours it answers "HTTP/1.1 100 Continue" first and sends its real response after the
+            // body. Taken as the response, that is a reply with no headers of any use, which is how a
+            // multipart upload from a phone failed with "Part 1 is missing ETag in UploadPart
+            // response": the ETag was in the response this had already thrown away. A loop rather
+            // than a single skip, because the interim and the real response can arrive together.
+            let terminator = buffer.indexOf("\r\n\r\n");
+            let parsed = terminator === -1 ? undefined : parseResponseHead(buffer.subarray(0, terminator).toString("utf8"));
+            while (parsed !== undefined && parsed.statusCode >= 100 && parsed.statusCode < 200) {
+                // The caller is told, because a caller that asked for "Expect: 100-continue" is
+                // waiting for exactly this before it sends a body.
+                if (parsed.statusCode === 100) {
+                    this.emit("continue");
+                }
+                buffer = buffer.subarray(terminator + 4);
+                terminator = buffer.indexOf("\r\n\r\n");
+                parsed = terminator === -1 ? undefined : parseResponseHead(buffer.subarray(0, terminator).toString("utf8"));
+            }
+
+            if (parsed === undefined) {
                 return;
             }
-            const headerText = buffer.subarray(0, terminator).toString("utf8");
+
             const remainder = buffer.subarray(terminator + 4);
-            const parsed = parseResponseHead(headerText);
             headParsed = true;
+
+            // Where a slow request's time went, split three ways: everything before the head was
+            // written, the body going out, and the wait for the server to answer.
+            //
+            // Nothing else can say this. A sync's own timings cover a whole upload as one number,
+            // and an upload is all three of these. Said only for a request that took a noticeable
+            // time, because a quick one has nothing to explain.
+            const requestElapsedMs = Date.now() - this.startedAt;
+            if (requestElapsedMs >= SLOW_REQUEST_MS) {
+                console.log(`${this.methodForLogging} ${this.pathForLogging} took ${requestElapsedMs}ms: `
+                    + `${this.headWrittenAt - this.startedAt}ms to the head, `
+                    + `${this.bodyWrittenAt - this.headWrittenAt}ms sending the body, `
+                    + `${Date.now() - this.bodyWrittenAt}ms waiting for the answer.`);
+            }
 
             response = new IncomingMessage("", "", parsed.headers, this.transport as unknown as Socket) as IClientResponse;
             response.statusCode = parsed.statusCode;

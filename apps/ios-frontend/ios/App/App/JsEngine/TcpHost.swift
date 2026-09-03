@@ -177,6 +177,17 @@ final class TcpHost {
             let base64 = data.base64EncodedString()
             enqueue("{\"kind\":\"data\",\"connectionId\":\"\(connectionId)\",\"base64\":\"\(base64)\"}")
         }
+
+        // The socket is closed here, by the side that has just finished reading it, rather than left
+        // for the engine to close from JavaScript.
+        //
+        // A connection the remote has closed and this side has not holds its file descriptor for the
+        // life of the process. Nothing closed them: the JS net shim marks its Socket closed when this
+        // close event arrives and never calls back down. That is invisible until something makes
+        // thousands of requests, and syncing a real photo library to S3 is exactly that: measured on
+        // an Android phone, the app was holding 646 sockets in CLOSE_WAIT, and once they had built up
+        // every upload timed out and no further file ever reached the bucket. The same code is here.
+        _ = tcpClose(connectionId: connectionId)
         enqueue("{\"kind\":\"close\",\"connectionId\":\"\(connectionId)\"}")
     }
 
@@ -257,6 +268,74 @@ final class TcpHost {
         if result < 0 {
             return HostBridge.hostErrorEnvelope(NSError(domain: "tcp", code: Int(errno), userInfo: [NSLocalizedDescriptionKey: "write() failed"]))
         }
+        return nil
+    }
+
+    //
+    // host.tcpWriteFile(connectionId, path, offset, length): sends a range of a file to a connection,
+    // read from disk and written to the socket here, without the bytes entering the engine.
+    //
+    // This is what makes uploading from a phone possible. Everything else crosses the bridge as
+    // base64: a third larger than the bytes it carries, built here and decoded in an interpreter on
+    // the other side. An upload paid that twice, once to read the file and once to send it, and a
+    // phone managed about three megabytes a minute with the network idle nine tenths of the time.
+    // The counterpart of tcpWriteFile in TcpHost.java.
+    //
+    func tcpWriteFile(storageRoot: URL, connectionId: String, path: String, offset: Int, length: Int) -> String? {
+        lock.lock()
+        let connectionSocket = connections[connectionId]
+        lock.unlock()
+        guard let connectionSocket = connectionSocket else {
+            return HostBridge.hostErrorEnvelope(NSError(domain: "tcp", code: 0,
+                userInfo: [NSLocalizedDescriptionKey: "No such connection to write a file to: \(connectionId)"]))
+        }
+
+        let target: URL
+        do {
+            target = try PathSandbox.resolveWithin(root: storageRoot, candidate: path)
+        }
+        catch {
+            return HostBridge.hostErrorEnvelope(error)
+        }
+
+        guard let handle = FileHandle(forReadingAtPath: target.path) else {
+            return HostBridge.hostErrorEnvelope(NSError(domain: "tcp", code: 0,
+                userInfo: [NSLocalizedDescriptionKey: "No such file to send: \(path)"]))
+        }
+        defer { handle.closeFile() }
+
+        handle.seek(toFileOffset: UInt64(offset))
+
+        var remaining = length
+        while remaining > 0 {
+            let wanted = min(64 * 1024, remaining)
+            let chunk = handle.readData(ofLength: wanted)
+            if chunk.isEmpty {
+                return HostBridge.hostErrorEnvelope(NSError(domain: "tcp", code: 0,
+                    userInfo: [NSLocalizedDescriptionKey: "The file ended \(remaining) bytes before the \(length) asked for: \(path)"]))
+            }
+
+            var totalWritten = 0
+            let result: Int = chunk.withUnsafeBytes { rawBuffer -> Int in
+                let base = rawBuffer.bindMemory(to: UInt8.self).baseAddress!
+                while totalWritten < chunk.count {
+                    let written = write(connectionSocket, base + totalWritten, chunk.count - totalWritten)
+                    if written <= 0 {
+                        return -1
+                    }
+                    totalWritten += written
+                }
+                return totalWritten
+            }
+
+            if result < 0 {
+                return HostBridge.hostErrorEnvelope(NSError(domain: "tcp", code: Int(errno),
+                    userInfo: [NSLocalizedDescriptionKey: "write() failed while sending \(path)"]))
+            }
+
+            remaining -= chunk.count
+        }
+
         return nil
     }
 

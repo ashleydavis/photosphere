@@ -27,6 +27,9 @@ export interface ITomlSyncConfig {
     // Whether automatic syncing is refused on a cellular connection.
     only_on_wifi?: boolean;
 
+    // The sandbox-relative path of the database the background sync pushes.
+    database_path?: string;
+
     // The gap between background sync passes, in milliseconds. Absent in a file the app wrote: the
     // default applies unless someone has put a value here.
     pause_between_runs_ms?: number;
@@ -43,6 +46,7 @@ export function tomlToSyncFile(toml: ITomlSyncConfig | undefined): ISyncFile {
     if (!toml) {
         return {
             settings: normaliseSyncSettings(undefined),
+            databasePath: undefined,
             pauseBetweenRunsMs: resolveSyncPauseMs(undefined),
         };
     }
@@ -52,8 +56,13 @@ export function tomlToSyncFile(toml: ITomlSyncConfig | undefined): ISyncFile {
         onlyOnWifi: toml.only_on_wifi,
     };
 
+    const databasePath = typeof toml.database_path === "string" && toml.database_path.length > 0
+        ? toml.database_path
+        : undefined;
+
     return {
         settings: normaliseSyncSettings(rawSettings),
+        databasePath,
         pauseBetweenRunsMs: resolveSyncPauseMs(toml.pause_between_runs_ms),
     };
 }
@@ -62,9 +71,15 @@ export function tomlToSyncFile(toml: ITomlSyncConfig | undefined): ISyncFile {
 // Turns the settings and the pacing into the TOML on-disk contents.
 //
 export function syncFileToToml(contents: ISyncFile): ITomlSyncConfig {
-    return {
+    const toml: ITomlSyncConfig = {
         enabled: contents.settings.enabled,
         only_on_wifi: contents.settings.onlyOnWifi,
         pause_between_runs_ms: contents.pauseBetweenRunsMs,
     };
+
+    if (contents.databasePath !== undefined) {
+        toml.database_path = contents.databasePath;
+    }
+
+    return toml;
 }

@@ -248,6 +248,114 @@ describe("http shim outbound request", () => {
         expect(timedOut).toBe(true);
     });
 
+    test("an interim 100 Continue is skipped, so the real response and its headers arrive", async () => {
+        // The AWS SDK asks for "Expect: 100-continue" on every streamed upload, so a server that
+        // honours it answers "HTTP/1.1 100 Continue" first and sends its real response after the
+        // body. Taken as the response, that is a reply with no headers of any use: a multipart upload
+        // from a phone failed with "Part 1 is missing ETag in UploadPart response", because the ETag
+        // was in the response that had been thrown away.
+        installClientHost();
+
+        const req: any = request({ hostname: "minio.test", port: 9000, path: "/obj?partNumber=1", method: "PUT" });
+        let received: any;
+        req.on("response", (response: any) => { received = response; });
+        req.end(Buffer.from("part-bytes"));
+        await flush(10);
+
+        deliver(Buffer.from("HTTP/1.1 100 Continue\r\n\r\n", "utf8"));
+        await flush(5);
+        expect(received).toBeUndefined();
+
+        deliver(Buffer.from("HTTP/1.1 200 OK\r\nETag: \"abc123\"\r\nContent-Length: 0\r\n\r\n", "utf8"));
+        await flush(5);
+
+        expect(received).toBeDefined();
+        expect(received.statusCode).toBe(200);
+        expect(received.headers.etag).toBe("\"abc123\"");
+    });
+
+    test("a listener attached after the response arrived is still told about it", async () => {
+        // This shim sends a request as soon as it has it, where Node waits to be told to send the
+        // body, so a reply can arrive before the caller has finished attaching listeners. The AWS SDK
+        // attaches `continue` and `response` listeners after writing the request and waits up to six
+        // seconds for one of them: measured on a Pixel 6, every request paid that wait in full, which
+        // was nearly all of the nineteen seconds a file took to sync.
+        installClientHost();
+
+        const req: any = request({ hostname: "minio.test", port: 9000, path: "/obj", method: "PUT" });
+        req.end(Buffer.from("body"));
+        await flush(10);
+
+        deliver(Buffer.from("HTTP/1.1 200 OK\r\nETag: \"abc\"\r\nContent-Length: 0\r\n\r\n", "utf8"));
+        await flush(5);
+
+        // The listener goes on only now, after the response has already been dispatched.
+        let toldAbout: any;
+        req.on("response", (response: any) => { toldAbout = response; });
+        await flush(5);
+
+        expect(toldAbout).toBeDefined();
+        expect(toldAbout.statusCode).toBe(200);
+    });
+
+    test("a caller waiting on continue is told when the server sends one", async () => {
+        installClientHost();
+
+        const req: any = request({ hostname: "minio.test", port: 9000, path: "/obj", method: "PUT" });
+        req.end(Buffer.from("body"));
+        await flush(10);
+
+        deliver(Buffer.from("HTTP/1.1 100 Continue\r\n\r\n", "utf8"));
+        await flush(5);
+
+        let continued = false;
+        req.on("continue", () => { continued = true; });
+        await flush(5);
+
+        expect(continued).toBe(true);
+    });
+
+    test("an interim response arriving with the real one in a single chunk is still skipped", async () => {
+        installClientHost();
+
+        const req: any = request({ hostname: "minio.test", port: 9000, path: "/obj?partNumber=2", method: "PUT" });
+        let received: any;
+        req.on("response", (response: any) => { received = response; });
+        req.end(Buffer.from("part-bytes"));
+        await flush(10);
+
+        deliver(Buffer.from("HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 200 OK\r\nETag: \"def456\"\r\nContent-Length: 0\r\n\r\n", "utf8"));
+        await flush(5);
+
+        expect(received).toBeDefined();
+        expect(received.statusCode).toBe(200);
+        expect(received.headers.etag).toBe("\"def456\"");
+    });
+
+    //
+    // Zero means no timeout, as it does in Node, and it is what the AWS SDK asks for when no socket
+    // timeout is configured.
+    //
+    // Taken literally, zero is a timer that fires the moment traffic pauses, which is every request:
+    // measured on a Pixel 6 syncing photos to S3, each upload reached the bucket whole and was then
+    // thrown away by a timeout raised while waiting for the response, reported as "the request socket
+    // timed out after 0 ms of inactivity". The sync retried the same file for ever.
+    //
+    test("a timeout of zero means no timeout, so a quiet moment does not kill the request", async () => {
+        installClientHost();
+
+        const req: any = request({ hostname: "minio.test", port: 9000, path: "/obj", method: "PUT" });
+        let timedOut = false;
+        req.setTimeout(0, () => {
+            timedOut = true;
+        });
+        req.end(Buffer.from("payload"));
+
+        await new Promise(resolve => globalThis.setTimeout(resolve, 250));
+        expect(timedOut).toBe(false);
+        expect(req.destroyed).toBe(false);
+    });
+
     //
     // The AWS SDK reaches for `request.socket` and, when it finds one, calls the Node net.Socket
     // contract on it: setTimeout, removeListener, setKeepAlive. The transport underneath this shim

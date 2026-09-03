@@ -55,6 +55,27 @@ export class EncryptedStorage implements IStorage {
     }
 
     //
+    // Writes the stream, ignoring the hash. It is the hash of the plaintext, and what reaches the
+    // store underneath is ciphertext, so handing it down would have the store reject every correctly
+    // written file.
+    //
+    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength: number, sha256: Buffer): Promise<boolean> {
+        await this.writeStream(filePath, contentType, inputStream, contentLength);
+        return false;
+    }
+
+    //
+    // Always undefined here, so a caller checking a copy reads it back and hashes the plaintext.
+    //
+    // What the underlying store holds is ciphertext, and its hash is not the hash of the file this
+    // storage reads and writes. Handing that back would compare two different things and call every
+    // correctly written file corrupt.
+    //
+    async storedHash(filePath: string): Promise<Buffer | undefined> {
+        return undefined;
+    }
+
+    //
     // Gets info about a file.
     //
     info(filePath: string): Promise<IFileInfo | undefined> {
