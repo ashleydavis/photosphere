@@ -196,6 +196,11 @@ Run each of these on Android and on iOS. Tick a test only when it has passed on 
 ### Automatic import
 - [ ] [auto-import-full-flow](mobile/auto-import/auto-import-full-flow.md)
     - *n* Step 6 fails: the import record doesn't load as new imports are added. The Import page reads the record once, when the database is opened, and never again, so a database opened before automatic import ran shows an empty list however many photos have gone in since.
+    - *n* An origin should use the credentials from the origin database's own entry. Right now the credentials have to be attached a second time to the database doing the syncing, so a database already in the list with working credentials cannot just be named as an origin.
+    - *n* Background sync probably needs to be incremental for a large database. A pass that works out the whole difference each time gets more expensive as the database grows, on a device that is paying for it in battery and data.
+    - *n* Setting the origin should let you pick from the databases already in the list, rather than making you type the path by hand. The path is usually one the app already knows.
+    - *n* The pairing code input when receiving a database should be numeric only, not the full alphabet keyboard. The code is digits.
+    - *n* There is no progress indicator showing that automatic import is happening. That would at least be one simple way to know something is still happening. Right now the only in-app signal is the gallery count, which moves only when a batch of 250 commits, so the app looks stopped for long stretches while it is working.
     - *e* Android: works, but too slowly to call a pass. Steps 1 to 4 passed. Step 5: a photo taken at 07:06 did not appear until about 07:48, so 42 minutes instead of a few seconds.
     - High priority
         - *e* A photo just taken must show up within 3 seconds. It took 42 minutes. New photos must take priority over importing the existing library: right now the import loop only looks for new photos between batches, and a batch of up to 60 old photos takes ten minutes or more, so a new photo is not even noticed until that finishes. The batch size must be much, much smaller than 60.

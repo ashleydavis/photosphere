@@ -61,7 +61,7 @@ Expected:
 
 ### 5. Change the origin and save
 
-1. In the Edit dialog's **Origin** field, type `s3:my-bucket:/origin-database`.
+1. In the Edit dialog's **Origin** field, type `s3:my-bucket/origin-database`.
 2. Click **Save**.
 
 Expected:
@@ -76,7 +76,7 @@ bun run start -- origin --db /tmp/psi-desktop-test/db
 ```
 
 Expected:
-- The output is `s3:my-bucket:/origin-database`.
+- The output is `s3:my-bucket/origin-database`.
 
 ---
 
@@ -87,4 +87,4 @@ cat /tmp/psi-desktop-test/db/.db/config.json
 ```
 
 Expected:
-- The `origin` field in the JSON is `s3:my-bucket:/origin-database`.
+- The `origin` field in the JSON is `s3:my-bucket/origin-database`.

@@ -46,7 +46,7 @@ This machine keeps a cache directory per database, and the hash cache is one thi
 
 The platform cache location is `$XDG_CACHE_HOME` or `~/.cache` on Linux and the other Unixes, `~/Library/Caches` on macOS, `%LOCALAPPDATA%` on Windows, and the app's storage sandbox on iOS and Android, each with `photosphere` under it. `PHOTOSPHERE_CACHE_DIR` overrides all of that, and the test temp allocator sets it for every suite so a run cannot reach the real caches. `psi hash-cache dir --db <path>` prints the whole directory for one database, and `psi version` prints the root they all sit under.
 
-The database path is hashed rather than used directly, because it can be a Windows path or a URL-ish `s3:bucket:/path`, neither of which is safe to paste into a directory name.
+The database path is hashed rather than used directly, because it can be a Windows path or a URL-ish `s3:bucket/path`, neither of which is safe to paste into a directory name.
 
 Note that this is deliberately not kept beside the settings in `~/.config/photosphere`. Nothing in the cache is a setting, none of it is worth backing up, and the platform's cache location is where an operating system, a backup tool and a disk cleaner all expect to find something like it.
 
@@ -127,7 +127,7 @@ Sync refuses to run between two databases that are not related to each other, an
 
 ```bash
 psi consolidate --db ./photos ./backup                  # a directory
-psi consolidate --db ./photos s3:my-bucket:/photos      # an S3 location
+psi consolidate --db ./photos s3:my-bucket/photos      # an S3 location
 ```
 
 It looks at what is there and picks between three cases:

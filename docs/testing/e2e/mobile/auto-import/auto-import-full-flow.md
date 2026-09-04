@@ -19,6 +19,8 @@ The device needs at least two photos in its photo library before you start, and 
 
 An S3 bucket and its credentials, reachable from both the phone and your development machine. The later steps push the phone's backup into it and then read it back with the CLI.
 
+The CLI commands below name the bucket by a raw `s3:` path, which carries no stored credentials with it, so it uses the environment. On anything other than real AWS, `AWS_ENDPOINT` has to be exported as well, or the command goes to AWS and reports that the bucket does not exist.
+
 The phone must be on Wi-Fi. Syncing refuses a cellular connection by default, and a phone on mobile data will sit there doing nothing with no error.
 
 If the app has been used before, remove its data first so the test starts with no database and no settings. On Android: **Settings > Apps > Photosphere > Storage > Clear storage**. On iOS: delete the app and let `bun run ios` reinstall it.
@@ -108,7 +110,98 @@ This is the difference between a running total and a record: the app remembers w
 
 ---
 
-### 8. Switching it off stops it
+### 8. Give the backup somewhere remote to go
+
+Syncing pushes a database to its origin, and the origin has to exist already: a sync against a bucket with nothing in it reports the origin as unreachable rather than creating it.
+
+Create the empty remote from `apps/cli/`:
+
+```bash
+bun run start -- init --db s3:cloud-storage-tests/auto-sync-test --yes
+```
+
+Now the phone needs to know that path, and needs credentials for it. Take either route below. They end in the same place, so run one, not both.
+
+#### Route A: type it into the phone
+
+1. Go to the **Databases** page.
+2. Open the **⋮** menu on the database automatic import created and choose **Edit**.
+3. Set **Origin** to `s3:cloud-storage-tests/auto-sync-test`.
+4. Press **Configure secrets…** and set **S3 Credentials** to the bucket's credentials. Use **+ New** to enter them if the phone does not have them yet, filling in the endpoint as well as the keys.
+
+    A phone has no environment to fall back on, so the endpoint belongs in the secret. For a bucket that is not on real AWS this is the field that decides whether anything works at all.
+
+5. Save.
+
+#### Route B: set it up on the development machine and send it over
+
+Typing an access key and a secret on a phone keyboard is the slowest part of this test. The CLI can hold them instead and hand them over the local network. Both devices must be on the same network.
+
+From `apps/cli/`, make the secret and the database entry:
+
+```bash
+bun run start -- secrets add --yes --name auto-sync-test-s3 --type s3-credentials \
+  --value '{"endpoint":"https://<region>.digitaloceanspaces.com","region":"us-east-1","accessKeyId":"<access key id>","secretAccessKey":"<secret access key>"}'
+
+bun run start -- dbs add --yes --name auto-sync-test \
+  --path s3:cloud-storage-tests/auto-sync-test --s3-cred auto-sync-test-s3
+```
+
+Then send them together. `dbs send` carries the database entry and the secrets attached to it, so the secret does not have to be sent separately:
+
+```bash
+bun run start -- dbs send --name auto-sync-test --yes
+```
+
+`--yes` is what makes it go straight to a pairing code. Without it the command walks through the name, description and path one field at a time, offering to edit each, before it sends anything.
+
+It prints the pairing code and waits. On the phone, go to the **Databases** page, choose **Receive database**, and enter that code.
+
+Then set the origin, which is the one thing that still has to be done on the phone:
+
+1. Open the **⋮** menu on the database automatic import created and choose **Edit**.
+2. Set **Origin** to `s3:cloud-storage-tests/auto-sync-test`.
+3. Press **Configure secrets…** and set **S3 Credentials** to `auto-sync-test-s3`, which arrived with the database.
+4. Save.
+
+Expected, either route:
+- The origin is accepted and shown against the database on the Databases page.
+- Nothing else is asked for. Syncing needs no separate setup of its own.
+
+---
+
+### 9. Check automatic syncing is on
+
+1. Open the menu and choose **Configuration**.
+2. Look at the **Syncing** section.
+
+Expected:
+- **Enable syncing** is on. A fresh installation starts with it on, so this is a check rather than a change.
+- **Only sync over Wi-Fi** is on, and the phone is on Wi-Fi.
+
+---
+
+### 10. The backup reaches the bucket on its own
+
+1. Leave the app open and wait. Passes run every five minutes by default, so give it that long before deciding nothing is happening.
+
+Check the bucket from `apps/cli/`:
+
+```bash
+bun run start -- summary --db s3:cloud-storage-tests/auto-sync-test
+```
+
+Expected:
+- The photos backed up on the phone are in the bucket, without anybody having asked for a sync.
+- The count climbs across passes if automatic import is still catching up, rather than arriving all at once.
+
+Nothing on the phone was pressed to make this happen. That is the point of the step: a photo taken on the phone ends up in the cloud with no user action anywhere in the chain.
+
+---
+
+### 11. Switching it off stops it
+
+Automatic import comes off here rather than earlier, because everything above needed it running: the library had to be backed up and the backup had to reach the bucket before there was anything worth checking.
 
 1. Open the menu and choose **Configuration**.
 2. Turn the **Automatic import** toggle off.
@@ -121,67 +214,14 @@ Expected:
 
 ---
 
-### 9. Give the backup somewhere remote to go
-
-Syncing pushes a database to its origin, and the origin has to exist already: a sync against a bucket with nothing in it reports the origin as unreachable rather than creating it.
-
-Create the empty remote from `apps/cli/`:
-
-```bash
-bun run start -- init --db s3:<bucket>:/auto-sync-test --yes
-```
-
-Then on the phone:
-
-1. Go to the **Databases** page.
-2. Open the **⋮** menu on the database automatic import created and choose **Edit**.
-3. Set **Origin** to `s3:<bucket>:/auto-sync-test`.
-4. Press **Configure secrets…** and set **S3 Credentials** to the bucket's credentials. Use **+ New** to enter them if the phone does not have them yet.
-5. Save.
-
-Expected:
-- The origin is accepted and shown against the database on the Databases page.
-- Nothing else is asked for. Syncing needs no separate setup of its own.
-
----
-
-### 10. Check automatic syncing is on
-
-1. Open the menu and choose **Configuration**.
-2. Look at the **Syncing** section.
-
-Expected:
-- **Enable syncing** is on. A fresh installation starts with it on, so this is a check rather than a change.
-- **Only sync over Wi-Fi** is on, and the phone is on Wi-Fi.
-
----
-
-### 11. The backup reaches the bucket on its own
-
-1. Leave the app open and wait. Passes run every five minutes by default, so give it that long before deciding nothing is happening.
-
-Check the bucket from `apps/cli/`:
-
-```bash
-bun run start -- summary --db s3:<bucket>:/auto-sync-test
-```
-
-Expected:
-- The photos backed up on the phone are in the bucket, without anybody having asked for a sync.
-- The count climbs across passes if automatic import is still catching up, rather than arriving all at once.
-
-Nothing on the phone was pressed to make this happen. That is the point of the step: a photo taken on the phone ends up in the cloud with no user action anywhere in the chain.
-
----
-
 ### 12. Check the photos are really there
 
-Automatic import and syncing must both have caught up before the counts can match. While either is still working the numbers keep moving, so turn the **Automatic import** toggle off, wait for one more sync pass, and note the count in the gallery you are comparing against.
+Automatic import and syncing must both have caught up before the counts can match. Step 11 has just switched importing off, so wait for one more sync pass and note the count in the gallery you are comparing against.
 
 From `apps/cli/`:
 
 ```bash
-bun run start -- verify --db s3:<bucket>:/auto-sync-test
+bun run start -- verify --db s3:cloud-storage-tests/auto-sync-test
 ```
 
 Expected:
@@ -194,9 +234,9 @@ A photo that shows in the gallery but fails verification has been recorded witho
 
 ### 13. A new photo goes the whole way, with nothing else in the way
 
-The last step, and it needs a quiet phone: the existing library fully imported and the bucket already caught up, as step 12 has just established. Everything up to here has been about a backlog; this is the app doing its ordinary day-to-day job.
+This one needs a quiet phone: the existing library fully imported and the bucket already caught up, as step 12 has just established. Everything up to here has been about a backlog; this is the app doing its ordinary day-to-day job.
 
-1. Open the menu, choose **Configuration**, and turn **Automatic import** back on. Step 12 turned it off.
+1. Open the menu, choose **Configuration**, and turn **Automatic import** back on. Step 11 turned it off.
 2. Take a photo with the camera.
 3. Switch back to Photosphere and go to the gallery.
 
@@ -205,7 +245,32 @@ Expected:
 - After a sync pass it is in the bucket. Check from `apps/cli/`:
 
 ```bash
-bun run start -- list --db s3:<bucket>:/auto-sync-test
+bun run start -- list --db s3:cloud-storage-tests/auto-sync-test
 ```
 
 Camera to cloud, with the app only ever left open. This is what the feature is for, and it is the step to run when the earlier ones have been slow: a phone that has finished backfilling should handle a new photo promptly even if the first backup took hours.
+
+---
+
+### 14. Clear up so the test can be run again
+
+The test starts from a phone with no database and a bucket with nothing at that prefix, so both have to go back to how they were. Leaving them means the next run silently tests something else: a second run against a bucket that already holds the photos syncs nothing and proves nothing.
+
+1. Delete everything under the `auto-sync-test` prefix in the bucket. Do this from the Spaces or S3 console, or with an S3 client. The CLI has no command for it: `psi dbs remove` takes the database out of the list and leaves its files where they are.
+2. On the phone, remove the app's data. On Android: **Settings > Apps > Photosphere > Storage > Clear storage**. On iOS: delete the app.
+3. Take the bucket's credentials off the development machine, and the database entry with them. Route B put them there, and a live access key left in a keychain outlives the test that needed it. From `apps/cli/`:
+
+```bash
+bun run start -- dbs remove --yes --name auto-sync-test
+bun run start -- secrets remove --yes --name auto-sync-test-s3
+```
+
+    Skip this if you took Route A, which never put anything on the development machine.
+
+Confirm the bucket is clear, from `apps/cli/`:
+
+```bash
+bun run start -- summary --db s3:cloud-storage-tests/auto-sync-test
+```
+
+Expected: it reports that no database was found at that path, which is the state step 8 starts from.

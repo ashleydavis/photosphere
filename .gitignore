@@ -70,3 +70,6 @@ ux-review/
 # Per-machine record of how long each test script took, used by test:everything to print an
 # expected time. A measurement of this machine only, so it is never shared.
 .test-durations/
+
+# Local Claude Code settings for this checkout. Per-machine and per-person, so it is never shared.
+.claude/settings.local.json

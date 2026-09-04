@@ -139,6 +139,7 @@ The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why t
 - [UI stories](../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player.
 - [Testing](testing/README.md) - Running the tests, the manual e2e scripts, and the stories.
 - [Git hooks](git-hooks.md) - The local commit and push gate, and how to install it.
+- [Storage paths](storage-paths.md) - What a valid `fs:` and `s3:` path looks like, and where S3 credentials and the endpoint come from.
 - [Automatic photo backup](automatic-photo-backup.md) - Watching for new photos, importing them, and keeping a remote copy.
 - [Syncing](syncing.md) - What a sync moves, when each platform runs one, and how it keeps working while the app is not on screen.
 - [Background tasks](background-tasks.md) - Adding a new background task type.

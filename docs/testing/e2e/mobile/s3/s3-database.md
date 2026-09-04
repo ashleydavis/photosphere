@@ -16,8 +16,8 @@ bun run ios    # iOS
 An S3 bucket and its credentials. Create the database from `apps/cli/`:
 
 ```bash
-bun run start -- init --db s3:<bucket>:/manual-test --yes
-bun run start -- add ../../test/test.jpg --db s3:<bucket>:/manual-test
+bun run start -- init --db s3:<bucket>/manual-test --yes
+bun run start -- add ../../test/test.jpg --db s3:<bucket>/manual-test
 ```
 
 Send the S3 credentials to the phone as a secret, and the database entry, as in [cli-to-mobile](../lan-share/cli-to-mobile.md).
@@ -40,7 +40,7 @@ Expected:
 
 Expected:
 - The import completes and the photo appears in the gallery.
-- It is in the bucket: check from `apps/cli/` with `bun run start -- list --db s3:<bucket>:/manual-test`.
+- It is in the bucket: check from `apps/cli/` with `bun run start -- list --db s3:<bucket>/manual-test`.
 
 ---
 
