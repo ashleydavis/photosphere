@@ -12,6 +12,7 @@ import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
 import IconButton from '@mui/joy/IconButton/IconButton';
+import CircularProgress from '@mui/joy/CircularProgress';
 import Divider from '@mui/joy/Divider/Divider';
 import { useSearch } from '../context/search-context';
 import { useDeveloper } from '../context/developer-context';
@@ -80,7 +81,7 @@ export interface ILeftSidebarProps {
 export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, onNewDatabase, onAddDatabase, onOpenDatabase }: ILeftSidebarProps) {
     const { setOpenSearch } = useSearch();
     const { developerMode } = useDeveloper();
-    const { openDatabase, databasePath } = useAssetDatabase();
+    const { openDatabase, databasePath, isOpening } = useAssetDatabase();
     const platform = usePlatform();
     const theme = useTheme();
     const location = useLocation();
@@ -91,6 +92,8 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
     const TemporaryNavPageIcon = temporaryNavPage?.icon;
     // Recently opened databases (top 5).
     const [recentDatabases, setRecentDatabases] = useState<IDatabaseEntry[]>([]);
+    // The path of the recent database the user tapped, so the spinner shows on that one alone.
+    const [openingPath, setOpeningPath] = useState<string | undefined>(undefined);
 
     function loadRecentDatabases(): void {
         platform.getRecentDatabases()
@@ -291,9 +294,16 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                                     >
                                     <ListItemButton
                                         data-id={`open-recent-database-button-${dbIndex}`}
+                                        // Every entry goes dead while an open is under way, so a
+                                        // second open cannot be started on top of the first.
+                                        disabled={isOpening}
+                                        // The sidebar is closed once the open has resolved rather
+                                        // than on the tap. Closing it first hides the only thing
+                                        // saying anything is happening, and an open takes seconds.
                                         onClick={async () => {
-                                            setSidebarOpen(false);
+                                            setOpeningPath(dbEntry.path);
                                             await openDatabase(dbEntry.path);
+                                            setSidebarOpen(false);
                                         }}
                                         >
                                         <ListItemDecorator>
@@ -305,6 +315,9 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                                         <ListItemContent data-id={`recent-database-name-${dbIndex}`} title={dbEntry.path}>
                                             {dbEntry.name || dbEntry.path.split(/[\\/]/).filter(Boolean).pop() || dbEntry.path}
                                         </ListItemContent>
+                                        {isOpening && openingPath === dbEntry.path && (
+                                            <CircularProgress data-id={`open-recent-database-spinner-${dbIndex}`} size="sm" />
+                                        )}
                                     </ListItemButton>
                                 </ListItem>
                             ))}

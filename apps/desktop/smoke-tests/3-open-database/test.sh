@@ -31,6 +31,15 @@ send_command "$APP_PORT" menu '{"itemId":"open-database"}'
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}'
+
+# The app has to say it is opening, and then say it opened.
+#
+# Tapping a database queues a probe task and then a load, and the dialog now stays open, disables
+# every entry and spins on the one tapped until the open resolves, rather than closing on the tap and
+# leaving the user looking at an empty gallery. The pair of log lines is asserted rather than the
+# spinner itself: the state clears as soon as the open finishes, so polling the DOM for it is a race
+# the test would lose whenever the open was quick.
+wait_for_log "$TMP_DIR" "Opening database:"
 wait_for_log "$TMP_DIR" "Database opened"
 
 # Open the Database Summary page through the sidebar's "Database Info" link and check it reports the

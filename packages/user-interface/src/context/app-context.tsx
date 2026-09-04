@@ -26,6 +26,12 @@ export interface IAppContext {
     refresh: () => Promise<void>;
 
     //
+    // Re-reads the configured databases alone. For callers that only show databases, so refreshing
+    // the list does not also go to the keychain once per stored secret.
+    //
+    refreshDbs: () => Promise<void>;
+
+    //
     // Adds a new database entry and returns the created entry.
     //
     addDatabase: (entry: IDatabaseEntry) => Promise<IDatabaseEntry>;
@@ -186,10 +192,40 @@ export function AppContextProvider({ children }: IProps) {
         });
     }, [platform]);
 
+    //
+    // Reload the list when a background task has added a database to it.
+    //
+    // A database can be created without anyone asking for it: automatic import makes its own the
+    // first time it runs, and the task that records it writes the database list from inside the
+    // worker. Nothing in the interface is on that path, so without this the list only catches up on
+    // the next restart, and a user watching the open-database dialog watches it stay empty while the
+    // database is made underneath them.
+    //
+    // It watches the task rather than the platform because the task is the same on every platform:
+    // onTaskComplete is on the platform interface and every platform with a worker implements it, so
+    // this needs nothing added to any one of them. The refresh runs whatever the task's status: a
+    // failed record may still have written the list, and the cost of a refresh that finds nothing new
+    // is one read of a small config file.
+    //
+    useEffect(() => {
+        return platform.onTaskComplete((_taskId, result) => {
+            if (result.type !== "record-default-database") {
+                return;
+            }
+
+            log.info("Databases changed");
+
+            refreshDbs().catch(err => {
+                log.exception(`Failed to reload databases after a task changed them:`, err as Error);
+            });
+        });
+    }, [platform]);
+
     const value: IAppContext = {
         dbs,
         secrets,
         refresh,
+        refreshDbs,
         addDatabase,
         updateDatabase,
         removeDatabase,

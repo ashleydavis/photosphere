@@ -30,6 +30,18 @@ send_command "$APP_PORT" menu '{"itemId":"open-database"}' || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
+
+# The app has to say it is opening, and then say it opened.
+#
+# Tapping a database queues a probe task and then a load, which on a phone is seconds with nothing on
+# screen: the dialog used to close on the tap and leave the user looking at an empty gallery. It now
+# stays open, disables every entry and spins on the one tapped until the open resolves.
+#
+# The pair of log lines is what is asserted rather than the spinner itself, for the same reason test
+# 34 asserts the sync spinner through its lifecycle lines: the state clears itself as soon as the open
+# finishes, so polling the DOM for it is a race the test would lose whenever the open was quick. These
+# two lines are written at the exact points the state is set and cleared.
+wait_for_log "$TMP_DIR" "Opening database: $DB_NAME"
 wait_for_log "$TMP_DIR" "Database opened"
 
 # Assert onDatabaseOpened fired from the REAL open flow (the list-item click above drives the real

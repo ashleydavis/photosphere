@@ -339,6 +339,7 @@ export function mockAssetDatabase(assets?: IGalleryItem[]): IAssetDatabase {
     return {
         isLoading: false,
         isSyncing: false,
+        isOpening: false,
         isWorking: false,
         isReadOnly: false,
         getAssets: () => assetMap,

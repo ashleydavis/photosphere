@@ -46,7 +46,7 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
             dataId="configuration-dialog"
             onKeyDown={createDialogKeyHandler(onClose, false)}
             >
-                <ModalClose />
+                <ModalClose data-id="configuration-dialog-close" />
                 <DialogTitle>Configuration</DialogTitle>
                 <DialogContent>
                     <Stack spacing={3} sx={{ maxWidth: 400, pt: 1 }}>

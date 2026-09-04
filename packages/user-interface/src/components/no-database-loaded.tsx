@@ -1,6 +1,7 @@
 import { log } from "utils";
 import { useEffect, useState } from "react";
 import Box from "@mui/joy/Box";
+import CircularProgress from "@mui/joy/CircularProgress";
 import Typography from "@mui/joy/Typography";
 import Button from "@mui/joy/Button";
 import CreateNewFolderIcon from "@mui/icons-material/CreateNewFolder";
@@ -20,10 +21,13 @@ import { useIsMobile } from "../lib/use-is-mobile";
 //
 export function NoDatabaseLoaded() {
     const platform = usePlatform();
-    const { openDatabase } = useAssetDatabase();
+    const { openDatabase, isOpening } = useAssetDatabase();
 
     // Drives the phone layout: stacked full-width actions rather than a row of three.
     const isMobile = useIsMobile();
+
+    // The path of the recent database the user tapped, so the spinner shows on that one alone.
+    const [openingPath, setOpeningPath] = useState<string | undefined>(undefined);
 
     const [createModalOpen, setCreateModalOpen] = useState(false);
     const [openModalOpen, setOpenModalOpen] = useState(false);
@@ -120,14 +124,25 @@ export function NoDatabaseLoaded() {
                                 Recent databases
                             </Typography>
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                {recentDatabases.map(dbEntry => (
+                                {recentDatabases.map((dbEntry, index) => (
                                     <Button
                                         key={dbEntry.name}
+                                        data-id={`recent-database-button-${index}`}
                                         variant="outlined"
                                         color="neutral"
                                         size="lg"
+                                        // Every entry goes dead while an open is under way, so a
+                                        // second open cannot be started on top of the first.
+                                        disabled={isOpening}
                                         startDecorator={<FolderOpenIcon />}
-                                        onClick={() => openDatabase(dbEntry.path).catch(err => log.exception('Open database error:', err as Error))}
+                                        endDecorator={isOpening && openingPath === dbEntry.path
+                                            ? <CircularProgress data-id={`recent-database-spinner-${index}`} size="sm" />
+                                            : undefined
+                                        }
+                                        onClick={() => {
+                                            setOpeningPath(dbEntry.path);
+                                            openDatabase(dbEntry.path).catch(err => log.exception('Open database error:', err as Error));
+                                        }}
                                         sx={{ justifyContent: 'flex-start', minHeight: 52, borderRadius: 'md' }}
                                     >
                                         {dbEntry.name || dbEntry.path.split(/[\\/]/).filter(Boolean).pop() || dbEntry.path}

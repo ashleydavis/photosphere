@@ -82,6 +82,15 @@ export interface IAssetDatabase extends IGallerySource {
     isSyncing: boolean;
 
     //
+    // True from the moment a database is asked for until that open has resolved or failed.
+    //
+    // Opening a database is not instant: it probes the storage through a queued task and then starts
+    // the load. Until this existed nothing anywhere said that was happening, so tapping a database in
+    // the list looked like tapping a dead button for as long as the probe took.
+    //
+    isOpening: boolean;
+
+    //
     // Returns a direct URL for an asset, suitable for use in img src attributes.
     //
     assetUrl(assetId: string, assetType: string): string;
@@ -130,6 +139,11 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     // Set to true while a background sync with the origin database is in progress.
     //
     const [ isSyncing, setIsSyncing ] = useState(false);
+
+    //
+    // Set to true while a database is being opened, so the lists a database is tapped in can say so.
+    //
+    const [ isOpening, setIsOpening ] = useState(false);
 
     //
     // The database path currently being loaded (if any).
@@ -450,65 +464,79 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     // changing state so the previously open database stays loaded.
     //
     async function openDatabase(dbPath: string): Promise<void> {
-        // A database that cannot be reached is a different problem from one that is not there, and
-        // saying "not found" for an unreachable bucket tells the user their photos are gone when they
-        // are merely out of reach. checkDatabaseExists throws for anything that stopped it getting an
-        // answer, and only reports false when the storage answered and held no database.
-        let exists: boolean;
+        // Said out loud because the opening state that follows is all the user sees for as long as
+        // the open takes, and a state that clears itself is not something a smoke test can catch by
+        // polling. This line and "Database opened" bracket the wait, so a test can assert the app
+        // entered the state and left it again.
+        log.info(`Opening database: ${dbPath}`);
+
+        // Cleared in a finally rather than at each exit, so a throw from anything below leaves the
+        // lists usable. A stuck flag disables every entry in them for the life of the app.
+        setIsOpening(true);
         try {
-            exists = await checkDatabaseExists(dbPath);
-        }
-        catch (err) {
-            log.exception(`Could not reach the database at ${dbPath}`, err as Error);
-            addToast({
-                message: `Could not reach the database: ${dbPath}`,
-                color: 'danger',
-                duration: 8000,
-            });
-            return;
-        }
-
-        if (!exists) {
-            addToast({
-                message: `Database not found: ${dbPath}`,
-                color: 'warning',
-            });
-            return;
-        }
-
-        // What to do about the database already on screen is decided by planOpenDatabase, which
-        // carries the reasoning and the tests. The short of it: a database being reopened while its
-        // own load is still running is left alone, and one being reopened after its load has finished
-        // is closed and then reloaded from here, because setting the path to the value it already
-        // holds does not re-run the effect that loads on a path change.
-        const plan = planOpenDatabase({
-            openDatabasePath: databasePath,
-            requestedDatabasePath: dbPath,
-            loadingDatabasePath: loadingDatabasePath.current,
-        });
-
-        if (plan.closeFirst) {
-            await closeDatabase();
-        }
-
-        setDatabasePath(dbPath);
-
-        if (plan.startLoadDirectly) {
-            loadAssets(dbPath)
-                .catch(err => {
-                    log.exception(`Failed to load assets:`, err as Error);
+            // A database that cannot be reached is a different problem from one that is not there, and
+            // saying "not found" for an unreachable bucket tells the user their photos are gone when they
+            // are merely out of reach. checkDatabaseExists throws for anything that stopped it getting an
+            // answer, and only reports false when the storage answered and held no database.
+            let exists: boolean;
+            try {
+                exists = await checkDatabaseExists(dbPath);
+            }
+            catch (err) {
+                log.exception(`Could not reach the database at ${dbPath}`, err as Error);
+                addToast({
+                    message: `Could not reach the database: ${dbPath}`,
+                    color: 'danger',
+                    duration: 8000,
                 });
+                return;
+            }
+
+            if (!exists) {
+                addToast({
+                    message: `Database not found: ${dbPath}`,
+                    color: 'warning',
+                });
+                return;
+            }
+
+            // What to do about the database already on screen is decided by planOpenDatabase, which
+            // carries the reasoning and the tests. The short of it: a database being reopened while its
+            // own load is still running is left alone, and one being reopened after its load has finished
+            // is closed and then reloaded from here, because setting the path to the value it already
+            // holds does not re-run the effect that loads on a path change.
+            const plan = planOpenDatabase({
+                openDatabasePath: databasePath,
+                requestedDatabasePath: dbPath,
+                loadingDatabasePath: loadingDatabasePath.current,
+            });
+
+            if (plan.closeFirst) {
+                await closeDatabase();
+            }
+
+            setDatabasePath(dbPath);
+
+            if (plan.startLoadDirectly) {
+                loadAssets(dbPath)
+                    .catch(err => {
+                        log.exception(`Failed to load assets:`, err as Error);
+                    });
+            }
+
+            // Remembered here, in the one place every platform opens a database through, so the app
+            // reopens it next time it starts. main.tsx reads this key on mount.
+            //
+            // It used to be written by the Electron main process instead, which is why it only ever
+            // worked on the desktop: nothing obliged a new platform to write it and nothing noticed when
+            // it did not, so the read simply returned nothing and the app started with nothing open.
+            await config.set(LAST_DATABASE_KEY, dbPath);
+
+            await platform.notifyDatabaseOpened(dbPath);
         }
-
-        // Remembered here, in the one place every platform opens a database through, so the app
-        // reopens it next time it starts. main.tsx reads this key on mount.
-        //
-        // It used to be written by the Electron main process instead, which is why it only ever
-        // worked on the desktop: nothing obliged a new platform to write it and nothing noticed when
-        // it did not, so the read simply returned nothing and the app started with nothing open.
-        await config.set(LAST_DATABASE_KEY, dbPath);
-
-        await platform.notifyDatabaseOpened(dbPath);
+        finally {
+            setIsOpening(false);
+        }
     }
     
     //
@@ -968,6 +996,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
 
         // Asset database source.
         assetUrl: (assetId, assetType) => `${restApiUrl}/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databasePath || "")}`,
+        isOpening,
         databasePath,
         setDatabasePath,
         closeDatabase,
