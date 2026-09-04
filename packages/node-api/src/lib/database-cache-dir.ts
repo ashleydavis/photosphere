@@ -29,3 +29,13 @@ export function getDatabaseCacheDir(databasePath: string): string {
     const databaseKey = createHash("sha256").update(databasePath).digest("hex").slice(0, 16);
     return path.join(getCacheDir(), databaseKey);
 }
+
+//
+// Where this machine keeps its record of what it imported into one database.
+//
+// This is the only place the path is worked out. Nothing else derives it, in TypeScript or in a
+// smoke test's shell, because a second derivation goes stale silently the moment this one changes.
+//
+export function getImportRecordPath(databasePath: string): string {
+    return path.join(getDatabaseCacheDir(databasePath), "imports.dat");
+}

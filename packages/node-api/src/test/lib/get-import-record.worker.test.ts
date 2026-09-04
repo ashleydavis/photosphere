@@ -28,7 +28,7 @@ describe("getImportRecordHandler", () => {
         mockOpenStorage.mockResolvedValue({ storage: {}, rawStorage: {} } as any);
     });
 
-    test("returns what the database recorded", async () => {
+    test("returns what this machine recorded", async () => {
         mockLoadImportRecord.mockResolvedValue({
             entries: [{ assetId: "a", logicalPath: "one.png", outcome: "imported", importedAt: "", source: "automatic" }],
             truncated: true,
@@ -52,6 +52,18 @@ describe("getImportRecordHandler", () => {
     test("a missing database path is refused rather than read as an empty database", async () => {
         await expect(getImportRecordHandler({ databasePath: "" }, emptyContext))
             .rejects.toThrow("databasePath is required");
+        expect(mockLoadImportRecord).not.toHaveBeenCalled();
+    });
+
+    test("the record is read for the database path without opening the database", async () => {
+        mockLoadImportRecord.mockResolvedValue({ entries: [], truncated: false });
+
+        await getImportRecordHandler({ databasePath: "s3:bucket:/photos" }, emptyContext);
+
+        // The record is a local file beside the hash cache, so nothing about the database has to be
+        // reachable to read it: an S3 database with no credentials, or one whose remote is down,
+        // still answers "what did I import?".
+        expect(mockLoadImportRecord).toHaveBeenCalledWith("s3:bucket:/photos");
         expect(mockOpenStorage).not.toHaveBeenCalled();
     });
 });

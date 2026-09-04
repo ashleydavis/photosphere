@@ -999,6 +999,17 @@ describe('importAssetsHandler', () => {
         expect(mockRecordImports.mock.calls[0][1]).toHaveLength(1);
     });
 
+    test("records against the database path, not the database's storage", async () => {
+        watchHashCache();
+        scanFindsOneFile('/test/photos/img1.jpg');
+
+        await importAssetsHandler(makeData(), makeContext());
+
+        // The record is a local file worked out from the database path. Handing the record a storage
+        // is what used to put it inside the database, where several machines overwrote each other's.
+        expect(mockRecordImports.mock.calls[0][0]).toBe('/test/db');
+    });
+
     test("a dry run records nothing, because it changed nothing", async () => {
         watchHashCache();
         scanFindsOneFile('/test/photos/img1.jpg');

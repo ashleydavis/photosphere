@@ -221,16 +221,38 @@ log_success "The source files the database already held were deleted"
 
 # The record is what lets a user ask what came in. It is written by the import itself, so it is
 # already on disk here; the point of reading it after a restart is that it is not merely in memory.
-RECORD_FILE="$DEFAULT_DB_DIR/.db/imports.dat"
+#
+# The record's path carries a hash of the database path, so this script does not build it: a copy of
+# that derivation here would go stale silently the moment the real one changed. It searches the
+# machine's cache directory instead, which this suite points at a directory of its own per run.
+for attempt in $(seq 1 60); do
+    RECORD_FILE="$(find "$PHOTOSPHERE_CACHE_DIR" -name "imports.dat" -print -quit 2>/dev/null)"
+    if [ -n "$RECORD_FILE" ]; then
+        break
+    fi
+    sleep 1
+done
 
-wait_for_file "$RECORD_FILE"
-log_success "The imports were recorded"
+if [ -z "$RECORD_FILE" ]; then
+    log_error "The desktop app wrote no import record under $PHOTOSPHERE_CACHE_DIR"
+    find "$PHOTOSPHERE_CACHE_DIR" -type f 2>/dev/null
+    exit 1
+fi
+log_success "The imports were recorded at $RECORD_FILE"
 
 if ! grep -q '"source":"automatic"' "$RECORD_FILE"; then
     log_error "Photos brought in by automatic import were not badged automatic in $RECORD_FILE"
     exit 1
 fi
 log_success "The automatic imports are badged automatic"
+
+# The record belongs to the machine, not the database. Nothing may appear inside the database.
+RECORD_INSIDE_DATABASE="$(find "$DEFAULT_DB_DIR" -name "imports.dat" -print -quit 2>/dev/null)"
+if [ -n "$RECORD_INSIDE_DATABASE" ]; then
+    log_error "The desktop app wrote an import record inside the database at $RECORD_INSIDE_DATABASE. It belongs on this machine: inside a database, several machines overwrite each other's."
+    exit 1
+fi
+log_success "Nothing was written inside the database"
 
 check_no_errors "$TMP_DIR"
 

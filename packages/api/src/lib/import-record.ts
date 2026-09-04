@@ -9,15 +9,15 @@
 // least room. When the cap is reached the oldest entries are dropped and the interface says so,
 // rather than quietly presenting a partial history as a complete one.
 //
-// It lives in `.db/imports.dat` and belongs to the database it describes. It must never be copied or
-// synced to another: it is this machine's account of what it did, not part of the photo collection.
-// Nothing here adds it to the merkle tree, which is what keeps it out of sync and replication.
+// It belongs to the machine that wrote it, not to the database it describes, and it is kept on that
+// machine: a local file in that machine's cache directory for that database. It must never be
+// copied or synced to another machine, because it is this machine's account of what it did, not
+// part of the photo collection.
 //
-
+// This file holds no path. Working out where the record goes needs a filesystem, and only node-api
+// has one, so `getImportRecordPath` lives there. Everything here is the record's contents and the
+// rules for reading, writing and capping them, which every platform shares.
 //
-// Where the import record is kept, relative to the database root.
-//
-export const IMPORT_RECORD_PATH = ".db/imports.dat";
 
 //
 // How many imports are remembered. Older ones are dropped.

@@ -34,11 +34,12 @@ Once a run has read the whole listing, entries for items the library no longer h
 
 ### Where the cache lives
 
-This machine keeps a cache directory per database, and the hash cache is one thing inside it:
+This machine keeps a cache directory per database, and the hash cache is one thing inside it. The [import record](#where-the-record-lives) is the other:
 
 ```
 <platform cache location>/           getCacheDir()
     <a hash of the database path>/   getDatabaseCacheDir(databasePath)
+        imports.dat                  getImportRecordPath(databasePath)
         hash-cache/                  getHashCacheDir(databasePath)
             hash-cache-x.dat
 ```
@@ -141,13 +142,29 @@ Two machines each connected to the same remote end up with each other's photos: 
 
 ## What was imported
 
-Every import, whether the user asked for it or it arrived on its own, is written to the database's own import record at `.db/imports.dat`. The Import page shows it, newest first, so opening a database answers "what came in?" rather than only showing what has happened since the app started. Each row is badged **manual** or **automatic**, because a photo that arrived on its own is the one a user is most likely to be asking about.
+Every import, whether the user asked for it or it arrived on its own, is written to this machine's import record for that database. The Import page shows it, newest first, so opening a database answers "what came in?" rather than only showing what has happened since the app started. Each row is badged **manual** or **automatic**, because a photo that arrived on its own is the one a user is most likely to be asking about.
 
 The record holds the last 1000 imports. When it is full the oldest go and the page says so, rather than presenting a partial history as a complete one.
 
-**It never travels.** It is written straight to storage and is deliberately not added to the merkle tree, which is what keeps it out of sync, replication and consolidation: those copy what the tree indexes. It is this machine's account of what it did, not part of the photo collection, and a record that quietly travelled would show one machine's imports as another's. `87-import-record` proves it stays put while the photos themselves go.
+### Where the record lives
 
-Losing it costs nothing but the history: an unreadable record reads as empty, and a record that cannot be written does not fail the import, because by then the photos are already in the database.
+It is a local file, `imports.dat`, in the same per-database cache directory the hash cache sits in. [Where the cache lives](#where-the-cache-lives) has the layout, the platform locations, and why the database path is hashed rather than used directly.
+
+`getImportRecordPath` is the only thing that works the path out. Nothing else derives it, in TypeScript or in a smoke test's shell: a second copy of the derivation would go stale silently the moment this one changed, and the test standing on it would then be checking a file nothing writes. The smoke tests search the cache directory for `imports.dat` instead, which is exact because every suite runs with `PHOTOSPHERE_CACHE_DIR` pointed at a directory of its own.
+
+**It is never read or written through `IStorage`, on any platform.** It is reached through the local filesystem and nothing else. That is not a detail of the implementation, it is the whole point: `IStorage` is how the database is reached, and this is not part of the database.
+
+**It never travels**, and no arrangement is needed to keep it from travelling. It is not in the database, so sync, replication and consolidation cannot carry it: they copy what the merkle tree indexes, and the tree indexes the database. It is this machine's account of what it did, not part of the photo collection, and a record that travelled would show one machine's imports as another's. `87-import-record` proves no `imports.dat` appears anywhere inside the database directory after any of the three.
+
+Keeping it here is what makes it true. It used to sit inside the database at `.db/imports.dat`, where a database on shared storage and every S3 database is opened by more than one machine, and each did a full read-modify-write of that one file with no lock and no merge, so the last writer erased what the others had recorded. The file went on presenting itself as a complete account of what this machine imported while holding whatever the most recent machine happened to write. On the machine it belongs to, two writers into the same database (the CLI and the desktop app at once, say) merge instead: the update runs under a lock beside the file and is re-run if the file moved underneath it.
+
+Being a local file also means a flush costs a local read and write rather than, on an S3 database, a GET and a PUT of the whole record, and on an encrypted database a decrypt and encrypt of the whole record. It is written once every `IMPORT_RECORD_FLUSH_SIZE` photos.
+
+It is plaintext, including for an encrypted database, exactly as the hash cache beside it already is. The hash cache holds this machine's source file paths, content hashes and asset ids for that database in plaintext; the record holds paths, outcomes and a micro thumbnail per entry. The photos it names were on this machine in the clear when they were imported, so the record exposes nothing that machine did not already hold. What encryption protects is the database, which is what leaves the machine.
+
+There is no migration from the old location, because no database has a record written there. Nothing reads it and nothing deletes it: a machine's record starts empty and fills from its next import.
+
+Losing it costs nothing but the history: an unreadable record reads as empty, and a record that cannot be written does not fail the import, because by then the photos are already in the database. Clearing the machine's caches loses it, which is a real cost the hash cache does not have: the hash cache can be recomputed from the files and this cannot. It is kept here anyway, because a per-database directory the operating system already knows how to reap is worth more than a history of imports nobody has asked to keep forever.
 
 ## What each platform can do
 
@@ -210,7 +227,7 @@ Unit tests sit beside the code under `src/test/`. The end-to-end behaviour is co
 | `84-watch-sync-evict` | Imports reach the origin once `psi sync` pushes them, and the local originals stay. Eviction is no longer something the CLI can turn on, so it is covered by its unit tests rather than here. |
 | `85-consolidate` | Creating a remote, consolidating into an unrelated one without duplicating shared content, and sync working afterwards where it refused before. |
 | `86-multi-device` | Two databases connected to one remote each end up with the other's photos. |
-| `87-import-record` | What a database imported is remembered across restarts, manual and automatic imports are badged apart, and the record never travels: sync, consolidation and replication all leave `.db/imports.dat` behind while the photos themselves go. |
+| `87-import-record` | What a database imported is remembered across restarts, manual and automatic imports are badged apart, the record is written outside the database in this machine's cache directory, two databases on one machine each get their own, and no `imports.dat` appears inside a database directory after sync, consolidation or replication. |
 
 And by Electron smoke tests, which drive the real app:
 

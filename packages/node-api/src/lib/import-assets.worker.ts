@@ -199,8 +199,8 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     // Flushed part way through rather than only at the end, because the end used to be the only
     // place it happened: an import of two thousand photos that died at nineteen hundred wrote no
     // record at all, and an automatic import that runs until the app quits never reached the end.
-    // Each flush is a full read-modify-write of one JSON file, which is why it is every hundred
-    // rather than every file. A dry run records nothing, because it changed nothing.
+    // Each flush is a full read-modify-write of one local JSON file, which is why it is every
+    // hundred rather than every file. A dry run records nothing, because it changed nothing.
     //
     async function flushImportRecord(): Promise<void> {
         if (dryRun || recordEntries.length === 0) {
@@ -209,7 +209,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
 
         const entriesToWrite = recordEntries;
         recordEntries = [];
-        await recordImports(storage, entriesToWrite);
+        await recordImports(storageDescriptor.databasePath, entriesToWrite);
     }
 
     //
