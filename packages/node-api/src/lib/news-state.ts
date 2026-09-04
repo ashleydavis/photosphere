@@ -1,7 +1,7 @@
-import * as os from "os";
 import * as path from "path";
 import { readFile, writeFile, mkdir } from "fs/promises";
 import yaml from "js-yaml";
+import { getConfigDir } from "node-utils";
 
 //
 // Per-install state for the notification system. Stored as YAML at
@@ -35,7 +35,7 @@ interface IYamlNewsState {
     last_shown_update_version?: string;
 }
 
-const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || path.join(os.homedir(), ".config", "photosphere");
+const CONFIG_DIR = getConfigDir();
 const STATE_FILE = path.join(CONFIG_DIR, "news.yaml");
 
 //

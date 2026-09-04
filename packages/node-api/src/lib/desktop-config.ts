@@ -1,6 +1,5 @@
-import * as os from "os";
 import * as path from "path";
-import { readToml, updateToml, pathExists } from "node-utils";
+import { getConfigDir, readToml, updateToml, pathExists } from "node-utils";
 import { IAutoImportSource } from "api";
 
 //
@@ -127,8 +126,7 @@ interface ITomlDesktopConfig {
     auto_import_cleanup_enabled?: boolean;
 }
 
-const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || path.join(os.homedir(), ".config", "photosphere");
-const CONFIG_FILE = path.join(CONFIG_DIR, "desktop.toml");
+const CONFIG_FILE = path.join(getConfigDir(), "desktop.toml");
 export const MAX_RECENT_SEARCHES = 10;
 
 //

@@ -1,6 +1,5 @@
-import * as os from "os";
 import * as path from "path";
-import { readToml, updateToml, pathExists } from "node-utils";
+import { getConfigDir, readToml, updateToml, pathExists } from "node-utils";
 import { databaseEntryToToml, tomlEntryToDatabaseEntry, type IDatabaseEntry, type ITomlDatabasesConfig } from "./databases-config-format";
 
 // Re-exported: this module has always been where the codebase imports the entry type from. The
@@ -23,20 +22,16 @@ export interface IDatabasesConfig {
 }
 
 //
-// The directory holding databases.toml.
+// The file holding the list of databases, in the Photosphere data directory.
 //
-// Desktop and the CLI keep it under the user's home directory. A device has no home directory: the
-// mobile `os` shim returns an empty string from homedir() precisely so derived paths stay inside the
-// storage sandbox, and the app's database list sits at the root of that sandbox. Reading homedir()
-// therefore tells this module which platform it is on without either side having to configure it.
+// getConfigDir works out where that is per platform: under the user's home directory on desktop and
+// on the CLI, and the app's storage sandbox on a device, which has no home directory.
 //
 // Getting this wrong is not harmless. It previously always appended ".config/photosphere", so on a
 // device the lookup resolved to a file that cannot exist, every credential lookup found an empty
 // list, and S3 databases failed with "Region is missing" while working perfectly on desktop.
 //
-const HOME_DIR = os.homedir();
-const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || (HOME_DIR ? path.join(HOME_DIR, ".config", "photosphere") : ".");
-const DATABASES_FILE = path.join(CONFIG_DIR, "databases.toml");
+const DATABASES_FILE = path.join(getConfigDir(), "databases.toml");
 
 //
 // How many recently opened databases are remembered. Named once so the list that is trimmed and the

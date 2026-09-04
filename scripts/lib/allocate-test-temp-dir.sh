@@ -66,17 +66,27 @@ photosphere_test_temp_dir() {
 # Points every child process at the given test's directory, so the CLI and the app write their
 # temporary files inside it rather than into a location shared with every other test.
 #
-# Both variables are exported. PHOTOSPHERE_TMP_DIR is Photosphere's own setting for where it puts
+# Every variable is exported. PHOTOSPHERE_TMP_DIR is Photosphere's own setting for where it puts
 # temporary files, which getProcessTmpDir() reads, so pointing it at the test's directory is what
-# keeps the app's scratch files inside it. TEST_TMP_DIR is the shell-side name the CLI suites read
-# for their own fixtures. Exporting is the whole point. TEST_TMP_DIR was once set without being
-# exported, so the CLI never saw it, every CLI process on the machine shared /tmp/photosphere, and
-# `hash-cache clear` deleted it out from under a suite running alongside.
+# keeps the app's scratch files inside it. PHOTOSPHERE_CACHE_DIR does the same for the hash caches,
+# which getCacheDir() reads and which live with the user's own data rather than in the temp
+# directory, because a cache swept away costs a full re-hash of everything already imported.
+# TEST_TMP_DIR is the shell-side name the CLI suites read for their own fixtures.
+#
+# The hash cache is set here rather than left to each suite because every suite needs it and only
+# some of them set anything themselves: the desktop suite builds most of its fixtures by shelling out
+# to the CLI from inside a test, and the mobile suite's create_database does the same, none of which
+# names a directory of its own. One export here covers those and every suite written later.
+#
+# Exporting is the whole point. TEST_TMP_DIR was once set without being exported, so the CLI never
+# saw it, every CLI process on the machine shared /tmp/photosphere, and `hash-cache clear` deleted it
+# out from under a suite running alongside.
 # Usage: photosphere_export_test_temp <dir>
 #
 photosphere_export_test_temp() {
     local dir="$1"
     export PHOTOSPHERE_TMP_DIR="$dir"
+    export PHOTOSPHERE_CACHE_DIR="$dir/cache"
     export TEST_TMP_DIR="$dir"
 }
 

@@ -1,8 +1,10 @@
 import * as crypto from 'crypto';
+import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { getHashCacheDir, HashCache, IHashCacheEntry } from '../../lib/hash-cache';
-import { createTestTempDir } from 'node-utils';
+import { getDatabaseCacheDir } from '../../lib/database-cache-dir';
+import { createTestTempDir, getCacheDir, getProcessTmpDir } from 'node-utils';
 
 // Mock implementation of IStorage (no longer used, kept for reference)
 class MockStorage {
@@ -652,7 +654,36 @@ describe('HashCache concurrent saves', () => {
 });
 
 
+//
+// Puts an environment variable back to what it was, including back to not being set at all.
+//
+function restoreEnvironmentVariable(name: string, originalValue: string | undefined): void {
+    if (originalValue === undefined) {
+        delete process.env[name];
+    }
+    else {
+        process.env[name] = originalValue;
+    }
+}
+
 describe('getHashCacheDir', () => {
+    //
+    // Two of these tests point the cache and scratch directories at somewhere of their own, so the
+    // settings are put back afterwards rather than left for whatever runs next in this file.
+    //
+    let originalCacheDir: string | undefined;
+    let originalTmpDir: string | undefined;
+
+    beforeEach(() => {
+        originalCacheDir = process.env.PHOTOSPHERE_CACHE_DIR;
+        originalTmpDir = process.env.PHOTOSPHERE_TMP_DIR;
+    });
+
+    afterEach(() => {
+        restoreEnvironmentVariable('PHOTOSPHERE_CACHE_DIR', originalCacheDir);
+        restoreEnvironmentVariable('PHOTOSPHERE_TMP_DIR', originalTmpDir);
+    });
+
     test('gives two databases two different cache directories', () => {
         // An entry records the id its file has in the database, and the same photo imported into two
         // databases has two ids, so one cache cannot serve both.
@@ -663,16 +694,63 @@ describe('getHashCacheDir', () => {
         expect(getHashCacheDir('/photos/one')).toBe(getHashCacheDir('/photos/one'));
     });
 
-    test('puts every database cache under one hash-cache directory', () => {
-        expect(path.dirname(getHashCacheDir('/photos/one'))).toBe(path.dirname(getHashCacheDir('/photos/two')));
-        expect(path.basename(path.dirname(getHashCacheDir('/photos/one')))).toBe('hash-cache');
+    test('names the hash cache apart from anything else kept about the database', () => {
+        // The database's cache directory is shared with whatever else this machine works out about
+        // it, so the hash cache has a name of its own inside rather than being the directory itself.
+        expect(path.basename(getHashCacheDir('/photos/one'))).toBe('hash-cache');
     });
 
     test('makes a directory name out of a database path that could never be one', () => {
         // An S3 database path has colons and slashes in it, which cannot be pasted into a directory
         // name on any platform.
-        const cacheDir = getHashCacheDir('s3:my-bucket:/photos/db');
-        expect(path.basename(cacheDir)).toMatch(/^[0-9a-f]+$/);
+        expect(path.basename(getDatabaseCacheDir('s3:my-bucket:/photos/db'))).toMatch(/^[0-9a-f]+$/);
+    });
+
+    test('sits under the platform cache directory, not the process temp directory', () => {
+        // Everything the cache knows can be recomputed, but recomputing it for a photo library means
+        // copying and hashing every photo already imported. Under the process temp directory that
+        // happened at every reboot on Linux, and after a few untouched days on macOS, with nothing
+        // to say it had.
+        const runRoot = createTestTempDir('hash-cache-home-check');
+        process.env.PHOTOSPHERE_CACHE_DIR = path.join(runRoot, 'cache');
+        process.env.PHOTOSPHERE_TMP_DIR = path.join(runRoot, 'scratch');
+
+        const cacheDir = getHashCacheDir('/photos/one');
+
+        expect(cacheDir.startsWith(getCacheDir())).toBe(true);
+        expect(cacheDir.startsWith(getProcessTmpDir())).toBe(false);
+    });
+
+    test('sits inside the database cache directory, which is where anything else about a database goes', () => {
+        expect(path.dirname(getHashCacheDir('/photos/one'))).toBe(getDatabaseCacheDir('/photos/one'));
+    });
+
+    test('is still found once the process temp directory has been taken away', async () => {
+        // This is the restart, as far as a test can stage one: the scratch directory is gone and the
+        // cache is read back anyway. Every platform gets this, because every platform's temp
+        // directory is swept by something the app never hears about.
+        const runRoot = createTestTempDir('hash-cache-survives-temp');
+        process.env.PHOTOSPHERE_CACHE_DIR = path.join(runRoot, 'cache');
+        process.env.PHOTOSPHERE_TMP_DIR = path.join(runRoot, 'scratch');
+        await fs.mkdir(getProcessTmpDir(), { recursive: true });
+
+        const writer = new HashCache(getHashCacheDir('/photos/one'));
+        await writer.load();
+        writer.addSourceHash('device-item-1', {
+            hash: crypto.createHash('sha256').update('photo').digest(),
+            length: 4096,
+            lastModified: new Date(1700000000000),
+        });
+        await writer.save();
+
+        // The process temp directory itself goes, exactly as a boot-time sweep of /tmp takes it.
+        // Nothing put anything in it, so removing the directory alone is the whole of it.
+        await fs.rmdir(getProcessTmpDir());
+
+        const reader = new HashCache(getHashCacheDir('/photos/one'));
+        await reader.load();
+
+        expect(reader.getHash('device-item-1')!.length).toBe(4096);
     });
 });
 
@@ -799,6 +877,43 @@ describe('asset ids and source-keyed entries', () => {
 
         expect(removed).toBe(0);
         expect(hashCache.getHash('photos/manual-import.jpg')).toBeDefined();
+    });
+
+    test('keeps an entry the walk saw at an absolute path', async () => {
+        // A watched folder's source ids are absolute paths, and an entry is stored with its leading
+        // slash taken off. Compared raw, the stored "photos/one.jpg" never matched the live
+        // "/photos/one.jpg", so on Linux and macOS every entry automatic import wrote was swept at
+        // the end of the very run that wrote it and the whole folder was hashed again on the next.
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        hashCache.addSourceHash('/photos/one.jpg', { hash: createHash('a'), length: 1, lastModified: new Date(1000) });
+
+        const removed = hashCache.removeSourceEntriesNotIn(new Set(['/photos/one.jpg']));
+
+        expect(removed).toBe(0);
+        expect(hashCache.getHash('/photos/one.jpg')).toBeDefined();
+    });
+
+    test('keeps an entry the walk saw at a Windows path', async () => {
+        // The same failure on the other separator: stored as "C:/photos/one.jpg", walked as
+        // "C:\photos\one.jpg".
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        hashCache.addSourceHash('C:\\photos\\one.jpg', { hash: createHash('a'), length: 1, lastModified: new Date(1000) });
+
+        const removed = hashCache.removeSourceEntriesNotIn(new Set(['C:\\photos\\one.jpg']));
+
+        expect(removed).toBe(0);
+        expect(hashCache.getHash('C:\\photos\\one.jpg')).toBeDefined();
+    });
+
+    test('still drops an absolute path the walk did not see', async () => {
+        const hashCache = new HashCache(cacheDir);
+        await hashCache.load();
+        hashCache.addSourceHash('/photos/gone.jpg', { hash: createHash('a'), length: 1, lastModified: new Date(1000) });
+
+        expect(hashCache.removeSourceEntriesNotIn(new Set(['/photos/one.jpg']))).toBe(1);
+        expect(hashCache.getHash('/photos/gone.jpg')).toBeUndefined();
     });
 
     test('a sweep survives a save, so the dropped entries are gone for the next run too', async () => {

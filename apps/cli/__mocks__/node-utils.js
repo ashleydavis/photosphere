@@ -39,9 +39,22 @@ function registerTerminationCallback(fn) {
     return;
 }
 
+// Where Photosphere keeps its own data, and the caches it can rebuild. Fixed here so a test
+// importing the CLI does not resolve a path under the developer's real home directory, and never
+// writes to it.
+function getConfigDir() {
+    return '/test-config';
+}
+
+function getCacheDir() {
+    return '/test-cache';
+}
+
 module.exports = {
     exit,
     TestUuidGenerator,
     TestTimestampProvider,
-    registerTerminationCallback
+    registerTerminationCallback,
+    getConfigDir,
+    getCacheDir
 };

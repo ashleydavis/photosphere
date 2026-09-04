@@ -5,8 +5,7 @@ import { log } from "utils";
 import { version } from "config";
 import { buildMetadata } from "config";
 import { join } from "path";
-import * as os from "os";
-import { getProcessTmpDir } from "node-utils";
+import { getCacheDir, getConfigDir, getProcessTmpDir } from "node-utils";
 import { CURRENT_DATABASE_VERSION } from "merkle-tree";
 
 //
@@ -77,13 +76,14 @@ export async function versionCommand(): Promise<void> {
     log.info('');
     
     log.info(pc.bold('Directories:'));
-    const configDir = join(os.homedir(), '.config', 'photosphere');
+    const configDir = getConfigDir();
     log.info(`  ${pc.bold('Config')}: ${pc.cyan(configDir)}`);
     log.info(`  ${pc.bold('Temp')}: ${pc.cyan(join(getProcessTmpDir(), 'photosphere'))}`);
     log.info(`  ${pc.bold('Log files')}: ${pc.cyan(join(getProcessTmpDir(), 'photosphere', 'logs'))}`);
-    // The directory holding every database's hash cache, rather than one cache file: there is one
-    // cache per database now, and this command has no database in hand to name a single one.
-    log.info(`  ${pc.bold('Hash caches')}: ${pc.cyan(join(getProcessTmpDir(), 'photosphere', 'hash-cache'))}`);
+    // Where this machine keeps what it has worked out about each database, the hash caches among
+    // them. A directory per database rather than one file, and this command has no database in hand
+    // to name a single one, so it names the root they all sit under.
+    log.info(`  ${pc.bold('Cache')}: ${pc.cyan(getCacheDir())}`);
     log.info('');
     
     // Show overall status

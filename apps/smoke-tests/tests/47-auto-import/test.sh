@@ -48,17 +48,24 @@ read_value() {
 
 # Waits for the hash cache file the imports should have written into the app's sandbox.
 #
-# The directory under hash-cache/ is named by a hash of the database path, and the app makes its own
-# database here, so the name is not known to the test and the tree is listed rather than the file
-# named. `ls -R` is used instead of a glob because the shell `adb shell` gives us runs as the shell
-# user, which cannot read the app's private storage, so a pattern would come back unexpanded.
+# It lands at files/<a hash of the database path>/hash-cache/hash-cache-x.dat: the app's own data
+# directory rather than anywhere temporary, which is what lets it survive the app being killed and
+# started again, and is the same choice the desktop and the CLI make. The app makes its own database
+# here, so the hashed directory name is not known to the test and the whole tree is listed rather than
+# the file named. `ls -R` is used instead of a glob because the shell `adb shell` gives us runs as the
+# shell user, which cannot read the app's private storage, so a pattern would come back unexpanded.
+#
+# Both the directory and the file are looked for, so a cache written to the sandbox root, or anywhere
+# else the layout might drift to, does not read as a pass.
 #
 # It is polled rather than read once because the save happens as the import finishes, which is
 # around the same moment as the line the test waited for.
 wait_for_hash_cache() {
     local ticks=30
+    local listing
     while [ "$ticks" -gt 0 ]; do
-        if adb shell run-as "$APP_ID" ls -R files/tmp/photosphere/hash-cache 2>/dev/null | tr -d '\r' | grep -q "hash-cache-x.dat"; then
+        listing="$(adb shell run-as "$APP_ID" ls -R files 2>/dev/null | tr -d '\r')"
+        if echo "$listing" | grep -q "/hash-cache:" && echo "$listing" | grep -q "hash-cache-x.dat"; then
             return 0
         fi
         sleep 1
@@ -153,7 +160,7 @@ wait_for_log "$TMP_DIR" "Import: 1 imported" 180 || exit 1
 # import looked wrong from outside, and every run re-exported and re-hashed every photo it had
 # already imported, which on 2,186 photos is about an hour of work per run instead of a second.
 if ! wait_for_hash_cache; then
-    log_error "The hash cache was never written: no hash-cache-x.dat under files/tmp/photosphere/hash-cache after two imports. Every import will re-hash every photo it has already imported."
+    log_error "The hash cache was never written: no hash-cache/hash-cache-x.dat anywhere under files/ after two imports. Every import will re-hash every photo it has already imported."
     exit 1
 fi
 log_info "Hash cache written to the app sandbox"
@@ -163,6 +170,29 @@ log_info "Hash cache written to the app sandbox"
 # arrive.
 send_command "$APP_PORT" navigate '{"page":"/"}' || exit 1
 wait_for_log "$TMP_DIR" "Gallery loaded: 2 assets" 60 || exit 1
+
+# Restart the app and let automatic import run again over the same two photos.
+#
+# This is the whole point of the cache having a home that outlives the process. Automatic import is
+# already switched on and the setting is stored on the device, so the relaunched app starts its own
+# pass with no help from the test.
+stop_app "$APP_PORT" "$TMP_DIR"
+start_app "$TMP_DIR"
+wait_for_ready "$APP_PORT"
+
+# Nothing hashed, nothing read back from the cache after being opened, and both photos recognised
+# before they were opened at all. That last part is what costs nothing: an item answered there is
+# never copied out of the photo library, which on a real library is a full copy and a full hash of
+# every photo already imported, every single run.
+#
+# Matched as one substring of the timings line so the three figures have to agree in one pass rather
+# than being read from three different ones. They are adjacent in the order formatImportTimings
+# writes them.
+#
+# Waited for generously because the relaunched app may already have run a pass before the WebView
+# subscribed to task messages, and the next one is a pause away.
+wait_for_log "$TMP_DIR" '"filesHashed":0,"filesFromCache":0,"skippedBeforeOpening":2' 180 || exit 1
+log_info "The restarted app recognised both photos without copying or hashing either"
 
 check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1
 

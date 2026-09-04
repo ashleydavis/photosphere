@@ -47,6 +47,10 @@ source "$_ENCRYPTED_SCRIPT_DIR/../../scripts/lib/test-timeout.sh"
 # suite's `hash-cache clear` then deletes underneath it.
 export TEST_TMP_DIR="${TEST_TMP_DIR:-$(photosphere_test_temp_dir encrypted-suite)}"
 export PHOTOSPHERE_TMP_DIR="$TEST_TMP_DIR"
+
+# The hash caches are not temporary files: they live with the user's own data so they outlive a
+# restart, so pointing the temp directory at this suite says nothing about where they go.
+export PHOTOSPHERE_CACHE_DIR="$TEST_TMP_DIR/cache"
 TEST_FILES_DIR="../../test"
 
 # Isolate the vault and config so tests don't pollute the user's real data.

@@ -511,6 +511,88 @@ export function getProcessTmpDir(): string {
     return os.tmpdir();
 }
 
+//
+// Returns the directory Photosphere keeps its settings in: the databases list, the desktop config,
+// the news state.
+//
+// The same Unix-style path on every desktop platform, Windows included, so one support answer covers
+// every machine. PHOTOSPHERE_CONFIG_DIR overrides it, which is how a test run stays off the
+// developer's real data.
+//
+// A device has no home directory, and the mobile `os` shim returns an empty string from homedir()
+// precisely so derived paths stay inside the app's storage sandbox, so an empty home means the
+// sandbox root.
+//
+// Rebuildable data does not belong here. See getCacheDir.
+//
+export function getConfigDir(): string {
+    if (process.env.PHOTOSPHERE_CONFIG_DIR) {
+        return process.env.PHOTOSPHERE_CONFIG_DIR;
+    }
+    const homeDir = os.homedir();
+    if (homeDir) {
+        return path.join(homeDir, '.config', 'photosphere');
+    }
+    return '.';
+}
+
+//
+// Returns the directory Photosphere keeps data it could rebuild in: today, the hash caches.
+//
+// Each platform's own cache location, which is the one thing here not shared with the config. The
+// config uses one Unix-style path everywhere on purpose; a cache is the opposite case, because the
+// operating system, the backup tool and the disk cleaner all have opinions about where caches live
+// and each looks in its own place.
+//
+//  - macOS: ~/Library/Caches/photosphere.
+//  - Windows: LOCALAPPDATA\photosphere\cache. Local, not Roaming: a cache must not follow a roaming
+//    profile around a network.
+//  - Every other Unix: XDG_CACHE_HOME, else ~/.cache, then "photosphere" under it. Linux is the one
+//    that matters here, but XDG is the convention on the BSDs and Solaris too, so they are left to
+//    fall through to it rather than being named and then given the same answer.
+//  - A device: the app's storage sandbox, which goes when the app is uninstalled.
+//
+// Not the process temp directory, which is where the hash cache used to be. "Disposable" and
+// "deleted without warning" are not the same thing: Linux clears /tmp at boot and macOS reaps
+// /var/folders after a few untouched days, so the cache went at a moment nothing announced and the
+// next run copied and hashed every photo it had already imported.
+//
+// PHOTOSPHERE_CACHE_DIR overrides it, separately from PHOTOSPHERE_CONFIG_DIR because the two are
+// isolated by different things: a test run always wants its own cache, and the temp allocator gives
+// every suite one, but the encrypted CLI suite deliberately shares one config across its tests.
+//
+export function getCacheDir(): string {
+    if (process.env.PHOTOSPHERE_CACHE_DIR) {
+        return process.env.PHOTOSPHERE_CACHE_DIR;
+    }
+
+    // A device, answered first and never by asking the platform. The mobile `os` shim returns an
+    // empty home directory, which is what keeps every derived path inside the app's storage sandbox,
+    // and it is the only reliable signal there: the same shim answers platform() with "android" on
+    // iOS as well, so a device that reached the branches below would be told it was an Android one.
+    // Anything moved above this line has to be true of a phone as well as a desktop.
+    const homeDir = os.homedir();
+    if (!homeDir) {
+        return '.';
+    }
+
+    if (os.platform() === 'darwin') {
+        return path.join(homeDir, 'Library', 'Caches', 'photosphere');
+    }
+
+    if (os.platform() === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA || path.join(homeDir, 'AppData', 'Local');
+        return path.join(localAppData, 'photosphere', 'cache');
+    }
+
+    // Linux, and every other Unix that is not macOS. XDG_CACHE_HOME says where caches go; ~/.cache is
+    // what to use when it does not say, which is the usual case.
+    if (process.env.XDG_CACHE_HOME) {
+        return path.join(process.env.XDG_CACHE_HOME, 'photosphere');
+    }
+    return path.join(homeDir, '.cache', 'photosphere');
+}
+
 
 //
 // Reads the first `byteCount` bytes of a file, or the whole file when it is shorter.

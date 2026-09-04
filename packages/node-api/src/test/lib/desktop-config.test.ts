@@ -11,6 +11,9 @@ jest.mock('node-utils', () => ({
     writeToml: mockWriteToml,
     readJson: mockReadJson,
     remove: mockRemove,
+    // Where desktop.toml sits. Named here so the module under test resolves a path at import time
+    // without reaching for a real home directory.
+    getConfigDir: () => '/test-config',
     // Mirror the real updateToml as a read-modify-write over the mocked fs helpers, so the
     // config mutators (which now go through updateDesktopConfig -> updateToml) still exercise
     // the mocked readToml/writeToml the existing assertions rely on.

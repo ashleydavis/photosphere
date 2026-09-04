@@ -20,10 +20,13 @@ NC='\033[0m' # No Color
 export TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp}"
 
 # The same directory again under Photosphere's own temp-directory setting, so the temporary files
-# every psi process this test starts writes (the hash cache and the log directory among them) land
-# inside this test's own directory rather than in a location shared with every other test on the
-# machine.
+# every psi process this test starts writes (the log directory among them) land inside this test's
+# own directory rather than in a location shared with every other test on the machine.
 export PHOTOSPHERE_TMP_DIR="$TEST_TMP_DIR"
+
+# And the hash caches, which are not temporary files: they live with the user's own data so they
+# outlive a restart, so pointing the temp directory at this test says nothing about where they go.
+export PHOTOSPHERE_CACHE_DIR="$TEST_TMP_DIR/cache"
 
 TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
 TEST_FILES_DIR="../../test"

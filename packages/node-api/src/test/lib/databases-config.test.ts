@@ -18,6 +18,9 @@ jest.mock('node-utils', () => ({
     pathExists: mockPathExists,
     readToml: mockReadToml,
     updateToml: mockUpdateToml,
+    // Where databases.toml sits. Named here so the module under test resolves a path at import time
+    // without reaching for a real home directory.
+    getConfigDir: () => '/test-config',
 }));
 
 import {

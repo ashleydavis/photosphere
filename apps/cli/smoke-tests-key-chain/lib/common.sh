@@ -27,6 +27,10 @@ export TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp}"
 # every psi process this test starts writes land inside this test's own directory.
 export PHOTOSPHERE_TMP_DIR="$TEST_TMP_DIR"
 
+# And the hash caches, which are not temporary files: they live with the user's own data so they
+# outlive a restart, so pointing the temp directory at this test says nothing about where they go.
+export PHOTOSPHERE_CACHE_DIR="$TEST_TMP_DIR/cache"
+
 TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
 TEST_FILES_DIR="../../test"
 MULTIPLE_IMAGES_DIR="../../test/multiple-files"

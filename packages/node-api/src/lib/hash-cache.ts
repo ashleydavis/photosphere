@@ -1,8 +1,9 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { createHash } from "crypto";
-import { getProcessTmpDir, pathExists, updateFileRawOptimistic } from "node-utils";
+import { pathExists, updateFileRawOptimistic } from "node-utils";
 import { log } from "utils";
+import { getDatabaseCacheDir } from "./database-cache-dir";
 
 /**
  * File structure:
@@ -74,20 +75,25 @@ function isUpdateContentionError(error: any): boolean {
 //
 // The directory holding the hash cache of one database.
 //
-// There is one cache per database, not one per machine, because an entry now records the id the
-// file has in the database. A photo imported into two databases has two ids and one entry cannot
-// hold both, so the caches are kept apart rather than making the entry carry a map of database to
-// id, which would mean a variable-length field in a fixed-width binary format for the sake of a
-// case that is rare.
+// There is one cache per database, not one per machine, because an entry records the id the file has
+// in the database. A photo imported into two databases has two ids and one entry cannot hold both,
+// so the caches are kept apart rather than making the entry carry a map of database to id, which
+// would mean a variable-length field in a fixed-width binary format for the sake of a case that is
+// rare.
 //
-// The database path is hashed rather than used directly: it can be a Windows path, a URL-ish
-// "s3:bucket:/path", or anything else the storage layer accepts, none of which is safe to paste
-// into a directory name. The hash is stable for a given path, which is all that is needed, and the
-// commands that report on the cache print the whole directory so nobody has to decode it.
+// It sits in this machine's cache directory for that database, which outlives a restart on the
+// desktop, the CLI and a phone alike while still telling the operating system, the backup tool and
+// the disk cleaner that everything in it can be thrown away. See getDatabaseCacheDir and getCacheDir.
+//
+// It used to sit under the process temp directory, and that was wrong everywhere rather than only on
+// one platform: Linux clears /tmp at boot and sweeps old files out of it, macOS reaps /var/folders
+// after a few days of not being touched, and a phone's "temp" is a directory the app itself is free
+// to clear. Everything the cache exists to avoid, which for a photo library is a full copy and a full
+// hash of every photo already imported, was being paid again after whichever of those happened first,
+// and nothing announced it.
 //
 export function getHashCacheDir(databasePath: string): string {
-    const databaseKey = createHash("sha256").update(databasePath).digest("hex").slice(0, 16);
-    return path.join(getProcessTmpDir(), "photosphere", "hash-cache", databaseKey);
+    return path.join(getDatabaseCacheDir(databasePath), "hash-cache");
 }
 
 //
@@ -206,6 +212,23 @@ export class HashCache {
         private readonly cacheDir: string,
         private readonly isReadonly: boolean = false
     ) {}
+
+    //
+    // The form a key is stored and looked up under.
+    //
+    // A leading slash goes, and a backslash becomes a forward slash, so the same file named either
+    // way is one entry rather than two.
+    //
+    // One function rather than the same two lines written out at each entry point, because written
+    // out they drifted: getHash and removeHash dropped the leading slash and left backslashes alone,
+    // while upsertHash and setAssetId did both. On Windows that meant a file written under
+    // "C:\photos\one.jpg" was stored as "C:/photos/one.jpg" and never found again, so the cache
+    // answered nothing and every import hashed every file it had already hashed.
+    //
+    private normalizeKey(key: string): string {
+        const withoutLeadingSlash = key.startsWith('/') ? key.slice(1) : key;
+        return withoutLeadingSlash.replace(/\\/g, '/');
+    }
 
     //
     // Gets the size of a hash cache entry.
@@ -631,14 +654,7 @@ export class HashCache {
             return undefined;
         }
 
-        //
-        // Remove leading slash.
-        //
-        if (key.startsWith('/')) {
-            key = key.slice(1);
-        }
-
-        const entryOffset = this.findEntryOffset(key);
+        const entryOffset = this.findEntryOffset(this.normalizeKey(key));
 
         if (entryOffset < 0) {
             return undefined; // Not found
@@ -690,21 +706,13 @@ export class HashCache {
             throw new Error("Hash cache not initialized");
         }
 
-        //
-        // Remove leading slash.
-        //
-        if (key.startsWith('/')) {
-            key = key.slice(1);
-        }
-
         const { hash, length, lastModified } = hashedFile;
 
         if (hash.length !== 32) {
             throw new Error(`Invalid hash length: ${hash.length}. Expected 32 bytes.`);
         }
 
-        // Normalize the file path for consistent comparison
-        key = key.replace(/\\/g, '/');
+        key = this.normalizeKey(key);
 
         const entryOffset = this.findEntryOffset(key);
         if (entryOffset >= 0) {
@@ -814,14 +822,7 @@ export class HashCache {
             return false;
         }
 
-        //
-        // Remove leading slash.
-        //
-        if (key.startsWith('/')) {
-            key = key.slice(1);
-        }
-
-        key = key.replace(/\\/g, '/');
+        key = this.normalizeKey(key);
 
         const entryOffset = this.findEntryOffset(key);
         if (entryOffset < 0) {
@@ -861,9 +862,22 @@ export class HashCache {
     // The caller has to have walked the whole listing before calling this: a partial listing would
     // read as "everything else is gone" and delete the lot.
     //
+    // The live ids are put into the form entries are stored in before they are compared, because a
+    // source id is often a file path and a watched folder's paths are absolute. Compared raw, a
+    // stored "photos/one.jpg" never matched the live "/photos/one.jpg" on Linux or macOS, nor
+    // "C:/photos/one.jpg" the live "C:\photos\one.jpg" on Windows, so every entry automatic import
+    // had written read as dead and was swept at the end of the very run that wrote it. The desktop
+    // and the CLI therefore re-hashed the whole watched folder on every run, while a phone was
+    // unaffected because a photo library id has neither a leading slash nor a backslash in it.
+    //
     removeSourceEntriesNotIn(liveSourceIds: Set<string>): number {
+        const liveKeys = new Set<string>();
+        for (const liveSourceId of liveSourceIds) {
+            liveKeys.add(this.normalizeKey(liveSourceId));
+        }
+
         const deadKeys = this.getAllEntries()
-            .filter(entry => entry.keyedBySourceId && !liveSourceIds.has(entry.key))
+            .filter(entry => entry.keyedBySourceId && !liveKeys.has(entry.key))
             .map(entry => entry.key);
 
         for (const deadKey of deadKeys) {
@@ -884,12 +898,7 @@ export class HashCache {
             return false;
         }
 
-        //
-        // Remove leading slash.
-        //
-        if (key.startsWith('/')) {
-            key = key.slice(1);
-        }
+        key = this.normalizeKey(key);
 
         const entryOffset = this.findEntryOffset(key);
         if (entryOffset < 0) {
@@ -913,11 +922,10 @@ export class HashCache {
         this.entryCount--;
         this.isDirty = true;
 
-        // Record the removal so the next save applies it to the on-disk cache. The key uses the
-        // same normalization findEntryOffset applies, so it matches the entry that was removed.
-        const normalizedKey = key.replace(/\\/g, '/');
-        this.pendingRemovals.add(normalizedKey);
-        this.pendingUpserts.delete(normalizedKey);
+        // Record the removal so the next save applies it to the on-disk cache. The key was already
+        // put in its stored form above, so it matches the entry that was removed.
+        this.pendingRemovals.add(key);
+        this.pendingUpserts.delete(key);
 
         // Find the index of the entry that was removed
         const removedIndex = this.offsetLookup.findIndex(offset => offset === entryOffset);

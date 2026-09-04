@@ -47,6 +47,11 @@ describe("cleanupSourcesHandler", () => {
         fsSync.mkdirSync(photosDir, { recursive: true });
         process.env.PHOTOSPHERE_TMP_DIR = tempDir;
 
+        // The hash cache this test writes to and reads back lives in the platform's cache location,
+        // so pointing that at the test's own directory is what keeps the test off the developer's
+        // real cache and out of the way of any other run on the machine.
+        process.env.PHOTOSPHERE_CACHE_DIR = path.join(tempDir, "cache");
+
         mockFindByValue.mockReset();
         mockFindByValue.mockResolvedValue([]);
     });

@@ -32,6 +32,30 @@ There is one hash cache per database, because an entry now records the id its fi
 
 Once a run has read the whole listing, entries for items the library no longer holds are dropped, so the cache does not grow forever on a device where photos come and go. Only entries filed under a photo library identity are considered: a file path that is not in the photo library is a manual import, not a dead entry.
 
+### Where the cache lives
+
+This machine keeps a cache directory per database, and the hash cache is one thing inside it:
+
+```
+<platform cache location>/           getCacheDir()
+    <a hash of the database path>/   getDatabaseCacheDir(databasePath)
+        hash-cache/                  getHashCacheDir(databasePath)
+            hash-cache-x.dat
+```
+
+The platform cache location is `$XDG_CACHE_HOME` or `~/.cache` on Linux and the other Unixes, `~/Library/Caches` on macOS, `%LOCALAPPDATA%` on Windows, and the app's storage sandbox on iOS and Android, each with `photosphere` under it. `PHOTOSPHERE_CACHE_DIR` overrides all of that, and the test temp allocator sets it for every suite so a run cannot reach the real caches. `psi hash-cache dir --db <path>` prints the whole directory for one database, and `psi version` prints the root they all sit under.
+
+The database path is hashed rather than used directly, because it can be a Windows path or a URL-ish `s3:bucket:/path`, neither of which is safe to paste into a directory name.
+
+Note that this is deliberately not kept beside the settings in `~/.config/photosphere`. Nothing in the cache is a setting, none of it is worth backing up, and the platform's cache location is where an operating system, a backup tool and a disk cleaner all expect to find something like it.
+
+It is also not inside the database, and not under a temp directory:
+
+- **Not inside the database.** A database can be an S3 bucket with no local directory at all, and one on shared storage is opened by several machines at once. A cache kept there would be read and written by all of them with no lock and no merge, so the last writer would erase what the others had learnt, and what each machine knows is useless to the others anyway: the entries are keyed by that machine's own file paths and that device's own photo library ids.
+- **Not under a temp directory.** "Disposable" and "deleted without warning" are not the same thing. A temp directory is swept by something the app never hears about (Linux clears `/tmp` at boot, macOS reaps `/var/folders` after a few untouched days), and everything the cache avoids is then paid again with nothing to say why.
+
+The identity a cache entry is filed under is normalised before it is stored or looked up: a leading slash goes and a backslash becomes a forward slash. Every path that reaches the cache goes through the same normalisation, in both directions, so that a watched folder's absolute paths on Linux and macOS and its `C:\...` paths on Windows are recognised again on the next run.
+
 ## The command
 
 ```bash

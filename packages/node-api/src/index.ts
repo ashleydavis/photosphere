@@ -29,6 +29,7 @@ export * from "./lib/decrypt";
 export * from "./lib/sync";
 export * from "./lib/hash";
 export * from "./lib/hash-cache";
+export * from "./lib/database-cache-dir";
 export * from "./lib/zip-utils";
 export * from "./lib/import";
 export * from "./lib/import-assets.worker";

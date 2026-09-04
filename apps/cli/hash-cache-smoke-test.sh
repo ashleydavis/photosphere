@@ -95,9 +95,10 @@ trap stop_writers EXIT
 trap 'stop_writers; exit 130' INT
 trap 'stop_writers; exit 143' TERM
 
-# Both the writers and the reads resolve the cache directory from TEST_TMP_DIR, so pointing it at
-# an isolated directory keeps this test off the developer's real hash cache. PHOTOSPHERE_TMP_DIR goes
-# with it so the CLI's own scratch files land there too rather than in the shared /tmp/photosphere.
+# Both the writers and the reads resolve the cache directory from PHOTOSPHERE_CACHE_DIR, which this
+# points at a directory allocated for this run, so the test stays off the developer's real hash cache
+# and out of the way of any other run on the machine. PHOTOSPHERE_TMP_DIR goes with it so the CLI's
+# own scratch files land there too rather than in the shared /tmp/photosphere.
 photosphere_export_test_temp "$TEST_ROOT"
 
 # The database whose cache this test drives. There is one hash cache per database, so every
