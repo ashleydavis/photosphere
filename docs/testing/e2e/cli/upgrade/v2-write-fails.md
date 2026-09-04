@@ -1,5 +1,7 @@
 # CLI Manual Test: Write Commands Fail On v2 Database
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that `add` and `remove` refuse to write to a v2 database and instead
 suggest running `psi upgrade`.
 

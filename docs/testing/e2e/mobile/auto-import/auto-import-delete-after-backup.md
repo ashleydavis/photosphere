@@ -1,5 +1,7 @@
 # Mobile Manual Test: Deleting the Photo After it is Backed Up
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test the cleanup setting: once a photo is confirmed in the database, the copy in the device photo library is offered for deletion.
 
 This test destroys photos on the device, on purpose. Run it on a test device or with photos you are willing to lose, and never on a phone holding anything you care about.

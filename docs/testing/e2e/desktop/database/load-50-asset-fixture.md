@@ -1,5 +1,7 @@
 # Desktop Manual Test: Load the 50-Asset Fixture
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that the desktop app loads the repo's pre-populated 50-asset database and
 renders the gallery with all assets visible.
 

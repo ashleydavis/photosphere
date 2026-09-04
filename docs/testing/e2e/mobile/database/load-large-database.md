@@ -1,5 +1,7 @@
 # Mobile Manual Test: Open a Database With Many Photos
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test the app against a database large enough to show whether the gallery scrolls, loads and stays usable on a phone.
 
 ## Prerequisites

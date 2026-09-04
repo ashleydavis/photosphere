@@ -1,5 +1,7 @@
 # Mobile Manual Test: A Partial Replica and Fetching Originals Back
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test a database on the phone that holds only part of what the remote holds: the gallery still shows everything, and an original is fetched back when it is opened.
 
 This is what lets a phone carry a collection larger than the phone.

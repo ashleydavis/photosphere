@@ -1,5 +1,7 @@
 # Desktop Manual Test: Remove a Database From the Recent List
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that removing a database from the **Recent databases** sidebar list only
 removes the *recent* entry — the underlying database entry must stay
 registered in `databases.toml`.

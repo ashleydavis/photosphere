@@ -1,5 +1,7 @@
 # E2E Test Checklist
 
+**Do not skip steps.** Every test linked below is run in full, every step, in the order it is written. An agent taking someone through a test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Work through these manual tests and check them off as they pass.
 
 Upcoming version: 0.0.9
@@ -192,28 +194,26 @@ Run the story player and check every story cycles through without failures, then
 Run each of these on Android and on iOS. Tick a test only when it has passed on both, and say which platform failed when one does.
 
 ### Automatic import
-- [-] [auto-import-full-flow](mobile/auto-import/auto-import-full-flow.md)
-    - Android: works, but too slowly to call a pass. Steps 1 to 4 passed. Step 5: a photo taken at 07:06 did not appear until about 07:48, so 42 minutes instead of a few seconds.
+- [ ] [auto-import-full-flow](mobile/auto-import/auto-import-full-flow.md)
+    - *n* Step 6 fails: the import record doesn't load as new imports are added. The Import page reads the record once, when the database is opened, and never again, so a database opened before automatic import ran shows an empty list however many photos have gone in since.
+    - *e* Android: works, but too slowly to call a pass. Steps 1 to 4 passed. Step 5: a photo taken at 07:06 did not appear until about 07:48, so 42 minutes instead of a few seconds.
     - High priority
-        - Opening the database took 2 minutes 8 seconds while automatic import was running. Importing takes every worker, so the tap waits behind it. Opening a database is what the user is waiting on and must come first. This is the main problem.
-        - A photo just taken must show up within 3 seconds. It took 42 minutes. New photos must take priority over importing the existing library: right now the import loop only looks for new photos between batches, and a batch of up to 60 old photos takes ten minutes or more, so a new photo is not even noticed until that finishes. The batch size must be much, much smaller than 60.
-        - Tapping a database and having nothing happen is terrible. The app must respond straight away, so you can see the tap was taken and the database is loading.
-        - Increase the number of workers on mobile to 10.
-        - Don't use check-database-exists when opening a database. Just invoke the task that loads the database. If there is no database it will early out and say so.
+        - *e* A photo just taken must show up within 3 seconds. It took 42 minutes. New photos must take priority over importing the existing library: right now the import loop only looks for new photos between batches, and a batch of up to 60 old photos takes ten minutes or more, so a new photo is not even noticed until that finishes. The batch size must be much, much smaller than 60.
+        - *e* Increase the number of workers on mobile to 10.
     - Medium priority
-        - Hashing never hits the cache: 143 out of 143 hashes were computed from scratch. Each photo is copied out of the device library into a temp file before it is hashed, and the cache is keyed on the file path, size and last modified time, so a fresh copy never matches. The cache also lives in a temp directory that does not survive the app restarting. Find another way: read the original photo's path, timestamp and size from the device library and use those to know the file has already been imported, so it is never copied to temp or hashed again.
-        - Limit how many import child tasks run at once: 2 on mobile, 10 on desktop.
-        - The progress indicator stops while photos are still being imported, and so does the progress logging: both are fed by the same message. Progress is only reported twice per batch, once before the batch starts and once after it finishes, so with a batch of 60 there is no update at all for ten minutes or more. Report progress per photo.
-        - The new database took too long to show in the Open database list. Fix by reading the databases into memory before the dialog is opened.
+        - *e* Hashing never hits the cache: 143 out of 143 hashes were computed from scratch. Each photo is copied out of the device library into a temp file before it is hashed, and the cache is keyed on the file path, size and last modified time, so a fresh copy never matches. The cache also lives in a temp directory that does not survive the app restarting. Find another way: read the original photo's path, timestamp and size from the device library and use those to know the file has already been imported, so it is never copied to temp or hashed again.
+        - *e* Limit how many import child tasks run at once: 2 on mobile, 10 on desktop.
+        - *e* The progress indicator stops while photos are still being imported, and so does the progress logging: both are fed by the same message. Progress is only reported twice per batch, once before the batch starts and once after it finishes, so with a batch of 60 there is no update at all for ten minutes or more. Report progress per photo.
+        - *e* The new database took too long to show in the Open database list. Fix by reading the databases into memory before the dialog is opened.
     - Low priority
-        - Automatic import must keep running at a low priority when the app is in the background, and when the screen is off. Right now nothing keeps it alive: there is no background service and no wake lock, so Android is free to freeze the work.
-        - Automatic import never says how many photos are left to import. Not knowing how much is still to come is no good, especially on a big library.
-        - Import the existing library newest first, not oldest first, so users see their recent photos quickly.
-        - Remove the lone file name shown under the counts on the automatic import card. It has no label and no explanation, and serves no good purpose.
-        - Split the Import page in two. One page for importing, where photos and videos are selected and added. A separate Import Log page that just shows what was recently imported. One page doing both jobs does not fit on a phone screen.
-        - The "My Photos" button in the Open database list is too small. Make it double the size and add padding underneath to separate it from the other buttons.
-        - The wording "a private photo database is created for you" needs updating. Check what it really does first.
-        - Better if turning the toggle on prompted to add a folder, after Allow is tapped.
+        - *e* Automatic import must keep running at a low priority when the app is in the background, and when the screen is off. Right now nothing keeps it alive: there is no background service and no wake lock, so Android is free to freeze the work.
+        - *e* Automatic import never says how many photos are left to import. Not knowing how much is still to come is no good, especially on a big library.
+        - *e* Import the existing library newest first, not oldest first, so users see their recent photos quickly.
+        - *e* Remove the lone file name shown under the counts on the automatic import card. It has no label and no explanation, and serves no good purpose.
+        - *e* Split the Import page in two. One page for importing, where photos and videos are selected and added. A separate Import Log page that just shows what was recently imported. One page doing both jobs does not fit on a phone screen.
+        - *e* The "My Photos" button in the Open database list is too small. Make it double the size and add padding underneath to separate it from the other buttons.
+        - *e* The wording "a private photo database is created for you" needs updating. Check what it really does first.
+        - *e* Better if turning the toggle on prompted to add a folder, after Allow is tapped.
 - [ ] [auto-import-no-permission](mobile/auto-import/auto-import-no-permission.md)
 - [ ] [auto-import-delete-after-backup](mobile/auto-import/auto-import-delete-after-backup.md)
 

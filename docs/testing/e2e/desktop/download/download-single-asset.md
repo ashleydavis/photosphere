@@ -1,5 +1,7 @@
 # Desktop Manual Test: Download Single Asset
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that a single asset can be downloaded to a local folder from the asset view in the Photosphere desktop app.
 
 ## Prerequisites

@@ -1,5 +1,7 @@
 # Mobile Manual Test: Remove a Database from the List
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test removing a database entry from the app, and that a database whose files have gone is handled rather than crashing the app.
 
 ## Prerequisites

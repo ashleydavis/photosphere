@@ -1,5 +1,7 @@
 # CLI Manual Test: MCP Server Starts And Serves Resources
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 > **Warning:** The `psi mcp` command is not yet implemented. This walkthrough
 > is a placeholder so that the manual test exists once MCP support lands.
 

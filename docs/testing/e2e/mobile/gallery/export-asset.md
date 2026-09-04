@@ -1,5 +1,7 @@
 # Mobile Manual Test: Export a Photo Out of the App
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test sending a photo from the database back out to the device, through the system share sheet.
 
 ## Prerequisites

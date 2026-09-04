@@ -1,5 +1,7 @@
 # CLI Manual Test: Add a File to a Freshly-Upgraded v6 Database
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that a database upgraded from an older format accepts new file imports.
 
 ## Prerequisites

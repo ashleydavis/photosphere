@@ -1,5 +1,7 @@
 # Desktop Manual Test: Rename a Secret
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that renaming a secret stores it under the new name, so it is found by the
 new name and no longer by the old one, with its value preserved.
 

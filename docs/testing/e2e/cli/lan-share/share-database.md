@@ -1,5 +1,7 @@
 # CLI Manual Test: Share a Database Entry Over LAN
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that `dbs send` and `dbs receive` transfer a database configuration plus
 its linked secrets from one CLI to another.
 

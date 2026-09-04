@@ -1,5 +1,7 @@
 # CLI Manual Test: Add Zip Archive
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that a zip archive containing images and a video can be imported into a database using the CLI source. The zip contents should be extracted and each media file imported individually.
 
 ## Prerequisites

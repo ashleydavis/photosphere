@@ -1,5 +1,7 @@
 # Mobile Manual Test: Add S3 Credentials
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test storing S3 credentials on the phone and using them to reach a database in a bucket.
 
 ## Prerequisites

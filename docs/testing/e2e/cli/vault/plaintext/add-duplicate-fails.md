@@ -1,5 +1,7 @@
 # CLI Manual Test: Adding a Secret With a Duplicate Name Fails
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that adding a second secret with the same name as an existing one fails
 and does not overwrite the original.
 

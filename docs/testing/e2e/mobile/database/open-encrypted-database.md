@@ -1,5 +1,7 @@
 # Mobile Manual Test: Open an Encrypted Database
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that a database encrypted with a key opens on the phone when the key is in the vault, and refuses when it is not.
 
 ## Prerequisites

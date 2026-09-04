@@ -1,5 +1,7 @@
 # Mobile Manual Test: LAN Share, Phone to Phone
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test one phone sending a database entry and a secret to another phone on the same network. This is the only one of the three LAN tests where a phone is the sender as well as the target.
 
 ## Prerequisites

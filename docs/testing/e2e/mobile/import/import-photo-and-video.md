@@ -1,5 +1,7 @@
 # Mobile Manual Test: Import a Photo and a Video by Hand
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test importing media the user picks, which is the path automatic import does not cover.
 
 ## Prerequisites

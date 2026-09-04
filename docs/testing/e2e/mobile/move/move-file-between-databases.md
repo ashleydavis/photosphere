@@ -1,5 +1,7 @@
 # Mobile Manual Test: Move a Photo Between Databases
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test moving a photo from one database to another, and that it arrives whole and leaves the first.
 
 ## Prerequisites

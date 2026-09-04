@@ -1,5 +1,7 @@
 # Desktop Manual Test: Download Multiple Assets
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that multiple selected assets can be downloaded to a local folder from the right sidebar in the Photosphere desktop app.
 
 ## Prerequisites
