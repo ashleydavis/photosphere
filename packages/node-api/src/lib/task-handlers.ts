@@ -13,6 +13,7 @@ import { importAssetsHandler } from "./import-assets.worker";
 import { hashFileHandler } from "./hash-file.worker";
 import { getDatabaseSummaryHandler } from "./get-database-summary.worker";
 import { getImportRecordHandler } from "./get-import-record.worker";
+import { setDatabaseOriginHandler } from "./set-database-origin.worker";
 import { moveAssetsHandler } from "./move-assets.worker";
 import { assetServerHandler } from "./asset-server.worker";
 import { receiveShareHandler, findReceiverHandler, sendPayloadHandler } from "./lan-share.worker";
@@ -41,6 +42,7 @@ export function initTaskHandlers(): void {
     registerHandler("hash-file", hashFileHandler);
     registerHandler("get-database-summary", getDatabaseSummaryHandler);
     registerHandler("get-import-record", getImportRecordHandler);
+    registerHandler("set-database-origin", setDatabaseOriginHandler);
     registerHandler("move-assets", moveAssetsHandler);
     registerHandler("asset-server", assetServerHandler);
     registerHandler("receive-share", receiveShareHandler);

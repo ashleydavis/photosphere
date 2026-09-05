@@ -131,7 +131,7 @@ export function ConsolidateDatabaseDialog({ open, entry, onClose }: IConsolidate
                             <Input
                                 data-id="consolidate-remote-path-input"
                                 value={remotePath}
-                                placeholder="/path/to/backup or s3:bucket:/prefix"
+                                placeholder="/path/to/backup or s3:bucket/prefix"
                                 onChange={event => setRemotePath(event.target.value)}
                             />
                         </FormControl>

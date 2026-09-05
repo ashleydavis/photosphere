@@ -19,6 +19,7 @@ import { hashFileHandler } from "node-api/src/lib/hash-file.worker";
 import { uploadAssetHandler } from "node-api/src/lib/upload-asset.worker";
 import { getDatabaseSummaryHandler } from "node-api/src/lib/get-database-summary.worker";
 import { getImportRecordHandler } from "node-api/src/lib/get-import-record.worker";
+import { setDatabaseOriginHandler } from "node-api/src/lib/set-database-origin.worker";
 import { prefetchDatabaseHandler } from "node-api/src/lib/prefetch-database.worker";
 import { verifyFileHandler } from "node-api/src/lib/verify.worker";
 import { checkFileHandler } from "node-api/src/lib/check.worker";
@@ -86,6 +87,7 @@ registerHandler("upload-asset", uploadAssetHandler);
 // compute the summary of the open database (photo/file counts, total size, integrity hashes).
 registerHandler("get-database-summary", getDatabaseSummaryHandler);
 registerHandler("get-import-record", getImportRecordHandler);
+registerHandler("set-database-origin", setDatabaseOriginHandler);
 
 // Register the prefetch-database handler: load-assets fire-and-forget queues this for a partial
 // database to pull the missing thumbnails and BSON database files from origin storage.

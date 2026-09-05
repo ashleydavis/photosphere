@@ -523,6 +523,24 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, []);
 
     const setDatabaseOrigin = useCallback(async (databasePath: string, origin: string | undefined): Promise<void> => {
+        // The origin goes into the database itself as well as into the database list, because the
+        // sync loop reads it from the database: a background pass has no interface and no list open,
+        // so an origin recorded only here is one it never sees, and the database silently never
+        // syncs. The WebView cannot write into a database's storage, so a task does it. Desktop does
+        // both in the same way, in its set-database-origin handler.
+        const uuidGenerator = new RandomUuidGenerator();
+        const queue = new TaskQueue(uuidGenerator, databasePath);
+        try {
+            const taskId = queue.addTask("set-database-origin", { databasePath, origin });
+            const result = await queue.awaitTask(taskId);
+            if (!result || result.status === TaskStatus.Failed) {
+                throw new Error(result?.errorMessage || `Failed to set the origin of "${databasePath}"`);
+            }
+        }
+        finally {
+            queue.shutdown();
+        }
+
         await configStore.setDatabaseOrigin(mobileDatabasesConfigFile, databasePath, origin);
     }, []);
 

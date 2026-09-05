@@ -34,7 +34,7 @@ export const COMMAND_EXAMPLES: ICommandExamples = {
 
     consolidate: [
         { command: "psi consolidate --db ./photos ./backup", description: "Creates the remote as a copy of this database when nothing is there." },
-        { command: "psi consolidate --db ./photos s3:my-bucket:/photos", description: "Joins an S3 remote that already holds a different database, so the two can sync." },
+        { command: "psi consolidate --db ./photos s3:my-bucket/photos", description: "Joins an S3 remote that already holds a different database, so the two can sync." },
         { command: "psi consolidate --db ./photos ./shared", description: "Records an already-related remote as this database's origin." }
     ],
 
