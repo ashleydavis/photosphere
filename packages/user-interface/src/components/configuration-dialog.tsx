@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useColorScheme } from "@mui/joy/styles/CssVarsProvider";
 import Stack from "@mui/joy/Stack/Stack";
 import Typography from "@mui/joy/Typography";
@@ -15,6 +15,7 @@ import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useSync } from "../context/sync-context";
 import { createDialogKeyHandler } from "../lib/dialog-keys";
 import { AutoImportSettings } from "./auto-import-settings";
+import { ResetDeviceDialog } from "./reset-device-dialog";
 
 export interface IConfigurationDialogProps {
     //
@@ -36,6 +37,11 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
     const config = useConfig();
     const { targetRowHeight, setTargetRowHeight } = useGalleryLayout();
     const { syncEnabled, toggleSyncEnabled, syncOnlyOnWifi, toggleSyncOnlyOnWifi } = useSync();
+
+    //
+    // Whether the reset-device confirmation is open.
+    //
+    const [resetDialogOpen, setResetDialogOpen] = useState<boolean>(false);
 
     return (
         <ResponsiveDialog
@@ -106,8 +112,31 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
                         </Stack>
 
                         <AutoImportSettings />
+
+                        {/* Last in the dialog: the one setting nobody should land on by accident. */}
+                        <Stack>
+                            <Typography level="body-xs">Reset device</Typography>
+                            <Typography level="body-sm" sx={{ mt: 1 }}>
+                                Removes the databases Photosphere keeps on this device and the photos
+                                in them, along with its secrets, settings and caches.
+                            </Typography>
+                            <Button
+                                data-id="reset-device-open"
+                                color="danger"
+                                variant="soft"
+                                sx={{ mt: 1 }}
+                                onClick={() => setResetDialogOpen(true)}
+                            >
+                                Reset device
+                            </Button>
+                        </Stack>
                     </Stack>
                 </DialogContent>
+
+                <ResetDeviceDialog
+                    open={resetDialogOpen}
+                    onClose={() => setResetDialogOpen(false)}
+                />
         </ResponsiveDialog>
     );
 }

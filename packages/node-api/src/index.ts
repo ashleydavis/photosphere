@@ -16,6 +16,7 @@ export * from "./lib/source-cleanup";
 export * from "./lib/evict-originals.worker";
 export * from "./lib/consolidate";
 export * from "./lib/consolidate-database.worker";
+export * from "./lib/reset-app-storage.worker";
 export * from "./lib/verify";
 export * from "./lib/verify.worker";
 export * from "./lib/task-handlers";

@@ -701,6 +701,35 @@ wait_for_value() {
 }
 
 #
+# The opposite wait: polls /get-value until the element is gone or its value no longer matches, for
+# watching something leave the screen (a row that disappears when its database is removed, a dialog
+# that closes). Mirrors wait_for_value_gone in the desktop suite.
+#
+# The bridge is asked for a response first, because a dead app answers nothing at all and that reads
+# exactly like a row that has gone: without this check, a crash passes the assertion.
+# Usage: wait_for_value_gone <port> <dataId> <unwanted_regex> [timeout_seconds]
+#
+wait_for_value_gone() {
+    local port="$1"
+    local data_id="$2"
+    local unwanted="$3"
+    local timeout="${4:-$DEFAULT_WAIT_TIMEOUT}"
+    local ticks=$((timeout * POLL_TICKS_PER_SECOND))
+    local response=""
+    while [ "$ticks" -gt 0 ]; do
+        response=$(curl -sf "http://$BRIDGE_HOST:$port/get-value?dataId=$data_id" 2>/dev/null || true)
+        if [ -n "$response" ] && ! echo "$response" | grep -qE "$unwanted"; then
+            log_success "Value for '$data_id' no longer matches /$unwanted/"
+            return 0
+        fi
+        sleep "$POLL_INTERVAL_SECONDS"
+        ticks=$((ticks - 1))
+    done
+    log_error "Timed out waiting for '$data_id' to stop matching /$unwanted/ (last response: '${response:-}')"
+    exit 1
+}
+
+#
 # Creates a database on the host via the CLI at the given path, importing any image files passed
 # after the path. Mirrors how the desktop smoke tests pre-create their databases (the CLI does the
 # host-side image processing the mobile device cannot do yet). The database is created under the

@@ -20,6 +20,7 @@ import { checkDatabaseExistsHandler } from "./check-database-exists.worker";
 import { evictOriginalsHandler } from "./evict-originals.worker";
 import { cleanupSourcesHandler } from "./cleanup-sources.worker";
 import { consolidateDatabaseHandler } from "./consolidate-database.worker";
+import { resetAppStorageHandler } from "./reset-app-storage.worker";
 
 //
 // Register all task handlers
@@ -49,4 +50,5 @@ export function initTaskHandlers(): void {
     registerHandler("evict-originals", evictOriginalsHandler);
     registerHandler("cleanup-sources", cleanupSourcesHandler);
     registerHandler("consolidate-database", consolidateDatabaseHandler);
+    registerHandler("reset-app-storage", resetAppStorageHandler);
 }

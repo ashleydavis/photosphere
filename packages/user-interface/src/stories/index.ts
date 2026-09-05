@@ -26,6 +26,7 @@ import { stories as receiveDatabaseDialogStories } from "./dialogs/receive-datab
 import { stories as receiveSecretDialogStories } from "./dialogs/receive-secret-dialog.stories";
 import { stories as removeDatabaseDialogStories } from "./dialogs/remove-database-dialog.stories";
 import { stories as replicateDatabaseDialogStories } from "./dialogs/replicate-database-dialog.stories";
+import { stories as resetDeviceDialogStories } from "./dialogs/reset-device-dialog.stories";
 import { stories as setLocationDialogStories } from "./dialogs/set-location-dialog.stories";
 import { stories as setPhotoDateDialogStories } from "./dialogs/set-photo-date-dialog.stories";
 import { stories as shareDatabaseDialogStories } from "./dialogs/share-database-dialog.stories";
@@ -89,6 +90,7 @@ export const stories: IStory[] = [
     ...receiveSecretDialogStories,
     ...removeDatabaseDialogStories,
     ...replicateDatabaseDialogStories,
+    ...resetDeviceDialogStories,
     ...setLocationDialogStories,
     ...setPhotoDateDialogStories,
     ...shareDatabaseDialogStories,

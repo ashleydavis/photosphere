@@ -1381,6 +1381,20 @@ android_wait_for_file() {
 }
 
 #
+# Says whether a path exists under the app's private files directory, right now. Returns 0 when it is
+# there, non-zero when it is not.
+#
+# The counterpart of android_wait_for_file, for asserting something is gone rather than waiting for
+# it to appear: a wait cannot answer that, because "not there yet" and "never coming" look identical
+# to it. Used by the reset-device test to check the app's databases really left the device.
+# Usage: android_sandbox_path_exists <relative_path_under_files>
+#
+android_sandbox_path_exists() {
+    local rel="$1"
+    adb shell run-as "$APP_ID" ls -d "files/$rel" >/dev/null 2>&1
+}
+
+#
 # Removes everything a run leaves on the device: the databases seeded into the app's storage sandbox
 # and whatever the run imported into them, plus the fixture copies pushed through the shared temp
 # directory. The app stays installed, so the next run does not pay for a reinstall.

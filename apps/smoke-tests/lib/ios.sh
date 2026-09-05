@@ -375,6 +375,25 @@ ios_wait_for_file() {
 }
 
 #
+# Says whether a path exists under the app's Documents directory, right now. Returns 0 when it is
+# there, non-zero when it is not. Mirrors android_sandbox_path_exists.
+#
+# The counterpart of ios_wait_for_file, for asserting something is gone rather than waiting for it to
+# appear: a wait cannot answer that, because "not there yet" and "never coming" look identical to it.
+# Used by the reset-device test to check the app's databases really left the device.
+# Usage: ios_sandbox_path_exists <relative_path_under_documents>
+#
+ios_sandbox_path_exists() {
+    local rel="$1"
+    local container
+    container="$(ios_app_container)"
+    if [ -z "$container" ]; then
+        return 1
+    fi
+    [ -e "$container/Documents/$rel" ]
+}
+
+#
 # Removes everything a run leaves in the app's container: the databases seeded into its storage
 # sandbox (Documents) and whatever the run imported into them. The app stays installed, so the next
 # run does not pay for a reinstall.

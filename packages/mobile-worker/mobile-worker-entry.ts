@@ -24,6 +24,7 @@ import { verifyFileHandler } from "node-api/src/lib/verify.worker";
 import { checkFileHandler } from "node-api/src/lib/check.worker";
 import { receiveShareHandler, findReceiverHandler, sendPayloadHandler } from "node-api/src/lib/lan-share.worker";
 import { checkDatabaseExistsHandler } from "node-api/src/lib/check-database-exists.worker";
+import { resetAppStorageHandler } from "node-api/src/lib/reset-app-storage.worker";
 import { syncDatabaseHandler } from "node-api/src/lib/sync-database.worker";
 import { listS3DirsHandler } from "node-api/src/lib/list-s3-dirs.worker";
 import { readDatabasesConfigHandler, writeDatabasesConfigHandler } from "node-api/src/lib/databases-config.worker";
@@ -107,6 +108,12 @@ registerHandler("send-payload", sendPayloadHandler);
 // (via node-api's checkDatabaseExists). Desktop registers the same handler through initTaskHandlers, so
 // the shared openDatabase guard runs the identical check on both platforms.
 registerHandler("check-database-exists", checkDatabaseExistsHandler);
+
+// Register the reset-app-storage handler: empties the app's own config and cache directories, which
+// on a device are both the storage sandbox, so this is what "reset device" deletes the databases
+// with. Desktop registers the same handler through initTaskHandlers. Every delete it makes goes
+// through the fs shims, which cannot leave the sandbox.
+registerHandler("reset-app-storage", resetAppStorageHandler);
 
 // Register the sync-database handler: syncs a local database against its configured (e.g. S3) origin.
 // It opens the origin via storage (S3 over the mobile worker's S3 client) and streams sync-started /
