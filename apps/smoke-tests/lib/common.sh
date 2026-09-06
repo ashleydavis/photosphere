@@ -466,6 +466,23 @@ wait_for_ready() {
         attempt=$((attempt + 1))
     done
     log_error "App failed to become ready after $max_attempts launch attempts"
+
+    # What the app and the bridge had said by the time this gave up. wait_for_log below dumps app.log
+    # when it times out and this did not, which left the only failure that says nothing at all about
+    # its own cause as the one nobody can read: `ios-smoke-tests` in Release run 34020912055 lost test
+    # 4 to two 120s launches with no line anywhere saying what the app was doing, and the registry's
+    # entry for this mode has had "why the app failed to become ready" open since the first sighting
+    # for exactly that reason. app.log is appended across the launches of a test rather than
+    # truncated, so the failed attempt's lines are still there and both attempts are in this dump.
+    # bridge.log comes too, because an app that never connects may have been refused by the bridge.
+    log_error "Last 40 lines of app.log:"
+    tail -40 "$TMP_DIR/app.log" 2>/dev/null | while IFS= read -r line; do
+        echo "  $line"
+    done
+    log_error "Last 20 lines of bridge.log:"
+    tail -20 "$TMP_DIR/bridge.log" 2>/dev/null | while IFS= read -r line; do
+        echo "  $line"
+    done
     exit 1
 }
 
