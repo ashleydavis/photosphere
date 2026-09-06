@@ -109,6 +109,71 @@ wait_for_process_group_exit() {
 }
 
 #
+# Prints the pids of the given process's immediate children, one per line.
+#
+# `pgrep` is the answer everywhere it exists, and it does not exist in Git Bash. Every caller here
+# wrote `pgrep -P "$pid" 2>/dev/null`, which on Windows is not a lookup that finds nothing: it is a
+# missing command whose error is thrown away, so the loop runs zero times, nothing is killed, and the
+# caller is told it succeeded. That this repository's Windows runs have no pgrep is not a guess; it
+# was established at the real runner and is written up in smoke-tests/78-dbs-share-cancel/test.sh,
+# where a liveness check built on it could not fail and made a skipped test look covered.
+#
+# It is why the CLI suite's own ceiling has never saved a log on Windows. WINDOWS-CLI-SUITE-HANG in
+# docs/flaky-tests-registry.md has four sightings, most recently Release run 34029255595, and each
+# one ends the same way: the job cap kills the job and GitHub discards the log of a job it kills. The
+# watchdog is supposed to get in first and kill the children so the script it is holding to a ceiling
+# lets go of whatever it is blocked on. On Windows that step has always been a no-op.
+#
+# MSYS ships `ps`, and its first two columns are PID and PPID, so the children are readable there.
+# The POSIX form is tried first and unchanged, so on Linux and macOS this is exactly the lookup that
+# was here before; the fallback only runs where the old code already did nothing.
+# Usage: process_children <pid>
+#
+process_children() {
+    local pid="$1"
+
+    if command -v pgrep > /dev/null 2>&1; then
+        pgrep -P "$pid" 2>/dev/null
+        return 0
+    fi
+
+    # `ps -o` is POSIX and is what any Unix without pgrep would answer with. MSYS `ps` does not
+    # understand it and writes a usage message, so an empty result here is not taken as "no children"
+    # and falls through to the form MSYS does understand.
+    local posix_output
+    posix_output="$(ps -o pid=,ppid= 2>/dev/null)"
+    if [ -n "$posix_output" ]; then
+        printf '%s\n' "$posix_output" | awk -v parent="$pid" '$2 == parent { print $1 }'
+        return 0
+    fi
+
+    ps 2>/dev/null | process_children_from_ps_table "$pid"
+}
+
+#
+# Reads a `ps` table on stdin and prints the pids whose parent is the given pid, one per line.
+#
+# The columns are found by their headings rather than by position, because the two `ps` commands this
+# has to read do not agree on either. MSYS prints `PID PPID PGID WINPID TTY UID STIME COMMAND`, and a
+# bare POSIX `ps` prints `PID TTY TIME CMD`, where the second column is a terminal and matching on it
+# would answer confidently with nonsense. Reading the headings means a table with no PPID column
+# yields nothing, which is the truthful answer to a question it cannot be asked.
+# Usage: <ps output> | process_children_from_ps_table <pid>
+#
+process_children_from_ps_table() {
+    awk -v parent="$1" '
+        NR == 1 {
+            for (column = 1; column <= NF; column++) {
+                if ($column == "PID") { pid_column = column }
+                if ($column == "PPID") { parent_column = column }
+            }
+            next
+        }
+        pid_column && parent_column && $parent_column == parent { print $pid_column }
+    '
+}
+
+#
 # Prints the given process and every process descended from it, deepest first.
 #
 # The list is gathered before anything is killed, on purpose: once a parent dies its children are
@@ -121,7 +186,7 @@ process_tree_pids() {
         return 0
     fi
     local child
-    for child in $(pgrep -P "$pid" 2>/dev/null); do
+    for child in $(process_children "$pid"); do
         process_tree_pids "$child"
     done
     echo "$pid"

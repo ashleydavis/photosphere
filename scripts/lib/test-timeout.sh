@@ -172,7 +172,7 @@ run_test_function_with_timeout() {
         done
         : > "$timeout_marker"
         local child
-        for child in $(pgrep -P "$script_pid" 2>/dev/null); do
+        for child in $(process_children "$script_pid"); do
             if [ "$child" = "$BASHPID" ]; then
                 continue
             fi
@@ -251,7 +251,7 @@ start_suite_watchdog() {
 
         report_test_timeout "$suite_name" "$ceiling" "" "$limit_variable" >&2
         local child
-        for child in $(pgrep -P "$script_pid" 2>/dev/null); do
+        for child in $(process_children "$script_pid"); do
             if [ "$child" = "$BASHPID" ]; then
                 continue
             fi
