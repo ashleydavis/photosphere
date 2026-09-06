@@ -239,6 +239,22 @@ get_cli_command() {
 }
 
 # Run a command and assert exit code is 0.
+#
+# A command that died in the Bun shutdown panic is run a second time, and only that one. Bun crashes
+# on exit after a `psi verify` that has already finished its work and printed
+# "Database verification passed - all files are intact", panicking with either
+# "Unexpected JS error: JSError" and SIGILL or a segmentation fault, and saying itself that it
+# indicates a bug in Bun rather than in the code it was running. It has failed this suite four times
+# now across three of its tests, most recently `encrypt-reencrypt` in Release run 34014186020, and it
+# is recorded as BUN-PANIC-ON-EXIT-AFTER-VERIFY in docs/flaky-tests-registry.md, where its cause is
+# still unestablished after two attempts at it. There is nothing in this repository to fix, so the
+# retry is what carries the suite past an upstream crash.
+#
+# It is deliberately narrow. The marker Bun prints when it panics is the only thing that triggers it,
+# so an ordinary non-zero exit still fails on the first attempt exactly as it did before, and the
+# retry says loudly that it happened rather than swallowing it. If the second attempt crashes the
+# same way, or fails for any other reason, that is the failure the test reports.
+#
 # Usage: invoke_command "description" "actual command"
 invoke_command() {
     local description="$1"
@@ -248,6 +264,14 @@ invoke_command() {
     local output
     output=$(eval "$command" 2>&1)
     local exit_code=$?
+
+    if [ $exit_code -ne 0 ] && [[ "$output" == *"oh no: Bun has crashed"* ]]; then
+        log_error "Bun crashed on exit (exit $exit_code) running: $command"
+        echo "$output"
+        log_info "Bun panicked rather than the command failing, so running it once more. See BUN-PANIC-ON-EXIT-AFTER-VERIFY in docs/flaky-tests-registry.md."
+        output=$(eval "$command" 2>&1)
+        exit_code=$?
+    fi
 
     if [ $exit_code -ne 0 ]; then
         log_error "Command failed (exit $exit_code): $command"
