@@ -432,6 +432,20 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 - Not done, deliberately: the test was left alone. Making it re-arm the sender after the receiver is ready would hide an app that takes two minutes to start, which is the thing worth knowing about.
 - Evidence: `/tmp/photosphere-tests/share-secret-4FP1JS`, kept at `scratchpad/failing-e7-4FP1JS`. Sender port 42497 ready, pairing code 8784 read, receiver launched on port 44983 and never became ready, relaunched on 37195 and came up, dialog opened, code entered, start clicked, then silence for the full wait.
 
+### MOBILE-APP-NEVER-BECAME-READY
+
+- [ ] Not fixed, and not yet diagnosable. The cause is unknown and the first sighting kept nothing to work from; the change below is what the next one needs.
+- Suite: mobile smoke tests (`bun run test:ios` / `bun run test:and`), any test, since every one launches the app. Seen on `ios-smoke-tests` in CI.
+- Pattern: `Timed out waiting for app to be ready after \d+s \(attempt \d+ of \d+\)` twice, then `App failed to become ready after \d+ launch attempts`.
+- Distinguishing evidence (this mode): the control bridge started and printed its port, and the platform launcher ran and printed `App launched on <platform>`, so the failure is between the app starting and it answering `/ready`. Told apart from `BRIDGE-START-BIND` by the bridge having started, and from the Android emulator-detachment mode by there being no `no longer attached` line. On iOS in CI there is no emulator pool for the `[::1]` collision in `BRIDGE-START-BIND` to happen at all.
+- Fix commit: none.
+- First seen: 2026-09-06, Release run 34020912055, job 101453209837, `ios-smoke-tests`, test 4 (import-photos), 414s against a normal run of that test. Both launches used their full 120s. Every other test in the job passed and the simulator went on serving them, so the simulator was not dead.
+- Recurrences: none yet.
+- Root cause: **not established, and nothing was kept from the first sighting to establish it with.** `wait_for_ready` exited without printing anything the app or the bridge had said, and the test's `test-run.log` stays on the runner, so the job's output holds only the two timeouts.
+- What was changed: `wait_for_ready` in `apps/smoke-tests/lib/common.sh` now dumps the last lines of `app.log` and of `bridge.log` before it exits, matching what `wait_for_log` below it already did. The mobile harness appends `app.log` across the launches within a test rather than truncating it, so unlike the Electron harness in `SHARE-SENDER-EXPIRES-DURING-RECEIVER-RELAUNCH` it needs no move to keep the failed attempt: both attempts are in the one file and both are in the dump.
+- What to capture next time: whether `app.log` has any line at all. Nothing means the app never reached the point of forwarding logs, which points at the launch or the WebView; lines that stop part way point at what it was doing when it stopped. `bridge.log` says whether the bridge ever saw a connection, which separates an app that did not start from one that started and could not reach the bridge.
+- Evidence: the job log only. Test 4's own `test-run.log` was named in the output and never uploaded, which is the gap above.
+
 ### CLI-RECEIVER-DID-NOT-START-IN-TIME
 
 - [x] Fixed. Not yet 10x clean: the suite failed this way inside the pre-commit hook's `test:everything`, and passes all four tests after the change, twice on its own plus once more inside the hook that accepted the fix. All three of those are quieter than the run that failed, so the margin has not been tested under the load that produced it.
