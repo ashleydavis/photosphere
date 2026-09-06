@@ -790,17 +790,20 @@ android_seed_database() {
 # command for the tests to call. The file is rendered on the host by lib/write-databases-config.ts,
 # which uses the same node-api function the app itself writes the file through.
 #
-# Both arguments are JSON: the databases as an array of {name, path} (description optional), the
-# recents as an array of names. An omitted recents argument writes an empty recents list.
-# Usage: android_seed_databases_config '<databases json>' ['<recent names json>']
+# The first two arguments are JSON: the databases as an array of {name, path} (description optional),
+# the recents as an array of names. An omitted recents argument writes an empty recents list. The
+# third is the path of the database the app reopens on launch; omitting it writes no such key, which
+# is what leaves the app on the welcome screen.
+# Usage: android_seed_databases_config '<databases json>' ['<recent names json>'] ['<last database path>']
 #
 android_seed_databases_config() {
     local databases_json="$1"
     local recent_json="${2:-[]}"
+    local last_database="${3:-}"
     local tmp_local
     tmp_local="$(mktemp)"
 
-    if ! DATABASES="$databases_json" RECENT="$recent_json" bun "$LIB_DIR/write-databases-config.ts" "$tmp_local"; then
+    if ! DATABASES="$databases_json" RECENT="$recent_json" LAST_DATABASE="$last_database" bun "$LIB_DIR/write-databases-config.ts" "$tmp_local"; then
         log_error "Could not render the app's database list (see the error above)."
         rm -f "$tmp_local"
         return 1
@@ -832,6 +835,18 @@ android_seed_sandbox_file() {
     adb shell run-as "$APP_ID" mkdir -p files
     adb shell run-as "$APP_ID" cp "/data/local/tmp/$file_name" "files/$file_name"
     adb shell rm -f "/data/local/tmp/$file_name" >/dev/null 2>&1 || true
+}
+
+#
+# Prints the app's databases.toml as it stands on the device, or nothing when there is none yet.
+#
+# The counterpart of android_seed_databases_config: that puts state in from outside the app, this
+# reads back what the app itself has written there, which is how a test asserts on a write the app
+# made rather than on what the screen showed afterwards.
+# Usage: android_read_databases_config
+#
+android_read_databases_config() {
+    adb exec-out run-as "$APP_ID" cat "files/$DATABASES_CONFIG_FILE" 2>/dev/null || true
 }
 
 #

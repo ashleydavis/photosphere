@@ -264,6 +264,19 @@ describe("mobile-config-store concurrent operations", () => {
         expect(await getRecentDatabases(configFile)).toEqual([]);
     });
 
+    test("recording the last opened database beside a list change keeps both", async () => {
+        // The two arrive together on a real open: the database is added to the list and recorded as
+        // the one to reopen. Without the lock the second write starts from the config the first one
+        // read, so whichever landed second silently undid the other.
+        const configFile = memoryConfigFile();
+        await Promise.all([
+            addDatabase(configFile, entry("Holiday", "photos/holiday")),
+            setLastDatabase(configFile, "photos/holiday"),
+        ]);
+        expect((await getDatabases(configFile)).map(database => database.name)).toEqual(["Holiday"]);
+        expect(await getLastDatabase(configFile)).toEqual("photos/holiday");
+    });
+
     test("adding several databases together keeps every one", async () => {
         const configFile = memoryConfigFile();
         await Promise.all([

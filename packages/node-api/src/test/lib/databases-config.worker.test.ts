@@ -217,9 +217,23 @@ describe("registering a test database in a config", () => {
         ]);
     });
 
-    test("the user's own recents are left alone and stale test recents are dropped", () => {
+    test("the fixture becomes the most recent, the user's own recents follow it, and stale test recents are dropped", () => {
         const result = parseToml(registerDatabaseInConfig(existingConfig, "50-assets")) as any;
-        expect(result.recent_database_names).toEqual(["My photos"]);
+        expect(result.recent_database_names).toEqual(["test-50-assets", "My photos"]);
+    });
+
+    test("the fixture becomes the database reopened on launch", () => {
+        // The point of the deploy script: the app lands in the database it just seeded rather than
+        // on the welcome screen.
+        const result = parseToml(registerDatabaseInConfig(existingConfig, "50-assets")) as any;
+        expect(result.last_database).toEqual("50-assets");
+    });
+
+    test("registering a second fixture replaces the one reopened on launch", () => {
+        const first = registerDatabaseInConfig(existingConfig, "50-assets");
+        const result = parseToml(registerDatabaseInConfig(first, "1-asset")) as any;
+        expect(result.last_database).toEqual("1-asset");
+        expect(result.recent_database_names).toEqual(["test-1-asset", "My photos"]);
     });
 
     test("an earlier fixture is replaced rather than accumulating", () => {
@@ -251,7 +265,8 @@ describe("registering a test database in a config", () => {
         await fs.writeFile(path.join(tempDir, "databases.toml"), config, "utf8");
         const read = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
         expect(read.databases.map(entry => entry.name)).toEqual(["My photos", "Holiday", "test-50-assets"]);
-        expect(read.recentDatabaseNames).toEqual(["My photos"]);
+        expect(read.recentDatabaseNames).toEqual(["test-50-assets", "My photos"]);
+        expect(read.lastDatabase).toEqual("50-assets");
     });
 });
 
@@ -322,15 +337,27 @@ describe("the last opened database", () => {
         expect(read.lastDatabase).toEqual("alpha");
     });
 
-    test("survives a test fixture being registered beside it", async () => {
-        // The deploy script rewrites the whole file to add its fixture, so anything it does not
-        // carry through it deletes.
+    test("is taken over by a test fixture registered beside it", async () => {
+        // The deploy script has just been told to put this fixture in front of the user, so it
+        // replaces whatever the file named, rather than leaving the app to open something else.
         const existing = buildDatabasesConfigToml([{ name: "Alpha", description: "", path: "alpha" }], ["Alpha"], "alpha");
 
         const rewritten = registerDatabaseInConfig(existing, "50-assets");
 
         await fs.writeFile(path.join(tempDir, "databases.toml"), rewritten, "utf8");
         const read = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
-        expect(read.lastDatabase).toEqual("alpha");
+        expect(read.lastDatabase).toEqual("50-assets");
+        // The user's own database and their place in the recents list are still there.
+        expect(read.databases.map(entry => entry.name)).toEqual(["Alpha", "test-50-assets"]);
+        expect(read.recentDatabaseNames).toEqual(["test-50-assets", "Alpha"]);
+    });
+
+    test("is left out of the file entirely when there is none", () => {
+        const rendered = buildDatabasesConfigToml(
+            [{ name: "Alpha", description: "", path: "alpha" }],
+            ["Alpha"],
+            undefined);
+
+        expect(rendered).not.toContain("last_database");
     });
 });

@@ -303,6 +303,11 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         return [];
     }, []);
 
+    // The web frontend keeps no databases.toml, so there is never one to reopen.
+    const getLastDatabase = useCallback(async (): Promise<string | undefined> => {
+        return undefined;
+    }, []);
+
     const removeRecentDatabaseName = useCallback(async (_name: string): Promise<void> => {
     }, []);
 
@@ -420,6 +425,7 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         deleteSecret,
         getSecretValue,
         getRecentDatabases,
+        getLastDatabase,
         removeRecentDatabaseName,
         listS3Dirs,
         startShareReceive,

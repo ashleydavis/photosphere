@@ -11,7 +11,7 @@ import { RandomUuidGenerator, TimestampProvider, logExceptions, log, noLogDetail
 import { loadDatabaseConfig, updateDatabaseConfig } from 'api';
 import type { IReplicateDatabaseData, ISyncDatabaseData } from 'api';
 import { loadDesktopConfig, updateDesktopConfig, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion } from 'node-api';
-import { checkDatabaseExists, planDesktopAutoImport, AUTO_IMPORT_TASK_SOURCE, DEFAULT_DATABASE_DISPLAY_NAME } from 'node-api';
+import { checkDatabaseExists, planDesktopAutoImport, AUTO_IMPORT_TASK_SOURCE, DEFAULT_DATABASE_DISPLAY_NAME, getLastDatabase, setLastDatabase } from 'node-api';
 import { getDefaultPhotoFolders } from 'node-utils';
 import type { IDatabaseEntry, IDesktopConfig } from 'node-api';
 import type { ISaveAssetItem } from 'api';
@@ -729,6 +729,10 @@ ipcMain.handle('notify-database-opened', logExceptions(async (_event, databasePa
         }
         await markDatabaseOpened(existing.name);
     }
+
+    // Recorded beside the recents update above, because it is the same fact written twice: this is
+    // the database the user is in, so it is the one to reopen next time the app starts.
+    await setLastDatabase(databasePath);
     isDatabaseOpen = true;
     await updateMenu();
     resetSyncState(databasePath);
@@ -740,6 +744,13 @@ ipcMain.handle('notify-database-opened', logExceptions(async (_event, databasePa
 ipcMain.handle('get-recent-databases', logExceptions(async () => {
     return await getRecentDatabases();
 }, 'Error getting recent databases'));
+
+// IPC handler for returning the path of the database to reopen on this launch, read on startup.
+// Kept in databases.toml beside the recents above, which is why it is read here rather than from the
+// desktop config.
+ipcMain.handle('get-last-database', logExceptions(async () => {
+    return await getLastDatabase();
+}, 'Error getting the last database'));
 
 // IPC handler for removing a name from the recently opened database list (does NOT remove the database entry itself).
 ipcMain.handle('remove-recent-database-name', logExceptions(async (_event, name: string) => {
@@ -781,6 +792,8 @@ ipcMain.handle('list-s3-dirs', logExceptions(async (_event, { s3Key, bucket, pre
 
 // IPC handler for notifying that database was closed from frontend
 ipcMain.handle('notify-database-closed', logExceptions(async () => {
+    // Forgotten, so a database the user closed is not reopened for them on the next start.
+    await setLastDatabase(undefined);
     isDatabaseOpen = false;
     await updateMenu();
     resetSyncState();

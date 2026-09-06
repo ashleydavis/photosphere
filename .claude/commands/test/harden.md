@@ -101,14 +101,12 @@ then `EnterWorktree` with the `path` parameter. Never `EnterWorktree` with `name
 Then, for the one failure:
 
 1. **Read the report before touching any code.** Name the one test that failed and the earliest error line in it, never a downstream "not ready" or timeout that follows from it.
-2. **Check `docs/flaky-tests-registry.md`.** Strip ports, PIDs, timestamps, paths, ids, durations and hashes out of that error line and compare it against the patterns there. A match on an unticked entry gives you the recorded root cause to start from. A match on a ticked entry means that fix is disproven: untick it and append the recurrence, per the registry's own rules.
-3. **Establish the cause from evidence.** Read the test and the code it drives. Reproduce it narrowly where the logs are not enough: `bun run find-flakey-tests -- --script <suite> --test <filter>` loops one test in seconds. If the cause cannot be established, say so rather than changing code on a guess. Guessing is banned.
-4. **Make the smallest change that removes that cause, and nothing else.** No tidying, no renames, no reformatting, no second thing noticed on the way. Widening a timeout is a fix only when the evidence says the wait was genuinely too short for the work; when the evidence says the test raced something, wait for the thing rather than for longer. Contention on a machine-wide name (a fixed port, path, lock or device) is fixed by allocating per run: a free port, or `scripts/lib/allocate-test-temp-dir.sh` for a directory.
-5. **Comment the change** with what it fixes and why it is needed, in the code, not only in the commit message.
-6. **Prove it goes red without the fix.** Break it back and watch the looped test fail, then restore it and watch it pass. A fix only ever seen passing has not been shown to fix anything. Where the failure is too rare to reproduce on demand, say so plainly in the commit message and in the registry entry instead of claiming a proof you did not get.
-7. **Meet the repo's requirements.** `bun run compile` passes. Any new or changed TypeScript function gets a unit test under that package's `src/test`, watched failing first. Changed shell gets no test: `*.test.sh` is banned here.
-8. **Record the mode in `docs/flaky-tests-registry.md`**, following the format already in that file.
-9. **Commit it on its own**: the fix, its test, and the registry entry, nothing else. Check `git status` and `git diff HEAD` first, because the human stages work as they review it. Never `--no-verify` or `-n`, and never any other way of skipping the hook. A hook refusal is reported to the human and stops the loop.
+2. **Establish the cause from evidence.** Read the test and the code it drives. Reproduce it narrowly where the logs are not enough: `bun run find-flakey-tests -- --script <suite> --test <filter>` loops one test in seconds. If the cause cannot be established, say so rather than changing code on a guess. Guessing is banned.
+3. **Make the smallest change that removes that cause, and nothing else.** No tidying, no renames, no reformatting, no second thing noticed on the way. Widening a timeout is a fix only when the evidence says the wait was genuinely too short for the work; when the evidence says the test raced something, wait for the thing rather than for longer. Contention on a machine-wide name (a fixed port, path, lock or device) is fixed by allocating per run: a free port, or `scripts/lib/allocate-test-temp-dir.sh` for a directory.
+4. **Comment the change** with what it fixes and why it is needed, in the code, not only in the commit message.
+5. **Prove it goes red without the fix.** Break it back and watch the looped test fail, then restore it and watch it pass. A fix only ever seen passing has not been shown to fix anything. Where the failure is too rare to reproduce on demand, say so plainly in the commit message instead of claiming a proof you did not get.
+6. **Meet the repo's requirements.** `bun run compile` passes. Any new or changed TypeScript function gets a unit test under that package's `src/test`, watched failing first. Changed shell gets no test: `*.test.sh` is banned here.
+7. **Commit it on its own**: the fix and its test, nothing else. Check `git status` and `git diff HEAD` first, because the human stages work as they review it. Never `--no-verify` or `-n`, and never any other way of skipping the hook. A hook refusal is reported to the human and stops the loop.
 
 One fix per commit, one problem per fix.
 
@@ -124,7 +122,7 @@ This is the one destructive git command this skill authorises, and only in the w
 
 Judge each commit against that bar and remove the ones that fail it:
 
-- **A fix for a mode you diagnosed but never watched break a run** goes. Finding a real defect while reading the code is not the same as that defect having failed anything, and this skill is for what the scripts turn red. Record it in the registry so the knowledge survives, and leave the code alone.
+- **A fix for a mode you diagnosed but never watched break a run** goes. Finding a real defect while reading the code is not the same as that defect having failed anything, and this skill is for what the scripts turn red. Tell the human what you found, in the message you write at the end, and leave the code alone.
 - **A fix you could not prove**, where no red run was produced and no red/green pair exists, goes, unless the failure it addresses is one the scripts produced and the cause is established from that run's evidence. A number you picked rather than measured is not a fix.
 - **Diagnostics stay only when they earned it**: a logging change that named the cause of a failure the scripts produced has paid for itself and should be kept, because the next occurrence is then readable. One added on speculation has not, and goes.
 - **A fix that caused a failure of its own** goes immediately, whatever else it was for. That is the rule above, and it is not negotiable because the change was well intentioned.
@@ -162,13 +160,13 @@ Anything else is work to carry on with.
 
 ## Finishing
 
-Both scripts green in one pass each, and every remaining commit tied to a failure one of them produced. Then add an entry to `docs/testing/flakey-log.md`, dated today, following the entries already there: the ladder target, the result of each script with its session directory, what failed and what was done about it, and any suite left out of the run. Keep it to a few lines, because the detail of a failure mode belongs in `docs/flaky-tests-registry.md` and the entry points at it. A session that found nothing still gets an entry.
+Both scripts green in one pass each, and every remaining commit tied to a failure one of them produced.
 
 Then write:
 
 - Each fix: which test failed, what the cause was, what the change did, and why it was the smallest change that removes that one cause.
 - The evidence that proved each fix, or plainly that a red run could not be produced.
-- Any commit removed for not fixing an observed failure, and why. Removing one is a normal outcome of this skill, not an admission of having wasted the time: the knowledge goes into the registry and the code stays as it was.
+- Any commit removed for not fixing an observed failure, and why, along with what you found while writing it. Removing one is a normal outcome of this skill, not an admission of having wasted the time: the code stays as it was and the human gets the finding.
 - Which fixes are proven and which are not, kept apart rather than listed together. A change whose red/green pair you watched and a change you reasoned your way to are not the same claim, and running them together in one list overstates the weaker ones.
 - Any Bun crash, sick pool or dropped suite either run reported, and what it leaves unchecked. A dropped suite takes every combination it appears in with it, and the run prints how many; a run on Linux always drops `test:ios`.
 - The session directories: `tmp/parallel-check/<timestamp>` and `tmp/find-flakey-tests/<timestamp>`.

@@ -128,6 +128,12 @@ function isTestDatabaseName(name: string): boolean {
 // other test entry is removed first, so old fixtures do not accumulate run after run. The user's own
 // entries are never removed, reordered or edited, and neither are their recents.
 //
+// The fixture is registered, made most-recent and made last-opened in one move, because landing in
+// the seeded database is the whole point of the deploy script: without the last two the app starts on
+// the welcome screen and the fixture has to be found and tapped by hand. That overwrites whatever
+// last_database the file named, which is the intent rather than a loss, since the caller has just
+// asked for this database to be the one in front of them.
+//
 // Malformed TOML throws rather than being replaced: the file being unreadable is exactly when
 // overwriting it would destroy a config that cannot be recovered.
 //
@@ -135,23 +141,20 @@ export function registerDatabaseInConfig(existingToml: string, databasePath: str
     let databases: ITomlDatabaseEntry[] = [];
     let recentDatabaseNames: string[] = [];
 
-    // Carried through untouched. This rewrites the whole file to add one fixture, so anything it
-    // does not carry it deletes, and deleting this one would drop the user back to no database open.
-    let lastDatabase: string | undefined = undefined;
-
     if (existingToml.trim().length > 0) {
         const parsed = parseToml(existingToml) as ITomlDatabasesConfig;
         databases = parsed.databases ?? [];
         recentDatabaseNames = parsed.recent_database_names ?? [];
-        lastDatabase = typeof parsed.last_database === "string" ? parsed.last_database : undefined;
     }
 
     databases = databases.filter(entry => !isTestDatabaseName(entry.name ?? ""));
     recentDatabaseNames = recentDatabaseNames.filter(recentName => !isTestDatabaseName(recentName));
 
-    databases.push({ name: TEST_DATABASE_PREFIX + databasePath, description: "", path: databasePath });
+    const fixtureName = TEST_DATABASE_PREFIX + databasePath;
+    databases.push({ name: fixtureName, description: "", path: databasePath });
+    recentDatabaseNames = [fixtureName, ...recentDatabaseNames];
 
-    return buildDatabasesConfigToml(databases.map(tomlEntryToDatabaseEntry), recentDatabaseNames, lastDatabase);
+    return buildDatabasesConfigToml(databases.map(tomlEntryToDatabaseEntry), recentDatabaseNames, databasePath);
 }
 
 //

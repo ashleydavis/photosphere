@@ -449,6 +449,10 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         return await electronAPI.invoke('get-recent-databases') as IDatabaseEntry[];
     }, [electronAPI]);
 
+    const getLastDatabase = useCallback(async (): Promise<string | undefined> => {
+        return await electronAPI.invoke('get-last-database') as string | undefined;
+    }, [electronAPI]);
+
     const removeRecentDatabaseName = useCallback(async (name: string): Promise<void> => {
         await electronAPI.invoke('remove-recent-database-name', name);
     }, [electronAPI]);
@@ -549,6 +553,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         deleteSecret,
         getSecretValue,
         getRecentDatabases,
+        getLastDatabase,
         removeRecentDatabaseName,
         listS3Dirs,
         startShareReceive,

@@ -92,7 +92,7 @@ SECURE_STORE_FILE="shared_prefs/photosphere_secure_store.xml"
 # sharing a port number. Probing by name then reaches the emulator console rather than the bridge:
 # the connection succeeds, so curl never falls back to IPv4, and the console is not an HTTP server,
 # so every probe fails for the full timeout while the bridge sits there healthy. That is the
-# BRIDGE-START-BIND flake in docs/flaky-tests-registry.md, reproduced 7 times.
+# A bind race at bridge start, reproduced 7 times.
 BRIDGE_HOST="127.0.0.1"
 
 # Default seconds a wait tolerates before failing, doubled from the standalone value so a concurrent

@@ -19,6 +19,11 @@ export interface IDatabasesConfig {
     // MAX_RECENT_DATABASES.
     //
     recentDatabaseNames: string[];
+
+    //
+    // Path of the database to reopen on the next launch; absent when none is open.
+    //
+    lastDatabase?: string;
 }
 
 //
@@ -49,17 +54,28 @@ export function tomlToDatabasesConfig(toml: ITomlDatabasesConfig): IDatabasesCon
     const recentDatabaseNames = Array.isArray(toml.recent_database_names)
         ? toml.recent_database_names
         : [];
-    return { databases, recentDatabaseNames };
+    const config: IDatabasesConfig = { databases, recentDatabaseNames };
+    if (typeof toml.last_database === "string") {
+        config.lastDatabase = toml.last_database;
+    }
+    return config;
 }
 
 //
 // Converts the TypeScript IDatabasesConfig to the TOML on-disk shape.
 //
 export function databasesConfigToToml(config: IDatabasesConfig): ITomlDatabasesConfig {
-    return {
+    const toml: ITomlDatabasesConfig = {
         databases: config.databases.map(databaseEntryToToml),
         recent_database_names: config.recentDatabaseNames,
     };
+
+    // Only written when there is one. An absent key is what "no database is open" looks like on
+    // disk, so writing an empty string instead would reopen a database whose path is nothing.
+    if (config.lastDatabase !== undefined) {
+        toml.last_database = config.lastDatabase;
+    }
+    return toml;
 }
 
 //
@@ -140,8 +156,8 @@ export async function addDatabaseEntry(entry: IDatabaseEntry): Promise<void> {
             throw new Error(`A database named "${entry.name}" already exists.`);
         }
         return {
+            ...config,
             databases: [...config.databases, entry],
-            recentDatabaseNames: config.recentDatabaseNames,
         };
     });
 }
@@ -169,6 +185,7 @@ export async function updateDatabaseEntry(originalName: string, entry: IDatabase
         const updatedDatabases = config.databases.slice();
         updatedDatabases[matchIndex] = entry;
         return {
+            ...config,
             databases: updatedDatabases,
             recentDatabaseNames: renamed
                 ? config.recentDatabaseNames.map(recentName => namesMatch(recentName, originalName) ? entry.name : recentName)
@@ -190,11 +207,11 @@ export async function removeDatabaseEntry(name: string): Promise<void> {
         // entry that has already gone.
         const recentDatabaseNames = config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name));
         if (matchIndex === -1) {
-            return { databases: config.databases, recentDatabaseNames };
+            return { ...config, recentDatabaseNames };
         }
         const updatedDatabases = config.databases.slice();
         updatedDatabases.splice(matchIndex, 1);
-        return { databases: updatedDatabases, recentDatabaseNames };
+        return { ...config, databases: updatedDatabases, recentDatabaseNames };
     });
 }
 
@@ -221,7 +238,7 @@ export async function getRecentDatabases(): Promise<IDatabaseEntry[]> {
 //
 export async function removeRecentDatabaseName(name: string): Promise<void> {
     await updateDatabasesConfig(config => ({
-        databases: config.databases,
+        ...config,
         recentDatabaseNames: config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name)),
     }));
 }
@@ -238,11 +255,33 @@ export async function markDatabaseOpened(name: string): Promise<void> {
             return config;
         }
         return {
-            databases: config.databases,
+            ...config,
             recentDatabaseNames: [
                 found.name,
                 ...config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, found.name)),
             ].slice(0, MAX_RECENT_DATABASES),
         };
     });
+}
+
+//
+// Returns the path of the database to reopen on the next launch, or undefined when none is open.
+//
+export async function getLastDatabase(): Promise<string | undefined> {
+    const config = await loadDatabasesConfig();
+    return config.lastDatabase;
+}
+
+//
+// Records the database to reopen on the next launch. undefined clears it, which is what closing a
+// database does.
+//
+// Written through updateDatabasesConfig like every other edit here, so the databases and recents
+// lists are carried through untouched rather than being rewritten from a copy read earlier.
+//
+export async function setLastDatabase(databasePath: string | undefined): Promise<void> {
+    await updateDatabasesConfig(config => ({
+        ...config,
+        lastDatabase: databasePath,
+    }));
 }

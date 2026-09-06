@@ -16,9 +16,7 @@ import { useApi } from "./api-context";
 import type { IDownloadAssetItem } from "./platform-context";
 import { useToast } from "./toast-context";
 import { useUuidGenerator } from "./uuid-generator-context";
-import { useConfig } from "./config-context";
 import { markRecentArrival } from "../lib/recent-arrivals";
-import { LAST_DATABASE_KEY } from "../lib/last-database-config";
 import { planOpenDatabase } from "../lib/open-database-plan";
 
 //
@@ -125,7 +123,6 @@ interface ICheckDatabaseExistsOutputs {
 
 export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IAssetDatabaseProviderProps) {
     const platform = usePlatform();
-    const config = useConfig();
     const api = useApi();
     const uuidGenerator = useUuidGenerator();
     const { addToast } = useToast();
@@ -524,14 +521,9 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
                     });
             }
 
-            // Remembered here, in the one place every platform opens a database through, so the app
-            // reopens it next time it starts. main.tsx reads this key on mount.
-            //
-            // It used to be written by the Electron main process instead, which is why it only ever
-            // worked on the desktop: nothing obliged a new platform to write it and nothing noticed when
-            // it did not, so the read simply returned nothing and the app started with nothing open.
-            await config.set(LAST_DATABASE_KEY, dbPath);
-
+            // Recording this database as the one to reopen next time is part of what being told it was
+            // opened means, so it happens inside notifyDatabaseOpened rather than here. Each platform
+            // keeps it in its own databases.toml, which the interface cannot reach.
             await platform.notifyDatabaseOpened(dbPath);
         }
         finally {
@@ -554,9 +546,8 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         loadedAssets.current = {};
         onReset.current.invoke();
 
-        // Forgotten, so a database the user closed is not reopened for them on the next start.
-        await config.clear(LAST_DATABASE_KEY);
-
+        // The mirror of the open above: being told the database was closed is what makes the platform
+        // forget it, so a database the user closed is not reopened for them on the next start.
         await platform.notifyDatabaseClosed();
     }
    

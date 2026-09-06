@@ -890,7 +890,7 @@ export class CloudStorage implements IStorage {
                     // it. It is not corrupt: the read simply raced its owner, who is still in the
                     // critical section. Deleting it here let three processes write one database at
                     // once and one of them lost its records (S3-LOCK-BROKEN-WHILE-HELD in
-                    // docs/flaky-tests-registry.md). Refuse instead and let the caller retry.
+                    // Refuse instead and let the caller retry.
                     if (log.verboseEnabled) {
                         log.verbose(`[LOCK] ${timestamp},ACQUIRE_FAILED_UNREADABLE,${processId},${owner},${filePath}`);
                     }

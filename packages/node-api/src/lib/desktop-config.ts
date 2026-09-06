@@ -27,11 +27,6 @@ export interface IDesktopConfig {
     lastDownloadFolder?: string;
 
     //
-    // The path of the last database that was opened; absent when none.
-    //
-    lastDatabase?: string;
-
-    //
     // Whether the FPS indicator overlay is shown in the UI. Defaults to false when unset.
     //
     showFpsIndicator?: boolean;
@@ -95,9 +90,6 @@ interface ITomlDesktopConfig {
     // The last folder used when downloading assets.
     last_download_folder?: string;
 
-    // The path of the last database that was opened.
-    last_database?: string;
-
     // Whether the FPS indicator overlay is shown in the UI.
     show_fps_indicator?: boolean;
 
@@ -146,9 +138,6 @@ export function tomlToDesktopConfig(toml: ITomlDesktopConfig): IDesktopConfig {
     if (toml.last_download_folder !== undefined) {
         config.lastDownloadFolder = toml.last_download_folder;
     }
-    if (toml.last_database !== undefined) {
-        config.lastDatabase = toml.last_database;
-    }
     if (toml.show_fps_indicator !== undefined) {
         config.showFpsIndicator = toml.show_fps_indicator;
     }
@@ -195,9 +184,6 @@ export function desktopConfigToToml(config: IDesktopConfig): ITomlDesktopConfig 
     }
     if (config.lastDownloadFolder !== undefined) {
         toml.last_download_folder = config.lastDownloadFolder;
-    }
-    if (config.lastDatabase !== undefined) {
-        toml.last_database = config.lastDatabase;
     }
     if (config.showFpsIndicator !== undefined) {
         toml.show_fps_indicator = config.showFpsIndicator;

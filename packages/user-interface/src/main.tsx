@@ -5,7 +5,6 @@ import { GalleryPage } from "./pages/gallery/gallery";
 import classNames from "classnames";
 import { usePlatform } from "./context/platform-context";
 import { useIsMobile, MOBILE_BREAKPOINT_PX } from "./lib/use-is-mobile";
-import { useConfig } from "./context/config-context";
 import { useAssetDatabase } from "./context/asset-database-source";
 import { useSearch } from "./context/search-context";
 import { FullscreenSpinner } from "./components/full-screen-spinnner";
@@ -33,7 +32,6 @@ import { OpenDatabaseModal } from "./components/open-database-modal";
 import { CreateDatabaseModal } from "./components/create-database-modal";
 import { AddDatabaseModal } from "./components/add-database-modal";
 import { openBugReport } from "./lib/bug-report";
-import { LAST_DATABASE_KEY } from "./lib/last-database-config";
 
 export interface IMainProps {
     //
@@ -97,7 +95,6 @@ function __Main({ initialTheme }: IMainProps) {
     const { openSearch } = useSearch();
 
     const platform = usePlatform();
-    const config = useConfig();
 
     const theme = useTheme();
 
@@ -280,7 +277,7 @@ function __Main({ initialTheme }: IMainProps) {
             }
 
             try {
-                const lastDatabase = await config.get<string>(LAST_DATABASE_KEY);
+                const lastDatabase = await platform.getLastDatabase();
                 if (lastDatabase) {
                     await openDatabase(lastDatabase);
                 }

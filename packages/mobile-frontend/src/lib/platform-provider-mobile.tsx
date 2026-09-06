@@ -28,7 +28,6 @@ import { importSharePayload as importReceivedShare, type IReceivedSharePayload }
 import { shouldSyncAfterEdit, SYNC_AFTER_EDIT_DELAY_MS, SYNC_TASK_TYPE } from "./mobile-edit-sync";
 import { planBackgroundWork } from "./background-work";
 import { mobileDatabasesConfigFile } from "./mobile-databases-config-file";
-import { LAST_DATABASE_KEY } from "user-interface/src/lib/last-database-config";
 import type { IConflictResolution } from "lan-share-core";
 
 //
@@ -213,6 +212,13 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         const known = await configStore.findDatabaseByPath(mobileDatabasesConfigFile, databasePath);
         const name = known?.name ?? configStore.databaseBasename(databasePath);
         await configStore.addRecentDatabase(mobileDatabasesConfigFile, known ?? { name, description: "", path: databasePath });
+
+        // Recorded beside the recents update above, because it is the same fact written twice: this
+        // is the database the user is in, so it is the one to reopen next time the app starts. It
+        // goes in databases.toml rather than the WebView's local storage, which is flushed to disk
+        // when the WebView gets round to it: Android kills an app without waiting for that, so a
+        // phone stopped a second after a database was opened came back with nothing open.
+        await configStore.setLastDatabase(mobileDatabasesConfigFile, databasePath);
         log.info(`Database opened: ${configStore.databaseBasename(databasePath)}`);
         // Remember which database an edit made from here syncs, and record it where the native loop
         // can read it, which is what makes background syncing work for the database the user is
@@ -233,6 +239,8 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, []);
 
     const notifyDatabaseClosed = useCallback(async (): Promise<void> => {
+        // Forgotten, so a database the user closed is not reopened for them on the next start.
+        await configStore.setLastDatabase(mobileDatabasesConfigFile, undefined);
         // Nothing is open, so an edit has nothing to sync. Cleared rather than left, because a stale
         // path here would queue a sync for a database the app has closed.
         openDatabasePathRef.current = undefined;
@@ -634,6 +642,10 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         return configStore.getRecentDatabases(mobileDatabasesConfigFile);
     }, []);
 
+    const getLastDatabase = useCallback(async (): Promise<string | undefined> => {
+        return configStore.getLastDatabase(mobileDatabasesConfigFile);
+    }, []);
+
     const removeRecentDatabaseName = useCallback(async (name: string): Promise<void> => {
         await configStore.removeRecentDatabase(mobileDatabasesConfigFile, name);
         // Matches the desktop main process so smoke tests observe the same log line.
@@ -775,6 +787,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         deleteSecret,
         getSecretValue,
         getRecentDatabases,
+        getLastDatabase,
         removeRecentDatabaseName,
         listS3Dirs,
         startShareReceive,
@@ -808,9 +821,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             if (isSyncFileKey(key)) {
                 return getSyncFileValue(mobileSyncConfigFile, key);
             }
-            if (key === LAST_DATABASE_KEY) {
-                return configStore.getLastDatabase(mobileDatabasesConfigFile);
-            }
             return configStore.getConfigValue(persistentStore, key);
         },
         async (key, value) => {
@@ -834,10 +844,6 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
                 if (autoImportChangedRef.current) {
                     autoImportChangedRef.current();
                 }
-                return;
-            }
-            if (key === LAST_DATABASE_KEY) {
-                await configStore.setLastDatabase(mobileDatabasesConfigFile, value as string | undefined);
                 return;
             }
             configStore.setConfigValue(persistentStore, key, value);

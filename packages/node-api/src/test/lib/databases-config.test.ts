@@ -37,6 +37,8 @@ import {
     markDatabaseOpened,
     removeRecentDatabaseName,
     findDatabase,
+    getLastDatabase,
+    setLastDatabase,
     MAX_RECENT_DATABASES,
 } from '../../lib/databases-config';
 import type { IDatabaseEntry } from '../../lib/databases-config';
@@ -45,10 +47,14 @@ import type { IDatabaseEntry } from '../../lib/databases-config';
 // Sets what the config file is pretending to hold, for both the read path and the mutator the write
 // path is handed.
 //
+// Reads resolve fileContents as it stands at the moment of the read, not as it stood when this was
+// called, so a read that follows a write in the same test sees what the write left behind. Resolving
+// a captured copy instead made every such read return the file's original contents, which is not
+// something the real readToml can do.
 function setFileContents(toml: any): void {
     fileContents = toml;
     mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
-    mockReadToml.mockResolvedValue(toml);
+    mockReadToml.mockImplementation(async () => fileContents);
 }
 
 //
@@ -580,5 +586,107 @@ describe('removeRecentDatabaseName', () => {
         const tomlArg = writtenToml;
         expect(tomlArg.databases).toHaveLength(1);
         expect(tomlArg.databases[0].path).toBe('/a');
+    });
+});
+
+//
+// The database the app reopens on launch.
+//
+// It is kept in this file rather than desktop.toml so there is one place per platform holding it, in
+// one format: databases.toml exists on desktop, on the CLI and in the mobile app's storage sandbox,
+// and can be written from outside the app, which is what lets a fixture seeded onto a device open on
+// launch instead of leaving the app on the welcome screen.
+//
+describe('the last opened database', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        fileContents = undefined;
+        writtenToml = undefined;
+    });
+
+    test('is undefined when the file names none', async () => {
+        setFileContents({
+            databases: [makeTomlEntry('/a', 'alpha')],
+            recent_database_names: ['alpha'],
+        });
+
+        expect(await getLastDatabase()).toBeUndefined();
+    });
+
+    test('is undefined when there is no file at all', async () => {
+        mockPathExists.mockResolvedValue(false);
+
+        expect(await getLastDatabase()).toBeUndefined();
+    });
+
+    test('reads back the path that was set', async () => {
+        setFileContents({
+            databases: [makeTomlEntry('/a', 'alpha')],
+            recent_database_names: ['alpha'],
+        });
+
+        await setLastDatabase('/a');
+
+        expect(writtenToml.last_database).toBe('/a');
+        expect(await getLastDatabase()).toBe('/a');
+    });
+
+    test('setting undefined removes the key rather than writing an empty string', async () => {
+        // An empty string would send the app looking for a database whose path is nothing, where an
+        // absent key is what "no database is open" has always meant on disk.
+        setFileContents({
+            databases: [makeTomlEntry('/a', 'alpha')],
+            recent_database_names: ['alpha'],
+            last_database: '/a',
+        });
+
+        await setLastDatabase(undefined);
+
+        expect('last_database' in writtenToml).toBe(false);
+        expect(await getLastDatabase()).toBeUndefined();
+    });
+
+    test('setting it leaves the databases and recents lists exactly as they were', async () => {
+        setFileContents({
+            databases: [makeTomlEntry('/a', 'alpha'), makeTomlEntry('/b', 'beta')],
+            recent_database_names: ['beta', 'alpha'],
+        });
+
+        await setLastDatabase('/b');
+
+        expect(writtenToml.databases).toEqual([makeTomlEntry('/a', 'alpha'), makeTomlEntry('/b', 'beta')]);
+        expect(writtenToml.recent_database_names).toEqual(['beta', 'alpha']);
+    });
+
+    test('survives every other edit to the file', async () => {
+        // Each of these rewrites the whole file, so anything one of them does not carry through it
+        // deletes. Losing this one drops the user back to the welcome screen on the next start.
+        setFileContents({
+            databases: [makeTomlEntry('/a', 'alpha')],
+            recent_database_names: ['alpha'],
+            last_database: '/a',
+        });
+
+        await addDatabaseEntry(makeEntry('/b', 'beta'));
+        expect(writtenToml.last_database).toBe('/a');
+
+        await updateDatabaseEntry('beta', makeEntry('/b', 'gamma'));
+        expect(writtenToml.last_database).toBe('/a');
+
+        await markDatabaseOpened('alpha');
+        expect(writtenToml.last_database).toBe('/a');
+
+        await removeRecentDatabaseName('alpha');
+        expect(writtenToml.last_database).toBe('/a');
+
+        await removeDatabaseEntry('gamma');
+        expect(writtenToml.last_database).toBe('/a');
+    });
+
+    test('round-trips through the TOML conversions in both directions', () => {
+        expect(tomlToDatabasesConfig({ databases: [], recent_database_names: [], last_database: '/a' }).lastDatabase).toBe('/a');
+        expect(tomlToDatabasesConfig({ databases: [], recent_database_names: [] }).lastDatabase).toBeUndefined();
+        expect(databasesConfigToToml({ databases: [], recentDatabaseNames: [], lastDatabase: '/a' }).last_database).toBe('/a');
+        expect('last_database' in databasesConfigToToml({ databases: [], recentDatabaseNames: [] })).toBe(false);
     });
 });

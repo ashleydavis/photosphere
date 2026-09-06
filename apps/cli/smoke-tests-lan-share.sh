@@ -312,7 +312,19 @@ start_receiver_with_code() {
     track_test_pid "$RECEIVER_PID"
 
     # Poll until the receiver logs that it is waiting for a sender.
-    for attempt in $(seq 1 25); do
+    #
+    # The budget is generous because it is measuring how long a `bun` process takes to start, load the
+    # CLI and bind its sockets, and that is wall-clock time on a machine that may be running a dozen
+    # other suites and the emulator pool. Five seconds was enough on an idle machine and ran out under
+    # test:everything, failing a receiver that was starting perfectly well, just slowly.
+    #
+    # Waiting longer costs nothing, because neither thing this could be waiting for is left undetected:
+    # a receiver that died is caught on the next pass by the pid check below and reported at once, and
+    # a receiver that is alive but genuinely wedged is caught by the per-test watchdog in
+    # scripts/lib/test-timeout.sh, which is what bounds a hang for every suite here. So the only job
+    # left for this loop's own limit is to say something more useful than "the test timed out", and it
+    # can take its time doing that.
+    for attempt in $(seq 1 300); do
         sleep 0.2
         if [ -f "$log_file" ] && grep -q "Waiting for sender" "$log_file" 2>/dev/null; then
             # Give the HTTPS server and UDP broadcast a moment to be fully ready.
@@ -328,7 +340,7 @@ start_receiver_with_code() {
         fi
     done
 
-    log_fail "Receiver was not ready within 5 seconds."
+    log_fail "Receiver was not ready within 60 seconds."
     cat "$log_file" 2>/dev/null || true
     test_cleanup
     return 1

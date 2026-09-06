@@ -224,13 +224,16 @@ ios_seed_database() {
 # outside the app, before it launches, the way a desktop smoke test pre-writes
 # ~/.config/photosphere/databases.toml.
 #
-# Both arguments are JSON: the databases as an array of {name, path} (description optional), the
-# recents as an array of names. An omitted recents argument writes an empty recents list.
-# Usage: ios_seed_databases_config '<databases json>' ['<recent names json>']
+# The first two arguments are JSON: the databases as an array of {name, path} (description optional),
+# the recents as an array of names. An omitted recents argument writes an empty recents list. The
+# third is the path of the database the app reopens on launch; omitting it writes no such key, which
+# is what leaves the app on the welcome screen.
+# Usage: ios_seed_databases_config '<databases json>' ['<recent names json>'] ['<last database path>']
 #
 ios_seed_databases_config() {
     local databases_json="$1"
     local recent_json="${2:-[]}"
+    local last_database="${3:-}"
     local container
     container="$(ios_app_container)"
     if [ -z "$container" ]; then
@@ -238,11 +241,26 @@ ios_seed_databases_config() {
         return 1
     fi
     mkdir -p "$container/Documents"
-    if ! DATABASES="$databases_json" RECENT="$recent_json" bun "$LIB_DIR/write-databases-config.ts" "$container/Documents/$DATABASES_CONFIG_FILE"; then
+    if ! DATABASES="$databases_json" RECENT="$recent_json" LAST_DATABASE="$last_database" bun "$LIB_DIR/write-databases-config.ts" "$container/Documents/$DATABASES_CONFIG_FILE"; then
         log_error "Could not render the app's database list (see the error above)."
         return 1
     fi
     log_info "Wrote the app's database list to Documents/$DATABASES_CONFIG_FILE"
+}
+
+#
+# Prints the app's databases.toml as it stands in the simulator's container, or nothing when there is
+# none yet. The iOS counterpart of android_read_databases_config: it reads back what the app itself
+# wrote, so a test can assert on the write rather than on what the screen showed afterwards.
+# Usage: ios_read_databases_config
+#
+ios_read_databases_config() {
+    local container
+    container="$(ios_app_container)"
+    if [ -z "$container" ] || [ ! -f "$container/Documents/$DATABASES_CONFIG_FILE" ]; then
+        return 0
+    fi
+    cat "$container/Documents/$DATABASES_CONFIG_FILE"
 }
 
 #

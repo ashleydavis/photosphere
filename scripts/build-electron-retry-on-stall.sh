@@ -2,9 +2,8 @@
 #
 # Packages the Electron app, and retries once if the packaging stalls rather than fails.
 #
-# `build-desktop (windows-latest)` hangs in this build often enough to have its own registry entry,
-# WINDOWS-ELECTRON-BUILD-HANGS-ON-NPM-LIST, with four sightings and no established cause. The last
-# line before the silence is always the same: "note: bun does not support any CLI for dependency tree
+# `build-desktop (windows-latest)` hangs in this build, with no established cause. The last line
+# before the silence is always the same: "note: bun does not support any CLI for dependency tree
 # extraction, utilizing NPM node module collector instead". electron-builder has no dependency-tree
 # reader for bun, so it falls back to spawning `npm list` in the repository root, and that child has
 # no timeout of its own. Nothing here can make it come back, and nothing here can see why it did not.
@@ -56,7 +55,7 @@ while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
         exit "$status"
     fi
 
-    echo "Packaging attempt $attempt produced nothing for ${ATTEMPT_SECONDS}s and was killed. See WINDOWS-ELECTRON-BUILD-HANGS-ON-NPM-LIST in docs/flaky-tests-registry.md."
+    echo "Packaging attempt $attempt produced nothing for ${ATTEMPT_SECONDS}s and was killed."
     attempt=$((attempt + 1))
 done
 

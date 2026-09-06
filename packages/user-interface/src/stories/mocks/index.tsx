@@ -216,6 +216,7 @@ export function mockPlatform(): IPlatformContext {
         deleteSecret: async () => {},
         getSecretValue: async () => undefined,
         getRecentDatabases: async () => [],
+        getLastDatabase: async () => undefined,
         removeRecentDatabaseName: async () => {},
         listS3Dirs: async () => [],
         startShareReceive: async () => {},

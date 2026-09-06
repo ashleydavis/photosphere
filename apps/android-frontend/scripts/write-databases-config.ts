@@ -5,6 +5,9 @@
 // pushes the result back. Registering a database this way is the same move as registering one in
 // ~/.config/photosphere/databases.toml on desktop: write the config, the app reads it.
 //
+// The registration also makes the fixture the most-recent database and the one reopened on launch,
+// so the app starts in the seeded database rather than on the welcome screen.
+//
 // The merge itself is registerDatabaseInConfig in node-api, beside the handlers that read and write
 // the file on device, so this script and the app cannot drift on the format. That is also where its
 // unit tests are.

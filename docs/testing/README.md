@@ -174,7 +174,7 @@ bun run test:parallel -- --help
 The three verdicts:
 
 - **ok** - both scripts are sound alone and both sides passed when run together.
-- **interference** - both scripts are sound alone and at least one side failed when they ran together. This is a real finding: record it in the "Parallel-only failure modes" section of [the flaky-test registry](../flaky-tests-registry.md), naming the pair and the shared resource.
+- **interference** - both scripts are sound alone and at least one side failed when they ran together. This is a real finding, and it is a bug to fix rather than one to write down: find what the pair contends on (a fixed port, path, lock or device) and make it per-run, so a second copy of the suite cannot collide with the first.
 - **inconclusive** - at least one script failed on its own, so nothing the pair did proves anything. Ordinary flakiness has masked the answer. Run `bun run find-flakey-tests -- --script <name>` on that script first: the two tools are a pair, one proves a suite is sound alone and the other proves it is sound in company, and the second is only meaningful once the first has passed.
 
 Exit status is 0 when nothing was found, 1 when interference was, 2 on bad usage, 3 when too many Bun crashes in a row made the result meaningless, 4 when the emulator pool degraded mid-run, and 5 when nothing was found but something was inconclusive.
@@ -385,7 +385,7 @@ Set state up from outside the app, before it launches. Do not add a command, an 
 The two helpers to reach for, both defined per platform in `apps/smoke-tests/lib/android.sh` and `apps/smoke-tests/lib/ios.sh`:
 
 - `"${PLATFORM}_reset_app_state"` - wipes everything the app has stored on the device: its storage sandbox, the WebView's localStorage and the keychain. Call it before `start_app`, so the app starts from a known state and nothing can write state back underneath it. On Android this is `pm clear`; on iOS it empties the app's data container and resets the simulator keychain.
-- `"${PLATFORM}_seed_databases_config" '<databases json>' '<recent names json>'` - writes the app's `databases.toml` into its storage sandbox, registering the configured databases and the recents. This is the mobile equivalent of the desktop smoke tests pre-writing `~/.config/photosphere/databases.toml`. The file is rendered on the host by `apps/smoke-tests/lib/write-databases-config.ts`, through the same `node-api` function the app writes it with, so the two cannot drift.
+- `"${PLATFORM}_seed_databases_config" '<databases json>' '<recent names json>' '<last database path>'` - writes the app's `databases.toml` into its storage sandbox, registering the configured databases, the recents, and the database to reopen on launch. The third argument is optional; omitting it writes no `last_database` key, which leaves the app on the welcome screen. This is the mobile equivalent of the desktop smoke tests pre-writing `~/.config/photosphere/databases.toml`. The file is rendered on the host by `apps/smoke-tests/lib/write-databases-config.ts`, through the same `node-api` function the app writes it with, so the two cannot drift.
 
 Alongside those, `"${PLATFORM}_seed_database"` copies a database fixture into the sandbox and `"${PLATFORM}_reset_path"` removes a path under it.
 

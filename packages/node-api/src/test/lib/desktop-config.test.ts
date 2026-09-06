@@ -81,7 +81,7 @@ describe('loadDesktopConfig', () => {
             last_folder: '/folder',
             recent_searches: ['cats'],
             last_download_folder: '/downloads',
-            last_database: '/db',
+            default_database_path: '/db',
             show_fps_indicator: true,
         });
 
@@ -90,7 +90,7 @@ describe('loadDesktopConfig', () => {
         expect(config.lastFolder).toBe('/folder');
         expect(config.recentSearches).toEqual(['cats']);
         expect(config.lastDownloadFolder).toBe('/downloads');
-        expect(config.lastDatabase).toBe('/db');
+        expect(config.defaultDatabasePath).toBe('/db');
         expect(config.showFpsIndicator).toBe(true);
     });
 });
@@ -130,7 +130,7 @@ describe('updateDesktopConfig writes snake_case TOML', () => {
             config.lastFolder = '/folder';
             config.recentSearches = ['cats'];
             config.lastDownloadFolder = '/downloads';
-            config.lastDatabase = '/db';
+            config.defaultDatabasePath = '/db';
             config.showFpsIndicator = true;
         });
 
@@ -138,7 +138,7 @@ describe('updateDesktopConfig writes snake_case TOML', () => {
         expect(tomlArg.last_folder).toBe('/folder');
         expect(tomlArg.recent_searches).toEqual(['cats']);
         expect(tomlArg.last_download_folder).toBe('/downloads');
-        expect(tomlArg.last_database).toBe('/db');
+        expect(tomlArg.default_database_path).toBe('/db');
         expect(tomlArg.show_fps_indicator).toBe(true);
         expect(tomlArg.lastFolder).toBeUndefined();
     });
@@ -454,7 +454,7 @@ describe('tomlToDesktopConfig', () => {
             theme: 'dark',
             recent_searches: ['cats'],
             last_download_folder: '/downloads',
-            last_database: '/db',
+            default_database_path: '/db',
             show_fps_indicator: true,
             developer_mode: true,
             dev_tools_open: true,
@@ -467,7 +467,7 @@ describe('tomlToDesktopConfig', () => {
             theme: 'dark',
             recentSearches: ['cats'],
             lastDownloadFolder: '/downloads',
-            lastDatabase: '/db',
+            defaultDatabasePath: '/db',
             showFpsIndicator: true,
             developerMode: true,
             devToolsOpen: true,
@@ -490,7 +490,7 @@ describe('desktopConfigToToml', () => {
             theme: 'dark',
             recentSearches: ['cats'],
             lastDownloadFolder: '/downloads',
-            lastDatabase: '/db',
+            defaultDatabasePath: '/db',
             showFpsIndicator: true,
             developerMode: true,
             devToolsOpen: true,
@@ -503,7 +503,7 @@ describe('desktopConfigToToml', () => {
             theme: 'dark',
             recent_searches: ['cats'],
             last_download_folder: '/downloads',
-            last_database: '/db',
+            default_database_path: '/db',
             show_fps_indicator: true,
             developer_mode: true,
             dev_tools_open: true,
@@ -533,7 +533,7 @@ describe('updateDesktopConfig keeps concurrent changes', () => {
 
     test('keeps a key written by someone else while this edit was being made', async () => {
         mockPathExists.mockImplementation((filePath: string) => filePath.endsWith('.toml'));
-        mockReadToml.mockResolvedValue({ last_database: '/set-by-another-process' });
+        mockReadToml.mockResolvedValue({ default_database_path: '/set-by-another-process' });
 
         await updateDesktopConfig(config => {
             config.theme = 'dark';
@@ -541,7 +541,7 @@ describe('updateDesktopConfig keeps concurrent changes', () => {
 
         const tomlArg = mockWriteToml.mock.calls[0][1];
         expect(tomlArg.theme).toBe('dark');
-        expect(tomlArg.last_database).toBe('/set-by-another-process');
+        expect(tomlArg.default_database_path).toBe('/set-by-another-process');
     });
 
     test('caps the recent searches at MAX_RECENT_SEARCHES', async () => {
@@ -635,14 +635,14 @@ describe('updateFolderPath', () => {
     //
     test('leaves every other setting alone, including ones changed while the dialog was open', async () => {
         mockPathExists.mockResolvedValue(true);
-        mockReadToml.mockResolvedValue({ theme: 'dark', last_database: '/set-while-dialog-was-open' });
+        mockReadToml.mockResolvedValue({ theme: 'dark', default_database_path: '/set-while-dialog-was-open' });
 
         await updateFolderPath('lastFolder', '/new/photos');
 
         const tomlArg = mockWriteToml.mock.calls[0][1];
         expect(tomlArg.last_folder).toBe('/new/photos');
         expect(tomlArg.theme).toBe('dark');
-        expect(tomlArg.last_database).toBe('/set-while-dialog-was-open');
+        expect(tomlArg.default_database_path).toBe('/set-while-dialog-was-open');
     });
 
     test('throws on an unknown key without writing anything', async () => {

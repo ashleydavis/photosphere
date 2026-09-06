@@ -577,6 +577,16 @@ export interface IPlatformContext {
     getRecentDatabases: () => Promise<IDatabaseEntry[]>;
 
     //
+    // Returns the path of the database to reopen on this launch, or undefined when none should be.
+    //
+    // Read once on startup. It is the platform's to answer rather than a config value the interface
+    // reads, because each platform keeps it in its own databases.toml, beside the recents list above:
+    // on desktop that file is under the user's config directory, on mobile in the app's storage
+    // sandbox, and neither is reachable from the interface.
+    //
+    getLastDatabase: () => Promise<string | undefined>;
+
+    //
     // Removes the given name from the recently opened list only; the underlying database entry is preserved.
     //
     removeRecentDatabaseName: (name: string) => Promise<void>;

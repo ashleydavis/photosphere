@@ -223,7 +223,7 @@ check_devices_healthy() {
     # Measured: a run stopped here with 4 of 5 while the pool monitor, sampling every minute either
     # side of it, recorded 5 of 5 healthy throughout and memory at 43 to 50 percent, so nothing had
     # died and nothing was repaired. The same single-sample trap is recorded in
-    # docs/flaky-tests-registry.md as LAN-BRIDGE-PROBE-SINGLE-SAMPLE.
+    # a single sample, which proves nothing on its own.
     #
     # This does not soften the check against a real loss: an emulator that is gone is still gone a
     # second later, and every other reason the pool can be unhealthy is untouched below.
