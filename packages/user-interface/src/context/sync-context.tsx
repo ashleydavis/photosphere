@@ -120,6 +120,17 @@ export function SyncContextProvider({ children }: ISyncContextProviderProps) {
     // changes (and on mount), so automatic syncs only run when permitted.
     //
     useEffect(() => {
+        // What the decision was made from, said before it is made. computeSyncAllowed refuses on any
+        // of four inputs and the decision it hands on is one boolean, so a refusal on its own names
+        // nothing: Android smoke tests 34 and 42 both lost 120s waiting for a sync in Release run
+        // 34024406357, and all their logs say is that this went true and then false. Which input
+        // turned it is the whole question, and it was not recorded anywhere.
+        //
+        // The line below keeps "Sync gate set to <bool>" starting the message it is in, because
+        // desktop test 24-sync-settings waits on that exact text and wait_for_log matches by
+        // substring. This is a second line rather than more text on that one, so the two stay
+        // independent.
+        log.info(`Automatic sync decided from: syncEnabled=${syncEnabled}, wifiOnly=${syncOnlyOnWifi}, connected=${networkStatus.connected}, connection=${networkStatus.connectionType}`);
         platform.setSyncAllowed(computeSyncAllowed({
             syncEnabled,
             syncOnlyOnWifi,

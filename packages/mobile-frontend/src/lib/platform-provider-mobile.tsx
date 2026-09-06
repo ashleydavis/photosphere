@@ -334,11 +334,18 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         syncAfterEditTimerRef.current = setTimeout(() => {
             syncAfterEditTimerRef.current = undefined;
 
-            if (!shouldSyncAfterEdit({
+            // A refusal here used to be the end of it: no task queued and not a word said, so the
+            // only trace was a sync that never happened. Android smoke tests 34 and 42 each waited
+            // out their full 120s for "Sync started" in Release run 34024406357 with nothing in the
+            // app log between the edit and the timeout, and which of these three inputs refused it
+            // could not be told from the outside. Saying them is what makes the next one readable.
+            const editSyncInputs = {
                 syncAllowed: syncAllowedRef.current,
                 databasePath: openDatabasePathRef.current,
                 syncInFlight: syncInFlightRef.current,
-            })) {
+            };
+            if (!shouldSyncAfterEdit(editSyncInputs)) {
+                log.info(`No sync after this edit: syncAllowed=${editSyncInputs.syncAllowed}, databasePath=${editSyncInputs.databasePath}, syncInFlight=${editSyncInputs.syncInFlight}`);
                 return;
             }
 
