@@ -1241,6 +1241,11 @@ async function ensureAutoImport(): Promise<void> {
                 auto: true,
                 ...plan.settings,
             },
+            job: {
+                id: `auto-import:${plan.databasePath}`,
+                name: "Automatic import",
+                cancelSource: AUTO_IMPORT_TASK_SOURCE,
+            },
         }, AUTO_IMPORT_TASK_SOURCE);
 
         autoImportRunning = true;

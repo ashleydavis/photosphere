@@ -671,7 +671,7 @@ describe('importAssetsHandler', () => {
         expect(jobMessages[0].progressMessage).toBe('0 imported, 0 already there');
     });
 
-    test('reports no job for an automatic import, which is queued without a tag', async () => {
+    test('reports no job when the import was queued without a tag', async () => {
         const context = makeContext();
         const data = makeData();
 
@@ -938,6 +938,32 @@ describe('importAssetsHandler', () => {
 
         const hashFileTask = mockBackend.addedTasks.find(task => task.type === 'hash-file');
         expect(hashFileTask!.data.cacheIdentity).toEqual(SOURCE_IDENTITY);
+    });
+
+    test('reports an automatic import as a job under its own name', async () => {
+        watchHashCache();
+        hashFileReportsNewFile();
+        uploadSucceeds();
+        autoImportScannerPushesOneItem();
+
+        const context = makeContext();
+        await importAssetsHandler({
+            ...autoImportData(),
+            job: {
+                id: 'auto-import:/test/db',
+                name: 'Automatic import',
+                cancelSource: 'auto-import',
+            },
+        }, context);
+
+        const jobMessages = (context.sendMessage as jest.Mock).mock.calls
+            .map(call => call[0])
+            .filter(message => message.type === 'job-progress');
+
+        // Automatic import is a job like any other. It runs the same handler as a manual import, so
+        // the only thing separating them in the list is what the row is called.
+        expect(jobMessages.length).toBeGreaterThan(0);
+        expect(jobMessages[0].job.name).toBe('Automatic import');
     });
 
     test('hands an ordinary file no identity at all, which is what keeps manual import unchanged', async () => {

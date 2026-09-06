@@ -3,6 +3,7 @@ import Chip from "@mui/joy/Chip";
 import CircularProgress from "@mui/joy/CircularProgress";
 import { useJobs } from "../context/jobs-context";
 import { describeJobsIndicator } from "../lib/jobs";
+import { useIsMobile } from "../lib/use-is-mobile";
 
 //
 // Says how much is running in the background, in the navbar.
@@ -14,6 +15,7 @@ import { describeJobsIndicator } from "../lib/jobs";
 //
 export function NavbarJobsIndicator() {
     const { jobs } = useJobs();
+    const isMobile = useIsMobile();
 
     const indicator = describeJobsIndicator(jobs);
 
@@ -27,29 +29,31 @@ export function NavbarJobsIndicator() {
                     size="sm"
                     title="Show background jobs"
                     onClick={() => window.dispatchEvent(new CustomEvent("photosphere:show-jobs"))}
-                    startDecorator={
-                        // Always spinning, never filling. This says "something is running", and a
-                        // ring creeping round once over a minute reads as a stuck app rather than a
-                        // busy one. What each job is doing is in the dialog.
-                        <CircularProgress size="sm" />
-                    }
                     sx={{
                         mx: 1,
                         cursor: 'pointer',
                         whiteSpace: 'nowrap',
                         // Joy's small chip is sized for a bare word. This one carries a spinner as
                         // well, which sits against the edge without room made for it.
-                        '--Chip-paddingInline': '12px',
+                        '--Chip-paddingInline': isMobile ? '8px' : '12px',
                         '--Chip-gap': '8px',
                         py: 0.75,
                     }}
                     >
                     {/*
-                        Short enough to show at every width, including a phone's, where the longer
-                        label it replaced was hidden altogether and left a spinner saying nothing.
-                        How long each job has been going is in the dialog, where there is room.
+                        Always spinning, never filling. This says "something is running", and a ring
+                        creeping round once over a minute reads as a stuck app rather than a busy one.
                     */}
-                    {indicator.label}
+                    <CircularProgress size="sm" />
+
+                    {/*
+                        The count is desktop only. A phone's navbar has no room to spare, and the
+                        spinner alone still says work is happening; how much and what it is are one
+                        tap away in the dialog.
+                    */}
+                    {!isMobile
+                        && <span style={{ marginLeft: 8 }}>{indicator.label}</span>
+                    }
                 </Chip>
             }
 

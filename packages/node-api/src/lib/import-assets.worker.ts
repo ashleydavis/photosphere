@@ -115,9 +115,8 @@ export interface IImportAssetsData {
     // ends, which is what every manual import does.
     options?: IImportOptions;
 
-    // Names the job this task belongs to, so the import shows up in the interface's job list. An
-    // automatic import leaves this out: it is the same handler, but it runs for as long as the
-    // setting is on, so a row for it would never go away.
+    // Names the job this task belongs to, so the import shows up in the interface's job list.
+    // Automatic and manual imports both carry one; they differ only in what the row is called.
     job?: IJobTag;
 }
 

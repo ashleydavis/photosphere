@@ -258,14 +258,6 @@ export function Navbar({
 
                     <NavbarJobsIndicator />
 
-                    {isSyncing && !isLoading
-                        && <div className="flex flex-row items-center ml-1 mr-2">
-                            <span className="text-sm hidden sm:block mr-1">Syncing</span>
-                            <div className="mx-1 sm:mx-2">
-                                <Spinner show={true} />
-                            </div>
-                        </div>
-                    }
 
                     {databasePath && (
                         <div

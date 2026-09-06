@@ -100,6 +100,14 @@ export async function planAutoImportHandler(_data: object, context: ITaskContext
                     auto: true,
                     ...plan.settings,
                 },
+                // Named here rather than in native code, so a phone's row reads the same as a
+                // desktop's. No cancel source: the pass is queued by the native driver under a
+                // source of its own that the WebView never learns, and automatic import is switched
+                // off from Settings.
+                job: {
+                    id: `auto-import:${plan.databasePath}`,
+                    name: "Automatic import",
+                },
             },
         });
     }

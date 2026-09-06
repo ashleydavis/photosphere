@@ -250,7 +250,7 @@ const runStartedAt = context.timestampProvider.now();
 sendJobProgress(context, data.job, runStartedAt, `${checked} of ${total} files checked`);
 ```
 
-- `sendJobProgress` does nothing when the tag is absent, so a task queued without one never appears. That is how automatic import stays out of the list: it is the same handler as a manual import, but it runs for as long as the setting is on, so a row for it would never go away.
+- `sendJobProgress` does nothing when the tag is absent, so a task queued without one never appears. Leave the tag off only for work nobody would want to watch or stop, such as the hash and upload children an import spawns for itself.
 - `startedAt` is stamped by the handler and resent every time, so a job already running when a phone comes back to the foreground shows its real age rather than restarting from zero.
 - There is no completion fraction to report, and the interface shows a spinner rather than a bar. Most jobs here scan or stream and cannot know one, and a job made of several tasks has no single honest answer. Say what the job is doing in the message instead.
 - Report often enough that the row does not look stuck, and no more often than the work actually moves.
