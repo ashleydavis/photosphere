@@ -2,7 +2,72 @@
 DESCRIPTION="The import record remembers what a database took in, badges manual and automatic apart, stays on this machine and never appears inside a database"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
-trap cleanup_and_show_summary EXIT
+
+# Process id of the watch command started in part 2, empty once it has been stopped. Held out here so
+# the exit trap can stop a watch left behind by a failure anywhere below: a watch that outlives this
+# script goes on importing whatever lands in the folder it is watching, into the database it was
+# given, for the rest of the suite.
+WATCH_PID=""
+
+#
+# Stops the watch command, and fails the test if it will not stop.
+#
+# Ctrl-C is how a watch ends, and the SIGINT to its process group below is what a terminal sends. It
+# does not reach a native process from Git Bash (smoke-tests/78-dbs-share-cancel/test.sh writes out
+# why in full), so Windows needs the harder route: SIGKILL, which Cygwin turns into TerminateProcess.
+# Nothing here tests the SIGINT handler, so a hard kill of an idle watcher is enough; test 82 is what
+# covers Ctrl-C being handled, and it skips on Windows for that reason.
+#
+# It has to actually stop rather than be asked to. This used to send the SIGINT, wait, and carry on
+# regardless of whether anything died. On Windows nothing did: the build-windows job reported
+# "Terminate orphan process: pid (6124) (psi)" at cleanup, and long before that the surviving watch
+# had picked part 5's photo out of the folder it was still watching and imported it into the first
+# database, failing "A photo imported into the second database showed up in the first database's
+# record" in every run of that job.
+#
+stop_watch_command() {
+    if [ -z "$WATCH_PID" ] || [ "$WATCH_PID" -le 1 ]; then
+        return 0
+    fi
+
+    local stopping_pid="$WATCH_PID"
+    WATCH_PID=""
+
+    kill -INT -"$stopping_pid" 2>/dev/null || true
+
+    local attempt
+    for attempt in $(seq 1 60); do
+        sleep 0.5
+        if ! kill -0 "$stopping_pid" 2>/dev/null; then
+            return 0
+        fi
+    done
+
+    kill -KILL "$stopping_pid" 2>/dev/null || true
+
+    for attempt in $(seq 1 20); do
+        sleep 0.5
+        if ! kill -0 "$stopping_pid" 2>/dev/null; then
+            return 0
+        fi
+    done
+
+    log_error "The watch command was still running after Ctrl+C and then a kill. Left alone it imports whatever lands in $WATCH_DIR into $LOCAL_DB for the rest of the run."
+    return 1
+}
+
+#
+# Stops the watch and hands the script's real exit code on to the shared summary.
+#
+# The exit code is captured first because cleanup_and_show_summary reads $? and decides pass or fail
+# from it, so a cleanup step in front of it would overwrite a failure with its own success.
+#
+on_exit() {
+    local exit_code=$?
+    stop_watch_command
+    return $exit_code
+}
+trap 'on_exit; cleanup_and_show_summary' EXIT
 
 TEST_NUMBER="${1:-87}"
 print_test_header "$TEST_NUMBER" "IMPORT RECORD"
@@ -80,7 +145,7 @@ log_success "The manual import is recorded and badged manual"
 WATCH_LOG="$TEST_DIR/watch.log"
 set -m
 env NODE_ENV=testing $CLI_COMMAND add --db "$LOCAL_DB" "$WATCH_DIR" --watch --yes > "$WATCH_LOG" 2>&1 &
-WATCH_PGID=$!
+WATCH_PID=$!
 set +m
 
 cp "$TEST_FILES_DIR/test.jpg" "$WATCH_DIR/arrived.jpg"
@@ -92,13 +157,8 @@ for attempt in $(seq 1 60); do
     fi
 done
 
-kill -INT -"$WATCH_PGID" 2>/dev/null || true
-for attempt in $(seq 1 60); do
-    sleep 0.5
-    if ! kill -0 "$WATCH_PGID" 2>/dev/null; then
-        break
-    fi
-done
+stop_watch_command || exit 1
+log_success "The watch command stopped"
 
 if ! grep -q '"source":"automatic"' "$RECORD_FILE"; then
     log_error "An automatically imported photo was not badged automatic"
