@@ -432,6 +432,20 @@ Two of the three are now fixed by the per-test temporary directories on the `mob
 - Not done, deliberately: the test was left alone. Making it re-arm the sender after the receiver is ready would hide an app that takes two minutes to start, which is the thing worth knowing about.
 - Evidence: `/tmp/photosphere-tests/share-secret-4FP1JS`, kept at `scratchpad/failing-e7-4FP1JS`. Sender port 42497 ready, pairing code 8784 read, receiver launched on port 44983 and never became ready, relaunched on 37195 and came up, dialog opened, code entered, start clicked, then silence for the full wait.
 
+### EDIT-SYNC-REFUSED-WITHOUT-SAYING-SO
+
+- [ ] Not fixed, and the cause is not known. The change below only makes the next occurrence readable.
+- Suite: mobile smoke tests (`bun run test:and` / `bun run test:ios`), tests 34 (sync) and 42 (s3-sync-prefetch), and any other test that drives an edit and waits for a sync.
+- Pattern: `Timed out waiting for log pattern: Sync started`
+- Distinguishing evidence (this mode): the dumped `app.log` holds `test-notify-database-edited: scheduling a background sync` and then no sync line of any kind, neither `Sync started` nor `Sync skipped` nor `Sync completed`, so the sync task was never queued rather than queued and refused by the worker. `Sync gate set to true` followed by `Sync gate set to false` appears during startup, before the test does anything.
+- Fix commit: none.
+- First seen: 2026-09-06, Release run 34024406357, job 101462701056, both tests in the one run, 128s and 135s against runs of about 17s locally. The android-smoke-tests job had passed on the same commit in the run immediately before, so this is intermittent and not the commit.
+- Recurrences: none yet.
+- Root cause: **not established.** What is known: `computeSyncAllowed` (packages/api/src/lib/sync-gate.ts) returned false, since the decision went true and then false and stayed there. It refuses on four inputs: syncing switched off, no connection, connection type `none`, or type `cellular` while the Wi-Fi-only restriction is on, and that restriction is on by default. What is not known: which of those it was. The decision was recorded as one boolean, so the inputs behind it were never written down. `shouldSyncAfterEdit` (packages/mobile-frontend/src/lib/mobile-edit-sync.ts) then refuses on any of three inputs and its caller returned silently, so an edit that queued nothing left no trace either. Locally on a pool emulator the same test logs `connection=unknown` and then `connection=wifi` and the sync runs, so whatever CI reported, it was not that.
+- What was changed: the sync context now logs the four inputs it decided from, and the edit-sync caller logs its three inputs when it refuses. The existing `Sync gate set to <bool>` line is untouched, because desktop test 24-sync-settings waits on that text and `wait_for_log` matches by substring.
+- What to capture next time: the `Automatic sync decided from:` line at the point the decision turns false. `connected=false` or `connection=none` means the emulator had no network yet, which is a harness problem; `connection=cellular` means the Wi-Fi-only default is refusing on an emulator that reports mobile data, which is a real question about what these tests should assume; `syncEnabled=false` means the config load is the thing to chase.
+- Evidence: the job log, which carries both tests' `app.log` dumps in full.
+
 ### MOBILE-APP-NEVER-BECAME-READY
 
 - [ ] Not fixed, and not yet diagnosable. The cause is unknown and the first sighting kept nothing to work from; the change below is what the next one needs.
