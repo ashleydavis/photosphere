@@ -270,40 +270,41 @@ export function EditDatabaseModal({
                             </Box>
                         </FormControl>
 
-                        <FormControl sx={{ mb: 2 }}>
-                            <FormLabel>Origin</FormLabel>
-                            <Box sx={{ display: 'flex', gap: 1 }}>
+                        {/* The picker sits outside the FormControl, not beside the Input inside it: Joy
+                            allows a FormControl only one control component, and a Select is one. */}
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end', mb: 2 }}>
+                            <FormControl sx={{ flexGrow: 1 }}>
+                                <FormLabel>Origin</FormLabel>
                                 <Input
-                                    sx={{ flexGrow: 1 }}
                                     data-id="database-origin-input"
                                     value={form.origin}
                                     onChange={event => setForm(prev => ({ ...prev, origin: event.target.value }))}
                                 />
-                                {originCandidates.length > 0
-                                    && <Select
-                                        sx={{ minWidth: 160 }}
-                                        value=""
-                                        placeholder="Choose…"
-                                        onChange={(_event, selectedPath) => {
-                                            if (selectedPath) {
-                                                setForm(prev => ({ ...prev, origin: selectedPath as string }));
-                                            }
-                                        }}
-                                        slotProps={{ button: { 'data-id': 'database-origin-select' } }}
-                                    >
-                                        {originCandidates.map(candidate => (
-                                            <Option
-                                                data-id={`database-origin-option-${candidate.name}`}
-                                                key={candidate.path}
-                                                value={candidate.path}
-                                                >
-                                                {candidate.name}
-                                            </Option>
-                                        ))}
-                                    </Select>
-                                }
-                            </Box>
-                        </FormControl>
+                            </FormControl>
+                            {originCandidates.length > 0
+                                && <Select
+                                    sx={{ minWidth: 160 }}
+                                    value=""
+                                    placeholder="Choose…"
+                                    onChange={(_event, selectedPath) => {
+                                        if (selectedPath) {
+                                            setForm(prev => ({ ...prev, origin: selectedPath as string }));
+                                        }
+                                    }}
+                                    slotProps={{ button: { 'data-id': 'database-origin-select' } }}
+                                >
+                                    {originCandidates.map(candidate => (
+                                        <Option
+                                            data-id={`database-origin-option-${candidate.name}`}
+                                            key={candidate.path}
+                                            value={candidate.path}
+                                            >
+                                            {candidate.name}
+                                        </Option>
+                                    ))}
+                                </Select>
+                            }
+                        </Box>
 
                         <FormControl sx={{ mb: 1 }}>
                             <FormLabel>Secrets</FormLabel>

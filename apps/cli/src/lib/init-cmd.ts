@@ -24,6 +24,32 @@ import { getVault, getDefaultVaultType } from 'vault';
 import { fuzzyMatch } from 'fuzzy-match';
 
 //
+// The identity to create a database with, from whatever the user typed.
+//
+// Whitespace goes first, because an id is read off one screen and pasted into another and usually
+// brings some with it. The format is then checked here rather than left to surface later: an id with
+// a character wrong creates a database that looks perfectly fine and refuses to sync, and the refusal
+// arrives minutes afterwards in a background log saying the two databases are unrelated, a long way
+// from the command that caused it.
+//
+export function normaliseDatabaseId(databaseId: string | undefined): string | undefined {
+    if (databaseId === undefined) {
+        return undefined;
+    }
+
+    const trimmed = databaseId.trim();
+    if (trimmed.length === 0) {
+        throw new Error(`--database-id was given with no value. Leave it off to create a database with a new identity of its own.`);
+    }
+
+    if (!/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(trimmed)) {
+        throw new Error(`"${trimmed}" is not a database id. It should be a UUID, as printed by "psi database-id --db <database>".`);
+    }
+
+    return trimmed;
+}
+
+//
 // Reads the default S3 credentials fallback from the vault.
 //
 export async function getDefaultS3Config(): Promise<IS3Credentials | undefined> {
@@ -636,6 +662,16 @@ export interface ICreateCommandOptions extends IBaseCommandOptions {
     // But only if the key file doesn't exist.
     //
     generateKey?: boolean;
+
+    //
+    // The identity to give the new database, instead of a fresh one.
+    //
+    // Two databases can only sync when they share this identity, so passing the identity of an
+    // existing database creates an empty one that is already related to it. That is how a device
+    // with a full library gets a remote to sync into without copying anything up front: the empty
+    // remote is made here, named as the device's origin, and the ordinary sync fills it.
+    //
+    databaseId?: string;
 }
 
 //
@@ -1061,7 +1097,7 @@ export async function createDatabase(
     const database = createMediaFileDatabase(assetStorage, uuidGenerator, timestampProvider);
 
     // Create the database (instead of loading)
-    await createMediaDatabase(assetStorage, rawAssetStorage, uuidGenerator, database.metadataCollection);
+    await createMediaDatabase(assetStorage, rawAssetStorage, uuidGenerator, database.metadataCollection, normaliseDatabaseId(options.databaseId));
 
     // If database is encrypted, write the public key PEM to .db/encryption.pub as a marker
     if (isEncrypted && publicKeyPemForMarker) {

@@ -53,7 +53,7 @@ jest.mock('fuzzy-match', () => ({
     fuzzyMatch: jest.fn().mockReturnValue([]),
 }));
 
-import { getDefaultS3Config, promptToAddKey, promptToGenerateOrAddKey, resolveKeyPemsWithPrompt, findSimilarDatabaseNames, findSimilarSecretNames, findSimilarKeyNames } from '../../lib/init-cmd';
+import { getDefaultS3Config, promptToAddKey, promptToGenerateOrAddKey, resolveKeyPemsWithPrompt, findSimilarDatabaseNames, findSimilarSecretNames, findSimilarKeyNames, normaliseDatabaseId } from '../../lib/init-cmd';
 import { getVault } from 'vault';
 import { fuzzyMatch } from 'fuzzy-match';
 import { generateKeyPair, exportPublicKeyToPem } from 'storage';
@@ -91,6 +91,38 @@ function makeMockVault(secret: { name: string; type: string; value: string } | u
 }
 
 
+
+describe('normaliseDatabaseId', () => {
+
+    test('no id given means the database gets an identity of its own', () => {
+        expect(normaliseDatabaseId(undefined)).toBeUndefined();
+    });
+
+    test('a uuid is accepted', () => {
+        expect(normaliseDatabaseId('3f2504e0-4f89-11d3-9a0c-0305e82c3301')).toBe('3f2504e0-4f89-11d3-9a0c-0305e82c3301');
+    });
+
+    test('an uppercase uuid is accepted', () => {
+        expect(normaliseDatabaseId('3F2504E0-4F89-11D3-9A0C-0305E82C3301')).toBe('3F2504E0-4F89-11D3-9A0C-0305E82C3301');
+    });
+
+    test('surrounding whitespace is dropped, because an id gets pasted', () => {
+        expect(normaliseDatabaseId('  3f2504e0-4f89-11d3-9a0c-0305e82c3301\n')).toBe('3f2504e0-4f89-11d3-9a0c-0305e82c3301');
+    });
+
+    test('an empty value is refused rather than quietly creating a fresh identity', () => {
+        expect(() => normaliseDatabaseId('')).toThrow('--database-id was given with no value');
+        expect(() => normaliseDatabaseId('   ')).toThrow('--database-id was given with no value');
+    });
+
+    test('something that is not a uuid is refused', () => {
+        // A database created with a mistyped id looks fine and then refuses to sync, minutes later,
+        // in a background log. Failing here puts the complaint next to the command that caused it.
+        expect(() => normaliseDatabaseId('not-a-uuid')).toThrow('is not a database id');
+        expect(() => normaliseDatabaseId('3f2504e0-4f89-11d3-9a0c-0305e82c330')).toThrow('is not a database id');
+        expect(() => normaliseDatabaseId('3f2504e0-4f89-11d3-9a0c-0305e82c3301-extra')).toThrow('is not a database id');
+    });
+});
 
 describe('getDefaultS3Config', () => {
     beforeEach(() => {

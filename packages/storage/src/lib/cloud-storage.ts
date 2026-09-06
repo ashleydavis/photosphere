@@ -155,7 +155,7 @@ export class CloudStorage implements IStorage {
                 // than waited on for ever.
                 requestTimeout: 600000,
 
-                // Five minutes to get a connection, not ten seconds.
+                // The same ceiling as the request, because on a phone this timer measures the request.
                 //
                 // Ten seconds assumes the wait is the network's. In the embedded engine it is not:
                 // everything runs on one JavaScript thread, and the timer that gives up on the
@@ -163,13 +163,24 @@ export class CloudStorage implements IStorage {
                 // across the host bridge it services neither, and when it comes free the timer fires
                 // for time that was never spent connecting. Syncing a real library from a Pixel 6
                 // failed on a large video with "the request socket did not establish a connection
-                // with the server within the configured timeout of 10000 ms", and then the same at
-                // 60000 ms, against a server on the same desk answering everything else in
-                // milliseconds.
+                // with the server within the configured timeout of 10000 ms", then the same at
+                // 60000 ms, then the same again at 300000 ms, against a server answering everything
+                // else in milliseconds.
                 //
-                // It remains a ceiling: a server that is really unreachable fails the request anyway,
-                // through the connect the native side gives up on after ten seconds.
-                connectionTimeout: 300000,
+                // Each rise bought a bigger file and then failed on a bigger one still, because the
+                // number is being compared against how long the whole transfer takes, and that grows
+                // with the file. Measured on a Pixel 6 against a real library: the longest upload
+                // that ever succeeded took 288 seconds of a 300 second ceiling, of which 288 seconds
+                // was sending the body and 0.1 was reaching the server, and the two files that never
+                // arrived were a 203MB and a 148MB video needing 406 and 295 seconds at the 501KB/s
+                // the phone was managing. Both failed every pass for hours while bytes were visibly
+                // leaving the device.
+                //
+                // So it is set to the same ceiling as the request, which is the thing it is actually
+                // measuring. Nothing is given up by that: a server that is really unreachable fails
+                // through the connect the native side gives up on after ten seconds, which is the
+                // only one of these timers measuring what it claims to.
+                connectionTimeout: 600000,
             },
             ...(credentials && {
                 credentials: {

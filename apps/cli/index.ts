@@ -56,6 +56,7 @@ async function main() {
     const yesOption: [string, string, boolean] = ["-y, --yes", "Non-interactive mode. Use command line arguments and defaults.", false];
     const cwdOption: [string, string] = ["--cwd <path>", "Set the current working directory for directory selection prompts. Defaults to the current directory from your shell/terminal. This is mostly for testing/debugging."];
     const sessionIdOption: [string, string] = ["--session-id <id>", "Set session identifier for write lock tracking. Defaults to a random UUID."];
+    const databaseIdOption: [string, string] = ["--database-id <id>", "Create the database with this identity instead of a new one, so it is related to the database that already has that identity and the two can sync. Get it from `psi database-id`."];
     const recordsOption: [string, string, boolean] = ["--records", "Show JSON for each internal record in each shard.", false];
     const allOption: [string, string, boolean] = ["--all", "Show all fields and full values (don't truncate) when displaying records.", false];
     const fullOption: [string, string, boolean] = ["--full", "Show all differences without truncation.", false];
@@ -418,6 +419,7 @@ Resources:
         .option(...yesOption)
         .option(...cwdOption)
         .option(...sessionIdOption)
+        .option(...databaseIdOption)
         .addHelpText('after', getCommandExamplesHelp('init'))
         .action(initContext(initCommand));
 
