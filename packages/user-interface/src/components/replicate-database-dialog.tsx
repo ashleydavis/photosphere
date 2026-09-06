@@ -57,8 +57,11 @@ type ReplicateStep = "configure" | "running" | "success" | "error";
 // Dialog for replicating a database to a new destination via the worker pool.
 // Lets the user pick a destination path, choose between Partial and Full mode,
 // and select destination encryption and (when applicable) S3 credentials.
-// Cancellation while running is intentionally out of scope for v1; the dialog only
-// shows a progress view once the task starts.
+//
+// The dialog can be closed while the replication is running: "Run in background" hands it over to
+// the job list in the right sidebar, which is where its progress is shown from then on and where it
+// can be cancelled. Closing does not cancel anything; the task was queued against the worker pool
+// and knows nothing about this dialog.
 //
 export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, s3Secrets, geocodingSecrets, onClose }: IReplicateDatabaseDialogProps) {
     const platform = usePlatform();
@@ -117,7 +120,8 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
 
     //
     // Calls the shared replicateDatabase wrapper, which queues the task and waits for completion.
-    // Cancellation while running is intentionally out of scope for v1.
+    // The promise is owned here and is unaffected by the dialog being closed, so a replication run
+    // in the background still records its outcome.
     //
     const handleStart = useCallback(async () => {
         setStep("running");
@@ -167,7 +171,7 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
         <>
         <ResponsiveDialog
             open={open}
-            onClose={step === "running" ? undefined : onClose}
+            onClose={onClose}
             minWidth={520}
             maxWidth={720}
             dataId="replicate-database-dialog"
@@ -265,10 +269,15 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                 )}
 
                 {step === "running" && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3 }}>
-                        <CircularProgress size="sm" />
-                        <Typography>{progress}</Typography>
-                    </Box>
+                    <>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3 }}>
+                            <CircularProgress size="sm" />
+                            <Typography>{progress}</Typography>
+                        </Box>
+                        <Typography level="body-sm" color="neutral" data-id="replicate-background-hint">
+                            Replication runs in the background. You can close this dialog and it will keep going; watch it and stop it from the Background jobs list in the menu.
+                        </Typography>
+                    </>
                 )}
 
                 {step === "success" && (
@@ -303,6 +312,16 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                             Start replication
                         </Button>
                     </>
+                )}
+
+                {step === "running" && (
+                    <Button
+                        data-id="replicate-run-in-background-button"
+                        variant="plain"
+                        onClick={onClose}
+                    >
+                        Run in background
+                    </Button>
                 )}
 
                 {(step === "success" || step === "error") && (

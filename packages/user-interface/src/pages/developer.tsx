@@ -10,9 +10,11 @@ import ListItem from "@mui/joy/ListItem/ListItem";
 import ListItemButton from "@mui/joy/ListItemButton/ListItemButton";
 import ListItemDecorator from "@mui/joy/ListItemDecorator/ListItemDecorator";
 import ListItemContent from "@mui/joy/ListItemContent/ListItemContent";
-import { Science, Speed, BugReport, ChevronRight } from "@mui/icons-material";
+import { Science, Speed, BugReport, ChevronRight, PlayArrow, PlaylistPlay, Layers } from "@mui/icons-material";
 import { useDeveloper } from "../context/developer-context";
 import { useIsMobile } from "../lib/use-is-mobile";
+import { useUuidGenerator } from "../context/uuid-generator-context";
+import { planTestJob, startTestJob, TEST_JOB_KINDS } from "../lib/test-jobs";
 
 //
 // A dedicated screen listing developer tools, reachable only while developer
@@ -22,6 +24,18 @@ export function DeveloperPage(): JSX.Element {
     const navigate = useNavigate();
     const { disableDeveloperMode, showFpsIndicator, toggleShowFpsIndicator, devToolsOpen, toggleDevTools } = useDeveloper();
     const isMobile = useIsMobile();
+    const uuidGenerator = useUuidGenerator();
+
+    //
+    // Starts a synthetic job of the given kind, made of the given number of tasks.
+    //
+    // Each task runs for a random time in the twenty-to-sixty second range, so a grouped job's tasks
+    // finish at different moments and the row stays until the last of them is done.
+    //
+    function startJob(kindIndex: number, taskCount: number): void {
+        const randoms = Array.from({ length: taskCount }, () => Math.random());
+        startTestJob(uuidGenerator, planTestJob(uuidGenerator.generate(), TEST_JOB_KINDS[kindIndex], taskCount, randoms));
+    }
 
     //
     // Height of each row. Every row is a full-width tap target on a phone, comfortably above the
@@ -86,6 +100,61 @@ export function DeveloperPage(): JSX.Element {
                             <ListItemButton sx={rowSx}>
                                 <ListItemDecorator><BugReport /></ListItemDecorator>
                                 <ListItemContent>Developer tools</ListItemContent>
+                            </ListItemButton>
+                        </ListItem>
+                    </List>
+                </Card>
+
+                <Typography level="title-md" sx={{ mt: 3, mb: 1 }}>
+                    Test background jobs
+                </Typography>
+                <Typography level="body-sm" color="neutral" sx={{ mb: 1 }}>
+                    Synthetic work that does nothing but take twenty to sixty seconds, so the background
+                    jobs list can be watched and cancelled without staging a database first.
+                </Typography>
+
+                <Card variant="soft" sx={{ borderRadius: 'lg', p: 1, gap: 0 }}>
+                    <List sx={{ '--ListItem-paddingX': '8px' }}>
+                        {TEST_JOB_KINDS.map((kind, kindIndex) => (
+                            <ListItem
+                                key={kind.name}
+                                data-id={`developer-start-job-${kindIndex}`}
+                                onClick={() => startJob(kindIndex, 1)}
+                                >
+                                <ListItemButton sx={rowSx}>
+                                    <ListItemDecorator><PlayArrow /></ListItemDecorator>
+                                    <ListItemContent>{kind.name}</ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
+                        ))}
+
+                        <ListItem
+                            data-id="developer-start-grouped-job"
+                            onClick={() => startJob(0, 4)}
+                            >
+                            <ListItemButton sx={rowSx}>
+                                <ListItemDecorator><PlaylistPlay /></ListItemDecorator>
+                                <ListItemContent>
+                                    One job of four tasks
+                                    <Typography level="body-xs" color="neutral" sx={{ display: 'block' }}>
+                                        One row that stays until the last of its four tasks finishes.
+                                    </Typography>
+                                </ListItemContent>
+                            </ListItemButton>
+                        </ListItem>
+
+                        <ListItem
+                            data-id="developer-start-all-jobs"
+                            onClick={() => TEST_JOB_KINDS.forEach((_kind, kindIndex) => startJob(kindIndex, 1))}
+                            >
+                            <ListItemButton sx={rowSx}>
+                                <ListItemDecorator><Layers /></ListItemDecorator>
+                                <ListItemContent>
+                                    All four at once
+                                    <Typography level="body-xs" color="neutral" sx={{ display: 'block' }}>
+                                        Four separate rows, so the navbar counts them instead of naming one.
+                                    </Typography>
+                                </ListItemContent>
                             </ListItemButton>
                         </ListItem>
                     </List>

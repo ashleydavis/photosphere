@@ -1,4 +1,4 @@
-import { importAssetsHandler, IMPORT_RECORD_FLUSH_SIZE, DATABASE_BATCH_SIZE } from '../../lib/import-assets.worker';
+import { importAssetsHandler, describeImportProgress, IMPORT_RECORD_FLUSH_SIZE, DATABASE_BATCH_SIZE } from '../../lib/import-assets.worker';
 import type { IImportAssetsData } from '../../lib/import-assets.worker';
 import type { ITaskContext, IQueueBackend, ITaskResult, WorkerTaskCompletionCallback, UnsubscribeFn } from 'task-queue';
 import { TaskStatus, setQueueBackend } from 'task-queue';
@@ -254,6 +254,17 @@ function makeData(overrides: Partial<IImportAssetsData> = {}): IImportAssetsData
 }
 
 // ── tests ────────────────────────────────────────────────────────────────────
+
+describe('describeImportProgress', () => {
+
+    test('says what has been imported and what was already there', () => {
+        expect(describeImportProgress(12, 3, 0)).toBe('12 imported, 3 already there');
+    });
+
+    test('mentions failures only once there are some', () => {
+        expect(describeImportProgress(12, 3, 2)).toBe('12 imported, 3 already there, 2 failed');
+    });
+});
 
 describe('importAssetsHandler', () => {
     let mockBackend: MockBackend;
@@ -628,6 +639,53 @@ describe('importAssetsHandler', () => {
             type: 'scan-progress',
             currentPath: '/test/photos',
         });
+    });
+
+    test('reports its job as it scans, carrying the tag it was queued with', async () => {
+        const context = makeContext();
+        const data = makeData({
+            job: {
+                id: 'session-1',
+                name: 'Importing photos',
+                cancelSource: 'session-1',
+            },
+        });
+
+        mockScanPaths.mockImplementation(async (paths, visitFile, progressCallback) => {
+            progressCallback!('/test/photos', { currentlyScanning: '/test/photos', numFilesIgnored: 0, numFilesFailed: 0, tempDir: '' });
+        });
+
+        await importAssetsHandler(data, context);
+
+        const jobMessages = (context.sendMessage as jest.Mock).mock.calls
+            .map(call => call[0])
+            .filter(message => message.type === 'job-progress');
+
+        expect(jobMessages.length).toBeGreaterThan(0);
+        expect(jobMessages[0].job).toEqual({
+            id: 'session-1',
+            name: 'Importing photos',
+            // The session id the import was queued under, so Cancel stops this import's tasks.
+            cancelSource: 'session-1',
+        });
+        expect(jobMessages[0].progressMessage).toBe('0 imported, 0 already there');
+    });
+
+    test('reports no job for an automatic import, which is queued without a tag', async () => {
+        const context = makeContext();
+        const data = makeData();
+
+        mockScanPaths.mockImplementation(async (paths, visitFile, progressCallback) => {
+            progressCallback!('/test/photos', { currentlyScanning: '/test/photos', numFilesIgnored: 0, numFilesFailed: 0, tempDir: '' });
+        });
+
+        await importAssetsHandler(data, context);
+
+        const jobMessages = (context.sendMessage as jest.Mock).mock.calls
+            .map(call => call[0])
+            .filter(message => message.type === 'job-progress');
+
+        expect(jobMessages).toHaveLength(0);
     });
 
     test('sends file-ignored messages when files are ignored', async () => {

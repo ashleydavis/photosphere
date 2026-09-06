@@ -1,4 +1,5 @@
 import type { ITaskContext } from "task-queue";
+import { sendJobProgress } from "task-queue";
 import { createMediaFileDatabase } from "./media-file-database";
 import { openStorage } from "./open-storage";
 import { merkleTreeExists } from "./tree";
@@ -24,6 +25,7 @@ export async function syncDatabaseHandler(
     context: ITaskContext
 ): Promise<void> {
     const { uuidGenerator, timestampProvider, sessionId } = context;
+    const runStartedAt = timestampProvider.now();
 
     if (!data.databasePath) {
         throw new Error("databasePath is required");
@@ -60,7 +62,15 @@ export async function syncDatabaseHandler(
 
         context.sendMessage({ type: "sync-started", databasePath: data.databasePath });
 
+        // The job the interface lists. Sent here rather than at the top of the handler so a sync
+        // that returns early, having found no origin or an unreachable one, never puts a row up for
+        // work it did not do.
+        sendJobProgress(context, data.job, runStartedAt, undefined);
+
         const localDb = createMediaFileDatabase(localStorage, uuidGenerator, timestampProvider);
+
+        // How many records have moved so far, so the job row says more than that a sync is running.
+        let changesSynced = 0;
         const originDb = createMediaFileDatabase(originStorage, uuidGenerator, timestampProvider);
 
         //
@@ -97,6 +107,10 @@ export async function syncDatabaseHandler(
                 deletedIds,
             };
             context.sendMessage(batchMessage);
+
+            changesSynced += added.length + updated.length + deletedIds.length;
+            sendJobProgress(context, data.job, runStartedAt, `${changesSynced} changes synced`);
+
             pendingBatch = [];
         }
 

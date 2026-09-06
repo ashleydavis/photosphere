@@ -21,6 +21,7 @@ import { useAssetDatabase } from "../context/asset-database-source";
 import { useToast } from "../context/toast-context";
 import { usePlatform } from "../context/platform-context";
 import { ThemeToggle } from "./theme-toggle";
+import { NavbarJobsIndicator } from "./navbar-jobs-indicator";
 import { findTemporaryNavPage } from "../lib/nav-pages";
 
 export interface INavbarProps {
@@ -250,6 +251,8 @@ export function Navbar({
                             </div>
                         </div>
                     }
+
+                    <NavbarJobsIndicator />
 
                     {isSyncing && !isLoading
                         && <div className="flex flex-row items-center ml-1 mr-2">

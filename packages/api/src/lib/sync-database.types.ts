@@ -1,4 +1,5 @@
 import type { IAsset } from "./asset";
+import type { IJobTag } from "task-queue";
 
 //
 // Input data for the sync-database background task.
@@ -8,6 +9,13 @@ export interface ISyncDatabaseData {
     // Absolute path to the local replica database.
     //
     databasePath: string;
+
+    //
+    // Names the job this task belongs to, so the sync shows up in the interface's job list. It
+    // carries no cancel source: a sync is queued by the host under a source the interface never
+    // learns, and syncing is switched off from Settings rather than stopped from the job list.
+    //
+    job?: IJobTag;
 }
 
 //

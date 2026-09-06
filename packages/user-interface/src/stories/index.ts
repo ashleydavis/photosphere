@@ -48,6 +48,7 @@ import { stories as galleryImageStories } from "./components/gallery-image.stori
 import { stories as galleryLayoutStories } from "./components/gallery-layout.stories";
 import { stories as galleryPreviewStories } from "./components/gallery-preview.stories";
 import { stories as galleryScrollbarStories } from "./components/gallery-scrollbar.stories";
+import { stories as jobsStories } from "./components/jobs.stories";
 import { stories as leftSidebarStories } from "./components/left-sidebar.stories";
 import { stories as mapViewStories } from "./components/map-view.stories";
 import { stories as mobilePageHeaderStories } from "./components/mobile-page-header.stories";
@@ -112,6 +113,7 @@ export const stories: IStory[] = [
     ...galleryLayoutStories,
     ...galleryPreviewStories,
     ...galleryScrollbarStories,
+    ...jobsStories,
     ...leftSidebarStories,
     ...mapViewStories,
     ...mobilePageHeaderStories,

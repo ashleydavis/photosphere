@@ -22,12 +22,16 @@ import { evictOriginalsHandler } from "./evict-originals.worker";
 import { cleanupSourcesHandler } from "./cleanup-sources.worker";
 import { consolidateDatabaseHandler } from "./consolidate-database.worker";
 import { resetAppStorageHandler } from "./reset-app-storage.worker";
+import { testJobHandler } from "./test-job.worker";
 
 //
 // Register all task handlers
 // This has to be called from the worker thread.
 //
 export function initTaskHandlers(): void {
+    // Does nothing but take a while, so the job manager can be driven from the developer section of
+    // the sidebar without staging a database first.
+    registerHandler("test-job", testJobHandler);
     registerHandler("verify-file", verifyFileHandler);
     registerHandler("check-file", checkFileHandler);
     registerHandler("load-assets", loadAssetsHandler);

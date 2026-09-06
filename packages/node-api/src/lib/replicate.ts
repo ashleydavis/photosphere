@@ -54,6 +54,26 @@ export interface IReplicateOptions {
     // If true, only copy thumb directory assets. Asset and display files will be lazily copied when needed.
     //
     partial?: boolean;
+
+    //
+    // Answers whether the caller has asked for the replication to stop. Checked at every file and
+    // every record, so pressing Cancel on the job stops the copy rather than waiting for a database
+    // of any size to finish copying itself.
+    //
+    isCancelled?: () => boolean;
+}
+
+//
+// Stops a replication that has been cancelled, at the next file or record it reaches.
+//
+// It throws rather than returning, so a cancel takes the whole run down at once. Returning would
+// leave each loop to notice separately and hand back a half-copied database described by a result
+// that says it finished.
+//
+function throwIfCancelled(isCancelled: (() => boolean) | undefined): void {
+    if (isCancelled && isCancelled()) {
+        throw new Error("Replication was cancelled.");
+    }
 }
 
 //
@@ -185,6 +205,8 @@ Copied hash: ${copiedHash.toString("hex")}
     // Process files from MerkleNode differences.
     //
     const processMerkleNode = async (merkleNode: MerkleNode): Promise<void> => {
+        throwIfCancelled(options?.isCancelled);
+
         if (!merkleNode.left && !merkleNode.right) {
             // Leaf node - process the file directly
             if (merkleNode.name && merkleNode.hash) {
@@ -224,6 +246,7 @@ Copied hash: ${copiedHash.toString("hex")}
         //
 
         for (const nodeToProcess of nodesToProcess) {
+            throwIfCancelled(options?.isCancelled);
             await processMerkleNode(nodeToProcess);
         }
 
@@ -382,6 +405,7 @@ async function replicateBsonDatabase(
     sourceAssetStorage: IStorage,
     destAssetStorage: IStorage,
     progressCallback: ProgressCallback | undefined,
+    isCancelled: (() => boolean) | undefined,
     result: IReplicationResult
 ): Promise<void> {
 
@@ -423,6 +447,7 @@ async function replicateBsonDatabase(
         const toDelete = toDeleteByCollection.get(collectionName) ?? new Set<string>();
 
         for (const recordId of toCopy) {
+            throwIfCancelled(isCancelled);
             const shardId = sourceColl.getShardId(recordId);
             const sourceShard = sourceColl.shard(shardId);
             const sourceRecord = await sourceShard.record(recordId);
@@ -434,6 +459,7 @@ async function replicateBsonDatabase(
         }
 
         for (const recordId of toDelete) {
+            throwIfCancelled(isCancelled);
             await retry(() => destColl.deleteOne(recordId));
             result.copiedRecords++;
         }
@@ -601,6 +627,7 @@ export async function replicate(
             sourceAssetStorage,
             destAssetStorage,
             progressCallback,
+            options?.isCancelled,
             result
         );
 

@@ -31,7 +31,18 @@ export async function replicateDatabase(
         });
     }
 
-    const taskId = queue.addTask("replicate-database", data);
+    // Named after the destination, because that is what tells two replications of the same database
+    // apart, and it is what the user picked.
+    const destName = data.destPath.split(/[\\/]/).filter(Boolean).pop() ?? data.destPath;
+    const taggedData: IReplicateDatabaseData = {
+        ...data,
+        job: {
+            id: `replicate:${data.destPath}`,
+            name: `Replicating to ${destName}`,
+            cancelSource: data.sourcePath,
+        },
+    };
+    const taskId = queue.addTask("replicate-database", taggedData);
     const result = await queue.awaitTask(taskId);
     queue.shutdown();
 

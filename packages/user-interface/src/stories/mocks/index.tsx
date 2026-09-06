@@ -27,6 +27,7 @@ import { GallerySourceContext } from "../../context/gallery-source";
 import type { IGalleryItem } from "../../lib/gallery-item";
 import { Observable } from "../../lib/subscription";
 import { ImportContext, ImportContextProvider, type IImportContext, type IImportItem } from "../../context/import-context";
+import { JobsContext, JobsContextProvider, type IJobsContext } from "../../context/jobs-context";
 import { GalleryContextProvider, useGallery } from "../../context/gallery-context";
 import { DeleteConfirmationContextProvider } from "../../context/delete-confirmation-context";
 import { SearchContextProvider } from "../../context/search-context";
@@ -448,6 +449,14 @@ export interface IMockProvidersProps {
     // letting a story render the import page in a specific state.
     //
     importContext?: IImportContext;
+
+    //
+    // Optional override for the jobs context. When provided, the real
+    // JobsContextProvider is bypassed and this value is supplied directly, so a
+    // story can show the navbar indicator and the sidebar list with jobs in it.
+    // The mock platform reports no tasks, so the real provider is always empty.
+    //
+    jobsContext?: IJobsContext;
 }
 
 //
@@ -478,6 +487,7 @@ export function MockProviders({
     api,
     assetDatabase,
     importContext,
+    jobsContext,
 }: IMockProvidersProps) {
     const platformValue = platform || mockPlatform();
     const apiValue = api || mockApi();
@@ -510,6 +520,28 @@ export function MockProviders({
         );
     }
 
+    //
+    // When a story supplies a jobs context, provide it directly so the navbar
+    // indicator and the sidebar list can be shown with jobs running; otherwise
+    // use the real provider, which stays empty because the mock platform
+    // reports no task messages.
+    //
+    function withJobsContext(content: ReactNode): JSX.Element {
+        if (jobsContext) {
+            return (
+                <JobsContext.Provider value={jobsContext}>
+                    {content}
+                </JobsContext.Provider>
+            );
+        }
+        return (
+            <JobsContextProvider>
+                {content}
+            </JobsContextProvider>
+        );
+    }
+
+
     return (
         <>
             <UuidGeneratorProvider value={uuidGeneratorValue}>
@@ -518,6 +550,7 @@ export function MockProviders({
                     <ConfigContextProvider value={config}>
                         <AppContextProvider>
                             <ToastContextProvider>
+                                {withJobsContext(
                                 <AssetDatabaseContext.Provider value={databaseValue}>
                                     <GallerySourceContext.Provider value={databaseValue}>
                                         {withImportContext(
@@ -537,6 +570,7 @@ export function MockProviders({
                                         )}
                                     </GallerySourceContext.Provider>
                                 </AssetDatabaseContext.Provider>
+                                )}
                             </ToastContextProvider>
                         </AppContextProvider>
                     </ConfigContextProvider>
@@ -686,6 +720,7 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
                     <ConfigContextProvider value={config}>
                         <AppContextProvider>
                             <ToastContextProvider>
+                                <JobsContextProvider>
                                 <AssetDatabaseProvider queueBackend={getQueueBackend()} restApiUrl={restApiUrl}>
                                     <ImportContextProvider>
                                         <GalleryContextProvider>
@@ -705,6 +740,7 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
                                         </GalleryContextProvider>
                                     </ImportContextProvider>
                                 </AssetDatabaseProvider>
+                                </JobsContextProvider>
                             </ToastContextProvider>
                         </AppContextProvider>
                     </ConfigContextProvider>

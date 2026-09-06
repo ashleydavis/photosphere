@@ -1,4 +1,5 @@
 import type { ITaskContext } from "task-queue";
+import { sendJobProgress } from "task-queue";
 import { createMediaFileDatabase } from "./media-file-database";
 import { openStorage } from "./open-storage";
 import { replicate, type IReplicationResult } from "./replicate";
@@ -16,6 +17,7 @@ export async function replicateDatabaseHandler(
     context: ITaskContext
 ): Promise<IReplicationResult> {
     const { uuidGenerator, timestampProvider } = context;
+    const runStartedAt = timestampProvider.now();
 
     if (!data.sourcePath) {
         throw new Error("sourcePath is required");
@@ -51,6 +53,11 @@ export async function replicateDatabaseHandler(
             progress: progress ?? "",
         };
         context.sendMessage(message);
+
+        // The same line again, as the job the interface lists and can cancel, so a replication can
+        // be watched after its dialog has been closed. Indeterminate: replicate() reports what it is
+        // copying, not how much is left.
+        sendJobProgress(context, data.job, runStartedAt, progress);
     };
 
     const result = await replicate(
@@ -65,6 +72,7 @@ export async function replicateDatabaseHandler(
             force: data.force,
             partial: data.partial,
             pathFilter: data.pathFilter,
+            isCancelled: () => context.isCancelled(),
         },
         progressCallback
     );

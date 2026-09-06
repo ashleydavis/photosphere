@@ -76,6 +76,24 @@ describe("loadAssets", () => {
         loadAssets(queue, "/photos/db");
 
         expect(queue.addedTasks[0].type).toBe("load-assets");
-        expect(queue.addedTasks[0].data).toEqual({ databasePath: "/photos/db" });
+        expect(queue.addedTasks[0].data).toEqual({
+            databasePath: "/photos/db",
+            job: {
+                id: "load:/photos/db",
+                name: "Loading assets",
+                cancelSource: "/photos/db",
+            },
+        });
+    });
+
+    test("cancels by the database path, which is the source its caller's queue is tagged with", () => {
+        const queue = new RecordingTaskQueue();
+
+        loadAssets(queue, "/photos/db");
+
+        // Callers build their TaskQueue with the database path as its source (see
+        // asset-database-source), and cancelTasks() takes a source. A cancel source that did not
+        // match it would leave the Cancel button doing nothing at all.
+        expect(queue.addedTasks[0].data.job.cancelSource).toBe("/photos/db");
     });
 });

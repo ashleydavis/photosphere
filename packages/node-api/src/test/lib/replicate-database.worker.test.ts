@@ -143,6 +143,62 @@ describe("replicateDatabaseHandler", () => {
         expect(secondMessage.progress).toBe("Copied 20");
     });
 
+    test("reports its job alongside each progress string, carrying the tag it was queued with", async () => {
+        const context = makeContext();
+
+        await replicateDatabaseHandler(makeData({
+            job: {
+                id: "replicate:/fake/dest",
+                name: "Replicating to dest",
+                cancelSource: "/fake/source",
+            },
+        }), context);
+
+        const progressCallback = mockReplicate.mock.calls[0][8];
+        progressCallback!("Copied 10");
+
+        const jobMessages = (context.sendMessage as jest.Mock).mock.calls
+            .map(call => call[0])
+            .filter(message => message.type === "job-progress");
+
+        expect(jobMessages).toHaveLength(1);
+        expect(jobMessages[0].job).toEqual({
+            id: "replicate:/fake/dest",
+            name: "Replicating to dest",
+            // The source database's path, which is the source the task was queued under.
+            cancelSource: "/fake/source",
+        });
+        expect(jobMessages[0].progressMessage).toBe("Copied 10");
+    });
+
+    test("reports no job when the replication was queued without a tag", async () => {
+        const context = makeContext();
+
+        await replicateDatabaseHandler(makeData(), context);
+
+        const progressCallback = mockReplicate.mock.calls[0][8];
+        progressCallback!("Copied 10");
+
+        const jobMessages = (context.sendMessage as jest.Mock).mock.calls
+            .map(call => call[0])
+            .filter(message => message.type === "job-progress");
+
+        expect(jobMessages).toHaveLength(0);
+    });
+
+    test("hands replicate() a way to ask whether the task has been cancelled", async () => {
+        const isCancelled = jest.fn().mockReturnValue(true);
+
+        await replicateDatabaseHandler(makeData(), makeContext({ isCancelled }));
+
+        const options = mockReplicate.mock.calls[0][7];
+        expect(options?.isCancelled).toBeDefined();
+        // Asked at the time rather than read once when the task started, so a cancel that arrives
+        // mid-copy is noticed.
+        expect(options!.isCancelled!()).toBe(true);
+        expect(isCancelled).toHaveBeenCalled();
+    });
+
     test("writes encryption.pub to dest raw storage when destination is encrypted", async () => {
         const sourceRawWrite = jest.fn().mockResolvedValue(undefined);
         const destRawWrite = jest.fn().mockResolvedValue(undefined);

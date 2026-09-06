@@ -1,5 +1,6 @@
 import type { ITaskQueue } from "task-queue";
 import { TaskPriority } from "task-queue";
+import type { ILoadAssetsData } from "./load-assets.types";
 
 //
 // Loads assets from the database using a background task.
@@ -10,6 +11,14 @@ import { TaskPriority } from "task-queue";
 // took two minutes and eight seconds to open a database of 2,300 photos on a Pixel 6.
 //
 export function loadAssets(queue: ITaskQueue, databasePath: string): void {
-    queue.addTask("load-assets", { databasePath }, databasePath, TaskPriority.Interactive);
+    const data: ILoadAssetsData = {
+        databasePath,
+        job: {
+            id: `load:${databasePath}`,
+            name: "Loading assets",
+            cancelSource: databasePath,
+        },
+    };
+    queue.addTask("load-assets", data, databasePath, TaskPriority.Interactive);
 }
 

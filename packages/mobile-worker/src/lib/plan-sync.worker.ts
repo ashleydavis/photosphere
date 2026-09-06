@@ -2,6 +2,7 @@ import type { ITaskContext } from "task-queue";
 import { computeSyncAllowed } from "api/src/lib/sync-gate";
 import { AUTO_IMPORT_CONFIG_PATH, SYNC_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
 import type { ISyncSettings } from "api/src/lib/sync-settings";
+import type { ISyncDatabaseData } from "api/src/lib/sync-database.types";
 import { readAutoImportConfigFile } from "node-api/src/lib/auto-import-config.worker";
 import { readSyncConfigFile } from "node-api/src/lib/sync-config.worker";
 import { loadDatabaseConfig } from "api/src/lib/database-config";
@@ -148,7 +149,15 @@ export async function planSyncHandler(_data: object, _context: ITaskContext): Pr
                 type: "sync-database",
                 data: {
                     databasePath,
-                },
+                    // Named here rather than natively, so a phone's sync row reads the same as a
+                    // desktop's. No cancel source: the pass is queued by the native driver under a
+                    // source of its own that the WebView never learns, and syncing is switched off
+                    // from Settings rather than stopped from the job list.
+                    job: {
+                        id: `sync:${databasePath}`,
+                        name: "Syncing database",
+                    },
+                } satisfies ISyncDatabaseData,
             },
         ],
     };

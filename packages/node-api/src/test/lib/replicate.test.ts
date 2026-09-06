@@ -382,6 +382,50 @@ describe('replicate', () => {
         expect(Array.isArray(result.prunedFiles)).toBe(true);
     });
 
+    test('stops copying files once the caller says the replication has been cancelled', async () => {
+        const sourceAsset = new MockStorage();
+        const destAsset = new MockStorage();
+        const sourceBdb = new BsonDatabase(new MockStorage(), "", uuidGenerator, timestampProvider);
+
+        // A source tree with files in it, so the copy loop has something to walk. Without files the
+        // loop never runs and a cancelled run would look identical to a finished one.
+        const fileNames = ['asset/one.jpg', 'asset/two.jpg', 'asset/three.jpg'];
+        let sourceTree = createTree<IDatabaseMetadata>(dbId);
+        for (const fileName of fileNames) {
+            await sourceAsset.write(fileName, 'image/jpeg', Buffer.from(fileName, 'utf-8'));
+            sourceTree = addItem(sourceTree, {
+                name: fileName,
+                hash: makeHash(fileName),
+                length: fileName.length,
+                lastModified: new Date(),
+            });
+        }
+        sourceTree.databaseMetadata = { filesImported: fileNames.length };
+        sourceTree.merkle = buildMerkleTree(sourceTree.sort);
+        sourceTree.dirty = false;
+        await saveTree('.db/files.dat', sourceTree, sourceAsset);
+
+        await expect(
+            replicate(
+                'mock://source',
+                sourceAsset,
+                sourceBdb,
+                uuidGenerator,
+                timestampProvider,
+                destAsset,
+                destAsset,
+                { isCancelled: () => true },
+                undefined
+            )
+        ).rejects.toThrow('Replication was cancelled.');
+
+        // Nothing copied, because the cancel is noticed before the first file rather than after the
+        // last one.
+        for (const fileName of fileNames) {
+            expect(await destAsset.fileExists(fileName)).toBe(false);
+        }
+    });
+
     test('returns result shape with zero counts when source has no files and empty dest', async () => {
         const sourceAsset = new MockStorage();
         const destAsset = new MockStorage();

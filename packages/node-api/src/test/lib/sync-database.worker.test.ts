@@ -183,4 +183,59 @@ describe("syncDatabaseHandler", () => {
             synced: false,
         });
     });
+
+    test("reports its job once the sync actually starts, carrying the tag it was queued with", async () => {
+        const context = makeContext();
+
+        await syncDatabaseHandler(makeData({
+            job: {
+                id: "sync:/fake/local",
+                name: "Syncing database",
+            },
+        }), context);
+
+        const messages = (context.sendMessage as jest.Mock).mock.calls.map(call => call[0]);
+        const jobMessages = messages.filter(message => message.type === "job-progress");
+
+        expect(jobMessages).toHaveLength(1);
+        expect(jobMessages[0].job).toEqual({
+            id: "sync:/fake/local",
+            name: "Syncing database",
+        });
+        // No cancel source: the interface lists a sync but must not be able to stop it.
+        expect(jobMessages[0].job.cancelSource).toBeUndefined();
+        // After sync-started, so the row appears only once the sync is really under way.
+        expect(messages.indexOf(jobMessages[0])).toBeGreaterThan(messages.findIndex(message => message.type === "sync-started"));
+    });
+
+    test("reports no job when the sync returns early without an origin", async () => {
+        mockLoadDatabaseConfig.mockResolvedValueOnce(null);
+        const context = makeContext();
+
+        await syncDatabaseHandler(makeData({
+            job: {
+                id: "sync:/fake/local",
+                name: "Syncing database",
+            },
+        }), context);
+
+        const jobMessages = (context.sendMessage as jest.Mock).mock.calls
+            .map(call => call[0])
+            .filter(message => message.type === "job-progress");
+
+        // A sync that did nothing must not put a row up saying it is running.
+        expect(jobMessages).toHaveLength(0);
+    });
+
+    test("reports no job when the sync was queued without a tag", async () => {
+        const context = makeContext();
+
+        await syncDatabaseHandler(makeData(), context);
+
+        const jobMessages = (context.sendMessage as jest.Mock).mock.calls
+            .map(call => call[0])
+            .filter(message => message.type === "job-progress");
+
+        expect(jobMessages).toHaveLength(0);
+    });
 });

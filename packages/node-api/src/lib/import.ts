@@ -79,6 +79,17 @@ export async function addPaths(
         sessionId,
         dryRun,
         options,
+        // Tagged even though the CLI has no job list to show it in, so that the rule holds
+        // everywhere: work a user would want to watch carries a job tag, and whatever is watching
+        // decides what to do with it. An automatic import is left untagged because it runs for as
+        // long as the setting is on, so a row for it would never go away.
+        job: options?.auto
+            ? undefined
+            : {
+                id: sessionId,
+                name: "Importing photos",
+                cancelSource: storageDescriptor.databasePath,
+            },
     });
 
     // Ctrl-C has to reach the task, not just this process: the task is what holds the temporary

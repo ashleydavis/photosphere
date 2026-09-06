@@ -8,6 +8,7 @@ import {
     SearchContextProvider,
     DeleteConfirmationContextProvider,
     ImportContextProvider,
+    JobsContextProvider,
     ToastContextProvider,
     ApiContextProvider,
     axiosApi,
@@ -77,6 +78,7 @@ export function App() {
                         <ApiContextProvider value={axiosApi}>
                         <AppContextProvider>
                             <ToastContextProvider>
+                                <JobsContextProvider>
                                 <AssetDatabaseProvider queueBackend={queueBackend} restApiUrl={restApiUrl}>
                                     <ImportContextProvider>
                                         <GalleryContextProvider>
@@ -94,6 +96,7 @@ export function App() {
                                         </GalleryContextProvider>
                                     </ImportContextProvider>
                                 </AssetDatabaseProvider>
+                                </JobsContextProvider>
                             </ToastContextProvider>
                         </AppContextProvider>
                         </ApiContextProvider>

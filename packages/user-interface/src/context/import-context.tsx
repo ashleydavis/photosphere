@@ -69,6 +69,11 @@ export function startImportWithPaths(deps: IImportOrchestrationDeps, paths: stri
         storageDescriptor: { databasePath: deps.databasePath },
         sessionId,
         dryRun: false,
+        job: {
+            id: sessionId,
+            name: "Importing photos",
+            cancelSource: sessionId,
+        },
     }, sessionId);
     return { importAssetsTaskId, sessionId };
 }

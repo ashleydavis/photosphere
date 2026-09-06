@@ -219,6 +219,46 @@ queue.onTaskMessage<IMyProgressMessage>("my-progress", ({ message }) => {
 
 The `onTaskMessage` filter matches only messages whose `type` field equals the given string.
 
+## Surfacing a task as a job
+
+A **job** is a named group of tasks that the user can see running and, where it makes sense, stop. The navbar shows what is running and the right sidebar lists each one with its elapsed time, what it is doing, and a Cancel button.
+
+Jobs live only in the frontend. Nothing in a worker pool or a worker keeps job state or decides when a job is over. The whole mechanism is two things: a tag in the task's input data, and the handler reporting progress against it.
+
+**Where the task is queued**, put an `IJobTag` in its input data:
+
+```typescript
+queue.addTask("verify-database", {
+    databasePath,
+    job: {
+        id: `verify:${databasePath}`,
+        name: `Verifying "${databaseName}"`,
+        cancelSource: databasePath,
+    },
+} satisfies IVerifyDatabaseData, databasePath);
+```
+
+- `id` groups the tasks. Two tasks carrying the same id are one row, and the row goes when the last of them completes. Include whatever tells two of the same kind of job apart, usually the database path.
+- `name` is what the row is called.
+- `cancelSource` is what the Cancel button passes to `cancelTasks()`, so it must be the `source` the task was queued with. **Leave it out when the job cannot be cancelled from the interface**, and the row renders without a Cancel button. A background sync leaves it out: it is queued by the host (the desktop's main process, the mobile app's native sync driver) under a source the interface never learns, and syncing is switched off from Settings.
+
+**In the handler**, report against the tag from wherever it already reports progress:
+
+```typescript
+const runStartedAt = context.timestampProvider.now();
+...
+sendJobProgress(context, data.job, runStartedAt, `${checked} of ${total} files checked`);
+```
+
+- `sendJobProgress` does nothing when the tag is absent, so a task queued without one never appears. That is how automatic import stays out of the list: it is the same handler as a manual import, but it runs for as long as the setting is on, so a row for it would never go away.
+- `startedAt` is stamped by the handler and resent every time, so a job already running when a phone comes back to the foreground shows its real age rather than restarting from zero.
+- There is no completion fraction to report, and the interface shows a spinner rather than a bar. Most jobs here scan or stream and cannot know one, and a job made of several tasks has no single honest answer. Say what the job is doing in the message instead.
+- Report often enough that the row does not look stuck, and no more often than the work actually moves.
+
+**If the job can be cancelled**, the handler must honour `context.isCancelled()` at the boundaries of its loops, or Cancel will remove the row while the work carries on.
+
+Because both the message and the completion already reach every frontend for every task, this works unchanged on the desktop, on the CLI, on mobile (where the pool is native and the tag crosses the bridge inside the task's JSON data), and for tasks the host queued rather than the frontend.
+
 ---
 
 ## Key files
@@ -228,7 +268,10 @@ The `onTaskMessage` filter matches only messages whose `type` field equals the g
 | `packages/api/src/lib/task-handlers.ts` | Registers all handlers; call `initTaskHandlers()` in the worker thread |
 | `packages/api/src/lib/open-storage.ts` | Opens a storage instance with credentials and encryption |
 | `packages/task-queue/src/lib/task-queue.ts` | `TaskQueue` class — queue tasks, await results, subscribe to messages |
-| `packages/task-queue/src/lib/types.ts` | `ITaskContext`, `ITaskResult`, `TaskStatus`, callbacks |
+| `packages/task-queue/src/lib/types.ts` | `ITaskContext`, `ITaskResult`, `TaskStatus`, `IJobTag`, `IJobProgressMessage`, callbacks |
+| `packages/task-queue/src/lib/job-progress.ts` | `sendJobProgress`: how a handler reports the job it is doing |
+| `packages/user-interface/src/lib/jobs.ts` | Builds the job list from job progress and task completions |
+| `packages/user-interface/src/context/jobs-context.tsx` | Provides the job list and `cancelJob` to the interface |
 
 ## Existing task types
 

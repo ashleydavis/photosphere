@@ -109,7 +109,22 @@ send_command "$APP_PORT" type "{\"dataId\":\"replicate-dest-path-input\",\"text\
 send_command "$APP_PORT" click '{"dataId":"replicate-mode-full"}'
 send_command "$APP_PORT" click '{"dataId":"replicate-start-button"}'
 
+# The replication registers itself as a background job, so it can be watched and cancelled from the
+# right sidebar rather than only from this dialog.
+DEST_FULL_NAME="$(basename "$DEST_FULL")"
+wait_for_log "$TMP_DIR" "Background job started: Replicating to $DEST_FULL_NAME"
+log_success "Replication registered as a background job"
+
 wait_for_log "$TMP_DIR" "Replication completed for"
+
+# The row goes when the work does. Waiting on the job finishing rather than sampling the sidebar
+# means this does not race the replication, which for a one-asset database is over in moments.
+wait_for_log "$TMP_DIR" "Background job finished: Replicating to $DEST_FULL_NAME"
+
+# And nothing is left behind in the navbar: a job that never cleared would sit there forever, which
+# is the failure worth catching, and this reads the count rather than racing a spinner.
+wait_for_value "$APP_PORT" "navbar-jobs-count" "0" 30
+log_success "Background job cleared when the replication completed"
 
 if [ ! -f "$DEST_FULL/.db/files.dat" ]; then
     log_error "Full replication did not produce $DEST_FULL/.db/files.dat"

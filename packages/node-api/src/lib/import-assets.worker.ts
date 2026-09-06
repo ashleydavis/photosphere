@@ -4,8 +4,8 @@ import { ensureDir, remove, getProcessTmpDir } from "node-utils";
 import { createStorage, loadEncryptionKeysFromPem, IStorage } from "storage";
 import { IAutoImportSource, IDatabaseDescriptor } from "api";
 import { resolveStorageCredentials } from "./resolve-storage-credentials";
-import type { ITaskContext, ITaskResult } from "task-queue";
-import { TaskStatus, TaskQueue } from "task-queue";
+import type { ITaskContext, ITaskResult, IJobTag } from "task-queue";
+import { TaskStatus, TaskQueue, sendJobProgress } from "task-queue";
 import { IAsset } from "api";
 import { log, retry, retryOrLog, sleep, swallowError } from "utils";
 import { BsonDatabase } from "bdb";
@@ -114,6 +114,25 @@ export interface IImportAssetsData {
     // How this import runs. Absent is the default: `paths` above is walked once and the import
     // ends, which is what every manual import does.
     options?: IImportOptions;
+
+    // Names the job this task belongs to, so the import shows up in the interface's job list. An
+    // automatic import leaves this out: it is the same handler, but it runs for as long as the
+    // setting is on, so a row for it would never go away.
+    job?: IJobTag;
+}
+
+//
+// One line saying what an import has done so far, for the job row in the interface.
+//
+// Failures are only mentioned once there are some. A run that has not failed anything should not
+// have to say so, and "0 failed" reads as a warning at a glance.
+//
+export function describeImportProgress(imported: number, skipped: number, failed: number): string {
+    const parts = [`${imported} imported`, `${skipped} already there`];
+    if (failed > 0) {
+        parts.push(`${failed} failed`);
+    }
+    return parts.join(", ");
 }
 
 //
@@ -920,6 +939,11 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             currentItem,
         };
         context.sendMessage(message);
+
+        // The same counters again, as the job the interface lists and can cancel. Indeterminate,
+        // because the scanner streams: how many files there are to import is not known until the
+        // run that imports them has finished.
+        sendJobProgress(context, data.job, runStartedAt, describeImportProgress(result.imported.length, result.skipped.length + skippedBeforeOpening, result.failedCount));
 
         // Where the time has gone so far, sent as the run goes rather than only when it ends.
         //

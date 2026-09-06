@@ -1,3 +1,5 @@
+import type { IJobTag } from "task-queue";
+
 //
 // Input data for the replicate-database background task.
 //
@@ -45,6 +47,12 @@ export interface IReplicateDatabaseData {
     // Optional path filter — only replicate files matching this path (file or directory).
     //
     pathFilter?: string;
+
+    //
+    // Names the job this task belongs to, so the replication shows up in the interface's job list
+    // and can be watched and cancelled after its dialog has been closed.
+    //
+    job?: IJobTag;
 }
 
 //

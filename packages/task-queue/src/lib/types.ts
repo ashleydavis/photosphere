@@ -220,6 +220,72 @@ export type UnsubscribeFn = () => void;
 export type TaskCompletionCallback<TInputs = any, TOutputs = any> = (result: ITaskResult & { inputs: TInputs; outputs?: TOutputs }) => void | Promise<void>;
 
 //
+// Names the user-visible job a task belongs to.
+//
+// Whatever queues the task puts this in the task's input data, and the task's handler echoes it back
+// in the progress it reports. That echo is how the interface finds out about work it did not queue
+// itself: a background sync is queued by the desktop's main process and by the mobile app's native
+// sync driver, and the only thing either of those sends the interface is the task's own messages.
+//
+export interface IJobTag {
+    //
+    // Groups every task of this job. The interface shows one row per id, and drops the row when the
+    // last task carrying this id has completed.
+    //
+    id: string;
+
+    //
+    // What the row is called, for example "Importing photos".
+    //
+    name: string;
+
+    //
+    // The task source to cancel to stop this job, which is what the Cancel button passes to
+    // cancelTasks(). Left out when the job cannot be cancelled from the interface: a background sync
+    // is queued under a source chosen by the host, which the task that plans the sync does not know,
+    // so it says so by leaving this out rather than by guessing at one.
+    //
+    cancelSource?: string;
+}
+
+//
+// What a task handler reports about the job it is doing.
+//
+// Sent whenever its progress moves, and carrying the whole job every time, so an interface that was
+// not listening when the job started still learns all of it from the next one. That happens on a
+// phone, where the system suspends the WebView while the work carries on in the native engine.
+//
+export interface IJobProgressMessage {
+    //
+    // Discriminates this from every other task message.
+    //
+    type: "job-progress";
+
+    //
+    // The job this task belongs to, straight from the task's input data.
+    //
+    job: IJobTag;
+
+    //
+    // When the handler started work, in milliseconds since the epoch.
+    //
+    // The elapsed time the interface shows counts from here rather than from when it first saw the
+    // job, so a job that was already running when the app came back to the foreground reports its
+    // real age instead of restarting from zero.
+    //
+    startedAt: number;
+
+    //
+    // What the job is doing right now, for example "12 imported, 3 already there".
+    //
+    // There is deliberately no completion fraction. Most jobs here scan or stream and cannot know
+    // one, the interface shows a spinner rather than a bar, and a job made of several tasks has no
+    // single honest answer anyway.
+    //
+    progressMessage?: string;
+}
+
+//
 // A registered task message callback entry pairing a message type filter with its callback.
 //
 export interface IMessageCallbackEntry {

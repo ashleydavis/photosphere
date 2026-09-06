@@ -3,7 +3,7 @@
 //
 
 import type { ITaskContext } from "task-queue";
-import { TaskQueue, TaskPriority } from "task-queue";
+import { TaskQueue, TaskPriority, sendJobProgress } from "task-queue";
 import { createLazyDatabaseStorage, createMediaFileDatabase, isDatabasePartial } from "./media-file-database";
 import { openStorage } from "./open-storage";
 import type { ILoadAssetsData, ILoadAssetsResult } from "api";
@@ -23,6 +23,8 @@ export async function loadAssetsHandler(
     if (!data.databasePath) {
         throw new Error("databasePath is required");
     }
+
+    const runStartedAt = timestampProvider.now();
 
     log.info(`Loading assets from database "${data.databasePath}"`);
 
@@ -83,7 +85,11 @@ export async function loadAssetsHandler(
 
         // Send page via message
         context.sendMessage({ type: "asset-page", databasePath: data.databasePath, batch });
-        
+
+        // The same count as the job the interface lists and can cancel. Indeterminate: the pages are
+        // walked one at a time and how many there are is not known until the last one comes back.
+        sendJobProgress(context, data.job, runStartedAt, `${totalAssets} assets loaded`);
+
         if (!result.nextPageId) {
             break;
         }

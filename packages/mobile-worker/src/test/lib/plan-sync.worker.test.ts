@@ -241,7 +241,16 @@ describe("plan-sync", () => {
         expect(plan.shouldRun).toBe(true);
         expect(plan.databasePath).toBe(DATABASE_PATH);
         expect(plan.steps.map(step => step.type)).toEqual(["sync-database"]);
-        expect(plan.steps[0].data).toEqual({ databasePath: DATABASE_PATH });
+        expect(plan.steps[0].data).toEqual({
+            databasePath: DATABASE_PATH,
+            // Named here rather than in native code, so a phone's job row reads the same as a
+            // desktop's. No cancel source: the pass is queued by the native driver under a source
+            // the WebView never learns, so the row must not offer a Cancel button it cannot honour.
+            job: {
+                id: `sync:${DATABASE_PATH}`,
+                name: "Syncing database",
+            },
+        });
     });
 
     test("carries the pause through so the loop waits what the settings asked for", async () => {

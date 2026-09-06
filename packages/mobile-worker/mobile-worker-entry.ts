@@ -8,6 +8,7 @@ import "./src/lib/install-url";
 
 import { registerHandler } from "task-queue";
 import { loadAssetsHandler } from "node-api/src/lib/load-assets.worker";
+import { testJobHandler } from "node-api/src/lib/test-job.worker";
 import { createDatabaseHandler } from "node-api/src/lib/create-database.worker";
 import { replicateDatabaseHandler } from "node-api/src/lib/replicate-database.worker";
 import { moveAssetsHandler } from "node-api/src/lib/move-assets.worker";
@@ -53,6 +54,11 @@ import { installWorkerGlobal } from "./src/index";
 // read path never calls. This lets the real `load-assets` handler run unchanged: it reads the
 // database through `FileStorage` over the native `host.fs*` functions.
 //
+
+// Register the synthetic job used to drive the background jobs interface by hand from the developer
+// screen. It does nothing but take a while. Registered here as well as on the desktop because the
+// interface it exercises is the shared one, and a phone is where it is hardest to check.
+registerHandler("test-job", testJobHandler);
 
 // Register the real load-assets handler: it opens a database via storage (native-backed fs) and
 // streams asset pages back to the gallery.

@@ -14,6 +14,7 @@ import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import Drawer from "@mui/joy/Drawer/Drawer";
 import { LeftSidebar } from "./components/left-sidebar";
 import { RightSidebar } from "./components/right-sidebar";
+import { JobsDialog } from "./components/jobs-dialog";
 import { Navbar } from "./components/navbar";
 import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
@@ -67,6 +68,11 @@ function __Main({ initialTheme }: IMainProps) {
     // Set to true to open the right sidebar.
     //
     const [rightSidebarOpen, setRightSidebarOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to show the background jobs, opened from the navbar spinner.
+    //
+    const [jobsDialogOpen, setJobsDialogOpen] = useState<boolean>(false);
 
     //
     // Set to true to open the configuration dialog.
@@ -192,6 +198,19 @@ function __Main({ initialTheme }: IMainProps) {
 
 
     //
+    // Open the right sidebar when the navbar's job indicator is clicked, which is where the jobs are
+    // listed and cancelled. A window event rather than a prop, so the indicator can sit anywhere in
+    // the navbar without the sidebar's open state being threaded down to it.
+    //
+    useEffect(() => {
+        const showJobs = () => setJobsDialogOpen(true);
+        window.addEventListener("photosphere:show-jobs", showJobs);
+        return () => {
+            window.removeEventListener("photosphere:show-jobs", showJobs);
+        };
+    }, []);
+
+    //
     // Listen for platform events from the host and dispatch menu actions by name.
     //
     useEffect(() => {
@@ -308,6 +327,11 @@ function __Main({ initialTheme }: IMainProps) {
                     setSidebarOpen={setRightSidebarOpen}
                     />
             </Drawer>
+
+            <JobsDialog
+                open={jobsDialogOpen}
+                onClose={() => setJobsDialogOpen(false)}
+                />
 
             <div
                 id="main"

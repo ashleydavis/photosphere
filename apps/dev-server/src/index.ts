@@ -10,6 +10,7 @@ import { promisify } from "util";
 import * as path from "path";
 import { createDatabase, createMediaFileDatabase, loadDesktopConfig, updateDesktopConfig, getFolderPath, updateFolderPath, getDatabases, addDatabaseEntry, removeDatabaseEntry, updateLastFolder, markDatabaseOpened } from "node-api";
 import { createStorage } from "storage";
+import type { ISyncDatabaseData } from "api";
 
 const execAsync = promisify(exec);
 
@@ -94,7 +95,15 @@ function enqueueSyncTask(state: IConnectionSyncState): void {
     }
     state.isSyncRunning = true;
     log.info(`Queuing sync task for "${state.currentDatabasePath}"`);
-    workerPool.addTask("sync-database", { databasePath: state.currentDatabasePath }, state.currentDatabasePath);
+    const syncData: ISyncDatabaseData = {
+        databasePath: state.currentDatabasePath,
+        // No cancel source: syncing is switched off from Settings, not stopped from the job list.
+        job: {
+            id: `sync:${state.currentDatabasePath}`,
+            name: "Syncing database",
+        },
+    };
+    workerPool.addTask("sync-database", syncData, state.currentDatabasePath);
 }
 
 //

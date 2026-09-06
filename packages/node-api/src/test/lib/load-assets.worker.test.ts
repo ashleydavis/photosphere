@@ -22,9 +22,25 @@ jest.mock('../../lib/media-file-database', () => ({
 }));
 
 import { loadAssetsHandler } from '../../lib/load-assets.worker';
-import { isDatabasePartial } from '../../lib/media-file-database';
+import { isDatabasePartial, createMediaFileDatabase } from '../../lib/media-file-database';
 
 const mockIsDatabasePartial = isDatabasePartial as jest.MockedFunction<typeof isDatabasePartial>;
+const mockCreateMediaFileDatabase = createMediaFileDatabase as jest.MockedFunction<any>;
+
+//
+// Makes the mocked database hand back one page holding the given number of assets, so a test can
+// see what the handler reports as it streams them.
+//
+function stubOnePageOfAssets(assetCount: number): void {
+    const records = Array.from({ length: assetCount }, (_ignored, index) => ({ _id: `asset-${index}` }));
+    mockCreateMediaFileDatabase.mockReturnValue({
+        metadataCollection: {
+            sortIndex: jest.fn().mockReturnValue({
+                getPage: jest.fn().mockResolvedValue({ records, nextPageId: undefined }),
+            }),
+        },
+    });
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -127,5 +143,47 @@ describe('loadAssetsHandler', () => {
         await loadAssetsHandler({ databasePath: '/test/db' }, makeContext());
 
         expect(backend.addedTasks.filter(task => task.type === 'prefetch-database')).toHaveLength(0);
+    });
+
+    test('reports its job as it streams assets, carrying the tag it was queued with', async () => {
+        mockIsDatabasePartial.mockResolvedValue(false);
+        stubOnePageOfAssets(3);
+
+        const context = makeContext();
+        await loadAssetsHandler({
+            databasePath: '/test/db',
+            job: {
+                id: 'load:/test/db',
+                name: 'Loading assets',
+                cancelSource: '/test/db',
+            },
+        }, context);
+
+        const jobMessages = (context.sendMessage as jest.Mock).mock.calls
+            .map(call => call[0])
+            .filter(message => message.type === 'job-progress');
+
+        expect(jobMessages).toHaveLength(1);
+        expect(jobMessages[0].job).toEqual({
+            id: 'load:/test/db',
+            name: 'Loading assets',
+            // The source the load was queued under, so Cancel stops this load and nothing else.
+            cancelSource: '/test/db',
+        });
+        expect(jobMessages[0].progressMessage).toBe('3 assets loaded');
+    });
+
+    test('reports no job when the load was queued without a tag', async () => {
+        mockIsDatabasePartial.mockResolvedValue(false);
+        stubOnePageOfAssets(3);
+
+        const context = makeContext();
+        await loadAssetsHandler({ databasePath: '/test/db' }, context);
+
+        const jobMessages = (context.sendMessage as jest.Mock).mock.calls
+            .map(call => call[0])
+            .filter(message => message.type === 'job-progress');
+
+        expect(jobMessages).toHaveLength(0);
     });
 });

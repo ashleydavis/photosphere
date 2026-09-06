@@ -9,7 +9,7 @@ import { TaskStatus, setQueueBackend } from 'task-queue';
 import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log, noLogDetails } from 'utils';
 import { loadDatabaseConfig, updateDatabaseConfig } from 'api';
-import type { IReplicateDatabaseData } from 'api';
+import type { IReplicateDatabaseData, ISyncDatabaseData } from 'api';
 import { loadDesktopConfig, updateDesktopConfig, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion } from 'node-api';
 import { checkDatabaseExists, planDesktopAutoImport, AUTO_IMPORT_TASK_SOURCE, DEFAULT_DATABASE_DISPLAY_NAME } from 'node-api';
 import { getDefaultPhotoFolders } from 'node-utils';
@@ -1281,7 +1281,17 @@ function enqueueSyncTask(): void {
     }
     isSyncRunning = true;
     log.info(`Queuing sync task for "${currentDatabasePath}"`);
-    workerPool.addTask("sync-database", { databasePath: currentDatabasePath }, currentDatabasePath);
+    const syncData: ISyncDatabaseData = {
+        databasePath: currentDatabasePath,
+        // No cancel source: the renderer lists this job but must not be able to stop it, because
+        // syncing is switched off from Settings and a sync cancelled from a list would start again
+        // on the next timer anyway.
+        job: {
+            id: `sync:${currentDatabasePath}`,
+            name: "Syncing database",
+        },
+    };
+    workerPool.addTask("sync-database", syncData, currentDatabasePath);
 }
 
 //
