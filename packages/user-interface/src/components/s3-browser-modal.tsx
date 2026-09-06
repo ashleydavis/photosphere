@@ -25,7 +25,7 @@ export interface IS3BrowserModalProps {
     // Called when the modal should close without a selection.
     onClose: () => void;
 
-    // Called with the selected S3 path string (format: "s3:bucket:/prefix").
+    // Called with the selected S3 path string (format: "s3:bucket/prefix").
     onSelect: (path: string) => void;
 }
 

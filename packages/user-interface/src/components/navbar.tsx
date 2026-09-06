@@ -161,10 +161,14 @@ export function Navbar({
                         size={isMobile ? "lg" : "md"}
                         title="Toggle sidebar"
                         onClick={() => setSidebarOpen(!sidebarOpen)}
-                        sx={navButtonSx}
+                        sx={{ ...navButtonSx, flexShrink: 0 }}
                     >
                         <Menu />
                     </IconButton>
+
+                    {/* Everything between the two sidebar buttons scrolls sideways when it does not
+                        fit, so neither button can be pushed off the screen. See .navbar-scroll. */}
+                    <div className={classNames("navbar-scroll flex flex-row items-center", isMobile ? "gap-1" : "")}>
 
                     {!isMobile && <h1 className="ml-3 sm:ml-4">Photosphere</h1>}
 
@@ -263,20 +267,6 @@ export function Navbar({
                         </div>
                     }
 
-                    {/*
-                        Machine-readable sync state for the smoke tests: the driver reads this data-id to
-                        assert the navbar reflects a running background sync ("syncing") and its return to
-                        rest ("idle"). It always renders so the value is never empty, and it is taken
-                        off-screen (rather than display:none, which the driver treats as absent) so it adds
-                        no visible chrome while staying present in the DOM.
-                    */}
-                    <span
-                        data-id="navbar-sync-state"
-                        style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}
-                    >
-                        {isSyncing ? "syncing" : "idle"}
-                    </span>
-
                     {databasePath && (
                         <div
                             className="flex flex-row items-center mr-2 text-xs sm:text-sm"
@@ -322,9 +312,26 @@ export function Navbar({
 
                     <ThemeToggle />
 
+                    </div>
+
+                    {/*
+                        Machine-readable sync state for the smoke tests: the driver reads this data-id to
+                        assert the navbar reflects a running background sync ("syncing") and its return to
+                        rest ("idle"). It always renders so the value is never empty, and it is taken
+                        off-screen (rather than display:none, which the driver treats as absent) so it adds
+                        no visible chrome while staying present in the DOM. It sits outside the scrolling
+                        middle so it can never contribute to that region's scroll width.
+                    */}
+                    <span
+                        data-id="navbar-sync-state"
+                        style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}
+                    >
+                        {isSyncing ? "syncing" : "idle"}
+                    </span>
+
                     <IconButton
                         data-id="right-sidebar-button"
-                        sx={navButtonSx}
+                        sx={{ ...navButtonSx, flexShrink: 0 }}
                         variant="soft"
                         color="neutral"
                         size={isMobile ? "lg" : "md"}

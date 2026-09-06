@@ -97,6 +97,45 @@ body.mobile #navbar {
     height: 100px;
 }
 
+/*
+ * The middle of the nav bar, between the two sidebar buttons, which are pinned to the edges.
+ *
+ * Everything that can pile up in the bar lives in here: the page links, the loading and syncing
+ * spinners, the jobs indicator, the photo count, the update badge. On a phone there is not room for
+ * all of it at once, and when it overflowed the whole bar it pushed the right sidebar button off the
+ * screen, leaving no way to open that sidebar at all. Scrolling this part sideways means the bar
+ * runs out of room here rather than at the edges, so both sidebar buttons stay reachable however
+ * much is in the middle.
+ *
+ * min-width: 0 is what actually lets it shrink: a flex item defaults to min-width: auto, which is
+ * its content width, so without this the middle refuses to get smaller than its contents and pushes
+ * the buttons out exactly as before.
+ *
+ * The scrollbar is hidden because a horizontal bar across the nav bar reads as breakage rather than
+ * as an affordance, and touch scrolling needs no bar. Same treatment as .gallery-scroller.
+ */
+.navbar-scroll {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+}
+
+.navbar-scroll::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
+
+/*
+ * Stop the contents squashing instead of scrolling. A flex item shrinks by default, so without this
+ * the buttons and indicators would compress themselves to fit the narrower middle and the overflow
+ * that is supposed to become scroll would never happen.
+ */
+.navbar-scroll > * {
+    flex-shrink: 0;
+}
+
 #main {
     padding-top: 52px;
 }
