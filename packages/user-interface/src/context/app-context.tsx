@@ -209,7 +209,7 @@ export function AppContextProvider({ children }: IProps) {
     //
     useEffect(() => {
         return platform.onTaskComplete((_taskId, result) => {
-            if (result.type !== "record-default-database") {
+            if (result.type !== "create-default-database") {
                 return;
             }
 

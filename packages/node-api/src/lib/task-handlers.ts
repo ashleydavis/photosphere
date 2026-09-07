@@ -9,6 +9,7 @@ import { replicateDatabaseHandler } from "./replicate-database.worker";
 import { saveAssetHandler } from "./save-asset.worker";
 import { saveAssetsBatchHandler } from "./save-assets-batch.worker";
 import { createDatabaseHandler } from "./create-database.worker";
+import { createDefaultDatabaseHandler } from "./create-default-database.worker";
 import { importAssetsHandler } from "./import-assets.worker";
 import { hashFileHandler } from "./hash-file.worker";
 import { getDatabaseSummaryHandler } from "./get-database-summary.worker";
@@ -42,6 +43,7 @@ export function initTaskHandlers(): void {
     registerHandler("save-asset", saveAssetHandler);
     registerHandler("save-assets-batch", saveAssetsBatchHandler);
     registerHandler("create-database", createDatabaseHandler);
+    registerHandler("create-default-database", createDefaultDatabaseHandler);
     registerHandler("import-assets", importAssetsHandler);
     registerHandler("hash-file", hashFileHandler);
     registerHandler("get-database-summary", getDatabaseSummaryHandler);

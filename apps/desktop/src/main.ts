@@ -11,7 +11,7 @@ import { RandomUuidGenerator, TimestampProvider, logExceptions, log, noLogDetail
 import { loadDatabaseConfig, updateDatabaseConfig } from 'api';
 import type { IReplicateDatabaseData, ISyncDatabaseData } from 'api';
 import { loadAppConfig, updateAppConfig, loadAppState, updateAppState, getAppConfigValue, setAppConfigValue, getAppStateValue, setAppStateValue, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion } from 'node-api';
-import { checkDatabaseExists, planDesktopAutoImport, AUTO_IMPORT_TASK_SOURCE, DEFAULT_DATABASE_DISPLAY_NAME, getLastDatabase, setLastDatabase } from 'node-api';
+import { checkDatabaseExists, planDesktopAutoImport, AUTO_IMPORT_TASK_SOURCE, getConfigPath, getDatabasesConfigPath, getLastDatabase, setLastDatabase } from 'node-api';
 import { getDefaultPhotoFolders } from 'node-utils';
 import type { IDatabaseEntry, IAppConfigValue, IAppStateValue } from 'node-api';
 import type { ISaveAssetItem } from 'api';
@@ -1189,32 +1189,24 @@ let autoImportSettingsJson: string | null = null;
 let autoImportStarting = false;
 
 //
-// Creates the default private database and records it, returning its path.
+// Creates the default private database and records it.
 //
-// This is what "Create my private photo database" does: it queues the same create-database task the
-// Manage Databases page uses, lists it, and remembers it as the default. Nothing about it is special
-// beyond where it goes and that it is the one automatic import writes to.
+// The same create-default-database task a phone's background import runs: it makes the database,
+// lists it, and remembers it as the default. The main process queues it rather than writing the
+// config and the database list itself, so the default database comes to exist one way rather than
+// one way per platform.
 //
 async function createDefaultDatabase(databasePath: string): Promise<void> {
     log.info(`Creating the default photo database at "${databasePath}".`);
 
-    const taskResult = await runWorkerTask("create-database", { databasePath }, databasePath);
+    const taskResult = await runWorkerTask("create-default-database", {
+        databasePath,
+        configPath: getConfigPath(),
+        databasesConfigPath: getDatabasesConfigPath(),
+    }, databasePath);
     if (taskResult.status !== TaskStatus.Succeeded) {
         throw new Error(`Failed to create the default photo database at "${databasePath}": ${taskResult.errorMessage}`);
     }
-
-    const existingDatabases = await getDatabases();
-    if (!existingDatabases.find(entry => entry.path === databasePath)) {
-        await addDatabaseEntry({
-            name: DEFAULT_DATABASE_DISPLAY_NAME,
-            description: '',
-            path: databasePath,
-        });
-    }
-
-    await updateAppConfig(config => {
-        config.defaultDatabasePath = databasePath;
-    });
 
     if (mainWindow) {
         mainWindow.webContents.send('databases-changed');
