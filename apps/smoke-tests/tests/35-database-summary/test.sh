@@ -51,6 +51,24 @@ wait_for_log "$TMP_DIR" "Database summary loaded:"
 # so full is the only correct answer.
 wait_for_value "$APP_PORT" database-mode "full"
 
+# The same summary is a tap away from the navbar's photo count, which is the number it summarises.
+# On a phone the dialog is a drawer sliding up from the bottom edge rather than a centred modal.
+# Back to the gallery first, because the count only renders there.
+send_command "$APP_PORT" navigate '{"page":"/"}' || exit 1
+wait_for_value "$APP_PORT" database-photo-count "photos"
+
+send_command "$APP_PORT" click '{"dataId":"database-photo-count"}' || exit 1
+
+# The dialog mounts its own copy of the summary view when it opens, so it runs the
+# get-database-summary task again and writes the load line a second time. The cursor has already
+# passed the first one.
+wait_for_value "$APP_PORT" database-summary-dialog "Consolidate into remote"
+wait_for_log "$TMP_DIR" "Database summary loaded:"
+
+send_command "$APP_PORT" click '{"dataId":"database-summary-dialog-close"}' || exit 1
+wait_for_value_gone "$APP_PORT" database-summary-dialog "Consolidate into remote" || exit 1
+log_success "The navbar photo count opens the database summary and the close button dismisses it"
+
 # Thumbnail fetches require the not-yet-built mobile asset-serving layer; ignore only those errors.
 check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1
 
