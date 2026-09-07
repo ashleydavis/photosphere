@@ -21,6 +21,107 @@ import path from "path";
 const EXIF_HEAD_BYTES = 256 * 1024;
 
 //
+// A map of EXIF tag names to their raw values, as read from a photo.
+//
+// The values are whatever the parser produced. Date tags come through as strings; other tags can be
+// numbers or arrays, and are ignored when picking a date.
+//
+export interface IExifTags {
+    [tagName: string]: string | number | number[] | undefined;
+}
+
+//
+// The EXIF date tags, in the order they are preferred.
+//
+// DateTimeOriginal is when the shutter fired, which is what the date of a photo means to a person.
+// DateTimeDigitized is when the image was digitised: the same instant on a digital camera, and the
+// scan date for a scanned print. DateTime and ModifyDate are the file's last modification, which an
+// edit or a re-encode moves, so they come last and can never displace a real capture date.
+//
+// The order used to be ignored: every field present was assigned in turn with nothing stopping at
+// the first, so the last in the list won. Measured on a real photo, DateTimeOriginal of the 27th
+// lost to ModifyDate of the 31st and the photo was filed four days late.
+//
+const EXIF_DATE_TAGS_IN_PRIORITY_ORDER = [
+    "DateTimeOriginal",
+    "DateTimeDigitized",
+    "DateTime",
+    "ModifyDate",
+];
+
+//
+// Matches the EXIF date format, "YYYY:MM:DD HH:mm:ss".
+//
+// A "T" is accepted in place of the space, and anything trailing (a sub-second field, a timezone
+// offset) is ignored, because a tag with more precision than EXIF specifies is still a date.
+//
+const EXIF_DATE_PATTERN = /^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/;
+
+//
+// Turns one EXIF date string into an ISO timestamp, or undefined when it is not a date.
+//
+// EXIF carries no timezone, so the value is read as UTC, which is what this has always done. A
+// photo's stored date does not shift because the reader changed.
+//
+export function parseExifDate(rawValue: string | number | number[] | undefined): string | undefined {
+    if (typeof rawValue !== "string") {
+        return undefined;
+    }
+
+    const match = EXIF_DATE_PATTERN.exec(rawValue.trim());
+    if (!match) {
+        return undefined;
+    }
+
+    const year = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const day = parseInt(match[3], 10);
+    const hour = parseInt(match[4], 10);
+    const minute = parseInt(match[5], 10);
+    const second = parseInt(match[6], 10);
+
+    // Cameras write an all-zero date when the clock has never been set. It matches the pattern and
+    // is not a date, and left alone it files the photo in the year zero.
+    if (year === 0 || month === 0 || day === 0) {
+        return undefined;
+    }
+
+    if (month > 12 || day > 31 || hour > 23 || minute > 59 || second > 59) {
+        return undefined;
+    }
+
+    // Date.UTC rolls a day past the end of its month into the next one, so a date that came back
+    // different from what was asked for was never a real date.
+    const asDate = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+    if (asDate.getUTCFullYear() !== year || asDate.getUTCMonth() !== month - 1 || asDate.getUTCDate() !== day) {
+        return undefined;
+    }
+
+    return asDate.toISOString();
+}
+
+//
+// Picks the date a photo was taken out of its EXIF tags, or undefined when they carry none.
+//
+// Undefined means the photo's metadata says nothing about when it was taken, and the caller falls
+// back to the date of the file itself. Nothing is invented here.
+//
+export function pickExifDate(tags: IExifTags | undefined): string | undefined {
+    if (!tags) {
+        return undefined;
+    }
+
+    for (const tagName of EXIF_DATE_TAGS_IN_PRIORITY_ORDER) {
+        const parsed = parseExifDate(tags[tagName]);
+        if (parsed !== undefined) {
+            return parsed;
+        }
+    }
+
+    return undefined;
+}
+
+//
 // Gets the details of an image.
 //
 export async function getImageDetails(filePath: string, tempDir: string, contentType: string, uuidGenerator: IUuidGenerator, logicalPath: string): Promise<IAssetDetails> {
@@ -182,18 +283,7 @@ export async function getImageMetadata(filePath: string, contentType: string): P
                 }
             }
 
-            const dateFields = ["DateTime", "DateTimeOriginal", "DateTimeDigitized", "ModifyDate"];
-            for (const dateField of dateFields) {
-                const dateStr = exif.tags[dateField];
-                if (dateStr) {
-                    try {
-                        photoDate = dayjs.utc(dateStr, "YYYY:MM:DD HH:mm:ss").toISOString();
-                    }
-                    catch (err) {
-                        log.exception(`Failed to parse date from ${dateStr}`, err as Error);
-                    }
-                }
-            }
+            photoDate = pickExifDate(exif.tags);
 
             return {
                 metadata: exif.tags,

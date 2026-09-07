@@ -288,4 +288,65 @@ describe("AutoImportScanner", () => {
 
         expect(source.exportedIds).toContain("just-taken");
     });
+
+    //
+    // A photo library item is not a file until the scanner copies it out, and that copy is made
+    // during the import, so nothing the copy carries describes the photo. A photo with no EXIF takes
+    // its date from its file, so a copy's timestamp here dates every such photo to the import.
+    //
+    describe("the stat the import is given for a photo library item", () => {
+
+        test("carries the library's date, not the copy's", async () => {
+            const capturedAtMs = Date.parse("2024-06-15T09:30:00.000Z");
+            const source = sourceWith([makeItem("one", capturedAtMs)]);
+
+            const pushed = await runScan(new AutoImportScanner(makeDeps(source, {})));
+
+            expect(pushed[0].fileStat.lastModified.getTime()).toBe(capturedAtMs);
+        });
+
+        test("is not the moment the copy was made", async () => {
+            // The failure this guards against: every photo without EXIF filed under the day it was
+            // imported, because the copy made during the import is what was measured.
+            const capturedAtMs = Date.parse("2024-06-15T09:30:00.000Z");
+            const startedScanningAtMs = Date.now();
+            const source = sourceWith([makeItem("one", capturedAtMs)]);
+
+            const pushed = await runScan(new AutoImportScanner(makeDeps(source, {})));
+
+            expect(pushed[0].fileStat.lastModified.getTime()).toBeLessThan(startedScanningAtMs);
+        });
+
+        test("carries the library's size, not the copy's", async () => {
+            // The fake writes a short string as the copy, nothing like the 1024 bytes the library
+            // reports for the item.
+            const source = sourceWith([makeItem("one", 1)]);
+
+            const pushed = await runScan(new AutoImportScanner(makeDeps(source, {})));
+
+            expect(pushed[0].fileStat.length).toBe(1024);
+        });
+
+        test("keeps the content type the scan worked out", async () => {
+            // Only the size and the date come from the library. What the file turned out to be is
+            // still what reading it said, because that is read from the bytes themselves.
+            const source = sourceWith([makeItem("one", 1)]);
+
+            const pushed = await runScan(new AutoImportScanner(makeDeps(source, {})));
+
+            expect(pushed[0].fileStat.contentType).toBe("image/jpeg");
+        });
+
+        test("agrees with the cache identity", async () => {
+            // They describe the same photo from the same two values, so a change to one that is not
+            // made to the other is the bug that was here.
+            const capturedAtMs = Date.parse("2024-06-15T09:30:00.000Z");
+            const source = sourceWith([makeItem("one", capturedAtMs)]);
+
+            const pushed = await runScan(new AutoImportScanner(makeDeps(source, {})));
+
+            expect(pushed[0].fileStat.length).toBe(pushed[0].cacheIdentity!.length);
+            expect(pushed[0].fileStat.lastModified.getTime()).toBe(pushed[0].cacheIdentity!.lastModified);
+        });
+    });
 });

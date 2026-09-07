@@ -280,7 +280,26 @@ export class AutoImportScanner implements IImportScanner {
                     lastModified: isAlreadyAFile ? result.fileStat.lastModified.getTime() : item.createdAt.getTime(),
                 };
 
-                await visitFile({ ...result, cacheIdentity });
+                // The same correction applied to the stat the rest of the import reads.
+                //
+                // Everything downstream takes fileStat as describing the photo that was imported,
+                // and for a library item it does not: the copy was made moments ago, so its size and
+                // date are the copy's. A photo with no date of its own falls back to its file date,
+                // and with the copy's stat that made it the date of the import, so every photo
+                // without EXIF was recorded as taken on the day it was imported however old it was.
+                const fileStat = isAlreadyAFile
+                    ? result.fileStat
+                    : {
+                        contentType: result.fileStat.contentType,
+                        length: item.size,
+                        lastModified: item.createdAt,
+                    };
+
+                await visitFile({
+                    ...result,
+                    fileStat,
+                    cacheIdentity,
+                });
             },
             onProgress,
             { ignorePatterns: [/\.db/] },

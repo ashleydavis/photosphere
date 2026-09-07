@@ -866,6 +866,48 @@ android_save_sandbox_file() {
 }
 
 #
+# Copies a directory out of the app's private storage onto this machine.
+#
+# A whole tree rather than one file, because a database is a directory: a test that checks what the
+# app wrote reads it with the CLI, and the CLI needs the whole `.db` folder.
+#
+# It goes through `tar` on the device and adb's stdout, for the same reason the single-file save
+# does: the app may not be allowed to write to the shared temp directory, and `adb pull` cannot reach
+# private storage at all.
+# Usage: android_save_sandbox_dir <dir_under_files> <local_dir>
+#
+android_save_sandbox_dir() {
+    local device_dir="$1"
+    local local_dir="$2"
+
+    if ! adb shell run-as "$APP_ID" test -d "files/$device_dir" >/dev/null 2>&1; then
+        log_error "The device has no files/$device_dir to save"
+        return 1
+    fi
+
+    mkdir -p "$local_dir"
+
+    local tarball="$local_dir/sandbox-dir.tar"
+    if ! adb exec-out run-as "$APP_ID" tar c -C files "$device_dir" > "$tarball" 2>/dev/null; then
+        log_error "Could not read files/$device_dir off the device."
+        return 1
+    fi
+
+    if [ ! -s "$tarball" ]; then
+        log_error "files/$device_dir came back empty from the device."
+        return 1
+    fi
+
+    if ! tar xf "$tarball" -C "$local_dir" 2>/dev/null; then
+        log_error "Could not unpack files/$device_dir after copying it off the device."
+        return 1
+    fi
+
+    rm -f "$tarball"
+    return 0
+}
+
+#
 # The same, for a file anywhere in the app's data directory rather than under files/.
 #
 # The secrets live in shared_prefs/, not in the sandbox, and a device run has to hand those back too:
