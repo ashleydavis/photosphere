@@ -1,16 +1,16 @@
 import type { ITaskContext } from "task-queue";
 import { DEFAULT_DATABASE_DISPLAY_NAME } from "api/src/lib/auto-import-mobile";
-import { AUTO_IMPORT_CONFIG_PATH, DATABASES_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
-import { readAutoImportConfigFile, writeAutoImportConfigHandler } from "node-api/src/lib/auto-import-config.worker";
+import { CONFIG_PATH, DATABASES_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
+import { readConfigFromStorage, writeConfigHandler } from "node-api/src/lib/config.worker";
 import { readDatabasesConfigHandler, writeDatabasesConfigHandler } from "node-api/src/lib/databases-config.worker";
 
 //
 // The task that records a newly created default database, so nothing creates it a second time.
 //
-// It writes the database's path into auto-import.toml and adds the database to databases.toml, which
-// is what makes it appear in the app's database list. Both files live in the app's storage sandbox
-// and neither is reachable from the WebView or from native code, so this runs in the worker, beside
-// the pass that has just created the database.
+// It writes the database's path into the automatic import section of config.yaml and adds the
+// database to databases.toml, which is what makes it appear in the app's database list. Both files
+// live in the app's storage sandbox and neither is reachable from the WebView or from native code,
+// so this runs in the worker, beside the pass that has just created the database.
 //
 // This is one task rather than two because the two writes have to happen together: a database
 // recorded as the default but missing from the list is one the user cannot open, and a database in
@@ -33,12 +33,17 @@ export async function recordDefaultDatabaseHandler(data: IRecordDefaultDatabaseD
         throw new Error("databasePath is required");
     }
 
-    const autoImportFile = await readAutoImportConfigFile(AUTO_IMPORT_CONFIG_PATH);
-    await writeAutoImportConfigHandler({
-        configPath: AUTO_IMPORT_CONFIG_PATH,
-        settings: autoImportFile.settings,
-        defaultDatabasePath: data.databasePath,
-        pauseBetweenRunsMs: autoImportFile.pauseBetweenRunsMs,
+    const { config } = await readConfigFromStorage(CONFIG_PATH);
+    const autoImportFile = config.autoImport;
+    // Only the automatic import section is sent, so the syncing settings in the same file are left
+    // exactly as they were.
+    await writeConfigHandler({
+        configPath: CONFIG_PATH,
+        autoImport: {
+            settings: autoImportFile.settings,
+            defaultDatabasePath: data.databasePath,
+            pauseBetweenRunsMs: autoImportFile.pauseBetweenRunsMs,
+        },
     }, context);
 
     const databasesConfig = await readDatabasesConfigHandler({ configPath: DATABASES_CONFIG_PATH }, context);

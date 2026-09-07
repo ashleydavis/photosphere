@@ -9,7 +9,7 @@
 # How it works:
 #   - Points PHOTOSPHERE_NEWS_URL at the in-repo test/demo-news.yaml.
 #   - Uses an isolated, auto-cleaned scratch config dir, so your real
-#     ~/.config/photosphere/desktop.toml is not touched.
+#     ~/.config/photosphere/config.yaml is not touched.
 #   - Launches `bun run dev` from apps/desktop/, which bundles main/preload
 #     and starts Electron.
 #   - The desktop shows the oldest UNSEEN item per startup. Since the

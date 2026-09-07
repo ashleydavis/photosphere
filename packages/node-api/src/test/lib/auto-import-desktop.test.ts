@@ -1,5 +1,5 @@
 import * as path from "path";
-import { IDesktopConfig } from "../../lib/desktop-config";
+import { IAppConfig } from "../../lib/app-config";
 import {
     DEFAULT_DATABASE_FOLDER_NAME,
     foldersAsSources,
@@ -19,19 +19,19 @@ describe("planDesktopAutoImport", () => {
     });
 
     test("does not run when automatic import is switched off", () => {
-        const config: IDesktopConfig = { autoImportEnabled: false };
+        const config: IAppConfig = { autoImportEnabled: false };
 
         expect(planDesktopAutoImport(config, PHOTO_FOLDERS, APP_DATA_PATH).shouldRun).toBe(false);
     });
 
     test("runs when automatic import is switched on", () => {
-        const config: IDesktopConfig = { autoImportEnabled: true };
+        const config: IAppConfig = { autoImportEnabled: true };
 
         expect(planDesktopAutoImport(config, PHOTO_FOLDERS, APP_DATA_PATH).shouldRun).toBe(true);
     });
 
     test("does not run when there is nothing at all to watch", () => {
-        const config: IDesktopConfig = { autoImportEnabled: true };
+        const config: IAppConfig = { autoImportEnabled: true };
 
         const plan = planDesktopAutoImport(config, [], APP_DATA_PATH);
 
@@ -40,7 +40,7 @@ describe("planDesktopAutoImport", () => {
     });
 
     test("falls back to the operating system's photo folders when none are configured", () => {
-        const config: IDesktopConfig = { autoImportEnabled: true };
+        const config: IAppConfig = { autoImportEnabled: true };
 
         const plan = planDesktopAutoImport(config, ["/home/someone/Pictures", "/home/someone/Camera"], APP_DATA_PATH);
 
@@ -51,7 +51,7 @@ describe("planDesktopAutoImport", () => {
     });
 
     test("uses the configured places rather than the operating system's", () => {
-        const config: IDesktopConfig = {
+        const config: IAppConfig = {
             autoImportEnabled: true,
             autoImportSources: [{ type: "folder", path: "/mnt/photos", recurse: false }],
         };
@@ -80,7 +80,7 @@ describe("planDesktopAutoImport", () => {
     });
 
     test("uses the chosen default database when there is one", () => {
-        const config: IDesktopConfig = { autoImportEnabled: true, defaultDatabasePath: "/home/someone/my-photos" };
+        const config: IAppConfig = { autoImportEnabled: true, defaultDatabasePath: "/home/someone/my-photos" };
 
         const plan = planDesktopAutoImport(config, PHOTO_FOLDERS, APP_DATA_PATH);
 
@@ -89,7 +89,7 @@ describe("planDesktopAutoImport", () => {
     });
 
     test("an empty stored default counts as none chosen", () => {
-        const config: IDesktopConfig = { autoImportEnabled: true, defaultDatabasePath: "" };
+        const config: IAppConfig = { autoImportEnabled: true, defaultDatabasePath: "" };
 
         const plan = planDesktopAutoImport(config, PHOTO_FOLDERS, APP_DATA_PATH);
 

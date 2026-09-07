@@ -345,7 +345,7 @@ By default the app reads and writes your real config at `~/.config/photosphere`,
 
 | Variable | Controls | Default |
 |---|---|---|
-| `PHOTOSPHERE_CONFIG_DIR` | Config dir (`desktop.toml`, `databases.toml`) | `~/.config/photosphere` |
+| `PHOTOSPHERE_CONFIG_DIR` | Config dir (`config.yaml`, `databases.toml`) | `~/.config/photosphere` |
 | `PHOTOSPHERE_VAULT_DIR` | Secrets storage (plaintext mode only) | `~/.config/photosphere/vault` |
 | `PHOTOSPHERE_VAULT_TYPE` | Vault backend: `plaintext` or `keychain` | `keychain` |
 | `PHOTOSPHERE_LOG_DIR` | Log output | system temp |

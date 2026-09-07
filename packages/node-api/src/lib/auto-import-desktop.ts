@@ -1,6 +1,6 @@
 import * as path from "path";
 import { IAutoImportSettings, IAutoImportSource, IFolderAutoImportSource, normaliseAutoImportSettings } from "api";
-import { IDesktopConfig } from "./desktop-config";
+import { IAppConfig } from "./app-config";
 
 //
 // What the desktop app should do about automatic import, worked out from its config alone.
@@ -69,7 +69,7 @@ export function getDefaultDatabasePath(appDataPath: string): string {
 // looking like it was working, which is the worst of both.
 //
 export function planDesktopAutoImport(
-    config: IDesktopConfig,
+    config: IAppConfig,
     defaultPhotoFolders: string[],
     appDataPath: string
 ): IDesktopAutoImportPlan {

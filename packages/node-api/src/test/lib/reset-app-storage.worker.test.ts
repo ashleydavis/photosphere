@@ -71,7 +71,7 @@ describe("resetAppStorageHandler", () => {
         fsSync.mkdirSync(configDir, { recursive: true });
         fsSync.mkdirSync(cacheDir, { recursive: true });
         fsSync.writeFileSync(path.join(configDir, "databases.toml"), "databases = []");
-        fsSync.writeFileSync(path.join(configDir, "desktop.toml"), "theme = 'dark'");
+        fsSync.writeFileSync(path.join(configDir, "config.yaml"), "theme: dark\n");
         fsSync.writeFileSync(path.join(cacheDir, "hashes.dat"), "hashes");
         useDirectories(configDir, cacheDir);
 

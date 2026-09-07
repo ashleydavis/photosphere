@@ -30,8 +30,7 @@ import { resetAppStorageHandler } from "node-api/src/lib/reset-app-storage.worke
 import { syncDatabaseHandler } from "node-api/src/lib/sync-database.worker";
 import { listS3DirsHandler } from "node-api/src/lib/list-s3-dirs.worker";
 import { readDatabasesConfigHandler, writeDatabasesConfigHandler } from "node-api/src/lib/databases-config.worker";
-import { readAutoImportConfigHandler, writeAutoImportConfigHandler } from "node-api/src/lib/auto-import-config.worker";
-import { readSyncConfigHandler, writeSyncConfigHandler } from "node-api/src/lib/sync-config.worker";
+import { readConfigHandler, writeConfigHandler } from "node-api/src/lib/config.worker";
 import { planAutoImportHandler } from "./src/lib/plan-auto-import.worker";
 import { planSyncHandler } from "./src/lib/plan-sync.worker";
 import { recordDefaultDatabaseHandler } from "./src/lib/record-default-database.worker";
@@ -139,17 +138,13 @@ registerHandler("list-s3-dirs", listS3DirsHandler);
 registerHandler("read-databases-config", readDatabasesConfigHandler);
 registerHandler("write-databases-config", writeDatabasesConfigHandler);
 
-// Register the auto-import.toml handlers: the automatic import settings live in a file in the
-// storage sandbox rather than in the WebView's localStorage, because the background import runs
-// while the app is off screen and has to be able to read them.
-registerHandler("read-auto-import-config", readAutoImportConfigHandler);
-registerHandler("write-auto-import-config", writeAutoImportConfigHandler);
-
-// Register the sync.toml handlers, for the same reason: the two syncing settings live in a file in
-// the storage sandbox rather than in the WebView's config store, because the background sync loop
-// runs while the app is off screen and has to be able to read them.
-registerHandler("read-sync-config", readSyncConfigHandler);
-registerHandler("write-sync-config", writeSyncConfigHandler);
+// Register the config.yaml handlers: every setting the app remembers lives in a file in the storage
+// sandbox rather than in the WebView's localStorage or config store, because the background import
+// and the background sync run while the app is off screen and have to be able to read them. A write
+// sends only the section it is changing and the handler merges it, so the two features, which are
+// switched on separately, cannot overwrite each other now they share a file.
+registerHandler("read-config", readConfigHandler);
+registerHandler("write-config", writeConfigHandler);
 
 // Register the background import's two decisions. plan-auto-import says whether a pass should run,
 // what it imports into and what it watches; record-default-database records a database the pass has

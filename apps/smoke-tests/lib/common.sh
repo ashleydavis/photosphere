@@ -65,15 +65,11 @@ BUNDLE_ID="au.com.codecapers.photosphere"
 # packages/mobile-frontend/src/lib/mobile-databases-config-file.ts, which is what the app reads.
 DATABASES_CONFIG_FILE="databases.toml"
 
-# Name of the automatic import settings file inside the app's storage sandbox. Must match
-# AUTO_IMPORT_CONFIG_PATH in packages/api/src/lib/mobile-config-paths.ts, which is what the app and
-# the background import both read.
-AUTO_IMPORT_CONFIG_FILE="auto-import.toml"
-
-# Name of the syncing settings file inside the app's storage sandbox. Must match SYNC_CONFIG_PATH in
-# packages/api/src/lib/mobile-config-paths.ts, which is what the app and the background sync both
-# read.
-SYNC_CONFIG_FILE="sync.toml"
+# Name of the settings file inside the app's storage sandbox, holding the automatic import settings,
+# the syncing settings and the pacing of both background loops. Must match CONFIG_PATH in
+# packages/api/src/lib/mobile-config-paths.ts, which is what the app, the background import and the
+# background sync all read.
+CONFIG_FILE="config.yaml"
 
 # Where the Android app's secrets live, relative to its data directory. Must match PREFS_FILE_NAME in
 # apps/android-frontend/.../jsengine/SecureStore.java. A test that adds a secret to a real phone saves

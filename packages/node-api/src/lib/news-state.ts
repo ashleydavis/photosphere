@@ -1,13 +1,18 @@
-import * as path from "path";
-import { readFile, writeFile, mkdir } from "fs/promises";
-import yaml from "js-yaml";
-import { getConfigDir } from "node-utils";
+import { log } from "utils";
+import { loadConfigFile, updateConfigFile } from "./config-file";
+import type { INewsConfig } from "./config-format";
 
 //
-// Per-install state for the notification system. Stored as YAML at
-// $PHOTOSPHERE_CONFIG_DIR/news.yaml (defaults to ~/.config/photosphere/news.yaml)
-// and shared between the desktop app and the CLI on the same machine, so a news
-// item or update version surfaced on one surface is suppressed on the other.
+// Per-install state for the notification system, held in the `news` section of config.yaml
+// ($PHOTOSPHERE_CONFIG_DIR/config.yaml, defaulting to ~/.config/photosphere/config.yaml) and shared
+// between the desktop app and the CLI on the same machine, so a news item or update version surfaced
+// on one surface is suppressed on the other.
+//
+// This is state rather than a setting, and it sits in the config file anyway so that the config
+// directory holds one settings file rather than two.
+//
+// Not to be confused with the news.yaml in the root of the Photosphere repository, which is the
+// published feed fetched over the network and has nothing to do with this.
 //
 export interface INewsState {
     //
@@ -25,72 +30,45 @@ export interface INewsState {
 }
 
 //
-// On-disk YAML shape (snake_case keys, plain primitives only).
+// Loads the news state. Returns an empty state when the config file is missing, empty, or malformed.
+// The user must never be blocked by news-state failures.
 //
-interface IYamlNewsState {
-    // Stable news item ids already shown on this install.
-    shown_news_ids?: string[];
-
-    // Latest update version that has already been announced to the user.
-    last_shown_update_version?: string;
-}
-
-const CONFIG_DIR = getConfigDir();
-const STATE_FILE = path.join(CONFIG_DIR, "news.yaml");
-
-//
-// Returns the absolute path of the news state file. Useful for tests and demo scripts.
-//
-export function getNewsStatePath(): string {
-    return STATE_FILE;
-}
-
-//
-// Loads the news state from disk. Returns an empty state when the file is missing,
-// empty, or malformed. The user must never be blocked by news-state failures.
+// A file that cannot be read is reported rather than swallowed: it means something else has written
+// a broken config, and the notifications going quiet is the only symptom anyone would otherwise see.
 //
 export async function loadNewsState(): Promise<INewsState> {
-    let raw: string;
+    let news: INewsConfig;
     try {
-        raw = await readFile(STATE_FILE, "utf-8");
+        news = (await loadConfigFile()).news;
     }
     catch (error) {
-        return { shownNewsIds: [] };
-    }
-
-    let parsed: IYamlNewsState | null | undefined;
-    try {
-        parsed = yaml.load(raw) as IYamlNewsState | null | undefined;
-    }
-    catch (error) {
-        return { shownNewsIds: [] };
-    }
-
-    if (!parsed || typeof parsed !== "object") {
+        log.error(`The news state could not be read, carrying on with an empty one: ${error}`);
         return { shownNewsIds: [] };
     }
 
     const state: INewsState = {
-        shownNewsIds: Array.isArray(parsed.shown_news_ids) ? parsed.shown_news_ids.slice() : [],
+        shownNewsIds: news.shownNewsIds.slice(),
     };
-    if (typeof parsed.last_shown_update_version === "string" && parsed.last_shown_update_version.length > 0) {
-        state.lastShownUpdateVersion = parsed.last_shown_update_version;
+    if (news.lastShownUpdateVersion !== undefined) {
+        state.lastShownUpdateVersion = news.lastShownUpdateVersion;
     }
     return state;
 }
 
 //
-// Saves the news state to disk, creating the config directory if needed.
+// Saves the news state into the `news` section of the config file, leaving every other section
+// exactly as it is. It goes through updateConfigFile rather than a load-then-save so a setting changed
+// between this read and this write is not discarded.
 //
 export async function saveNewsState(state: INewsState): Promise<void> {
-    const yamlShape: IYamlNewsState = {
-        shown_news_ids: state.shownNewsIds,
-    };
-    if (state.lastShownUpdateVersion !== undefined) {
-        yamlShape.last_shown_update_version = state.lastShownUpdateVersion;
-    }
-    await mkdir(CONFIG_DIR, { recursive: true });
-    await writeFile(STATE_FILE, yaml.dump(yamlShape), "utf-8");
+    await updateConfigFile(config => {
+        config.news = {
+            shownNewsIds: state.shownNewsIds,
+        };
+        if (state.lastShownUpdateVersion !== undefined) {
+            config.news.lastShownUpdateVersion = state.lastShownUpdateVersion;
+        }
+    });
 }
 
 //
@@ -109,18 +87,19 @@ export async function addShownNewsIds(ids: string[]): Promise<void> {
     if (ids.length === 0) {
         return;
     }
-    const state = await loadNewsState();
-    const existing = state.shownNewsIds;
-    const seen = new Set<string>(existing);
-    const merged: string[] = existing.slice();
-    for (const id of ids) {
-        if (!seen.has(id)) {
-            seen.add(id);
-            merged.push(id);
+
+    await updateConfigFile(config => {
+        const existing = config.news.shownNewsIds;
+        const seen = new Set<string>(existing);
+        const merged: string[] = existing.slice();
+        for (const id of ids) {
+            if (!seen.has(id)) {
+                seen.add(id);
+                merged.push(id);
+            }
         }
-    }
-    state.shownNewsIds = merged;
-    await saveNewsState(state);
+        config.news.shownNewsIds = merged;
+    });
 }
 
 //
@@ -139,7 +118,7 @@ export async function getLastShownUpdateVersion(): Promise<string | undefined> {
 // overwrite this field.
 //
 export async function setLastShownUpdateVersion(version: string): Promise<void> {
-    const state = await loadNewsState();
-    state.lastShownUpdateVersion = version;
-    await saveNewsState(state);
+    await updateConfigFile(config => {
+        config.news.lastShownUpdateVersion = version;
+    });
 }

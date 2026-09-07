@@ -49,7 +49,7 @@ SECRET_NAME="background-sync-smoke-test-s3"
 #
 # Named for the test rather than "photosphere-default", so a run against a real phone never touches
 # the database that phone actually backs up to. Which database the background sync pushes is whatever
-# auto-import.toml names, and this test names this one for as long as it runs.
+# config.yaml names, and this test names this one for as long as it runs.
 DB_NAME="background-sync-test-db"
 
 # True when this run is against a real phone rather than an emulator. Two things depend on it: the
@@ -218,8 +218,7 @@ on_exit() {
     # say which database its photos are backed up to, and leaving this test's in place would have it
     # backing up into a test database.
     if [ "$CAN_WIPE_APP_DATA" -ne 1 ]; then
-        android_restore_sandbox_file "$AUTO_IMPORT_CONFIG_FILE" "$SAVED_SETTINGS_DIR/$AUTO_IMPORT_CONFIG_FILE"
-        android_restore_sandbox_file "$SYNC_CONFIG_FILE" "$SAVED_SETTINGS_DIR/$SYNC_CONFIG_FILE"
+        android_restore_sandbox_file "$CONFIG_FILE" "$SAVED_SETTINGS_DIR/$CONFIG_FILE"
         android_restore_sandbox_file "$DATABASES_CONFIG_FILE" "$SAVED_SETTINGS_DIR/$DATABASES_CONFIG_FILE"
 
         # The keychain goes back as it was, which takes the S3 credentials this test added with it.
@@ -308,8 +307,7 @@ if [ "$CAN_WIPE_APP_DATA" -eq 1 ]; then
 else
     log_info "Running against a real device: borrowing its settings rather than wiping its data"
     mkdir -p "$SAVED_SETTINGS_DIR"
-    android_save_sandbox_file "$AUTO_IMPORT_CONFIG_FILE" "$SAVED_SETTINGS_DIR/$AUTO_IMPORT_CONFIG_FILE"
-    android_save_sandbox_file "$SYNC_CONFIG_FILE" "$SAVED_SETTINGS_DIR/$SYNC_CONFIG_FILE"
+    android_save_sandbox_file "$CONFIG_FILE" "$SAVED_SETTINGS_DIR/$CONFIG_FILE"
     android_save_sandbox_file "$DATABASES_CONFIG_FILE" "$SAVED_SETTINGS_DIR/$DATABASES_CONFIG_FILE"
     android_save_app_data_file "$SECURE_STORE_FILE" "$SAVED_SETTINGS_DIR/secure-store.xml"
 

@@ -10,15 +10,15 @@ import { SYNC_ENABLED_CONFIG_KEY, SYNC_ONLY_ON_WIFI_CONFIG_KEY } from "user-inte
 //
 // Client-side reading and writing of the mobile syncing settings.
 //
-// These live in sync.toml in the app's storage sandbox, beside databases.toml and auto-import.toml.
+// These live in the sync section of config.yaml in the app's storage sandbox, beside databases.toml.
 // They used to live in the WebView's config store, which nothing outside the WebView can read: the
 // background sync loop, which runs while the app is off screen, had no way to find out whether
 // syncing was switched on or whether it was restricted to Wi-Fi.
 //
 // The WebView cannot open a file, so the read and the write are handed to an ISyncConfigFile, which
-// the platform provider implements with the embedded worker's read-sync-config / write-sync-config
-// tasks. Keeping that behind an interface is what makes this module unit-testable without a device,
-// the same arrangement mobile-auto-import-file.ts uses for auto-import.toml.
+// the platform provider implements with the embedded worker's read-config / write-config tasks.
+// Keeping that behind an interface is what makes this module unit-testable without a device,
+// the same arrangement mobile-auto-import-file.ts uses for the automatic import section.
 //
 // The settings card knows nothing about any of this: it reads and writes the same two config keys on
 // every platform, and on mobile the platform provider routes those keys here instead of to local
@@ -26,7 +26,7 @@ import { SYNC_ENABLED_CONFIG_KEY, SYNC_ONLY_ON_WIFI_CONFIG_KEY } from "user-inte
 //
 
 //
-// What sync.toml holds, and whether it was there at all.
+// What the syncing section of config.yaml holds, and whether the file was there at all.
 //
 export interface ISyncFileContents {
     // The settings, already filled from the defaults by the reader.
@@ -38,13 +38,19 @@ export interface ISyncFileContents {
     // The gap between background sync passes, in milliseconds.
     pauseBetweenRunsMs: number;
 
-    // Whether the file exists. False means nobody has written it yet, which is a different thing
-    // from syncing having been switched off, even though both read as switched off.
+    // Whether the syncing settings have ever been written. False means nobody has chosen them yet,
+    // which is a different thing from syncing having been switched off, even though both read as
+    // switched off.
+    //
+    // It is the settings rather than the file: one file holds every feature's settings, so the file
+    // exists as soon as automatic import has written its own section, and answering for the file
+    // would tell a fresh install that syncing had already been decided.
     exists: boolean;
 }
 
 //
-// Reads and writes sync.toml. Implemented by the platform provider over the embedded worker, and by
+// Reads and writes the syncing section of config.yaml. Implemented by the platform provider over the
+// embedded worker, and by
 // an in-memory double in tests.
 //
 export interface ISyncConfigFile {

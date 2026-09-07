@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { parse as tomlParse, stringify as tomlStringify } from 'smol-toml';
+import yaml from 'js-yaml';
 
 //
 // Sleeps for the given number of milliseconds. Kept local rather than imported from the `utils`
@@ -186,6 +187,65 @@ export async function readToml<T = any>(filePath: string): Promise<T> {
 export async function writeToml(filePath: string, object: Record<string, any>): Promise<void> {
     const tomlString = tomlStringify(object);
     await outputFile(filePath, tomlString, { encoding: 'utf8' });
+}
+
+//
+// Reads a YAML file and parses it, or returns undefined when the file does not exist.
+//
+// Absence is not an error here, unlike readToml, because the one YAML file the app keeps is its
+// configuration and that file does not exist until something writes it. Every caller would otherwise
+// have to check for the file first, and a check followed by a read is two steps a concurrent writer
+// can arrive between.
+//
+// An empty file parses to undefined rather than to an object, which is what js-yaml returns for a
+// document with nothing in it.
+//
+export async function readYaml<T = any>(filePath: string): Promise<T | undefined> {
+    let data: string;
+    try {
+        data = await fs.readFile(filePath, { encoding: 'utf8' });
+    }
+    catch (error: any) {
+        if (error.code === 'ENOENT') {
+            return undefined;
+        }
+        throw error;
+    }
+
+    const parsed = yaml.load(data) as T | null | undefined;
+    if (parsed === null || parsed === undefined) {
+        return undefined;
+    }
+    return parsed;
+}
+
+//
+// Writes an object to a YAML file, creating parent directories as needed.
+//
+// It goes through outputFile, so the bytes land in a temporary file that is then renamed over the
+// target. That is what stops a crash part way through a write leaving half a config behind, and on
+// Windows it is what retries the rename the operating system refuses while a reader or a virus
+// scanner still holds the target open.
+//
+export async function writeYaml(filePath: string, object: Record<string, any>): Promise<void> {
+    const yamlString = yaml.dump(object);
+    await outputFile(filePath, yamlString, { encoding: 'utf8' });
+}
+
+//
+// Updates a YAML file as an optimistic read-modify-write. Same semantics as updateToml: it reads the
+// current parsed contents (or `fallback` when the file does not exist yet), passes them to `mutator`,
+// and writes the returned value back atomically, reloading and re-applying if another writer got
+// there first, up to `retries` times before throwing.
+//
+export async function updateYaml<ContentType extends Record<string, any>>(filePath: string, fallback: ContentType, mutator: (current: ContentType) => ContentType, retries: number = 3): Promise<void> {
+    await updateFileOptimistic(filePath, fallback, mutator, raw => {
+        const parsed = yaml.load(raw) as ContentType | null | undefined;
+        if (parsed === null || parsed === undefined) {
+            return fallback;
+        }
+        return parsed;
+    }, value => yaml.dump(value), retries);
 }
 
 //
@@ -512,8 +572,7 @@ export function getProcessTmpDir(): string {
 }
 
 //
-// Returns the directory Photosphere keeps its settings in: the databases list, the desktop config,
-// the news state.
+// Returns the directory Photosphere keeps its settings in: config.yaml and the databases list.
 //
 // The same Unix-style path on every desktop platform, Windows included, so one support answer covers
 // every machine. PHOTOSPHERE_CONFIG_DIR overrides it, which is how a test run stays off the

@@ -1,6 +1,6 @@
 import { dialog, BrowserWindow } from 'electron';
 import { join, dirname } from 'path';
-import { loadDesktopConfig, getFolderPath, updateFolderPath, updateLastDownloadFolder } from 'node-api';
+import { loadAppConfig, getFolderPath, updateFolderPath, updateLastDownloadFolder } from 'node-api';
 
 //
 // Options for the native folder picker dialog.
@@ -10,7 +10,7 @@ export interface IPickFolderOptions {
     title?: string;
 
     // Config key to read the default path from and persist the chosen path back to.
-    // Maps directly to a key in IDesktopConfig ('lastFolder' is the existing default).
+    // Maps directly to a key in IAppConfig ('lastFolder' is the existing default).
     folderKey?: string;
 
     // Whether to show the "New Folder" button.
@@ -77,7 +77,7 @@ export async function pickFile(mainWindow: BrowserWindow | null, defaultFilename
         return process.env.PHOTOSPHERE_TEST_PICK_FILE_PATH;
     }
 
-    const config = await loadDesktopConfig();
+    const config = await loadAppConfig();
     const defaultPath = config.lastDownloadFolder
         ? join(config.lastDownloadFolder, defaultFilename)
         : defaultFilename;

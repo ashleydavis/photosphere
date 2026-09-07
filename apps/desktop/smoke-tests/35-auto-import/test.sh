@@ -17,7 +17,7 @@ REPO_DIR="$(cd "$DESKTOP_DIR/../.." && native_pwd)"
 
 print_test_header 35 "auto-import"
 
-CONFIG_TOML="$TMP_DIR/config/desktop.toml"
+CONFIG_YAML="$TMP_DIR/config/config.yaml"
 WATCH_DIR="$TMP_DIR/watched-photos"
 DEFAULT_DB_DIR="$TMP_DIR/electron-user-data/photosphere-default"
 
@@ -27,20 +27,39 @@ cleanup() {
 trap cleanup EXIT
 
 #
-# Polls a TOML file until it contains a line matching the given extended-regex pattern.
+# Prints the indented body of one top-level section of a YAML config file.
 #
-wait_for_toml() {
+# The settings are grouped by feature now, and `enabled` appears under both `auto_import` and `sync`,
+# so a match against the whole file cannot say which feature it found.
+#
+# The range runs from the section's own line to the next line starting in column one, with both
+# delimiters dropped, so what is left is the section's keys.
+# Usage: config_section <file> <section-name>
+#
+config_section() {
     local file="$1"
-    local pattern="$2"
+    local section="$2"
+    sed -n "/^${section}:/,/^[^[:space:]]/{ /^${section}:/d; /^[^[:space:]]/d; p; }" "$file"
+}
+
+#
+# Polls one section of the config file until it contains a line matching the given extended-regex
+# pattern.
+# Usage: wait_for_config <file> <section-name> <ere-pattern>
+#
+wait_for_config() {
+    local file="$1"
+    local section="$2"
+    local pattern="$3"
     local elapsed=0
     while [ "$elapsed" -lt 30 ]; do
-        if [ -f "$file" ] && grep -Eq "$pattern" "$file"; then
+        if [ -f "$file" ] && config_section "$file" "$section" | grep -Eq "$pattern"; then
             return 0
         fi
         sleep 1
         elapsed=$((elapsed + 1))
     done
-    log_error "Timed out waiting for pattern '$pattern' in $file"
+    log_error "Timed out waiting for pattern '$pattern' in the $section section of $file"
     [ -f "$file" ] && cat "$file"
     exit 1
 }
@@ -105,12 +124,13 @@ mkdir -p "$WATCH_DIR"
 # The folder to watch is written before the app starts, so switching automatic import on has
 # somewhere to look that this test controls rather than the machine's own photo folders.
 mkdir -p "$TMP_DIR/config"
-cat > "$CONFIG_TOML" <<TOMLEOF
-[[auto_import_sources]]
-type = "folder"
-path = "$WATCH_DIR"
-recurse = true
-TOMLEOF
+cat > "$CONFIG_YAML" <<YAMLEOF
+auto_import:
+  sources:
+    - type: folder
+      path: "$WATCH_DIR"
+      recurse: true
+YAMLEOF
 
 # The default photo database goes under Electron's user data directory, which none of the
 # PHOTOSPHERE_* variables cover. Redirected here so this test writes inside its own directory rather
@@ -135,8 +155,8 @@ wait_for_log "$TMP_DIR" "Creating the default photo database"
 wait_for_log "$TMP_DIR" "Starting automatic import into"
 wait_for_log "$TMP_DIR" "Automatic import enabled"
 
-wait_for_toml "$CONFIG_TOML" "auto_import_enabled[[:space:]]*=[[:space:]]*true"
-wait_for_toml "$CONFIG_TOML" "default_database_path"
+wait_for_config "$CONFIG_YAML" "auto_import" "^[[:space:]]+enabled:[[:space:]]*true"
+wait_for_config "$CONFIG_YAML" "auto_import" "default_database_path"
 
 if [ ! -f "$DEFAULT_DB_DIR/.db/files.dat" ]; then
     log_error "The default database was not created at $DEFAULT_DB_DIR"

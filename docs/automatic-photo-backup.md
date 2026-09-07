@@ -1,6 +1,6 @@
 # Automatic photo backup
 
-Photosphere can take photos in from where they arrive, on its own, and push them to a remote copy. This describes the engine that does it, the command that drives it today, and what each platform can and cannot do.
+Photosphere can take photos in from where they arrive, on its own, and push them to a remote copy. This describes the engine that does it, the command that drives it, and what each platform does.
 
 ## What it does
 
@@ -12,7 +12,7 @@ Point Photosphere at one or more places where photos turn up and it will:
 - optionally delete the source file once the photo is confirmed in the local database;
 - optionally drop local originals the remote already holds, so the local database can stay small.
 
-Nothing about the file handling is new. Automatic import is the same `import-assets` task a manual import runs, fed by a scanner that reads the configured sources instead of a fixed list of paths, so deduplication by content hash, the write lock, derivative generation and the hash cache all behave exactly as they do for a manual `psi add`. There used to be a second task that decided what to import and started an `import-assets` for every handful it released, which paid for the scan, the write lock and the hash cache per handful.
+Automatic import is the same `import-assets` task a manual import runs, fed by a scanner that reads the configured sources rather than a fixed list of paths. Deduplication by content hash, the write lock, derivative generation and the hash cache all behave exactly as they do for a manual `psi add`. One task covers a whole pass, so the scan, the write lock and the hash cache are paid for once per pass rather than once per handful of photos.
 
 ## How it avoids re-importing what it has already imported
 
@@ -80,7 +80,7 @@ With `--watch` it runs the same import over and over, five seconds apart, until 
 
 A run reads its sources from the first page of the listing to the last, imports what is new, and ends. The app starts another a short while later: about thirty seconds on the desktop and on mobile, five on the CLI's `psi add --watch`. Nothing is left watching a filesystem or a photo library in between.
 
-That is a deliberate reversal of what this used to do. The old engine held filesystem watchers, polled every source every thirty seconds, and re-walked the whole listing whenever any of them reported a change, all inside a task that never ended. The watchers were worth little: recursive directory watching is not available on Linux at all and is not dependable across network and removable filesystems anywhere, so the poll was doing the real work everywhere, and on a phone there was no change notification to hook at all. What is left is the part that was doing the work.
+Passes rather than filesystem watchers, because a watcher cannot carry the job on any platform this runs on. Recursive directory watching is unavailable on Linux and undependable across network and removable filesystems everywhere else, and a phone's photo library offers no change notification to hook at all. A poll has to do the real work regardless, so a pass is the whole mechanism.
 
 The cost of a pass is a listing plus one hash cache lookup per item, because a photo already imported is recognised before it is opened. That is what makes running it over and over cheap, and it is why nothing needs to remember where the last pass got to: every run starts at the beginning.
 
@@ -88,13 +88,13 @@ The consequence to know about is latency. A photo that arrives is imported by th
 
 ## Nothing is paced
 
-Items are imported as fast as the machine manages. There used to be a rate limit, 60 items a minute by default, on the reasoning that backfilling years of photos would otherwise make the machine unusable. It was removed: nothing had ever measured the machine being made unusable, and the limit was the only thing setting the length of a full import. Measured on a Pixel 6 against a real library of 2,291 items, a full import took 45 minutes with it and 40 without.
+Items are imported as fast as the machine manages, with no rate limit. Pacing is what sets the length of a first backup, and the difference is measurable: on a Pixel 6 against a real library of 2,291 items, a full import takes 40 minutes unpaced and 45 minutes at 60 items a minute. Nothing has measured the unpaced import making a machine unusable, which is the only thing that would buy back those five minutes.
 
 A run that is cancelled part way, by the app quitting or the setting being switched off, simply stops. Nothing is written down about where it had reached: the next run starts at the beginning of the listing again and the hash cache is what stops it re-importing anything.
 
 ## Deleting the source file
 
-Deleting the source is its own operation rather than something the import does as it goes. On a phone every deletion raises a system confirmation, so doing it during the import asked the user once per handful of photos; done separately it asks once, at a moment they chose.
+Deleting the source is its own operation rather than something the import does as it goes. On a phone every deletion raises a system confirmation, so doing it during an import asks the user once per handful of photos. Done separately it asks once, at a moment they chose.
 
 It answers its own question. For each item the device still holds it asks the hash cache what that photo hashes to, and the database whether it holds that hash. Nothing is deleted because an import reported success: the database saying it holds the content is the only thing that counts. A photo imported on another device and synced in is left alone, because this device never hashed it and finding out would mean copying and hashing the whole library.
 
@@ -156,13 +156,13 @@ It is a local file, `imports.dat`, in the same per-database cache directory the 
 
 **It never travels**, and no arrangement is needed to keep it from travelling. It is not in the database, so sync, replication and consolidation cannot carry it: they copy what the merkle tree indexes, and the tree indexes the database. It is this machine's account of what it did, not part of the photo collection, and a record that travelled would show one machine's imports as another's. `87-import-record` proves no `imports.dat` appears anywhere inside the database directory after any of the three.
 
-Keeping it here is what makes it true. It used to sit inside the database at `.db/imports.dat`, where a database on shared storage and every S3 database is opened by more than one machine, and each did a full read-modify-write of that one file with no lock and no merge, so the last writer erased what the others had recorded. The file went on presenting itself as a complete account of what this machine imported while holding whatever the most recent machine happened to write. On the machine it belongs to, two writers into the same database (the CLI and the desktop app at once, say) merge instead: the update runs under a lock beside the file and is re-run if the file moved underneath it.
+Keeping it beside the cache is what makes that true. A database on shared storage, and every S3 database, is opened by more than one machine. A record inside one would be read-modify-written by all of them with no lock and no merge, so the last writer would erase what the others recorded while the file went on presenting itself as a complete account. Here the only writers are on the machine the record belongs to, and two of them into the same database (the CLI and the desktop app at once, say) merge: the update runs under a lock beside the file and is re-run if the file moved underneath it.
 
 Being a local file also means a flush costs a local read and write rather than, on an S3 database, a GET and a PUT of the whole record, and on an encrypted database a decrypt and encrypt of the whole record. It is written once every `IMPORT_RECORD_FLUSH_SIZE` photos.
 
 It is plaintext, including for an encrypted database, exactly as the hash cache beside it already is. The hash cache holds this machine's source file paths, content hashes and asset ids for that database in plaintext; the record holds paths, outcomes and a micro thumbnail per entry. The photos it names were on this machine in the clear when they were imported, so the record exposes nothing that machine did not already hold. What encryption protects is the database, which is what leaves the machine.
 
-There is no migration from the old location, because no database has a record written there. Nothing reads it and nothing deletes it: a machine's record starts empty and fills from its next import.
+A machine's record starts empty and fills from its next import.
 
 Losing it costs nothing but the history: an unreadable record reads as empty, and a record that cannot be written does not fail the import, because by then the photos are already in the database. Clearing the machine's caches loses it, which is a real cost the hash cache does not have: the hash cache can be recomputed from the files and this cannot. It is kept here anyway, because a per-database directory the operating system already knows how to reap is worth more than a history of imports nobody has asked to keep forever.
 
@@ -182,15 +182,15 @@ On the desktop the settings live on the configuration dialog and the settings pa
 
 On mobile the same thing happens and the user does the same thing: switch the toggle on, and the app makes its private database, asks for the photo permission, walks the device photo library and imports what it finds, including photos taken while it is running. It runs the same `import-assets` task the CLI and the desktop run, reading the photo library through the same host bridge the rest of the worker code uses. The only difference is which media source is registered underneath.
 
-The `import-assets` task holds an engine slot for as long as the run lasts, and the `hash-file` and `upload-asset` tasks it queues hold more. On a phone that chain has to fit inside `EnginePool.POOL_SIZE`. It used to be worse: a separate `auto-import` task sat in a slot of its own for as long as the setting was on, and started an `import-assets` in a second slot, which is what deadlocked the pool at three, silently, with the setting on, the task running and the counts at zero forever. That task is gone and the run now ends, but the pool is still sized for the chain that remains. See [Mobile background tasks](mobile-background-tasks.md) before changing anything about that.
+The `import-assets` task holds an engine slot for as long as the run lasts, and the `hash-file` and `upload-asset` tasks it queues hold more. On a phone that whole chain has to fit inside `EnginePool.POOL_SIZE`, which is sized for it with room to spare. Shrinking the pool deadlocks automatic import, and the failure is silent: the setting stays on, the task stays running, and the counts stay at zero. See [Mobile background tasks](mobile-background-tasks.md) before changing anything about that.
 
 ## While the app is not on screen
 
-The loop that starts one pass after another lives on the native side of the mobile apps, not in the WebView. It used to be a `setInterval` in the WebView, and that is exactly why automatic import stopped the moment the app was backgrounded: the operating system throttles and then stops a WebView's timers, and photos taken after that were backed up only when the app was next opened, with nothing anywhere saying so. Nothing in the WebView queues an import on any platform now.
+The loop that starts one pass after another lives on the native side of the mobile apps, not in the WebView. The operating system throttles and then stops a WebView's timers once the app is backgrounded, so a loop kept there imports nothing until the app is next opened, and says so nowhere. Nothing in the WebView queues an import on any platform.
 
 Syncing works the same way and for the same reason, in a loop of its own beside this one, so a photo imported while the app is off screen reaches the remote without the app being opened. [Syncing](syncing.md) describes that half: what it costs to ask whether there is anything to push, the two settings and where they live, and what the two loops contend on when their passes overlap.
 
-The settings moved for the same reason. They used to be in the WebView's `localStorage`, which nothing outside the WebView can read, so a service that woke up had no way to find out whether automatic import was switched on or what it should be reading. They live in `auto-import.toml` in the app's storage sandbox, beside `databases.toml`.
+The settings live in the `auto_import` section of `config.yaml`, in the app's storage sandbox beside `databases.toml`. A file there is readable by anything that runs while the app is off screen, which is what lets a service that has just woken find out whether automatic import is switched on and what it should be reading. The [configuration file](https://github.com/ashleydavis/photosphere/wiki/Configuration-File) page in the wiki has the keys and their defaults.
 
 The native side does not parse that file. It asks the `plan-auto-import` worker task, which reads the settings, decides whether a pass should run, and hands back the tasks the pass consists of, already built: `create-database` and `record-default-database` the first time, and `import-assets` every time. Native code forwards each one to the engine pool unchanged and never assembles a payload of its own, so what a pass does is decided once, in TypeScript, and cannot drift between the two platforms.
 
@@ -213,7 +213,7 @@ An import pass and a sync pass do overlap, and have to. A first backup of a whol
 
 All of it is opt-in and stays opt-in. Until the user switches automatic import on there is no service, no background task request, no wake lock, no notification and no permission prompt, and switching it off takes all of them away again: the Android service stops and its notification goes with it, and the iOS background request is withdrawn.
 
-One more thing had to change for any of this to work: the engine pool used to be torn down when the WebView was destroyed, which is precisely when the service needs it. It is now torn down by whichever of the two goes last.
+The engine pool is torn down by whichever of the WebView and the service goes last. The service needs the pool at exactly the moment the WebView is destroyed, so tying the pool's life to the WebView alone takes it away mid-pass.
 
 ## Tests
 
@@ -224,7 +224,7 @@ Unit tests sit beside the code under `src/test/`. The end-to-end behaviour is co
 | `81-watch-once` (`psi add`) | A pass imports what is there, and a second pass imports nothing twice. |
 | `82-watch-continuous` (`psi add --watch`) | A file created while the command is running is imported, and Ctrl-C stops it. |
 | `83-watch-cleanup` | A source file the database holds is deleted and one that failed to import is not. |
-| `84-watch-sync-evict` | Imports reach the origin once `psi sync` pushes them, and the local originals stay. Eviction is no longer something the CLI can turn on, so it is covered by its unit tests rather than here. |
+| `84-watch-sync-evict` | Imports reach the origin once `psi sync` pushes them, and the local originals stay. Eviction is an app setting rather than a CLI flag, so it is covered by its unit tests rather than here. |
 | `85-consolidate` | Creating a remote, consolidating into an unrelated one without duplicating shared content, and sync working afterwards where it refused before. |
 | `86-multi-device` | Two databases connected to one remote each end up with the other's photos. |
 | `87-import-record` | What a database imported is remembered across restarts, manual and automatic imports are badged apart, the record is written outside the database in this machine's cache directory, two databases on one machine each get their own, and no `imports.dat` appears inside a database directory after sync, consolidation or replication. |
@@ -248,8 +248,8 @@ Those are Android only. The iOS simulator has no supported way to remove a seede
 
 Test 47 is the one that caught the engine-pool deadlock, and the one that would catch it again. It waits for the photo to arrive rather than for the task to start, because a deadlocked import looks exactly like a working one from outside: the setting is on, the task is running, and the counts sit at zero forever.
 
-Writing those two found three further defects that nothing else had:
+Three things those two tests hold in place:
 
-- The photo permission request never delivered its answer. It went straight to `ActivityCompat.requestPermissions`, whose result reaches the Activity, and Capacitor only forwards a result to the plugin it believes made the request, so a request it never saw was answered into nothing and the call waited forever. It now asks through Capacitor's own permission API, under an alias declared on the plugin.
-- An automatically imported photo appeared in the gallery twice, because the import task announced it as `import-success` and the automatic import loop announced it as `auto-import-item`, and the gallery appended both. The two messages have since been merged into one `import-success` that both kinds of import send, so there is nothing left to announce twice. The list still refuses an asset it already holds, which covers a photo taken in before the database has finished loading.
-- An arrival landed in whatever gallery was open, not the database it went into. Automatic import writes to the default database, which is not necessarily the one on screen. Every arrival now names its database and the gallery ignores the ones that are not its own.
+- **The photo permission is requested through Capacitor's own permission API**, under an alias declared on the plugin. A result from `ActivityCompat.requestPermissions` reaches the Activity, and Capacitor forwards a result only to the plugin it believes made the request, so a request made directly is answered into nothing and the call waits forever.
+- **One `import-success` message announces an imported photo**, whichever kind of import made it. A second message for the same photo puts it in the gallery twice. The list also refuses an asset it already holds, which covers a photo taken in before the database has finished loading.
+- **Every arrival names its database, and the gallery ignores the ones that are not its own.** Automatic import writes to the default database, which is not necessarily the one on screen.

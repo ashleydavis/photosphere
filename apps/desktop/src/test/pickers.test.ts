@@ -9,14 +9,14 @@ jest.mock('electron', () => ({
     },
 }));
 
-// Mock node-api so the tests don't touch the real desktop config file.
+// Mock node-api so the tests do not touch the real config file.
 const mockLoadDesktopConfig = jest.fn();
 const mockGetFolderPath = jest.fn();
 const mockUpdateFolderPath = jest.fn();
 const mockUpdateLastDownloadFolder = jest.fn();
 
 jest.mock('node-api', () => ({
-    loadDesktopConfig: mockLoadDesktopConfig,
+    loadAppConfig: mockLoadDesktopConfig,
     getFolderPath: mockGetFolderPath,
     updateFolderPath: mockUpdateFolderPath,
     updateLastDownloadFolder: mockUpdateLastDownloadFolder,

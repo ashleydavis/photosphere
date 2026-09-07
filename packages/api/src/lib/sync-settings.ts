@@ -77,11 +77,9 @@ export function normaliseSyncSettings(stored: IRawSyncSettings | undefined): ISy
 }
 
 //
-// Everything the mobile sync settings file holds.
+// Everything the syncing section of the config file holds.
 //
-// The settings themselves and the pacing of the background loop. The database that is synced is not
-// here: it is the one automatic import writes to, recorded in auto-import.toml, and a fact recorded
-// in two files is a fact that goes out of step.
+// The settings themselves, the database the background loop pushes, and the pacing of that loop.
 //
 export interface ISyncFile {
     // The settings automatic syncing runs with.

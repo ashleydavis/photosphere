@@ -19,7 +19,7 @@ interface IGitHubReleaseResponse {
 //
 // Checks GitHub for the latest Photosphere release and returns the version string
 // (without leading "v") when it differs from the running version AND has not
-// already been notified to the user (per news.yaml's last_shown_update_version).
+// already been notified to the user (per the config file's news.last_shown_update_version).
 // Returns undefined when the running version is current, when it is a non-release
 // build ("dev" or nightly), when the user has already been notified about this
 // version, or when the network/parse step fails.

@@ -157,7 +157,7 @@ function __Main({ initialTheme }: IMainProps) {
                 action = undefined;
             }
 
-            // News toasts carry a newsId so we can persist "seen" state in news.yaml
+            // News toasts carry a newsId so we can persist "seen" state in the config file
             // only when the user clicks the close button (via markNewsAsShown). Other
             // toasts (sync results, generic notifications) have no newsId and need no
             // dismissal callback.

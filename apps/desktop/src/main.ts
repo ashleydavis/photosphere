@@ -10,10 +10,10 @@ import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log, noLogDetails } from 'utils';
 import { loadDatabaseConfig, updateDatabaseConfig } from 'api';
 import type { IReplicateDatabaseData, ISyncDatabaseData } from 'api';
-import { loadDesktopConfig, updateDesktopConfig, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion } from 'node-api';
+import { loadAppConfig, updateAppConfig, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion } from 'node-api';
 import { checkDatabaseExists, planDesktopAutoImport, AUTO_IMPORT_TASK_SOURCE, DEFAULT_DATABASE_DISPLAY_NAME, getLastDatabase, setLastDatabase } from 'node-api';
 import { getDefaultPhotoFolders } from 'node-utils';
-import type { IDatabaseEntry, IDesktopConfig } from 'node-api';
+import type { IDatabaseEntry, IAppConfig } from 'node-api';
 import type { ISaveAssetItem } from 'api';
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
@@ -227,7 +227,7 @@ interface IGitHubReleaseResponse {
 // Compares the running build version against the latest GitHub release and, when a
 // newer version is available that the user has not yet been notified about, sends
 // an `update-available` IPC to the renderer (which renders the navbar pill and a
-// primary-coloured sticky toast). The version is recorded in news.yaml's
+// primary-coloured sticky toast). The version is recorded in the config file's news section,
 // `last_shown_update_version` only when the user dismisses the toast (via
 // `mark-update-shown` IPC), so closing the app without dismissing causes the
 // notification to re-fire on the next startup.
@@ -278,7 +278,7 @@ async function checkForUpdate(): Promise<void> {
 
 //
 // Fetches the published news feed and, if there is an unseen item, sends the oldest one
-// to the renderer as a toast notification. The item id is recorded in news.yaml's
+// to the renderer as a toast notification. The item id is recorded in the config file's news section,
 // `shown_news_ids` only when the user dismisses the toast (via `mark-news-shown` IPC),
 // so closing the app without dismissing causes the same item to re-fire next startup.
 // Network errors and malformed feeds are swallowed via the try/catch so news failures
@@ -747,7 +747,7 @@ ipcMain.handle('get-recent-databases', logExceptions(async () => {
 
 // IPC handler for returning the path of the database to reopen on this launch, read on startup.
 // Kept in databases.toml beside the recents above, which is why it is read here rather than from the
-// desktop config.
+// the config file.
 ipcMain.handle('get-last-database', logExceptions(async () => {
     return await getLastDatabase();
 }, 'Error getting the last database'));
@@ -805,10 +805,10 @@ ipcMain.on('notify-database-edited', () => {
     scheduleSync();
 });
 
-// IPC handler for reading a value from the desktop config file
+// IPC handler for reading one value from the config file
 ipcMain.handle('get-config', logExceptions(async (_event, key: string) => {
-    const config = await loadDesktopConfig();
-    return config[key as keyof IDesktopConfig];
+    const config = await loadAppConfig();
+    return config[key as keyof IAppConfig];
 }, 'Error getting config value'));
 
 //
@@ -819,13 +819,13 @@ interface ISetConfigRequest {
     key: string;
 
     // The new value to store.
-    value: IDesktopConfig[keyof IDesktopConfig];
+    value: IAppConfig[keyof IAppConfig];
 }
 
-// IPC handler for writing a value to the desktop config file
+// IPC handler for writing one value to the config file
 ipcMain.handle('set-config', logExceptions(async (_event, { key, value }: ISetConfigRequest) => {
-    await updateDesktopConfig(config => {
-        (config as Record<string, IDesktopConfig[keyof IDesktopConfig]>)[key] = value;
+    await updateAppConfig(config => {
+        (config as Record<string, IAppConfig[keyof IAppConfig]>)[key] = value;
     });
     // Keep the theme-changed event so the menu bar can react to theme changes
     if (key === 'theme' && mainWindow) {
@@ -849,7 +849,7 @@ ipcMain.handle('save-asset', logExceptions(async (_event, assetId: string, asset
         actualDestPath = destPath;
     }
     else {
-        const config = await loadDesktopConfig();
+        const config = await loadAppConfig();
         const defaultPath = config.lastDownloadFolder
             ? join(config.lastDownloadFolder, filename)
             : filename;
@@ -984,14 +984,14 @@ ipcMain.handle('check-tools', logExceptions(async () => {
 }, 'Error checking tools'));
 
 // IPC handler invoked when the user dismisses the update-available toast. Records the
-// version in news.yaml so the same update is not re-announced on the next startup.
+// version in the config file so the same update is not re-announced on the next startup.
 ipcMain.handle('mark-update-shown', logExceptions(async (_event, version: string) => {
     await setLastShownUpdateVersion(version);
     log.info(`Marked update notification as shown: v${version}`);
 }, 'Error marking update notification as shown'));
 
 // IPC handler invoked when the user dismisses a news toast. Records the news item id in
-// news.yaml so it is not re-shown on the next startup.
+// the config file so it is not re-shown on the next startup.
 ipcMain.handle('mark-news-shown', logExceptions(async (_event, newsId: string) => {
     await addShownNewsIds([newsId]);
     log.info(`Marked news notification as shown: ${newsId}`);
@@ -1187,7 +1187,7 @@ async function createDefaultDatabase(databasePath: string): Promise<void> {
         });
     }
 
-    await updateDesktopConfig(config => {
+    await updateAppConfig(config => {
         config.defaultDatabasePath = databasePath;
     });
 
@@ -1207,7 +1207,7 @@ async function ensureAutoImport(): Promise<void> {
         return;
     }
 
-    const config = await loadDesktopConfig();
+    const config = await loadAppConfig();
     const plan = planDesktopAutoImport(config, getDefaultPhotoFolders(), app.getPath('userData'));
 
     const plannedSettingsJson = JSON.stringify(plan.settings);
@@ -1584,7 +1584,7 @@ async function showDirectoryPicker(title: string, extraProperties: Electron.Open
         mainWindow.focus();
     }
 
-    const config = await loadDesktopConfig();
+    const config = await loadAppConfig();
     const options: Electron.OpenDialogOptions = {
         properties: ['openDirectory', ...extraProperties],
         title,
@@ -1612,7 +1612,7 @@ async function showFilePicker(title: string): Promise<string[] | undefined> {
         mainWindow.focus();
     }
 
-    const config = await loadDesktopConfig();
+    const config = await loadAppConfig();
     const options: Electron.OpenDialogOptions = {
         properties: ['openFile', 'multiSelections'],
         title,

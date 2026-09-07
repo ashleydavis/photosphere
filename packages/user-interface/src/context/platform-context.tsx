@@ -260,7 +260,7 @@ export interface IPickFolderOptions {
 
     //
     // Config key to read the default path from and persist the chosen path back to. The Electron
-    // implementation maps this to a key in IDesktopConfig ('lastFolder' is the existing default).
+    // implementation maps this to a key in IAppConfig ('lastFolder' is the existing default).
     //
     folderKey?: string;
 
@@ -439,7 +439,7 @@ export interface IPlatformContext {
 
     //
     // Subscribes to update-available events fired from the desktop main process when a
-    // newer GitHub release is detected and has not already been recorded in news.yaml's
+    // newer GitHub release is detected and has not already been recorded in the config file's
     // `last_shown_update_version`. The renderer uses this to render the navbar pill
     // and fire a one-off primary-coloured toast. No-op on web/mobile (which have no main process
     // and rely on the update check baked into the host app store update flow).

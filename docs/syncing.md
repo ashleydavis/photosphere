@@ -80,15 +80,16 @@ Two toggles on the configuration dialog control automatic syncing, on every plat
 
 Neither affects a sync the user asks for explicitly, and neither affects the CLI, which syncs when the command says to.
 
-**On mobile they live in `sync.toml`** in the app's storage sandbox, beside `databases.toml` and `auto-import.toml`. They used to be in the WebView's config store, which nothing outside the WebView can read, and a loop that runs while the app is off screen has to be able to find out whether syncing is switched on at all. It is a separate file from `auto-import.toml` because they are separate features: switching automatic import off must not switch syncing off, and a user reading one of those files should not find the other feature's settings in it.
+**They live in the `sync` section of `config.yaml`**, in the app's storage sandbox on mobile and in `~/.config/photosphere` on desktop and the CLI. A file there is readable by the native loop that runs while the app is off screen, which has to find out whether syncing is switched on at all before it does anything. The [configuration file](https://github.com/ashleydavis/photosphere/wiki/Configuration-File) page in the wiki describes the whole file.
 
-The file holds the two toggles and the gap between passes:
+The section holds the two toggles and the gap between passes:
 
-```toml
-enabled = true
-only_on_wifi = true
-database_path = "photosphere-default"
-pause_between_runs_ms = 300000
+```yaml
+sync:
+  enabled: true
+  only_on_wifi: true
+  database_path: photosphere-default
+  pause_between_runs_ms: 300000
 ```
 
 `database_path` is not a setting the user chooses: it is the database the app last opened, written as it is opened, so the background loop knows what to push.
@@ -97,7 +98,7 @@ A gap of zero, a negative gap, or anything that is not a number falls back to th
 
 **A file that is missing or will not parse reads as syncing switched off.** That is the opposite of what the toggle defaults to in a fresh install, and deliberately: the app writes the file as soon as the settings are touched, so an unreadable one means something is wrong, and the safe answer to "should this phone start pushing over its cellular connection?" when nothing can be read is no.
 
-On the desktop the same two settings are held by the main process in `desktop.toml`, where they have always been. Nothing outside the app needs to read them there, because the loop that uses them is in the same process.
+On the desktop the same two settings are held by the main process, in the same `sync` section of the same file. Nothing outside the app needs to read them there, because the loop that uses them is in the same process.
 
 ## When a sync is refused
 
@@ -116,7 +117,7 @@ The mobile background loop cannot ask the WebView what the connection is, becaus
 
 ## What gets synced in the background on mobile
 
-The database the app last opened, recorded in `sync.toml` as it is opened. Failing that, the one automatic import writes to, from `auto-import.toml`.
+The database the app last opened, recorded in `sync.database_path` as it is opened. Failing that, the one automatic import writes to, from `auto_import.default_database_path`. Both are in `config.yaml`, so resolving this costs one file read rather than two.
 
 The opened one comes first because it is what the user is actually using, and because syncing must not need automatic import switched on to have anything to push. The import's database is the fallback for a phone that has been importing in the background without anybody opening it.
 
@@ -202,7 +203,7 @@ End to end:
 | `85-consolidate` (CLI) | Sync working after consolidation where it refused before. |
 | `86-multi-device` (CLI) | Two databases connected to one remote each end up with the other's photos. |
 | `bun run test:cli:sync` | Several processes syncing one database at once. |
-| `24-sync-settings` (Electron) | Each toggle recomputes whether syncing is permitted and pushes that to the main process, and both values persist to `desktop.toml`. |
+| `24-sync-settings` (Electron) | Each toggle recomputes whether syncing is permitted and pushes that to the main process, and both values persist to the `sync` section of `config.yaml`. |
 | `36-consolidate-database` (Electron) | Consolidating through the UI leaves ordinary sync working. |
 | `45-s3-share-replica-sync` (mobile, Android) | An edit made on the phone reaching an encrypted S3 origin, and the early-out firing when there is nothing to sync. |
 | `50-background-sync` (mobile, Android) | A photo imported while the app is backgrounded, and again while the screen is off, reaching an S3 origin without the app being opened. With **Enable syncing** switched off nothing reaches the origin while the app and its service are still running; switched back on, the same photo arrives. Everything is measured by reading the bucket, because a backgrounded WebView may have its socket to the harness suspended, which is the exact moment the test cares about. |

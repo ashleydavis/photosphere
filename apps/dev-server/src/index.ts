@@ -8,7 +8,7 @@ import { createAssetServer } from "rest-api";
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
-import { createDatabase, createMediaFileDatabase, loadDesktopConfig, updateDesktopConfig, getFolderPath, updateFolderPath, getDatabases, addDatabaseEntry, removeDatabaseEntry, updateLastFolder, markDatabaseOpened } from "node-api";
+import { createDatabase, createMediaFileDatabase, loadAppConfig, updateAppConfig, getFolderPath, updateFolderPath, getDatabases, addDatabaseEntry, removeDatabaseEntry, updateLastFolder, markDatabaseOpened } from "node-api";
 import { createStorage } from "storage";
 import type { ISyncDatabaseData } from "api";
 
@@ -295,7 +295,7 @@ wss.on("connection", (ws: WebSocket) => {
 //
 async function handleOpenDatabase(ws: WebSocket): Promise<void> {
     try {
-        const config = await loadDesktopConfig();
+        const config = await loadAppConfig();
         const databasePath = await showDirectoryDialog(config.lastFolder);
 
         if (databasePath) {
@@ -335,7 +335,7 @@ async function handleOpenDatabase(ws: WebSocket): Promise<void> {
 //
 async function handleCreateDatabase(ws: WebSocket): Promise<void> {
     try {
-        const config = await loadDesktopConfig();
+        const config = await loadAppConfig();
         const databasePath = await showDirectoryDialog(config.lastFolder);
 
         if (databasePath) {
@@ -457,11 +457,11 @@ async function handleNotifyDatabaseClosed(ws: WebSocket, requestId: unknown): Pr
 }
 
 //
-// Handles a request to read one value from the desktop config file.
+// Handles a request to read one value from the config file.
 //
 async function handleGetConfig(ws: WebSocket, key: string, requestId: unknown): Promise<void> {
     try {
-        const config = await loadDesktopConfig();
+        const config = await loadAppConfig();
         ws.send(JSON.stringify({
             type: "config-value",
             requestId,
@@ -478,13 +478,13 @@ async function handleGetConfig(ws: WebSocket, key: string, requestId: unknown): 
 }
 
 //
-// Handles a request to write one value to the desktop config file.
+// Handles a request to write one value to the config file.
 //
 async function handleSetConfig(ws: WebSocket, key: string, value: unknown, requestId: unknown): Promise<void> {
     try {
-        // Written through updateDesktopConfig rather than load-then-save, so setting one key cannot
+        // Written through updateAppConfig rather than load-then-save, so setting one key cannot
         // discard another key set at the same moment by the desktop app or a worker.
-        await updateDesktopConfig(config => {
+        await updateAppConfig(config => {
             (config as Record<string, unknown>)[key] = value;
         });
         ws.send(JSON.stringify({ type: "config-set", requestId }));
@@ -522,7 +522,7 @@ interface IPickFolderRequestOptions {
 
 //
 // Handles a request to show a directory picker and respond with the chosen path.
-// Reads the default path from desktop config under options.folderKey (defaults to "lastFolder"),
+// Reads the default path from the config file under options.folderKey (defaults to "lastFolder"),
 // persists the chosen path under the same key, and sends pick-folder-result with value=undefined when cancelled.
 //
 async function handlePickFolder(ws: WebSocket, options: IPickFolderRequestOptions | undefined, requestId: unknown): Promise<void> {

@@ -2,8 +2,8 @@ import * as os from "os";
 import * as path from "path";
 import * as fs from "fs/promises";
 import { DEFAULT_DATABASE_DISPLAY_NAME } from "api/src/lib/auto-import-mobile";
-import { AUTO_IMPORT_CONFIG_PATH, DATABASES_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
-import { buildAutoImportConfigToml, readAutoImportConfigHandler } from "node-api/src/lib/auto-import-config.worker";
+import { CONFIG_PATH, DATABASES_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
+import { buildConfigYaml, readConfigHandler } from "node-api/src/lib/config.worker";
 import { buildDatabasesConfigToml, readDatabasesConfigHandler } from "node-api/src/lib/databases-config.worker";
 import { recordDefaultDatabaseHandler } from "../../lib/record-default-database.worker";
 
@@ -45,21 +45,35 @@ describe("record-default-database", () => {
 
     test("records the database as the default and adds it to the database list", async () => {
         await fs.writeFile(
-            path.join(tempDir, AUTO_IMPORT_CONFIG_PATH),
-            buildAutoImportConfigToml({
-                settings: {
-                    enabled: true,
-                    sources: [{ type: "device-album", albumId: "all" }],
+            path.join(tempDir, CONFIG_PATH),
+            buildConfigYaml({
+                autoImport: {
+                    settings: {
+                        enabled: true,
+                        sources: [{ type: "device-album", albumId: "all" }],
+                    },
+                    defaultDatabasePath: undefined,
+                    pauseBetweenRunsMs: 5000,
                 },
-                defaultDatabasePath: undefined,
-                pauseBetweenRunsMs: 5000,
+                sync: {
+                    settings: {
+                        enabled: false,
+                        onlyOnWifi: true,
+                    },
+                    databasePath: undefined,
+                    pauseBetweenRunsMs: 300000,
+                },
+                desktop: {},
+                news: {
+                    shownNewsIds: [],
+                },
             }),
             "utf8");
 
         await recordDefaultDatabaseHandler({ databasePath: "photosphere-default" }, context);
 
-        const settings = await readAutoImportConfigHandler({ configPath: AUTO_IMPORT_CONFIG_PATH }, context);
-        expect(settings.defaultDatabasePath).toBe("photosphere-default");
+        const settings = await readConfigHandler({ configPath: CONFIG_PATH }, context);
+        expect(settings.autoImport.defaultDatabasePath).toBe("photosphere-default");
 
         const databases = await readDatabasesConfigHandler({ configPath: DATABASES_CONFIG_PATH }, context);
         expect(databases.databases).toEqual([
@@ -75,23 +89,43 @@ describe("record-default-database", () => {
         // The pass that creates the database runs while the user may be changing the settings, and
         // this write must not undo what they chose.
         await fs.writeFile(
-            path.join(tempDir, AUTO_IMPORT_CONFIG_PATH),
-            buildAutoImportConfigToml({
-                settings: {
-                    enabled: true,
-                    sources: [{ type: "device-album", albumId: "holiday-album" }],
+            path.join(tempDir, CONFIG_PATH),
+            buildConfigYaml({
+                autoImport: {
+                    settings: {
+                        enabled: true,
+                        sources: [{ type: "device-album", albumId: "holiday-album" }],
+                    },
+                    defaultDatabasePath: undefined,
+                    pauseBetweenRunsMs: 1500,
                 },
-                defaultDatabasePath: undefined,
-                pauseBetweenRunsMs: 1500,
+                sync: {
+                    settings: {
+                        enabled: true,
+                        onlyOnWifi: false,
+                    },
+                    databasePath: "a-database-the-user-opened",
+                    pauseBetweenRunsMs: 90000,
+                },
+                desktop: {},
+                news: {
+                    shownNewsIds: [],
+                },
             }),
             "utf8");
 
         await recordDefaultDatabaseHandler({ databasePath: "photosphere-default" }, context);
 
-        const settings = await readAutoImportConfigHandler({ configPath: AUTO_IMPORT_CONFIG_PATH }, context);
-        expect(settings.settings.enabled).toBe(true);
-        expect(settings.settings.sources).toEqual([{ type: "device-album", albumId: "holiday-album" }]);
-        expect(settings.pauseBetweenRunsMs).toBe(1500);
+        const settings = await readConfigHandler({ configPath: CONFIG_PATH }, context);
+        expect(settings.autoImport.settings.enabled).toBe(true);
+        expect(settings.autoImport.settings.sources).toEqual([{ type: "device-album", albumId: "holiday-album" }]);
+        expect(settings.autoImport.pauseBetweenRunsMs).toBe(1500);
+
+        // The syncing settings share the file and must survive this write untouched.
+        expect(settings.sync.settings.enabled).toBe(true);
+        expect(settings.sync.settings.onlyOnWifi).toBe(false);
+        expect(settings.sync.databasePath).toBe("a-database-the-user-opened");
+        expect(settings.sync.pauseBetweenRunsMs).toBe(90000);
     });
 
     test("keeps the databases the user already has", async () => {

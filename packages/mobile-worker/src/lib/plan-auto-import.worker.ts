@@ -1,8 +1,8 @@
 import type { ITaskContext } from "task-queue";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
-import { AUTO_IMPORT_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
+import { CONFIG_PATH } from "api/src/lib/mobile-config-paths";
 import type { IAutoImportSettings } from "api/src/lib/auto-import-settings";
-import { readAutoImportConfigFile } from "node-api/src/lib/auto-import-config.worker";
+import { readConfigFromStorage } from "node-api/src/lib/config.worker";
 
 //
 // The task that decides what a background automatic import pass should do.
@@ -60,7 +60,8 @@ export interface IPlanAutoImportResult {
 // Handler for the plan-auto-import task.
 //
 export async function planAutoImportHandler(_data: object, context: ITaskContext): Promise<IPlanAutoImportResult> {
-    const contents = await readAutoImportConfigFile(AUTO_IMPORT_CONFIG_PATH);
+    const { config } = await readConfigFromStorage(CONFIG_PATH);
+    const contents = config.autoImport;
     const plan = planMobileAutoImport(contents.settings, contents.defaultDatabasePath);
 
     const steps: IAutoImportPassStep[] = [];

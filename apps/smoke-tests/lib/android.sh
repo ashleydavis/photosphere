@@ -941,7 +941,27 @@ android_restore_sandbox_file() {
 }
 
 #
-# Writes the app's auto-import.toml into its private files directory.
+# Copies the app's current config.yaml off the device, so a seed can merge into it rather than
+# replace it. Prints nothing and leaves no file behind when the app has never written one.
+#
+# The merge is what the single settings file costs: seeding the syncing settings must leave what
+# automatic import was told to watch exactly as it was, and vice versa. A test that re-seeds one
+# feature part way through a run (test 50 does, several times) would otherwise silently switch the
+# other one off.
+# Usage: android_pull_config <local_path>
+#
+android_pull_config() {
+    local local_path="$1"
+
+    rm -f "$local_path"
+    adb exec-out run-as "$APP_ID" cat "files/$CONFIG_FILE" > "$local_path" 2>/dev/null || true
+    if [ ! -s "$local_path" ]; then
+        rm -f "$local_path"
+    fi
+}
+
+#
+# Writes the automatic import settings into the app's config.yaml in its private files directory.
 #
 # This is how a test starts with automatic import already on, writing into a database it seeded
 # itself. Switching the toggle on through the settings card makes the app create its own database
@@ -958,23 +978,26 @@ android_seed_auto_import_config() {
     local pause_ms="${3:-}"
     local album_id="${4:-}"
     local tmp_local
+    local tmp_base
     tmp_local="$(mktemp)"
+    tmp_base="$(mktemp)"
+    android_pull_config "$tmp_base"
 
-    if ! ENABLED="$enabled" DEFAULT_DATABASE_PATH="$default_database_path" PAUSE_MS="$pause_ms" ALBUM_ID="$album_id" \
-        bun "$LIB_DIR/write-auto-import-config.ts" "$tmp_local"; then
+    if ! MODE="auto-import" ENABLED="$enabled" DEFAULT_DATABASE_PATH="$default_database_path" PAUSE_MS="$pause_ms" ALBUM_ID="$album_id" BASE="$tmp_base" \
+        bun "$LIB_DIR/write-config.ts" "$tmp_local"; then
         log_error "Could not render the app's automatic import settings (see the error above)."
-        rm -f "$tmp_local"
+        rm -f "$tmp_local" "$tmp_base"
         return 1
     fi
 
-    android_seed_sandbox_file "$tmp_local" "$AUTO_IMPORT_CONFIG_FILE"
-    rm -f "$tmp_local"
+    android_seed_sandbox_file "$tmp_local" "$CONFIG_FILE"
+    rm -f "$tmp_local" "$tmp_base"
 
-    log_info "Wrote the app's automatic import settings to files/$AUTO_IMPORT_CONFIG_FILE (enabled=$enabled)"
+    log_info "Wrote the app's automatic import settings to files/$CONFIG_FILE (enabled=$enabled)"
 }
 
 #
-# Writes the app's sync.toml into its private files directory.
+# Writes the syncing settings into the app's config.yaml in its private files directory.
 #
 # The background sync reads this file rather than anything in the WebView, so this is how a test
 # establishes the two syncing settings before the app starts. It is also how a test switches syncing
@@ -991,19 +1014,22 @@ android_seed_sync_config() {
     local pause_ms="${3:-}"
     local database_path="${4:-}"
     local tmp_local
+    local tmp_base
     tmp_local="$(mktemp)"
+    tmp_base="$(mktemp)"
+    android_pull_config "$tmp_base"
 
-    if ! ENABLED="$enabled" ONLY_ON_WIFI="$only_on_wifi" PAUSE_MS="$pause_ms" DATABASE_PATH="$database_path" \
-        bun "$LIB_DIR/write-sync-config.ts" "$tmp_local"; then
+    if ! MODE="sync" ENABLED="$enabled" ONLY_ON_WIFI="$only_on_wifi" PAUSE_MS="$pause_ms" DATABASE_PATH="$database_path" BASE="$tmp_base" \
+        bun "$LIB_DIR/write-config.ts" "$tmp_local"; then
         log_error "Could not render the app's syncing settings (see the error above)."
-        rm -f "$tmp_local"
+        rm -f "$tmp_local" "$tmp_base"
         return 1
     fi
 
-    android_seed_sandbox_file "$tmp_local" "$SYNC_CONFIG_FILE"
-    rm -f "$tmp_local"
+    android_seed_sandbox_file "$tmp_local" "$CONFIG_FILE"
+    rm -f "$tmp_local" "$tmp_base"
 
-    log_info "Wrote the app's syncing settings to files/$SYNC_CONFIG_FILE (enabled=$enabled, onlyOnWifi=$only_on_wifi)"
+    log_info "Wrote the app's syncing settings to files/$CONFIG_FILE (enabled=$enabled, onlyOnWifi=$only_on_wifi)"
 }
 
 #

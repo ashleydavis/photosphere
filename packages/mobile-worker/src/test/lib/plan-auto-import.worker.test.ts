@@ -2,8 +2,8 @@ import * as os from "os";
 import * as path from "path";
 import * as fs from "fs/promises";
 import { DEFAULT_AUTO_IMPORT_PAUSE_MS, DEFAULT_DATABASE_FOLDER_NAME } from "api/src/lib/auto-import-mobile";
-import { AUTO_IMPORT_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
-import { buildAutoImportConfigToml } from "node-api/src/lib/auto-import-config.worker";
+import { CONFIG_PATH } from "api/src/lib/mobile-config-paths";
+import { buildConfigYaml, readConfigFromStorage } from "node-api/src/lib/config.worker";
 import { planAutoImportHandler, type IAutoImportPassStep } from "../../lib/plan-auto-import.worker";
 
 //
@@ -47,18 +47,20 @@ afterEach(async () => {
 });
 
 //
-// Writes an auto-import.toml into the temporary sandbox, exactly as the app would.
+// Writes the automatic import settings into the temporary sandbox's config.yaml, exactly as the app
+// would, leaving every other section of the file as it is.
 //
 async function writeSettingsFile(enabled: boolean, defaultDatabasePath: string | undefined, sources: any[], pauseBetweenRunsMs: number): Promise<void> {
-    const contents = buildAutoImportConfigToml({
+    const { config } = await readConfigFromStorage(CONFIG_PATH);
+    config.autoImport = {
         settings: {
             enabled,
             sources,
         },
         defaultDatabasePath,
         pauseBetweenRunsMs,
-    });
-    await fs.writeFile(path.join(tempDir, AUTO_IMPORT_CONFIG_PATH), contents, "utf8");
+    };
+    await fs.writeFile(path.join(tempDir, CONFIG_PATH), buildConfigYaml(config), "utf8");
 }
 
 //
@@ -188,8 +190,8 @@ describe("plan-auto-import", () => {
 
     test("a gap of zero in the file falls back to the default rather than spinning", async () => {
         await fs.writeFile(
-            path.join(tempDir, AUTO_IMPORT_CONFIG_PATH),
-            "enabled = true\ndefault_database_path = \"my-photos\"\npause_between_runs_ms = 0\n",
+            path.join(tempDir, CONFIG_PATH),
+            "auto_import:\n  enabled: true\n  default_database_path: my-photos\n  pause_between_runs_ms: 0\n",
             "utf8");
 
         const plan = await planAutoImportHandler({}, context);

@@ -76,8 +76,8 @@ banner "6. After resetting state: \`psi news\` shows ALL 5 items as (new)"
 run_psi news
 
 # ─── show what got persisted ──────────────────────────────────────────────────
-banner "7. Contents of desktop.toml after step 6"
-cat "$DEMO_CONFIG/desktop.toml" 2>/dev/null || echo "(no toml written. Did psi news succeed?)"
+banner "7. Contents of config.yaml after step 6"
+cat "$DEMO_CONFIG/config.yaml" 2>/dev/null || echo "(no config written. Did psi news succeed?)"
 
 echo
 echo "Done."

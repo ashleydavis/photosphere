@@ -5,14 +5,14 @@ import { AUTO_IMPORT_ENABLED_KEY, AUTO_IMPORT_SOURCES_KEY, DEFAULT_DATABASE_PATH
 //
 // Client-side reading and writing of the mobile automatic import settings.
 //
-// These live in auto-import.toml in the app's storage sandbox, beside databases.toml. They used to
+// These live in the auto_import section of config.yaml in the app's storage sandbox, beside
+// databases.toml. They used to
 // live in the WebView's localStorage, which nothing outside the WebView can read: a background
 // import running while the app is off screen had no way to find out whether it was switched on, what
 // it should be watching, or which database to write to.
 //
 // The WebView cannot open a file, so the read and the write are handed to an IAutoImportConfigFile,
-// which the platform provider implements with the embedded worker's read-auto-import-config /
-// write-auto-import-config tasks. Keeping that behind an interface is what makes this module
+// which the platform provider implements with the embedded worker's read-config / write-config tasks. Keeping that behind an interface is what makes this module
 // unit-testable without a device, the same arrangement mobile-config-store.ts uses for
 // databases.toml.
 //
@@ -22,7 +22,8 @@ import { AUTO_IMPORT_ENABLED_KEY, AUTO_IMPORT_SOURCES_KEY, DEFAULT_DATABASE_PATH
 //
 
 //
-// Reads and writes auto-import.toml. Implemented by the platform provider over the embedded worker,
+// Reads and writes the automatic import section of config.yaml. Implemented by the platform provider
+// over the embedded worker,
 // and by an in-memory double in tests.
 //
 export interface IAutoImportConfigFile {

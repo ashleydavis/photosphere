@@ -1,10 +1,9 @@
 import * as os from "os";
 import * as path from "path";
 import * as fs from "fs/promises";
-import { AUTO_IMPORT_CONFIG_PATH, SYNC_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
+import { CONFIG_PATH } from "api/src/lib/mobile-config-paths";
 import { DEFAULT_SYNC_PAUSE_MS } from "api/src/lib/sync-settings";
-import { buildAutoImportConfigToml } from "node-api/src/lib/auto-import-config.worker";
-import { buildSyncConfigToml } from "node-api/src/lib/sync-config.worker";
+import { buildConfigYaml, readConfigFromStorage } from "node-api/src/lib/config.worker";
 import { planSyncHandler } from "../../lib/plan-sync.worker";
 
 //
@@ -62,25 +61,32 @@ function setConnectionType(connectionType: string): void {
 }
 
 //
-// Writes a sync.toml into the temporary sandbox, exactly as the app would.
+// Writes the syncing settings into the temporary sandbox's config.yaml, exactly as the app would.
 //
-async function writeSyncSettings(enabled: boolean, onlyOnWifi: boolean): Promise<void> {
-    const contents = buildSyncConfigToml({
+// It reads what is already there and puts back only the syncing section, because the two features
+// share one file now: rebuilding the document from the syncing settings alone would delete whatever
+// automatic import had been told to watch.
+//
+async function writeSyncSettings(enabled: boolean, onlyOnWifi: boolean, pauseBetweenRunsMs: number = DEFAULT_SYNC_PAUSE_MS): Promise<void> {
+    const { config } = await readConfigFromStorage(CONFIG_PATH);
+    config.sync = {
         settings: {
             enabled,
             onlyOnWifi,
         },
         databasePath: undefined,
-        pauseBetweenRunsMs: DEFAULT_SYNC_PAUSE_MS,
-    });
-    await fs.writeFile(path.join(tempDir, SYNC_CONFIG_PATH), contents, "utf8");
+        pauseBetweenRunsMs,
+    };
+    await fs.writeFile(path.join(tempDir, CONFIG_PATH), buildConfigYaml(config), "utf8");
 }
 
 //
-// Writes an auto-import.toml naming the database background sync pushes, exactly as the app would.
+// Writes the automatic import section naming the database background sync falls back to, exactly as
+// the app would, leaving the syncing settings as they are.
 //
 async function writeDefaultDatabase(defaultDatabasePath: string | undefined): Promise<void> {
-    const contents = buildAutoImportConfigToml({
+    const { config } = await readConfigFromStorage(CONFIG_PATH);
+    config.autoImport = {
         settings: {
             enabled: true,
             sources: [
@@ -92,8 +98,8 @@ async function writeDefaultDatabase(defaultDatabasePath: string | undefined): Pr
         },
         defaultDatabasePath,
         pauseBetweenRunsMs: 30000,
-    });
-    await fs.writeFile(path.join(tempDir, AUTO_IMPORT_CONFIG_PATH), contents, "utf8");
+    };
+    await fs.writeFile(path.join(tempDir, CONFIG_PATH), buildConfigYaml(config), "utf8");
 }
 
 //
@@ -254,15 +260,7 @@ describe("plan-sync", () => {
     });
 
     test("carries the pause through so the loop waits what the settings asked for", async () => {
-        const contents = buildSyncConfigToml({
-            settings: {
-                enabled: true,
-                onlyOnWifi: false,
-            },
-            databasePath: undefined,
-            pauseBetweenRunsMs: 90000,
-        });
-        await fs.writeFile(path.join(tempDir, SYNC_CONFIG_PATH), contents, "utf8");
+        await writeSyncSettings(true, false, 90000);
         await setUpSyncableDatabase();
 
         const plan = await planSyncHandler({}, context);

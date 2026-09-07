@@ -1,17 +1,23 @@
-// Mock fs/promises so tests don't touch the real filesystem.
-const mockReadFile = jest.fn();
-const mockWriteFile = jest.fn();
-const mockMkdir = jest.fn();
+// Mock the node-utils fs helpers so tests don't touch the real filesystem. The news state now lives
+// in the `news` section of config.yaml rather than in a news.yaml of its own, so what is mocked is
+// the YAML document reader and writer the config file goes through.
+const mockReadYaml = jest.fn();
+const mockWriteYaml = jest.fn();
 
-jest.mock('fs/promises', () => ({
-    readFile: mockReadFile,
-    writeFile: mockWriteFile,
-    mkdir: mockMkdir,
+jest.mock('node-utils', () => ({
+    readYaml: mockReadYaml,
+    writeYaml: mockWriteYaml,
+    getConfigDir: () => '/test-config',
+    // Mirror the real updateYaml as a read-modify-write over the mocked helpers.
+    updateYaml: async (filePath: string, fallback: any, mutator: (current: any) => any) => {
+        const read = await mockReadYaml(filePath);
+        const current = read === undefined ? fallback : read;
+        const updated = mutator(current);
+        await mockWriteYaml(filePath, updated);
+    },
 }));
 
-import yaml from 'js-yaml';
 import {
-    getNewsStatePath,
     loadNewsState,
     saveNewsState,
     getShownNewsIds,
@@ -19,13 +25,18 @@ import {
     getLastShownUpdateVersion,
     setLastShownUpdateVersion,
 } from '../../lib/news-state';
+import { getConfigPath } from '../../lib/config-file';
 
-describe('getNewsStatePath', () => {
-    test('returns a string ending with news.yaml', () => {
-        const result = getNewsStatePath();
+//
+// The document written by the call under test.
+//
+function writtenDocument(): any {
+    return mockWriteYaml.mock.calls[0][1];
+}
 
-        expect(typeof result).toBe('string');
-        expect(result.endsWith('news.yaml')).toBe(true);
+describe('where the news state lives', () => {
+    test('is the config file, not a news.yaml of its own', () => {
+        expect(getConfigPath().endsWith('config.yaml')).toBe(true);
     });
 });
 
@@ -33,23 +44,31 @@ describe('loadNewsState', () => {
     beforeEach(() => jest.clearAllMocks());
 
     test('returns empty state when the file does not exist', async () => {
-        mockReadFile.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+        mockReadYaml.mockResolvedValue(undefined);
 
         const state = await loadNewsState();
 
         expect(state).toEqual({ shownNewsIds: [] });
     });
 
-    test('returns empty state on YAML parse error', async () => {
-        mockReadFile.mockResolvedValue(':::not yaml:::');
+    test('returns empty state when the config file has no news section', async () => {
+        mockReadYaml.mockResolvedValue({ theme: 'dark' });
+
+        const state = await loadNewsState();
+
+        expect(state).toEqual({ shownNewsIds: [] });
+    });
+
+    test('returns empty state when the news section is malformed', async () => {
+        mockReadYaml.mockResolvedValue({ news: 'not a section' });
 
         const state = await loadNewsState();
 
         expect(state.shownNewsIds).toEqual([]);
     });
 
-    test('parses shown_news_ids from YAML', async () => {
-        mockReadFile.mockResolvedValue(yaml.dump({ shown_news_ids: ['a', 'b'] }));
+    test('parses shown_news_ids from the news section', async () => {
+        mockReadYaml.mockResolvedValue({ news: { shown_news_ids: ['a', 'b'] } });
 
         const state = await loadNewsState();
 
@@ -57,8 +76,8 @@ describe('loadNewsState', () => {
         expect(state.lastShownUpdateVersion).toBeUndefined();
     });
 
-    test('parses last_shown_update_version from YAML', async () => {
-        mockReadFile.mockResolvedValue(yaml.dump({ shown_news_ids: [], last_shown_update_version: '1.2.3' }));
+    test('parses last_shown_update_version from the news section', async () => {
+        mockReadYaml.mockResolvedValue({ news: { shown_news_ids: [], last_shown_update_version: '1.2.3' } });
 
         const state = await loadNewsState();
 
@@ -66,38 +85,73 @@ describe('loadNewsState', () => {
     });
 
     test('omits last_shown_update_version when empty string', async () => {
-        mockReadFile.mockResolvedValue(yaml.dump({ last_shown_update_version: '' }));
+        mockReadYaml.mockResolvedValue({ news: { last_shown_update_version: '' } });
 
         const state = await loadNewsState();
 
         expect(state.lastShownUpdateVersion).toBeUndefined();
+    });
+
+    //
+    // A read that throws must not stop the app. The failure is reported rather than swallowed, but
+    // the caller still gets an empty state.
+    //
+    test('returns empty state when the config file cannot be read at all', async () => {
+        mockReadYaml.mockRejectedValue(new Error('the disk went away'));
+
+        const state = await loadNewsState();
+
+        expect(state).toEqual({ shownNewsIds: [] });
     });
 });
 
 describe('saveNewsState', () => {
     beforeEach(() => jest.clearAllMocks());
 
-    test('writes shown_news_ids in snake_case yaml form', async () => {
+    test('writes shown_news_ids in snake_case under the news section', async () => {
+        mockReadYaml.mockResolvedValue(undefined);
+
         await saveNewsState({ shownNewsIds: ['a', 'b'] });
 
-        const writtenPath = mockWriteFile.mock.calls[0][0];
-        const writtenYaml = yaml.load(mockWriteFile.mock.calls[0][1] as string) as Record<string, unknown>;
-        expect(writtenPath.endsWith('news.yaml')).toBe(true);
-        expect(writtenYaml.shown_news_ids).toEqual(['a', 'b']);
-        expect(writtenYaml.last_shown_update_version).toBeUndefined();
+        const writtenPath = mockWriteYaml.mock.calls[0][0];
+        expect(writtenPath.endsWith('config.yaml')).toBe(true);
+        expect(writtenDocument().news.shown_news_ids).toEqual(['a', 'b']);
+        expect(writtenDocument().news.last_shown_update_version).toBeUndefined();
     });
 
     test('writes last_shown_update_version when set', async () => {
+        mockReadYaml.mockResolvedValue(undefined);
+
         await saveNewsState({ shownNewsIds: [], lastShownUpdateVersion: '1.2.3' });
 
-        const writtenYaml = yaml.load(mockWriteFile.mock.calls[0][1] as string) as Record<string, unknown>;
-        expect(writtenYaml.last_shown_update_version).toBe('1.2.3');
+        expect(writtenDocument().news.last_shown_update_version).toBe('1.2.3');
     });
 
-    test('creates the config directory before writing', async () => {
-        await saveNewsState({ shownNewsIds: [] });
+    //
+    // The news state shares its file with every setting the app has, so writing it must not disturb
+    // any of them. This is the whole hazard of folding it in.
+    //
+    test('leaves every other section of the config file alone', async () => {
+        mockReadYaml.mockResolvedValue({
+            theme: 'dark',
+            developer_mode: true,
+            sync: { enabled: true, only_on_wifi: false, pause_between_runs_ms: 60000 },
+            auto_import: { enabled: true, sources: [{ type: 'folder', path: '/photos', recurse: true }] },
+            desktop: { last_folder: '/home/someone/photos' },
+        });
 
-        expect(mockMkdir).toHaveBeenCalled();
+        await saveNewsState({ shownNewsIds: ['a'] });
+
+        const document = writtenDocument();
+        expect(document.theme).toBe('dark');
+        expect(document.developer_mode).toBe(true);
+        expect(document.sync.enabled).toBe(true);
+        expect(document.sync.only_on_wifi).toBe(false);
+        expect(document.sync.pause_between_runs_ms).toBe(60000);
+        expect(document.auto_import.enabled).toBe(true);
+        expect(document.auto_import.sources).toEqual([{ type: 'folder', path: '/photos', recurse: true }]);
+        expect(document.desktop.last_folder).toBe('/home/someone/photos');
+        expect(document.news.shown_news_ids).toEqual(['a']);
     });
 });
 
@@ -107,34 +161,31 @@ describe('addShownNewsIds', () => {
     test('is a no-op for empty input', async () => {
         await addShownNewsIds([]);
 
-        expect(mockWriteFile).not.toHaveBeenCalled();
+        expect(mockWriteYaml).not.toHaveBeenCalled();
     });
 
     test('appends new ids to the existing list', async () => {
-        mockReadFile.mockResolvedValue(yaml.dump({ shown_news_ids: ['a'] }));
+        mockReadYaml.mockResolvedValue({ news: { shown_news_ids: ['a'] } });
 
         await addShownNewsIds(['b', 'c']);
 
-        const writtenYaml = yaml.load(mockWriteFile.mock.calls[0][1] as string) as Record<string, unknown>;
-        expect(writtenYaml.shown_news_ids).toEqual(['a', 'b', 'c']);
+        expect(writtenDocument().news.shown_news_ids).toEqual(['a', 'b', 'c']);
     });
 
     test('dedupes ids preserving first-seen order', async () => {
-        mockReadFile.mockResolvedValue(yaml.dump({ shown_news_ids: ['a', 'b'] }));
+        mockReadYaml.mockResolvedValue({ news: { shown_news_ids: ['a', 'b'] } });
 
         await addShownNewsIds(['b', 'c', 'a']);
 
-        const writtenYaml = yaml.load(mockWriteFile.mock.calls[0][1] as string) as Record<string, unknown>;
-        expect(writtenYaml.shown_news_ids).toEqual(['a', 'b', 'c']);
+        expect(writtenDocument().news.shown_news_ids).toEqual(['a', 'b', 'c']);
     });
 
     test('preserves last_shown_update_version when only news ids are added', async () => {
-        mockReadFile.mockResolvedValue(yaml.dump({ shown_news_ids: [], last_shown_update_version: '1.2.3' }));
+        mockReadYaml.mockResolvedValue({ news: { shown_news_ids: [], last_shown_update_version: '1.2.3' } });
 
         await addShownNewsIds(['a']);
 
-        const writtenYaml = yaml.load(mockWriteFile.mock.calls[0][1] as string) as Record<string, unknown>;
-        expect(writtenYaml.last_shown_update_version).toBe('1.2.3');
+        expect(writtenDocument().news.last_shown_update_version).toBe('1.2.3');
     });
 });
 
@@ -142,7 +193,7 @@ describe('update version persistence', () => {
     beforeEach(() => jest.clearAllMocks());
 
     test('getLastShownUpdateVersion returns undefined when unset', async () => {
-        mockReadFile.mockResolvedValue(yaml.dump({ shown_news_ids: [] }));
+        mockReadYaml.mockResolvedValue({ news: { shown_news_ids: [] } });
 
         const result = await getLastShownUpdateVersion();
 
@@ -150,7 +201,7 @@ describe('update version persistence', () => {
     });
 
     test('getLastShownUpdateVersion returns the stored version', async () => {
-        mockReadFile.mockResolvedValue(yaml.dump({ last_shown_update_version: '1.2.3' }));
+        mockReadYaml.mockResolvedValue({ news: { last_shown_update_version: '1.2.3' } });
 
         const result = await getLastShownUpdateVersion();
 
@@ -158,22 +209,21 @@ describe('update version persistence', () => {
     });
 
     test('setLastShownUpdateVersion overwrites the previous value', async () => {
-        mockReadFile.mockResolvedValue(yaml.dump({ last_shown_update_version: '1.2.2' }));
+        mockReadYaml.mockResolvedValue({ news: { last_shown_update_version: '1.2.2' } });
 
         await setLastShownUpdateVersion('1.2.3');
 
-        const writtenYaml = yaml.load(mockWriteFile.mock.calls[0][1] as string) as Record<string, unknown>;
-        expect(writtenYaml.last_shown_update_version).toBe('1.2.3');
+        expect(writtenDocument().news.last_shown_update_version).toBe('1.2.3');
     });
 
     test('setLastShownUpdateVersion preserves existing shown news ids', async () => {
-        mockReadFile.mockResolvedValue(yaml.dump({ shown_news_ids: ['a', 'b'] }));
+        mockReadYaml.mockResolvedValue({ news: { shown_news_ids: ['a', 'b'] } });
 
         await setLastShownUpdateVersion('1.2.3');
 
-        const writtenYaml = yaml.load(mockWriteFile.mock.calls[0][1] as string) as Record<string, unknown>;
-        expect(writtenYaml.shown_news_ids).toEqual(['a', 'b']);
-        expect(writtenYaml.last_shown_update_version).toBe('1.2.3');
+        const document = writtenDocument();
+        expect(document.news.shown_news_ids).toEqual(['a', 'b']);
+        expect(document.news.last_shown_update_version).toBe('1.2.3');
     });
 });
 
@@ -181,7 +231,7 @@ describe('getShownNewsIds', () => {
     beforeEach(() => jest.clearAllMocks());
 
     test('returns the stored list', async () => {
-        mockReadFile.mockResolvedValue(yaml.dump({ shown_news_ids: ['a', 'b'] }));
+        mockReadYaml.mockResolvedValue({ news: { shown_news_ids: ['a', 'b'] } });
 
         const result = await getShownNewsIds();
 
@@ -189,7 +239,7 @@ describe('getShownNewsIds', () => {
     });
 
     test('returns [] when the file does not exist', async () => {
-        mockReadFile.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+        mockReadYaml.mockResolvedValue(undefined);
 
         const result = await getShownNewsIds();
 

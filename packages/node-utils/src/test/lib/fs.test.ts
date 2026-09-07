@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fsNative from 'fs/promises';
 import { writeFileSync } from 'fs';
-import { readToml, writeToml, readJson, writeJson, outputFile, updateToml, updateJson, updateFileOptimistic, updateFileRawOptimistic } from '../../lib/fs';
+import { readToml, writeToml, readJson, writeJson, outputFile, updateToml, updateJson, updateFileOptimistic, updateFileRawOptimistic, readYaml, writeYaml, updateYaml } from '../../lib/fs';
 import { createTestTempDir } from '../../lib/test-temp-dir';
 
 //
@@ -159,6 +159,139 @@ describe('updateToml optimistic read-modify-write', () => {
             // Change the file under every attempt (growing its size) so the pre-move check always
             // sees a conflict regardless of mtime resolution.
             writeFileSync(filePath, `count = ${external}\n${'# pad\n'.repeat(external)}`);
+            external += 1;
+            return { count: current.count + 1 };
+        }, 2)).rejects.toThrow(/kept changing/);
+
+        await fsNative.unlink(filePath);
+    });
+});
+
+describe('readYaml / writeYaml', () => {
+    test('a file that does not exist reads as undefined', async () => {
+        // Absence is not an error, unlike readToml: the config file does not exist until something
+        // writes it, and a caller that had to check first would be checking then reading, which a
+        // concurrent writer can arrive between.
+        const filePath = tempFilePath('missing.yaml');
+
+        expect(await readYaml(filePath)).toBeUndefined();
+    });
+
+    test('a written file reads back identically', async () => {
+        const filePath = tempFilePath('round-trip.yaml');
+        const original = {
+            name: 'test',
+            count: 42,
+            flag: true,
+            nested: {
+                list: ['a', 'b'],
+            },
+        };
+
+        await writeYaml(filePath, original);
+
+        expect(await readYaml<typeof original>(filePath)).toEqual(original);
+
+        await fsNative.unlink(filePath);
+    });
+
+    test('an empty file reads as undefined rather than as an empty object', async () => {
+        const filePath = tempFilePath('empty.yaml');
+        await outputFile(filePath, '', { encoding: 'utf8' });
+
+        expect(await readYaml(filePath)).toBeUndefined();
+
+        await fsNative.unlink(filePath);
+    });
+
+    test('text that is not YAML throws rather than reading as nothing', async () => {
+        // A caller that wants the defaults for an unreadable file decides that for itself. Returning
+        // undefined here would make "there is no file" and "the file is broken" indistinguishable.
+        const filePath = tempFilePath('broken.yaml');
+        await outputFile(filePath, 'a:\n  b: 1\n   c: [', { encoding: 'utf8' });
+
+        await expect(readYaml(filePath)).rejects.toThrow();
+
+        await fsNative.unlink(filePath);
+    });
+
+    test('writing creates the parent directories', async () => {
+        const filePath = path.join(createTestTempDir('photosphere-fs-test'), 'nested', 'deeper', 'config.yaml');
+
+        await writeYaml(filePath, { count: 1 });
+
+        expect(await readYaml<ICounter>(filePath)).toEqual({ count: 1 });
+
+        await fsNative.unlink(filePath);
+    });
+});
+
+describe('updateYaml optimistic read-modify-write', () => {
+    test('uses the fallback and writes when the file does not exist', async () => {
+        const filePath = tempFilePath('update-yaml-new.yaml');
+
+        await updateYaml<Record<string, number>>(filePath, { count: 0 }, current => ({ count: current.count + 5 }));
+
+        const result = await readYaml<ICounter>(filePath);
+        expect(result!.count).toBe(5);
+
+        await fsNative.unlink(filePath);
+    });
+
+    test('reads existing contents and applies the mutator', async () => {
+        const filePath = tempFilePath('update-yaml-existing.yaml');
+        await writeYaml(filePath, { count: 10 });
+
+        await updateYaml<Record<string, number>>(filePath, { count: 0 }, current => ({ count: current.count + 1 }));
+
+        const result = await readYaml<ICounter>(filePath);
+        expect(result!.count).toBe(11);
+
+        await fsNative.unlink(filePath);
+    });
+
+    test('uses the fallback when the file is there but empty', async () => {
+        const filePath = tempFilePath('update-yaml-empty.yaml');
+        await outputFile(filePath, '', { encoding: 'utf8' });
+
+        await updateYaml<Record<string, number>>(filePath, { count: 7 }, current => ({ count: current.count + 1 }));
+
+        const result = await readYaml<ICounter>(filePath);
+        expect(result!.count).toBe(8);
+
+        await fsNative.unlink(filePath);
+    });
+
+    test('reloads and re-applies the mutator when the file changed under it', async () => {
+        const filePath = tempFilePath('update-yaml-retry.yaml');
+        await writeYaml(filePath, { count: 0 });
+        let injected = false;
+
+        await updateYaml<Record<string, number>>(filePath, { count: 0 }, current => {
+            if (!injected) {
+                injected = true;
+                // Simulate a concurrent writer changing the file after our read but before the pre-move check.
+                writeFileSync(filePath, 'count: 99\n');
+            }
+            return { count: current.count + 1 };
+        }, 3);
+
+        // The mutator ran twice: once on the stale read (discarded), once on the reloaded value 99 -> 100.
+        const result = await readYaml<ICounter>(filePath);
+        expect(result!.count).toBe(100);
+
+        await fsNative.unlink(filePath);
+    });
+
+    test('throws after the configured retries when the file keeps changing', async () => {
+        const filePath = tempFilePath('update-yaml-exhaust.yaml');
+        await writeYaml(filePath, { count: 0 });
+        let external = 1;
+
+        await expect(updateYaml<Record<string, number>>(filePath, { count: 0 }, current => {
+            // Change the file under every attempt (growing its size) so the pre-move check always
+            // sees a conflict regardless of mtime resolution.
+            writeFileSync(filePath, `count: ${external}\n${'# pad\n'.repeat(external)}`);
             external += 1;
             return { count: current.count + 1 };
         }, 2)).rejects.toThrow(/kept changing/);

@@ -16,9 +16,8 @@ import { formatImportTimings } from "node-api/src/lib/import-timings";
 import type { IAutoImportSource } from "api/src/lib/auto-import-settings";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
 import { getAutoImportFileValue, isAutoImportFileKey, readAutoImportFile, setAutoImportFileValue } from "./mobile-auto-import-file";
-import { mobileAutoImportConfigFile } from "./mobile-auto-import-config-file";
 import { getSyncFileValue, isSyncFileKey, recordSyncDatabase, seedSyncSettingsFile, setSyncFileValue } from "./mobile-sync-file";
-import { mobileSyncConfigFile } from "./mobile-sync-config-file";
+import { mobileAutoImportConfigFile, mobileSyncConfigFile } from "./mobile-config-file";
 import { readPermissionState, resolveMediaPermission } from "./mobile-media-permission";
 import { JsEngine } from "./js-engine-plugin";
 import * as configStore from "./mobile-config-store";
@@ -808,11 +807,11 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     // Generic config persisted to WebView localStorage so settings (developer mode, theme, etc.)
     // survive app restarts, matching how databases and secrets are persisted.
     //
-    // The automatic import keys are the exception: they go to auto-import.toml in the storage
-    // sandbox instead, and the two syncing keys go to sync.toml beside it. Local storage belongs to
-    // the WebView and nothing else can read it, and both background loops run while there is no
-    // WebView. The settings card is unchanged and still writes the same keys on every platform; the
-    // routing is here because where they are kept is a platform's business.
+    // The automatic import and syncing keys are the exception: they go to config.yaml in the storage
+    // sandbox instead, each to its own section of it. Local storage belongs to the WebView and
+    // nothing else can read it, and both background loops run while there is no WebView. The
+    // settings card is unchanged and still writes the same keys on every platform; the routing is
+    // here because where they are kept is a platform's business.
     const config = createConfig(
         async (key) => {
             if (isAutoImportFileKey(key)) {
@@ -878,7 +877,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
 
     // Writes the syncing settings a fresh installation starts from, if nobody has written them yet.
     //
-    // The background sync loop reads sync.toml, and a file it cannot read means syncing off, which
+    // The background sync loop reads config.yaml, and a file it cannot read means syncing off, which
     // is the safe answer for a loop that would otherwise push photos over a metered connection on a
     // guess. That leaves a new phone with the two toggles showing syncing on and a file saying
     // nothing, so the app writes what the toggles say the first time it runs. A file that is already

@@ -3,7 +3,7 @@
 //
 // They are named here, in the shared package, because the settings card writes the same two keys on
 // every platform and each platform decides where they are kept: the desktop puts them in its own
-// settings file, and mobile routes them to sync.toml in the app's storage sandbox, where the
+// settings file, and mobile routes them to the sync section of config.yaml in the app's storage sandbox, where the
 // background sync loop can read them while there is no WebView.
 //
 

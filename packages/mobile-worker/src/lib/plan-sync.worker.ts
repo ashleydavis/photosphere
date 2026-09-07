@@ -1,10 +1,9 @@
 import type { ITaskContext } from "task-queue";
 import { computeSyncAllowed } from "api/src/lib/sync-gate";
-import { AUTO_IMPORT_CONFIG_PATH, SYNC_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
+import { CONFIG_PATH } from "api/src/lib/mobile-config-paths";
 import type { ISyncSettings } from "api/src/lib/sync-settings";
 import type { ISyncDatabaseData } from "api/src/lib/sync-database.types";
-import { readAutoImportConfigFile } from "node-api/src/lib/auto-import-config.worker";
-import { readSyncConfigFile } from "node-api/src/lib/sync-config.worker";
+import { readConfigFromStorage } from "node-api/src/lib/config.worker";
 import { loadDatabaseConfig } from "api/src/lib/database-config";
 import { openStorage } from "node-api/src/lib/open-storage";
 import { readNetworkConnectionType } from "../shims/network-status";
@@ -85,7 +84,10 @@ function refuse(reason: string, settings: ISyncSettings, pauseBetweenRunsMs: num
 // Handler for the plan-sync task.
 //
 export async function planSyncHandler(_data: object, _context: ITaskContext): Promise<IPlanSyncResult> {
-    const syncConfig = await readSyncConfigFile(SYNC_CONFIG_PATH);
+    // One read for both sections. They used to be two files, so resolving which database to push
+    // meant opening sync.toml and then auto-import.toml; the merged file costs one read per pass.
+    const { config } = await readConfigFromStorage(CONFIG_PATH);
+    const syncConfig = config.sync;
     const settings = syncConfig.settings;
     const pauseBetweenRunsMs = syncConfig.pauseBetweenRunsMs;
 
@@ -117,7 +119,7 @@ export async function planSyncHandler(_data: object, _context: ITaskContext): Pr
     // must not need automatic import switched on to have anything to push: the two are switched on
     // separately. The import's database is the fallback for a phone that has imported in the
     // background without anybody opening it.
-    const autoImportConfig = await readAutoImportConfigFile(AUTO_IMPORT_CONFIG_PATH);
+    const autoImportConfig = config.autoImport;
     const recordedPath = syncConfig.databasePath;
     const databasePath = recordedPath !== undefined && recordedPath.length > 0
         ? recordedPath
