@@ -14,6 +14,7 @@ import Drawer from "@mui/joy/Drawer/Drawer";
 import { LeftSidebar } from "./components/left-sidebar";
 import { RightSidebar } from "./components/right-sidebar";
 import { JobsDialog } from "./components/jobs-dialog";
+import { DatabaseSummaryDialog } from "./components/database-summary-dialog";
 import { Navbar } from "./components/navbar";
 import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
@@ -71,6 +72,11 @@ function __Main({ initialTheme }: IMainProps) {
     // Set to true to show the background jobs, opened from the navbar spinner.
     //
     const [jobsDialogOpen, setJobsDialogOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to show the database summary, opened from the navbar's photo count.
+    //
+    const [databaseSummaryDialogOpen, setDatabaseSummaryDialogOpen] = useState<boolean>(false);
 
     //
     // Set to true to open the configuration dialog.
@@ -208,6 +214,18 @@ function __Main({ initialTheme }: IMainProps) {
     }, []);
 
     //
+    // Open the database summary when the navbar's photo count is clicked, which is where the number
+    // it shows comes from. A window event for the same reason as the jobs listener above it.
+    //
+    useEffect(() => {
+        const showDatabaseSummary = () => setDatabaseSummaryDialogOpen(true);
+        window.addEventListener("photosphere:show-database-summary", showDatabaseSummary);
+        return () => {
+            window.removeEventListener("photosphere:show-database-summary", showDatabaseSummary);
+        };
+    }, []);
+
+    //
     // Listen for platform events from the host and dispatch menu actions by name.
     //
     useEffect(() => {
@@ -328,6 +346,11 @@ function __Main({ initialTheme }: IMainProps) {
             <JobsDialog
                 open={jobsDialogOpen}
                 onClose={() => setJobsDialogOpen(false)}
+                />
+
+            <DatabaseSummaryDialog
+                open={databaseSummaryDialogOpen}
+                onClose={() => setDatabaseSummaryDialogOpen(false)}
                 />
 
             <div

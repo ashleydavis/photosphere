@@ -36,8 +36,23 @@ export function NavbarJobsIndicator() {
                         // Joy's small chip is sized for a bare word. This one carries a spinner as
                         // well, which sits against the edge without room made for it.
                         '--Chip-paddingInline': isMobile ? '8px' : '12px',
-                        '--Chip-gap': '8px',
                         py: 0.75,
+                    }}
+                    slotProps={{
+                        //
+                        // The spinner and the count are both children, so they land in the label
+                        // slot together. That slot is not a flex row, so the ring sat on the text's
+                        // baseline instead of level with it, and the space between them came from a
+                        // margin on the text rather than from the layout. Centring them here lines
+                        // the ring up with the word and gives the gap one owner.
+                        //
+                        label: {
+                            sx: {
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                            },
+                        },
                     }}
                     >
                     {/*
@@ -52,7 +67,7 @@ export function NavbarJobsIndicator() {
                         tap away in the dialog.
                     */}
                     {!isMobile
-                        && <span style={{ marginLeft: 8 }}>{indicator.label}</span>
+                        && <span>{indicator.label}</span>
                     }
                 </Chip>
             }

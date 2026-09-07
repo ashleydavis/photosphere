@@ -38,6 +38,7 @@ import { stories as assetInfoStories } from "./components/asset-info.stories";
 import { stories as assetViewStories } from "./components/asset-view.stories";
 import { stories as carouselStories } from "./components/carousel.stories";
 import { stories as collapsibleSectionStories } from "./components/collapsible-section.stories";
+import { stories as databaseSummaryDialogStories } from "./components/database-summary-dialog.stories";
 import { stories as emptyDatabaseStories } from "./components/empty-database.stories";
 import { stories as entityCardStories } from "./components/entity-card.stories";
 import { stories as filmStripStories } from "./components/film-strip.stories";
@@ -103,6 +104,7 @@ export const stories: IStory[] = [
     ...assetViewStories,
     ...carouselStories,
     ...collapsibleSectionStories,
+    ...databaseSummaryDialogStories,
     ...emptyDatabaseStories,
     ...entityCardStories,
     ...filmStripStories,

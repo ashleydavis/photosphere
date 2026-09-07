@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Spinner } from "./spinner";
 import IconButton from '@mui/joy/IconButton';
+import Box from '@mui/joy/Box';
 import MoreVert from '@mui/icons-material/MoreVert';
 import Star from "@mui/icons-material/Star";
 import StarBorder from "@mui/icons-material/StarBorder";
@@ -274,7 +275,36 @@ export function Navbar({
                                     </button>
                                     {selectedItemsCount} selected
                                 </div>
-                                || <div data-id="database-photo-count">{sortedItemsCount} photos</div>
+                                /*
+                                    A real <button>, not a Joy Chip like the jobs indicator beside
+                                    it, because Joy hangs a Chip's onClick on a nested button of its
+                                    own and the smoke-test driver clicks the element carrying the
+                                    data-id. The data-id has to stay on the element holding the
+                                    count, which several tests read the number from. The soft pill
+                                    below is the chip's look, so the two still match.
+                                */
+                                || <Box
+                                    component="button"
+                                    data-id="database-photo-count"
+                                    title="Show database summary"
+                                    onClick={() => window.dispatchEvent(new CustomEvent("photosphere:show-database-summary"))}
+                                    sx={{
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                        border: 'none',
+                                        font: 'inherit',
+                                        color: 'text.primary',
+                                        borderRadius: 'sm',
+                                        px: 1,
+                                        py: 0.5,
+                                        backgroundColor: 'neutral.softBg',
+                                        '&:hover': {
+                                            backgroundColor: 'neutral.softHoverBg',
+                                        },
+                                    }}
+                                    >
+                                    {sortedItemsCount} photos
+                                </Box>
                             }                        
                         </div>
                     )}

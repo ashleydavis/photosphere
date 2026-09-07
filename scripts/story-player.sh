@@ -152,6 +152,62 @@ fi
 TMP_DIR="$REPO_DIR/stories-tmp/$PLATFORM_NAME"
 
 #
+# The descriptor holding the claimed device's lock, kept open for the whole run so no other suite
+# reinstalls the app or wipes its data while the stories are playing. Empty until a device is
+# claimed, and on Electron it stays empty.
+#
+STORY_DEVICE_FD=""
+
+#
+# Binds this run to one emulator or simulator, and holds that device's lock until the script exits.
+#
+# Without this every bare adb call goes to whichever devices happen to be attached, and with a pool
+# of more than one emulator up adb refuses outright ("more than one device/emulator"), so the
+# install fails before a single story renders. The smoke-test runner claims a device the same way
+# through with_device in apps/smoke-tests/lib/runner.sh; the story player needs one device for one
+# long session rather than one per test, so it takes the claim once, here.
+#
+# The claim is non-blocking and tries each device in turn, so a device another suite is mid-test on
+# is passed over rather than fought for. Nothing is claimed when flock is missing (Windows), which
+# leaves the previous behaviour on the platform that cannot lock anyway.
+#
+claim_story_device() {
+    if [ "$PLATFORM_NAME" = "electron" ]; then
+        return 0
+    fi
+
+    local slots
+    slots="$("${PLATFORM_NAME}_device_slots")"
+    if [ -z "$slots" ]; then
+        log_error "No device is available to play the stories on."
+        return 1
+    fi
+
+    if ! command -v flock >/dev/null 2>&1; then
+        # Nothing to claim with, so bind to the first device and rely on there being only one, which
+        # is what the smoke-test runner falls back to for the same reason.
+        "${PLATFORM_NAME}_export_device" "$(echo "$slots" | head -1)"
+        return 0
+    fi
+
+    local serial fd
+    while IFS= read -r serial; do
+        [ -n "$serial" ] || continue
+        exec {fd}<>"$(android_device_lock_path "$serial")"
+        if flock -n "$fd"; then
+            STORY_DEVICE_FD="$fd"
+            "${PLATFORM_NAME}_export_device" "$serial"
+            log_info "Playing the stories on $serial."
+            return 0
+        fi
+        exec {fd}>&-
+    done <<< "$slots"
+
+    log_error "Every device is being used by another suite, so the stories have nowhere to play."
+    return 1
+}
+
+#
 # Builds (and for mobile, installs) the app under test. Electron bundles the renderer and main
 # process; the mobile platforms boot their emulator/simulator, build the native app, and install
 # it. The cycle switches theme at runtime, so one build covers both light and dark.
@@ -426,6 +482,8 @@ open_index() {
 
 print_test_header "story-player" "play-every-story ($PLATFORM_NAME)"
 
+claim_story_device || exit 1
+
 build_app || exit 1
 
 rm -rf "$TMP_DIR"
@@ -473,7 +531,17 @@ wait_for_ready "$APP_PORT"
 # quick off the mark.
 #
 if [ -n "$SCREENSHOTS_DIR" ]; then
-    capture_loop "$TMP_DIR/app.log" "$SCREENSHOTS_DIR" "$APP_PORT" &
+    # Started with the device lock's descriptor closed. A background process inherits its parent's
+    # open descriptors, and an flock lives as long as any descriptor referring to it, so a capture
+    # loop (or the `tail -F` it spawns) that outlived this run would keep the emulator locked with
+    # nothing using it. The descriptor is only closed when one is held, because `{var}>&-` with an
+    # empty var is an ambiguous redirect and would stop the loop starting at all. The same reasoning
+    # as the health watcher in apps/smoke-tests/lib/runner.sh.
+    if [ -n "$STORY_DEVICE_FD" ]; then
+        capture_loop "$TMP_DIR/app.log" "$SCREENSHOTS_DIR" "$APP_PORT" {STORY_DEVICE_FD}>&- &
+    else
+        capture_loop "$TMP_DIR/app.log" "$SCREENSHOTS_DIR" "$APP_PORT" &
+    fi
     CAPTURE_PID=$!
     log_info "Capture loop started (PID $CAPTURE_PID); screenshots go to $SCREENSHOTS_DIR"
 fi
