@@ -23,7 +23,7 @@ NC='\033[0m'
 
 # Per-test temporary directories, the same allocator every other suite in this repository uses.
 _ENCRYPTED_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$_ENCRYPTED_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
+source "$_ENCRYPTED_SCRIPT_DIR/../../scripts/lib/test-lib.sh"
 
 # The per-test timeout every suite in this repository shares, and the reporting that goes with it.
 source "$_ENCRYPTED_SCRIPT_DIR/../../scripts/lib/test-timeout.sh"

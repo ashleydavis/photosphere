@@ -488,7 +488,7 @@ mkdir -p "$SESSION_DIR"
 REPORT="$SESSION_DIR/report.txt"
 
 # Per-test temporary directories, for the count reported at the end of a session.
-source "$ROOT/scripts/lib/allocate-test-temp-dir.sh"
+source "$ROOT/scripts/lib/test-lib.sh"
 
 # How many per-test directories existed before this session started, so the growth it causes can be
 # told from what was already there.

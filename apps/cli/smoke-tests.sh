@@ -28,7 +28,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Per-test temporary directories, the same allocator every other suite in this repository uses.
-source "$_CLI_ABS_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
+source "$_CLI_ABS_DIR/../../scripts/lib/test-lib.sh"
 
 # Starting and stopping background processes: the tree walk the traps below use to take a batch
 # subshell together with the CLI processes underneath it. Shared with the desktop and mobile suites

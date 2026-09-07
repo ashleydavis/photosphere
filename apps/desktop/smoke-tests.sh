@@ -6,7 +6,7 @@ REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Per-test temporary directories. Each test gets a uniquely named directory of its own, outside the
 # source tree, in place of the fixed <test>/tmp every run used to share.
-source "$REPO_DIR/scripts/lib/allocate-test-temp-dir.sh"
+source "$REPO_DIR/scripts/lib/test-lib.sh"
 
 # The leak check, so this run can be held to leaving the machine as it found it. Every app the tests
 # launch records its process group in this file, and the check at the end looks at those groups and

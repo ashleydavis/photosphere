@@ -15,7 +15,7 @@ NC='\033[0m'
 
 # Per-test temporary directories, the same allocator every other suite in this repository uses.
 _KEYCHAIN_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$_KEYCHAIN_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
+source "$_KEYCHAIN_SCRIPT_DIR/../../scripts/lib/test-lib.sh"
 
 # The suite root. It is NOT where a test runs: run_one allocates a uniquely named directory for
 # each test and hands it down as TEST_TMP_DIR.

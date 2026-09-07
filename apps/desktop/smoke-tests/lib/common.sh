@@ -16,7 +16,7 @@ REPO_DIR="$(cd "$COMMON_LIB_DIR/../../../.." && pwd)"
 
 # Per-test temporary directories. Every test writes everything it produces inside one directory of
 # its own, so no test can be affected by, or affect, another test's files.
-source "$REPO_DIR/scripts/lib/allocate-test-temp-dir.sh"
+source "$REPO_DIR/scripts/lib/test-lib.sh"
 
 # Starting and stopping background processes: the process group launcher, the tree walk and the
 # leak counter. Shared with the mobile suite, the CLI suites and the story player so there is one

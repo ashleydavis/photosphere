@@ -20,7 +20,7 @@ NC='\033[0m' # No Color
 
 # Per-run temporary directory, the same allocator every other suite in this repository uses.
 _WRITE_LOCK_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$_WRITE_LOCK_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
+source "$_WRITE_LOCK_SCRIPT_DIR/../../scripts/lib/test-lib.sh"
 
 # This suite is one script rather than a set of separate tests, so the script itself is what gets
 # held to the shared timeout. Without it a wedged run here had no limit at all and kept going until

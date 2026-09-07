@@ -9,6 +9,9 @@ SMOKE_TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
 # Absolute path to the repository root, for reaching the helper scripts under scripts/.
 REPO_ROOT="$(cd "$SMOKE_TESTS_DIR/../../.." && pwd)"
 
+# LAN pairing codes, allocated so a test cannot take one another run on the machine is using.
+source "$REPO_ROOT/scripts/lib/test-lib.sh"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'

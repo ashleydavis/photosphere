@@ -19,9 +19,10 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# Per-test temporary directories, the same allocator every other suite in this repository uses.
+# Per-test temporary directories and LAN pairing codes, the same allocators every other suite in
+# this repository uses.
 _LAN_SHARE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$_LAN_SHARE_SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
+source "$_LAN_SHARE_SCRIPT_DIR/../../scripts/lib/test-lib.sh"
 
 # Starting and stopping background processes: the tree walk this suite kills its receiver with.
 # Shared with the desktop and mobile suites so there is one implementation rather than a copy per
@@ -255,46 +256,6 @@ seed_databases_config() {
         bun ../smoke-tests/lib/write-databases-config.ts "${config_dir}/databases.toml"
 }
 
-#
-# Prints a four digit LAN pairing code, drawn at random so no two runs share one.
-#
-# The code is the only thing that tells two shares apart on the segment. A receiver announces
-# sha256(code) to the whole subnet and a sender takes the first announcement whose hash matches its
-# own code, so two shares using the same code are indistinguishable and the sender pairs with
-# whichever it hears first.
-#
-# Every test here used to hardcode one (1234, 2345, 3456, 4567, 5678, 6789, 8901). A second copy of
-# this suite therefore announced the same hashes, and the two runs took each other's senders: the
-# sender reported success having paired with the other run's receiver, and this run's receiver vault
-# was left empty. `bun run test:parallel` reports it as interference on the self-pair. A fixed code
-# is the machine-wide fixed name this repository forbids everywhere else, and it collides with
-# another worktree's run just as readily as with a second copy here.
-#
-# Matches allocate_pairing_code in apps/smoke-tests/lib/common.sh and CLI tests 78 and 79, which all
-# draw theirs the same way.
-# Usage: code="$(allocate_pairing_code)"
-#
-allocate_pairing_code() {
-    echo $(( (RANDOM % 9000) + 1000 ))
-}
-
-#
-# Prints a four digit pairing code that is not the one given, for the test that needs a sender's code
-# to differ from its receiver's. Drawing both independently would collide once in nine thousand runs
-# and turn that test into a rare, baffling failure.
-# Usage: wrong="$(allocate_different_pairing_code "$receiver_code")"
-#
-allocate_different_pairing_code() {
-    local avoid="$1"
-    local code
-    while true; do
-        code="$(allocate_pairing_code)"
-        if [ "$code" != "$avoid" ]; then
-            echo "$code"
-            return 0
-        fi
-    done
-}
 
 # Start a receiver in background with the given pairing code and wait for it to be ready.
 # Sets: RECEIVER_PID

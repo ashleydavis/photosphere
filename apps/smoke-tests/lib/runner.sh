@@ -18,7 +18,7 @@ RUNNER_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Per-test temporary directories. Sourced here as well as from common.sh because runner.test.sh
 # sources this file on its own, without common.sh, and the worker loop below allocates a directory
 # for every test it dispatches.
-source "$RUNNER_LIB_DIR/../../../scripts/lib/allocate-test-temp-dir.sh"
+source "$RUNNER_LIB_DIR/../../../scripts/lib/test-lib.sh"
 
 # The per-test timeout every suite in this repository shares, and the reporting that goes with it.
 source "$RUNNER_LIB_DIR/../../../scripts/lib/test-timeout.sh"

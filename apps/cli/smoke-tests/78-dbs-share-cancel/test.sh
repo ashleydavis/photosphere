@@ -40,7 +40,7 @@ SHARE_PGID=""
 # pair with the receiver belonging to another share test, or to another checkout's run, so the code is
 # drawn per run. The database name carries the same code because `dbs receive` refuses a name already
 # in its list, and the receiver config outlives a run.
-PAIRING_CODE=$(( (RANDOM % 9000) + 1000 ))
+PAIRING_CODE="$(allocate_pairing_code)"
 SHARED_DB_NAME="shared-db-$PAIRING_CODE"
 
 #

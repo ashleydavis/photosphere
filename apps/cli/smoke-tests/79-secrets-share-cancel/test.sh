@@ -29,7 +29,7 @@ SHARE_PGID=""
 # pair with the receiver belonging to another share test, or to another checkout's run, so the code is
 # drawn per run. The secret name carries the same code because the vault outlives a run and a name
 # already in it would be refused.
-PAIRING_CODE=$(( (RANDOM % 9000) + 1000 ))
+PAIRING_CODE="$(allocate_pairing_code)"
 SHARED_SECRET_NAME="shared-key-$PAIRING_CODE"
 
 #

@@ -53,7 +53,7 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Per-run temporary directory, the same allocator every other suite in this repository uses.
-source "$SCRIPT_DIR/../../scripts/lib/allocate-test-temp-dir.sh"
+source "$SCRIPT_DIR/../../scripts/lib/test-lib.sh"
 
 # Everything this run writes lives under a directory allocated for this run alone. It used to be a
 # fixed path under test/tmp, which broke two ways at once: that tree belongs to smoke-tests.sh, which

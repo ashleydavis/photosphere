@@ -25,9 +25,10 @@ LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SMOKE_TESTS_DIR="$(cd "$LIB_DIR/.." && pwd)"
 REPO_DIR="$(cd "$SMOKE_TESTS_DIR/../.." && pwd)"
 
-# Per-test temporary directories. Every test writes everything it produces inside one directory of
-# its own, so no test can be affected by, or affect, another test's files.
-source "$REPO_DIR/scripts/lib/allocate-test-temp-dir.sh"
+# Per-test temporary directories and LAN pairing codes. Every test writes everything it produces
+# inside one directory of its own, and holds a pairing code nothing else on the machine holds, so no
+# test can be affected by, or affect, another.
+source "$REPO_DIR/scripts/lib/test-lib.sh"
 
 # Starting and stopping background processes: the process group launcher, the tree walk and the
 # leak counter. Shared with the desktop suite, the CLI suites and the story player so there is one
@@ -962,28 +963,6 @@ run_cli() {
         PHOTOSPHERE_CONFIG_DIR="$tmp_dir/cli-config" \
         run_with_timeout 90 bun run start -- "$@" </dev/null
     )
-}
-
-#
-# A four digit LAN pairing code for one test run, drawn at random so no two runs share one.
-#
-# The code is the only thing that tells two shares apart. A receiver announces sha256(code) to the
-# whole subnet and a sender takes the first announcement whose hash matches its own code, so two
-# shares using the same code are indistinguishable and the sender pairs with whichever it hears
-# first. The loser then waits out its full timeout having never been contacted, and the failure
-# names the wrong thing: the receiving test reports that it never reached its review step.
-#
-# Four mobile tests used to hardcode 4321 between them (26, 27, 44 and 45). The runner spreads tests
-# across every attached device, so those ran at the same time and stole each other's senders. It was
-# invisible for as long as the timing happened not to overlap, then became a hard failure the moment
-# anything shifted. A fixed code also collides with the same test running from another worktree,
-# which is the machine-wide fixed name this repository forbids anywhere else.
-#
-# Matches the CLI suites, which already draw theirs this way (see 78-dbs-share-cancel).
-# Usage: PAIRING_CODE="$(allocate_pairing_code)"
-#
-allocate_pairing_code() {
-    echo $(( (RANDOM % 9000) + 1000 ))
 }
 
 #

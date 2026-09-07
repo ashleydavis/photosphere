@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-# Per-test temporary directories for the shell smoke-test runners.
+# Shared library for the shell smoke-test runners: the per-run resources a suite must not share
+# with anything else on the machine.
 #
 # Every test, not every suite, owns a uniquely named directory for its fixtures, logs and scratch
 # space, and gets one without opting in. Sharing a directory is how tests came to interfere with
@@ -103,4 +104,102 @@ photosphere_test_temp_count() {
         return 0
     fi
     find "$PHOTOSPHERE_TEST_TEMP_ROOT" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' '
+}
+
+# LAN pairing codes for the shell smoke-test runners.
+#
+# Source this from a runner or a test harness:
+#   source "<repo>/scripts/lib/test-lib.sh"
+#
+# It defines functions only. A suite must not share a code with anything else running on the machine,
+# for the same reason it must not share a temp directory.
+#
+# A pairing code is the only thing that tells two shares apart on a network segment. A receiver
+# announces sha256(code) to the whole subnet and a sender takes the first announcement whose hash
+# matches the code it holds, so two shares on the same code are indistinguishable and a sender pairs
+# with whichever it hears first.
+#
+# Drawing with $RANDOM out of nine thousand, which is what every caller used to do for itself, is
+# not an allocation: two concurrent runs collide by luck. When they do, a receiver receives a payload
+# meant for another run and the test that asserts its vault is empty fails, naming nothing that is
+# actually wrong. Rare enough to look like a product bug and never reproduce.
+#
+# Another machine on the same subnet can still draw the same code, because nothing here can see it.
+# That is a smaller problem than a second copy of a suite on this machine, which is the case
+# `bun run test:parallel` exercises on purpose.
+
+# Where held codes are recorded, one file per code, named by the code and holding the pid that took
+# it. Beside the temp root rather than inside it, so a run that deletes its own directory does not
+# release a code it is still using.
+PHOTOSPHERE_PAIRING_CODE_DIR="${TMPDIR:-/tmp}/photosphere-pairing-codes"
+
+#
+# Prints a four digit pairing code no other live process on this machine holds, and records that this
+# process holds it.
+#
+# A code is free when nothing names it, or when the file's owner is gone: a run killed part way
+# through leaves its files behind and nothing else would clear them. Liveness is the test rather than
+# an age, because a suite holds a code for minutes and a file whose owner has died is worthless the
+# moment it dies.
+#
+# Usage: code="$(allocate_pairing_code)"
+#
+allocate_pairing_code() {
+    mkdir -p "$PHOTOSPHERE_PAIRING_CODE_DIR"
+
+    local code
+    local holder
+    local attempts=0
+    local lock_fd
+
+    # One lock around the look and the claim. Without it two callers can both see a code free and
+    # both take it, which is the collision this exists to remove.
+    exec {lock_fd}>"$PHOTOSPHERE_PAIRING_CODE_DIR/.lock"
+    flock "$lock_fd"
+
+    while true; do
+        code=$(( (RANDOM % 9000) + 1000 ))
+
+        if [ -f "$PHOTOSPHERE_PAIRING_CODE_DIR/$code" ]; then
+            holder="$(cat "$PHOTOSPHERE_PAIRING_CODE_DIR/$code" 2>/dev/null)"
+            if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then
+                attempts=$((attempts + 1))
+                if [ "$attempts" -gt 100 ]; then
+                    # Nine thousand codes and a hundred misses means codes are leaking rather than
+                    # that the machine is busy. Say so instead of spinning.
+                    flock -u "$lock_fd"
+                    exec {lock_fd}>&-
+                    echo "Could not allocate a pairing code: $PHOTOSPHERE_PAIRING_CODE_DIR is full of live holders." >&2
+                    return 1
+                fi
+                continue
+            fi
+        fi
+
+        echo "$$" > "$PHOTOSPHERE_PAIRING_CODE_DIR/$code"
+        break
+    done
+
+    flock -u "$lock_fd"
+    exec {lock_fd}>&-
+
+    printf '%s\n' "$code"
+}
+
+#
+# Prints an allocated pairing code that is not the one given, for the test that needs a sender's code
+# to differ from its receiver's.
+#
+# Usage: wrong="$(allocate_different_pairing_code "$receiver_code")"
+#
+allocate_different_pairing_code() {
+    local avoid="$1"
+    local code
+    while true; do
+        code="$(allocate_pairing_code)" || return 1
+        if [ "$code" != "$avoid" ]; then
+            printf '%s\n' "$code"
+            return 0
+        fi
+    done
 }
