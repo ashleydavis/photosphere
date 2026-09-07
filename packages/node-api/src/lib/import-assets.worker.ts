@@ -24,7 +24,6 @@ import { IUploadAssetData, IUploadAssetResult, IAssetDatabaseData } from "./uplo
 import { IImportAssetsResult, IImportedAsset, IImportProgressMessage, IImportSuccessMessage, ISkippedImport } from "api/src/lib/import-assets.types";
 import { IImportRecordEntry, ImportSource } from "api/src/lib/import-record";
 import { recordImports } from "./import-record-storage";
-import { addDatabaseWriteBreakdown, addDatabaseWriteTiming, withExportMs, addHashFileTiming, addUploadAssetTiming, createEmptyImportTimings, formatImportTimings, withSkippedBeforeOpening, withTotalMs } from "./import-timings";
 
 //
 // How many import record entries pile up before they are written out.
@@ -193,15 +192,10 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
         imported: [],
         skipped: [],
         failedCount: 0,
-        timings: createEmptyImportTimings(),
     };
 
-    // When the run started, so its wall clock can be reported against the work its child tasks did.
+    // When the run started, so a job row can say how long it has been going.
     const runStartedAt = Date.now();
-
-    // What the timings counted last time they were reported, so the same numbers are not reported
-    // again. See where it is set for why the elapsed time is not part of it.
-    let lastTimingsSignature = "";
 
     // True once the scanner has nothing left to hand over, which is when a part-filled batch of
     // database writes should go out rather than wait for more that are not coming.
@@ -577,36 +571,6 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
                 const committedAt = Date.now();
 
                 await stampDatabaseModified(storage, rawStorage);
-
-                // Read back rather than guessed at, so the next batch compares against exactly what
-                // is on disk. The stamp is a timestamp this run did not choose, and a value that
-                // merely looks like it would make the next batch think somebody else had written.
-                lastModifiedAtWrittenByThisRun = (await loadDatabaseState(rawStorage))?.lastModifiedAt;
-
-                // What this batch cost, split by what it was doing. The batch count matters as much
-                // as the times: the merkle tree is loaded and saved whole every batch, so a run that
-                // writes in small batches pays for the whole tree over and over, and only the count
-                // beside the totals shows that.
-                result.timings = addDatabaseWriteBreakdown(result.timings, {
-                    lockWaitMs: lockedAt - databaseWriteStartedAt,
-                    flushMs: flushedAt - lockedAt,
-                    treeLoadMs: treeLoadedAt - flushedAt,
-                    addItemsMs: itemsAddedAt - treeLoadedAt,
-                    merkleAddMs,
-                    recordInsertMs,
-                    collectionInsertMs,
-                    hashCacheAssetIdMs,
-
-                    // What the loop spent on everything else: recording the outcome, telling the
-                    // gallery, and the bookkeeping between the two timed parts.
-                    perItemOtherMs: Math.max(0, (itemsAddedAt - treeLoadedAt) - merkleAddMs - recordInsertMs),
-                    treeSaveMs: treeSavedAt - itemsAddedAt,
-                    commitMs: committedAt - treeSavedAt,
-                    stampMs: Date.now() - committedAt,
-                    writes: databaseWrites,
-                    writeBytes: databaseWriteBytes,
-                    writeCallMs: databaseWriteCallMs,
-                });
             }
 
             return true;
@@ -615,11 +579,6 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             await releaseWriteLock(rawStorage);
             log.verbose(`Released write lock.`);
 
-            // Counted here rather than beside the return, so a batch that failed part way still says
-            // what it cost. The write lock's own wait is inside this, deliberately: waiting for the
-            // lock is part of what a database write costs an import, and leaving it out would make
-            // the stage look cheaper than it is.
-            result.timings = addDatabaseWriteTiming(result.timings, Date.now() - databaseWriteStartedAt);
         }
     }
 
@@ -705,7 +664,6 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             if (taskResult.status === TaskStatus.Succeeded) {
                 const hashResult = taskResult.outputs as IHashFileResult;
 
-                result.timings = addHashFileTiming(result.timings, hashResult);
 
                 if (!hashResult.hashFromCache) {
                     const cacheIdentity = hashFileData.cacheIdentity;
@@ -807,7 +765,6 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             if (taskResult.status === TaskStatus.Succeeded) {
                 const uploadResult = taskResult.outputs as IUploadAssetResult;
 
-                result.timings = addUploadAssetTiming(result.timings, uploadResult);
 
                 pendingDatabaseUpdates.push({
                     assetData: uploadResult.assetData,
@@ -866,9 +823,6 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     function onScannerProgress(scannerProgress: IAutoImportScannerProgress): void {
         skippedBeforeOpening = scannerProgress.skippedAsAlreadyImported;
 
-        // The scanner keeps a running total rather than reporting each copy, so this replaces what
-        // was recorded rather than adding to it.
-        result.timings = withExportMs(result.timings, scannerProgress.exportMs);
 
         // Save the hash cache and the import record once there is nothing left to import.
         //
@@ -943,29 +897,6 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
         // because the scanner streams: how many files there are to import is not known until the
         // run that imports them has finished.
         sendJobProgress(context, data.job, runStartedAt, describeImportProgress(result.imported.length, result.skipped.length + skippedBeforeOpening, result.failedCount));
-
-        // Where the time has gone so far, sent as the run goes rather than only when it ends.
-        //
-        // A run over a real photo library does not end for hours, so timings that were only reported
-        // at the end could only be read by stopping the import, and stopping it means driving the
-        // app's interface. That cannot be relied on: a phone left on its lockscreen has its WebView
-        // paused by Android, so the command to stop the import goes unanswered and the measurement
-        // is lost along with the run. Reported as it goes, a measurement is whatever the last report
-        // said, and nothing has to be asked of the interface at all.
-        //
-        // Only when the work it counts has actually moved, though. Progress is reported on a timer
-        // as well as on a completion, so sending this every time put thousands of lines that
-        // differed by a millisecond into the app log of a single import and buried everything else
-        // in it. The elapsed time is deliberately not part of what counts as a change: it moves on
-        // every tick, which would defeat the whole check.
-        const timingsSignature = `${result.timings.filesHashed}/${result.timings.filesFromCache}/${skippedBeforeOpening}/${result.timings.childTaskMs}`;
-        if (timingsSignature !== lastTimingsSignature) {
-            lastTimingsSignature = timingsSignature;
-            context.sendMessage({
-                type: "import-timings",
-                timings: withTotalMs(withSkippedBeforeOpening(result.timings, skippedBeforeOpening), Date.now() - runStartedAt),
-            });
-        }
     }
 
     try {
@@ -1080,21 +1011,6 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
         // because what it did take in before failing is exactly what a user asking "what happened?"
         // wants to see.
         await swallowError(() => flushImportRecord());
-
-        // Where the run's time went, written here rather than beside the return so a run that was
-        // cancelled or that failed part way still reports it. A measurement of a photo library too
-        // big to import in one sitting is a run that was stopped on purpose, and a run that reported
-        // nothing because it did not reach the end would be no measurement at all.
-        result.timings = withSkippedBeforeOpening(result.timings, skippedBeforeOpening);
-        result.timings = withTotalMs(result.timings, Date.now() - runStartedAt);
-        log.info(formatImportTimings(result.timings));
-
-        // Sent as well as logged, because on mobile this task runs inside the embedded JS engine and
-        // the line above never reaches the app log. Messages are the only thing that crosses.
-        context.sendMessage({
-            type: "import-timings",
-            timings: result.timings,
-        });
     }
 
     return result;

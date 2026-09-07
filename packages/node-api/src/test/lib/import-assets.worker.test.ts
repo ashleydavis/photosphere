@@ -1211,6 +1211,7 @@ describe('importAssetsHandler', () => {
         // way a part-filled batch goes out, which is a long-lived automatic import going idle with
         // a few assets in hand: that needs a run that stays alive while the scanner reports itself
         // caught up, which this harness has no way to hold open.
+        const databaseCommit = watchDatabaseCommits();
         hashFileReportsNewFile();
         uploadSucceeds();
         autoImportScannerPushesOneItem();
@@ -1218,7 +1219,7 @@ describe('importAssetsHandler', () => {
         const result = await importAssetsHandler(autoImportData(), makeContext());
 
         expect(result.imported).toHaveLength(1);
-        expect(result.timings.databaseBatches).toBe(1);
+        expect(databaseCommit).toHaveBeenCalledTimes(1);
     });
 
 
@@ -1229,6 +1230,8 @@ describe('importAssetsHandler', () => {
         // uploaded. Writing then, because "what is waiting is all there is", gave each of those
         // remaining photos a full database commit to itself, and a commit rewrites every shard it
         // touches, so it costs more the bigger the database is.
+        const databaseCommit = watchDatabaseCommits();
+
         // A hash per file rather than one for all of them, so all five are new files rather than
         // four duplicates of the first.
         mockBackend.setTaskResult("hash-file", (hashData: IHashFileData, taskId) => ({
@@ -1264,7 +1267,7 @@ describe('importAssetsHandler', () => {
         const result = await importAssetsHandler(autoImportData(), makeContext());
 
         expect(result.imported).toHaveLength(5);
-        expect(result.timings.databaseBatches).toBe(1);
+        expect(databaseCommit).toHaveBeenCalledTimes(1);
     });
     test("does not save the hash cache while the scanner still has work to hand over", async () => {
         const hashCache = watchHashCache();
@@ -1286,6 +1289,26 @@ describe('importAssetsHandler', () => {
     // index page holds every record in it. They are dropped only when the database's own modified
     // stamp differs from the one this run last wrote, which is what says somebody else has written.
     //
+    //
+    // Replaces the database mock with one whose commit can be counted, for the tests that care how
+    // many commits an import paid for rather than what it imported. Every batch is a full commit,
+    // and a commit rewrites every shard it touches, so the count is the thing worth asserting.
+    //
+    function watchDatabaseCommits(): jest.Mock {
+        const { BsonDatabase } = require("bdb");
+        const databaseCommit = jest.fn().mockResolvedValue(undefined);
+        BsonDatabase.mockImplementation(() => ({
+            collection: jest.fn().mockReturnValue({
+                insertOne: jest.fn().mockResolvedValue(undefined),
+                getAll: jest.fn().mockImplementation(async () => ({ records: mockExistingDatabaseRecords, next: undefined })),
+                sortIndex: jest.fn().mockReturnValue({ findByValue: jest.fn().mockResolvedValue([]) }),
+            }),
+            flush: jest.fn().mockResolvedValue(undefined),
+            commit: databaseCommit,
+        }));
+        return databaseCommit;
+    }
+
     function importOneBatchOfNewFiles(): { flush: jest.Mock; commit: jest.Mock } {
         const { BsonDatabase } = require("bdb");
         const databaseFlush = jest.fn().mockResolvedValue(undefined);

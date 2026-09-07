@@ -235,6 +235,45 @@ describe("mobile tools Image", () => {
         expect(resizeCall!.argv[2]).toBe("300x300!");
     });
 
+    test("resize accepts the numbered first frame a multi-frame image writes instead", async () => {
+        installFakeHost({
+            existingFiles: ["/cache/anim.gif", "/cache/temp_resize_uuid-1-0.jpg"],
+            registerOutputs: false,
+        });
+        const outputPath = await new Image("/cache/anim.gif").resize(
+            { width: 300, height: 300, quality: 90, format: "jpeg", ext: "jpg" },
+            "/cache",
+            fakeUuidGenerator,
+        );
+        expect(outputPath).toBe("/cache/temp_resize_uuid-1-0.jpg");
+    });
+
+    test("resize prefers the asked-for output path over the numbered frame when both exist", async () => {
+        installFakeHost({
+            existingFiles: ["/cache/a.jpg", "/cache/temp_resize_uuid-1.jpg", "/cache/temp_resize_uuid-1-0.jpg"],
+            registerOutputs: false,
+        });
+        const outputPath = await new Image("/cache/a.jpg").resize(
+            { width: 300, height: 300, quality: 90, format: "jpeg", ext: "jpg" },
+            "/cache",
+            fakeUuidGenerator,
+        );
+        expect(outputPath).toBe("/cache/temp_resize_uuid-1.jpg");
+    });
+
+    test("resize throws when ImageMagick fails, whatever files are lying around", async () => {
+        installFakeHost({
+            existingFiles: ["/cache/anim.gif", "/cache/temp_resize_uuid-1-0.jpg"],
+            registerOutputs: false,
+            imageMagickResult: () => ({ exitCode: 1, output: "boom" }),
+        });
+        await expect(new Image("/cache/anim.gif").resize(
+            { width: 300, height: 300, quality: 90, format: "jpeg", ext: "jpg" },
+            "/cache",
+            fakeUuidGenerator,
+        )).rejects.toThrow(/output not created/);
+    });
+
     test("resize throws when the output file is not created", async () => {
         installFakeHost({ existingFiles: ["/cache/a.jpg"], registerOutputs: false });
         await expect(new Image("/cache/a.jpg").resize(

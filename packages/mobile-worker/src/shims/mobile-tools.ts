@@ -136,6 +136,31 @@ function runImageMagickToFile(argv: string[], outputPath: string): void {
 }
 
 //
+// Runs an ImageMagick argv that produces a file, and returns whichever of the candidate paths it
+// actually wrote.
+//
+// An image with more than one frame, an animated GIF being the common one, is read by ImageMagick as
+// a sequence rather than a single image, and writing a sequence to one output path writes one file
+// per frame with the frame number appended before the extension instead. Nothing about that is an
+// error, so the exit code is zero and the path that was asked for is simply not there. The desktop
+// tool has always looked for the numbered first frame when the plain path is missing (see the resize
+// in packages/tools/src/lib/image.ts); this is the same check, and without it every animated GIF on
+// a phone fails its import.
+//
+function runImageMagickToOneOf(argv: string[], candidatePaths: string[]): string {
+    const result = runMediaTool(getMediaHost().imageMagick, argv);
+    if (result.exitCode === 0) {
+        for (const candidatePath of candidatePaths) {
+            if (getFsHost().fsAccess(candidatePath)) {
+                return candidatePath;
+            }
+        }
+    }
+
+    throw new Error(`ImageMagick operation failed (exit code ${result.exitCode}), output not created at any of: ${candidatePaths.join(", ")}`);
+}
+
+//
 // Parses the single-pixel dominant-colour output ("R,G,B") into an [r, g, b] triple.
 //
 function parseDominantColor(output: string): [number, number, number] {
@@ -304,7 +329,8 @@ export class Image {
             geometry = buildGeometry(undefined, options.height, false);
         }
 
-        const outputPath = path.join(tempDir, `temp_resize_${uuidGenerator.generate()}.${options.ext}`);
+        const basePath = path.join(tempDir, `temp_resize_${uuidGenerator.generate()}`);
+        const outputPath = `${basePath}.${options.ext}`;
         const argv = buildResizeArgs({
             inputPath: this.filePath,
             outputPath,
@@ -312,8 +338,10 @@ export class Image {
             quality: options.quality,
             format: options.format,
         });
-        runImageMagickToFile(argv, outputPath);
-        return outputPath;
+
+        // A multi-frame source writes its first frame to "<base>-0.<ext>" rather than to the path
+        // that was asked for, so both are accepted. See runImageMagickToOneOf.
+        return runImageMagickToOneOf(argv, [outputPath, `${basePath}-0.${options.ext}`]);
     }
 
     //

@@ -25,6 +25,8 @@ The phone must be on Wi-Fi. Syncing refuses a cellular connection by default, an
 
 If the app has been used before, remove its data first so the test starts with no database and no settings. On Android: **Settings > Apps > Photosphere > Storage > Clear storage**. On iOS: delete the app and let `bun run ios` reinstall it.
 
+If the test has been run before, the bucket still holds the database the last run put there, and step 8 needs that prefix empty. Step 16 has the commands to clear it. Run them before you start rather than trusting that the last run finished tidily, because a bucket that already holds the photos syncs nothing and the test passes without proving anything.
+
 ## Steps
 
 ### 1. Check where you are starting from
@@ -271,7 +273,16 @@ Camera to cloud, with the app only ever left open. This is what the feature is f
 
 The test starts from a phone with no database and a bucket with nothing at that prefix, so both have to go back to how they were. Leaving them means the next run silently tests something else: a second run against a bucket that already holds the photos syncs nothing and proves nothing.
 
-1. Delete everything under the `auto-sync-test` prefix in the bucket. Do this from the Spaces or S3 console, or with an S3 client. The CLI has no command for it: `psi dbs remove` takes the database out of the list and leaves its files where they are.
+1. Delete everything under the `auto-sync-test` prefix in the bucket, with the `aws` CLI and the bucket's credentials in the environment. The CLI has no command for it: `psi dbs remove` takes the database out of the list and leaves its files where they are.
+
+```bash
+aws s3 rm s3://cloud-storage-tests/auto-sync-test/ --recursive
+```
+
+    A recursive delete takes everything under whatever prefix it is given, there is no undo, and this bucket holds other tests' data alongside this one, so a prefix that is mistyped or left off takes those with it.
+
+    `InvalidAccessKeyId` from this means the request went to real AWS rather than to the bucket. `aws` does not read `AWS_ENDPOINT`, which is the variable the `psi` commands elsewhere in this test use, so the endpoint has to be in `AWS_ENDPOINT_URL` as well.
+
 2. On the phone, remove the app's data. On Android: **Settings > Apps > Photosphere > Storage > Clear storage**. On iOS: delete the app.
 3. Take the bucket's credentials off the development machine, and the database entry with them. Route B put them there, and a live access key left in a keychain outlives the test that needed it. From `apps/cli/`:
 
