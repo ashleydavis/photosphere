@@ -2,25 +2,37 @@ import * as os from "os";
 import * as path from "path";
 import * as fs from "fs/promises";
 import { DEFAULT_DATABASE_DISPLAY_NAME } from "api/src/lib/auto-import-mobile";
-import { buildConfigYaml, readConfigHandler } from "node-api/src/lib/config.worker";
-import { buildDatabasesConfigToml, readDatabasesConfigHandler } from "node-api/src/lib/databases-config.worker";
-import { recordDefaultDatabaseHandler } from "../../lib/record-default-database.worker";
+import { buildConfigYaml, readConfigHandler } from "../../lib/config.worker";
+import { buildDatabasesConfigToml, readDatabasesConfigHandler } from "../../lib/databases-config.worker";
+import { checkDatabaseExists } from "../../lib/media-file-database";
+import { createDefaultDatabaseHandler } from "../../lib/create-default-database.worker";
 
 //
-// Tests for the task that records a database the background import has just created.
+// Tests for the task that creates the default database and records it. Every platform runs this one,
+// so what a default database is cannot differ between them.
 //
-// The two writes it makes have to happen together: a database recorded as the default but missing
-// from the list is one the user cannot open, and a database in the list that is not recorded as the
-// default is created again on the next pass, on top of the one that is already there.
+// The three things it does have to happen together: a database recorded as the default but missing
+// from the list is one the user cannot open, and a database that exists but is recorded nowhere is
+// created again on the next pass, on top of the one that is already there.
 //
 // It runs against the real filesystem, from a temporary directory standing in for the app's storage
-// sandbox, because the two files are what it is for.
+// sandbox, because a real database and the two files are what it is for.
 //
 
 //
-// The task context the handlers take. They ignore it, so an empty object suffices.
+// The task context. The database it creates is stamped with the identifiers from here. The
+// identifier is a real UUID because the database's merkle tree is written with it packed into
+// sixteen bytes, which a made-up string cannot be.
 //
-const context: any = {};
+const context: any = {
+    uuidGenerator: {
+        generate: () => "6f1e2c3a-4b5d-4e7f-8a9b-0c1d2e3f4a5b",
+    },
+    timestampProvider: {
+        now: () => 0,
+        dateNow: () => new Date(0),
+    },
+};
 
 //
 // A temporary working directory standing in for the app's storage sandbox, and the directory the
@@ -31,7 +43,7 @@ let previousCwd: string;
 
 beforeEach(async () => {
     previousCwd = process.cwd();
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "psphere-record-default-"));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "psphere-create-default-"));
     process.chdir(tempDir);
 });
 
@@ -40,7 +52,13 @@ afterEach(async () => {
     await fs.rm(tempDir, { recursive: true, force: true });
 });
 
-describe("record-default-database", () => {
+describe("create-default-database", () => {
+
+    test("creates a real database at the path", async () => {
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml" }, context);
+
+        expect(await checkDatabaseExists(path.join(tempDir, "photosphere-default"))).toBe(true);
+    });
 
     test("records the database as the default and adds it to the database list", async () => {
         await fs.writeFile(
@@ -65,7 +83,7 @@ describe("record-default-database", () => {
             }),
             "utf8");
 
-        await recordDefaultDatabaseHandler({ databasePath: "photosphere-default" }, context);
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml" }, context);
 
         const settings = await readConfigHandler({ configPath: "config.yaml" }, context);
         expect(settings.autoImport.defaultDatabasePath).toBe("photosphere-default");
@@ -105,7 +123,7 @@ describe("record-default-database", () => {
             }),
             "utf8");
 
-        await recordDefaultDatabaseHandler({ databasePath: "photosphere-default" }, context);
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml" }, context);
 
         const settings = await readConfigHandler({ configPath: "config.yaml" }, context);
         expect(settings.autoImport.settings.enabled).toBe(true);
@@ -128,7 +146,7 @@ describe("record-default-database", () => {
                 undefined),
             "utf8");
 
-        await recordDefaultDatabaseHandler({ databasePath: "photosphere-default" }, context);
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml" }, context);
 
         const databases = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
         expect(databases.databases.map(entry => entry.path)).toEqual(["holiday", "photosphere-default"]);
@@ -138,14 +156,14 @@ describe("record-default-database", () => {
     test("recording the same database twice does not list it twice", async () => {
         // A pass can be interrupted after the database is recorded and before the import finishes, so
         // the next pass may record it again.
-        await recordDefaultDatabaseHandler({ databasePath: "photosphere-default" }, context);
-        await recordDefaultDatabaseHandler({ databasePath: "photosphere-default" }, context);
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml" }, context);
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml" }, context);
 
         const databases = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
         expect(databases.databases.map(entry => entry.path)).toEqual(["photosphere-default"]);
     });
 
     test("a missing database path is refused rather than recorded as nothing", async () => {
-        await expect(recordDefaultDatabaseHandler({ databasePath: "" }, context)).rejects.toThrow("databasePath is required");
+        await expect(createDefaultDatabaseHandler({ databasePath: "", configPath: "config.yaml", databasesConfigPath: "databases.toml" }, context)).rejects.toThrow("databasePath is required");
     });
 });

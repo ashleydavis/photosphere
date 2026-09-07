@@ -34,7 +34,7 @@ import { readConfigHandler, writeConfigHandler } from "node-api/src/lib/config.w
 import { readStateHandler, writeStateHandler } from "node-api/src/lib/state.worker";
 import { planAutoImportHandler } from "./src/lib/plan-auto-import.worker";
 import { planSyncHandler } from "./src/lib/plan-sync.worker";
-import { recordDefaultDatabaseHandler } from "./src/lib/record-default-database.worker";
+import { createDefaultDatabaseHandler } from "node-api/src/lib/create-default-database.worker";
 import { evictOriginalsHandler } from "node-api/src/lib/evict-originals.worker";
 import { cleanupSourcesHandler } from "node-api/src/lib/cleanup-sources.worker";
 import { registerMediaSourceBuilder } from "node-api/src/lib/media-source-registry";
@@ -155,13 +155,15 @@ registerHandler("write-config", writeConfigHandler);
 registerHandler("read-state", readStateHandler);
 registerHandler("write-state", writeStateHandler);
 
-// Register the background import's two decisions. plan-auto-import says whether a pass should run,
-// what it imports into and what it watches; record-default-database records a database the pass has
-// just created, so the next pass does not create it again. Both are asked for by the native
-// background import (the Android foreground service, the iOS driver), which must not parse or write
-// these files itself: the format is defined once, here, in TypeScript.
+// Register the background import's decision and the database it needs. plan-auto-import says whether
+// a pass should run, what it imports into and what it watches; create-default-database makes the
+// database the first pass imports into and records it, so the next pass does not make it again. Both
+// are asked for by the native background import (the Android foreground service, the iOS driver),
+// which must not parse or write these files itself: the format is defined once, here, in TypeScript.
+// create-default-database is registered on the desktop too, so the default database is made the same
+// way on every platform.
 registerHandler("plan-auto-import", planAutoImportHandler);
-registerHandler("record-default-database", recordDefaultDatabaseHandler);
+registerHandler("create-default-database", createDefaultDatabaseHandler);
 
 // Register the background sync's one decision. plan-sync says whether a sync should run right now
 // and against which database, applying the same gate the interface applies and checking the database

@@ -67,19 +67,15 @@ export async function planAutoImportHandler(_data: object, context: ITaskContext
 
     if (plan.shouldRun) {
         if (plan.isNewDefault) {
-            // The database first, then the record of it. Recorded before the import rather than
-            // after, because an import that fails must not leave the next pass creating the database
-            // a second time on top of the one that is already there.
+            // Made and recorded before the import rather than after, because an import that fails
+            // must not leave the next pass creating the database a second time on top of the one
+            // that is already there. The same task the desktop app runs to make this database.
             steps.push({
-                type: "create-database",
+                type: "create-default-database",
                 data: {
                     databasePath: plan.databasePath,
-                },
-            });
-            steps.push({
-                type: "record-default-database",
-                data: {
-                    databasePath: plan.databasePath,
+                    configPath: "config.yaml",
+                    databasesConfigPath: "databases.toml",
                 },
             });
         }

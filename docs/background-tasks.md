@@ -289,6 +289,7 @@ Because both the message and the completion already reach every frontend for eve
 | `"save-assets-batch"` | `save-assets-batch.worker.ts` | Save a batch of assets |
 | `"prefetch-database"` | `prefetch-database.worker.ts` | Prefetch thumbnails |
 | `"create-database"` | `create-database.worker.ts` | Initialize a new database |
+| `"create-default-database"` | `create-default-database.worker.ts` | Initialize the default photo database, record it as the one automatic import writes to, and add it to the database list |
 | `"get-database-summary"` | `get-database-summary.worker.ts` | Compute database statistics |
 | `"asset-server"` | `asset-server.worker.ts` | Long-running express asset server bound to a loopback port (serves `/asset`, applies database ops) |
 

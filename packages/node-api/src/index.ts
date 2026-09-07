@@ -61,5 +61,6 @@ export * from "./lib/lazy-origin-storage";
 export * from "./lib/save-asset.worker";
 export * from "./lib/save-assets-batch.worker";
 export * from "./lib/create-database.worker";
+export * from "./lib/create-default-database.worker";
 export * from "./lib/prefetch-database.worker";
 export * from "./lib/sync-database.worker";

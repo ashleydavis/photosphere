@@ -99,12 +99,14 @@ describe("plan-auto-import", () => {
         expect(plan.isNewDefault).toBe(true);
         expect(plan.databasePath).toBe(DEFAULT_DATABASE_FOLDER_NAME);
         expect(plan.steps.map(step => step.type)).toEqual([
-            "create-database",
-            "record-default-database",
+            "create-default-database",
             "import-assets",
         ]);
-        expect(stepData(plan.steps, "create-database")).toEqual({ databasePath: DEFAULT_DATABASE_FOLDER_NAME });
-        expect(stepData(plan.steps, "record-default-database")).toEqual({ databasePath: DEFAULT_DATABASE_FOLDER_NAME });
+        expect(stepData(plan.steps, "create-default-database")).toEqual({
+            databasePath: DEFAULT_DATABASE_FOLDER_NAME,
+            configPath: "config.yaml",
+            databasesConfigPath: "databases.toml",
+        });
     });
 
     test("records the database before importing into it", async () => {
@@ -114,7 +116,7 @@ describe("plan-auto-import", () => {
 
         const plan = await planAutoImportHandler({}, context);
 
-        const recordIndex = plan.steps.findIndex(step => step.type === "record-default-database");
+        const recordIndex = plan.steps.findIndex(step => step.type === "create-default-database");
         const importIndex = plan.steps.findIndex(step => step.type === "import-assets");
         expect(recordIndex).toBeGreaterThanOrEqual(0);
         expect(importIndex).toBeGreaterThanOrEqual(0);

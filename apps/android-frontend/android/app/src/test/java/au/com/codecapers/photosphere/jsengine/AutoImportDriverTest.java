@@ -163,8 +163,7 @@ public final class AutoImportDriverTest {
             "photosphere-default",
             1,
             Arrays.asList(
-                new AutoImportPlan.Step("create-database", "{}"),
-                new AutoImportPlan.Step("record-default-database", "{}"),
+                new AutoImportPlan.Step("create-default-database", "{}"),
                 new AutoImportPlan.Step("import-assets", "{}")));
         RecordingHost host = new RecordingHost(
             Collections.singletonList(plan),
@@ -174,7 +173,7 @@ public final class AutoImportDriverTest {
         assertEquals(AutoImportDriver.PassOutcome.RAN, driver.runOnePass());
 
         assertEquals(
-            Arrays.asList("create-database", "record-default-database", "import-assets"),
+            Arrays.asList("create-default-database", "import-assets"),
             host.stepsRun);
     }
 
@@ -186,16 +185,16 @@ public final class AutoImportDriverTest {
                 "photosphere-default",
                 7,
                 Arrays.asList(
-                    new AutoImportPlan.Step("create-database", "{}"),
+                    new AutoImportPlan.Step("create-default-database", "{}"),
                     new AutoImportPlan.Step("import-assets", "{}")))),
-            Collections.singletonList("create-database"));
+            Collections.singletonList("create-default-database"));
         AutoImportDriver driver = new AutoImportDriver(host);
         host.driverToStopWhilePaused = driver;
 
         driver.runLoop();
 
         assertEquals("the import must not run against a database that was not created",
-            Collections.singletonList("create-database"), host.stepsRun);
+            Collections.singletonList("create-default-database"), host.stepsRun);
         assertEquals("the next pass is still scheduled after a failure",
             Collections.singletonList(7L), host.pauses);
         assertFalse("a failed pass is not the same as automatic import being switched off",
