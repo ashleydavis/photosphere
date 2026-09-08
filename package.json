@@ -74,6 +74,7 @@
     "build:and": "bun --filter=android-frontend sync && cd ./apps/android-frontend/android && ./gradlew :app:assembleDebug",
     "build:ios": "bun --filter=ios-frontend sync && cd ./apps/ios-frontend/ios/App && xcodebuild -workspace App.xcworkspace -scheme App -destination 'generic/platform=iOS Simulator' build",
     "vendor:imagemagick:ios": "bash ./apps/ios-frontend/ios/build-imagemagick.sh",
+    "dist:and": "bash ./apps/android-frontend/scripts/distribute-android.sh",
     "open:and": "bun run --filter=android-frontend open",
     "open:ios": "bun run --filter=ios-frontend open",
     "run:and": "bun run --filter=android-frontend run",
