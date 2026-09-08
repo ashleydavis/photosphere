@@ -144,6 +144,7 @@ The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why t
 - [Syncing](syncing.md) - What a sync moves, when each platform runs one, and how it keeps working while the app is not on screen.
 - [Background tasks](background-tasks.md) - Adding a new background task type.
 - [Mobile background tasks](mobile-background-tasks.md) - The mobile engine pool: what a slot is, what holds one, and why running out hangs the app.
+- [Delivering the Android app to testers](android-tester-distribution.md) - Getting a build to Android testers through Firebase App Distribution.
 - [Mobile native media tools](mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired up.
 - [Updating mobile ImageMagick/ffmpeg](updating-mobile-imagemagick-ffmpeg.md) - Updating the bundled versions.
 - [Theme override](theme-override.md) - Forcing the startup theme with `PHOTOSPHERE_THEME`.

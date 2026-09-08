@@ -1637,59 +1637,19 @@ jobs:
       - name: Generate release notes
         id: release-notes
         run: |
-          # Get the latest non-nightly tag (excluding current tag if this is a tagged build)
-          if [ "${{ needs.prepare-tag.outputs.is-release }}" == "true" ]; then
-            # For tagged releases, get commits since the previous tag (excluding current and nightly tags)
-            PREVIOUS_TAG=$(git tag --list --sort=-version:refname | grep -v "^${{ needs.prepare-tag.outputs.tag }}$" | grep -v "^nightly$" | head -1)
-            if [ -n "$PREVIOUS_TAG" ]; then
-              echo "Generating release notes for tagged release since previous tag: $PREVIOUS_TAG"
-              COMMIT_RANGE="${PREVIOUS_TAG}..HEAD"
-            else
-              echo "No previous tag found, using all commits for tagged release"
-              COMMIT_RANGE=""
-            fi
-          else
-            # For nightly builds, get commits since the last non-nightly tag
-            LAST_TAG=$(git tag --list --sort=-version:refname | grep -v "^nightly$" | head -1)
-            if [ -n "$LAST_TAG" ]; then
-              echo "Generating release notes for nightly build since last tag: $LAST_TAG"
-              COMMIT_RANGE="${LAST_TAG}..HEAD"
-            else
-              echo "No previous tag found, using all commits for nightly build"
-              COMMIT_RANGE=""
-            fi
-          fi
-          
-          # Get commits that start with "cli:" and process them
-          if [ -n "$COMMIT_RANGE" ]; then
-            RAW_COMMITS=$(git log --oneline --no-merges "$COMMIT_RANGE" --format="%s" --grep="^cli:")
-          else
-            RAW_COMMITS=$(git log --oneline --no-merges --format="%s" --grep="^cli:")
-          fi
-          
-          # Process commits: filter for "cli:" prefix, remove prefix, trim whitespace, and format as bullet points
-          RELEASE_NOTES=""
-          if [ -n "$RAW_COMMITS" ]; then
-            RELEASE_NOTES=$(echo "$RAW_COMMITS" | while IFS= read -r commit; do
-              if [[ $commit == cli:* ]]; then
-                # Remove "cli:" prefix and trim leading/trailing whitespace
-                cleaned=$(echo "${commit#cli:}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-                if [ -n "$cleaned" ]; then
-                  echo "- $cleaned"
-                fi
-              fi
-            done)
-          fi
-          
-          if [ -z "$RELEASE_NOTES" ]; then
-            RELEASE_NOTES="- No CLI-related commits found"
-          fi
-          
-          # Save release notes to output and file
+          # The CLI commits made since the last release tag, as bullets. The same script produces the
+          # notes for the Android tester builds, so a release and a tester build never describe the
+          # same commits differently. The tag being built is excluded so a tagged release measures
+          # from the tag before it; for a nightly the tag is empty and nothing is excluded.
+          RELEASE_NOTES=$(bash ./scripts/release-notes.sh \
+            --prefix cli \
+            --exclude-tag "${{ needs.prepare-tag.outputs.tag }}" \
+            --empty-message "- No CLI-related commits found")
+
           echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
           echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          
+
           echo "Generated release notes:"
           echo "$RELEASE_NOTES"
 
