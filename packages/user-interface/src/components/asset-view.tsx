@@ -7,7 +7,7 @@ import { useGallery } from "../context/gallery-context";
 import { useGallerySource } from "../context/gallery-source";
 import { usePlatform } from "../context/platform-context";
 import { useAssetDatabase } from "../context/asset-database-source";
-import { useConfig } from "../context/config-context";
+import { useState as useStateStore } from "../context/state-context";
 import { Chip, Drawer, IconButton } from "@mui/joy";
 import { ContentCopy, Delete, Download, Flag, Star } from "@mui/icons-material";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
@@ -39,7 +39,7 @@ export interface IAssetViewProps {
 const SUMMARY_COLLAPSED_KEY = "assetSummaryCollapsed";
 
 //
-// Session-level cache of the summary card's collapsed state, seeded from persisted config.
+// Session-level cache of the summary card's collapsed state, seeded from the state store.
 // Lets the state apply synchronously when reopening an asset, avoiding a flash before config loads.
 //
 let summaryCollapsedCache: boolean | undefined = undefined;
@@ -54,7 +54,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
     const { copyToClipboard } = usePlatform();
     const { downloadAsset } = useAssetDatabase();
     const { asset, addArrayValue, removeArrayValue, deleteAsset } = useGalleryItem();
-    const config = useConfig();
+    const state = useStateStore();
 
     //
     // Set to true to open the info modal.
@@ -95,7 +95,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
     //
     useEffect(() => {
         let cancelled = false;
-        config.get<boolean>(SUMMARY_COLLAPSED_KEY)
+        state.get<boolean>(SUMMARY_COLLAPSED_KEY)
             .then(stored => {
                 if (!cancelled && stored !== undefined) {
                     summaryCollapsedCache = stored;
@@ -140,7 +140,7 @@ export function AssetView({ onClose, onNext, onPrev }: IAssetViewProps) {
         const collapsed = !summaryCollapsed;
         setSummaryCollapsed(collapsed);
         summaryCollapsedCache = collapsed;
-        await config.set(SUMMARY_COLLAPSED_KEY, collapsed);
+        await state.set(SUMMARY_COLLAPSED_KEY, collapsed);
     }
 
     //

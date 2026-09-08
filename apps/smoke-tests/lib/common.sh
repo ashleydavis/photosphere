@@ -61,15 +61,20 @@ APP_ID="au.com.codecapers.photosphere"
 BUNDLE_ID="au.com.codecapers.photosphere"
 
 # Name of the app's database-list config inside its storage sandbox, the mobile counterpart of
-# desktop's ~/.config/photosphere/databases.toml. Must match DATABASES_CONFIG_PATH in
-# packages/mobile-frontend/src/lib/mobile-databases-config-file.ts, which is what the app reads.
+# desktop's ~/.config/photosphere/databases.toml. Must match the path the app opens in
+# packages/mobile-frontend/src/lib/mobile-databases-config-file.ts.
 DATABASES_CONFIG_FILE="databases.toml"
 
-# Name of the settings file inside the app's storage sandbox, holding the automatic import settings,
-# the syncing settings and the pacing of both background loops. Must match CONFIG_PATH in
-# packages/api/src/lib/mobile-config-paths.ts, which is what the app, the background import and the
-# background sync all read.
+# Name of the settings file inside the app's storage sandbox, holding what the user chose: the
+# automatic import settings, the syncing settings and the pacing of both background loops. Must match
+# the path opened in packages/mobile-frontend/src/lib/mobile-config-file.ts, which is what the app,
+# the background import and the background sync all read.
 CONFIG_FILE="config.yaml"
+
+# Name of the state file beside it, holding what the app remembered rather than what the user chose:
+# the folders the dialogs reopen at, how the gallery was sorted, which sidebar sections are
+# collapsed, and the news already shown. Must match the path opened in the same module.
+STATE_FILE="state.yaml"
 
 # Where the Android app's secrets live, relative to its data directory. Must match PREFS_FILE_NAME in
 # apps/android-frontend/.../jsengine/SecureStore.java. A test that adds a secret to a real phone saves

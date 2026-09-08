@@ -1,11 +1,11 @@
 import React, { ReactNode, useEffect, useState } from "react";
 import Typography from "@mui/joy/Typography/Typography";
 import { ExpandMore, KeyboardArrowRight } from "@mui/icons-material";
-import { useConfig } from "../context/config-context";
+import { useState as useStateStore } from "../context/state-context";
 
 export interface ICollapsibleSectionProps {
     //
-    // The config key used to persist collapsed state.
+    // The state key the collapsed/expanded choice is remembered under.
     //
     configKey: string;
 
@@ -27,10 +27,10 @@ export interface ICollapsibleSectionProps {
 
 //
 // A sidebar section with a clickable header that collapses/expands its content.
-// Collapsed state is persisted to config under the given key.
+// Whether it is collapsed is remembered in the state store under the given key.
 //
 export function CollapsibleSection({ configKey, label, style, children }: ICollapsibleSectionProps) {
-    const config = useConfig();
+    const state = useStateStore();
 
     //
     // Whether the section is currently collapsed.
@@ -41,7 +41,7 @@ export function CollapsibleSection({ configKey, label, style, children }: IColla
     // Load persisted collapsed state on mount.
     //
     useEffect(() => {
-        config.get<boolean>(configKey).then(value => {
+        state.get<boolean>(configKey).then(value => {
             if (value !== undefined) {
                 setCollapsed(value);
             }
@@ -54,7 +54,7 @@ export function CollapsibleSection({ configKey, label, style, children }: IColla
     async function toggle() {
         const next = !collapsed;
         setCollapsed(next);
-        await config.set<boolean>(configKey, next);
+        await state.set<boolean>(configKey, next);
     }
 
     return (

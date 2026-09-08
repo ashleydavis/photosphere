@@ -31,6 +31,7 @@ import { syncDatabaseHandler } from "node-api/src/lib/sync-database.worker";
 import { listS3DirsHandler } from "node-api/src/lib/list-s3-dirs.worker";
 import { readDatabasesConfigHandler, writeDatabasesConfigHandler } from "node-api/src/lib/databases-config.worker";
 import { readConfigHandler, writeConfigHandler } from "node-api/src/lib/config.worker";
+import { readStateHandler, writeStateHandler } from "node-api/src/lib/state.worker";
 import { planAutoImportHandler } from "./src/lib/plan-auto-import.worker";
 import { planSyncHandler } from "./src/lib/plan-sync.worker";
 import { recordDefaultDatabaseHandler } from "./src/lib/record-default-database.worker";
@@ -145,6 +146,14 @@ registerHandler("write-databases-config", writeDatabasesConfigHandler);
 // switched on separately, cannot overwrite each other now they share a file.
 registerHandler("read-config", readConfigHandler);
 registerHandler("write-config", writeConfigHandler);
+
+// Register the state.yaml handlers. That file is the sibling of config.yaml and holds what the app
+// remembered rather than what the user chose: the folder a dialog last opened at, how the gallery was
+// sorted, which sidebar sections are collapsed, and which news has been shown. It is a file in the
+// sandbox for the same reason, and split from config.yaml because only one of the two is worth
+// documenting or carrying to another machine.
+registerHandler("read-state", readStateHandler);
+registerHandler("write-state", writeStateHandler);
 
 // Register the background import's two decisions. plan-auto-import says whether a pass should run,
 // what it imports into and what it watches; record-default-database records a database the pass has

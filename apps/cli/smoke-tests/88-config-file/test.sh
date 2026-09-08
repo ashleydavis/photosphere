@@ -1,15 +1,17 @@
 #!/bin/bash
-DESCRIPTION="Settings go in one config.yaml, the database list stays in its own databases.toml, and neither of the files they replaced comes back"
+DESCRIPTION="What the app remembered goes in state.yaml, the database list stays in its own databases.toml, and none of the files they replaced comes back"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 trap cleanup_and_show_summary EXIT
 
-# Every setting the app remembers lives in one file now. Before this there were four, in two formats,
-# and which one a setting landed in depended on which platform had written it. This test is about the
-# files themselves: that the CLI writes config.yaml, that it writes the news state into a section of
-# that same file rather than into a news.yaml of its own, and that databases.toml stays the separate
-# file it was always meant to be.
+# The settings live in two files now, split by who decided them: config.yaml holds what the user
+# chose and state.yaml holds what the app remembered. Before either there were four files, in two
+# formats, and which one a setting landed in depended on which platform had written it.
+#
+# This test is about the files themselves: that the news state the CLI records goes to state.yaml
+# rather than a news.yaml of its own, that the CLI writes no config.yaml at all because it reads none
+# of the settings, and that databases.toml stays the separate file it was always meant to be.
 #
 # It runs with PHOTOSPHERE_CONFIG_DIR pointed at a directory of its own, so it reads and writes the
 # settings of nothing but itself. Without that it would be looking at the settings of whoever is
@@ -69,15 +71,21 @@ test_config_file() {
 
     expect_config_file "databases.toml" "The database list is written to its own databases.toml"
 
-    # --- 2. Settings go to config.yaml, and the files it replaced are not written. ---
+    # --- 2. The news state goes to state.yaml, and the files it replaced are not written. ---
 
-    # `news` is what makes the CLI write settings: it records the items it has shown so the next run,
-    # and the desktop app on the same machine, do not show them again. That state used to be a
-    # news.yaml of its own; it is a section of the config file now.
+    # `news` is what makes the CLI write anything but the database list: it records the items it has
+    # shown so the next run, and the desktop app on the same machine, do not show them again. That
+    # used to be a news.yaml of its own, then a section of config.yaml; it is in state.yaml now,
+    # because nobody chose it and it is not worth carrying anywhere.
     local news_output
     invoke_command "Run the news command" "$(get_cli_command) news" 0 "news_output"
 
-    expect_config_file "config.yaml" "The settings are written to config.yaml"
+    expect_config_file "state.yaml" "What the app remembered is written to state.yaml"
+
+    # The CLI takes its instructions from the command line and reads none of the settings, so it must
+    # never bring the settings file into being. A file there would tell a desktop app on the same
+    # machine that settings had been chosen when nobody had chosen any.
+    expect_no_config_file "config.yaml" "No config.yaml is written, because the CLI has no settings to write"
 
     expect_no_config_file "desktop.toml" "No desktop.toml is written"
     expect_no_config_file "auto-import.toml" "No auto-import.toml is written"
@@ -86,14 +94,14 @@ test_config_file() {
 
     # --- 3. The two files hold different things and neither holds the other's. ---
 
-    local config_contents
-    config_contents="$(cat "$PHOTOSPHERE_CONFIG_DIR/config.yaml")"
-    expect_output_string "$config_contents" "news:" "config.yaml has a news section"
+    local state_contents
+    state_contents="$(cat "$PHOTOSPHERE_CONFIG_DIR/state.yaml")"
+    expect_output_string "$state_contents" "news:" "state.yaml has a news section"
 
     local databases_contents
     databases_contents="$(cat "$PHOTOSPHERE_CONFIG_DIR/databases.toml")"
     expect_output_string "$databases_contents" "config-file-db" "databases.toml holds the database that was added"
-    expect_output_string "$config_contents" "config-file-db" "config.yaml does not hold the database list" false
+    expect_output_string "$state_contents" "config-file-db" "state.yaml does not hold the database list" false
     expect_output_string "$databases_contents" "news" "databases.toml does not hold the news state" false
 
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"

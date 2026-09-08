@@ -10,10 +10,10 @@ import { WorkerPoolElectronMain } from './lib/worker-pool-electron-main';
 import { RandomUuidGenerator, TimestampProvider, logExceptions, log, noLogDetails } from 'utils';
 import { loadDatabaseConfig, updateDatabaseConfig } from 'api';
 import type { IReplicateDatabaseData, ISyncDatabaseData } from 'api';
-import { loadAppConfig, updateAppConfig, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion } from 'node-api';
+import { loadAppConfig, updateAppConfig, loadAppState, updateAppState, getAppConfigValue, setAppConfigValue, getAppStateValue, setAppStateValue, updateLastFolder, updateLastDownloadFolder, getTheme, setTheme, getDatabases, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases, markDatabaseOpened, removeRecentDatabaseName, findDatabase, fetchNews, getShownNewsIds, addShownNewsIds, getLastShownUpdateVersion, setLastShownUpdateVersion } from 'node-api';
 import { checkDatabaseExists, planDesktopAutoImport, AUTO_IMPORT_TASK_SOURCE, DEFAULT_DATABASE_DISPLAY_NAME, getLastDatabase, setLastDatabase } from 'node-api';
 import { getDefaultPhotoFolders } from 'node-utils';
-import type { IDatabaseEntry, IAppConfig } from 'node-api';
+import type { IDatabaseEntry, IAppConfigValue, IAppStateValue } from 'node-api';
 import type { ISaveAssetItem } from 'api';
 import type { IWorkerPoolOptions } from './lib/worker-pool-electron-main';
 import type { IRestApiWorkerStopMessage, IRestApiWorkerStartMessage } from './rest-api-worker';
@@ -805,27 +805,26 @@ ipcMain.on('notify-database-edited', () => {
     scheduleSync();
 });
 
-// IPC handler for reading one value from the config file
+// IPC handler for reading one setting the user chose, from config.yaml.
 ipcMain.handle('get-config', logExceptions(async (_event, key: string) => {
-    const config = await loadAppConfig();
-    return config[key as keyof IAppConfig];
+    return getAppConfigValue(await loadAppConfig(), key);
 }, 'Error getting config value'));
 
 //
 // Request payload for the set-config IPC channel.
 //
 interface ISetConfigRequest {
-    // The config key to write.
+    // The setting to write.
     key: string;
 
-    // The new value to store.
-    value: IAppConfig[keyof IAppConfig];
+    // The new value to store. undefined removes it.
+    value: IAppConfigValue | undefined;
 }
 
-// IPC handler for writing one value to the config file
+// IPC handler for writing one setting the user chose, to config.yaml.
 ipcMain.handle('set-config', logExceptions(async (_event, { key, value }: ISetConfigRequest) => {
     await updateAppConfig(config => {
-        (config as Record<string, IAppConfig[keyof IAppConfig]>)[key] = value;
+        setAppConfigValue(config, key, value);
     });
     // Keep the theme-changed event so the menu bar can react to theme changes
     if (key === 'theme' && mainWindow) {
@@ -839,6 +838,32 @@ ipcMain.handle('set-config', logExceptions(async (_event, { key, value }: ISetCo
     }
 }, 'Error setting config value'));
 
+// IPC handler for reading one thing the app remembered, from state.yaml.
+ipcMain.handle('get-state', logExceptions(async (_event, key: string) => {
+    return getAppStateValue(await loadAppState(), key);
+}, 'Error getting state value'));
+
+//
+// Request payload for the set-state IPC channel.
+//
+interface ISetStateRequest {
+    // The key to write.
+    key: string;
+
+    // The new value to store. undefined removes it.
+    value: IAppStateValue | undefined;
+}
+
+// IPC handler for writing one thing the app remembered, to state.yaml.
+//
+// Nothing here reacts to a particular key the way set-config does: the theme and the automatic import
+// settings are the user's, and this file holds nothing anything else has to be told about.
+ipcMain.handle('set-state', logExceptions(async (_event, { key, value }: ISetStateRequest) => {
+    await updateAppState(state => {
+        setAppStateValue(state, key, value);
+    });
+}, 'Error setting state value'));
+
 // IPC handler for saving an asset to disk. When `destPath` is provided (e.g. by the MCP
 // save_media_file tool, which already has a path from the model), the save dialog is
 // skipped and the asset is written straight to that path. When omitted, the user picks
@@ -849,9 +874,9 @@ ipcMain.handle('save-asset', logExceptions(async (_event, assetId: string, asset
         actualDestPath = destPath;
     }
     else {
-        const config = await loadAppConfig();
-        const defaultPath = config.lastDownloadFolder
-            ? join(config.lastDownloadFolder, filename)
+        const state = await loadAppState();
+        const defaultPath = state.lastDownloadFolder
+            ? join(state.lastDownloadFolder, filename)
             : filename;
         const result = await dialog.showSaveDialog(mainWindow!, {
             defaultPath,
@@ -1584,11 +1609,11 @@ async function showDirectoryPicker(title: string, extraProperties: Electron.Open
         mainWindow.focus();
     }
 
-    const config = await loadAppConfig();
+    const state = await loadAppState();
     const options: Electron.OpenDialogOptions = {
         properties: ['openDirectory', ...extraProperties],
         title,
-        defaultPath: config.lastFolder,
+        defaultPath: state.lastFolder,
     };
     const result = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)
@@ -1612,11 +1637,11 @@ async function showFilePicker(title: string): Promise<string[] | undefined> {
         mainWindow.focus();
     }
 
-    const config = await loadAppConfig();
+    const state = await loadAppState();
     const options: Electron.OpenDialogOptions = {
         properties: ['openFile', 'multiSelections'],
         title,
-        defaultPath: config.lastFolder,
+        defaultPath: state.lastFolder,
     };
     const result = mainWindow
         ? await dialog.showOpenDialog(mainWindow, options)

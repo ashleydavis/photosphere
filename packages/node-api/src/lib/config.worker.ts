@@ -15,6 +15,7 @@
 // file written here is readable by anything else that opens it by construction.
 //
 
+import yaml from "js-yaml";
 import type { ITaskContext } from "task-queue";
 import { log } from "utils";
 import { FileStorage } from "storage";
@@ -23,12 +24,21 @@ import { resolveAutoImportPauseMs, type IAutoImportFile } from "api/src/lib/auto
 import { resolveSyncPauseMs, type ISyncFile, type ISyncSettings } from "api/src/lib/sync-settings";
 import {
     buildConfigYaml,
+    configFileToYaml,
     defaultConfigFile,
     parseConfigYamlChecked,
     sectionsPresent,
     type IConfigSectionsPresent,
     type IConfigFile,
+    type IYamlConfigFile,
 } from "./config-format";
+import {
+    appConfigSettings,
+    appConfigToYaml,
+    setAppConfigValue,
+    yamlToAppConfig,
+    type IAppConfigValue,
+} from "./app-config-format";
 
 //
 // Input for the read-config task.
@@ -67,11 +77,27 @@ export interface IWriteConfigSync {
 }
 
 //
+// One flat key the caller is changing.
+//
+// A missing `value` clears the key, which is what IConfig.clear means, and is not the same as the
+// entry not being sent at all. The two have to be told apart because the entry crosses the bridge to
+// the phone as JSON, where an undefined property simply disappears: a caller that meant "clear this"
+// would arrive looking like a caller that meant nothing, so the key would be left as it was.
+//
+export interface IWriteConfigEntry {
+    // The flat key the interface uses.
+    key: string;
+
+    // What to store under it. Absent clears the key.
+    value?: IAppConfigValue;
+}
+
+//
 // Input for the write-config task.
 //
-// Both sections are optional, and a section that is absent is left as it is on disk. That is what
-// keeps two features that are switched on separately from overwriting each other now they share a
-// file: the settings card writes the one section the user touched.
+// Every part is optional, and a part that is absent is left as it is on disk. That is what keeps two
+// features that are switched on separately from overwriting each other now they share a file: the
+// settings card writes the one section the user touched.
 //
 export interface IWriteConfigData {
     // Sandbox-relative path of config.yaml.
@@ -82,6 +108,9 @@ export interface IWriteConfigData {
 
     // The syncing settings, when they are what is being changed.
     sync?: IWriteConfigSync;
+
+    // The flat keys being changed, each written where this file keeps it.
+    entries?: IWriteConfigEntry[];
 }
 
 //
@@ -110,6 +139,11 @@ export interface IReadConfigResult {
 
     // Whether the automatic import settings have ever been written, for the same reason.
     autoImportSettingsWritten: boolean;
+
+    // Every setting that has a value, under the flat name the interface uses for it. Flat rather than
+    // the sectioned document so the phone's WebView can answer a get by indexing it, without needing
+    // the module that knows which section each key belongs in.
+    settings: Record<string, IAppConfigValue>;
 }
 
 //
@@ -122,6 +156,10 @@ export interface IConfigRead {
     // Which sections the file actually carried. A caller needs this to tell a section nobody has
     // written from one that has been switched off, because both read as switched off.
     present: IConfigSectionsPresent;
+
+    // The document as it was on disk, which is what the flat key/value view is built from. Undefined
+    // when there is no file, or when it would not parse.
+    document?: IYamlConfigFile;
 }
 
 //
@@ -156,6 +194,7 @@ export async function readConfigFromStorage(configPath: string): Promise<IConfig
     return {
         config: parsed.config,
         present: parsed.present,
+        document: parsed.document,
     };
 }
 
@@ -174,6 +213,7 @@ export async function readConfigHandler(data: IReadConfigData, _context: ITaskCo
         sync: contents.config.sync,
         syncSettingsWritten: contents.present.sync,
         autoImportSettingsWritten: contents.present.autoImport,
+        settings: appConfigSettings(yamlToAppConfig(contents.document)),
     };
 }
 
@@ -182,15 +222,14 @@ export async function readConfigHandler(data: IReadConfigData, _context: ITaskCo
 //
 // A read-modify-write: it reads what is on disk, replaces only the sections the caller sent, and
 // writes the whole document back. Reading first is what keeps the sections nobody touched, including
-// the ones this task has no notion of at all, such as the theme and the news state a desktop
-// installation sharing this file would have written.
+// the ones this task has no notion of at all.
 //
 export async function writeConfigHandler(data: IWriteConfigData, _context: ITaskContext): Promise<void> {
     if (!data.configPath) {
         throw new Error("configPath is required");
     }
-    if (!data.autoImport && !data.sync) {
-        throw new Error("write-config was given neither an autoImport nor a sync section, so there is nothing to write.");
+    if (!data.autoImport && !data.sync && !data.entries) {
+        throw new Error("write-config was given no autoImport section, no sync section and no settings to write, so there is nothing to write.");
     }
 
     const storage = new FileStorage("fs:");
@@ -223,10 +262,26 @@ export async function writeConfigHandler(data: IWriteConfigData, _context: ITask
     // A feature's section goes into the file once it has been set, and stays once it is there. Both
     // halves matter: writing a section nobody has chosen would tell a fresh install its settings had
     // already been decided, and dropping one that had been chosen would lose the user's decision.
-    const text = buildConfigYaml(current, {
+    let document = configFileToYaml(current, {
         autoImport: present.autoImport || data.autoImport !== undefined,
         sync: present.sync || data.sync !== undefined,
     });
+
+    // The settings the interface names go on last, through the flat view, which is the only thing
+    // that knows which section each of them belongs in. It merges into the document rather than
+    // rebuilding it, so it changes the keys it was given and leaves the rest of the file alone.
+    if (data.entries) {
+        const appConfig = yamlToAppConfig(document);
+        for (const entry of data.entries) {
+            if (!entry.key) {
+                throw new Error("write-config was given a setting with no key.");
+            }
+            setAppConfigValue(appConfig, entry.key, entry.value);
+        }
+        document = appConfigToYaml(appConfig, document);
+    }
+
+    const text = yaml.dump(document);
     await storage.write(data.configPath, "application/yaml", Buffer.from(text, "utf8"));
 }
 

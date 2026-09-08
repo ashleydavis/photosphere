@@ -1,6 +1,6 @@
 import type { IQueueBackend, ITaskResult, TaskMessageCallback, UnsubscribeFn, WorkerTaskCompletionCallback } from "task-queue";
 import { setQueueBackend, TaskPriority, TaskStatus } from "task-queue";
-import { DATABASES_CONFIG_PATH, mobileDatabasesConfigFile } from "../lib/mobile-databases-config-file";
+import { mobileDatabasesConfigFile } from "../lib/mobile-databases-config-file";
 
 //
 // What one call to addTask was given, so a test can assert on the priority it asked for.
@@ -137,6 +137,6 @@ describe("mobileDatabasesConfigFile", () => {
 
         await mobileDatabasesConfigFile.read();
 
-        expect(backend.addedTasks[0].data).toEqual({ configPath: DATABASES_CONFIG_PATH });
+        expect(backend.addedTasks[0].data).toEqual({ configPath: "databases.toml" });
     });
 });

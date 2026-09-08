@@ -25,11 +25,10 @@ describe("yamlToConfigFile", () => {
         expect(config.sync.settings.onlyOnWifi).toBe(true);
         expect(config.sync.databasePath).toBeUndefined();
         expect(config.sync.pauseBetweenRunsMs).toBe(DEFAULT_SYNC_PAUSE_MS);
-        expect(config.desktop).toEqual({});
-        expect(config.news.shownNewsIds).toEqual([]);
-        expect(config.news.lastShownUpdateVersion).toBeUndefined();
         expect(config.theme).toBeUndefined();
         expect(config.developerMode).toBeUndefined();
+        expect(config.showFpsIndicator).toBeUndefined();
+        expect(config.savedSearches).toBeUndefined();
     });
 
     test("a document with only a sync section leaves the other sections at their defaults", () => {
@@ -50,8 +49,6 @@ describe("yamlToConfigFile", () => {
         expect(config.autoImport.settings.enabled).toBe(false);
         expect(config.autoImport.settings.sources).toEqual([]);
         expect(config.autoImport.pauseBetweenRunsMs).toBe(DEFAULT_AUTO_IMPORT_PAUSE_MS);
-        expect(config.desktop).toEqual({});
-        expect(config.news.shownNewsIds).toEqual([]);
     });
 
     test("a document with only an auto_import section leaves the other sections at their defaults", () => {
@@ -109,8 +106,7 @@ describe("yamlToConfigFile", () => {
                 enabled: true,
                 default_database_path: "kept",
             },
-            news: [1, 2, 3],
-            desktop: 17,
+            saved_searches: "not a list",
         } as any;
 
         const config = yamlToConfigFile(document);
@@ -121,8 +117,13 @@ describe("yamlToConfigFile", () => {
 
         expect(config.sync.settings.enabled).toBe(false);
         expect(config.sync.settings.onlyOnWifi).toBe(true);
-        expect(config.news.shownNewsIds).toEqual([]);
-        expect(config.desktop).toEqual({});
+        expect(config.savedSearches).toBeUndefined();
+    });
+
+    test("a saved search of the wrong type is dropped and the rest of the list kept", () => {
+        const config = yamlToConfigFile({ saved_searches: ["beach", 17, "dogs"] } as any);
+
+        expect(config.savedSearches).toEqual(["beach", "dogs"]);
     });
 
     test("a theme the file invents is ignored", () => {
@@ -220,17 +221,8 @@ function fullConfig(): IConfigFile {
             databasePath: "/home/user/photos",
             pauseBetweenRunsMs: 54321,
         },
-        desktop: {
-            lastFolder: "/home/user/photos",
-            lastDownloadFolder: "/home/user/Downloads",
-            recentSearches: ["beach", "2024 birthday"],
-            showFpsIndicator: true,
-            devToolsOpen: false,
-        },
-        news: {
-            shownNewsIds: ["release-0-9-0", "survey-2025-03"],
-            lastShownUpdateVersion: "0.9.1",
-        },
+        showFpsIndicator: true,
+        savedSearches: ["beach", "2024 birthday"],
     };
 }
 
@@ -255,14 +247,18 @@ describe("configFileToYaml", () => {
         expect(document.auto_import!.cleanup_enabled).toBeUndefined();
         expect(document.sync!.database_path).toBeUndefined();
 
-        // A section holding nothing is left out rather than written as an empty one. A phone never
-        // writes either of these, and an empty section in its settings file is a line the reader has
-        // to work out means nothing.
-        expect(document.news).toBeUndefined();
-        expect(document.desktop).toBeUndefined();
+        expect(document.show_fps_indicator).toBeUndefined();
+        expect(document.saved_searches).toBeUndefined();
 
         // The rendered document must not carry the absent keys at all.
         expect(buildConfigYaml(config)).not.toContain("null");
+    });
+
+    test("the searches the user saved are written at the top level", () => {
+        const config = defaultConfigFile();
+        config.savedSearches = ["beach", "dogs"];
+
+        expect(configFileToYaml(config).saved_searches).toEqual(["beach", "dogs"]);
     });
 
     //
@@ -406,8 +402,7 @@ describe("buildConfigYaml and parseConfigYaml", () => {
 
         expect(document.auto_import!.enabled).toBe(true);
         expect(document.sync!.only_on_wifi).toBe(false);
-        expect(document.desktop!.last_folder).toBe("/home/user/photos");
-        expect(document.news!.shown_news_ids).toEqual(["release-0-9-0", "survey-2025-03"]);
+        expect(document.saved_searches).toEqual(["beach", "2024 birthday"]);
         expect(document.theme).toBe("dark");
     });
 

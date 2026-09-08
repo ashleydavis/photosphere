@@ -17,6 +17,7 @@ import { DeveloperContextProvider } from "../../context/developer-context";
 import { ApiContextProvider, axiosApi, type IApi } from "../../context/api-context";
 import { ToastContextProvider } from "../../context/toast-context";
 import { ConfigContextProvider, createConfig } from "../../context/config-context";
+import { StateContextProvider } from "../../context/state-context";
 import {
     AssetDatabaseContext,
     AssetDatabaseProvider,
@@ -500,6 +501,7 @@ export function MockProviders({
     // implementation instead of crashing on missing context.
     //
     const config = createInMemoryConfig();
+    const state = createInMemoryConfig();
 
     //
     // When a story supplies an import context, provide it directly so the
@@ -549,6 +551,7 @@ export function MockProviders({
                 <PlatformContextProvider value={platformValue}>
                     <ApiContextProvider value={apiValue}>
                     <ConfigContextProvider value={config}>
+                    <StateContextProvider value={state}>
                         <AppContextProvider>
                             <ToastContextProvider>
                                 {withJobsContext(
@@ -574,6 +577,7 @@ export function MockProviders({
                                 )}
                             </ToastContextProvider>
                         </AppContextProvider>
+                    </StateContextProvider>
                     </ConfigContextProvider>
                     </ApiContextProvider>
                 </PlatformContextProvider>
@@ -705,6 +709,7 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
     const [platformValue] = useState<IPlatformContext>(() => mockPlatform());
     const [uuidGeneratorValue] = useState<IUuidGenerator>(() => new RandomUuidGenerator());
     const [config] = useState(() => createInMemoryConfig());
+    const [state] = useState(() => createInMemoryConfig());
 
     // The url of the asset server, reported by the asset-server task once it has bound its port.
     const restApiUrl = useAssetServer();
@@ -719,6 +724,7 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
                 <PlatformContextProvider value={platformValue}>
                     <ApiContextProvider value={axiosApi}>
                     <ConfigContextProvider value={config}>
+                    <StateContextProvider value={state}>
                         <AppContextProvider>
                             <ToastContextProvider>
                                 <JobsContextProvider>
@@ -744,6 +750,7 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
                                 </JobsContextProvider>
                             </ToastContextProvider>
                         </AppContextProvider>
+                    </StateContextProvider>
                     </ConfigContextProvider>
                     </ApiContextProvider>
                 </PlatformContextProvider>

@@ -1,6 +1,5 @@
 import type { ITaskContext } from "task-queue";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
-import { CONFIG_PATH } from "api/src/lib/mobile-config-paths";
 import type { IAutoImportSettings } from "api/src/lib/auto-import-settings";
 import { readConfigFromStorage } from "node-api/src/lib/config.worker";
 
@@ -60,7 +59,7 @@ export interface IPlanAutoImportResult {
 // Handler for the plan-auto-import task.
 //
 export async function planAutoImportHandler(_data: object, context: ITaskContext): Promise<IPlanAutoImportResult> {
-    const { config } = await readConfigFromStorage(CONFIG_PATH);
+    const { config } = await readConfigFromStorage("config.yaml");
     const contents = config.autoImport;
     const plan = planMobileAutoImport(contents.settings, contents.defaultDatabasePath);
 

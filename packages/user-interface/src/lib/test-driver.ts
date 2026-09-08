@@ -497,12 +497,13 @@ export const TEST_MENU_EVENT = "photosphere-test:menu";
 export const TEST_OPEN_DATABASE_EVENT = "photosphere-test:open-database";
 
 //
-// Window event name used to seed the mobile config store's news items (test setup).
+// Window event name used to seed the news feed the mobile app has in hand (test setup).
 //
-// This is the one piece of state a mobile smoke test cannot set up from outside the app: the news
-// feed lives in WebView localStorage, which no host-side tool can write. Everything else a test
-// needs (the database list, the recents, the secrets) is established by the harness before launch,
-// by writing the app's databases.toml and clearing its stored data (see apps/smoke-tests/lib).
+// It goes through the app rather than being written from the host, because the feed is fetched
+// rather than configured: seeding it here drives the same path a real fetch would. Everything else a
+// test needs (the database list, the recents, the settings, the secrets) is established by the
+// harness before launch, by writing the app's files and clearing its stored data (see
+// apps/smoke-tests/lib).
 //
 export const TEST_SEED_NEWS_EVENT = "photosphere-test:seed-news";
 

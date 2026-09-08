@@ -75,7 +75,7 @@ describe("resetDevice", () => {
             ],
             {
                 "gallery-sort": "date",
-                "photosphere.config.theme": "\"dark\"",
+                "photosphere.news": "[]",
             }
         );
 
@@ -87,7 +87,7 @@ describe("resetDevice", () => {
             "remove-database:archive",
             "delete-secret:s3-key",
             "remove-setting:gallery-sort",
-            "remove-setting:photosphere.config.theme",
+            "remove-setting:photosphere.news",
             "reset-app-storage",
         ]);
         expect(result).toEqual({

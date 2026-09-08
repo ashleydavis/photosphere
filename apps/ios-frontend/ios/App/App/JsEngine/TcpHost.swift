@@ -266,6 +266,19 @@ final class TcpHost {
             return totalWritten
         }
         if result < 0 {
+            // The read loop takes a connection out of the map and then closes its descriptor when the
+            // remote goes away, so a write that took the descriptor out a moment earlier is writing to
+            // one that has just been closed. That is the same situation as the lookup above missing,
+            // and it gets the same answer: the connection is gone and this write had nowhere to go.
+            // Reporting it instead made a LAN share fail after the sender had already finished and hung
+            // up, which only happened when the phone was busy enough to widen the window. The
+            // counterpart of the same check in TcpHost.java.
+            lock.lock()
+            let stillRegistered = connections[connectionId] != nil
+            lock.unlock()
+            if !stillRegistered {
+                return nil
+            }
             return HostBridge.hostErrorEnvelope(NSError(domain: "tcp", code: Int(errno), userInfo: [NSLocalizedDescriptionKey: "write() failed"]))
         }
         return nil

@@ -46,11 +46,11 @@ if grep -q "smoke-test-002" "$TMP_DIR/app.log"; then
     exit 1
 fi
 
-STATE_FILE="$TMP_DIR/config/config.yaml"
+STATE_FILE="$TMP_DIR/config/state.yaml"
 # Before dismissal the news state file should not record smoke-test-001 — the toast
 # is sticky and persistence is deferred until the user clicks close.
 if [ -f "$STATE_FILE" ] && grep -q 'smoke-test-001' "$STATE_FILE"; then
-    log_error "the config file unexpectedly persisted smoke-test-001 before user dismissed the toast"
+    log_error "the state file unexpectedly persisted smoke-test-001 before user dismissed the toast"
     cat "$STATE_FILE"
     exit 1
 fi
@@ -60,12 +60,12 @@ send_command "$APP_PORT" click '{"dataId":"toast-dismiss"}'
 wait_for_log "$TMP_DIR" "Marked news notification as shown: smoke-test-001"
 
 if ! grep -q 'smoke-test-001' "$STATE_FILE"; then
-    log_error "the config file does not contain smoke-test-001 after dismissal"
+    log_error "the state file does not contain smoke-test-001 after dismissal"
     cat "$STATE_FILE"
     exit 1
 fi
 if grep -q 'smoke-test-002' "$STATE_FILE"; then
-    log_error "the config file unexpectedly contains smoke-test-002 after first startup"
+    log_error "the state file unexpectedly contains smoke-test-002 after first startup"
     cat "$STATE_FILE"
     exit 1
 fi
@@ -89,12 +89,12 @@ if grep -q "Showed news notification: smoke-test-001" "$TMP_DIR/app.log"; then
 fi
 
 if ! grep -q 'smoke-test-001' "$STATE_FILE"; then
-    log_error "the config file lost smoke-test-001 after second startup"
+    log_error "the state file lost smoke-test-001 after second startup"
     cat "$STATE_FILE"
     exit 1
 fi
 if grep -q 'smoke-test-002' "$STATE_FILE"; then
-    log_error "the config file unexpectedly persisted smoke-test-002 before user dismissed the toast"
+    log_error "the state file unexpectedly persisted smoke-test-002 before user dismissed the toast"
     cat "$STATE_FILE"
     exit 1
 fi
@@ -104,7 +104,7 @@ send_command "$APP_PORT" click '{"dataId":"toast-dismiss"}'
 wait_for_log "$TMP_DIR" "Marked news notification as shown: smoke-test-002"
 
 if ! grep -q 'smoke-test-002' "$STATE_FILE"; then
-    log_error "the config file does not contain smoke-test-002 after dismissal"
+    log_error "the state file does not contain smoke-test-002 after dismissal"
     cat "$STATE_FILE"
     exit 1
 fi

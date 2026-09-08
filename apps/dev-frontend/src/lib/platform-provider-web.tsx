@@ -1,6 +1,6 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider, convertToPng } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, StateContextProvider, createConfig, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider, convertToPng } from "user-interface";
 import { RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator } from "utils";
 import { TaskQueue, TaskStatus } from "task-queue";
 import type { ISaveAssetItem } from "api";
@@ -479,17 +479,26 @@ export function PlatformProviderWeb({ children, ws }: IPlatformProviderWebProps)
         });
     }
 
+    // A pair of messages per file, so neither end has to work out where a key belongs: the caller
+    // reaches for the store it means and the handler on the other side opens one file.
     const config = createConfig(
         (key) => sendAndWait<unknown>({ type: "get-config", key }, "config-value"),
         (key, value) => sendAndWait<void>({ type: "set-config", key, value }, "config-set")
     );
 
+    const state = createConfig(
+        (key) => sendAndWait<unknown>({ type: "get-state", key }, "state-value"),
+        (key, value) => sendAndWait<void>({ type: "set-state", key, value }, "state-set")
+    );
+
     return (
         <UuidGeneratorProvider value={uuidGenerator}>
             <ConfigContextProvider value={config}>
-                <PlatformContextProvider value={platformContext}>
-                    {children}
-                </PlatformContextProvider>
+                <StateContextProvider value={state}>
+                    <PlatformContextProvider value={platformContext}>
+                        {children}
+                    </PlatformContextProvider>
+                </StateContextProvider>
             </ConfigContextProvider>
         </UuidGeneratorProvider>
     );

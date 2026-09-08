@@ -42,7 +42,7 @@ REPO_DIR="$(cd "$APP_ROOT/../.." && pwd)"
 APP_ID="au.com.codecapers.photosphere"
 
 # The app's databases config, relative to its storage sandbox. The mobile counterpart of desktop's
-# ~/.config/photosphere/databases.toml, in the same format. Must match DATABASES_CONFIG_PATH in
+# ~/.config/photosphere/databases.toml, in the same format. Must match the path opened in
 # packages/mobile-frontend/src/lib/mobile-databases-config-file.ts, which is what reads it.
 DATABASES_CONFIG="databases.toml"
 

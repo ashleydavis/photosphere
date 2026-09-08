@@ -2,7 +2,7 @@ import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import eruda from "eruda";
 import { Capacitor } from "@capacitor/core";
 import { Network } from "@capacitor/network";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_PICK_FILES_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_STAGE_DELETE_EVENT, TEST_STAGE_PICK_FOLDER_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, StateContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, signalTestAppReady, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_PICK_FILES_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_STAGE_DELETE_EVENT, TEST_STAGE_PICK_FOLDER_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
 import { TaskQueue, TaskStatus, getQueueBackend } from "task-queue";
 import type { ITaskResult } from "task-queue";
 import type { ISaveAssetItem } from "api";
@@ -13,9 +13,9 @@ import { setInjectedDeleteOutcome } from "./mobile-media-cleanup";
 import { AUTO_IMPORT_ENABLED_KEY } from "user-interface";
 import type { IAutoImportSource } from "api/src/lib/auto-import-settings";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
-import { getAutoImportFileValue, isAutoImportFileKey, readAutoImportFile, setAutoImportFileValue } from "./mobile-auto-import-file";
-import { getSyncFileValue, isSyncFileKey, recordSyncDatabase, seedSyncSettingsFile, setSyncFileValue } from "./mobile-sync-file";
-import { mobileAutoImportConfigFile, mobileSyncConfigFile } from "./mobile-config-file";
+import { mobileConfigSettingsFile, mobileStateSettingsFile, mobileNewsStateFile, readMobileAutoImportSettings, readMobileSyncSettings, recordMobileSyncDatabase, seedMobileSyncSettings } from "./mobile-config-file";
+import type { IAppConfigValue } from "node-api/src/lib/app-config-format";
+import type { INewsFeedItem } from "node-api/src/lib/state-format";
 import { readPermissionState, resolveMediaPermission } from "./mobile-media-permission";
 import { JsEngine } from "./js-engine-plugin";
 import * as configStore from "./mobile-config-store";
@@ -61,6 +61,23 @@ let erudaVisible = false;
 const LIST_S3_DIRS_SOURCE = "list-s3-dirs";
 
 //
+// The settings the background work has to be told about the moment they change.
+//
+// Every setting is written the same way; this only decides who needs telling afterwards, which is
+// what AUTO_IMPORT_CONFIG_KEYS does on the desktop. The syncing pair is here as well as the automatic
+// import ones because a phone decides in the WebView whether the background sync should run, so
+// switching syncing on while automatic import is off would otherwise wait for the next launch.
+//
+const BACKGROUND_WORK_CONFIG_KEYS: string[] = [
+    'autoImportEnabled',
+    'autoImportSources',
+    'autoImportCleanupEnabled',
+    'defaultDatabasePath',
+    'syncEnabled',
+    'syncOnlyOnWifi',
+];
+
+//
 // The fields of a completed task result the provider inspects. The native taskCompleted event
 // arrives as a plain record, so this names the shape rather than indexing it untyped.
 //
@@ -99,11 +116,10 @@ function toggleEruda(): void {
 }
 
 //
-// The WebView localStorage used to persist the configured-databases / recent-databases lists and the
-// generic config (theme, sync flags). It satisfies the small key/value interface the config store needs.
-// Secrets do NOT live here: they are held in the device keychain via secretStore below.
+// Nothing the app remembers is kept in the WebView's own storage any more. The settings the user chose
+// are in config.yaml, everything the app remembered is in state.yaml beside it, the configured
+// databases are in databases.toml, and secrets are in the device keychain via secretStore below.
 //
-const persistentStore: configStore.IKeyValueStore = window.localStorage;
 
 //
 // The device keychain every mobile secret is stored in, one item per secret, matching desktop's use of
@@ -132,7 +148,8 @@ export interface IPlatformProviderMobileProps {
 // dispatched to the embedded JS engine, where the native networking host functions (TcpHost,
 // UdpHost, TlsHost) back them. openDatabase remains a no-op: there is no native database picker
 // on mobile yet.
-// Generic config is persisted to WebView localStorage so settings survive app restarts.
+// Settings are persisted to config.yaml in the storage sandbox, the same file and the same format
+// the CLI and the desktop app use.
 //
 export function PlatformProviderMobile({ children }: IPlatformProviderMobileProps) {
     // LAN database-sharing methods, dispatched through the shared task queue.
@@ -221,7 +238,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         // can read it, which is what makes background syncing work for the database the user is
         // actually using rather than only for the one automatic import made.
         openDatabasePathRef.current = databasePath;
-        recordSyncDatabase(mobileSyncConfigFile, databasePath)
+        recordMobileSyncDatabase(databasePath)
             .then(() => {
                 // Opening a database can be the first thing that gives the background sync something
                 // to push, so the decision about whether to run it is worth taking again.
@@ -388,8 +405,12 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     // Shows the first not-yet-shown news item as a toast (fires the show-notification callbacks) and
     // logs a line matching the desktop main process so smoke tests observe it. No-op when there is no
     // unshown news. News items are seeded in tests; production news fetching is a later layer.
-    const showFirstUnshownNews = useCallback((): void => {
-        const item = configStore.firstUnshownNews(persistentStore);
+    //
+    // The feed and which items have already been shown both come from state.yaml, so they are read
+    // rather than looked up in memory, which is why this is async where it used to be immediate.
+    const showFirstUnshownNews = useCallback(async (): Promise<void> => {
+        const news = await mobileNewsStateFile.read();
+        const item = configStore.firstUnshownNews(news.feed, news.shownNewsIds);
         if (!item) {
             return;
         }
@@ -403,9 +424,8 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     // this parent effect, so they are in place when showFirstUnshownNews fires.
     useEffect(() => {
         const handleSeedNews = (event: Event) => {
-            const items = (event as CustomEvent<configStore.INewsItemRecord[]>).detail || [];
-            configStore.seedNews(persistentStore, items);
-            showFirstUnshownNews();
+            const items = (event as CustomEvent<INewsFeedItem[]>).detail || [];
+            mobileNewsStateFile.setFeed(items).then(showFirstUnshownNews);
         };
         window.addEventListener(TEST_SEED_NEWS_EVENT, handleSeedNews);
         showFirstUnshownNews();
@@ -675,11 +695,16 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         await importReceivedShare(mobileDatabasesConfigFile, secretStore, payload as IReceivedSharePayload, conflictResolutions as Record<string, IConflictResolution>);
     }, []);
 
-    const markUpdateAsShown = useCallback(async (_version: string): Promise<void> => {
+    // Both of these record what the user has been told about, in the `news` section of config.yaml,
+    // which is where the CLI and the desktop app record it too. markUpdateAsShown was an empty
+    // function that reported success and did nothing, so the same release could be announced again
+    // every time the app started.
+    const markUpdateAsShown = useCallback(async (version: string): Promise<void> => {
+        await mobileNewsStateFile.setLastShownUpdateVersion(version);
     }, []);
 
     const markNewsAsShown = useCallback(async (newsId: string): Promise<void> => {
-        configStore.addShownNewsId(persistentStore, newsId);
+        await mobileNewsStateFile.addShownNewsId(newsId);
         // Matches the desktop main process so smoke tests observe the same log line.
         log.info(`Marked news notification as shown: ${newsId}`);
     }, []);
@@ -802,48 +827,38 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         setSyncAllowed,
     };
 
-    // Generic config persisted to WebView localStorage so settings (developer mode, theme, etc.)
-    // survive app restarts, matching how databases and secrets are persisted.
+    // Every setting goes to config.yaml in the storage sandbox, the same file and the same format the
+    // CLI and the desktop app use, so a setting means the same thing whichever platform wrote it.
     //
-    // The automatic import and syncing keys are the exception: they go to config.yaml in the storage
-    // sandbox instead, each to its own section of it. Local storage belongs to the WebView and
-    // nothing else can read it, and both background loops run while there is no WebView. The
-    // settings card is unchanged and still writes the same keys on every platform; the routing is
-    // here because where they are kept is a platform's business.
+    // The automatic import and syncing keys take their own route to that file rather than the general
+    // one, because switching either on has to start the background work now rather than at the next
+    // restart, and because syncing needs to tell a section nobody has written from one that has been
+    // switched off. Everything else goes through the general accessor, which puts each key wherever
+    // the format says it belongs.
+    //
+    // These settings used to be kept in the WebView's own storage, which nothing outside the WebView
+    // can read and the operating system can clear, while the two feature sections were already in the
+    // file. The settings card is unchanged and still writes the same keys on every platform.
     const config = createConfig(
-        async (key) => {
-            if (isAutoImportFileKey(key)) {
-                return getAutoImportFileValue(mobileAutoImportConfigFile, key);
-            }
-            if (isSyncFileKey(key)) {
-                return getSyncFileValue(mobileSyncConfigFile, key);
-            }
-            return configStore.getConfigValue(persistentStore, key);
-        },
+        async (key) => mobileConfigSettingsFile.get(key),
         async (key, value) => {
-            if (isAutoImportFileKey(key)) {
-                await setAutoImportFileValue(mobileAutoImportConfigFile, key, value as boolean | string | IAutoImportSource[] | undefined);
+            await mobileConfigSettingsFile.set(key, value as IAppConfigValue | undefined);
 
-                // Tell the background import to catch up with what was just written, rather than
-                // having it find out on a timer.
-                if (autoImportChangedRef.current) {
-                    autoImportChangedRef.current();
-                }
-                return;
+            // Tell the background work to catch up with what was just written, rather than having it
+            // find out on a timer. The desktop app does the same thing after the same write, calling
+            // ensureAutoImport from its set-config handler.
+            if (BACKGROUND_WORK_CONFIG_KEYS.includes(key) && autoImportChangedRef.current) {
+                autoImportChangedRef.current();
             }
-            if (isSyncFileKey(key)) {
-                await setSyncFileValue(mobileSyncConfigFile, key, value as boolean | undefined);
+        }
+    );
 
-                // Switching syncing on is a reason to start the background work, and switching it
-                // off may be a reason to stop it, so the same callback the import settings use is
-                // rung here. Without it, syncing switched on while automatic import is off would
-                // wait for the next launch to have any effect.
-                if (autoImportChangedRef.current) {
-                    autoImportChangedRef.current();
-                }
-                return;
-            }
-            configStore.setConfigValue(persistentStore, key, value);
+    // The state store, which the interface reaches through its own context. Nothing routes between
+    // the two: a caller asks the one it means.
+    const state = createConfig(
+        async (key) => mobileStateSettingsFile.get(key),
+        async (key, value) => {
+            await mobileStateSettingsFile.set(key, value as IAppConfigValue | undefined);
         }
     );
 
@@ -881,7 +896,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     // nothing, so the app writes what the toggles say the first time it runs. A file that is already
     // there is left alone: rewriting it would put syncing back on for somebody who switched it off.
     useEffect(() => {
-        seedSyncSettingsFile(mobileSyncConfigFile)
+        seedMobileSyncSettings()
             .catch(error => log.exception("Failed to write the initial syncing settings", error as Error));
     }, []);
 
@@ -928,9 +943,9 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         };
 
         const ensureAutoImportOnce = async (): Promise<void> => {
-            const contents = await readAutoImportFile(mobileAutoImportConfigFile);
+            const contents = await readMobileAutoImportSettings();
             const importPlan = planMobileAutoImport(contents.settings, contents.defaultDatabasePath);
-            const syncSettings = await mobileSyncConfigFile.read();
+            const syncSettings = await readMobileSyncSettings();
 
             if (cancelled) {
                 return;
@@ -940,7 +955,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             // separately, and syncing must not need automatic import switched on as well: somebody
             // who imports by hand and wants their edits pushed is not asking for their photo library
             // to be scanned.
-            const syncEnabled = syncSettings.exists && syncSettings.settings.enabled;
+            const syncEnabled = syncSettings.written && syncSettings.settings.enabled;
             const syncDatabasePath = syncSettings.databasePath ?? contents.defaultDatabasePath;
             const decision = planBackgroundWork({
                 autoImportEnabled: importPlan.shouldRun,
@@ -960,7 +975,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
                 const outcome = resolveMediaPermission(permission);
                 if (!outcome.enabled) {
                     importWanted = false;
-                    await setAutoImportFileValue(mobileAutoImportConfigFile, AUTO_IMPORT_ENABLED_KEY, false);
+                    await mobileConfigSettingsFile.set(AUTO_IMPORT_ENABLED_KEY, false);
                     log.info(`Automatic import switched off: ${outcome.message}`);
                 }
             }
@@ -1034,9 +1049,11 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     return (
         <UuidGeneratorProvider value={uuidGenerator}>
             <ConfigContextProvider value={config}>
-                <PlatformContextProvider value={platformContext}>
-                    {children}
-                </PlatformContextProvider>
+                <StateContextProvider value={state}>
+                    <PlatformContextProvider value={platformContext}>
+                        {children}
+                    </PlatformContextProvider>
+                </StateContextProvider>
             </ConfigContextProvider>
         </UuidGeneratorProvider>
     );

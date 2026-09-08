@@ -2,7 +2,6 @@ import * as os from "os";
 import * as path from "path";
 import * as fs from "fs/promises";
 import { DEFAULT_AUTO_IMPORT_PAUSE_MS, DEFAULT_DATABASE_FOLDER_NAME } from "api/src/lib/auto-import-mobile";
-import { CONFIG_PATH } from "api/src/lib/mobile-config-paths";
 import { buildConfigYaml, readConfigFromStorage } from "node-api/src/lib/config.worker";
 import { planAutoImportHandler, type IAutoImportPassStep } from "../../lib/plan-auto-import.worker";
 
@@ -51,7 +50,7 @@ afterEach(async () => {
 // would, leaving every other section of the file as it is.
 //
 async function writeSettingsFile(enabled: boolean, defaultDatabasePath: string | undefined, sources: any[], pauseBetweenRunsMs: number): Promise<void> {
-    const { config } = await readConfigFromStorage(CONFIG_PATH);
+    const { config } = await readConfigFromStorage("config.yaml");
     config.autoImport = {
         settings: {
             enabled,
@@ -60,7 +59,7 @@ async function writeSettingsFile(enabled: boolean, defaultDatabasePath: string |
         defaultDatabasePath,
         pauseBetweenRunsMs,
     };
-    await fs.writeFile(path.join(tempDir, CONFIG_PATH), buildConfigYaml(config), "utf8");
+    await fs.writeFile(path.join(tempDir, "config.yaml"), buildConfigYaml(config), "utf8");
 }
 
 //
@@ -190,7 +189,7 @@ describe("plan-auto-import", () => {
 
     test("a gap of zero in the file falls back to the default rather than spinning", async () => {
         await fs.writeFile(
-            path.join(tempDir, CONFIG_PATH),
+            path.join(tempDir, "config.yaml"),
             "auto_import:\n  enabled: true\n  default_database_path: my-photos\n  pause_between_runs_ms: 0\n",
             "utf8");
 

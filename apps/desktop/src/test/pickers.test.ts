@@ -9,14 +9,14 @@ jest.mock('electron', () => ({
     },
 }));
 
-// Mock node-api so the tests do not touch the real config file.
-const mockLoadDesktopConfig = jest.fn();
+// Mock node-api so the tests do not touch the real state file.
+const mockLoadAppState = jest.fn();
 const mockGetFolderPath = jest.fn();
 const mockUpdateFolderPath = jest.fn();
 const mockUpdateLastDownloadFolder = jest.fn();
 
 jest.mock('node-api', () => ({
-    loadAppConfig: mockLoadDesktopConfig,
+    loadAppState: mockLoadAppState,
     getFolderPath: mockGetFolderPath,
     updateFolderPath: mockUpdateFolderPath,
     updateLastDownloadFolder: mockUpdateLastDownloadFolder,
@@ -30,7 +30,7 @@ describe('pickFile', () => {
     });
 
     test('uses lastDownloadFolder joined with the filename as the default path', async () => {
-        mockLoadDesktopConfig.mockResolvedValue({ lastDownloadFolder: '/downloads' });
+        mockLoadAppState.mockResolvedValue({ lastDownloadFolder: '/downloads' });
         mockShowSaveDialog.mockResolvedValue({ canceled: false, filePath: '/downloads/photo.jpg' });
 
         const result = await pickFile(null, 'photo.jpg');
@@ -40,7 +40,7 @@ describe('pickFile', () => {
     });
 
     test('falls back to the filename when no last download folder is configured', async () => {
-        mockLoadDesktopConfig.mockResolvedValue({});
+        mockLoadAppState.mockResolvedValue({});
         mockShowSaveDialog.mockResolvedValue({ canceled: false, filePath: '/elsewhere/photo.jpg' });
 
         const result = await pickFile(null, 'photo.jpg');
@@ -50,7 +50,7 @@ describe('pickFile', () => {
     });
 
     test('persists the chosen folder to lastDownloadFolder on confirm', async () => {
-        mockLoadDesktopConfig.mockResolvedValue({ lastDownloadFolder: '/downloads' });
+        mockLoadAppState.mockResolvedValue({ lastDownloadFolder: '/downloads' });
         mockShowSaveDialog.mockResolvedValue({ canceled: false, filePath: '/elsewhere/photo.jpg' });
 
         await pickFile(null, 'photo.jpg');
@@ -58,8 +58,8 @@ describe('pickFile', () => {
         expect(mockUpdateLastDownloadFolder).toHaveBeenCalledWith('/elsewhere');
     });
 
-    test('returns undefined and does not update config when the user cancels', async () => {
-        mockLoadDesktopConfig.mockResolvedValue({ lastDownloadFolder: '/downloads' });
+    test('returns undefined and does not update the state when the user cancels', async () => {
+        mockLoadAppState.mockResolvedValue({ lastDownloadFolder: '/downloads' });
         mockShowSaveDialog.mockResolvedValue({ canceled: true });
 
         const result = await pickFile(null, 'photo.jpg');
