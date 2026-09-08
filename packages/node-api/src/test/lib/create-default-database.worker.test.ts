@@ -32,7 +32,15 @@ const context: any = {
         now: () => 0,
         dateNow: () => new Date(0),
     },
+    sendMessage: (message: any) => {
+        sentMessages.push(message);
+    },
 };
+
+//
+// The messages the task sent, which is how it tells the interface to open what it made.
+//
+let sentMessages: any[] = [];
 
 //
 // A temporary working directory standing in for the app's storage sandbox, and the directory the
@@ -43,6 +51,7 @@ let previousCwd: string;
 
 beforeEach(async () => {
     previousCwd = process.cwd();
+    sentMessages = [];
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "psphere-create-default-"));
     process.chdir(tempDir);
 });
@@ -55,7 +64,7 @@ afterEach(async () => {
 describe("create-default-database", () => {
 
     test("creates a real database at the path", async () => {
-        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml" }, context);
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml", open: true }, context);
 
         expect(await checkDatabaseExists(path.join(tempDir, "photosphere-default"))).toBe(true);
     });
@@ -83,7 +92,7 @@ describe("create-default-database", () => {
             }),
             "utf8");
 
-        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml" }, context);
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml", open: true }, context);
 
         const settings = await readConfigHandler({ configPath: "config.yaml" }, context);
         expect(settings.autoImport.defaultDatabasePath).toBe("photosphere-default");
@@ -123,7 +132,7 @@ describe("create-default-database", () => {
             }),
             "utf8");
 
-        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml" }, context);
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml", open: true }, context);
 
         const settings = await readConfigHandler({ configPath: "config.yaml" }, context);
         expect(settings.autoImport.settings.enabled).toBe(true);
@@ -146,7 +155,7 @@ describe("create-default-database", () => {
                 undefined),
             "utf8");
 
-        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml" }, context);
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml", open: true }, context);
 
         const databases = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
         expect(databases.databases.map(entry => entry.path)).toEqual(["holiday", "photosphere-default"]);
@@ -156,14 +165,53 @@ describe("create-default-database", () => {
     test("recording the same database twice does not list it twice", async () => {
         // A pass can be interrupted after the database is recorded and before the import finishes, so
         // the next pass may record it again.
-        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml" }, context);
-        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml" }, context);
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml", open: true }, context);
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml", open: true }, context);
 
         const databases = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
         expect(databases.databases.map(entry => entry.path)).toEqual(["photosphere-default"]);
     });
 
+    test("tells the interface to open the database it made", async () => {
+        // The one way the task reaches the interface on every platform: the Electron main process
+        // forwards a task message to the renderer and the native plugin emits it to the WebView.
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml", open: true }, context);
+
+        expect(sentMessages).toEqual([
+            {
+                type: "database-opened",
+                databasePath: "photosphere-default",
+            },
+        ]);
+    });
+
+    test("says nothing when the database was not asked for on screen", async () => {
+        // Made on disk and recorded, but the user is not taken to it.
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml", open: false }, context);
+
+        expect(sentMessages).toEqual([]);
+
+        const settings = await readConfigHandler({ configPath: "config.yaml" }, context);
+        expect(settings.autoImport.defaultDatabasePath).toBe("photosphere-default");
+    });
+
+    test("still says so for a database that was already listed", async () => {
+        // The second pass over a database that exists and is recorded still has to open it: the
+        // interface asking for it is a separate thing from the database being new.
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml", open: true }, context);
+        sentMessages = [];
+
+        await createDefaultDatabaseHandler({ databasePath: "photosphere-default", configPath: "config.yaml", databasesConfigPath: "databases.toml", open: true }, context);
+
+        expect(sentMessages).toEqual([
+            {
+                type: "database-opened",
+                databasePath: "photosphere-default",
+            },
+        ]);
+    });
+
     test("a missing database path is refused rather than recorded as nothing", async () => {
-        await expect(createDefaultDatabaseHandler({ databasePath: "", configPath: "config.yaml", databasesConfigPath: "databases.toml" }, context)).rejects.toThrow("databasePath is required");
+        await expect(createDefaultDatabaseHandler({ databasePath: "", configPath: "config.yaml", databasesConfigPath: "databases.toml", open: true }, context)).rejects.toThrow("databasePath is required");
     });
 });

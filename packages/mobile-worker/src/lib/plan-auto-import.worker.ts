@@ -76,6 +76,10 @@ export async function planAutoImportHandler(_data: object, context: ITaskContext
                     databasePath: plan.databasePath,
                     configPath: "config.yaml",
                     databasesConfigPath: "databases.toml",
+
+                    // The user switched automatic import on and photos are about to start arriving
+                    // in this database, so it is the one they should be looking at.
+                    open: true,
                 },
             });
         }

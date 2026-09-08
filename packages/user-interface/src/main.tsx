@@ -199,7 +199,6 @@ function __Main({ initialTheme }: IMainProps) {
         return unsubscribe;
     }, [platform, setMode]);
 
-
     //
     // Open the right sidebar when the navbar's job indicator is clicked, which is where the jobs are
     // listed and cancelled. A window event rather than a prop, so the indicator can sit anywhere in
@@ -226,10 +225,26 @@ function __Main({ initialTheme }: IMainProps) {
     }, []);
 
     //
-    // Listen for platform events from the host and dispatch menu actions by name.
+    // Listen to the host: menu actions it dispatches by name, and messages from the tasks it runs.
+    //
+    // A task message is how a task reaches the interface on every platform, the Electron main process
+    // forwarding it to the renderer and the native plugin emitting it to the WebView, so a task that
+    // has made a database the user asked for says so here and this is the one place that opens it.
+    // A database the user already has open is left alone: taking them out of what they are looking at
+    // is worse than not opening anything, and nothing is lost, since the new database is in the list
+    // and is recorded as the one automatic import writes to.
     //
     useEffect(() => {
-        return platform.onPlatformEvent((event) => {
+        const unsubscribeTaskMessage = platform.onTaskMessage((_taskId, message) => {
+            if (message.type !== "database-opened" || databasePath) {
+                return;
+            }
+
+            openDatabase(message.databasePath as string)
+                .catch(error => log.exception("Failed to open the database a background task made", error as Error));
+        });
+
+        const unsubscribePlatformEvent = platform.onPlatformEvent((event) => {
             if (event.type !== 'menu-action') {
                 return;
             }
@@ -266,7 +281,12 @@ function __Main({ initialTheme }: IMainProps) {
                     break;
             }
         });
-    }, [platform, startImportDirectories, addToast, navigate]);
+
+        return () => {
+            unsubscribeTaskMessage();
+            unsubscribePlatformEvent();
+        };
+    }, [platform, databasePath, openDatabase, startImportDirectories, addToast, navigate]);
 
     //
     // Adds the mobile or desktop class to the body based on the current form
