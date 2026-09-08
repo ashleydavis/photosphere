@@ -68,12 +68,32 @@
         android:maxSdkVersion="32" />
 
     <!--
+      Android 14 gives the user a third answer besides allow and deny: pick some photos. Declaring
+      this is what makes that partial grant persist. An app targeting 34 or later that does not
+      declare it is run in compatibility mode instead, where the media permissions above are granted
+      for the current session and taken away the moment the app goes to the background, so the app
+      would ask again and see a different handful of photos every time.
+
+      Declaring it is also what lets the app tell a partial grant apart from a refusal, which it has
+      to do: automatic import over a few hand-picked photos is not the backup the switch promises.
+    -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+
+    <!--
       The background import runs as a foreground service, which the platform requires to post an
       ongoing notification. Android 13 will not show that notification without POST_NOTIFICATIONS,
       and the service then runs invisibly, which is the opposite of what a foreground service is for.
       It is declared here but asked for only when automatic import is switched on.
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!--
+      An app targeting Android 14 or later must hold the permission matching each service's
+      foregroundServiceType, or startForeground throws a SecurityException and the import service
+      dies the moment it starts. The service below is a dataSync service, so this is its permission.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!--

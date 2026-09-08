@@ -2,6 +2,7 @@ package au.com.codecapers.photosphere.jsengine;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.DocumentsContract;
@@ -9,6 +10,7 @@ import android.provider.OpenableColumns;
 import android.util.Log;
 
 import androidx.activity.result.ActivityResult;
+import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -55,12 +57,20 @@ import java.util.concurrent.TimeUnit;
 // for a permission and how it delivers the answer back. Requesting straight through
 // ActivityCompat.requestPermissions instead looks like it works and does not: the result goes to the
 // Activity, and Capacitor only forwards it to the plugin it believes made the request, so a request
-// it never saw is answered into nothing and the call waits forever. There are two aliases because
-// Android 13 split the storage permission into per-type media ones and an alias names a fixed list,
-// so the version decides which one is asked for.
+// it never saw is answered into nothing and the call waits forever. There is an alias per version
+// range, because Android 13 split the storage permission into per-type media ones, Android 14 added
+// the selected-photos one, and an alias names a fixed list, so the version decides which is asked for.
 @CapacitorPlugin(
     name = "JsEngine",
     permissions = {
+        @Permission(
+            alias = MediaPermissions.PER_TYPE_MEDIA_WITH_SELECTED_ALIAS,
+            strings = {
+                MediaPermissions.READ_MEDIA_IMAGES,
+                MediaPermissions.READ_MEDIA_VIDEO,
+                MediaPermissions.READ_MEDIA_VISUAL_USER_SELECTED,
+            }
+        ),
         @Permission(
             alias = MediaPermissions.PER_TYPE_MEDIA_ALIAS,
             strings = { MediaPermissions.READ_MEDIA_IMAGES, MediaPermissions.READ_MEDIA_VIDEO }
@@ -804,21 +814,23 @@ public final class JsEnginePlugin extends Plugin {
     }
 
     //
-    // requestMediaPermission: asks for the photo library permission and reports whether it was
-    // granted, as { granted: boolean }.
+    // requestMediaPermission: asks for the photo library permission and reports what came back, as
+    // { granted: boolean, partial: boolean }.
     //
     // Android 13 split the old storage permission into per-type media ones, so which permission to
     // ask for depends on the version the app is running on, not the one it was built against.
     //
     @PluginMethod
     public void requestMediaPermission(PluginCall call) {
-        String alias = MediaPermissions.aliasForVersion(android.os.Build.VERSION.SDK_INT);
-
-        if (getPermissionState(alias) == PermissionState.GRANTED) {
-            resolveMediaPermission(call, alias);
+        if (currentMediaAccess() == MediaAccess.FULL) {
+            resolveMediaPermission(call);
             return;
         }
 
+        // Asked for again when the app holds only the photos the user picked, because that is the
+        // one way back to the whole library: the platform puts the choice up again and the user can
+        // allow everything this time.
+        String alias = MediaPermissions.aliasForVersion(android.os.Build.VERSION.SDK_INT);
         requestPermissionForAlias(alias, call, "mediaPermissionCallback");
     }
 
@@ -831,20 +843,58 @@ public final class JsEnginePlugin extends Plugin {
     //
     @PermissionCallback
     private void mediaPermissionCallback(PluginCall call) {
-        resolveMediaPermission(call, MediaPermissions.aliasForVersion(android.os.Build.VERSION.SDK_INT));
+        resolveMediaPermission(call);
     }
 
     //
-    // Resolves a photo library permission call with what the platform says about the alias.
+    // Resolves a photo library permission call with how much of the library the app can now see.
     //
-    // Granted means every permission in the alias was granted, which is what Capacitor reports:
-    // automatic import reads both images and videos, and a half-granted answer would silently back
-    // up only half the library.
+    // Granted means the whole library: automatic import reads both images and videos, and a
+    // half-granted answer would silently back up only half of it. Partial means the user picked
+    // individual photos on Android 14 or later, which is reported separately rather than as a
+    // refusal, because the two need different things said to the user and only one of them can be
+    // put right from the permission dialog.
     //
-    private void resolveMediaPermission(PluginCall call, String alias) {
+    private void resolveMediaPermission(PluginCall call) {
+        MediaAccess access = currentMediaAccess();
+
         JSObject result = new JSObject();
-        result.put("granted", getPermissionState(alias) == PermissionState.GRANTED);
+        result.put("granted", access == MediaAccess.FULL);
+        result.put("partial", access == MediaAccess.PARTIAL);
         call.resolve(result);
+    }
+
+    //
+    // How much of the photo library the app can see right now.
+    //
+    // Read one permission at a time rather than through Capacitor's alias state, which is granted
+    // only when every permission in the alias is: a user who picked some photos holds the
+    // selected-photos permission and neither per-type one, so the alias reports that as a flat
+    // refusal and the app would tell them it cannot see photos it can see.
+    //
+    private MediaAccess currentMediaAccess() {
+        int sdkInt = android.os.Build.VERSION.SDK_INT;
+
+        if (sdkInt >= MediaPermissions.FIRST_PER_TYPE_MEDIA_VERSION) {
+            return MediaPermissions.mediaAccessFor(
+                isPermissionGranted(MediaPermissions.READ_MEDIA_IMAGES),
+                isPermissionGranted(MediaPermissions.READ_MEDIA_VIDEO),
+                sdkInt >= MediaPermissions.FIRST_PARTIAL_MEDIA_VERSION
+                    && isPermissionGranted(MediaPermissions.READ_MEDIA_VISUAL_USER_SELECTED));
+        }
+
+        // One permission covers both types before Android 13, and no version that old can grant
+        // access to part of the library, so its answer stands for both and there is nothing partial
+        // to report.
+        boolean storageGranted = isPermissionGranted(MediaPermissions.READ_EXTERNAL_STORAGE);
+        return MediaPermissions.mediaAccessFor(storageGranted, storageGranted, false);
+    }
+
+    //
+    // Whether the app holds one named permission.
+    //
+    private boolean isPermissionGranted(String permission) {
+        return ContextCompat.checkSelfPermission(getContext(), permission) == PackageManager.PERMISSION_GRANTED;
     }
 
     //

@@ -18,18 +18,19 @@
 set -euo pipefail
 
 # The SDK package versions, kept in step with android/variables.gradle and android/app/build.gradle.
-# compileSdkVersion 33 -> platforms;android-33 and build-tools;33.0.2 (the last 33.x build-tools).
+# compileSdkVersion 35 -> platforms;android-35 and build-tools;35.0.0, which is also the build-tools
+# version the Android Gradle Plugin in android/build.gradle asks for.
 # ndkVersion and the cmake version are copied verbatim from android/app/build.gradle.
-ANDROID_PLATFORM="platforms;android-33"
-ANDROID_BUILD_TOOLS="build-tools;33.0.2"
+ANDROID_PLATFORM="platforms;android-35"
+ANDROID_BUILD_TOOLS="build-tools;35.0.0"
 ANDROID_NDK="ndk;25.1.8937393"
 ANDROID_CMAKE="cmake;3.22.1"
 
 # The emulator's system image. The API level matches what scripts/emulator.sh builds its base AVD
 # from: create_base_avd picks the highest installed system image, and the image it documents to
-# install is android-34 google_apis x86_64, so installing that is what lets `emu:and:up` create an
+# install is android-36 google_apis x86_64, so installing that is what lets `emu:and:up` create an
 # AVD. x86_64 is the emulator ABI on an x86_64 host and is one of the app's built ABIs.
-ANDROID_SYSTEM_IMAGE="system-images;android-34;google_apis;x86_64"
+ANDROID_SYSTEM_IMAGE="system-images;android-36;google_apis;x86_64"
 
 # Everything --install fetches and --status checks for: the packages the Gradle build reaches for,
 # plus the emulator and its system image so the app can run on an emulator, not only a physical
@@ -172,7 +173,7 @@ resolve_jdk17() {
 }
 
 # The SDK path a package id installs to: sdkmanager lays each package out under the SDK with its ';'
-# separators turned into directory separators (platforms;android-33 -> platforms/android-33).
+# separators turned into directory separators (platforms;android-35 -> platforms/android-35).
 package_install_path() {
     printf '%s/%s\n' "$ANDROID_HOME" "${1//;//}"
 }

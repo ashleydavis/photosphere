@@ -1266,7 +1266,7 @@ jobs:
         env:
           PHOTOSPHERE_NO_LAN_BRIDGE: "1"
         with:
-          api-level: 33
+          api-level: 35
           arch: x86_64
           target: google_apis
           # ONE LINE, and it has to stay one line. This action splits `script:` on newlines and runs
