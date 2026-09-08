@@ -1,6 +1,5 @@
 import type { ITaskContext } from "task-queue";
 import { DEFAULT_DATABASE_DISPLAY_NAME } from "api/src/lib/auto-import-mobile";
-import { CONFIG_PATH, DATABASES_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
 import { readConfigFromStorage, writeConfigHandler } from "node-api/src/lib/config.worker";
 import { readDatabasesConfigHandler, writeDatabasesConfigHandler } from "node-api/src/lib/databases-config.worker";
 
@@ -33,12 +32,12 @@ export async function recordDefaultDatabaseHandler(data: IRecordDefaultDatabaseD
         throw new Error("databasePath is required");
     }
 
-    const { config } = await readConfigFromStorage(CONFIG_PATH);
+    const { config } = await readConfigFromStorage("config.yaml");
     const autoImportFile = config.autoImport;
     // Only the automatic import section is sent, so the syncing settings in the same file are left
     // exactly as they were.
     await writeConfigHandler({
-        configPath: CONFIG_PATH,
+        configPath: "config.yaml",
         autoImport: {
             settings: autoImportFile.settings,
             defaultDatabasePath: data.databasePath,
@@ -46,14 +45,14 @@ export async function recordDefaultDatabaseHandler(data: IRecordDefaultDatabaseD
         },
     }, context);
 
-    const databasesConfig = await readDatabasesConfigHandler({ configPath: DATABASES_CONFIG_PATH }, context);
+    const databasesConfig = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
     const alreadyListed = databasesConfig.databases.some(entry => entry.path === data.databasePath);
     if (alreadyListed) {
         return;
     }
 
     await writeDatabasesConfigHandler({
-        configPath: DATABASES_CONFIG_PATH,
+        configPath: "databases.toml",
         databases: [
             ...databasesConfig.databases,
             {

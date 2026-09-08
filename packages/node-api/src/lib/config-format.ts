@@ -9,6 +9,10 @@
 // Nothing here touches the filesystem, which is what lets it be bundled into the mobile worker, and
 // it is the only definition of the file format, so the reader and the writer cannot drift apart.
 //
+// This file is what the user chose. What the app remembered on its own, so the interface comes back
+// the way it was left, is in state.yaml beside it (see state-format.ts). The two are split because
+// only one of them is worth documenting, hand-editing or carrying to another machine.
+//
 // The settings themselves are not defined here. The normalisers in `api` own what a valid setting is
 // (normaliseSyncSettings, normaliseAutoImportSettings and the two pause resolvers), because the
 // interface applies the same rules to values that never came from this file. This module is only
@@ -36,57 +40,6 @@ import {
 export type IConfigTheme = 'light' | 'dark' | 'system';
 
 //
-// What the notification system has already shown on this install, so it does not show it twice.
-//
-// State rather than a setting, and in this file rather than one of its own because the config
-// directory holding one file is the point of the merge. Shared between the desktop app and the CLI
-// on the same machine: an item announced by one is not announced again by the other.
-//
-export interface INewsConfig {
-    //
-    // Stable ids of news items that have already been shown to the user, in the order they were
-    // first seen.
-    //
-    shownNewsIds: string[];
-
-    //
-    // The release version the user has already been told about. A newer release on GitHub notifies
-    // again and overwrites this.
-    //
-    lastShownUpdateVersion?: string;
-}
-
-//
-// Preferences that only mean something where there is a window and a file dialog.
-//
-export interface IDesktopSection {
-    //
-    // The folder the file dialog reopens at.
-    //
-    lastFolder?: string;
-
-    //
-    // The folder the download dialog reopens at.
-    //
-    lastDownloadFolder?: string;
-
-    //
-    // Recently executed searches, most recent first, capped at MAX_RECENT_SEARCHES.
-    //
-    recentSearches?: string[];
-
-    //
-    // Whether the frames-per-second overlay is drawn.
-    //
-    showFpsIndicator?: boolean;
-
-    //
-    // Whether the native inspector was open when the app closed, so it can be reopened on startup.
-    //
-    devToolsOpen?: boolean;
-}
-
-//
 // Everything config.yaml holds, in memory, with camelCase fields.
 //
 // The auto-import and sync sections are the already-resolved types the rest of the app works with
@@ -105,6 +58,17 @@ export interface IConfigFile {
     developerMode?: boolean;
 
     //
+    // Whether the frames-per-second overlay is drawn.
+    //
+    showFpsIndicator?: boolean;
+
+    //
+    // The searches the user has deliberately saved from the sidebar. The ones they merely ran are in
+    // state.yaml, because those the app remembered rather than the user chose.
+    //
+    savedSearches?: string[];
+
+    //
     // What automatic photo import watches, where it puts what it finds, and how often it looks.
     //
     autoImport: IAutoImportFile;
@@ -118,16 +82,6 @@ export interface IConfigFile {
     // The two syncing toggles, the database the background loop pushes, and how often it runs.
     //
     sync: ISyncFile;
-
-    //
-    // Preferences that only apply where there is a window.
-    //
-    desktop: IDesktopSection;
-
-    //
-    // What the notification system has already shown.
-    //
-    news: INewsConfig;
 }
 
 //
@@ -185,37 +139,6 @@ export interface IYamlSyncSection {
 }
 
 //
-// On-disk contents of the `desktop` section.
-//
-export interface IYamlDesktopSection {
-    // The folder the file dialog reopens at.
-    last_folder?: string;
-
-    // The folder the download dialog reopens at.
-    last_download_folder?: string;
-
-    // Recently executed searches, most recent first.
-    recent_searches?: string[];
-
-    // Whether the frames-per-second overlay is drawn.
-    show_fps_indicator?: boolean;
-
-    // Whether the native inspector should be reopened on startup.
-    dev_tools_open?: boolean;
-}
-
-//
-// On-disk contents of the `news` section.
-//
-export interface IYamlNewsSection {
-    // Stable news item ids already shown on this install.
-    shown_news_ids?: string[];
-
-    // The release version that has already been announced to the user.
-    last_shown_update_version?: string;
-}
-
-//
 // The whole on-disk document (snake_case keys, sections nested by feature).
 //
 export interface IYamlConfigFile {
@@ -225,17 +148,17 @@ export interface IYamlConfigFile {
     // Whether developer mode is on.
     developer_mode?: boolean;
 
+    // Whether the frames-per-second overlay is drawn.
+    show_fps_indicator?: boolean;
+
+    // The searches the user has deliberately saved.
+    saved_searches?: string[];
+
     // Automatic photo import.
     auto_import?: IYamlAutoImportSection;
 
     // Automatic syncing.
     sync?: IYamlSyncSection;
-
-    // Window-only preferences.
-    desktop?: IYamlDesktopSection;
-
-    // What the notification system has already shown.
-    news?: IYamlNewsSection;
 }
 
 //
@@ -348,55 +271,6 @@ function yamlToSyncFile(section: IYamlSyncSection | undefined): ISyncFile {
 }
 
 //
-// Turns the `desktop` section into its in-memory form, dropping anything of the wrong type.
-//
-function yamlToDesktopSection(section: IYamlDesktopSection | undefined): IDesktopSection {
-    if (!isSection(section)) {
-        return {};
-    }
-
-    const desktop: IDesktopSection = {};
-    if (typeof section!.last_folder === "string") {
-        desktop.lastFolder = section!.last_folder;
-    }
-    if (typeof section!.last_download_folder === "string") {
-        desktop.lastDownloadFolder = section!.last_download_folder;
-    }
-    if (Array.isArray(section!.recent_searches)) {
-        desktop.recentSearches = section!.recent_searches.filter(search => typeof search === "string");
-    }
-    if (typeof section!.show_fps_indicator === "boolean") {
-        desktop.showFpsIndicator = section!.show_fps_indicator;
-    }
-    if (typeof section!.dev_tools_open === "boolean") {
-        desktop.devToolsOpen = section!.dev_tools_open;
-    }
-    return desktop;
-}
-
-//
-// Turns the `news` section into its in-memory form.
-//
-// A malformed section comes back as an empty state rather than throwing, because the user must never
-// be blocked from starting the app by what the notification system has recorded.
-//
-function yamlToNewsConfig(section: IYamlNewsSection | undefined): INewsConfig {
-    if (!isSection(section)) {
-        return { shownNewsIds: [] };
-    }
-
-    const news: INewsConfig = {
-        shownNewsIds: Array.isArray(section!.shown_news_ids)
-            ? section!.shown_news_ids.filter(newsId => typeof newsId === "string")
-            : [],
-    };
-    if (typeof section!.last_shown_update_version === "string" && section!.last_shown_update_version.length > 0) {
-        news.lastShownUpdateVersion = section!.last_shown_update_version;
-    }
-    return news;
-}
-
-//
 // Turns the parsed document into the configuration the app works with.
 //
 // A file that is not there arrives here as undefined and comes back as the defaults, which have both
@@ -413,8 +287,6 @@ export function yamlToConfigFile(document: IYamlConfigFile | undefined): IConfig
     const config: IConfigFile = {
         autoImport: yamlToAutoImportFile(parsed.auto_import),
         sync: yamlToSyncFile(parsed.sync),
-        desktop: yamlToDesktopSection(parsed.desktop),
-        news: yamlToNewsConfig(parsed.news),
     };
 
     if (typeof parsed.theme === "string" && ALLOWED_THEMES.includes(parsed.theme)) {
@@ -422,6 +294,12 @@ export function yamlToConfigFile(document: IYamlConfigFile | undefined): IConfig
     }
     if (typeof parsed.developer_mode === "boolean") {
         config.developerMode = parsed.developer_mode;
+    }
+    if (typeof parsed.show_fps_indicator === "boolean") {
+        config.showFpsIndicator = parsed.show_fps_indicator;
+    }
+    if (Array.isArray(parsed.saved_searches)) {
+        config.savedSearches = parsed.saved_searches.filter(search => typeof search === "string");
     }
     if (isSection(parsed.auto_import) && typeof parsed.auto_import!.cleanup_enabled === "boolean") {
         config.autoImportCleanupEnabled = parsed.auto_import!.cleanup_enabled;
@@ -461,30 +339,6 @@ export function configFileToYaml(config: IConfigFile, emit?: IConfigSectionsPres
         sync.database_path = config.sync.databasePath;
     }
 
-    const desktop: IYamlDesktopSection = {};
-    if (config.desktop.lastFolder !== undefined) {
-        desktop.last_folder = config.desktop.lastFolder;
-    }
-    if (config.desktop.lastDownloadFolder !== undefined) {
-        desktop.last_download_folder = config.desktop.lastDownloadFolder;
-    }
-    if (config.desktop.recentSearches !== undefined) {
-        desktop.recent_searches = config.desktop.recentSearches;
-    }
-    if (config.desktop.showFpsIndicator !== undefined) {
-        desktop.show_fps_indicator = config.desktop.showFpsIndicator;
-    }
-    if (config.desktop.devToolsOpen !== undefined) {
-        desktop.dev_tools_open = config.desktop.devToolsOpen;
-    }
-
-    const news: IYamlNewsSection = {
-        shown_news_ids: config.news.shownNewsIds,
-    };
-    if (config.news.lastShownUpdateVersion !== undefined) {
-        news.last_shown_update_version = config.news.lastShownUpdateVersion;
-    }
-
     const document: IYamlConfigFile = {};
 
     if (config.theme !== undefined) {
@@ -492,6 +346,12 @@ export function configFileToYaml(config: IConfigFile, emit?: IConfigSectionsPres
     }
     if (config.developerMode !== undefined) {
         document.developer_mode = config.developerMode;
+    }
+    if (config.showFpsIndicator !== undefined) {
+        document.show_fps_indicator = config.showFpsIndicator;
+    }
+    if (config.savedSearches !== undefined) {
+        document.saved_searches = config.savedSearches;
     }
 
     // A section is written only once its feature has actually been set, so a reader can tell "nobody
@@ -503,15 +363,6 @@ export function configFileToYaml(config: IConfigFile, emit?: IConfigSectionsPres
     }
     if (emit === undefined || emit.sync) {
         document.sync = sync;
-    }
-
-    // These two go in only when they hold something. A phone never writes either, and an empty
-    // section in its settings file is a line the reader has to work out means nothing.
-    if (Object.keys(desktop).length > 0) {
-        document.desktop = desktop;
-    }
-    if (news.shown_news_ids!.length > 0 || news.last_shown_update_version !== undefined) {
-        document.news = news;
     }
 
     return document;
@@ -589,6 +440,16 @@ export interface IParsedConfigFile {
     // Which sections the document actually carried. Both false for text that would not parse.
     //
     present: IConfigSectionsPresent;
+
+    //
+    // The document as it was parsed, before any section was filled in from the defaults. Undefined
+    // for an empty file and for text that would not parse.
+    //
+    // A caller that writes one setting by the name the interface uses needs this rather than the
+    // configuration: the flat view has to be able to tell a setting nobody has chosen from one that
+    // was switched off, and the configuration has already lost that distinction.
+    //
+    document?: IYamlConfigFile;
 }
 
 //
@@ -618,6 +479,7 @@ export function parseConfigYamlChecked(text: string): IParsedConfigFile {
         config: yamlToConfigFile(parsed),
         malformed: false,
         present: sectionsPresent(parsed),
+        document: isSection(parsed) ? parsed : undefined,
     };
 }
 

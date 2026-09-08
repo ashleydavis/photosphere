@@ -2,6 +2,7 @@ import React, { createContext, ReactNode, useContext, useEffect, useRef, useStat
 import { computePartialLayout, deleteFromLayout, IGalleryLayout } from "../lib/create-layout";
 import { useGallery } from "./gallery-context";
 import { IGalleryItem } from "../lib/gallery-item";
+import { useState as useStateStore } from "./state-context";
 
 //
 // Manages the layout of the gallery.
@@ -62,8 +63,10 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     //
     // The target row height of the gallery.
     //
-    const savedHeight = localStorage.getItem("gallery-row-height");
-    const [targetRowHeight, _setTargetRowHeight] = useState(savedHeight ? parseInt(savedHeight) : 80);
+    // Starts at the default and is replaced by what was remembered once the store answers. The store
+    // is a file now rather than the browser's own, so it cannot be read while this is being built.
+    //
+    const [targetRowHeight, _setTargetRowHeight] = useState(80);
     
     //
     // The current layout of the gallery, stored in a ref so updates during incremental loading
@@ -79,6 +82,8 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
     const [_time, setTime] = useState<number>(0);
 
     const { sortedItems, onReset, onNewItems, onItemsDeleted, onItemsUpdated, getItemById, searchText, sortBy, sorting } = useGallery();
+
+    const stateStore = useStateStore();
 
     const scrollToHandler = useRef<(scrollTop: number) => void>();
 
@@ -231,8 +236,20 @@ export function GalleryLayoutContextProvider({ children }: IGalleryLayoutContext
 
     const setTargetRowHeight = (height: number) => {
         _setTargetRowHeight(height);
-        localStorage.setItem("gallery-row-height", height.toString());
+        stateStore.set<number>("galleryRowHeight", height);
     };
+
+    //
+    // Applies the row height the app remembered, once the store has answered.
+    //
+    useEffect(() => {
+        stateStore.get<number>("galleryRowHeight")
+            .then(remembered => {
+                if (remembered !== undefined) {
+                    _setTargetRowHeight(remembered);
+                }
+            });
+    }, []);
 
     const value: IGalleryLayoutContext = {
         galleryWidth,

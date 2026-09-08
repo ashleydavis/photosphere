@@ -26,6 +26,7 @@ export * from "./context/platform-context";
 export * from "./context/api-context";
 export * from "./context/uuid-generator-context";
 export * from "./context/config-context";
+export * from "./context/state-context";
 export * from "./lib/clipboard";
 export * from "./lib/bug-report";
 export * from "./lib/auto-import-config";

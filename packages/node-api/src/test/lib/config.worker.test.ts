@@ -315,16 +315,13 @@ describe("a write of one section leaves the others alone", () => {
     // A desktop installation sharing this file writes sections this task has no notion of at all.
     // Reading before writing is what keeps them.
     //
-    test("keeps sections the task knows nothing about, such as the theme and the news state", async () => {
+    test("keeps settings the task knows nothing about, such as the theme and the saved searches", async () => {
         await writeConfigText([
             "theme: dark",
             "developer_mode: true",
-            "news:",
-            "  shown_news_ids:",
-            "    - release-1",
-            "  last_shown_update_version: 1.2.3",
-            "desktop:",
-            "  last_folder: /home/someone/photos",
+            "show_fps_indicator: true",
+            "saved_searches:",
+            "  - beach",
             "",
         ].join("\n"));
 
@@ -343,9 +340,8 @@ describe("a write of one section leaves the others alone", () => {
 
         expect(document.theme).toBe("dark");
         expect(document.developer_mode).toBe(true);
-        expect(document.news.shown_news_ids).toEqual(["release-1"]);
-        expect(document.news.last_shown_update_version).toBe("1.2.3");
-        expect(document.desktop.last_folder).toBe("/home/someone/photos");
+        expect(document.show_fps_indicator).toBe(true);
+        expect(document.saved_searches).toEqual(["beach"]);
         expect(document.sync.enabled).toBe(true);
     });
 });
@@ -557,10 +553,6 @@ describe("buildConfigYaml", () => {
                 databasePath: "photosphere-default",
                 pauseBetweenRunsMs: 120000,
             },
-            desktop: {},
-            news: {
-                shownNewsIds: [],
-            },
         });
 
         await writeConfigText(rendered);
@@ -600,8 +592,92 @@ describe("bad input to the handlers", () => {
     // A write with no section at all would silently rewrite the file with what it already held,
     // which looks like it worked and changes nothing. It is always a caller bug, so it is loud.
     //
-    test("a write with neither section fails rather than doing nothing quietly", async () => {
+    test("a write with nothing to write fails rather than doing nothing quietly", async () => {
         await expect(writeConfigHandler({ configPath: CONFIG_PATH }, context))
-            .rejects.toThrow(/neither an autoImport nor a sync section/);
+            .rejects.toThrow(/nothing to write/);
+    });
+
+    test("a setting with no key fails rather than being written under an empty name", async () => {
+        await expect(writeConfigHandler({ configPath: CONFIG_PATH, entries: [{ key: "", value: true }] }, context))
+            .rejects.toThrow(/no key/);
+    });
+});
+
+//
+// The settings the interface names, which is how a phone reads and writes what the desktop app and
+// the CLI keep in this same file. Each one goes to the section the format puts it in. A key this file
+// does not hold is not this handler's business: the routing sends it to state.yaml instead.
+//
+describe("the settings the interface names", () => {
+
+    test("a setting the format declares is written into its own section and read back by name", async () => {
+        await writeConfigHandler({ configPath: CONFIG_PATH, entries: [{ key: "theme", value: "dark" }] }, context);
+
+        expect((await readConfigDocument()).theme).toBe("dark");
+        expect((await readConfigHandler({ configPath: CONFIG_PATH }, context)).settings.theme).toBe("dark");
+    });
+
+    test("the searches the user saved are written at the top level and read back by name", async () => {
+        await writeConfigHandler({
+            configPath: CONFIG_PATH,
+            entries: [{ key: "savedSearches", value: ["beach", "dogs"] }],
+        }, context);
+
+        expect((await readConfigDocument()).saved_searches).toEqual(["beach", "dogs"]);
+        expect((await readConfigHandler({ configPath: CONFIG_PATH }, context)).settings.savedSearches)
+            .toEqual(["beach", "dogs"]);
+    });
+
+    test("an entry with no value clears the setting rather than leaving it as it was", async () => {
+        await writeConfigHandler({ configPath: CONFIG_PATH, entries: [{ key: "theme", value: "dark" }] }, context);
+        await writeConfigHandler({ configPath: CONFIG_PATH, entries: [{ key: "theme" }] }, context);
+
+        expect((await readConfigDocument()).theme).toBeUndefined();
+        expect((await readConfigHandler({ configPath: CONFIG_PATH }, context)).settings.theme).toBeUndefined();
+    });
+
+    test("writing a setting leaves a feature's settings exactly as they were", async () => {
+        await writeConfigHandler({
+            configPath: CONFIG_PATH,
+            sync: {
+                settings: {
+                    enabled: true,
+                    onlyOnWifi: false,
+                },
+                databasePath: "the-database",
+                pauseBetweenRunsMs: 90000,
+            },
+        }, context);
+
+        await writeConfigHandler({ configPath: CONFIG_PATH, entries: [{ key: "theme", value: "light" }] }, context);
+
+        const result = await readConfigHandler({ configPath: CONFIG_PATH }, context);
+        expect(result.sync.settings.enabled).toBe(true);
+        expect(result.sync.settings.onlyOnWifi).toBe(false);
+        expect(result.sync.databasePath).toBe("the-database");
+        expect(result.sync.pauseBetweenRunsMs).toBe(90000);
+        expect(result.settings.theme).toBe("light");
+    });
+
+    test("writing a setting does not make it look as though syncing had been decided", async () => {
+        // A fresh install seeds syncing on, and only skips that when the file says syncing has been
+        // chosen already. An empty sync section left behind by an unrelated write would say exactly
+        // that, and the phone would sit with syncing off and its toggles saying on.
+        await writeConfigHandler({ configPath: CONFIG_PATH, entries: [{ key: "theme", value: "light" }] }, context);
+
+        const result = await readConfigHandler({ configPath: CONFIG_PATH }, context);
+        expect(result.syncSettingsWritten).toBe(false);
+        expect(result.autoImportSettingsWritten).toBe(false);
+        expect((await readConfigDocument()).sync).toBeUndefined();
+    });
+
+    test("a setting the state file holds is not answered from here", async () => {
+        // The routing sends it to state.yaml, so config.yaml never carries it and reading it back
+        // through this handler has to come up empty rather than finding a stale copy.
+        await writeConfigHandler({ configPath: CONFIG_PATH, entries: [{ key: "theme", value: "dark" }] }, context);
+
+        const settings = (await readConfigHandler({ configPath: CONFIG_PATH }, context)).settings;
+        expect(settings.gallerySort).toBeUndefined();
+        expect(settings["sidebar-collapsed-databases"]).toBeUndefined();
     });
 });

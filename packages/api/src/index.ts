@@ -17,7 +17,6 @@ export * from "./lib/replicate-database.types";
 export * from "./lib/sync-database.types";
 export * from "./lib/auto-import-settings";
 export * from "./lib/auto-import-mobile";
-export * from "./lib/mobile-config-paths";
 export * from "./lib/sync-settings";
 export * from "./lib/sync-gate";
 export * from "./lib/retention-policy";

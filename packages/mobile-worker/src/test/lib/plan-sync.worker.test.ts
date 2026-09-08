@@ -1,7 +1,6 @@
 import * as os from "os";
 import * as path from "path";
 import * as fs from "fs/promises";
-import { CONFIG_PATH } from "api/src/lib/mobile-config-paths";
 import { DEFAULT_SYNC_PAUSE_MS } from "api/src/lib/sync-settings";
 import { buildConfigYaml, readConfigFromStorage } from "node-api/src/lib/config.worker";
 import { planSyncHandler } from "../../lib/plan-sync.worker";
@@ -68,7 +67,7 @@ function setConnectionType(connectionType: string): void {
 // automatic import had been told to watch.
 //
 async function writeSyncSettings(enabled: boolean, onlyOnWifi: boolean, pauseBetweenRunsMs: number = DEFAULT_SYNC_PAUSE_MS): Promise<void> {
-    const { config } = await readConfigFromStorage(CONFIG_PATH);
+    const { config } = await readConfigFromStorage("config.yaml");
     config.sync = {
         settings: {
             enabled,
@@ -77,7 +76,7 @@ async function writeSyncSettings(enabled: boolean, onlyOnWifi: boolean, pauseBet
         databasePath: undefined,
         pauseBetweenRunsMs,
     };
-    await fs.writeFile(path.join(tempDir, CONFIG_PATH), buildConfigYaml(config), "utf8");
+    await fs.writeFile(path.join(tempDir, "config.yaml"), buildConfigYaml(config), "utf8");
 }
 
 //
@@ -85,7 +84,7 @@ async function writeSyncSettings(enabled: boolean, onlyOnWifi: boolean, pauseBet
 // the app would, leaving the syncing settings as they are.
 //
 async function writeDefaultDatabase(defaultDatabasePath: string | undefined): Promise<void> {
-    const { config } = await readConfigFromStorage(CONFIG_PATH);
+    const { config } = await readConfigFromStorage("config.yaml");
     config.autoImport = {
         settings: {
             enabled: true,
@@ -99,7 +98,7 @@ async function writeDefaultDatabase(defaultDatabasePath: string | undefined): Pr
         defaultDatabasePath,
         pauseBetweenRunsMs: 30000,
     };
-    await fs.writeFile(path.join(tempDir, CONFIG_PATH), buildConfigYaml(config), "utf8");
+    await fs.writeFile(path.join(tempDir, "config.yaml"), buildConfigYaml(config), "utf8");
 }
 
 //

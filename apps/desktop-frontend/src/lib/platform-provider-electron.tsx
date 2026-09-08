@@ -1,5 +1,5 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
-import { PlatformContextProvider, ConfigContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, StateContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, convertToPng, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, UuidGeneratorProvider } from "user-interface";
 import { RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator } from "utils";
 import type { ISaveAssetItem } from "api";
 import type { IElectronAPI } from "./electron-ipc";
@@ -571,17 +571,26 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
         setSyncAllowed,
     };
 
+    // A pair of channels per file, so neither end has to work out where a key belongs: the caller
+    // reaches for the store it means and the handler on the other side opens one file.
     const config = createConfig(
         (key) => electronAPI.invoke('get-config', key),
         (key, value) => electronAPI.invoke('set-config', { key, value })
     );
 
+    const state = createConfig(
+        (key) => electronAPI.invoke('get-state', key),
+        (key, value) => electronAPI.invoke('set-state', { key, value })
+    );
+
     return (
         <UuidGeneratorProvider value={uuidGenerator}>
             <ConfigContextProvider value={config}>
-                <PlatformContextProvider value={platformContext}>
-                    {children}
-                </PlatformContextProvider>
+                <StateContextProvider value={state}>
+                    <PlatformContextProvider value={platformContext}>
+                        {children}
+                    </PlatformContextProvider>
+                </StateContextProvider>
             </ConfigContextProvider>
         </UuidGeneratorProvider>
     );

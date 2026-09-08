@@ -1,4 +1,5 @@
 import type { IDatabaseEntry, IShowNotificationData } from "user-interface";
+import type { INewsFeedItem } from "node-api/src/lib/state-format";
 
 //
 // Client-side persistence for the mobile app's configured-databases and recent-databases lists.
@@ -11,39 +12,17 @@ import type { IDatabaseEntry, IShowNotificationData } from "user-interface";
 // The mobile WebView cannot read files, so the reads and writes are handed to an
 // IDatabasesConfigFile, which the platform provider implements with the embedded worker's
 // read-databases-config / write-databases-config tasks. Keeping that behind an interface is what
-// makes this module unit-testable without a device, the same reason the news and generic-config
-// functions below take an IKeyValueStore.
+// makes this module unit-testable without a device.
 //
-
+// The settings the interface names are not here. What the user chose is in config.yaml and what the
+// app remembered is in state.yaml, both reached through mobile-config-file.ts, which is the mobile
+// half of the same store the CLI and the desktop app use.
 //
-// localStorage key for the available news items (seeded in tests; would be fetched in production).
-//
-export const NEWS_KEY = "photosphere.news";
-
-//
-// localStorage key for the set of already-shown news item ids.
-//
-export const SHOWN_NEWS_KEY = "photosphere.shownNews";
 
 //
 // The most recently opened databases the config retains, matching desktop.
 //
 const MAX_RECENT_DATABASES = 5;
-
-//
-// The minimal key/value interface the news and generic-config functions need (a subset of the Web
-// Storage API). Abstracted so unit tests can supply an in-memory implementation.
-//
-export interface IKeyValueStore {
-    // Returns the stored string for a key, or null when absent.
-    getItem(key: string): string | null;
-
-    // Stores a string for a key.
-    setItem(key: string, value: string): void;
-
-    // Removes a key.
-    removeItem(key: string): void;
-}
 
 //
 // The databases config as held in databases.toml. Mirrors IDatabasesConfig in
@@ -78,30 +57,6 @@ export interface IDatabasesConfigFile {
 //
 function namesMatch(left: string, right: string): boolean {
     return left.toLowerCase() === right.toLowerCase();
-}
-
-//
-// Reads and parses a JSON array from the store, returning [] when missing or malformed.
-//
-function readArray<EntryT>(store: IKeyValueStore, key: string): EntryT[] {
-    const raw = store.getItem(key);
-    if (!raw) {
-        return [];
-    }
-    try {
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed as EntryT[] : [];
-    }
-    catch {
-        return [];
-    }
-}
-
-//
-// Serialises and stores a JSON array.
-//
-function writeArray<EntryT>(store: IKeyValueStore, key: string, entries: EntryT[]): void {
-    store.setItem(key, JSON.stringify(entries));
 }
 
 //
@@ -262,70 +217,21 @@ export async function removeRecentDatabase(configFile: IDatabasesConfigFile, nam
 }
 
 //
-// A news item that can be shown as a toast notification.
+// Returns the first news item in the feed that has not yet been shown, or undefined when none remain.
 //
-export interface INewsItemRecord {
-    // Stable id used to track whether the item has been shown.
-    id: string;
-
-    // The toast message.
-    message: string;
-
-    // Optional toast colour variant.
-    color?: "primary" | "success" | "warning" | "danger" | "neutral";
-
-    // Optional auto-dismiss duration in ms (0/undefined means no auto-dismiss).
-    duration?: number;
-
-    // Optional link shown in the toast.
-    link?: string;
-}
-
+// Both the feed and the ids already shown come from the caller, because both are kept in the `news`
+// section of state.yaml, the same place and the same format the CLI and the desktop app keep them in.
 //
-// Returns the available news items.
-//
-export function getNews(store: IKeyValueStore): INewsItemRecord[] {
-    return readArray<INewsItemRecord>(store, NEWS_KEY);
-}
-
-//
-// Replaces the available news items (used by test setup to seed a known news feed).
-//
-export function seedNews(store: IKeyValueStore, items: INewsItemRecord[]): void {
-    writeArray(store, NEWS_KEY, items);
-}
-
-//
-// Returns the ids of news items already shown to (and dismissed by) the user.
-//
-export function getShownNewsIds(store: IKeyValueStore): string[] {
-    return readArray<string>(store, SHOWN_NEWS_KEY);
-}
-
-//
-// Records a news item id as shown (no-op when already present).
-//
-export function addShownNewsId(store: IKeyValueStore, id: string): void {
-    const ids = getShownNewsIds(store);
-    if (!ids.includes(id)) {
-        ids.push(id);
-        writeArray(store, SHOWN_NEWS_KEY, ids);
-    }
-}
-
-//
-// Returns the first news item that has not yet been shown, or undefined when none remain.
-//
-export function firstUnshownNews(store: IKeyValueStore): INewsItemRecord | undefined {
-    const shown = new Set(getShownNewsIds(store));
-    return getNews(store).find(item => !shown.has(item.id));
+export function firstUnshownNews(feed: INewsFeedItem[], shownNewsIds: string[]): INewsFeedItem | undefined {
+    const shown = new Set(shownNewsIds);
+    return feed.find(item => !shown.has(item.id));
 }
 
 //
 // Maps a news item to the show-notification payload shown as a toast (with the newsId so dismissal
 // can mark it shown). Defaults: 'primary' colour, no auto-dismiss.
 //
-export function buildNewsNotification(item: INewsItemRecord): IShowNotificationData {
+export function buildNewsNotification(item: INewsFeedItem): IShowNotificationData {
     return {
         message: item.message,
         color: item.color ?? "primary",
@@ -342,40 +248,6 @@ export function databaseBasename(databasePath: string): string {
     const segments = databasePath.split(/[\\/]/).filter(segment => segment.length > 0);
     return segments.length > 0 ? segments[segments.length - 1] : databasePath;
 }
-
-//
-// localStorage key prefix for generic config values (the IConfig get/set store: developer mode,
-// theme, collapsed-section state, etc.). Distinct from the news keys above so the two never collide.
-//
-export const CONFIG_KEY_PREFIX = "photosphere.config.";
-
-//
-// Returns a stored generic config value, or undefined when absent or malformed.
-//
-export function getConfigValue<ValueT>(store: IKeyValueStore, key: string): ValueT | undefined {
-    const raw = store.getItem(CONFIG_KEY_PREFIX + key);
-    if (raw === null) {
-        return undefined;
-    }
-    try {
-        return JSON.parse(raw) as ValueT;
-    }
-    catch {
-        return undefined;
-    }
-}
-
-//
-// Stores a generic config value as JSON, or removes it when the value is undefined.
-//
-export function setConfigValue<ValueT>(store: IKeyValueStore, key: string, value: ValueT): void {
-    if (value === undefined) {
-        store.removeItem(CONFIG_KEY_PREFIX + key);
-        return;
-    }
-    store.setItem(CONFIG_KEY_PREFIX + key, JSON.stringify(value));
-}
-
 
 //
 // The path of the database to open again next time the app starts, or undefined when none should be.

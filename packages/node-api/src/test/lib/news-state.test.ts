@@ -1,6 +1,6 @@
 // Mock the node-utils fs helpers so tests don't touch the real filesystem. The news state now lives
-// in the `news` section of config.yaml rather than in a news.yaml of its own, so what is mocked is
-// the YAML document reader and writer the config file goes through.
+// in the `news` section of state.yaml rather than in a news.yaml of its own, so what is mocked is
+// the YAML document reader and writer the state file goes through.
 const mockReadYaml = jest.fn();
 const mockWriteYaml = jest.fn();
 
@@ -25,7 +25,7 @@ import {
     getLastShownUpdateVersion,
     setLastShownUpdateVersion,
 } from '../../lib/news-state';
-import { getConfigPath } from '../../lib/config-file';
+import { getStatePath } from '../../lib/state-file';
 
 //
 // The document written by the call under test.
@@ -35,8 +35,8 @@ function writtenDocument(): any {
 }
 
 describe('where the news state lives', () => {
-    test('is the config file, not a news.yaml of its own', () => {
-        expect(getConfigPath().endsWith('config.yaml')).toBe(true);
+    test('is the state file, not a news.yaml of its own', () => {
+        expect(getStatePath().endsWith('state.yaml')).toBe(true);
     });
 });
 
@@ -48,15 +48,15 @@ describe('loadNewsState', () => {
 
         const state = await loadNewsState();
 
-        expect(state).toEqual({ shownNewsIds: [] });
+        expect(state).toEqual({ shownNewsIds: [], feed: [] });
     });
 
-    test('returns empty state when the config file has no news section', async () => {
+    test('returns empty state when the state file has no news section', async () => {
         mockReadYaml.mockResolvedValue({ theme: 'dark' });
 
         const state = await loadNewsState();
 
-        expect(state).toEqual({ shownNewsIds: [] });
+        expect(state).toEqual({ shownNewsIds: [], feed: [] });
     });
 
     test('returns empty state when the news section is malformed', async () => {
@@ -96,12 +96,12 @@ describe('loadNewsState', () => {
     // A read that throws must not stop the app. The failure is reported rather than swallowed, but
     // the caller still gets an empty state.
     //
-    test('returns empty state when the config file cannot be read at all', async () => {
+    test('returns empty state when the state file cannot be read at all', async () => {
         mockReadYaml.mockRejectedValue(new Error('the disk went away'));
 
         const state = await loadNewsState();
 
-        expect(state).toEqual({ shownNewsIds: [] });
+        expect(state).toEqual({ shownNewsIds: [], feed: [] });
     });
 });
 
@@ -111,10 +111,10 @@ describe('saveNewsState', () => {
     test('writes shown_news_ids in snake_case under the news section', async () => {
         mockReadYaml.mockResolvedValue(undefined);
 
-        await saveNewsState({ shownNewsIds: ['a', 'b'] });
+        await saveNewsState({ shownNewsIds: ['a', 'b'], feed: [] });
 
         const writtenPath = mockWriteYaml.mock.calls[0][0];
-        expect(writtenPath.endsWith('config.yaml')).toBe(true);
+        expect(writtenPath.endsWith('state.yaml')).toBe(true);
         expect(writtenDocument().news.shown_news_ids).toEqual(['a', 'b']);
         expect(writtenDocument().news.last_shown_update_version).toBeUndefined();
     });
@@ -122,7 +122,7 @@ describe('saveNewsState', () => {
     test('writes last_shown_update_version when set', async () => {
         mockReadYaml.mockResolvedValue(undefined);
 
-        await saveNewsState({ shownNewsIds: [], lastShownUpdateVersion: '1.2.3' });
+        await saveNewsState({ shownNewsIds: [], lastShownUpdateVersion: '1.2.3', feed: [] });
 
         expect(writtenDocument().news.last_shown_update_version).toBe('1.2.3');
     });
@@ -131,26 +131,22 @@ describe('saveNewsState', () => {
     // The news state shares its file with every setting the app has, so writing it must not disturb
     // any of them. This is the whole hazard of folding it in.
     //
-    test('leaves every other section of the config file alone', async () => {
+    test('leaves every other section of the state file alone', async () => {
         mockReadYaml.mockResolvedValue({
-            theme: 'dark',
-            developer_mode: true,
-            sync: { enabled: true, only_on_wifi: false, pause_between_runs_ms: 60000 },
-            auto_import: { enabled: true, sources: [{ type: 'folder', path: '/photos', recurse: true }] },
             desktop: { last_folder: '/home/someone/photos' },
+            searches: { recent: ['beach'] },
+            gallery: { sort: 'name', row_height: 240 },
+            ui: { 'sidebar-collapsed-databases': true },
         });
 
-        await saveNewsState({ shownNewsIds: ['a'] });
+        await saveNewsState({ shownNewsIds: ['a'], feed: [] });
 
         const document = writtenDocument();
-        expect(document.theme).toBe('dark');
-        expect(document.developer_mode).toBe(true);
-        expect(document.sync.enabled).toBe(true);
-        expect(document.sync.only_on_wifi).toBe(false);
-        expect(document.sync.pause_between_runs_ms).toBe(60000);
-        expect(document.auto_import.enabled).toBe(true);
-        expect(document.auto_import.sources).toEqual([{ type: 'folder', path: '/photos', recurse: true }]);
         expect(document.desktop.last_folder).toBe('/home/someone/photos');
+        expect(document.searches.recent).toEqual(['beach']);
+        expect(document.gallery.sort).toBe('name');
+        expect(document.gallery.row_height).toBe(240);
+        expect(document.ui).toEqual({ 'sidebar-collapsed-databases': true });
         expect(document.news.shown_news_ids).toEqual(['a']);
     });
 });

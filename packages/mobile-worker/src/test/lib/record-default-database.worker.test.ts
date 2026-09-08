@@ -2,7 +2,6 @@ import * as os from "os";
 import * as path from "path";
 import * as fs from "fs/promises";
 import { DEFAULT_DATABASE_DISPLAY_NAME } from "api/src/lib/auto-import-mobile";
-import { CONFIG_PATH, DATABASES_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
 import { buildConfigYaml, readConfigHandler } from "node-api/src/lib/config.worker";
 import { buildDatabasesConfigToml, readDatabasesConfigHandler } from "node-api/src/lib/databases-config.worker";
 import { recordDefaultDatabaseHandler } from "../../lib/record-default-database.worker";
@@ -45,7 +44,7 @@ describe("record-default-database", () => {
 
     test("records the database as the default and adds it to the database list", async () => {
         await fs.writeFile(
-            path.join(tempDir, CONFIG_PATH),
+            path.join(tempDir, "config.yaml"),
             buildConfigYaml({
                 autoImport: {
                     settings: {
@@ -63,19 +62,15 @@ describe("record-default-database", () => {
                     databasePath: undefined,
                     pauseBetweenRunsMs: 300000,
                 },
-                desktop: {},
-                news: {
-                    shownNewsIds: [],
-                },
             }),
             "utf8");
 
         await recordDefaultDatabaseHandler({ databasePath: "photosphere-default" }, context);
 
-        const settings = await readConfigHandler({ configPath: CONFIG_PATH }, context);
+        const settings = await readConfigHandler({ configPath: "config.yaml" }, context);
         expect(settings.autoImport.defaultDatabasePath).toBe("photosphere-default");
 
-        const databases = await readDatabasesConfigHandler({ configPath: DATABASES_CONFIG_PATH }, context);
+        const databases = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
         expect(databases.databases).toEqual([
             {
                 name: DEFAULT_DATABASE_DISPLAY_NAME,
@@ -89,7 +84,7 @@ describe("record-default-database", () => {
         // The pass that creates the database runs while the user may be changing the settings, and
         // this write must not undo what they chose.
         await fs.writeFile(
-            path.join(tempDir, CONFIG_PATH),
+            path.join(tempDir, "config.yaml"),
             buildConfigYaml({
                 autoImport: {
                     settings: {
@@ -107,16 +102,12 @@ describe("record-default-database", () => {
                     databasePath: "a-database-the-user-opened",
                     pauseBetweenRunsMs: 90000,
                 },
-                desktop: {},
-                news: {
-                    shownNewsIds: [],
-                },
             }),
             "utf8");
 
         await recordDefaultDatabaseHandler({ databasePath: "photosphere-default" }, context);
 
-        const settings = await readConfigHandler({ configPath: CONFIG_PATH }, context);
+        const settings = await readConfigHandler({ configPath: "config.yaml" }, context);
         expect(settings.autoImport.settings.enabled).toBe(true);
         expect(settings.autoImport.settings.sources).toEqual([{ type: "device-album", albumId: "holiday-album" }]);
         expect(settings.autoImport.pauseBetweenRunsMs).toBe(1500);
@@ -130,7 +121,7 @@ describe("record-default-database", () => {
 
     test("keeps the databases the user already has", async () => {
         await fs.writeFile(
-            path.join(tempDir, DATABASES_CONFIG_PATH),
+            path.join(tempDir, "databases.toml"),
             buildDatabasesConfigToml(
                 [{ name: "Holiday", description: "Trip photos", path: "holiday" }],
                 ["Holiday"],
@@ -139,7 +130,7 @@ describe("record-default-database", () => {
 
         await recordDefaultDatabaseHandler({ databasePath: "photosphere-default" }, context);
 
-        const databases = await readDatabasesConfigHandler({ configPath: DATABASES_CONFIG_PATH }, context);
+        const databases = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
         expect(databases.databases.map(entry => entry.path)).toEqual(["holiday", "photosphere-default"]);
         expect(databases.recentDatabaseNames).toEqual(["Holiday"]);
     });
@@ -150,7 +141,7 @@ describe("record-default-database", () => {
         await recordDefaultDatabaseHandler({ databasePath: "photosphere-default" }, context);
         await recordDefaultDatabaseHandler({ databasePath: "photosphere-default" }, context);
 
-        const databases = await readDatabasesConfigHandler({ configPath: DATABASES_CONFIG_PATH }, context);
+        const databases = await readDatabasesConfigHandler({ configPath: "databases.toml" }, context);
         expect(databases.databases.map(entry => entry.path)).toEqual(["photosphere-default"]);
     });
 

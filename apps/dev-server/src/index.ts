@@ -8,7 +8,7 @@ import { createAssetServer } from "rest-api";
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
-import { createDatabase, createMediaFileDatabase, loadAppConfig, updateAppConfig, getFolderPath, updateFolderPath, getDatabases, addDatabaseEntry, removeDatabaseEntry, updateLastFolder, markDatabaseOpened } from "node-api";
+import { createDatabase, createMediaFileDatabase, loadAppConfig, updateAppConfig, loadAppState, updateAppState, getAppConfigValue, setAppConfigValue, getAppStateValue, setAppStateValue, getFolderPath, updateFolderPath, getDatabases, addDatabaseEntry, removeDatabaseEntry, updateLastFolder, markDatabaseOpened, type IAppConfigValue, type IAppStateValue } from "node-api";
 import { createStorage } from "storage";
 import type { ISyncDatabaseData } from "api";
 
@@ -265,6 +265,12 @@ wss.on("connection", (ws: WebSocket) => {
             else if (messageData.type === "set-config") {
                 await handleSetConfig(ws, messageData.key, messageData.value, messageData.requestId);
             }
+            else if (messageData.type === "get-state") {
+                await handleGetState(ws, messageData.key, messageData.requestId);
+            }
+            else if (messageData.type === "set-state") {
+                await handleSetState(ws, messageData.key, messageData.value, messageData.requestId);
+            }
             else if (messageData.type === "pick-files") {
                 await handlePickFiles(ws, messageData.title, messageData.requestId);
             }
@@ -295,8 +301,8 @@ wss.on("connection", (ws: WebSocket) => {
 //
 async function handleOpenDatabase(ws: WebSocket): Promise<void> {
     try {
-        const config = await loadAppConfig();
-        const databasePath = await showDirectoryDialog(config.lastFolder);
+        const state = await loadAppState();
+        const databasePath = await showDirectoryDialog(state.lastFolder);
 
         if (databasePath) {
             // Save to databases list and update last folder
@@ -335,8 +341,8 @@ async function handleOpenDatabase(ws: WebSocket): Promise<void> {
 //
 async function handleCreateDatabase(ws: WebSocket): Promise<void> {
     try {
-        const config = await loadAppConfig();
-        const databasePath = await showDirectoryDialog(config.lastFolder);
+        const state = await loadAppState();
+        const databasePath = await showDirectoryDialog(state.lastFolder);
 
         if (databasePath) {
             const { storage, rawStorage } = createStorage(databasePath, undefined, undefined);
@@ -457,15 +463,14 @@ async function handleNotifyDatabaseClosed(ws: WebSocket, requestId: unknown): Pr
 }
 
 //
-// Handles a request to read one value from the config file.
+// Handles a request to read one setting the user chose, from config.yaml.
 //
 async function handleGetConfig(ws: WebSocket, key: string, requestId: unknown): Promise<void> {
     try {
-        const config = await loadAppConfig();
         ws.send(JSON.stringify({
             type: "config-value",
             requestId,
-            value: (config as Record<string, unknown>)[key],
+            value: getAppConfigValue(await loadAppConfig(), key),
         }));
     }
     catch (error: any) {
@@ -478,14 +483,15 @@ async function handleGetConfig(ws: WebSocket, key: string, requestId: unknown): 
 }
 
 //
-// Handles a request to write one value to the config file.
+// Handles a request to write one setting the user chose, to config.yaml.
+//
+// Written a key at a time against the file's current contents, so setting one cannot discard another
+// set at the same moment by the desktop app or a worker.
 //
 async function handleSetConfig(ws: WebSocket, key: string, value: unknown, requestId: unknown): Promise<void> {
     try {
-        // Written through updateAppConfig rather than load-then-save, so setting one key cannot
-        // discard another key set at the same moment by the desktop app or a worker.
         await updateAppConfig(config => {
-            (config as Record<string, unknown>)[key] = value;
+            setAppConfigValue(config, key, value as IAppConfigValue | undefined);
         });
         ws.send(JSON.stringify({ type: "config-set", requestId }));
     }
@@ -494,6 +500,45 @@ async function handleSetConfig(ws: WebSocket, key: string, value: unknown, reque
             type: "error",
             requestId,
             message: error instanceof Error ? error.message : "Unknown error setting config",
+        }));
+    }
+}
+
+//
+// Handles a request to read one thing the app remembered, from state.yaml.
+//
+async function handleGetState(ws: WebSocket, key: string, requestId: unknown): Promise<void> {
+    try {
+        ws.send(JSON.stringify({
+            type: "state-value",
+            requestId,
+            value: getAppStateValue(await loadAppState(), key),
+        }));
+    }
+    catch (error: any) {
+        ws.send(JSON.stringify({
+            type: "error",
+            requestId,
+            message: error instanceof Error ? error.message : "Unknown error getting state",
+        }));
+    }
+}
+
+//
+// Handles a request to write one thing the app remembered, to state.yaml.
+//
+async function handleSetState(ws: WebSocket, key: string, value: unknown, requestId: unknown): Promise<void> {
+    try {
+        await updateAppState(state => {
+            setAppStateValue(state, key, value as IAppStateValue | undefined);
+        });
+        ws.send(JSON.stringify({ type: "state-set", requestId }));
+    }
+    catch (error: any) {
+        ws.send(JSON.stringify({
+            type: "error",
+            requestId,
+            message: error instanceof Error ? error.message : "Unknown error setting state",
         }));
     }
 }

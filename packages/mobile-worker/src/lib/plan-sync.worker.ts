@@ -1,6 +1,5 @@
 import type { ITaskContext } from "task-queue";
 import { computeSyncAllowed } from "api/src/lib/sync-gate";
-import { CONFIG_PATH } from "api/src/lib/mobile-config-paths";
 import type { ISyncSettings } from "api/src/lib/sync-settings";
 import type { ISyncDatabaseData } from "api/src/lib/sync-database.types";
 import { readConfigFromStorage } from "node-api/src/lib/config.worker";
@@ -86,7 +85,7 @@ function refuse(reason: string, settings: ISyncSettings, pauseBetweenRunsMs: num
 export async function planSyncHandler(_data: object, _context: ITaskContext): Promise<IPlanSyncResult> {
     // One read for both sections. They used to be two files, so resolving which database to push
     // meant opening sync.toml and then auto-import.toml; the merged file costs one read per pass.
-    const { config } = await readConfigFromStorage(CONFIG_PATH);
+    const { config } = await readConfigFromStorage("config.yaml");
     const syncConfig = config.sync;
     const settings = syncConfig.settings;
     const pauseBetweenRunsMs = syncConfig.pauseBetweenRunsMs;

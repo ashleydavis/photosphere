@@ -4,28 +4,12 @@ import {
 } from "../lib/mobile-share-receive";
 import type { IDatabaseSharePayload, IConflictResolution } from "lan-share-core";
 import {
-    IKeyValueStore,
     IDatabasesConfig,
     IDatabasesConfigFile,
     getDatabases,
 } from "../lib/mobile-config-store";
 import { MobileSecretStore, type ISecureStore } from "../lib/mobile-secure-store";
 
-//
-// Builds an in-memory key/value store implementing IKeyValueStore for the tests, plus access to the
-// backing map so tests can assert exactly which localStorage keys were written.
-//
-interface IMemoryStore {
-    // The store passed to the module under test.
-    store: IKeyValueStore;
-
-    // The backing map (localStorage stand-in).
-    map: Map<string, string>;
-}
-
-//
-// Creates an in-memory store.
-//
 //
 // Builds an in-memory databases.toml for the tests, standing in for the file the embedded worker
 // reads and writes on a device.
@@ -36,16 +20,6 @@ function memoryConfigFile(): IDatabasesConfigFile {
         read: async () => ({ databases: [...config.databases], recentDatabaseNames: [...config.recentDatabaseNames], lastDatabase: undefined }),
         write: async (updated: IDatabasesConfig) => { config = updated; },
     };
-}
-
-function memoryStore(): IMemoryStore {
-    const map = new Map<string, string>();
-    const store: IKeyValueStore = {
-        getItem: (key: string) => (map.has(key) ? map.get(key)! : null),
-        setItem: (key: string, value: string) => { map.set(key, value); },
-        removeItem: (key: string) => { map.delete(key); },
-    };
-    return { store, map };
 }
 
 //
@@ -125,21 +99,18 @@ describe("mobile-share-receive database payload", () => {
         expect(s3Value.endpoint).toBe("https://s3.example.com");
     });
 
-    test("secrets go to the keychain and only the database entry is written to the key/value store", async () => {
-        const { map } = memoryStore();
+    test("secrets go to the keychain and the database entry to databases.toml", async () => {
         const configFile = memoryConfigFile();
         const secretStore = memorySecretStore();
 
         await importSharePayload(configFile, secretStore, databasePayloadWithSecrets(), {});
 
-        // The three secrets are held in the keychain (secret store), not in localStorage.
+        // The three secrets are held in the keychain, which is the only place a secret value goes.
         expect((await secretStore.listSecrets()).map(secret => secret.name)).toEqual(
             expect.arrayContaining(["default:s3", "digital-ocean", "geocoding-key"]),
         );
-        // The database entry goes to databases.toml, so nothing at all is written to localStorage:
-        // no secret, and no database list either.
+        // The database entry goes to databases.toml, and nothing else does.
         expect((await getDatabases(configFile)).map(database => database.name)).toEqual(["shared-photos"]);
-        expect([...map.keys()]).toEqual([]);
     });
 
     test("conflict reuse keeps the existing secret and does not overwrite it", async () => {
@@ -232,7 +203,6 @@ describe("mobile-share-receive database payload", () => {
 describe("mobile-share-receive secret payload", () => {
 
     test("imports a standalone secret under the chosen save name", async () => {
-        const { map } = memoryStore();
         const configFile = memoryConfigFile();
         const secretStore = memorySecretStore();
         const payload: IReceivedSecretPayload = {
@@ -247,8 +217,8 @@ describe("mobile-share-receive secret payload", () => {
 
         expect(await secretStore.getSecretValue("received-s3")).toBe(payload.value);
         expect(await secretStore.listSecrets()).toEqual([{ name: "received-s3", type: "s3-credentials" }]);
-        // A standalone secret writes nothing to the key/value store; it lives only in the keychain.
-        expect([...map.keys()]).toEqual([]);
+        // A standalone secret adds no database entry; it lives only in the keychain.
+        expect(await getDatabases(configFile)).toEqual([]);
     });
 
     test("importing a standalone secret over an existing name overwrites it", async () => {

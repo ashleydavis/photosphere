@@ -191,6 +191,16 @@ public final class TcpHost {
             return null;
         }
         catch (IOException error) {
+            if (connections.get(connectionId) == null) {
+                // The reader thread takes a connection out of the map and then closes its socket when
+                // the remote goes away, so a write that took the socket out a moment earlier finds it
+                // closed underneath it and throws "Socket is closed". That is the same situation as
+                // the lookup above missing, and it gets the same answer: the connection is gone and
+                // this write had nowhere to go. Reporting it instead made a LAN share fail after the
+                // sender had already finished and hung up, which only happened when the phone was
+                // busy enough to widen the window.
+                return null;
+            }
             return HostFunctions.hostErrorEnvelope(error);
         }
     }

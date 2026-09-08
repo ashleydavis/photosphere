@@ -115,7 +115,23 @@ if "${PLATFORM}_sandbox_path_exists" "databases.toml"; then
     log_error "The app reported the reset but its databases.toml is still in the storage sandbox"
     exit 1
 fi
-log_success "The app's config is gone from the device"
+log_success "The app's database list is gone from the device"
+
+# The settings the user chose are in config.yaml beside it, so a reset that left this behind would
+# hand the next person the previous owner's settings.
+if "${PLATFORM}_sandbox_path_exists" "config.yaml"; then
+    log_error "The app reported the reset but its config.yaml is still in the storage sandbox"
+    exit 1
+fi
+log_success "The app's settings are gone from the device"
+
+# And state.yaml holds what the app remembered: the folders it last opened at, how the gallery was
+# sorted, and the news it had already shown.
+if "${PLATFORM}_sandbox_path_exists" "state.yaml"; then
+    log_error "The app reported the reset but its state.yaml is still in the storage sandbox"
+    exit 1
+fi
+log_success "What the app remembered is gone from the device"
 
 check_no_errors "$TMP_DIR"
 

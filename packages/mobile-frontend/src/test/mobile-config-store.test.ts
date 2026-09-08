@@ -1,5 +1,4 @@
 import {
-    IKeyValueStore,
     IDatabasesConfig,
     IDatabasesConfigFile,
     getDatabases,
@@ -12,29 +11,12 @@ import {
     getRecentDatabases,
     addRecentDatabase,
     removeRecentDatabase,
-    seedNews,
-    getShownNewsIds,
-    addShownNewsId,
     firstUnshownNews,
     buildNewsNotification,
     databaseBasename,
-    getConfigValue,
-    setConfigValue,
     getLastDatabase,
     setLastDatabase,
 } from "../lib/mobile-config-store";
-
-//
-// Builds an in-memory key/value store implementing IKeyValueStore for the tests.
-//
-function memoryStore(): IKeyValueStore {
-    const map = new Map<string, string>();
-    return {
-        getItem: (key: string) => (map.has(key) ? map.get(key)! : null),
-        setItem: (key: string, value: string) => { map.set(key, value); },
-        removeItem: (key: string) => { map.delete(key); },
-    };
-}
 
 //
 // Builds an in-memory databases.toml for the tests, standing in for the file the embedded worker
@@ -54,32 +36,6 @@ function memoryConfigFile(): IDatabasesConfigFile {
 function entry(name: string, path: string): any {
     return { name, description: "", path };
 }
-
-describe("mobile-config-store generic config", () => {
-
-    test("getConfigValue returns undefined when nothing is stored", () => {
-        expect(getConfigValue<boolean>(memoryStore(), "developerMode")).toBeUndefined();
-    });
-
-    test("setConfigValue then getConfigValue round-trips a value", () => {
-        const store = memoryStore();
-        setConfigValue<boolean>(store, "developerMode", true);
-        expect(getConfigValue<boolean>(store, "developerMode")).toBe(true);
-    });
-
-    test("setConfigValue with undefined removes the stored value", () => {
-        const store = memoryStore();
-        setConfigValue<boolean>(store, "developerMode", true);
-        setConfigValue<boolean>(store, "developerMode", undefined as unknown as boolean);
-        expect(getConfigValue<boolean>(store, "developerMode")).toBeUndefined();
-    });
-
-    test("getConfigValue returns undefined for malformed JSON", () => {
-        const store = memoryStore();
-        store.setItem("photosphere.config.developerMode", "{not json");
-        expect(getConfigValue<boolean>(store, "developerMode")).toBeUndefined();
-    });
-});
 
 describe("mobile-config-store databases", () => {
 
@@ -156,30 +112,36 @@ describe("mobile-config-store databases", () => {
 
 describe("mobile-config-store news", () => {
 
-    test("firstUnshownNews returns the first item not yet shown", () => {
-        const store = memoryStore();
-        seedNews(store, [{ id: "n1", message: "first" }, { id: "n2", message: "second" }]);
-        expect(firstUnshownNews(store)?.id).toBe("n1");
+    test("firstUnshownNews returns the first item the caller has not already shown", () => {
+        const feed = [
+            {
+                id: "n1",
+                message: "first",
+            },
+            {
+                id: "n2",
+                message: "second",
+            },
+        ];
 
-        addShownNewsId(store, "n1");
-        expect(firstUnshownNews(store)?.id).toBe("n2");
-
-        addShownNewsId(store, "n2");
-        expect(firstUnshownNews(store)).toBeUndefined();
+        expect(firstUnshownNews(feed, [])?.id).toBe("n1");
+        expect(firstUnshownNews(feed, ["n1"])?.id).toBe("n2");
+        expect(firstUnshownNews(feed, ["n1", "n2"])).toBeUndefined();
     });
 
-    test("addShownNewsId is idempotent", () => {
-        const store = memoryStore();
-        addShownNewsId(store, "n1");
-        addShownNewsId(store, "n1");
-        expect(getShownNewsIds(store)).toEqual(["n1"]);
+    test("an empty feed has nothing to show", () => {
+        expect(firstUnshownNews([], [])).toBeUndefined();
     });
 
-    test("seedNews replaces the whole feed", () => {
-        const store = memoryStore();
-        seedNews(store, [{ id: "n1", message: "first" }]);
-        seedNews(store, [{ id: "n2", message: "second" }]);
-        expect(firstUnshownNews(store)?.id).toBe("n2");
+    test("an id already shown that is not in the feed does not hide anything", () => {
+        const feed = [
+            {
+                id: "n1",
+                message: "first",
+            },
+        ];
+
+        expect(firstUnshownNews(feed, ["gone"])?.id).toBe("n1");
     });
 
     test("buildNewsNotification maps a news item to the toast payload with defaults", () => {

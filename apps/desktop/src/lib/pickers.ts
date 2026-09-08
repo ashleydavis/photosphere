@@ -1,6 +1,6 @@
 import { dialog, BrowserWindow } from 'electron';
 import { join, dirname } from 'path';
-import { loadAppConfig, getFolderPath, updateFolderPath, updateLastDownloadFolder } from 'node-api';
+import { loadAppState, getFolderPath, updateFolderPath, updateLastDownloadFolder } from 'node-api';
 
 //
 // Options for the native folder picker dialog.
@@ -77,9 +77,9 @@ export async function pickFile(mainWindow: BrowserWindow | null, defaultFilename
         return process.env.PHOTOSPHERE_TEST_PICK_FILE_PATH;
     }
 
-    const config = await loadAppConfig();
-    const defaultPath = config.lastDownloadFolder
-        ? join(config.lastDownloadFolder, defaultFilename)
+    const state = await loadAppState();
+    const defaultPath = state.lastDownloadFolder
+        ? join(state.lastDownloadFolder, defaultFilename)
         : defaultFilename;
 
     const result = mainWindow

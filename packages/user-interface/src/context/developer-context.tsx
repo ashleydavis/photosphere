@@ -1,6 +1,7 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { usePlatform } from "./platform-context";
 import { useConfig } from "./config-context";
+import { useState as useStateStore } from "./state-context";
 import { log } from "utils";
 
 //
@@ -82,6 +83,7 @@ export interface IDeveloperContextProviderProps {
 export function DeveloperContextProvider({ children }: IDeveloperContextProviderProps) {
     const platform = usePlatform();
     const config = useConfig();
+    const state = useStateStore();
 
     //
     // Whether developer mode is currently enabled. Loaded from persistent config on mount.
@@ -161,7 +163,7 @@ export function DeveloperContextProvider({ children }: IDeveloperContextProvider
     }, []);
 
     useEffect(() => {
-        config.get<boolean>(DEV_TOOLS_OPEN_CONFIG_KEY).then(value => {
+        state.get<boolean>(DEV_TOOLS_OPEN_CONFIG_KEY).then(value => {
             if (value === true) {
                 setDevToolsOpen(true);
                 // Reopen the developer tools on startup. Both inspectors start closed
@@ -181,7 +183,7 @@ export function DeveloperContextProvider({ children }: IDeveloperContextProvider
         return platform.onPlatformEvent(event => {
             if (event.type === "devtools-state") {
                 setDevToolsOpen(event.open);
-                config.set<boolean>(DEV_TOOLS_OPEN_CONFIG_KEY, event.open)
+                state.set<boolean>(DEV_TOOLS_OPEN_CONFIG_KEY, event.open)
                     .catch(err => log.exception("Failed to persist developer tools setting:", err as Error));
             }
         });

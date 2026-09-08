@@ -1,7 +1,6 @@
 import { TaskQueue, TaskStatus, TaskPriority } from "task-queue";
 import { RandomUuidGenerator } from "utils";
 import type { IDatabaseEntry } from "user-interface";
-import { DATABASES_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
 import type { IDatabasesConfig, IDatabasesConfigFile } from "./mobile-config-store";
 
 //
@@ -12,13 +11,6 @@ import type { IDatabasesConfig, IDatabasesConfigFile } from "./mobile-config-sto
 // is reached through the embedded worker's read-databases-config / write-databases-config tasks,
 // which run over the same storage layer the databases themselves are read through.
 //
-
-//
-// Sandbox-relative path of databases.toml. Re-exported so the callers here keep reaching it by the
-// name they always have; it is defined in api/src/lib/mobile-config-paths.ts because the worker
-// opens the same file for the background import and cannot reach this package.
-//
-export { DATABASES_CONFIG_PATH } from "api/src/lib/mobile-config-paths";
 
 //
 // Prefix of the source tag for the config tasks.
@@ -73,7 +65,7 @@ export const mobileDatabasesConfigFile: IDatabasesConfigFile = {
     // Reads databases.toml, returning empty lists when the file does not exist yet.
     //
     async read(): Promise<IDatabasesConfig> {
-        const outputs = await runConfigTask("read-databases-config", { configPath: DATABASES_CONFIG_PATH });
+        const outputs = await runConfigTask("read-databases-config", { configPath: "databases.toml" });
         return {
             databases: outputs.databases ?? [],
             recentDatabaseNames: outputs.recentDatabaseNames ?? [],
@@ -86,7 +78,7 @@ export const mobileDatabasesConfigFile: IDatabasesConfigFile = {
     //
     async write(config: IDatabasesConfig): Promise<void> {
         await runConfigTask("write-databases-config", {
-            configPath: DATABASES_CONFIG_PATH,
+            configPath: "databases.toml",
             databases: config.databases,
             recentDatabaseNames: config.recentDatabaseNames,
             lastDatabase: config.lastDatabase,

@@ -436,10 +436,11 @@ export class ControlBridge {
         });
 
         //
-        // Seeds the news feed. This is the only state a test still sets up through the app: the news
-        // items live in WebView localStorage, which the harness cannot write from the host. Every
-        // other precondition is established before launch (see apps/smoke-tests/lib/android.sh and
-        // ios.sh), the way the desktop tests pre-write ~/.config/photosphere/databases.toml.
+        // Seeds the news feed. This is the only state a test still sets up through the app, because
+        // the feed is fetched rather than configured, so seeding it here drives the same path a real
+        // fetch would. Every other precondition is established before launch (see
+        // apps/smoke-tests/lib/android.sh and ios.sh), the way the desktop tests pre-write
+        // ~/.config/photosphere/databases.toml.
         //
         this.expressApp.post("/seed-news", (req: Request, res: Response) => {
             void this.forward("seed-news", { news: req.body.news }, res);
