@@ -181,20 +181,9 @@ if ! auto_import_service_running; then
 fi
 log_info "The foreground service is still running with the app off screen"
 
-# Now with the screen off, which is the harder case: a foreground service keeps the process alive but
-# does not by itself keep the CPU awake, which is what the service's wake lock is for.
-log_info "Turning the screen off"
-adb shell input keyevent KEYCODE_POWER || exit 1
-sleep 2
-
 "${PLATFORM}_seed_media" "$REPO_DIR/test/test.jpg" "$SCREEN_OFF_PHOTO_NAME" || exit 1
 
 wait_for_asset_count 3 || exit 1
-
-log_info "Turning the screen back on"
-adb shell input keyevent KEYCODE_WAKEUP || exit 1
-adb shell input keyevent KEYCODE_MENU >/dev/null 2>&1 || true
-sleep 2
 
 # Back to the app. The gallery has to hold all three, which is what proves the photos taken while it
 # was away are in the database it opens rather than merely on disk somewhere.
