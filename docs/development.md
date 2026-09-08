@@ -145,6 +145,7 @@ The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why t
 - [Background tasks](background-tasks.md) - Adding a new background task type.
 - [Mobile background tasks](mobile-background-tasks.md) - The mobile engine pool: what a slot is, what holds one, and why running out hangs the app.
 - [Delivering the Android app to testers](android-tester-distribution.md) - Getting a build to Android testers through Firebase App Distribution.
+- [Setting up Photosphere on Android](android-onboarding.md) - What a user does after installing the app: automatic import, and a private encrypted remote copy to back up to.
 - [Mobile native media tools](mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired up.
 - [Updating mobile ImageMagick/ffmpeg](updating-mobile-imagemagick-ffmpeg.md) - Updating the bundled versions.
 - [Theme override](theme-override.md) - Forcing the startup theme with `PHOTOSPHERE_THEME`.
