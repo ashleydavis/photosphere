@@ -151,6 +151,29 @@ public final class AutoImportService extends Service {
     }
 
     //
+    // Stops the service when the platform says its time is up.
+    //
+    // An app targeting Android 15 gets six hours of dataSync foreground service in any 24 hours.
+    // Past that the platform calls this and allows a few seconds to stop before it kills the process
+    // with "a foreground service of type dataSync did not stop within its timeout". Stopping here is
+    // therefore not optional, and it is all this does: stopSelf brings on onDestroy below, which is
+    // the shutdown the service already does for every other reason it stops.
+    //
+    // Automatic import then stays stopped until the app is opened again, exactly as it does when the
+    // process is killed for any other reason: the provider starts the service back up when it finds
+    // the setting switched on.
+    //
+    // This takes Android types, so it cannot run under the plain-JVM unit tests, and nothing in adb
+    // can force the platform to time a service out, so no smoke test reaches it either. Keeping it
+    // to a log line and a stopSelf is what makes that acceptable.
+    //
+    @Override
+    public void onTimeout(int startId, int fgsType) {
+        Log.i(LOG_TAG, "The platform has reached its daily limit for this foreground service. Stopping.");
+        stopSelf();
+    }
+
+    //
     // Stops the loop and releases the wake lock. Called when the service is stopped, whether by the
     // app switching automatic import off or by the system.
     //

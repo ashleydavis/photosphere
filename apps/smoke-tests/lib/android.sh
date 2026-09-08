@@ -7,7 +7,7 @@
 # android_prepare sets up the toolchain automatically (detects ANDROID_HOME, puts adb/emulator
 # on PATH, finds a JDK 17, and boots an emulator if none is attached), so `bun run test:and`
 # works without manual environment setup. The only prerequisite that cannot be auto-installed is
-# a JDK 17 (AGP 8.0 fails on the JDK 21 Android Studio bundles); see ensure_jdk17.
+# a JDK 17 (the Android Gradle Plugin fails on the JDK 21 Android Studio bundles); see ensure_jdk17.
 
 # Path to the debug APK produced by assembleDebug.
 ANDROID_APK="$ANDROID_FRONTEND_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
@@ -333,7 +333,7 @@ java_is_17() {
 }
 
 #
-# Ensures JAVA_HOME points at a JDK 17. The Android build (AGP 8.0) fails on JDK 21 (the version
+# Ensures JAVA_HOME points at a JDK 17. The Android build fails on JDK 21 (the version
 # Android Studio bundles), so a JDK 17 is required. Honors an already-correct JAVA_HOME, then a
 # PHOTOSPHERE_JDK17_HOME override, then searches common install locations. Fails with a clear
 # install hint if none is found.
@@ -359,7 +359,7 @@ ensure_jdk17() {
             return 0
         fi
     done
-    log_error "A JDK 17 is required to build the Android app (AGP 8.0 fails on the JDK 21 that"
+    log_error "A JDK 17 is required to build the Android app (the Android Gradle Plugin fails on the JDK 21 that"
     log_error "Android Studio bundles). Install one, e.g.:  sudo apt install openjdk-17-jdk"
     log_error "Or set PHOTOSPHERE_JDK17_HOME (or JAVA_HOME) to a JDK 17 install."
     return 1
@@ -734,10 +734,68 @@ android_launch() {
         log_info "Emulator is on the LAN bridge; pointing the app at the host at $host."
     fi
 
-    adb shell am start -n "$APP_ID/.MainActivity" \
-        --ez photosphereTestMode true \
-        --es photosphereTestHost "$host" \
-        --ei photosphereTestPort "$port"
+    # Started up to three times, because a launch can be killed the moment it starts and the platform
+    # says nothing about it to anyone watching adb. `pm clear` force-stops the app and removes its
+    # task, and the task removal lands a fraction of a second after the clear returns, so a start
+    # issued in that window has its brand new process killed under it: logcat shows "Start proc" and
+    # then "Killing <pid> (adj -10000): remove task", and ten seconds later "failed to attach". On the
+    # Pixel 6 that costs a test two full 120s waits for a bridge connection that can never come; the
+    # emulators are quick enough that it almost never happens there. Starting again once the process
+    # has gone is what gets past it, and a launch that never sticks is now a loud failure instead of a
+    # test hanging on a device with no app on it.
+    local attempt=1
+    while [ "$attempt" -le 3 ]; do
+        adb shell am start -n "$APP_ID/.MainActivity" \
+            --ez photosphereTestMode true \
+            --es photosphereTestHost "$host" \
+            --ei photosphereTestPort "$port"
+
+        if android_app_process_survives_launch; then
+            return 0
+        fi
+
+        log_info "The app was killed as it started on ${ANDROID_SERIAL:-this device}; starting it again (attempt $attempt of 3)."
+        attempt=$((attempt + 1))
+    done
+
+    log_error "The app would not stay running on ${ANDROID_SERIAL:-this device} after three launches."
+    return 1
+}
+
+#
+# Whether the app's process appears after a launch and is still there a moment later.
+#
+# Two questions, because both failures look the same from outside: a process that never starts, and
+# one that starts and is killed straight away. Waiting for the pid to appear answers the first, and
+# reading it again after a pause answers the second.
+#
+# Returns 0 when the app is up and staying up, 1 when it never appeared or did not last.
+#
+android_app_process_survives_launch() {
+    local waited=0
+    local pid=""
+    while [ "$waited" -lt 10 ]; do
+        pid="$(adb shell pidof "$APP_ID" 2>/dev/null | tr -d '\r' | awk '{ print $1 }')"
+        if [ -n "$pid" ]; then
+            break
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    if [ -z "$pid" ]; then
+        return 1
+    fi
+
+    sleep 1
+
+    local still_running
+    still_running="$(adb shell pidof "$APP_ID" 2>/dev/null | tr -d '\r' | awk '{ print $1 }')"
+    if [ "$still_running" != "$pid" ]; then
+        return 1
+    fi
+
+    return 0
 }
 
 #
@@ -1246,7 +1304,12 @@ android_refuse_media_permission() {
     sdk="$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
 
     local permissions
-    if [ "${sdk:-0}" -ge 33 ]; then
+    if [ "${sdk:-0}" -ge 34 ]; then
+        # The selected-photos permission goes with them from Android 14. Leaving it behind would
+        # leave the app holding the photos the user picked, which is a partial grant and not the
+        # refusal this is asked to set up.
+        permissions="android.permission.READ_MEDIA_IMAGES android.permission.READ_MEDIA_VIDEO android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
+    elif [ "${sdk:-0}" -ge 33 ]; then
         permissions="android.permission.READ_MEDIA_IMAGES android.permission.READ_MEDIA_VIDEO"
     else
         permissions="android.permission.READ_EXTERNAL_STORAGE"
@@ -1306,7 +1369,16 @@ android_grant_media_permission() {
     sdk="$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
 
     local granted_permissions
-    if [ "${sdk:-0}" -ge 33 ]; then
+    if [ "${sdk:-0}" -ge 34 ]; then
+        # All three, which is what the platform grants when a user chooses "Allow all" on Android 14
+        # or later. The two per-type ones are what give access to the whole library; the
+        # selected-photos one comes with them, and leaving it out would leave the app looking at a
+        # state no user can actually produce.
+        adb shell pm grant "$APP_ID" android.permission.READ_MEDIA_IMAGES >/dev/null 2>&1 || true
+        adb shell pm grant "$APP_ID" android.permission.READ_MEDIA_VIDEO >/dev/null 2>&1 || true
+        adb shell pm grant "$APP_ID" android.permission.READ_MEDIA_VISUAL_USER_SELECTED >/dev/null 2>&1 || true
+        granted_permissions="android.permission.READ_MEDIA_IMAGES android.permission.READ_MEDIA_VIDEO android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
+    elif [ "${sdk:-0}" -ge 33 ]; then
         adb shell pm grant "$APP_ID" android.permission.READ_MEDIA_IMAGES >/dev/null 2>&1 || true
         adb shell pm grant "$APP_ID" android.permission.READ_MEDIA_VIDEO >/dev/null 2>&1 || true
         granted_permissions="android.permission.READ_MEDIA_IMAGES android.permission.READ_MEDIA_VIDEO"
@@ -1333,6 +1405,55 @@ android_grant_media_permission() {
     done
 
     log_info "Granted the photo library permission from outside the app"
+}
+
+#
+# Gives the app access to only the photos the user picked, from outside the app.
+#
+# This is the third answer Android 14 added to the photo permission, and it is set up the same way a
+# refusal is, because a test cannot tap the picker either: the two per-type permissions are revoked
+# and marked user-fixed so the next request comes straight back without a dialog, and the
+# selected-photos permission is granted, which is exactly the state the platform leaves behind when a
+# user chooses "Select photos".
+#
+# Refuses to run on a device older than Android 14, rather than quietly setting up something else:
+# there is no partial grant to make there, and a test that called this on API 33 would be testing the
+# refusal path under a name that says otherwise.
+#
+# Usage: android_grant_partial_media_permission
+#
+android_grant_partial_media_permission() {
+    local sdk
+    sdk="$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
+
+    if [ "${sdk:-0}" -lt 34 ]; then
+        log_error "Partial photo access needs Android 14 or later, and ${ANDROID_SERIAL:-this device} is API ${sdk:-unknown}"
+        return 1
+    fi
+
+    local permission
+    for permission in android.permission.READ_MEDIA_IMAGES android.permission.READ_MEDIA_VIDEO; do
+        adb shell pm revoke "$APP_ID" "$permission" >/dev/null 2>&1 || true
+
+        local result
+        result="$(adb shell pm set-permission-flags "$APP_ID" "$permission" user-fixed 2>&1 | tr -d '\r')"
+        if [ -n "$result" ]; then
+            log_error "Could not mark $permission as refused on ${ANDROID_SERIAL:-this device}: $result"
+            return 1
+        fi
+    done
+
+    adb shell pm grant "$APP_ID" android.permission.READ_MEDIA_VISUAL_USER_SELECTED >/dev/null 2>&1 || true
+
+    # Read back, for the reason the full grant reads its permissions back: a `pm grant` that did not
+    # take leaves the app with no access at all, which is the refusal path, and this test would then
+    # pass for the wrong reason.
+    if ! adb shell dumpsys package "$APP_ID" 2>/dev/null | tr -d '\r' | grep -q "android.permission.READ_MEDIA_VISUAL_USER_SELECTED: granted=true"; then
+        log_error "android.permission.READ_MEDIA_VISUAL_USER_SELECTED is not granted to $APP_ID after asking for it, so this would test a refusal rather than a partial grant"
+        return 1
+    fi
+
+    log_info "Gave the app access to only the photos the user picked"
 }
 
 #

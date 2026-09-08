@@ -115,7 +115,11 @@ if [ -n "$LIMIT" ]; then
     TOTAL="$(printf '%s' "$NOTES" | wc -l)"
     if [ "$TOTAL" -gt "$LIMIT" ]; then
         LEFT_OUT=$(( TOTAL - LIMIT ))
-        NOTES="$(printf '%s' "$NOTES" | head -n "$LIMIT")"$'\n'
+        # sed rather than head, which stops reading once it has its lines and closes the pipe. The
+        # printf feeding it is then killed by SIGPIPE, and `set -o pipefail` makes that the status of
+        # the assignment, so `set -e` ended the whole script with 141 the moment there were more
+        # commits than the limit. sed reads to the end and exits 0.
+        NOTES="$(printf '%s' "$NOTES" | sed -n "1,${LIMIT}p")"$'\n'
         NOTES="$NOTES- ...and $LEFT_OUT older changes."$'\n'
     fi
 fi

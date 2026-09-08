@@ -1,5 +1,6 @@
 import {
     MEDIA_PERMISSION_DENIED_MESSAGE,
+    MEDIA_PERMISSION_PARTIAL_MESSAGE,
     MEDIA_PERMISSION_UNAVAILABLE_MESSAGE,
     readPermissionState,
     resolveMediaPermission,
@@ -26,6 +27,19 @@ describe("resolveMediaPermission", () => {
         expect(MEDIA_PERMISSION_DENIED_MESSAGE).toMatch(/permission/i);
     });
 
+    test("photos picked one at a time switches automatic import back off and explains why", () => {
+        const outcome = resolveMediaPermission("partial");
+
+        expect(outcome.enabled).toBe(false);
+        expect(outcome.message).toBe(MEDIA_PERMISSION_PARTIAL_MESSAGE);
+    });
+
+    test("the partial explanation says what to change, and is not the refusal wording", () => {
+        expect(MEDIA_PERMISSION_PARTIAL_MESSAGE).toMatch(/settings/i);
+        expect(MEDIA_PERMISSION_PARTIAL_MESSAGE).toMatch(/allow all/i);
+        expect(MEDIA_PERMISSION_PARTIAL_MESSAGE).not.toBe(MEDIA_PERMISSION_DENIED_MESSAGE);
+    });
+
     test("a device with no photo library switches automatic import off and says so", () => {
         const outcome = resolveMediaPermission("unavailable");
 
@@ -42,6 +56,27 @@ describe("readPermissionState", () => {
 
     test("refused is refused", () => {
         expect(readPermissionState({ granted: false })).toBe("denied");
+    });
+
+    test("a partial grant is partial, not a refusal", () => {
+        expect(readPermissionState({ granted: false, partial: true })).toBe("partial");
+    });
+
+    test("a full grant stays granted whatever the partial flag says", () => {
+        // Android reports both flags. Granted is the whole library and wins: reading this as partial
+        // would switch automatic import off for a user who allowed everything.
+        expect(readPermissionState({ granted: true, partial: false })).toBe("granted");
+        expect(readPermissionState({ granted: true, partial: true } as any)).toBe("granted");
+    });
+
+    test("a platform that never mentions partial access is unaffected", () => {
+        expect(readPermissionState({ granted: false, partial: false })).toBe("denied");
+        expect(readPermissionState({ granted: false })).toBe("denied");
+    });
+
+    test("a partial flag nobody understands is not treated as partial access", () => {
+        expect(readPermissionState({ granted: false, partial: "yes" } as any)).toBe("denied");
+        expect(readPermissionState({ granted: false, partial: 1 } as any)).toBe("denied");
     });
 
     test("no answer at all means the platform cannot offer it", () => {

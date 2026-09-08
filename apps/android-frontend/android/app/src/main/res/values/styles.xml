@@ -1,22 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <!--
+      windowOptOutEdgeToEdgeEnforcement, on every theme the activity wears, keeps the app inside the
+      system bars. An app targeting Android 15 (API 35) is otherwise drawn edge to edge, with the
+      WebView running underneath the status bar at the top and the navigation bar at the bottom, and
+      the app is expected to apply the window insets itself. Capacitor 5 does not, and the UI it
+      hosts is shared with every other platform, so the app would lose its navbar behind the clock.
+
+      The platform ignores this for an app targeting 36 or later, so raising the target level again
+      means handling insets for real rather than deleting these three lines.
+    -->
+
     <!-- Base application theme. -->
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
         <!-- Customize your theme here. -->
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
     </style>
 
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
     </style>
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
     </style>
 </resources>

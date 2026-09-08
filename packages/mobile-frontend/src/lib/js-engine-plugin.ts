@@ -198,8 +198,12 @@ export interface ITaskMessageEvent {
 // What the platform said when asked for the photo library permission.
 //
 export interface IMediaPermissionResult {
-    // Whether the user granted it.
+    // Whether the user granted it, meaning the whole photo library.
     granted: boolean;
+
+    // Whether the user granted access to only the photos they picked, which Android 14 and later
+    // offer as a third answer. Absent on iOS and on older Android, which have no such answer.
+    partial?: boolean;
 }
 
 //

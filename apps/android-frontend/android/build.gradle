@@ -7,7 +7,10 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.1.4'
+        // 8.6.0 is the lowest plugin version that can compile against API 35, which is what
+        // compileSdkVersion in variables.gradle is. It requires Gradle 8.7 (see the wrapper) and
+        // JDK 17, which is what scripts/android-env.sh already resolves.
+        classpath 'com.android.tools.build:gradle:8.6.0'
         classpath 'com.google.gms:google-services:4.3.15'
 
         // NOTE: Do not place your application dependencies here; they belong
