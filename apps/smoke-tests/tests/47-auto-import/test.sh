@@ -120,16 +120,20 @@ send_command "$APP_PORT" click '{"dataId":"auto-import-toggle"}' || exit 1
 # the app knows is that it asked for the loop to start, and the import below is the proof it did.
 wait_for_log "$TMP_DIR" "Starting automatic import." || exit 1
 
+# The database the first pass makes is opened for the user. Nothing here opens it: the photos are
+# about to arrive in it, and a gallery showing nothing while they do is what this asserts against.
+# Waited for before the import below because the pass makes the database before it imports into it.
+wait_for_log "$TMP_DIR" "Database opened: photosphere-default" 180 || exit 1
+
 # The photo has to actually arrive. This is the line the engine-pool deadlock never reached: the loop
 # would report zeros forever because the import it queued could not get a slot.
 wait_for_log "$TMP_DIR" "Import: 1 imported" 180 || exit 1
 
-# The photo has to be in the database the app made, not merely reported as imported. Opening it is
-# also what the Import page needs before it will run its tool check and become ready.
-send_command "$APP_PORT" menu '{"itemId":"open-database"}' || exit 1
-wait_for_log "$TMP_DIR" "Open database dialog opened"
-send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
-wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded" 120 || exit 1
+# The photo has to be in the database the app made, not merely reported as imported, and the count in
+# the navbar says both things at once: it is only rendered while a database is open, and the number
+# is what that database holds. Asserted by value rather than by a log line so it does not depend on
+# where the app had got to when the photo landed.
+wait_for_value "$APP_PORT" "database-photo-count" "^1 photos$" 120
 
 send_command "$APP_PORT" navigate '{"page":"/import"}' || exit 1
 wait_for_log "$TMP_DIR" "Import page ready" || exit 1

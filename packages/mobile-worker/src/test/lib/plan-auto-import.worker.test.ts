@@ -106,6 +106,10 @@ describe("plan-auto-import", () => {
             databasePath: DEFAULT_DATABASE_FOLDER_NAME,
             configPath: "config.yaml",
             databasesConfigPath: "databases.toml",
+
+            // Asked for on screen as well as on disk: photos are about to start arriving in it, and a
+            // gallery showing nothing while they do is the thing this asks for.
+            open: true,
         });
     });
 

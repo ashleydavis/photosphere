@@ -8,7 +8,11 @@ Switching automatic import on creates the default "My Photos" database, and noth
 
 ## Issues
 
-- [ ] The approach has not been chosen. Agree it with the human before writing any code.
+- [x] The approach has not been chosen. Agree it with the human before writing any code.
+
+The approach, as built: whoever queues the task that makes the database says whether it is wanted on screen, with `open` in the task's input, and each platform raises its own ordinary database-opened event once the task finishes. Nothing new carries the news, because a completed task already comes back with the input it was queued with. The shared interface is untouched: it already opens a database when the platform says one was opened. A database the user already has open is left alone.
+
+This rests on the database being made one way on every platform, which was a prerequisite done first: the `create-default-database` task, queued by the Electron main process on the desktop and by the background import's pass on a phone.
 
 ## Steps
 

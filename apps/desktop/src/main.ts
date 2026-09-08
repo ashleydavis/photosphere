@@ -1203,6 +1203,11 @@ async function createDefaultDatabase(databasePath: string): Promise<void> {
         databasePath,
         configPath: getConfigPath(),
         databasesConfigPath: getDatabasesConfigPath(),
+
+        // The user switched automatic import on and photos are about to start arriving in this
+        // database, so it is asked for on screen as well as on disk. The same thing a phone's pass
+        // asks for, said the same way: in the request that makes the database.
+        open: true,
     }, databasePath);
     if (taskResult.status !== TaskStatus.Succeeded) {
         throw new Error(`Failed to create the default photo database at "${databasePath}": ${taskResult.errorMessage}`);

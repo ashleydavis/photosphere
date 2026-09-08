@@ -41,6 +41,29 @@ export interface ICreateDefaultDatabaseData {
 
     // The path of databases.toml, which the database is added to so it appears in the list.
     databasesConfigPath: string;
+
+    // Whether the app should open this database once it exists.
+    //
+    // Whoever asks for the database says here whether it is also being asked for on screen, so a
+    // database made because the user switched automatic import on is the one the user ends up
+    // looking at. The task says so by sending the message below; opening it is the interface's.
+    open: boolean;
+}
+
+//
+// The message the task sends when it has made a database that was asked for on screen.
+//
+// A task message rather than anything platform-specific, because a task message is the one way a
+// task reaches the interface that works the same everywhere: the Electron main process forwards it
+// to the renderer, and the native plugin emits it to the WebView. So the interface has one thing to
+// listen to and neither platform needs an opener of its own.
+//
+export interface IDatabaseOpenedMessage {
+    // Names this message among all the messages tasks send.
+    type: "database-opened";
+
+    // The database to open.
+    databasePath: string;
 }
 
 //
@@ -79,24 +102,31 @@ export async function createDefaultDatabaseHandler(data: ICreateDefaultDatabaseD
 
     const databasesConfig = await readDatabasesConfigHandler({ configPath: data.databasesConfigPath }, context);
     const alreadyListed = databasesConfig.databases.some(entry => entry.path === data.databasePath);
-    if (alreadyListed) {
-        return;
+    if (!alreadyListed) {
+        await writeDatabasesConfigHandler({
+            configPath: data.databasesConfigPath,
+            databases: [
+                ...databasesConfig.databases,
+                {
+                    name: DEFAULT_DATABASE_DISPLAY_NAME,
+                    description: "",
+                    path: data.databasePath,
+                },
+            ],
+            recentDatabaseNames: databasesConfig.recentDatabaseNames,
+
+            // Carried through rather than dropped: this rewrites the whole file to add one entry, and
+            // writing undefined here would close the database the user had open.
+            lastDatabase: databasesConfig.lastDatabase,
+        }, context);
     }
 
-    await writeDatabasesConfigHandler({
-        configPath: data.databasesConfigPath,
-        databases: [
-            ...databasesConfig.databases,
-            {
-                name: DEFAULT_DATABASE_DISPLAY_NAME,
-                description: "",
-                path: data.databasePath,
-            },
-        ],
-        recentDatabaseNames: databasesConfig.recentDatabaseNames,
-
-        // Carried through rather than dropped: this rewrites the whole file to add one entry, and
-        // writing undefined here would close the database the user had open.
-        lastDatabase: databasesConfig.lastDatabase,
-    }, context);
+    // Said last, so the interface is told to open a database that is made, recorded and listed.
+    if (data.open) {
+        const openedMessage: IDatabaseOpenedMessage = {
+            type: "database-opened",
+            databasePath: data.databasePath,
+        };
+        context.sendMessage(openedMessage);
+    }
 }

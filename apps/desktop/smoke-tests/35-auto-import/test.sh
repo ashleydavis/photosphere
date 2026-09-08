@@ -158,6 +158,12 @@ wait_for_log "$TMP_DIR" "Automatic import enabled"
 wait_for_config "$CONFIG_YAML" "auto_import" "^[[:space:]]+enabled:[[:space:]]*true"
 wait_for_config "$CONFIG_YAML" "auto_import" "default_database_path"
 
+# The database that was just made is opened for the user, without this test opening it. The count in
+# the navbar is only rendered while a database is open, so its being there at all is the assertion;
+# the number is whatever has landed by the time it is read, which at this point is usually none.
+wait_for_value "$APP_PORT" "database-photo-count" '"value":"[0-9]* photos"' 60
+log_success "The default database was opened without being asked for"
+
 if [ ! -f "$DEFAULT_DB_DIR/.db/files.dat" ]; then
     log_error "The default database was not created at $DEFAULT_DB_DIR"
     ls -la "$TMP_DIR/electron-user-data" 2>/dev/null || true
