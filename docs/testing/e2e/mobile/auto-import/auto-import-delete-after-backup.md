@@ -15,7 +15,7 @@ bun run and    # Android
 bun run ios    # iOS
 ```
 
-Automatic import already working, as in [the full flow test](auto-import-full-flow.md). Put two throwaway photos in the device library that you can tell apart from the rest.
+Automatic import already working, as in [the new remote test](auto-import-new-remote.md). Put two throwaway photos in the device library that you can tell apart from the rest.
 
 ## Steps
 

@@ -194,7 +194,7 @@ Run the story player and check every story cycles through without failures, then
 Run each of these on Android and on iOS. Tick a test only when it has passed on both, and say which platform failed when one does.
 
 ### Automatic import
-- [ ] [auto-import-full-flow](mobile/auto-import/auto-import-full-flow.md)
+- [ ] [auto-import-new-remote](mobile/auto-import/auto-import-new-remote.md)
     - *n* Step 6 fails: the import record doesn't load as new imports are added. The Import page reads the record once, when the database is opened, and never again, so a database opened before automatic import ran shows an empty list however many photos have gone in since.
     - *n* Consolidate does not sound safe: it deletes all the local records, which sounds like losing the local database rather than consolidating it. It removes the local originals the remote already holds, then deletes `.db/bson` entirely, then replicates the remote down to replace them. The three are not one transaction, so anything that stops the app in that window leaves a phone with files deleted, no records, and no replacement. On a phone being killed mid-task is ordinary, and this work has no background service keeping it alive.
     - *n* Replicate database just times out and produces an error, with fewer than 500 files in the database. The failure is "Operation timed out after 30000ms: () => copyAsset(...)": replicate wraps each asset copy in `retry`, whose per-attempt timeout defaults to thirty seconds, and one asset is an original, a display copy and a thumbnail. The S3 client was already given ten minutes per request for this reason, with a comment saying thirty seconds is far too short on a phone, but the replicate path still caps every copy at thirty.
@@ -225,6 +225,7 @@ Run each of these on Android and on iOS. Tick a test only when it has passed on 
         - *e* The "My Photos" button in the Open database list is too small. Make it double the size and add padding underneath to separate it from the other buttons.
         - *e* The wording "a private photo database is created for you" needs updating. Check what it really does first.
         - *e* Better if turning the toggle on prompted to add a folder, after Allow is tapped.
+- [ ] [auto-import-existing-remote](mobile/auto-import/auto-import-existing-remote.md)
 - [ ] [auto-import-no-permission](mobile/auto-import/auto-import-no-permission.md)
 - [ ] [auto-import-delete-after-backup](mobile/auto-import/auto-import-delete-after-backup.md)
 

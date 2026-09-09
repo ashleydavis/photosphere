@@ -40,7 +40,7 @@ Expected:
 
 Expected:
 - The toggle stays on this time.
-- The app creates its database and starts backing up, as in [the full flow test](auto-import-full-flow.md).
+- The app creates its database and starts backing up, as in [the new remote test](auto-import-new-remote.md).
 
 ---
 
