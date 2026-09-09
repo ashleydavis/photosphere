@@ -8,7 +8,7 @@ Point Photosphere at one or more places where photos turn up and it will:
 
 - import anything that is already there, as fast as the machine manages;
 - import anything new on its next pass, a short while after the last one ended;
-- push what it imported to a remote database, when one is configured, including while the app is not on screen (see [Syncing](syncing.md), which is the other half of this feature and describes it in full);
+- push what it imported to a remote database, when one is configured, including while the app is not on screen (see [Syncing](syncing.md), which is the other half of this feature and describes it in full, and [what it costs on a phone with a real library](#what-it-costs-on-a-phone-with-a-real-library) below, which is where the pushing does not currently work);
 - optionally delete the source file once the photo is confirmed in the local database;
 - optionally drop local originals the remote already holds, so the local database can stay small.
 
@@ -85,6 +85,40 @@ Passes rather than filesystem watchers, because a watcher cannot carry the job o
 The cost of a pass is a listing plus one hash cache lookup per item, because a photo already imported is recognised before it is opened. That is what makes running it over and over cheap, and it is why nothing needs to remember where the last pass got to: every run starts at the beginning.
 
 The consequence to know about is latency. A photo that arrives is imported by the next pass rather than the moment it lands, so the wait is up to one interval plus however long the pass takes.
+
+## What it costs on a phone with a real library
+
+Measured on a Pixel 6 importing a library of 2,308 items into a partial replica of a database that already held 8,231 photos, with syncing on and a prefetch running beside it. The full write-up, with the log lines behind every figure, is [Prefetch, syncing and importing on a phone, against a real library](performance/mobile-sync-at-scale.md).
+
+| | |
+|---|---|
+| Listing the whole photo library | 51 seconds |
+| Items found | 2,308, every one a miss in an empty hash cache |
+| Photos taken in | about 5 a minute |
+| Writing one batch of 250 into a database of 8,231 | **16 minutes**, of which 9 is saving the merkle tree |
+| Time before anything at all reached the origin | 68 minutes |
+
+**Nothing is in the database until a batch is written, and nothing reaches the origin until it is.** For the first hour of a first backup the phone exports, hashes, generates derivatives for and writes to local storage hundreds of photos that appear in no gallery and exist on no other machine. Every sync pass in that window early-outs, because the local database's content hash has not changed: no record has been committed.
+
+**The batch write stops everything else the import is doing.** No photo is exported, hashed or uploaded for the whole sixteen minutes.
+
+That cost grows with the database, not with the batch, because a commit rewrites every shard it touches and a shard holds every record that hashed into it. It is the reason the batch is 250 rather than 1, and it is why an import into a large database looks like long dead periods punctuated by a lurch.
+
+### And then the push to the origin fails, silently, every time
+
+Once the first batch was committed, the sync that followed it tried to push the new originals to the S3 origin and could not push a single one:
+
+```
+Failed to copy file asset/<id>: Failed to write stream to <bucket>/asset/<id>: not a function
+  at getDataReadable ... at getChunkStream ... at __doConcurrentUpload
+  at __doMultipartUpload ... at writeStreamHashed ... at copyFile
+```
+
+The AWS SDK's multipart upload path calls something the embedded engine does not have. Every original attempted failed this way, none succeeded, and no thumbnail or display copy was ever reached because the tree walk reaches originals first.
+
+`syncDatabases` catches a failed file copy deliberately, so that one bad file does not end the pass, and leaves it for the next pass to try again. With this failure that means every pass tries every original and fails on every one, for ever, and **nothing tells the user**: the interface shows a sync that ran and completed.
+
+So on a phone today, automatic import into a database whose origin is S3 takes photos in and never gets them off the device.
 
 ## Nothing is paced
 
