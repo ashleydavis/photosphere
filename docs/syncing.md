@@ -4,13 +4,27 @@ A Photosphere database can be connected to a remote copy of itself, and syncing 
 
 ## What it does
 
-A sync is two-way between a local database and its origin. It pulls what the origin has and the local database does not, then pushes what the local database has and the origin does not, and stamps both sides as synced. When it finishes, both hold the same content: the same records, the same thumbnails, and the same originals, except where the local database is a partial replica that has dropped originals the origin holds.
+A sync is two-way between a local database and its origin. It pulls what the origin has and the local database does not, then pushes what the local database has and the origin does not, and stamps both sides as synced. When it finishes, both hold the same records.
+
+**Files are a different matter, and a partial replica is a different matter again.** See [What a sync does and does not move](#what-a-sync-does-and-does-not-move) below, which is the part that has been measured and is not what it was once assumed to be.
 
 Because it is two-way, two phones and a desktop connected to one remote end up with each other's photos. Each pushes what the remote does not have and pulls the rest.
 
 What it moves is decided by comparing merkle trees rather than by remembering what was sent last time. There is no queue of pending uploads anywhere, and nothing has to be replayed after a crash: a sync interrupted half way leaves both databases valid, and the next one works out what is still missing by looking.
 
 **Importing and syncing are separate operations, deliberately.** An import takes photos in from a folder or the device photo library and writes them to the local database. A sync moves what is in the local database to the origin, and knows nothing about where any of it came from. `psi add --watch` and `psi sync --watch` are two commands for that reason, and the mobile app runs two background loops for the same reason. Merging them would make each half untestable without the other, and neither is useful only in company: a database with no origin still imports, and a database nothing imports into still syncs edits.
+
+## What a sync does and does not move
+
+Everything in this section was measured on a Pixel 6 against a partial replica of a database of 8,231 photos and 24,260 files, over Wi-Fi to an S3 origin. The numbers and the log lines behind them are in [Prefetch, syncing and importing on a phone, against a real library](performance/mobile-sync-at-scale.md).
+
+**A sync between a partial replica and its origin does nothing at all, and that is not the partial filter.** `copyFile` in `packages/node-api/src/lib/sync.ts` will copy thumbnails and root-level files into a partial target, and skip originals and display copies. But at this scale that code is never reached, because the early-out below fires first.
+
+The early-out compares the two content hashes, and a content hash is of the merkle tree. A partial replica made by `psi replicate --partial` has the whole tree, so its content hash equals the origin's from the moment it is made. **Files it is missing do not change it.** Both sides therefore say they are identical, and every pass returns in about a seventh of a second having moved nothing.
+
+The consequence to know about is what happens when the [prefetch](automatic-photo-backup.md) that was supposed to fill the replica in fails part way: nothing ever repairs it. Syncing will not, because syncing believes the two are already the same, and it will go on believing that for ever.
+
+**So do not reach for a sync to complete a partial replica.** Reopening the database is what queues another prefetch, and the prefetch is the only thing that fills one in.
 
 ## It refuses to sync unrelated databases
 
@@ -24,6 +38,8 @@ So a database with no origin recorded is not a failure and is not reported as on
 
 Each database keeps a small state file holding the content hash of everything in it. A sync reads both, and if the two hashes are equal the databases are identical and it stops there: no write lock is taken on either side, and no merkle tree is downloaded.
 
+The hash is of the merkle tree rather than of the files on disk, so it says the two databases describe the same content, not that both hold every file. That distinction is invisible for a full database and decisive for a partial one: see [What a sync does and does not move](#what-a-sync-does-and-does-not-move).
+
 That early-out is what makes running a sync over and over affordable, and it is why nothing has to keep track of whether the database has changed since the last sync. Asking is cheap enough to be the whole mechanism.
 
 The state files are also what the two sides stamp when a sync completes, so a sync that ran leaves both hashes equal and the next one early-outs.
@@ -32,7 +48,7 @@ The state files are also what the two sides stamp when a sync completes, so a sy
 
 There are two costs, and they are far apart.
 
-- **Nothing to do.** Two small file reads, one of them at the origin. On an S3 origin that is a single small object fetched over the network. This is what almost every pass costs on a phone that is sitting still.
+- **Nothing to do.** Two small file reads, one of them at the origin. On an S3 origin that is a single small object fetched over the network. This is what almost every pass costs on a phone that is sitting still. **Measured on a Pixel 6 against an S3 origin over Wi-Fi: 154 milliseconds for the whole pass**, of which 21 ms is reading the plan, 97 ms is reaching the origin's merkle tree, and 24 ms is the comparison itself.
 - **Something to do.** The write lock at each side, the merkle trees loaded and compared, and then the records and files that differ, transferred.
 
 The second cost is proportional to what changed rather than to the size of the database, which is what makes a frequent sync cheaper than a rare one: the same work is done either way, in smaller pieces.
@@ -131,6 +147,8 @@ The loop that runs one sync pass after another lives on the native side of the m
 
 The native side holds no decisions. It asks the `plan-sync` worker task whether a sync should run, and that task reads the settings file, asks for the connection type, applies the same rule the interface applies, checks the database has an origin, and hands back the `sync-database` task to queue, already built. Native code forwards it unchanged and never assembles a task payload of its own, so what a pass does is decided once, in TypeScript, and cannot drift between the two platforms.
 
+The gap between passes is honoured. Measured on a Pixel 6 over a session of many passes, every pause logged the gap it asked for and the gap it waited, and they were equal to the millisecond: 300,000 ms asked, 300,000 ms waited, nothing cutting it short. A pass is 154 ms of that five minutes.
+
 A refused pass never ends the loop, which is the one way the sync loop differs from the import loop. Every reason to refuse a sync can go away without the app being touched: a phone moves onto Wi-Fi, a network comes back, a database gets an origin, the user switches syncing on again. A loop that ended on a refusal would need something to notice each of those and start it again, and a loop nobody restarted is the silent kind of broken this app has been bitten by before. A refused pass costs one settings file read.
 
 What differs between the platforms is only what keeps the loop alive:
@@ -218,6 +236,7 @@ The mobile tests are Android only. `apps/smoke-tests/tests/50-background-sync/IO
 
 ## See also
 
+- [Prefetch, syncing and importing on a phone, against a real library](performance/mobile-sync-at-scale.md) - what all of this actually costs on a Pixel 6 against a database of 8,231 photos, and what does not work at that size.
 - [Automatic photo backup](automatic-photo-backup.md) - what puts the photos in the database in the first place, and the loop this one is modelled on.
 - [Mobile background tasks](mobile-background-tasks.md) - the engine pool both background loops run on.
 - [Background tasks](background-tasks.md) - adding a new task type and wiring it up on every platform.
