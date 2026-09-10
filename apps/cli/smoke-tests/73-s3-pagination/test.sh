@@ -85,8 +85,13 @@ test_s3_pagination() {
         "$(get_cli_command) find-orphans --db \"$s3_db\" --yes" 0 "orphans_output"
 
     # The command's summary line reads "Found <n> orphaned file(s) ..." (apps/cli/src/cmd/find-orphans.ts).
+    # A missing summary is a failure in its own right rather than a count of zero: it means the
+    # capture is not the whole of what the command printed, and nothing about S3 can be read off it.
     local orphan_count
-    orphan_count="$(parse_numeric "$orphans_output" "Found")"
+    if ! orphan_count="$(parse_numeric "$orphans_output" "Found")"; then
+        log_error "find-orphans printed no summary line, so its output was cut short."
+        exit 1
+    fi
     expect_value "$orphan_count" "$SEED_COUNT" "The app's listing enumerated every object past the first page"
 
     test_passed

@@ -382,11 +382,22 @@ expect_output_string() {
 }
 
 # Parse a numeric value from output based on a pattern
+#
+# A pattern that is not in the output is answered with the given default, and with nothing at all when
+# no default was given. It used to answer 0 either way, and 0 is a number a test will happily compare
+# against: "the summary line is missing from what we captured" was reported as "the app enumerated 0
+# objects", and that description sent three separate investigations at S3 when the fault was a command
+# losing the end of its own output. A caller that wants 0 for an absent pattern says so by passing it.
 parse_numeric() {
     local output="$1"
     local pattern="$2"
-    local default_value="${3:-0}"
-    
+    local default_given=0
+    local default_value=""
+    if [ "$#" -ge 3 ]; then
+        default_given=1
+        default_value="$3"
+    fi
+
     local clean_output="$output"
     
     # Escape special regex characters in the pattern - but keep parentheses as literals
@@ -403,8 +414,24 @@ parse_numeric() {
         value=$(echo "$clean_output" | sed -n "s/.*\([0-9][0-9]*\)[[:space:]]*${escaped_pattern}.*/\1/p" | head -1)
     fi
     
-    # Return the value or default if not found
-    echo "${value:-$default_value}"
+    if [ -n "$value" ]; then
+        echo "$value"
+        return 0
+    fi
+
+    if [ "$default_given" -eq 1 ]; then
+        echo "$default_value"
+        return 0
+    fi
+
+    # To stderr, and nothing to stdout: this runs inside a command substitution, so anything said on
+    # stdout would be captured as the answer, and an `exit` here would end only the subshell.
+    {
+        echo -e "${RED}[FAIL]${NC} No number could be read for '$pattern', which is not in the output."
+        echo "  The last few lines of what was searched:"
+        echo "$clean_output" | tail -5 | sed 's/^/    /'
+    } >&2
+    return 1
 }
 
 # Validate that a file is a valid image with expected mime type
