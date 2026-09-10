@@ -37,6 +37,20 @@ fi
 PHOTO_NAME="psphere-auto-import-$$.jpeg"
 SECOND_PHOTO_NAME="psphere-auto-import-second-$$.png"
 
+# The album this test's photos go in, which is a directory of its own: MediaStore files an item under
+# the directory it sits in, so a directory of our own is an album of our own.
+#
+# That is what makes this test run on a real phone as well as an emulator. Switching automatic import
+# on watches the whole photo library, and a phone's library is somebody's photo collection: on the
+# Pixel this is tested against, 2,309 items. The test would then wait for "Import: 1 imported" while
+# the app took in thousands, and never see it. Pointing automatic import at this album alone means
+# the only photos it can take in are the ones this test put there, on any device.
+TEST_ALBUM_DIR="/sdcard/DCIM/psphere-auto-import-$$"
+
+# The gap between passes, seeded short so the test is not waiting out the thirty second default
+# several times over.
+PASS_GAP_MS=5000
+
 # Reads the text of a data-id element through the control bridge (empty when absent).
 read_value() {
     local port="$1"
@@ -80,6 +94,13 @@ on_exit() {
     local exit_code=$?
     "${PLATFORM}_remove_media" "$PHOTO_NAME" 2>/dev/null || true
     "${PLATFORM}_remove_media" "$SECOND_PHOTO_NAME" 2>/dev/null || true
+
+    # The album directory goes too, so a phone is left as it was found. The files go first and the
+    # directory second, because rmdir refuses a directory with anything in it. This is a plain file
+    # delete and an empty-directory removal, never a recursive one.
+    adb shell "rm -f $TEST_ALBUM_DIR/*" >/dev/null 2>&1 || true
+    adb shell "rmdir $TEST_ALBUM_DIR" >/dev/null 2>&1 || true
+
     stop_app "$APP_PORT" "$TMP_DIR"
     return $exit_code
 }
@@ -90,12 +111,33 @@ trap on_exit EXIT
 "${PLATFORM}_reset_app_state" || exit 1
 
 # Sweep up anything a previous run of this test left behind. A run killed outright never reaches its
-# exit trap, and a photo it left would be imported by this one and throw its counts out.
+# exit trap, and a photo it left would be imported by this one and throw its counts out. The files go
+# first and the now-empty directories second, because a row removed while its file remains is put back
+# by the next scan of the volume.
+adb shell "rm -f /sdcard/DCIM/psphere-auto-import-*/*" >/dev/null 2>&1 || true
+adb shell "rmdir /sdcard/DCIM/psphere-auto-import-*" >/dev/null 2>&1 || true
 "${PLATFORM}_remove_media_matching" "psphere-auto-import-" || true
 
 # Put the photo into the device photo library before the app starts, so it is part of the library the
-# backfill walks rather than something that arrives mid-run.
-"${PLATFORM}_seed_media" "$REPO_DIR/test/multiple-files/test-1.jpeg" "$PHOTO_NAME" || exit 1
+# backfill walks rather than something that arrives mid-run. Into this test's own album, which is what
+# automatic import is pointed at below.
+"${PLATFORM}_seed_media" "$REPO_DIR/test/multiple-files/test-1.jpeg" "$PHOTO_NAME" "$TEST_ALBUM_DIR" || exit 1
+
+# The album exists now that something is in it, so MediaStore can be asked for its id.
+TEST_ALBUM_ID="$(android_media_album_id "$PHOTO_NAME")"
+if [ -z "$TEST_ALBUM_ID" ]; then
+    log_error "MediaStore did not file $PHOTO_NAME under an album, so automatic import cannot be pointed at one."
+    log_error "MediaStore row: $(android_media_store_row "$PHOTO_NAME" || echo "none")"
+    exit 1
+fi
+log_info "This test's photos are in album $TEST_ALBUM_ID ($TEST_ALBUM_DIR)"
+
+# Automatic import is switched OFF here and pointed at that album. Switching it ON is what the test
+# does through the settings card below, which is the only thing the user does; the card reads these
+# settings and writes back what it read with the switch flipped, so the album survives.
+#
+# No default database path is seeded, because the app creating its own is part of what is under test.
+"${PLATFORM}_seed_auto_import_config" "false" "" "$PASS_GAP_MS" "$TEST_ALBUM_ID" || exit 1
 
 # Grant the photo permission from outside the app. The system dialog cannot be tapped by a test, and
 # the app's own request resolves straight away once the permission is already held.
@@ -153,7 +195,7 @@ wait_for_log "$TMP_DIR" "Import page ready" || exit 1
 # It also fills the Import page's panel, which only shows what it has been told while it is on
 # screen. The panel is the shared one the desktop uses and it reads task messages, so this is what
 # proves the progress of an import running in the embedded engine still reaches the interface.
-"${PLATFORM}_seed_media" "$REPO_DIR/test/multiple-files/test-2.png" "$SECOND_PHOTO_NAME" || exit 1
+"${PLATFORM}_seed_media" "$REPO_DIR/test/multiple-files/test-2.png" "$SECOND_PHOTO_NAME" "$TEST_ALBUM_DIR" || exit 1
 
 # The panel appears on the first progress message it is told about, which is the one sent as the
 # batch is handed over, so it is waited for before the count that follows it. Waiting the other way

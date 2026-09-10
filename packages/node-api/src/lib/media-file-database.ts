@@ -1,9 +1,9 @@
 import { BsonDatabase, IBsonDatabase, IBsonCollection, getDatabaseRootHash } from "bdb";
-import { loadDatabaseConfig, saveDatabaseConfig } from "api";
+import { loadDatabaseConfig, saveDatabaseConfig, DATABASE_REACHABLE_TIMEOUT } from "api";
 import { createStorage, IStorage, IS3Credentials, IStorageOptions, loadEncryptionKeysFromPem, pathJoin, StoragePrefixWrapper } from "storage";
 import { resolveStorageCredentials } from "./resolve-storage-credentials";
 import { LazyOriginStorage } from "./lazy-origin-storage";
-import { ILocation, log, retry, IUuidGenerator, ITimestampProvider } from "utils";
+import { ILocation, log, retry, retryOnce, IUuidGenerator, ITimestampProvider } from "utils";
 import dayjs from "dayjs";
 import { IAsset } from "api";
 import { computeHash } from "./hash";
@@ -733,8 +733,19 @@ export async function checkDatabaseExists(databasePath: string): Promise<boolean
     // used to report every one of them as the latter: the app told the user their database was not
     // found when it simply could not get to it. Reaching the storage and finding no merkle tree is
     // the only thing that returns false.
-    const { storage } = await openStorage(databasePath);
-    return await merkleTreeExists(storage);
+    //
+    // Bounded, because nothing else bounds it. One attempt, because this is a question a user is
+    // waiting on the answer to rather than work worth retrying: the app tells them the database
+    // cannot be reached, and pressing it again is the retry. Without the bound the wait fell through
+    // to the S3 client's ten minute request ceiling, which is set for a phone pushing a large video
+    // and leaves someone opening a database looking at a screen that never resolves. It only bites
+    // where a connection is accepted and then answers nothing, which is what a phone reaching a
+    // stopped server through an `adb reverse` forward gets, and is why this was invisible on an
+    // emulator, where the same server refuses the connection at once.
+    return await retryOnce(async () => {
+        const { storage } = await openStorage(databasePath);
+        return await merkleTreeExists(storage);
+    }, DATABASE_REACHABLE_TIMEOUT);
 }
 
 //

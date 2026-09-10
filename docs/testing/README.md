@@ -218,6 +218,17 @@ bun run emu:and:down           # stops only your own emulator
 
 Each pool emulator runs on a writable clone of your base AVD, about 8KB each, because two emulators cannot share one AVD. Set `PHOTOSPHERE_EMULATOR_COUNT` to change the pool size. Pin a run to particular devices with `PHOTOSPHERE_ANDROID_DEVICES="emulator-5556 emulator-5558"`, for example to leave your hand-testing emulator out of it.
 
+### Every smoke test runs on an emulator and on a real device
+
+There is no such thing here as a test that is only for an emulator. Every mobile smoke test is meant to pass on a pool emulator and on a phone, and a test that passes on one and fails on the other is a broken test, not a test that has found its limit. The two differ in ways worth designing for, and there are only a few of them:
+
+- **A phone holds somebody's photo library.** A test that watches the whole library imports thousands of photos on a phone and two on an emulator, so any test that switches automatic import on gives itself an album of its own (a directory of its own under `/sdcard/DCIM`, since MediaStore files an item under the directory it sits in) and points automatic import at that album alone. Tests 47, 49 and 50 all do this. Getting it wrong looks like a test waiting for a count it will never see.
+- **A phone reaches the host through the port reverses adb sets up over USB**, not over a real network, and a large upload through that tunnel can time out where the same upload over an emulator's network carries. Where that matters, the phone gets a smaller fixture.
+- **A phone can be showing a lock screen**, and an app launched behind one is refused its foreground service by the platform. A test that needs a service says so and stops rather than failing later for a reason that reads as a product fault.
+- **A phone's data is not the harness's to destroy**, which is the next section.
+
+What is legitimately not covered on a real device is a whole platform's mechanism, not a device: an iOS `BGProcessingTask` cannot be triggered from this harness at all, on a simulator or a phone. Those tests skip on iOS and each has an `IOS-NOT-COVERED.md` beside it saying what is left unproven and what covers it instead. That is a different thing from a test that only works on an emulator, and there are none of those.
+
 ### The mobile tests wipe the app's data, and will not do it to a real phone
 
 Every mobile test starts by clearing the app's stored data, because a test that ran on state an earlier one left behind would pass or fail for reasons that have nothing to do with it. That wipe takes the storage sandbox with it: every database the app holds and everything imported into them.
