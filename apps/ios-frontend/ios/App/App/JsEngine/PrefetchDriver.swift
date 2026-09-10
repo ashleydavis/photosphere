@@ -82,6 +82,42 @@ struct PrefetchStepResult {
 }
 
 //
+// What the last pass says about the replica, for anything that has to decide what to do while a
+// prefetch is outstanding. The counterpart of PrefetchDriver.ReplicaState in Java, with the same wire
+// spellings, because the same TypeScript task reads both.
+//
+// The periodic sync is the one thing that reads it. A sync that runs while a prefetch is working does
+// the same work slowly and gets in its own way. What it must never do is wait for a prefetch that
+// cannot finish, so the states say whether the prefetch is making PROGRESS rather than whether it has
+// finished, and only one of them holds a sync back.
+//
+enum PrefetchReplicaState: String {
+
+    //
+    // No pass has completed yet, so nothing is known. Syncing is allowed: refusing on no evidence is
+    // how a loop gets stuck.
+    //
+    case unknown
+
+    //
+    // The last pass fetched files, so the prefetch is getting through the replica. Syncing waits.
+    //
+    case working
+
+    //
+    // The last pass fetched nothing and left files missing, or failed outright. The prefetch is stuck,
+    // and syncing stops waiting for it.
+    //
+    case stalled
+
+    //
+    // The last pass fetched nothing and found nothing missing: the replica is filled in and the loop
+    // has stopped. Syncing is allowed.
+    //
+    case complete
+}
+
+//
 // What a finished pass says about what should happen next.
 //
 enum PrefetchPassOutcome {
@@ -201,6 +237,12 @@ final class PrefetchDriver {
     private var pauseBetweenPasses: TimeInterval = PrefetchDriver.fallbackPause
 
     //
+    // What the last completed pass said about the replica. Guarded by the same lock, because the sync
+    // loop reads it from its own thread.
+    //
+    private var lastReplicaState: PrefetchReplicaState = .unknown
+
+    //
     // Constructs a driver over the given host.
     //
     init(host: PrefetchDriverHost) {
@@ -214,6 +256,24 @@ final class PrefetchDriver {
         stateLock.lock()
         defer { stateLock.unlock() }
         return stoppedFlag
+    }
+
+    //
+    // What the last completed pass said about the replica.
+    //
+    var replicaState: PrefetchReplicaState {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return lastReplicaState
+    }
+
+    //
+    // Records what a pass said about the replica.
+    //
+    private func setReplicaState(_ state: PrefetchReplicaState) {
+        stateLock.lock()
+        lastReplicaState = state
+        stateLock.unlock()
     }
 
     //
@@ -343,7 +403,10 @@ final class PrefetchDriver {
                 let result = try host.runStep(step)
                 if !result.succeeded {
                     // The loop keeps going, which is what makes a failed prefetch retry, and is the
-                    // whole reason this loop exists.
+                    // whole reason this loop exists. Stalled rather than complete: a failed step
+                    // reports no counts, and reading that as a filled-in replica would be reading the
+                    // worst case as the best one, and would hold a sync back for ever.
+                    setReplicaState(.stalled)
                     host.reportError("Prefetch step \"\(step.type)\" did not succeed.")
                     return .ran
                 }
@@ -356,6 +419,7 @@ final class PrefetchDriver {
                 }
             }
             catch {
+                setReplicaState(.stalled)
                 host.reportError("Prefetch step \"\(step.type)\" failed: \(error)")
                 return .ran
             }
@@ -365,9 +429,16 @@ final class PrefetchDriver {
             // Nothing fetched and nothing missing: the replica is complete and there is nothing left
             // to walk. Opening a database queues a prefetch again, which is what starts this loop over
             // when there is a reason to.
+            setReplicaState(.complete)
             host.report("\"\(plan.databasePath)\" is filled in; nothing left to fetch.")
             return .stop
         }
+
+        // Fetching anything at all counts as progress, including a pass that fetched files and found
+        // nothing left: the next pass confirms that and reports the replica complete, so at worst a
+        // sync waits one more gap. Fetching nothing while files are still missing is the stuck case,
+        // and it is the one a sync must not wait on.
+        setReplicaState(anythingFetched ? .working : .stalled)
 
         return .ran
     }

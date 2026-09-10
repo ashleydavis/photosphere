@@ -271,6 +271,87 @@ final class PrefetchDriverTests: XCTestCase {
         XCTAssertEqual(["prefetch-database"], host.stepsRun)
     }
 
+    func testTheReplicaStateIsUnknownBeforeAnyPassHasCompleted() {
+        // Which is every phone at launch. The sync reads this and must be allowed to run on it:
+        // refusing on no evidence is how a loop gets stuck.
+        let host = RecordingHost(plan: runningPlan(pause: 1))
+        let driver = PrefetchDriver(host: host)
+
+        XCTAssertEqual(PrefetchReplicaState.unknown, driver.replicaState)
+    }
+
+    func testAPassThatFetchedFilesAndLeftSomeReportsWorking() {
+        let host = RecordingHost(plan: runningPlan(pause: 1))
+        host.stepResult = PrefetchStepResult(succeeded: true, filesFetched: 3, filesStillMissing: 5)
+        let driver = PrefetchDriver(host: host)
+
+        driver.runOnePass()
+
+        XCTAssertEqual(PrefetchReplicaState.working, driver.replicaState)
+    }
+
+    func testAPassThatFetchedNothingAndLeftSomeReportsStalled() {
+        // The state that stops a sync waiting. Getting this wrong the other way, by reporting working,
+        // is a phone that never syncs again.
+        let host = RecordingHost(plan: runningPlan(pause: 1))
+        host.stepResult = PrefetchStepResult(succeeded: true, filesFetched: 0, filesStillMissing: 5)
+        let driver = PrefetchDriver(host: host)
+
+        driver.runOnePass()
+
+        XCTAssertEqual(PrefetchReplicaState.stalled, driver.replicaState)
+    }
+
+    func testAPassThatFetchedNothingWithNothingMissingReportsComplete() {
+        let host = RecordingHost(plan: runningPlan(pause: 1))
+        host.stepResult = PrefetchStepResult(succeeded: true, filesFetched: 0, filesStillMissing: 0)
+        let driver = PrefetchDriver(host: host)
+
+        driver.runOnePass()
+
+        XCTAssertEqual(PrefetchReplicaState.complete, driver.replicaState)
+    }
+
+    func testAFailedStepReportsStalledRatherThanComplete() {
+        // A failed step reports no counts at all, and reading that as a filled-in replica would read
+        // the worst case as the best one: the sync would be told the prefetch had finished when it had
+        // in fact broken.
+        let host = RecordingHost(plan: runningPlan(pause: 1))
+        host.stepResult = PrefetchStepResult(succeeded: false, filesFetched: 0, filesStillMissing: 0)
+        let driver = PrefetchDriver(host: host)
+
+        driver.runOnePass()
+
+        XCTAssertEqual(PrefetchReplicaState.stalled, driver.replicaState)
+    }
+
+    func testAStepThatThrewReportsStalled() {
+        let host = RecordingHost(plan: runningPlan(pause: 1))
+        host.stepThrows = true
+        let driver = PrefetchDriver(host: host)
+
+        driver.runOnePass()
+
+        XCTAssertEqual(PrefetchReplicaState.stalled, driver.replicaState)
+    }
+
+    func testARefusedPassLeavesTheReplicaStateAsItWas() {
+        // A refusal says nothing about the replica: the connection went away, or syncing was switched
+        // off. Overwriting what the last real pass found would throw away the only evidence the sync
+        // has.
+        let host = RecordingHost(plan: runningPlan(pause: 1))
+        host.stepResult = PrefetchStepResult(succeeded: true, filesFetched: 2, filesStillMissing: 2)
+        let driver = PrefetchDriver(host: host)
+
+        driver.runOnePass()
+        XCTAssertEqual(PrefetchReplicaState.working, driver.replicaState)
+
+        host.plan = refusedPlan(reason: "syncing is switched off", pause: 1)
+        driver.runOnePass()
+
+        XCTAssertEqual(PrefetchReplicaState.working, driver.replicaState)
+    }
+
     func testTheGapBetweenPassesComesFromThePlan() {
         let host = RecordingHost(plan: runningPlan(pause: 1234))
         let driver = PrefetchDriver(host: host)
