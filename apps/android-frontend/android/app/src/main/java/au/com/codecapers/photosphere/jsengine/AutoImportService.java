@@ -74,6 +74,20 @@ public final class AutoImportService extends Service {
     private SyncDriver syncDriver;
 
     //
+    // The thread the prefetch driver's loop runs on.
+    //
+    // A third thread beside the other two, under the same notification and the same wake lock, for
+    // the same reasons. This loop is the one that ends itself, when a pass finds the replica has
+    // nothing left missing, and is started again by the app opening a database.
+    //
+    private Thread prefetchLoopThread;
+
+    //
+    // The driver running the prefetch passes, or null when the service has not started one.
+    //
+    private PrefetchDriver prefetchDriver;
+
+    //
     // The wake lock held while a pass is in flight.
     //
     private PowerManager.WakeLock wakeLock;
@@ -104,6 +118,25 @@ public final class AutoImportService extends Service {
             Log.i(LOG_TAG, "The JsEngine plugin is not loaded, so there is nothing to import with. Stopping.");
             stopSelf();
             return START_NOT_STICKY;
+        }
+
+        // The prefetch loop is started before the import loop's check below, not beside the sync
+        // loop after it. That check returns from this method when the import loop is already alive,
+        // and the moment the prefetch loop most needs starting again is exactly then: it ends itself
+        // when a replica is complete, and the thing that gives it something to do again is a database
+        // being opened, which starts this service while the import loop is still running. Started
+        // beside the sync loop it would never come back.
+        if (prefetchLoopThread == null || !prefetchLoopThread.isAlive()) {
+            final PrefetchDriver startedPrefetchDriver = new PrefetchDriver(new PrefetchServiceHost());
+            prefetchDriver = startedPrefetchDriver;
+
+            prefetchLoopThread = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    startedPrefetchDriver.runLoop();
+                }
+            }, "photosphere-background-prefetch");
+            prefetchLoopThread.start();
         }
 
         if (loopThread != null && loopThread.isAlive()) {
@@ -185,6 +218,10 @@ public final class AutoImportService extends Service {
 
         if (syncDriver != null) {
             syncDriver.stop();
+        }
+
+        if (prefetchDriver != null) {
+            prefetchDriver.stop();
         }
 
         // Wake whatever is waiting between passes, so the loops end now rather than at the end of the
@@ -434,6 +471,87 @@ public final class AutoImportService extends Service {
         @Override
         public void reportError(String message) {
             Log.e(LOG_TAG, message);
+        }
+    }
+
+    //
+    // Everything the prefetch driver needs that is Android's business. The same list as the sync
+    // driver's, plus being told the loop has ended: this is the one loop that finishes, when a pass
+    // finds the replica has nothing left missing.
+    //
+    private final class PrefetchServiceHost implements PrefetchDriver.Host {
+
+        //
+        // Asks the plan-prefetch task whether a prefetch should run, and against which database.
+        //
+        @Override
+        public PrefetchPlan readPlan() throws Exception {
+            return JsEnginePlugin.readBackgroundPrefetchPlan();
+        }
+
+        //
+        // Runs one of the plan's steps on the engine pool and waits for it to finish, reporting what
+        // it fetched and what it left behind.
+        //
+        @Override
+        public PrefetchDriver.StepResult runStep(PrefetchPlan.Step step) throws Exception {
+            return JsEnginePlugin.runBackgroundPrefetchStep(step);
+        }
+
+        //
+        // Waits between passes, ending early when the service is stopped.
+        //
+        @Override
+        public boolean pause(long millis) throws InterruptedException {
+            synchronized (pauseLock) {
+                pauseLock.wait(millis);
+            }
+            return prefetchDriver != null && !prefetchDriver.isStopped();
+        }
+
+        //
+        // Keeps the CPU running for the length of a pass.
+        //
+        // The same wake lock the other two loops use, and it is reference counted precisely because
+        // the passes of the three loops overlap: each takes a hold for its own pass and gives it back
+        // afterwards, and the phone is free to sleep when the last hold goes.
+        //
+        @Override
+        public void holdAwake(boolean awake) {
+            if (awake) {
+                acquireWakeLock();
+            }
+            else {
+                releaseWakeLock();
+            }
+        }
+
+        //
+        // Says what the background prefetch is doing, in logcat.
+        //
+        @Override
+        public void report(String message) {
+            Log.i(LOG_TAG, message);
+        }
+
+        //
+        // Says what went wrong, in logcat.
+        //
+        @Override
+        public void reportError(String message) {
+            Log.e(LOG_TAG, message);
+        }
+
+        //
+        // The replica is complete, so this loop has ended.
+        //
+        // The service is NOT stopped here, and neither is anything else. The other two loops carry
+        // on, and this one is started again by the next onStartCommand, which is what opening a
+        // database produces.
+        //
+        @Override
+        public void onStopped() {
+            Log.i(LOG_TAG, "The replica is filled in, so the background prefetch loop has finished. Opening a database starts it again.");
         }
     }
 }

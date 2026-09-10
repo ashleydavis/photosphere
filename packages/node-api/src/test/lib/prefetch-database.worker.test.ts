@@ -228,6 +228,104 @@ describe("prefetchDatabaseHandler", () => {
         expect(localStorage.writeStream).not.toHaveBeenCalled();
     });
 
+    test("reports what it fetched, so the background loop knows whether to keep going", async () => {
+        // The loop stops when a pass reports nothing fetched and nothing missing, and asks again
+        // otherwise, so these two numbers are the whole of what it decides on.
+        const localStorage = makeLocalStorage([]);
+        const originStorage = makeOriginStorage();
+        mockOpenStorage
+            .mockResolvedValueOnce({
+                storage: localStorage as any,
+                rawStorage: { __label: "local-raw" } as any,
+                encryptionKeyPems: [],
+                s3Config: undefined,
+                storageOptions: {} as any,
+                googleApiKey: undefined,
+            })
+            .mockResolvedValueOnce({
+                storage: originStorage as any,
+                rawStorage: { __label: "origin-raw" } as any,
+                encryptionKeyPems: [],
+                s3Config: undefined,
+                storageOptions: {} as any,
+                googleApiKey: undefined,
+            });
+        mockLoadMerkleTree.mockResolvedValue({ databaseMetadata: { isPartial: true } } as any);
+        mockLoadDatabaseConfig.mockResolvedValue({ origin: "/fake/origin" } as any);
+        mockWalkDirectory.mockImplementation((_storage: any, dir: string) => {
+            if (dir === "thumb") {
+                return fakeWalk(["thumb/a", "thumb/b"]) as any;
+            }
+            return fakeWalk([".db/bson/collection"]) as any;
+        });
+
+        const result = await prefetchDatabaseHandler({ databasePath: "/fake/db" }, makeContext(false));
+
+        expect(result).toEqual({
+            filesFetched: 3,
+            filesStillMissing: 0,
+        });
+    });
+
+    test("reports nothing fetched and nothing missing for a replica that is already complete", async () => {
+        // This is what tells the loop the replica is filled in and it can stop, rather than walking
+        // every object at the origin again on every gap.
+        const localStorage = makeLocalStorage(["thumb/a"]);
+        const originStorage = makeOriginStorage();
+        mockOpenStorage
+            .mockResolvedValueOnce({
+                storage: localStorage as any,
+                rawStorage: { __label: "local-raw" } as any,
+                encryptionKeyPems: [],
+                s3Config: undefined,
+                storageOptions: {} as any,
+                googleApiKey: undefined,
+            })
+            .mockResolvedValueOnce({
+                storage: originStorage as any,
+                rawStorage: { __label: "origin-raw" } as any,
+                encryptionKeyPems: [],
+                s3Config: undefined,
+                storageOptions: {} as any,
+                googleApiKey: undefined,
+            });
+        mockLoadMerkleTree.mockResolvedValue({ databaseMetadata: { isPartial: true } } as any);
+        mockLoadDatabaseConfig.mockResolvedValue({ origin: "/fake/origin" } as any);
+        mockWalkDirectory.mockImplementation((_storage: any, dir: string) => {
+            if (dir === "thumb") {
+                return fakeWalk(["thumb/a"]) as any;
+            }
+            return fakeWalk([]) as any;
+        });
+
+        const result = await prefetchDatabaseHandler({ databasePath: "/fake/db" }, makeContext(false));
+
+        expect(result).toEqual({
+            filesFetched: 0,
+            filesStillMissing: 0,
+        });
+    });
+
+    test("reports nothing fetched and nothing missing for a full database", async () => {
+        const localStorage = makeLocalStorage([]);
+        mockOpenStorage.mockResolvedValueOnce({
+            storage: localStorage as any,
+            rawStorage: { __label: "raw" } as any,
+            encryptionKeyPems: [],
+            s3Config: undefined,
+            storageOptions: {} as any,
+            googleApiKey: undefined,
+        });
+        mockLoadMerkleTree.mockResolvedValue({ databaseMetadata: { isPartial: false } } as any);
+
+        const result = await prefetchDatabaseHandler({ databasePath: "/fake/db" }, makeContext(false));
+
+        expect(result).toEqual({
+            filesFetched: 0,
+            filesStillMissing: 0,
+        });
+    });
+
     test("copies a file that takes longer than the default retry timeout to read", async () => {
         // How long the one file takes to come out of the origin, in fake milliseconds. Comfortably
         // over retry's 30 second default and far under the long timeout a file copy is meant to get,
@@ -325,8 +423,16 @@ describe("prefetchDatabaseHandler", () => {
         });
 
         // Cancelled before any batch runs, so nothing is copied.
-        await prefetchDatabaseHandler({ databasePath: "/fake/db" }, makeContext(true));
+        const result = await prefetchDatabaseHandler({ databasePath: "/fake/db" }, makeContext(true));
 
         expect(localStorage.writeStream).not.toHaveBeenCalled();
+
+        // And the file it had already found is reported as still missing. A cancelled pass that
+        // reported nothing left behind would read to the loop exactly like a finished one, and the
+        // loop would stop with the replica half filled in.
+        expect(result).toEqual({
+            filesFetched: 0,
+            filesStillMissing: 1,
+        });
     });
 });
