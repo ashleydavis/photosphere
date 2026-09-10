@@ -78,6 +78,21 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     private static let planSyncTask = "plan-sync"
 
     //
+    // The source tag the background prefetch queues its tasks under.
+    //
+    // Its own tag again, for the same reason the sync has one: filling a replica in is not the sync
+    // and not the import, and cancelling it because one of those was switched off would leave a
+    // replica half filled in with nothing to notice. Matches BACKGROUND_PREFETCH_TASK_SOURCE in
+    // JsEnginePlugin.java.
+    //
+    static let backgroundPrefetchTaskSource = "background-prefetch"
+
+    //
+    // The task type that says whether a background prefetch pass should run.
+    //
+    private static let planPrefetchTask = "plan-prefetch"
+
+    //
     // The plugin instance the background import reaches the engine pool through. Set when the plugin
     // loads: the background processing task the system schedules has no plugin call of its own.
     //
@@ -129,6 +144,30 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     // saying "AutoImport" and a sync's wait ending when the import loop stopped.
     //
     private static let syncDriverHost = SyncPluginHost()
+
+    //
+    // The one prefetch driver for the life of the app, and the thread its foreground loop runs on.
+    //
+    // The same arrangement as the other two, and for the same reason: two callers (the foreground
+    // loop and the system's background processing task) and one serialised entry point between them.
+    //
+    private static var prefetchDriver: PrefetchDriver?
+
+    //
+    // The thread the foreground prefetch loop runs on, so it never blocks the WebView's.
+    //
+    private static var prefetchLoopThread: Thread?
+
+    //
+    // Guards the prefetch driver and its loop thread above.
+    //
+    private static let prefetchLock = NSLock()
+
+    //
+    // The host the prefetch driver talks to the engine pool through. Its own object, for the same
+    // reason the sync has one.
+    //
+    private static let prefetchDriverHost = PrefetchPluginHost()
 
     //
     // True once the user has switched automatic import on, and false again as soon as they switch it
@@ -660,6 +699,97 @@ public class JsEnginePlugin: CAPPlugin, EnginePoolDelegate {
     //
     static func runOneBackgroundSyncPass() {
         guard let driver = sharedSyncDriver() else {
+            return
+        }
+
+        driver.resume()
+        driver.runOnePass()
+    }
+
+    //
+    // Returns the one prefetch driver for the life of the app, creating it on first use.
+    //
+    static func sharedPrefetchDriver() -> PrefetchDriver? {
+        prefetchLock.lock()
+        defer { prefetchLock.unlock() }
+
+        if let existing = prefetchDriver {
+            return existing
+        }
+
+        guard activeInstance != nil else {
+            return nil
+        }
+
+        let created = PrefetchDriver(host: prefetchDriverHost)
+        prefetchDriver = created
+        return created
+    }
+
+    //
+    // Starts the loop that fills a partial replica in while the app is foregrounded.
+    //
+    // Starting it again while it is running does nothing, for the same reason the other loops refuse
+    // a second start. Starting it again after it has FINISHED does start it, which is the point: it
+    // ends itself when a replica is complete, and the thing that gives it something to do again is a
+    // database being opened.
+    //
+    static func startForegroundPrefetch() {
+        guard let driver = sharedPrefetchDriver() else {
+            return
+        }
+
+        driver.resume()
+
+        prefetchLock.lock()
+        if let existing = prefetchLoopThread, !existing.isFinished {
+            prefetchLock.unlock()
+            return
+        }
+
+        let thread = Thread {
+            driver.runLoop()
+        }
+        thread.name = "photosphere-background-prefetch"
+        prefetchLoopThread = thread
+        prefetchLock.unlock()
+
+        thread.start()
+    }
+
+    //
+    // Stops the foreground prefetch loop, leaving any pass in flight to finish or be cancelled.
+    //
+    static func stopForegroundPrefetch() {
+        prefetchLock.lock()
+        let driver = prefetchDriver
+        prefetchLock.unlock()
+
+        driver?.stop()
+    }
+
+    //
+    // Stops the background prefetch outright and cancels the fetch in flight.
+    //
+    static func stopPrefetch() {
+        stopForegroundPrefetch()
+
+        guard let plugin = activeInstance else {
+            return
+        }
+
+        plugin.lock.lock()
+        let currentPool = plugin.pool
+        plugin.lock.unlock()
+
+        currentPool?.cancelTasks(source: backgroundPrefetchTaskSource)
+    }
+
+    //
+    // Runs exactly one prefetch pass, for the background processing task the system schedules.
+    //
+    static func runOneBackgroundPrefetchPass() {
+        guard let driver = sharedPrefetchDriver() else {
             return
         }
 
@@ -1291,6 +1421,95 @@ extension JsEnginePlugin {
             pauseBetweenRuns: pauseMs / 1000,
             steps: steps)
     }
+
+    //
+    // Queues one background prefetch task and waits for it, ending the wait if the prefetch driver is
+    // stopped.
+    //
+    fileprivate static func runPrefetchBackgroundTask(type: String, dataJson: String) throws -> BackgroundTaskWaiter {
+        guard let plugin = activeInstance else {
+            throw AutoImportError.stopped
+        }
+
+        return try plugin.runBackgroundTask(
+            type: type,
+            dataJson: dataJson,
+            source: backgroundPrefetchTaskSource,
+            isStopped: { sharedPrefetchDriver()?.isStopped != false })
+    }
+
+    //
+    // Asks the plan-prefetch task whether a prefetch should run, and against which database.
+    //
+    fileprivate static func readPrefetchPlan() throws -> PrefetchPlan {
+        let waiter = try runPrefetchBackgroundTask(type: planPrefetchTask, dataJson: "{}")
+        if !waiter.succeeded {
+            throw AutoImportError.taskFailed(waiter.errorMessage ?? "plan-prefetch failed")
+        }
+
+        guard let outputsJson = waiter.outputsJson else {
+            throw AutoImportError.malformedPlan
+        }
+
+        return try parsePrefetchPlan(outputsJson)
+    }
+
+    //
+    // Turns the plan-prefetch task's outputs into the plan the prefetch driver runs.
+    //
+    // Every field defaults to the answer that does nothing, so outputs that arrive malformed refuse a
+    // pass rather than running one on a guess.
+    //
+    static func parsePrefetchPlan(_ outputsJson: String) throws -> PrefetchPlan {
+        guard let data = outputsJson.data(using: .utf8),
+              let outputs = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw AutoImportError.malformedPlan
+        }
+
+        var steps: [PrefetchPlan.Step] = []
+        if let stepsJson = outputs["steps"] as? [[String: Any]] {
+            for stepJson in stepsJson {
+                guard let type = stepJson["type"] as? String,
+                      let stepData = stepJson["data"],
+                      let stepDataJson = try? JSONSerialization.data(withJSONObject: stepData),
+                      let stepDataString = String(data: stepDataJson, encoding: .utf8) else {
+                    throw AutoImportError.malformedPlan
+                }
+                steps.append(PrefetchPlan.Step(type: type, dataJson: stepDataString))
+            }
+        }
+
+        // The plan carries the gap in milliseconds, because that is what the Android side takes; iOS
+        // waits in seconds.
+        let pauseMs = outputs["pauseBetweenRunsMs"] as? Double ?? 0
+
+        return PrefetchPlan(
+            shouldRun: outputs["shouldRun"] as? Bool ?? false,
+            databasePath: outputs["databasePath"] as? String ?? "",
+            reason: outputs["reason"] as? String ?? "",
+            pauseBetweenRuns: pauseMs / 1000,
+            steps: steps)
+    }
+
+    //
+    // Reads what a prefetch step did out of the task's outputs.
+    //
+    // Outputs that are absent read as a pass that fetched nothing and left nothing, which is what a
+    // prefetch against a full database returns and is the answer that ends the loop. It cannot be
+    // reached from a plan, because plan-prefetch refuses a database that is not partial.
+    //
+    static func parsePrefetchStepResult(_ outputsJson: String?) -> PrefetchStepResult {
+        guard let outputsJson = outputsJson,
+              let data = outputsJson.data(using: .utf8),
+              let outputs = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return PrefetchStepResult(succeeded: true, filesFetched: 0, filesStillMissing: 0)
+        }
+
+        return PrefetchStepResult(
+            succeeded: true,
+            filesFetched: Int(outputs["filesFetched"] as? Double ?? 0),
+            filesStillMissing: Int(outputs["filesStillMissing"] as? Double ?? 0))
+    }
 }
 
 //
@@ -1348,5 +1567,67 @@ final class SyncPluginHost: SyncDriverHost {
     //
     func reportError(_ message: String) {
         print("[BackgroundSync] ERROR: \(message)")
+    }
+}
+
+//
+// What the prefetch driver talks to the engine pool through.
+//
+// Its own type, for the same reason the sync has one: the driver protocols name the same methods, and
+// one type answering several would leave a prefetch's log lines saying "BackgroundSync" and a
+// prefetch's wait between passes ending when the sync loop was stopped.
+//
+final class PrefetchPluginHost: PrefetchDriverHost {
+
+    //
+    // Asks the plan-prefetch task whether a prefetch should run, and against which database.
+    //
+    func readPlan() throws -> PrefetchPlan {
+        return try JsEnginePlugin.readPrefetchPlan()
+    }
+
+    //
+    // Runs one of the plan's steps on the engine pool and waits for it to finish, reporting what it
+    // fetched and what it left behind.
+    //
+    func runStep(_ step: PrefetchPlan.Step) throws -> PrefetchStepResult {
+        let waiter = try JsEnginePlugin.runPrefetchBackgroundTask(type: step.type, dataJson: step.dataJson)
+        if !waiter.succeeded {
+            return PrefetchStepResult(succeeded: false, filesFetched: 0, filesStillMissing: 0)
+        }
+
+        return JsEnginePlugin.parsePrefetchStepResult(waiter.outputsJson)
+    }
+
+    //
+    // Waits between passes, ending early when the prefetch driver is stopped.
+    //
+    // Woken every second rather than parked for the whole gap, so the app leaving the foreground is
+    // noticed within a second instead of at the end of a gap measured in minutes.
+    //
+    func pause(_ seconds: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            if JsEnginePlugin.sharedPrefetchDriver()?.isStopped != false {
+                return false
+            }
+            Thread.sleep(forTimeInterval: min(1, deadline.timeIntervalSinceNow))
+        }
+
+        return JsEnginePlugin.sharedPrefetchDriver()?.isStopped == false
+    }
+
+    //
+    // Says what the background prefetch is doing.
+    //
+    func report(_ message: String) {
+        print("[BackgroundPrefetch] \(message)")
+    }
+
+    //
+    // Says what went wrong.
+    //
+    func reportError(_ message: String) {
+        print("[BackgroundPrefetch] ERROR: \(message)")
     }
 }

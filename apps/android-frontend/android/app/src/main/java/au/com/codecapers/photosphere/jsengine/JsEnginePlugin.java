@@ -155,6 +155,20 @@ public final class JsEnginePlugin extends Plugin {
     private static final String PLAN_SYNC_TASK = "plan-sync";
 
     //
+    // The source tag every background prefetch task is queued under.
+    //
+    // Its own tag again, for the same reason the sync has one: filling a replica in is not the sync
+    // and not the import, and cancelling it because one of those was switched off would leave a
+    // replica half filled in with nothing to notice.
+    //
+    private static final String BACKGROUND_PREFETCH_TASK_SOURCE = "background-prefetch";
+
+    //
+    // The task type that says whether a background prefetch pass should run.
+    //
+    private static final String PLAN_PREFETCH_TASK = "plan-prefetch";
+
+    //
     // How long a wait for a background task is parked for before it checks whether the background
     // import has been stopped, in milliseconds.
     //
@@ -1032,10 +1046,13 @@ public final class JsEnginePlugin extends Plugin {
             if (enginePool != null) {
                 enginePool.cancelTasks(AUTO_IMPORT_TASK_SOURCE);
 
-                // The sync in flight goes with it. The two loops live in the one service, so
-                // stopping the service stops both, and a sync task left queued would hold an engine
-                // slot for a service that is going away.
+                // The sync in flight goes with it. The loops live in the one service, so stopping the
+                // service stops them all, and a task left queued would hold an engine slot for a
+                // service that is going away.
                 enginePool.cancelTasks(BACKGROUND_SYNC_TASK_SOURCE);
+
+                // And the prefetch, for the same reason.
+                enginePool.cancelTasks(BACKGROUND_PREFETCH_TASK_SOURCE);
             }
         }
 
@@ -1110,6 +1127,49 @@ public final class JsEnginePlugin extends Plugin {
             Log.e(LOG_TAG, "Background sync task \"" + step.type + "\" failed: " + waiter.errorMessage);
         }
         return waiter.succeeded;
+    }
+
+    //
+    // Asks the plan-prefetch task whether a background prefetch should run, and against which
+    // database.
+    //
+    // Static for the same reason the other two are: the service runs with no Activity and no plugin
+    // call of its own.
+    //
+    public static PrefetchPlan readBackgroundPrefetchPlan() throws Exception {
+        JsEnginePlugin plugin = activeInstance;
+        if (plugin == null) {
+            throw new IllegalStateException("The JsEngine plugin is not loaded, so the background prefetch cannot ask what to do.");
+        }
+
+        BackgroundTaskWaiter waiter = plugin.runBackgroundTask(PLAN_PREFETCH_TASK, "{}", BACKGROUND_PREFETCH_TASK_SOURCE);
+        if (!waiter.succeeded) {
+            throw new IllegalStateException("plan-prefetch failed: " + waiter.errorMessage);
+        }
+
+        return parsePrefetchPlan(waiter.outputsJson);
+    }
+
+    //
+    // Runs one step of a background prefetch pass and waits for it to finish, reporting what it did.
+    //
+    // What it did rather than merely whether it worked, because the loop stops when a pass finds
+    // nothing left to fetch and there is no way to tell that from a boolean: no files copied is what
+    // a complete replica and a failed pass both look like from outside.
+    //
+    public static PrefetchDriver.StepResult runBackgroundPrefetchStep(PrefetchPlan.Step step) throws Exception {
+        JsEnginePlugin plugin = activeInstance;
+        if (plugin == null) {
+            throw new IllegalStateException("The JsEngine plugin is not loaded, so the background prefetch cannot run.");
+        }
+
+        BackgroundTaskWaiter waiter = plugin.runBackgroundTask(step.type, step.dataJson, BACKGROUND_PREFETCH_TASK_SOURCE);
+        if (!waiter.succeeded) {
+            Log.e(LOG_TAG, "Background prefetch task \"" + step.type + "\" failed: " + waiter.errorMessage);
+            return new PrefetchDriver.StepResult(false, 0, 0);
+        }
+
+        return parsePrefetchStepResult(waiter.outputsJson);
     }
 
     //
@@ -1203,6 +1263,55 @@ public final class JsEnginePlugin extends Plugin {
         }
 
         return new SyncPlan(
+            outputs.optBoolean("shouldRun", false),
+            outputs.optString("databasePath", ""),
+            outputs.optString("reason", ""),
+            outputs.optLong("pauseBetweenRunsMs", 0),
+            steps);
+    }
+
+    //
+    // Reads what a prefetch step did out of the task's outputs.
+    //
+    // A task that returned nothing is read as a pass that fetched nothing and left nothing, which is
+    // what a prefetch against a full database returns and is the answer that ends the loop. It cannot
+    // be reached from a plan, because plan-prefetch refuses a database that is not partial, and a
+    // missing output is otherwise a task that succeeded while saying nothing.
+    //
+    private static PrefetchDriver.StepResult parsePrefetchStepResult(String outputsJson) throws JSONException {
+        if (outputsJson == null) {
+            return new PrefetchDriver.StepResult(true, 0, 0);
+        }
+
+        JSONObject outputs = new JSONObject(outputsJson);
+        return new PrefetchDriver.StepResult(
+            true,
+            outputs.optInt("filesFetched", 0),
+            outputs.optInt("filesStillMissing", 0));
+    }
+
+    //
+    // Turns the plan-prefetch task's outputs into the plan the driver runs.
+    //
+    private static PrefetchPlan parsePrefetchPlan(String outputsJson) throws JSONException {
+        if (outputsJson == null) {
+            throw new JSONException("plan-prefetch returned nothing.");
+        }
+
+        JSONObject outputs = new JSONObject(outputsJson);
+        List<PrefetchPlan.Step> steps = new ArrayList<>();
+
+        JSONArray stepsJson = outputs.optJSONArray("steps");
+        if (stepsJson != null) {
+            for (int stepIndex = 0; stepIndex < stepsJson.length(); stepIndex++) {
+                JSONObject stepJson = stepsJson.getJSONObject(stepIndex);
+                steps.add(new PrefetchPlan.Step(
+                    stepJson.getString("type"),
+                    stepJson.getJSONObject("data").toString()));
+            }
+        }
+
+        return new PrefetchPlan(
             outputs.optBoolean("shouldRun", false),
             outputs.optString("databasePath", ""),
             outputs.optString("reason", ""),

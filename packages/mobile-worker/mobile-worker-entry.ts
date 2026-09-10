@@ -34,6 +34,7 @@ import { readConfigHandler, writeConfigHandler } from "node-api/src/lib/config.w
 import { readStateHandler, writeStateHandler } from "node-api/src/lib/state.worker";
 import { planAutoImportHandler } from "./src/lib/plan-auto-import.worker";
 import { planSyncHandler } from "./src/lib/plan-sync.worker";
+import { planPrefetchHandler } from "./src/lib/plan-prefetch.worker";
 import { createDefaultDatabaseHandler } from "node-api/src/lib/create-default-database.worker";
 import { evictOriginalsHandler } from "node-api/src/lib/evict-originals.worker";
 import { cleanupSourcesHandler } from "node-api/src/lib/cleanup-sources.worker";
@@ -170,6 +171,14 @@ registerHandler("create-default-database", createDefaultDatabaseHandler);
 // has an origin to push to. Asked for by the native background sync (the Android foreground
 // service's loop, the iOS driver), which must not read these files or build this payload itself.
 registerHandler("plan-sync", planSyncHandler);
+
+// Register the background prefetch's one decision. plan-prefetch says whether a pass should fill in a
+// partial replica right now and which one, applying the same settings as the sync because it is the
+// same connection being used. Its loop exists because the only thing that ever queued a prefetch was
+// the end of a load-assets run: a prefetch that failed part way was never tried again, and a sync
+// cannot repair the replica it left behind, since a sync copies what a merkle tree difference shows
+// and a partial replica's tree already matches its origin's.
+registerHandler("plan-prefetch", planPrefetchHandler);
 
 // Register the device photo library as a media source. The automatic import scanner only ever talks
 // to the IMediaSource interface, so registering this here is what lets the same import task that

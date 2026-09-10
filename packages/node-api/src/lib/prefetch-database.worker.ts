@@ -1,4 +1,5 @@
-import type { ITaskContext } from "task-queue";
+import type { ITaskContext, IJobTag } from "task-queue";
+import { sendJobProgress } from "task-queue";
 import { walkDirectory } from "storage";
 import { openStorage } from "./open-storage";
 import { loadMerkleTree } from "./tree";
@@ -18,6 +19,34 @@ export interface IPrefetchDatabaseData {
     // Path to the partial database to prefetch.
     //
     databasePath: string;
+
+    //
+    // Names the job this task belongs to, so filling a replica in shows up in the interface's job
+    // list. It carries no cancel source: a background pass is queued by the host under a source the
+    // interface never learns, and it is switched off from Settings rather than stopped from the job
+    // list.
+    //
+    job?: IJobTag;
+}
+
+//
+// What one prefetch pass did, which is what tells the background loop whether to keep going.
+//
+// A pass that fetched nothing and found nothing missing has filled the replica in, and the loop that
+// asked for it can stop until a database is opened again. Anything else means there is more to do, or
+// that something is in the way, and the loop asks again after its gap.
+//
+export interface IPrefetchDatabaseResult {
+    //
+    // How many files this pass copied down from the origin.
+    //
+    filesFetched: number;
+
+    //
+    // How many files this pass found missing and did not copy, because it was cancelled part way
+    // through. Zero when the pass got to the end of what it found.
+    //
+    filesStillMissing: number;
 }
 
 //
@@ -31,10 +60,22 @@ export interface IPrefetchDatabaseData {
 export async function prefetchDatabaseHandler(
     data: IPrefetchDatabaseData,
     context: ITaskContext
-): Promise<void> {
+): Promise<IPrefetchDatabaseResult> {
     if (!data.databasePath) {
         throw new Error("databasePath is required");
     }
+
+    const runStartedAt = Date.now();
+
+    //
+    // Nothing to fetch is a result, not a failure, and both of the ways of having nothing to fetch
+    // are answered the same way: no files copied and none left behind, which is what tells the
+    // background loop the replica is complete and it can stop asking.
+    //
+    const nothingToFetch: IPrefetchDatabaseResult = {
+        filesFetched: 0,
+        filesStillMissing: 0,
+    };
 
     //
     // Check whether this is a partial database. Skip immediately for full databases.
@@ -42,7 +83,7 @@ export async function prefetchDatabaseHandler(
     const { storage: localStorage, rawStorage } = await openStorage(data.databasePath);
     const merkleTree = await loadMerkleTree(localStorage);
     if (!merkleTree?.databaseMetadata?.isPartial) {
-        return;
+        return nothingToFetch;
     }
 
     //
@@ -50,7 +91,7 @@ export async function prefetchDatabaseHandler(
     //
     const config = await loadDatabaseConfig(rawStorage);
     if (!config?.origin) {
-        return;
+        return nothingToFetch;
     }
 
     const { storage: originStorage } = await openStorage(config.origin);
@@ -69,11 +110,22 @@ export async function prefetchDatabaseHandler(
         }
     }
 
+    let filesFetched = 0;
+    let filesStillMissing = 0;
+
+    // The job the interface lists. Sent before the walk starts, because walking the origin is itself
+    // minutes of work on a phone and a job that appears only once bytes move looks like nothing is
+    // happening.
+    sendJobProgress(context, data.job, runStartedAt, undefined);
+
     //
     // Fetch missing files PREFETCH_CONCURRENCY at a time without accumulating them in memory.
     //
     for await (const batch of batchGenerator(missingFiles(), PREFETCH_CONCURRENCY)) {
         if (context.isCancelled()) {
+            // The batch was drawn from the walk and is not going to be fetched, so it is left behind.
+            // Reporting it is what stops the loop reading a cancelled pass as a finished one.
+            filesStillMissing += batch.length;
             break;
         }
         await Promise.all(batch.map(async filePath => {
@@ -92,6 +144,15 @@ export async function prefetchDatabaseHandler(
                 const stream = await originStorage.readStream(filePath);
                 await localStorage.writeStream(filePath, undefined, stream);
             }, 3, 1_000, 2, LARGE_FILE_TIMEOUT, `Failed to prefetch ${filePath}`);
+
+            filesFetched += 1;
         }));
+
+        sendJobProgress(context, data.job, runStartedAt, `${filesFetched} files fetched`);
     }
+
+    return {
+        filesFetched,
+        filesStillMissing,
+    };
 }
