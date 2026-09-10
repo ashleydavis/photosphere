@@ -221,11 +221,21 @@ Copied hash: ${copiedHash.toString("hex")}
                     }
                 }
                 
-                await retry(() => copyAsset(merkleNode.name!, merkleNode.hash));
+                // The long timeout is the one the copy inside copyAsset already asks for, and it has
+                // to be repeated here or it counts for nothing: this wrapper starts a 30 second
+                // timer around the whole of copyAsset, so the generous allowances inside it can
+                // never be reached. Replicating a real library from S3 failed on the first file
+                // that took longer than 30 seconds to move, retried it twice and gave up, and the
+                // copy ended there. sync.ts already passes the long timeout at exactly this point,
+                // for the same reason.
+                await retry(() => copyAsset(merkleNode.name!, merkleNode.hash), 3, 1_000, 2, LARGE_FILE_TIMEOUT,
+                    `Failed to copy file ${merkleNode.name}`);
 
                 if (result.copiedFiles % 100 === 0) {
-                    // Save the destination merkle tree periodically
-                    await retry(() => saveMerkleTree(destMerkleTree!, destMetadataStorage));
+                    // Save the destination merkle tree periodically. The tree of a large database is
+                    // itself a large file, so it gets the same allowance as one.
+                    await retry(() => saveMerkleTree(destMerkleTree!, destMetadataStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT,
+                        "Failed to save the destination merkle tree part way through a replication");
                 }
             }
         } 
