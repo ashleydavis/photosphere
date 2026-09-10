@@ -426,6 +426,74 @@ describe('replicate', () => {
         }
     });
 
+    test('copies a file that takes longer than the default retry timeout to read', async () => {
+        // How long the one file takes to come out of the source, in fake milliseconds. Comfortably
+        // over retry's 30 second default and far under the long timeout a file copy is meant to get,
+        // so it separates the two: with the default the copy is abandoned, with the long one it
+        // finishes. A real library has files like this in it, and the first of them ended a whole
+        // replication.
+        const readDelayMs = 45_000;
+
+        jest.useFakeTimers();
+
+        try {
+            const sourceAsset = new MockStorage();
+            const destAsset = new MockStorage();
+            const sourceBdb = new BsonDatabase(new MockStorage(), "", uuidGenerator, timestampProvider);
+
+            const fileName = 'asset/slow.jpg';
+            await sourceAsset.write(fileName, 'image/jpeg', Buffer.from(fileName, 'utf-8'));
+
+            // The source hands the file over slowly. Wrapped on the instance rather than in a
+            // subclass so everything else about the storage is untouched.
+            const readStreamNormally = sourceAsset.readStream.bind(sourceAsset);
+            sourceAsset.readStream = async (readFileName: string) => {
+                await new Promise<void>(resolve => setTimeout(resolve, readDelayMs));
+                return readStreamNormally(readFileName);
+            };
+
+            let sourceTree = createTree<IDatabaseMetadata>(dbId);
+            sourceTree = addItem(sourceTree, {
+                name: fileName,
+                // The tree's hash has to be the real hash of the content, because the copy is
+                // checked against it.
+                hash: makeHash(fileName),
+                length: fileName.length,
+                lastModified: new Date(),
+            });
+            sourceTree.databaseMetadata = { filesImported: 1 };
+            sourceTree.merkle = buildMerkleTree(sourceTree.sort);
+            sourceTree.dirty = false;
+            await saveTree('.db/files.dat', sourceTree, sourceAsset);
+
+            const replication = replicate(
+                'mock://source',
+                sourceAsset,
+                sourceBdb,
+                uuidGenerator,
+                timestampProvider,
+                destAsset,
+                destAsset,
+                undefined,
+                undefined
+            );
+
+            // The file is read twice: once to copy it, once to hash what was copied. Time is pushed
+            // past both, in steps, so each delay resolves before the next is scheduled.
+            for (let readCount = 0; readCount < 4; readCount++) {
+                await jest.advanceTimersByTimeAsync(readDelayMs);
+            }
+
+            const result = await replication;
+
+            expect(result.copiedFiles).toBe(1);
+            expect(await destAsset.fileExists(fileName)).toBe(true);
+        }
+        finally {
+            jest.useRealTimers();
+        }
+    });
+
     test('returns result shape with zero counts when source has no files and empty dest', async () => {
         const sourceAsset = new MockStorage();
         const destAsset = new MockStorage();
