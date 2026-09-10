@@ -120,13 +120,21 @@ send_command "$APP_PORT" click '{"dataId":"auto-import-toggle"}' || exit 1
 # the app knows is that it asked for the loop to start, and the import below is the proof it did.
 wait_for_log "$TMP_DIR" "Starting automatic import." || exit 1
 
-# The database the first pass makes is opened for the user. Nothing here opens it: the photos are
-# about to arrive in it, and a gallery showing nothing while they do is what this asserts against.
-# Waited for before the import below because the pass makes the database before it imports into it.
-wait_for_log "$TMP_DIR" "Database opened: photosphere-default" 180 || exit 1
-
 # The photo has to actually arrive. This is the line the engine-pool deadlock never reached: the loop
 # would report zeros forever because the import it queued could not get a slot.
+#
+# Nothing is waited for between "Starting automatic import." and this, and that is deliberate. There
+# used to be a wait for "Database opened: photosphere-default" here, on the reasoning that the pass
+# makes the database before it imports into it. The making is ordered; the two log lines are not. The
+# database is opened by the WebView when it notices, and the import is done by the native pass, so on
+# a fast run the import line is written first. wait_for_log starts from wherever the last wait left
+# its cursor, so waiting for the open first moved the cursor past the import line and then timed out
+# waiting 180 seconds for a line that had already gone by. That is what failed in CI and on the
+# emulator pool, intermittently, always with "Import: 0 imported, 1 already there" in the log
+# underneath it: the photo had been imported, by the pass whose line the test had skipped over.
+#
+# The database being opened for the user is still asserted, by the photo count below, which is only
+# rendered while a database is open.
 wait_for_log "$TMP_DIR" "Import: 1 imported" 180 || exit 1
 
 # The photo has to be in the database the app made, not merely reported as imported, and the count in
