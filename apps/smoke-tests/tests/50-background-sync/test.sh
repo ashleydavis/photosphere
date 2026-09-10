@@ -373,9 +373,10 @@ wait_for_log "$TMP_DIR" "Secrets page loaded"
 add_s3_secret_via_ui "$APP_PORT" "$SECRET_NAME" "$S3_ENDPOINT" "us-east-1" "$S3_EMULATOR_ACCESS_KEY" "$S3_EMULATOR_SECRET_KEY" || exit 1
 
 # Automatic import on, writing into the replica, watching this test's album and nothing else.
-# Switching the toggle on through the settings card would make the app create a database of its own
-# and watch the whole library, which would have no origin to sync to and, on a phone, would import
-# somebody's entire photo collection; test 47 and test 49 cover that path on an emulator. The gap
+# Switching the toggle on through the settings card would make the app create a database of its own,
+# which would have no origin to sync to, so this test seeds the setting instead; tests 47 and 49 are
+# the ones that go through the card. Every one of the three watches an album of its own, because
+# watching the whole library means importing somebody's photo collection on a real phone. The gap
 # between passes is seeded short so the test is not waiting out the thirty second default several
 # times over.
 "${PLATFORM}_seed_auto_import_config" "true" "$DB_NAME" "5000" "$TEST_ALBUM_ID" || exit 1
