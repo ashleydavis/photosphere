@@ -292,6 +292,16 @@ This only happens when a terminal is attached, so the git hook, CI and any piped
 
 On the `psi` side `--yes` now carries this meaning. `spinner(interactive)` in `apps/cli/src/lib/spinner.ts` hands back the animated spinner when someone is watching and plain log lines when nobody is, so a non-interactive run says the same things without the terminal ever being taken hold of. A command run without `--yes` behaves exactly as it always did.
 
+## A command's output has to be complete when something captures it
+
+A `psi` command that prints more than about 8 KB into a pipe used to lose everything past it, silently, with a zero exit code. It only happened once the command had opened a database, and only when the far end of the pipe was slow to read, which is what a script capturing output gives a command and never what a terminal gives it. So it showed up as a smoke test that failed only in company: `73-s3-pagination` read a count out of a summary line that had gone missing and reported that the app had enumerated 0 objects, which sent three separate investigations at S3 for a fault that was in the printing.
+
+The cause is `process.stdout` after this process has a Worker, and the CLI creates a pool of them as soon as it opens a database. From that point anything written beyond what the far end accepts immediately is discarded as it is written, not queued: measured on the pinned Bun, `psi find-orphans` printing 3,000 orphans delivered 8,127 bytes of 220,890 and no summary. Waiting does not recover it, and neither does ending the stream or letting the process end on its own; all three deliver exactly the same 8,127 bytes. `console.log` and `fs.writeSync(1, ...)` lose it alike.
+
+What does work is a file description of the CLI's own: opening `/dev/stdout` gives a second description onto the same destination, with its own flags rather than the ones the Workers brought, and writes through it arrive whole. Every line the CLI prints goes through `writeOutputLine` / `writeErrorLine` in `apps/cli/src/lib/console-output.ts`, which is what both the CLI logger and the worker logger call. Windows has no such path and has never shown the loss, so it keeps the ordinary console. `89-piped-output` is the test that holds this: it prints into a reader that sleeps before taking a byte, so it reproduces the loss on an idle machine rather than waiting for a busy one, and asserts that every line and the summary after them arrived.
+
+The other half is that a test must not read a truncated capture as a real answer. `parse_numeric` in `apps/cli/smoke-tests/lib/common.sh` used to answer 0 for a pattern that was not in the output, which is how a missing summary line became a count of zero. It now answers with nothing and says why, unless the caller passed a default explicitly. A test reading a value out of captured output must fail when the value is absent.
+
 ## Every test gets its own directory
 
 Every test, not every suite, owns a uniquely named directory for its fixtures, logs and scratch space, and gets one without asking. Tests used to share directories and interfere with each other: one suite deleted `/tmp/photosphere` while another was writing its log header there, and two concurrent mobile runs wiped each other's live bridge logs out of `tests/<name>/tmp`.

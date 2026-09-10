@@ -1,5 +1,6 @@
 import { ILog, ILogDetails, noLogDetails, setLog, formatErrorChain } from "utils";
 import { FileLogger } from "./file-logger";
+import { writeErrorLine, writeOutputLine } from "./console-output";
 
 export interface ILogOptions {
     //
@@ -37,28 +38,28 @@ class Log implements ILog {
     }
 
     info(message: string): void {
-        console.log(message);
+        writeOutputLine(message);
     }
-    
-    verbose(message: string): void {    
+
+    verbose(message: string): void {
         if (!this.options.verbose) {
             return;
         }
-        
-        console.log(message);
+
+        writeOutputLine(message);
     }
-    
+
     error(message: string): void {
-        console.error(message);
+        writeErrorLine(message);
     }
-    
+
     exception(message: string, error: Error): void {
-        console.error(message);
-        console.error(formatErrorChain(error));
+        writeErrorLine(message);
+        writeErrorLine(formatErrorChain(error));
     }
 
     warn(message: string): void {
-        console.warn(message);
+        writeErrorLine(message);
     }
 
     debug(message: string): void {
@@ -66,24 +67,24 @@ class Log implements ILog {
             return;
         }
 
-        console.debug(message);
+        writeErrorLine(message);
     }
 
     tool(tool: string, data: { stdout?: string; stderr?: string }): void {
         if (!this.options.tools) {
             return;
         }
-        
+
         if (data.stdout) {
-            console.log(`== ${tool} stdout ==\n${data.stdout}`);
+            writeOutputLine(`== ${tool} stdout ==\n${data.stdout}`);
         }
         if (data.stderr) {
-            console.log(`== ${tool} stderr ==\n${data.stderr}`);
+            writeOutputLine(`== ${tool} stderr ==\n${data.stderr}`);
         }
     }
 
     event(message: string): void {
-        console.log(`[EVENT] ${message}`);
+        writeOutputLine(`[EVENT] ${message}`);
     }
 
     //

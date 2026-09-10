@@ -1,13 +1,14 @@
 //
 // Worker log implementation for Bun CLI workers.
-// Writes log messages directly to the console, prefixed with worker and task IDs.
+// Writes log messages to the process's output, prefixed with worker and task IDs.
 //
 
 import { ILog, ILogDetails, noLogDetails, formatErrorChain } from "utils";
+import { writeErrorLine, writeOutputLine } from "./console-output";
 
 //
 // Bun CLI worker log implementation.
-// Writes log messages directly to the console, prefixed with worker and task IDs.
+// Writes log messages to the process's output, prefixed with worker and task IDs.
 //
 class WorkerLogBun implements ILog {
     // Whether verbose logging is enabled.
@@ -40,28 +41,28 @@ class WorkerLogBun implements ILog {
         return `[${parts.join(':')}] ${message}`;
     }
 
-    verbose(message: string): void {    
+    verbose(message: string): void {
         if (!this.verboseEnabled) {
             return;
         }
-        console.log(this.prefixMessage(message));
+        writeOutputLine(this.prefixMessage(message));
     }
-    
+
     info(message: string): void {
-        console.log(this.prefixMessage(message));
+        writeOutputLine(this.prefixMessage(message));
     }
-    
+
     error(message: string): void {
-        console.error(this.prefixMessage(message));
+        writeErrorLine(this.prefixMessage(message));
     }
-    
+
     exception(message: string, error: Error): void {
-        console.error(this.prefixMessage(message));
-        console.error(formatErrorChain(error));
+        writeErrorLine(this.prefixMessage(message));
+        writeErrorLine(formatErrorChain(error));
     }
 
     warn(message: string): void {
-        console.warn(this.prefixMessage(message));
+        writeErrorLine(this.prefixMessage(message));
     }
 
     debug(message: string): void {
@@ -74,15 +75,15 @@ class WorkerLogBun implements ILog {
         }
         
         if (data.stdout) {
-            console.log(this.prefixMessage(`== ${tool} stdout ==\n${data.stdout}`));
+            writeOutputLine(this.prefixMessage(`== ${tool} stdout ==\n${data.stdout}`));
         }
         if (data.stderr) {
-            console.log(this.prefixMessage(`== ${tool} stderr ==\n${data.stderr}`));
+            writeOutputLine(this.prefixMessage(`== ${tool} stderr ==\n${data.stderr}`));
         }
     }
 
     event(message: string): void {
-        console.log(this.prefixMessage(`[EVENT] ${message}`));
+        writeOutputLine(this.prefixMessage(`[EVENT] ${message}`));
     }
 
     //
