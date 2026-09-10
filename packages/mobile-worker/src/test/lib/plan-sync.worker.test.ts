@@ -277,6 +277,89 @@ describe("plan-sync", () => {
         expect(plan.pauseBetweenRunsMs).toBe(DEFAULT_SYNC_PAUSE_MS);
     });
 
+    test("says not to sync while a prefetch is still filling the database in", async () => {
+        // A sync that overlaps a working prefetch does the same work slowly and gets in its own way:
+        // measured on a Pixel 6, reaching the origin's merkle tree took 81.5 seconds during such a
+        // pass against 97 milliseconds when the phone was idle, and the record merge took 15 minutes
+        // pulling down the same metadata shards the prefetch was fetching.
+        await writeSyncSettings(true, false);
+        await setUpSyncableDatabase();
+
+        const plan = await planSyncHandler({ prefetchState: "working" }, context);
+
+        expect(plan.shouldRun).toBe(false);
+        expect(plan.reason).toContain("prefetch");
+        expect(plan.steps).toEqual([]);
+    });
+
+    test("syncs when the prefetch is stalled, so a prefetch that cannot finish cannot stop syncing", async () => {
+        // The hazard this whole ordering could create, and the reason the wait is bounded by progress
+        // rather than by completion. A prefetch failed and was never retried on the measured phone; a
+        // sync that waited on that would have waited for the life of the app, which is a phone that
+        // has silently stopped backing up.
+        await writeSyncSettings(true, false);
+        await setUpSyncableDatabase();
+
+        const plan = await planSyncHandler({ prefetchState: "stalled" }, context);
+
+        expect(plan.shouldRun).toBe(true);
+    });
+
+    test("syncs when the prefetch has finished filling the database in", async () => {
+        await writeSyncSettings(true, false);
+        await setUpSyncableDatabase();
+
+        const plan = await planSyncHandler({ prefetchState: "complete" }, context);
+
+        expect(plan.shouldRun).toBe(true);
+    });
+
+    test("syncs when nothing is known about the prefetch yet", async () => {
+        // Nothing has reported a pass, which is every phone at launch. Refusing on no evidence is how
+        // a loop gets stuck.
+        await writeSyncSettings(true, false);
+        await setUpSyncableDatabase();
+
+        const plan = await planSyncHandler({ prefetchState: "unknown" }, context);
+
+        expect(plan.shouldRun).toBe(true);
+    });
+
+    test("syncs when the native side said nothing about the prefetch at all", async () => {
+        // An older native build, or any caller that sends no input data. A missing value must not be
+        // able to stop a phone syncing.
+        await writeSyncSettings(true, false);
+        await setUpSyncableDatabase();
+
+        const plan = await planSyncHandler({}, context);
+
+        expect(plan.shouldRun).toBe(true);
+    });
+
+    test("the master switch wins over a working prefetch", async () => {
+        // The reason a user is most likely to care about is the one the log should carry: a phone with
+        // syncing switched off is not syncing because it was switched off, whatever the prefetch is
+        // doing.
+        await writeSyncSettings(false, false);
+        await setUpSyncableDatabase();
+
+        const plan = await planSyncHandler({ prefetchState: "working" }, context);
+
+        expect(plan.shouldRun).toBe(false);
+        expect(plan.reason).toContain("switched off");
+    });
+
+    test("the connection check wins over a working prefetch", async () => {
+        await writeSyncSettings(true, true);
+        await setUpSyncableDatabase();
+        setConnectionType("cellular");
+
+        const plan = await planSyncHandler({ prefetchState: "working" }, context);
+
+        expect(plan.shouldRun).toBe(false);
+        expect(plan.reason).toContain("cellular");
+    });
+
     test("a refusal says why, so a phone that is not syncing can be accounted for", async () => {
         await writeSyncSettings(true, true);
         await setUpSyncableDatabase();

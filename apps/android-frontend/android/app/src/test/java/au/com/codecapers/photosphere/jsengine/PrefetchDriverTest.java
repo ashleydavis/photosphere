@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -307,6 +308,107 @@ public final class PrefetchDriverTest {
 
         assertEquals("a stopped driver asks for no plan at all", 0, host.plansRead.get());
         assertTrue("and runs no step", host.stepsRun.isEmpty());
+    }
+
+    @Test
+    public void theReplicaStateIsUnknownBeforeAnyPassHasCompleted() {
+        // Which is every phone at launch. The sync reads this and must be allowed to run on it:
+        // refusing on no evidence is how a loop gets stuck.
+        RecordingHost host = new RecordingHost(
+            Collections.singletonList(runningPlan(1)),
+            new PrefetchDriver.StepResult(true, 1, 1));
+        PrefetchDriver driver = new PrefetchDriver(host);
+
+        assertEquals(PrefetchDriver.ReplicaState.UNKNOWN, driver.getReplicaState());
+    }
+
+    @Test
+    public void aPassThatFetchedFilesAndLeftSomeReportsWorking() throws Exception {
+        RecordingHost host = new RecordingHost(
+            Collections.singletonList(runningPlan(1)),
+            new PrefetchDriver.StepResult(true, 3, 5));
+        PrefetchDriver driver = new PrefetchDriver(host);
+
+        driver.runOnePass();
+
+        assertEquals(PrefetchDriver.ReplicaState.WORKING, driver.getReplicaState());
+    }
+
+    @Test
+    public void aPassThatFetchedNothingAndLeftSomeReportsStalled() throws Exception {
+        // The state that stops a sync waiting. Getting this wrong the other way, by reporting
+        // working, is a phone that never syncs again.
+        RecordingHost host = new RecordingHost(
+            Collections.singletonList(runningPlan(1)),
+            new PrefetchDriver.StepResult(true, 0, 5));
+        PrefetchDriver driver = new PrefetchDriver(host);
+
+        driver.runOnePass();
+
+        assertEquals(PrefetchDriver.ReplicaState.STALLED, driver.getReplicaState());
+    }
+
+    @Test
+    public void aPassThatFetchedNothingWithNothingMissingReportsComplete() throws Exception {
+        RecordingHost host = new RecordingHost(
+            Collections.singletonList(runningPlan(1)),
+            new PrefetchDriver.StepResult(true, 0, 0));
+        PrefetchDriver driver = new PrefetchDriver(host);
+
+        driver.runOnePass();
+
+        assertEquals(PrefetchDriver.ReplicaState.COMPLETE, driver.getReplicaState());
+    }
+
+    @Test
+    public void aFailedStepReportsStalledRatherThanComplete() throws Exception {
+        // A failed step reports no counts at all, and reading that as a filled-in replica would read
+        // the worst case as the best one: the sync would be told the prefetch had finished when it had
+        // in fact broken.
+        RecordingHost host = new RecordingHost(
+            Collections.singletonList(runningPlan(1)),
+            new PrefetchDriver.StepResult(false, 0, 0));
+        PrefetchDriver driver = new PrefetchDriver(host);
+
+        driver.runOnePass();
+
+        assertEquals(PrefetchDriver.ReplicaState.STALLED, driver.getReplicaState());
+    }
+
+    @Test
+    public void aStepThatThrewReportsStalled() throws Exception {
+        RecordingHost host = new RecordingHost(
+            Collections.singletonList(runningPlan(1)),
+            new PrefetchDriver.StepResult(true, 0, 0)) {
+
+            @Override
+            public PrefetchDriver.StepResult runStep(PrefetchPlan.Step step) {
+                stepsRun.add(step.type);
+                throw new IllegalStateException("the engine went away");
+            }
+        };
+        PrefetchDriver driver = new PrefetchDriver(host);
+
+        driver.runOnePass();
+
+        assertEquals(PrefetchDriver.ReplicaState.STALLED, driver.getReplicaState());
+    }
+
+    @Test
+    public void aRefusedPassLeavesTheReplicaStateAsItWas() throws Exception {
+        // A refusal says nothing about the replica: the connection went away, or syncing was switched
+        // off. Overwriting what the last real pass found would throw away the only evidence the sync
+        // has.
+        RecordingHost host = new RecordingHost(
+            Arrays.asList(runningPlan(1), refusedPlan(1)),
+            new PrefetchDriver.StepResult(true, 2, 2));
+        PrefetchDriver driver = new PrefetchDriver(host);
+
+        driver.runOnePass();
+        assertEquals(PrefetchDriver.ReplicaState.WORKING, driver.getReplicaState());
+
+        driver.runOnePass();
+        assertEquals(PrefetchDriver.ReplicaState.WORKING, driver.getReplicaState());
     }
 
     @Test

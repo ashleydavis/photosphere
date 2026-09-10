@@ -28,6 +28,27 @@ import { readNetworkConnectionType } from "../shims/network-status";
 //
 
 //
+// What the native prefetch loop's last pass said about the replica, as it arrives here.
+//
+// The native side reports the fact and this task decides what it means, which is the same division as
+// the connection type: the platform says "wifi" or "cellular" and computeSyncAllowed decides. Only
+// "working" holds a sync back, because the question is whether the prefetch is making progress rather
+// than whether it has finished: a sync that waited for a prefetch that cannot finish would be a phone
+// that has silently stopped backing up, which is worse than the contention it was avoiding.
+//
+export type PrefetchState = "unknown" | "working" | "stalled" | "complete";
+
+//
+// The inputs of the plan-sync task.
+//
+export interface IPlanSyncData {
+    // What the prefetch loop's last pass said about the replica. Absent, or a value this build does
+    // not recognise, is read as "unknown" and allows syncing: nothing about a value nobody understood
+    // should be able to stop a phone syncing.
+    prefetchState?: PrefetchState;
+}
+
+//
 // One task a pass runs, in the order it is given.
 //
 export interface ISyncPassStep {
@@ -82,7 +103,7 @@ function refuse(reason: string, settings: ISyncSettings, pauseBetweenRunsMs: num
 //
 // Handler for the plan-sync task.
 //
-export async function planSyncHandler(_data: object, _context: ITaskContext): Promise<IPlanSyncResult> {
+export async function planSyncHandler(data: IPlanSyncData, _context: ITaskContext): Promise<IPlanSyncResult> {
     // One read for both sections. They used to be two files, so resolving which database to push
     // meant opening sync.toml and then auto-import.toml; the merged file costs one read per pass.
     const { config } = await readConfigFromStorage("config.yaml");
@@ -110,6 +131,21 @@ export async function planSyncHandler(_data: object, _context: ITaskContext): Pr
 
     if (!allowed) {
         return refuse(`the connection is "${connectionType}" and syncing is not allowed on it`, settings, pauseBetweenRunsMs);
+    }
+
+    // After the master switch and the connection, and before the database is resolved, because the
+    // reason a user is most likely to care about should win: a phone on cellular is refused for being
+    // on cellular rather than for waiting on a prefetch.
+    //
+    // Only "working" waits. A prefetch that is stuck, one that has finished, and a state nobody has
+    // reported yet all let the sync run, because the alternative is a sync that never happens again:
+    // measured on a Pixel 6, a prefetch failed and was never retried, and a sync that had waited for
+    // it would have waited for the life of the app. Reaching the origin's merkle tree during a pass
+    // that overlapped a working prefetch took 81.5 seconds against 97 milliseconds when the phone was
+    // idle, and the record merge in that pass took 15 minutes pulling down the same metadata shards
+    // the prefetch was fetching, which is what waiting one gap avoids.
+    if (data?.prefetchState === "working") {
+        return refuse("a prefetch is still filling this database in", settings, pauseBetweenRunsMs);
     }
 
     // The database the app last opened, and failing that the one automatic import writes to.

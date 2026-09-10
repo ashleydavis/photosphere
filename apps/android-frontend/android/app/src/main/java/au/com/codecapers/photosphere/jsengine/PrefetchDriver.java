@@ -56,6 +56,48 @@ public final class PrefetchDriver {
     }
 
     //
+    // What the last pass says about the replica, for anything that has to decide what to do while a
+    // prefetch is outstanding.
+    //
+    // The periodic sync is the one thing that reads it. A sync that runs while a prefetch is working
+    // does the same work slowly and gets in its own way: measured on a Pixel 6, reaching the origin's
+    // merkle tree took 81.5 seconds during a pass that overlapped a prefetch against 97 milliseconds
+    // when the phone was idle, and the record merge in that pass took 15 minutes because it was
+    // pulling the metadata shards down one at a time through the lazy storage, which is the same set
+    // of files the prefetch was fetching.
+    //
+    // What it must never do is wait for a prefetch that cannot finish, because a phone that has
+    // stopped syncing silently is the exact failure this work exists to remove. So the states say
+    // whether the prefetch is making PROGRESS, not whether it is finished, and only one of them holds
+    // a sync back.
+    //
+    public enum ReplicaState {
+
+        //
+        // No pass has completed yet, so nothing is known. Syncing is allowed: refusing on no evidence
+        // is how a loop gets stuck.
+        //
+        UNKNOWN,
+
+        //
+        // The last pass fetched files, so the prefetch is getting through the replica. Syncing waits.
+        //
+        WORKING,
+
+        //
+        // The last pass fetched nothing and left files missing, or failed outright. The prefetch is
+        // stuck, and syncing stops waiting for it.
+        //
+        STALLED,
+
+        //
+        // The last pass fetched nothing and found nothing missing: the replica is filled in and the
+        // loop has stopped. Syncing is allowed.
+        //
+        COMPLETE,
+    }
+
+    //
     // What running one step did, which is the whole of what the loop decides on.
     //
     // A carrier rather than a number, because "it worked" and "how much was left" are separate
@@ -177,6 +219,12 @@ public final class PrefetchDriver {
     private volatile long pauseMs = FALLBACK_PAUSE_MS;
 
     //
+    // What the last completed pass said about the replica. Read from the sync loop's thread, hence
+    // volatile.
+    //
+    private volatile ReplicaState replicaState = ReplicaState.UNKNOWN;
+
+    //
     // Constructs a driver over the given host.
     //
     public PrefetchDriver(Host host) {
@@ -271,6 +319,13 @@ public final class PrefetchDriver {
     }
 
     //
+    // What the last completed pass said about the replica.
+    //
+    public ReplicaState getReplicaState() {
+        return replicaState;
+    }
+
+    //
     // Asks what this pass should do and runs it.
     //
     private PassOutcome performPass() {
@@ -314,13 +369,19 @@ public final class PrefetchDriver {
                     result = host.runStep(step);
                 }
                 catch (Exception error) {
+                    // Stalled, not complete. A step that threw tells us nothing about what is left,
+                    // and a sync that waited on it would wait for ever.
+                    replicaState = ReplicaState.STALLED;
                     host.reportError("Prefetch step \"" + step.type + "\" failed: " + error);
                     return PassOutcome.RAN;
                 }
 
                 if (!result.succeeded) {
                     // The loop keeps going, which is what makes a failed prefetch retry, and is the
-                    // whole reason this loop exists.
+                    // whole reason this loop exists. Stalled for the same reason as above: a failed
+                    // step reports no counts, and reading that as a complete replica would be reading
+                    // the worst case as the best one.
+                    replicaState = ReplicaState.STALLED;
                     host.reportError("Prefetch step \"" + step.type + "\" did not succeed.");
                     return PassOutcome.RAN;
                 }
@@ -337,9 +398,16 @@ public final class PrefetchDriver {
                 // Nothing fetched and nothing missing: the replica is complete and there is nothing
                 // left to walk. Opening a database queues a prefetch again, which is what starts this
                 // loop over when there is a reason to.
+                replicaState = ReplicaState.COMPLETE;
                 host.report("\"" + plan.databasePath + "\" is filled in; nothing left to fetch.");
                 return PassOutcome.STOP;
             }
+
+            // Fetching anything at all counts as progress, including a pass that fetched files and
+            // found nothing left: the next pass confirms that and reports the replica complete, so at
+            // worst a sync waits one more gap. Fetching nothing while files are still missing is the
+            // stuck case, and it is the one a sync must not wait on.
+            replicaState = anythingFetched ? ReplicaState.WORKING : ReplicaState.STALLED;
         }
         finally {
             host.holdAwake(false);

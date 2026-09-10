@@ -416,9 +416,17 @@ public final class AutoImportService extends Service {
         //
         // Asks the plan-sync task whether a sync should run, and against which database.
         //
+        // What the prefetch is doing goes with the question, because a sync that runs while a
+        // prefetch is working does the same work slowly and gets in its own way. The service reports
+        // the fact and plan-sync decides what it means, which is the same division as the connection
+        // type: the platform says "wifi" or "cellular" and computeSyncAllowed decides.
+        //
         @Override
         public SyncPlan readPlan() throws Exception {
-            return JsEnginePlugin.readBackgroundSyncPlan();
+            PrefetchDriver.ReplicaState prefetchState = prefetchDriver == null
+                ? PrefetchDriver.ReplicaState.UNKNOWN
+                : prefetchDriver.getReplicaState();
+            return JsEnginePlugin.readBackgroundSyncPlan(prefetchState);
         }
 
         //

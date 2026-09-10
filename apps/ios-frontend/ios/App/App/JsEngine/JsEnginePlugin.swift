@@ -1373,7 +1373,13 @@ extension JsEnginePlugin {
     // Asks the plan-sync task whether a sync should run, and against which database.
     //
     fileprivate static func readSyncPlan() throws -> SyncPlan {
-        let waiter = try runSyncBackgroundTask(type: planSyncTask, dataJson: "{}")
+        // What the prefetch is doing goes with the question, because a sync that runs while a
+        // prefetch is working does the same work slowly and gets in its own way. The plugin reports
+        // the fact and plan-sync decides what it means, which is the same division as the connection
+        // type. The spelling matches what the Android side sends, because one TypeScript task reads
+        // both.
+        let prefetchState = sharedPrefetchDriver()?.replicaState ?? .unknown
+        let waiter = try runSyncBackgroundTask(type: planSyncTask, dataJson: "{\"prefetchState\":\"\(prefetchState.rawValue)\"}")
         if !waiter.succeeded {
             throw AutoImportError.taskFailed(waiter.errorMessage ?? "plan-sync failed")
         }

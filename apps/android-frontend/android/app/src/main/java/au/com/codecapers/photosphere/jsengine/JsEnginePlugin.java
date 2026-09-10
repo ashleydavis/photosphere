@@ -1098,13 +1098,19 @@ public final class JsEnginePlugin extends Plugin {
     // Static for the same reason the import's is: the service runs with no Activity and no plugin
     // call of its own.
     //
-    public static SyncPlan readBackgroundSyncPlan() throws Exception {
+    public static SyncPlan readBackgroundSyncPlan(PrefetchDriver.ReplicaState prefetchState) throws Exception {
         JsEnginePlugin plugin = activeInstance;
         if (plugin == null) {
             throw new IllegalStateException("The JsEngine plugin is not loaded, so the background sync cannot ask what to do.");
         }
 
-        BackgroundTaskWaiter waiter = plugin.runBackgroundTask(PLAN_SYNC_TASK, "{}", BACKGROUND_SYNC_TASK_SOURCE);
+        // What the prefetch is doing goes to the task as input data, in the same spelling the iOS side
+        // sends and the TypeScript reads. Lower case because it is a wire value rather than a Java
+        // name, and an unrecognised one is read as "unknown" there, which allows syncing: a value
+        // nobody understood must not be able to stop a phone syncing.
+        String planData = "{\"prefetchState\":\"" + prefetchState.name().toLowerCase(java.util.Locale.ROOT) + "\"}";
+
+        BackgroundTaskWaiter waiter = plugin.runBackgroundTask(PLAN_SYNC_TASK, planData, BACKGROUND_SYNC_TASK_SOURCE);
         if (!waiter.succeeded) {
             throw new IllegalStateException("plan-sync failed: " + waiter.errorMessage);
         }
