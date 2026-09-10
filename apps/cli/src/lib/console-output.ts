@@ -3,101 +3,90 @@ import * as fs from "fs";
 //
 // Where the CLI's own output goes, and why it does not go through `console.log`.
 //
-// Once this process has a Worker, anything written to `process.stdout` or `process.stderr` beyond
-// what the far end takes immediately is discarded, silently, and the CLI creates a pool of Workers as
-// soon as it opens a database. Measured on the pinned Bun: `psi find-orphans` printing 3,000 orphans
+// Once this process has a Worker, and the CLI creates a pool of them as soon as it opens a database,
+// the standard output is non-blocking and anything written to it beyond what the far end takes
+// immediately is discarded. Measured on the pinned Bun: `psi find-orphans` printing 3,000 orphans
 // into a pipe whose reader had not started yet delivered 8,127 bytes of 220,890 and no summary line
-// after them. `console.log` and `fs.writeSync(1, ...)` lose it alike, and nothing recovers it: the
-// bytes are dropped as they are written rather than queued, so waiting, ending the stream and letting
-// the process end on its own all deliver exactly the same truncated 8,127 bytes.
+// after them. The bytes are dropped as they are written rather than queued, so nothing recovers them:
+// waiting six seconds, ending the stream and waiting for its callback, and letting the process end on
+// its own with no `process.exit` at all each deliver exactly the same 8,127 bytes.
 //
 // It only happens when the output is a pipe, which is what a script capturing the output gets and
 // never what a terminal gets, and it is worse the busier the machine is, so it showed up as a smoke
 // test that failed only in company: `73-s3-pagination` read a count out of the summary line that was
-// missing and reported that the app had enumerated 0 objects, which sent three separate
-// investigations at S3 for a fault that was in the output.
+// missing and reported that the app had enumerated 0 objects.
 //
-// Opening `/dev/stdout` gives this process a second file description onto the same destination, with
-// its own flags rather than the ones the Workers brought, and writes through it arrive whole. That is
-// what every line the CLI prints now goes through.
-//
-// Windows has no such path, and this has never been seen there, so it keeps the ordinary console.
+// So the CLI writes its own bytes and waits for them, which is what a blocking write to a terminal
+// does anyway. `fs.writeSync` on a non-blocking descriptor raises EAGAIN when the far end is full
+// instead of waiting, and can write fewer bytes than it was given; both are the caller's to deal
+// with, and neither is dealt with by anything that writes a whole line and moves on.
 //
 
 //
-// One of the two standard destinations, by the path that reopens it.
+// One word of shared memory, there only as something `Atomics.wait` can block on. It is the one way
+// to pause without spinning and without handing control back to the event loop, which a synchronous
+// write cannot do.
 //
-interface IReopenedStream {
-    // The device path that opens a fresh file description onto the same destination.
-    devicePath: string;
-
-    // The file description, once opened. Undefined until the first write.
-    fileDescriptor: number | undefined;
-
-    // True once opening has been tried and failed, so it is not tried again per line.
-    unavailable: boolean;
-}
+const pauseWord = new Int32Array(new SharedArrayBuffer(4));
 
 //
-// Standard output, reopened.
+// Milliseconds to wait before trying a write again when the far end is full. Long enough that a
+// reader which has not started yet is not spun on, short enough to be invisible against the reading.
 //
-const reopenedStdout: IReopenedStream = {
-    devicePath: "/dev/stdout",
-    fileDescriptor: undefined,
-    unavailable: false,
-};
+const RETRY_PAUSE_MS = 1;
 
 //
-// Standard error, reopened.
+// True once a write has failed in a way that means there is nothing at the other end any more, so
+// the remaining output is dropped rather than reported per line.
 //
-const reopenedStderr: IReopenedStream = {
-    devicePath: "/dev/stderr",
-    fileDescriptor: undefined,
-    unavailable: false,
-};
+let outputGone = false;
 
 //
-// Writes a line to one of the two destinations, opening it on first use.
+// Writes every byte of the text to the given descriptor, and does not return until they have gone.
 //
-// Falls back to the console when the device path cannot be opened, which is Windows and anything else
-// without /dev/stdout. Losing the reopened description mid-run (a closed pipe, say) falls back the
-// same way rather than throwing, because the alternative is a command that fails while printing its
-// answer.
-//
-function writeLine(stream: IReopenedStream, message: string, fallback: (message: string) => void): void {
-    if (!stream.unavailable && stream.fileDescriptor === undefined) {
-        try {
-            stream.fileDescriptor = fs.openSync(stream.devicePath, "a");
-        }
-        catch {
-            stream.unavailable = true;
-        }
+function writeAll(fileDescriptor: number, text: string): void {
+    if (outputGone) {
+        return;
     }
 
-    if (stream.fileDescriptor !== undefined) {
+    const bytes = Buffer.from(text, "utf8");
+    let written = 0;
+
+    while (written < bytes.length) {
         try {
-            fs.writeSync(stream.fileDescriptor, `${message}\n`);
-            return;
+            written += fs.writeSync(fileDescriptor, bytes, written, bytes.length - written);
         }
-        catch {
-            stream.unavailable = true;
-            stream.fileDescriptor = undefined;
+        catch (error: any) {
+            const code = error?.code;
+
+            if (code === "EAGAIN" || code === "EWOULDBLOCK") {
+                // The far end is full. A blocking descriptor would have waited here, so wait.
+                Atomics.wait(pauseWord, 0, 0, RETRY_PAUSE_MS);
+                continue;
+            }
+
+            if (code === "EPIPE" || code === "EBADF") {
+                // Nobody is reading any more, which is what `head` does to a long listing. Node's
+                // own streams swallow this rather than turning it into an error the user sees.
+                outputGone = true;
+                return;
+            }
+
+            throw error;
         }
     }
-
-    fallback(message);
 }
 
 //
 // Prints a line of the CLI's output.
 //
 export function writeOutputLine(message: string): void {
-    writeLine(reopenedStdout, message, console.log);
+    writeAll(1, `${message}\n`);
 }
 
 //
 // Prints a line of the CLI's error output.
 //
 export function writeErrorLine(message: string): void {
-    writeLine(reopenedStderr, message, console.error);
+    writeAll(2, `${message}\n`);
 }
