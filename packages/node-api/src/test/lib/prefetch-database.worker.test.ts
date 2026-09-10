@@ -13,6 +13,11 @@ jest.mock("../../lib/tree", () => ({
 
 jest.mock("api", () => ({
     loadDatabaseConfig: jest.fn(),
+    // The real value, because the handler passes it to retry as the timeout for one file's copy and
+    // the test below is about that timeout. Left out of the mock it arrives as undefined, retry falls
+    // back to its 30 second default, and the test measures the default while appearing to measure
+    // the long one.
+    LARGE_FILE_TIMEOUT: 90 * 60 * 1_000,
 }));
 
 jest.mock("storage", () => ({
@@ -221,6 +226,73 @@ describe("prefetchDatabaseHandler", () => {
 
         expect(originStorage.readStream).not.toHaveBeenCalled();
         expect(localStorage.writeStream).not.toHaveBeenCalled();
+    });
+
+    test("copies a file that takes longer than the default retry timeout to read", async () => {
+        // How long the one file takes to come out of the origin, in fake milliseconds. Comfortably
+        // over retry's 30 second default and far under the long timeout a file copy is meant to get,
+        // so it separates the two: with the default the copy is abandoned, with the long one it
+        // finishes. The metadata hash index of a real database is nine files of about 13 MB each, and
+        // a phone cannot pull one of those down and write it inside thirty seconds.
+        const readDelayMs = 45_000;
+
+        jest.useFakeTimers();
+
+        try {
+            const localStorage = makeLocalStorage([]);
+            const originStorage = makeOriginStorage();
+
+            // The origin hands the file over slowly. Wrapped on the fake rather than replaced so
+            // everything else about it is untouched.
+            const readStreamNormally = originStorage.readStream;
+            originStorage.readStream = jest.fn().mockImplementation(async (fileName: string) => {
+                await new Promise<void>(resolve => setTimeout(resolve, readDelayMs));
+                return readStreamNormally(fileName);
+            });
+
+            mockOpenStorage
+                .mockResolvedValueOnce({
+                    storage: localStorage as any,
+                    rawStorage: { __label: "local-raw" } as any,
+                    encryptionKeyPems: [],
+                    s3Config: undefined,
+                    storageOptions: {} as any,
+                    googleApiKey: undefined,
+                })
+                .mockResolvedValueOnce({
+                    storage: originStorage as any,
+                    rawStorage: { __label: "origin-raw" } as any,
+                    encryptionKeyPems: [],
+                    s3Config: undefined,
+                    storageOptions: {} as any,
+                    googleApiKey: undefined,
+                });
+            mockLoadMerkleTree.mockResolvedValue({ databaseMetadata: { isPartial: true } } as any);
+            mockLoadDatabaseConfig.mockResolvedValue({ origin: "/fake/origin" } as any);
+            mockWalkDirectory.mockImplementation((_storage: any, dir: string) => {
+                if (dir === "thumb") {
+                    return fakeWalk([]) as any;
+                }
+                return fakeWalk([".db/bson/collections/metadata/shards/1"]) as any;
+            });
+
+            const prefetch = prefetchDatabaseHandler({ databasePath: "/fake/db" }, makeContext(false));
+
+            // Time is pushed past the read in steps, so each delay resolves before the next is
+            // scheduled. More steps than reads, because a retry that has given up schedules its
+            // wait before the next attempt.
+            for (let step = 0; step < 4; step++) {
+                await jest.advanceTimersByTimeAsync(readDelayMs);
+            }
+
+            await prefetch;
+
+            expect(localStorage.writeStream).toHaveBeenCalledTimes(1);
+            expect(localStorage.writeStream).toHaveBeenCalledWith(".db/bson/collections/metadata/shards/1", undefined, { __stream: ".db/bson/collections/metadata/shards/1" });
+        }
+        finally {
+            jest.useRealTimers();
+        }
     });
 
     test("stops copying when the task is cancelled", async () => {

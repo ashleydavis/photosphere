@@ -2,7 +2,7 @@ import type { ITaskContext } from "task-queue";
 import { walkDirectory } from "storage";
 import { openStorage } from "./open-storage";
 import { loadMerkleTree } from "./tree";
-import { loadDatabaseConfig } from "api";
+import { loadDatabaseConfig, LARGE_FILE_TIMEOUT } from "api";
 import { retry, batchGenerator } from "utils";
 
 //
@@ -77,10 +77,21 @@ export async function prefetchDatabaseHandler(
             break;
         }
         await Promise.all(batch.map(async filePath => {
+            // The long timeout, because this is a file copy and a file copy is allowed to take a
+            // while. `retry`'s thirty second default was what applied here, and the metadata hash
+            // index of a real database is nine files of about 13 MB each: a phone cannot pull one of
+            // those down and write it in thirty seconds, so each timed out, was retried, timed out
+            // again, and eventually one exhausted its attempts and took the whole prefetch with it.
+            // Measured on a Pixel 6, that killed the prefetch 38 minutes in, with every thumbnail
+            // already fetched and the index files left behind.
+            //
+            // `sync.ts` and `replicate.ts` pass it at exactly this point in their own copy loops and
+            // `sync.ts` carries a comment about having been bitten by it on a phone. This is the same
+            // mistake in a third place.
             await retry(async () => {
                 const stream = await originStorage.readStream(filePath);
                 await localStorage.writeStream(filePath, undefined, stream);
-            });
+            }, 3, 1_000, 2, LARGE_FILE_TIMEOUT, `Failed to prefetch ${filePath}`);
         }));
     }
 }
