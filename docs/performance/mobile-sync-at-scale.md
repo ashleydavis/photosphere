@@ -333,3 +333,22 @@ On the phone:
 - Two secrets in the app's keychain: `minio-measure` and `<encryption-key>`.
 - The device had none of those files before this work, so there was nothing of its own to put back.
 - The instrumented build is still installed. Reinstalling from a clean build replaces it.
+
+## What has been fixed since, and what still stands
+
+The measurements above are what they were on the day. Four of the five faults they turned up have been fixed; everything else here is still true of the app.
+
+Fixed:
+
+- **A phone could not push an original to an encrypted S3 origin at all.** The mobile stream shim's `Transform` had no `Symbol.asyncIterator`, and on an encrypted database every upload goes through the AWS SDK's multipart uploader, which async-iterates the body. It has one now, and `56-large-asset-push` reads the object back out of the bucket to prove a photo imported on a device arrives byte for byte.
+- **The prefetch died on the database index files.** Each file was copied under `retry`'s thirty second default, which nine files of about 13 MB each cannot meet on a phone. They get `LARGE_FILE_TIMEOUT` now, as the same copy loops in `sync.ts` and `replicate.ts` already did.
+- **A failed prefetch was never tried again.** It ran only when a database was opened. There is a background prefetch loop now, beside the import and sync loops, which retries until the replica is complete and then stops; `57-prefetch-retries` proves it fills a replica in with nothing having opened the database.
+- **A sync and a prefetch fetching the same files at once.** A periodic sync now waits while a prefetch of the same database is making progress, and stops waiting if that prefetch stalls, so a prefetch that cannot finish cannot stop a phone syncing. `58-sync-waits-for-prefetch` proves both halves.
+
+Still true, and not addressed:
+
+- **86 seconds before the first photo appears**, and ten and a half minutes before the last of 8,109 records is loaded.
+- **A batch of 250 photos takes sixteen minutes to write** into a database of 8,231, and the import does nothing else for the whole of it.
+- **The 83 MB allocation that was refused during a sync**, and the memory pressure behind it.
+- **The push order reaches originals before thumbnails**, so a replica gains its originals before it can show what they are.
+- Everything under "What was not measured" above is still unmeasured.

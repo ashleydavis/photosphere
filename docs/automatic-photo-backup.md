@@ -104,9 +104,9 @@ Measured on a Pixel 6 importing a library of 2,308 items into a partial replica 
 
 That cost grows with the database, not with the batch, because a commit rewrites every shard it touches and a shard holds every record that hashed into it. It is the reason the batch is 250 rather than 1, and it is why an import into a large database looks like long dead periods punctuated by a lurch.
 
-### And then the push to the origin fails, silently, every time
+### And then the push to the origin, which used to fail silently every time
 
-Once the first batch was committed, the sync that followed it tried to push the new originals to the S3 origin and could not push a single one:
+Once the first batch is committed, the sync that follows it pushes the new originals to the origin. Against an S3 origin on the measured run that failed on every single file:
 
 ```
 Failed to copy file asset/<id>: Failed to write stream to <bucket>/asset/<id>: not a function
@@ -114,11 +114,13 @@ Failed to copy file asset/<id>: Failed to write stream to <bucket>/asset/<id>: n
   at __doMultipartUpload ... at writeStreamHashed ... at copyFile
 ```
 
-The AWS SDK's multipart upload path calls something the embedded engine does not have. Every original attempted failed this way, none succeeded, and no thumbnail or display copy was ever reached because the tree walk reaches originals first.
+On an encrypted database every upload takes the AWS SDK's multipart path, whatever the file's size: `EncryptedStorage.writeStreamHashed` cannot hand the plaintext hash down to the store, so it delegates to `writeStream`, which pipes the caller's stream through the encryption stream, and `CloudStorage.writeStream` always uploads in parts. That uploader async-iterates the body it is given, and on mobile the body is the encryption stream: the shim `Transform`, whose hand-built prototype had no `Symbol.asyncIterator`. So the SDK called `undefined`. Every original failed, none succeeded, and no thumbnail was ever reached because the tree walk reaches originals first. After 2 hours 18 minutes of importing, 441 photos were on the device and not one byte had reached the origin.
 
-`syncDatabases` catches a failed file copy deliberately, so that one bad file does not end the pass, and leaves it for the next pass to try again. With this failure that means every pass tries every original and fails on every one, for ever, and **nothing tells the user**: the interface shows a sync that ran and completed.
+The shim's `Transform` has an async iterator now, with the same contract as the shim's `Readable` one, and an upload from an encrypted database goes up in parts and arrives. `56-large-asset-push` is the test that holds it: it imports a 6.6 MB photo on a device into a partial replica of an encrypted S3 database, lets a sync push it, and then reads the object back out of the bucket from the host and compares the bytes, because the sync's own report cannot tell the difference. It passes on the Android emulator pool, on a Pixel 6, and on the iOS simulator.
 
-So on a phone today, automatic import into a database whose origin is S3 takes photos in and never gets them off the device.
+Nothing reports a failed push to the user, and that is deliberate rather than unfinished. `syncDatabases` catches a file it could not copy, counts it as left behind, and leaves it for the next pass to try again, which is retry-until-it-works and is the right behaviour now that the copy can succeed. What that does not cover is a file that can never upload for a reason that will not go away: it would be retried every pass for ever, spending battery and data. Nothing measured has produced such a file, and if one turns up the answer is a backoff on a file that has failed the same way several passes running, not an error message the user cannot act on.
+
+The measured cost of the batch write above is unchanged by any of this, and stands.
 
 ## Nothing is paced
 
@@ -222,7 +224,7 @@ The `import-assets` task holds an engine slot for as long as the run lasts, and 
 
 The loop that starts one pass after another lives on the native side of the mobile apps, not in the WebView. The operating system throttles and then stops a WebView's timers once the app is backgrounded, so a loop kept there imports nothing until the app is next opened, and says so nowhere. Nothing in the WebView queues an import on any platform.
 
-Syncing works the same way and for the same reason, in a loop of its own beside this one, so a photo imported while the app is off screen reaches the remote without the app being opened. [Syncing](syncing.md) describes that half: what it costs to ask whether there is anything to push, the two settings and where they live, and what the two loops contend on when their passes overlap.
+Syncing works the same way and for the same reason, in a loop of its own beside this one, so a photo imported while the app is off screen reaches the remote without the app being opened. Filling a partial replica in is a third such loop, obeying the syncing settings. [Syncing](syncing.md) describes those two: what it costs to ask whether there is anything to push, the two settings and where they live, what the loops contend on when their passes overlap, and the one ordering between them.
 
 The settings live in the `auto_import` section of `config.yaml`, in the app's storage sandbox beside `databases.toml`. A file there is readable by anything that runs while the app is off screen, which is what lets a service that has just woken find out whether automatic import is switched on and what it should be reading. The [configuration file](https://github.com/ashleydavis/photosphere/wiki/Configuration-File) page in the wiki has the keys and their defaults.
 
