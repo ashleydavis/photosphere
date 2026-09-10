@@ -150,38 +150,42 @@ allocate_pairing_code() {
     local code
     local holder
     local attempts=0
-    local lock_fd
 
-    # One lock around the look and the claim. Without it two callers can both see a code free and
-    # both take it, which is the collision this exists to remove.
-    exec {lock_fd}>"$PHOTOSPHERE_PAIRING_CODE_DIR/.lock"
-    flock "$lock_fd"
-
+    # The claim itself is what keeps two callers apart, rather than a lock around a look and a claim.
+    # `set -o noclobber` makes the redirection refuse to write a file that already exists, and it
+    # refuses it in the one operation that creates it, so exactly one of two callers drawing the same
+    # code can succeed and the other is told so and draws again.
+    #
+    # It used to be a lock, taken with `exec {lock_fd}>` and `flock`. Both are Linux-only: the
+    # descriptor syntax needs bash 4 and macOS ships bash 3.2, and `flock` is util-linux and is not on
+    # a Mac at all. So on macOS the lock was never taken, the shell said `exec: {lock_fd}: not found`
+    # into the log, and two concurrent tests could draw the same code. That is what 78-dbs-share-cancel
+    # and 79-secrets-share-cancel were failing on in CI, together, every time: two shares on one code
+    # are indistinguishable on the network and the sender pairs with whichever it hears first.
     while true; do
         code=$(( (RANDOM % 9000) + 1000 ))
 
-        if [ -f "$PHOTOSPHERE_PAIRING_CODE_DIR/$code" ]; then
-            holder="$(cat "$PHOTOSPHERE_PAIRING_CODE_DIR/$code" 2>/dev/null)"
-            if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then
-                attempts=$((attempts + 1))
-                if [ "$attempts" -gt 100 ]; then
-                    # Nine thousand codes and a hundred misses means codes are leaking rather than
-                    # that the machine is busy. Say so instead of spinning.
-                    flock -u "$lock_fd"
-                    exec {lock_fd}>&-
-                    echo "Could not allocate a pairing code: $PHOTOSPHERE_PAIRING_CODE_DIR is full of live holders." >&2
-                    return 1
-                fi
-                continue
-            fi
+        if ( set -o noclobber; echo "$$" > "$PHOTOSPHERE_PAIRING_CODE_DIR/$code" ) 2>/dev/null; then
+            break
         fi
 
-        echo "$$" > "$PHOTOSPHERE_PAIRING_CODE_DIR/$code"
-        break
-    done
+        # Somebody holds it, or held it and died. A file whose holder is gone is worthless, so it is
+        # removed and the code is drawn for again; whoever gets the claim in first wins it, because
+        # the claim above is still the only thing that decides.
+        holder="$(cat "$PHOTOSPHERE_PAIRING_CODE_DIR/$code" 2>/dev/null)"
+        if [ -z "$holder" ] || ! kill -0 "$holder" 2>/dev/null; then
+            rm -f "$PHOTOSPHERE_PAIRING_CODE_DIR/$code" 2>/dev/null
+            continue
+        fi
 
-    flock -u "$lock_fd"
-    exec {lock_fd}>&-
+        attempts=$((attempts + 1))
+        if [ "$attempts" -gt 100 ]; then
+            # Nine thousand codes and a hundred misses means codes are leaking rather than that the
+            # machine is busy. Say so instead of spinning.
+            echo "Could not allocate a pairing code: $PHOTOSPHERE_PAIRING_CODE_DIR is full of live holders." >&2
+            return 1
+        fi
+    done
 
     printf '%s\n' "$code"
 }
