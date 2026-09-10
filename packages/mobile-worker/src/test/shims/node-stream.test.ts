@@ -393,6 +393,17 @@ describe("node-stream Transform shim", () => {
     }
 
     //
+    // Consumes the transform with `for await`, appending each chunk to the given array, and resolves
+    // once the iteration finishes. Started without being awaited so the caller can drive the transform
+    // while it is being iterated, which is what the AWS uploader does.
+    //
+    async function collectByIteration(transform: any, received: Buffer[]): Promise<void> {
+        for await (const chunk of transform) {
+            received.push(chunk);
+        }
+    }
+
+    //
     // Collects the transform's output, resolving once it ends.
     //
     function collectOutput(transform: any): Promise<string> {
@@ -474,6 +485,100 @@ describe("node-stream Transform shim", () => {
 
         expect(sawData).toBe(false);
         expect(sawEnd).toBe(false);
+    });
+
+    test("for await yields every chunk in order and completes when the transform ends", async () => {
+        // @aws-sdk/lib-storage async iterates the upload body, and on an encrypted database that body
+        // is always this transform, so without an async iterator every upload fails with
+        // "not a function".
+        const transform = createUppercaseTransform();
+
+        const received: Buffer[] = [];
+        const iterated = collectByIteration(transform, received);
+
+        transform.write(Buffer.from("ab", "utf8"));
+        transform.write(Buffer.from("cd", "utf8"));
+        transform.end();
+
+        await iterated;
+
+        expect(Buffer.concat(received).toString("utf8")).toBe("ABCD!");
+    });
+
+    test("for await receives output buffered before the iteration started", async () => {
+        const transform = createUppercaseTransform();
+
+        // Written and drained before anything is iterating, which is what the transform's own
+        // buffering exists for.
+        transform.write(Buffer.from("early", "utf8"));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        const received: Buffer[] = [];
+        const iterated = collectByIteration(transform, received);
+
+        transform.write(Buffer.from("late", "utf8"));
+        transform.end();
+
+        await iterated;
+
+        expect(Buffer.concat(received).toString("utf8")).toBe("EARLYLATE!");
+    });
+
+    test("for await yields nothing and completes for a transform ended with no data", async () => {
+        const transform = new (Transform as any)();
+
+        // Ended and drained before anything is iterating, so `end` has already been emitted to
+        // nobody: the iterator has to notice that rather than wait for an event that cannot come.
+        transform.end();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        const received: Buffer[] = [];
+        await collectByIteration(transform, received);
+
+        expect(received.length).toBe(0);
+    });
+
+    test("for await rejects when the transform is destroyed with an error", async () => {
+        const transform = createUppercaseTransform();
+
+        const iterated = collectByIteration(transform, []);
+
+        transform.destroy(new Error("transform broke"));
+
+        await expect(iterated).rejects.toThrow("transform broke");
+    });
+
+    test("for await consumes a transform that pushes a header before the body, as the encryption stream does", async () => {
+        // createEncryptionStream pushes a header, an encrypted key and an IV from the first write and
+        // the cipher's final block from the flush, so one write produces several chunks and the flush
+        // produces one more. This is the arrangement the AWS uploader iterates.
+        const transform = new (Transform as any)({
+            transform(chunk: Buffer, encoding: string, callback: () => void) {
+                if (!(this as any).headerSent) {
+                    (this as any).headerSent = true;
+                    (this as any).push(Buffer.from("header", "utf8"));
+                    (this as any).push(Buffer.from("key", "utf8"));
+                }
+                (this as any).push(chunk);
+                callback();
+            },
+            flush(callback: () => void) {
+                (this as any).push(Buffer.from("final", "utf8"));
+                callback();
+            },
+        });
+
+        const received: Buffer[] = [];
+        const iterated = collectByIteration(transform, received);
+
+        transform.write(Buffer.from("body", "utf8"));
+        transform.end();
+
+        await iterated;
+
+        expect(Buffer.concat(received).toString("utf8")).toBe("headerkeybodyfinal");
     });
 
 });

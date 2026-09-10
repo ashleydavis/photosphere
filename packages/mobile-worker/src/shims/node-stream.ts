@@ -657,6 +657,72 @@ transformPrototype.pipe = function (destination: IStreamDestination): IStreamDes
 };
 
 //
+// Yields the transform's output, so `for await (const chunk of transform)` works.
+//
+// The same contract as Readable's iterator above, and it is here for the same consumer:
+// @aws-sdk/lib-storage async iterates the body it is uploading. On an encrypted database that body
+// is always this transform, because EncryptedStorage.writeStreamHashed cannot hand the plaintext
+// hash down to the store and so delegates to writeStream, which pipes through the encryption
+// stream, and CloudStorage.writeStream always uploads in parts. So every original a phone tried to
+// push to an encrypted S3 origin failed here with "not a function", the sync caught it and carried
+// on, and nothing said anything: measured on a Pixel 6, 441 photos imported over 2 hours 18 minutes
+// and not one byte reached the origin.
+//
+// Delivery goes through the same listeners and drain any other consumer uses rather than a second
+// path of its own, so output produced before the iteration starts is still buffered in shimPending
+// and arrives when the data listener attaches. A transform that has already ended before anything
+// iterated it is finished rather than waiting: its `end` was emitted to nobody and cannot come again.
+//
+transformPrototype[Symbol.asyncIterator] = async function* (this: any): AsyncGenerator<Buffer> {
+    const queued: Buffer[] = [];
+    let ended = this.shimEndEmitted;
+    let failure: Error | undefined;
+    let wake: (() => void) | undefined;
+
+    //
+    // Releases the consumer waiting below, if there is one.
+    //
+    const signal = () => {
+        const waiting = wake;
+        wake = undefined;
+        if (waiting) {
+            waiting();
+        }
+    };
+
+    // Attaching a data listener is what makes buffered output deliverable, so this subscribes before
+    // waiting for anything.
+    this.on("data", (chunk: Buffer) => {
+        queued.push(chunk);
+        signal();
+    });
+    this.on("end", () => {
+        ended = true;
+        signal();
+    });
+    this.on("error", (error: Error) => {
+        failure = error instanceof Error ? error : new Error(String(error));
+        ended = true;
+        signal();
+    });
+
+    for (;;) {
+        while (queued.length > 0) {
+            yield queued.shift()!;
+        }
+        if (failure) {
+            throw failure;
+        }
+        if (ended) {
+            return;
+        }
+        await new Promise<void>(resolve => {
+            wake = resolve;
+        });
+    }
+};
+
+//
 // Stops the stream; no further output is emitted.
 //
 transformPrototype.destroy = function (error?: Error): any {
