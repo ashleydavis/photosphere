@@ -49,6 +49,24 @@ The background import reaches the pool through a static reference to the plugin,
 
 A background pass takes slots exactly as a foreground one does, so nothing about `POOL_SIZE` changes. The chain below is the same chain whether the app is on screen or not.
 
+## Three loops, one service
+
+There are three background loops, not two, and one Android foreground service hosting all of them on its own thread each:
+
+| Loop | What a pass does | When it ends |
+|---|---|---|
+| Automatic import | Walks the photo library and imports what is new | When the plan says automatic import is switched off |
+| Background sync | Pushes and pulls between the database and its origin | Never: every reason to refuse can go away without the app being touched |
+| Background prefetch | Fills a partial replica in, fetching the origin's thumbnails and database index files | When a pass finds nothing left to fetch. Opening a database starts it again |
+
+Each asks a planning task in TypeScript what to do (`plan-auto-import`, `plan-sync`, `plan-prefetch`) and forwards the steps it is handed, so no native code decides anything or assembles a task payload. Each queues under its own source tag, so switching one feature off cancels only its own tasks.
+
+One service rather than three, because the platform requires a foreground service to post an ongoing notification and three services would mean three notifications for what a user thinks of as one thing. The wake lock is shared and reference counted, because the three loops' passes overlap and each takes a hold for the length of its own pass.
+
+A prefetch pass queues one `prefetch-database` task, which queues no children, so the third loop adds at most one more concurrent task. Measured occupancy during the work that produced these numbers never exceeded three of the five slots.
+
+The one ordering between them: a periodic sync waits while a prefetch of the same database is making progress, because the two fetch the same files and contend hard for the network. It is bounded by progress rather than by completion, so a prefetch that is stuck cannot stop syncing. See [Syncing](syncing.md) for the rule and the measurements behind it.
+
 ## Priority: who gets the next free slot
 
 Every task carries a priority, and there is **one** queue of waiting tasks. The pool always takes from the head. An interactive task joins the head of the queue; a background task joins the end. That is the whole of the mechanism, and it works identically on Android, iOS and the desktop.
