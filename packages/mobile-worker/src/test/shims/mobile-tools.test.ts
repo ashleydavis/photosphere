@@ -42,6 +42,13 @@ interface IFakeHostOptions {
     // Custom ffprobe stdout (defaults to a canned probe document).
     ffprobeOutput?: string;
 
+    // Custom ffprobe result responder (exit code + output); overrides ffprobeOutput when set. Needed
+    // to cover a file ffprobe refuses, which a photo library really does contain.
+    ffprobeResult?: (argv: string[]) => IFakeResult;
+
+    // Sizes reported by fsStat, keyed by path. Absent paths report no stat at all.
+    fileSizes?: Record<string, number>;
+
     // When false, producing ops do not register their output path as existing (to test the missing-output check).
     registerOutputs?: boolean;
 }
@@ -130,7 +137,17 @@ function installFakeHost(options: IFakeHostOptions): IFakeCall[] {
         ffprobe: (argvJson: string): string => {
             const argv = JSON.parse(argvJson) as string[];
             calls.push({ tool: "ffprobe", argv });
-            return JSON.stringify({ exitCode: 0, output: ffprobeOutput });
+            const result = options.ffprobeResult
+                ? options.ffprobeResult(argv)
+                : { exitCode: 0, output: ffprobeOutput };
+            return JSON.stringify(result);
+        },
+        fsStat: (filePath: string): string | null => {
+            const size = options.fileSizes?.[filePath];
+            if (size === undefined) {
+                return null;
+            }
+            return JSON.stringify({ size, mtimeMs: 0, isFile: true, isDirectory: false });
         },
     };
 
@@ -379,9 +396,46 @@ describe("mobile tools Video", () => {
         await expect(new Video("/cache/v.mp4").getInfo()).rejects.toThrow(/No video stream/);
     });
 
-    test("getInfo throws when ffprobe exits non-zero", async () => {
+    test("getInfo throws when the file is not there at all", async () => {
         installFakeHost({ existingFiles: [] });
         await expect(new Video("/cache/missing.mp4").getInfo()).rejects.toThrow(/File not found/);
+    });
+
+    test("getInfo says the file is not a readable video, and how big it is, when ffprobe refuses it", async () => {
+        // A photo library really holds files named like videos that are not: measured on a Pixel 6
+        // importing a real library, ffprobe exited 1 with no output at all for a Messenger download
+        // of 794 bytes. The old message was "ffprobe exit code 1: {}", which names the tool and its
+        // empty output and reads like the app is broken. The size is what says the file is.
+        installFakeHost({
+            existingFiles: ["/cache/stub.mp4"],
+            fileSizes: { "/cache/stub.mp4": 794 },
+            ffprobeResult: () => ({ exitCode: 1, output: "" }),
+        });
+
+        await expect(new Video("/cache/stub.mp4").getInfo())
+            .rejects.toThrow(/"\/cache\/stub\.mp4" is not a video ffprobe can read \(794 bytes\)\. ffprobe exited 1 and said nothing\./);
+    });
+
+    test("getInfo passes ffprobe's own complaint through when it makes one", async () => {
+        installFakeHost({
+            existingFiles: ["/cache/broken.mp4"],
+            fileSizes: { "/cache/broken.mp4": 1024 },
+            ffprobeResult: () => ({ exitCode: 1, output: "moov atom not found" }),
+        });
+
+        await expect(new Video("/cache/broken.mp4").getInfo())
+            .rejects.toThrow(/is not a video ffprobe can read \(1024 bytes\)\. ffprobe exited 1: moov atom not found\./);
+    });
+
+    test("getInfo still reports a refusal when the size cannot be read", async () => {
+        // The size is a nicety and must never be the reason the real error is lost.
+        installFakeHost({
+            existingFiles: ["/cache/nosize.mp4"],
+            ffprobeResult: () => ({ exitCode: 1, output: "" }),
+        });
+
+        await expect(new Video("/cache/nosize.mp4").getInfo())
+            .rejects.toThrow(/"\/cache\/nosize\.mp4" is not a video ffprobe can read\. ffprobe exited 1 and said nothing\./);
     });
 
     test("extractScreenshot throws when the frame is not produced", async () => {
