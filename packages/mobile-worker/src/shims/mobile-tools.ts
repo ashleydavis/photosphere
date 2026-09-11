@@ -112,6 +112,35 @@ function ensureFileExists(filePath: string): void {
 }
 
 //
+// Describes a file's size for an error message, as " (N bytes)", or nothing when it cannot be read.
+//
+// A media tool that refuses a file says nothing about why, and the size usually does. A photo library
+// holds files that are named like videos and are not: measured on a Pixel 6 importing a real library,
+// ffprobe exited 1 with no output at all for `Movies/Messenger/received_<id>.mp4`, and the file turned
+// out to be 794 bytes. The old message named ffprobe's exit code and its empty output, which reads
+// like the app is broken; the size says at a glance that the file is.
+//
+// It must never be the reason an error is lost, so anything that goes wrong reading the size is
+// dropped and the caller's message goes out without it.
+//
+function describeFileSize(filePath: string): string {
+    try {
+        const statJson = getFsHost().fsStat(filePath);
+        if (!statJson) {
+            return "";
+        }
+        const stat = JSON.parse(statJson) as { size?: number };
+        if (typeof stat.size !== "number") {
+            return "";
+        }
+        return ` (${stat.size} bytes)`;
+    }
+    catch {
+        return "";
+    }
+}
+
+//
 // Runs an ImageMagick argv expecting captured text on stdout (identify/info/dominant/histogram),
 // throwing on a non-zero exit so read operations fail loudly like the desktop subprocess does.
 //
@@ -480,7 +509,8 @@ export class Video {
 
         const result = runMediaTool(getMediaHost().ffprobe, buildFfprobeInfoArgs(this.filePath));
         if (result.exitCode !== 0) {
-            throw new Error(`Failed to get video info: ffprobe exit code ${result.exitCode}: ${result.output}`);
+            throw new Error(`"${this.filePath}" is not a video ffprobe can read${describeFileSize(this.filePath)}. `
+                + `ffprobe exited ${result.exitCode}${result.output.trim().length > 0 ? `: ${result.output.trim()}` : " and said nothing"}.`);
         }
 
         const probeData = JSON.parse(result.output) as IFfprobeData;
