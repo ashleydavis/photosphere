@@ -857,4 +857,57 @@ describe('BsonCollection', () => {
 
         expect(shardA).toBe(shardB);
     });
+
+    test('the shard cache is bounded, so walking a collection does not end up holding all of it', () => {
+        // A shard holds every record in it, so an unbounded cache holds the whole collection once
+        // enough of it has been touched. A sync's record merge visits every differing shard on both
+        // sides: measured on a Pixel 6 against a database of 8,231 photos, that ran the embedded
+        // engine out of memory and aborted the app three times.
+        //
+        // Asserted by identity rather than by reading a size: a shard that was dropped comes back as
+        // a different instance, and one that was kept comes back as the same one.
+        const first = collection.shard('shard-0');
+
+        for (let shardNumber = 1; shardNumber <= 32; shardNumber += 1) {
+            collection.shard(`shard-${shardNumber}`);
+        }
+
+        expect(collection.shard('shard-0')).not.toBe(first);
+        expect(collection.shard('shard-32')).toBe(collection.shard('shard-32'));
+    });
+
+    test('a shard used recently survives while older ones are dropped', () => {
+        const kept = collection.shard('shard-kept');
+
+        for (let shardNumber = 0; shardNumber < 32; shardNumber += 1) {
+            collection.shard(`shard-${shardNumber}`);
+            // Touched on every round, so it is never the least recently used one.
+            collection.shard('shard-kept');
+        }
+
+        expect(collection.shard('shard-kept')).toBe(kept);
+    });
+
+    test('a shard with uncommitted writes is never dropped, because its records are the only copy', async () => {
+        // Eviction frees records that can be read again from storage. A dirty shard's records cannot:
+        // dropping one would silently lose the write.
+        const user: TestUser = {
+            _id: '123e4567-e89b-12d3-a456-426614174000',
+            name: 'John Doe',
+            email: 'john@example.com',
+            age: 30,
+            role: 'user',
+        };
+        await collection.insertOne(user);
+
+        const dirtyShardId = collection.getShardId(user._id);
+        const dirtyShard = collection.shard(dirtyShardId);
+
+        for (let shardNumber = 0; shardNumber < 32; shardNumber += 1) {
+            collection.shard(`other-shard-${shardNumber}`);
+        }
+
+        expect(collection.shard(dirtyShardId)).toBe(dirtyShard);
+        expect(await collection.getOne(user._id)).toMatchObject({ name: 'John Doe' });
+    });
 });
