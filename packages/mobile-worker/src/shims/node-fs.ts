@@ -289,14 +289,114 @@ export function fstatSync(fd: number): Stats {
 }
 
 //
-// Creates a writable stream that buffers chunks and, when ended, writes the whole file through the
-// host bridge. Matches the whole-file write model (FileStorage.writeStream pipes into this then
-// renames the temp file into place).
+// A file-backed writable stream that flushes to the host a chunk at a time.
+//
+// It used to buffer every chunk and write the whole file in one host call on end, which is the
+// mirror image of the read model that `ReadStream` above already had to abandon: the bytes cross the
+// bridge as one base64 string and are decoded into one allocation on the host side, so writing a
+// large file needs an allocation of the file's own size there. On Android that is a `byte[]` on a
+// Java heap whose growth limit is 256 MB, and measured on a Pixel 6 importing a real library an
+// 87 MB video could not be written at all: "Failed to allocate a 90894120 byte allocation with
+// 51397312 free bytes and 49MB until OOM, target footprint 268435456, growth limit 268435456",
+// against a file of 90,893,534 bytes, refused three times over 5 minutes 47 seconds.
+//
+// So it writes through `_write` and `_final`, which the shim's `Writable` prefers over its onFinish
+// sink, and flushes whenever the pending bytes reach CHUNK_BYTES. The first flush writes (truncating
+// anything already there, as a write stream must) and every later one appends.
+//
+class WriteStream extends Writable {
+    //
+    // The path being written.
+    //
+    private readonly path: string;
+
+    //
+    // Chunks written but not yet flushed to the host.
+    //
+    private pending: Buffer[] = [];
+
+    //
+    // How many bytes those chunks hold, so the flush decision costs no walk of the list.
+    //
+    private pendingBytes = 0;
+
+    //
+    // True once a flush has happened, which is what makes every later flush an append rather than a
+    // second truncating write.
+    //
+    private hasFlushed = false;
+
+    //
+    // Builds a stream over the given sandboxed path.
+    //
+    constructor(path: string) {
+        super();
+        this.path = path;
+    }
+
+    //
+    // Takes a chunk, flushing once enough have arrived. The shim's Writable calls this in preference
+    // to its onFinish sink.
+    //
+    _write(chunk: Buffer, _encoding: string, callback: (error?: Error) => void): void {
+        try {
+            this.pending.push(chunk);
+            this.pendingBytes += chunk.length;
+            if (this.pendingBytes >= CHUNK_BYTES) {
+                this.flush();
+            }
+            callback();
+        }
+        catch (error) {
+            callback(error as Error);
+        }
+    }
+
+    //
+    // Flushes whatever is left when the stream ends.
+    //
+    _final(callback: (error?: Error) => void): void {
+        try {
+            this.flush();
+            callback();
+        }
+        catch (error) {
+            callback(error as Error);
+        }
+    }
+
+    //
+    // Writes the pending bytes to the host and forgets them.
+    //
+    // A stream that was ended with nothing written still has to produce an empty file, which is why
+    // the first flush happens even with no bytes; later flushes with nothing pending do nothing.
+    //
+    private flush(): void {
+        if (this.pendingBytes === 0 && this.hasFlushed) {
+            return;
+        }
+
+        const data = this.pending.length === 1 ? this.pending[0] : Buffer.concat(this.pending);
+        this.pending = [];
+        this.pendingBytes = 0;
+
+        const base64 = data.toString("base64");
+        if (this.hasFlushed) {
+            callHost(() => getFsHost().fsAppendFile(this.path, base64));
+        }
+        else {
+            callHost(() => getFsHost().fsWriteFile(this.path, base64, false));
+            this.hasFlushed = true;
+        }
+    }
+}
+
+//
+// Creates a writable stream over a sandboxed path, flushing to the host in bounded chunks.
+// FileStorage.writeStream pipes into this and then renames the temp file into place.
 //
 export function createWriteStream(path: string): Writable {
-    return new Writable((data: Buffer) => {
-        callHost(() => getFsHost().fsWriteFile(path, data.toString("base64"), false));
-    });
+    return new WriteStream(path);
 }
 
 //

@@ -151,6 +151,11 @@ public final class HostBridgeDelegationTest {
         assertTrue(bridge.fsStat("dir/a.txt").contains("\"isFile\":true"));
         assertTrue(bridge.fsReaddir("dir").contains("a.txt"));
 
+        // The write stream's chunked flush goes through here, so the delegation has to reach the
+        // appending write rather than a second truncating one.
+        bridge.fsAppendFile("dir/a.txt", Base64.getEncoder().encodeToString(" again".getBytes(StandardCharsets.UTF_8)));
+        assertEquals("hello again", new String(Base64.getDecoder().decode(bridge.fsReadFile("dir/a.txt")), StandardCharsets.UTF_8));
+
         bridge.fsRename("dir/a.txt", "dir/b.txt");
         assertFalse(bridge.fsAccess("dir/a.txt"));
         assertTrue(bridge.fsAccess("dir/b.txt"));

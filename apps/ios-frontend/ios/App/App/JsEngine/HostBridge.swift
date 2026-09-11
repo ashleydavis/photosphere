@@ -317,6 +317,20 @@ final class HostBridge {
         }
         host.setValue(JSValue(object: fsWriteFile, in: context), forProperty: "fsWriteFile")
 
+        // fsAppendFile(path, base64): appends bytes, creating the file when absent; returns JS null on
+        // success or an error envelope. Backs the write stream's chunked flush.
+        let fsAppendFile: @convention(block) (String, String) -> JSValue = { [weak self] path, base64 in
+            guard let self = self else { return JSValue(nullIn: context) }
+            do {
+                try self.fsAppendFile(path: path, base64: base64)
+                return JSValue(nullIn: context)
+            }
+            catch {
+                return JSValue(object: HostBridge.hostErrorEnvelope(error), in: context)
+            }
+        }
+        host.setValue(JSValue(object: fsAppendFile, in: context), forProperty: "fsAppendFile")
+
         // fsMkdir(path, recursive): creates a sandboxed directory; null on success or error envelope.
         let fsMkdir: @convention(block) (String, Bool) -> JSValue = { [weak self] path, recursive in
             guard let self = self else { return JSValue(nullIn: context) }
@@ -903,6 +917,46 @@ final class HostBridge {
             throw HostFsError.message("fsWriteFile: invalid base64 for \(path)")
         }
         try data.write(to: url)
+    }
+
+    //
+    // host.fsAppendFile(path, base64): appends base64-decoded bytes to a sandboxed path, creating the
+    // file and its parent directories when they are not there.
+    //
+    // It exists so a write stream can cross the bridge a chunk at a time, which is what the read side
+    // already does through fsReadFileRange. A whole-file write has to hold the file's bytes in one
+    // allocation on the host side, and on Android that is a byte[] on a heap whose growth limit is
+    // 256 MB: importing an 87 MB video on a Pixel 6 had that allocation refused three times and the
+    // video was never imported. The same shape of limit is not documented for iOS, and the fix is
+    // shared because the shim is.
+    //
+    // There is deliberately no exclusive flag. Appending to a file that is not there creates it, and
+    // the write-lock's exclusive create still goes through fsWriteFile.
+    //
+    func fsAppendFile(path: String, base64: String) throws {
+        let url = try PathSandbox.resolveWithin(root: storageRoot, candidate: path)
+        let fileManager = FileManager.default
+
+        let parent = url.deletingLastPathComponent()
+        if !fileManager.fileExists(atPath: parent.path) {
+            try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
+        }
+
+        guard let data = Data(base64Encoded: base64) else {
+            throw HostFsError.message("fsAppendFile: invalid base64 for \(path)")
+        }
+
+        if !fileManager.fileExists(atPath: url.path) {
+            try data.write(to: url)
+            return
+        }
+
+        let handle = try FileHandle(forWritingTo: url)
+        defer {
+            handle.closeFile()
+        }
+        handle.seekToEndOfFile()
+        handle.write(data)
     }
 
     //

@@ -580,6 +580,8 @@ public final class QuickJsTaskEngine implements TaskEngine {
         // error-envelope string on failure.
         host.setProperty("fsWriteFile", (JSCallFunction) args -> safeVoid(() ->
             hostBridge.fsWriteFile((String) args[0], (String) args[1], toBoolean(args[2]))));
+        host.setProperty("fsAppendFile", (JSCallFunction) args -> safeVoid(() ->
+            hostBridge.fsAppendFile((String) args[0], (String) args[1])));
         host.setProperty("fsMkdir", (JSCallFunction) args -> safeVoid(() ->
             hostBridge.fsMkdir((String) args[0], toBoolean(args[1]))));
         host.setProperty("fsRename", (JSCallFunction) args -> safeVoid(() ->

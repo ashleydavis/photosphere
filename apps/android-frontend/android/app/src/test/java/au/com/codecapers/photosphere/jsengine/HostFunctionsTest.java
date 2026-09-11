@@ -204,6 +204,37 @@ public final class HostFunctionsTest {
     }
 
     //
+    // fsAppendFile creates the file and its parents on the first call and adds to it afterwards, so a
+    // write stream can put a large file down a chunk at a time rather than in one allocation.
+    //
+    @Test
+    public void fsAppendFileCreatesThenAppends() throws Exception {
+        File root = temporaryFolder.getRoot();
+        byte[] first = new byte[] { 1, 2, 3 };
+        byte[] second = new byte[] { 4, 5 };
+
+        HostFunctions.fsAppendFile(root, "db/nested/stream.bin", Base64.getEncoder().encodeToString(first));
+        HostFunctions.fsAppendFile(root, "db/nested/stream.bin", Base64.getEncoder().encodeToString(second));
+
+        File written = new File(root, "db/nested/stream.bin");
+        assertTrue(written.isFile());
+        assertArrayEquals(new byte[] { 1, 2, 3, 4, 5 }, HostFunctions.readAllBytes(written));
+    }
+
+    //
+    // fsAppendFile adds to what a whole-file write left, which is the order a write stream uses: the
+    // first flush truncates through fsWriteFile and every later one appends through this.
+    //
+    @Test
+    public void fsAppendFileAddsToAWholeFileWrite() throws Exception {
+        File root = temporaryFolder.getRoot();
+        HostFunctions.fsWriteFile(root, "db/stream.bin", Base64.getEncoder().encodeToString(new byte[] { 10 }), false);
+        HostFunctions.fsAppendFile(root, "db/stream.bin", Base64.getEncoder().encodeToString(new byte[] { 20, 30 }));
+
+        assertArrayEquals(new byte[] { 10, 20, 30 }, HostFunctions.readAllBytes(new File(root, "db/stream.bin")));
+    }
+
+    //
     // fsMkdir creates nested directories recursively and is a no-op when the directory exists.
     //
     @Test

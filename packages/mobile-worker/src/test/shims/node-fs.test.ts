@@ -77,6 +77,78 @@ describe("node-fs shim", () => {
         expect(Buffer.from(writes[0].base64, "base64").toString("utf8")).toBe("hello world");
     });
 
+    test("createWriteStream ended with nothing written still creates an empty file", async () => {
+        // FileStorage writes a zero-length file for an empty asset, and a stream that flushed nothing
+        // would leave no file at all rather than an empty one.
+        const writes: Array<{ path: string; base64: string }> = [];
+        (globalThis as any).host = {
+            platform: "android",
+            fsWriteFile: (path: string, base64: string) => { writes.push({ path, base64 }); },
+        };
+
+        createWriteStream("db/empty").end();
+
+        expect(writes).toEqual([{ path: "db/empty", base64: "" }]);
+    });
+
+    test("a file larger than one chunk is written in pieces rather than all at once", async () => {
+        // The mirror of the read case below, and the one that could not be worked around. A whole
+        // file used to be handed to the host in a single call, so the host had to hold an allocation
+        // of the file's own size: on Android a byte[] on a Java heap whose growth limit is 256 MB.
+        // Measured on a Pixel 6 importing a real library, an 87 MB video could not be written at all
+        // ("Failed to allocate a 90894120 byte allocation ... growth limit 268435456", against a file
+        // of 90,893,534 bytes), refused three times over 5 minutes 47 seconds, and the video was
+        // never imported.
+        const written: Buffer[] = [];
+        const appended: Buffer[] = [];
+        (globalThis as any).host = {
+            platform: "android",
+            fsWriteFile: (_path: string, base64: string) => { written.push(Buffer.from(base64, "base64")); },
+            fsAppendFile: (_path: string, base64: string) => { appended.push(Buffer.from(base64, "base64")); },
+        };
+
+        const writable = createWriteStream("db/big");
+        // Ten one-megabyte chunks, so more than one flush is forced whatever the chunk size is set to,
+        // and the total is checked rather than the number of calls.
+        for (let chunkIndex = 0; chunkIndex < 10; chunkIndex += 1) {
+            writable.write(Buffer.alloc(1024 * 1024, chunkIndex));
+        }
+        writable.end();
+
+        // Exactly one truncating write, at the start, and everything after it an append: two
+        // truncating writes would silently lose whatever the first one put down.
+        expect(written).toHaveLength(1);
+        expect(appended.length).toBeGreaterThan(0);
+
+        const total = written[0].length + appended.reduce((sum, chunk) => sum + chunk.length, 0);
+        expect(total).toBe(10 * 1024 * 1024);
+
+        // No single call carried the whole file, which is the point.
+        for (const call of [...written, ...appended]) {
+            expect(call.length).toBeLessThan(10 * 1024 * 1024);
+        }
+    });
+
+    test("the bytes a chunked write puts down are the bytes written, in order", async () => {
+        const parts: Buffer[] = [];
+        (globalThis as any).host = {
+            platform: "android",
+            fsWriteFile: (_path: string, base64: string) => { parts.push(Buffer.from(base64, "base64")); },
+            fsAppendFile: (_path: string, base64: string) => { parts.push(Buffer.from(base64, "base64")); },
+        };
+
+        const writable = createWriteStream("db/ordered");
+        const expected: Buffer[] = [];
+        for (let chunkIndex = 0; chunkIndex < 12; chunkIndex += 1) {
+            const chunk = Buffer.alloc(512 * 1024, chunkIndex);
+            expected.push(chunk);
+            writable.write(chunk);
+        }
+        writable.end();
+
+        expect(Buffer.concat(parts).equals(Buffer.concat(expected))).toBe(true);
+    });
+
     test("pipeline from createReadStream to createWriteStream copies the bytes", async () => {
         const files: Record<string, Buffer> = { "db/src": Buffer.from("copy me", "utf8") };
         const writes: Record<string, Buffer> = {};
@@ -91,6 +163,9 @@ describe("node-fs shim", () => {
                 ? JSON.stringify({ size: files[path].length, mtimeMs: 0, isFile: true, isDirectory: false })
                 : null,
             fsWriteFile: (path: string, base64: string) => { writes[path] = Buffer.from(base64, "base64"); },
+            fsAppendFile: (path: string, base64: string) => {
+                writes[path] = Buffer.concat([writes[path], Buffer.from(base64, "base64")]);
+            },
         };
 
         await pipeline(createReadStream("db/src"), createWriteStream("db/dest"));

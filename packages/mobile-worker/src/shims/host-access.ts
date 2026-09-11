@@ -35,6 +35,10 @@ export interface IFsHost {
     // Writes base64-decoded bytes to a path (exclusive maps the Node 'wx' flag: EEXIST if present).
     fsWriteFile: (path: string, base64: string, exclusive: boolean) => string | null;
 
+    // Appends base64-decoded bytes to a path, creating it when absent. What a write stream flushes
+    // through, so a large file never needs an allocation of its own size on the host side.
+    fsAppendFile: (path: string, base64: string) => string | null;
+
     // Creates a directory (recursive maps Node's { recursive: true }).
     fsMkdir: (path: string, recursive: boolean) => string | null;
 

@@ -448,6 +448,15 @@ public final class HostBridge {
     }
 
     //
+    // host.fsAppendFile(path, base64): appends base64-decoded bytes to a sandboxed path, creating it
+    // when absent. Backs the mobile fs shim's write stream, which flushes a chunk at a time so a
+    // large file never needs a byte[] of its own size on the Java heap.
+    //
+    public void fsAppendFile(String path, String base64) {
+        HostFunctions.fsAppendFile(storageRoot, path, base64);
+    }
+
+    //
     // host.fsMkdir(path, recursive): creates a sandboxed directory. Backs the mobile fs shim's mkdir.
     //
     public void fsMkdir(String path, boolean recursive) {
