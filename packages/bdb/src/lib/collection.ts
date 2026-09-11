@@ -18,6 +18,16 @@ import * as crypto from 'crypto';
 import { BsonShard, type IInternalRecord, type IShard } from './shard';
 
 //
+// How many shards a collection keeps loaded before it starts dropping the ones it used longest ago.
+//
+// A shard holds every record in it, so this is the ceiling on how much of a collection is in memory
+// at once. Eight is enough that the handful of shards a write touches together all stay, and small
+// enough that walking a whole collection does not end up holding it: a sync's record merge visits
+// every differing shard on both sides, and holding them all is what ran a phone out of memory.
+//
+const MAX_CACHED_SHARDS = 8;
+
+//
 // Options needed to construct a sort index (caller adds fieldName and direction).
 //
 export interface ISortIndexCreationOptions {
@@ -263,6 +273,13 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     private readonly sortIndexCache = new Map<string, SortIndex>();
 
     // Shard cache; each shard carries a dirty flag until commit (BSON + merkle).
+    //
+    // Bounded, and least-recently-used first out. A shard holds every record in it, so an unbounded
+    // cache holds the whole collection once enough of it has been touched, and a sync's record merge
+    // touches every differing shard on both sides. Measured on a Pixel 6 against a database of 8,231
+    // photos, that merge aborted the app three times: "Scudo ERROR: internal map failure (error
+    // desc=Out of memory)", `malloc` failing inside the embedded engine, thirteen to eighteen minutes
+    // in, having pushed nothing.
     private readonly shardCache = new Map<string, BsonShard>();
 
     // Lazily-created ref for this collection's merkle tree.
@@ -397,11 +414,40 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
     shard(shardId: string): IShard {
         const cached = this.shardCache.get(shardId);
         if (cached) {
+            // Re-inserted so the map's iteration order is least-recently-used first, which is the
+            // order evictShards drops them in.
+            this.shardCache.delete(shardId);
+            this.shardCache.set(shardId, cached);
             return cached;
         }
         const bsonShard = new BsonShard(shardId, this.storage, this.bsonDbPath, this.name, this.uuidGenerator);
         this.shardCache.set(shardId, bsonShard);
+        this.evictShards();
         return bsonShard;
+    }
+
+    //
+    // Drops cached shards, oldest first, until the cache is inside its quota.
+    //
+    // A dirty shard is never dropped, because its records are the only copy of writes that have not
+    // been committed yet. So the quota is a target rather than a guarantee: a caller that dirties more
+    // shards than the quota keeps them all, which is what commit() exists to end.
+    //
+    private evictShards(): void {
+        if (this.shardCache.size <= MAX_CACHED_SHARDS) {
+            return;
+        }
+
+        for (const [shardId, shard] of this.shardCache) {
+            if (this.shardCache.size <= MAX_CACHED_SHARDS) {
+                return;
+            }
+            if (shard.dirty()) {
+                continue;
+            }
+            shard.flush();
+            this.shardCache.delete(shardId);
+        }
     }
 
     //
