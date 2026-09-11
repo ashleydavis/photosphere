@@ -122,7 +122,7 @@ export async function planPrefetchHandler(_data: object, _context: ITaskContext)
     }
 
     // A database with no origin has nothing to fetch from.
-    const { rawStorage } = await openStorage(databasePath);
+    const { rawStorage, s3Config, storageOptions } = await openStorage(databasePath);
     const databaseConfig = await loadDatabaseConfig(rawStorage);
     if (!databaseConfig?.origin) {
         return refuse(`"${databasePath}" has no origin to fill in from`, settings, pauseBetweenRunsMs);
@@ -131,7 +131,14 @@ export async function planPrefetchHandler(_data: object, _context: ITaskContext)
     // And a full database has nothing missing. The prefetch task itself checks this and returns, but
     // it would pay for an engine slot and a merkle tree load to find out, every pass, for as long as
     // the phone was switched on.
-    if (!await isDatabasePartial(databasePath)) {
+    //
+    // The credentials openStorage already resolved go with the question, because reading the merkle
+    // tree needs them: without them an encrypted database's .db/files.dat is read as the raw
+    // ciphertext it is on disk and the read fails on the serialized checksum, so every pass of the
+    // loop threw and the prefetch never ran at all. Measured on a Pixel 6 against an encrypted S3
+    // origin, every pass reported "Checksum mismatch: expected <the last 32 bytes of the encrypted
+    // file> got <a hash of the rest of it>". `load-assets` passes them at the same call.
+    if (!await isDatabasePartial(databasePath, s3Config, storageOptions)) {
         return refuse(`"${databasePath}" is not a partial replica, so there is nothing to fill in`, settings, pauseBetweenRunsMs);
     }
 

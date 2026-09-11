@@ -1,6 +1,7 @@
 import * as os from "os";
 import * as path from "path";
 import * as fs from "fs/promises";
+import { generateKeyPairSync } from "node:crypto";
 import { DEFAULT_SYNC_PAUSE_MS } from "api/src/lib/sync-settings";
 import { buildConfigYaml, readConfigFromStorage } from "node-api/src/lib/config.worker";
 import { saveMerkleTree } from "node-api/src/lib/tree";
@@ -50,6 +51,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
     delete (globalThis as any).host;
+    delete process.env.PSI_ENCRYPTION_KEY;
     process.chdir(previousCwd);
     await fs.rm(tempDir, { recursive: true, force: true });
 });
@@ -131,6 +133,36 @@ async function writeMerkleTree(isPartial: boolean): Promise<void> {
     tree.databaseMetadata = { isPartial };
     tree.merkle = buildMerkleTree(tree.sort);
     await saveMerkleTree(tree, storage);
+}
+
+//
+// Makes every storage this test opens an encrypted one, the way a phone holding a replica of an
+// encrypted database has it.
+//
+// The key goes in through PSI_ENCRYPTION_KEY as a file path, which resolveStorageCredentials accepts
+// and which needs neither a vault nor a database list: the point is that the storage is genuinely
+// encrypted, not where the key came from. Called before the merkle tree is written, so the tree is
+// written encrypted and has to be decrypted to be read back.
+//
+async function encryptEveryStorage(): Promise<void> {
+    const { privateKey } = generateKeyPairSync("rsa", {
+        // 4096 bits because that is the only size the encrypted format can read back: decryptNewFormat
+        // slices the wrapped AES key at a fixed 512 bytes, which is an RSA-4096 block, so a smaller
+        // key writes a file this codebase cannot decrypt. A 2048-bit key here failed silently, because
+        // decryptBuffer treats a failed decryption as "not encrypted" and hands back the ciphertext.
+        modulusLength: 4096,
+        publicKeyEncoding: {
+            type: "spki",
+            format: "pem",
+        },
+        privateKeyEncoding: {
+            type: "pkcs8",
+            format: "pem",
+        },
+    });
+    const keyPath = path.join(tempDir, "encryption.key");
+    await fs.writeFile(keyPath, privateKey, "utf8");
+    process.env.PSI_ENCRYPTION_KEY = keyPath;
 }
 
 //
@@ -231,6 +263,45 @@ describe("plan-prefetch", () => {
         expect(plan.shouldRun).toBe(false);
         expect(plan.reason).toContain("not a partial replica");
         expect(plan.steps).toEqual([]);
+    });
+
+    test("runs against an encrypted replica, whose merkle tree has to be decrypted to be read", async () => {
+        // The database on a real phone is encrypted, and the merkle tree this reads to find out
+        // whether the replica is partial is one of the encrypted files. Asked for it without the
+        // credentials, the tree loader read .db/files.dat as the raw ciphertext it is on disk and
+        // threw on the serialized checksum, so every pass of the background loop failed and the
+        // prefetch never ran at all. Measured on a Pixel 6 against an encrypted S3 origin: "Checksum
+        // mismatch: expected <the file's last 32 bytes> got <a hash of the rest of it>", once a pass,
+        // for as long as the phone was left running.
+        await encryptEveryStorage();
+        await writeSyncSettings(true, false);
+        await setUpPartialReplica();
+
+        // The fixture is only worth anything if the tree really did go down encrypted, and a wrong key
+        // or a key the format cannot read back looks from here exactly like the bug under test.
+        const written = await fs.readFile(path.join(tempDir, DATABASE_PATH, ".db", "files.dat"));
+        expect(written.subarray(0, 4).toString("ascii")).toBe("PSEN");
+
+        const plan = await planPrefetchHandler({}, context);
+
+        expect(plan.shouldRun).toBe(true);
+        expect(plan.databasePath).toBe(DATABASE_PATH);
+        expect(plan.steps.map(step => step.type)).toEqual(["prefetch-database"]);
+    });
+
+    test("says not to run when an encrypted database is not a partial replica", async () => {
+        // The other half of the encrypted case: the flag is read correctly rather than the read
+        // merely not throwing.
+        await encryptEveryStorage();
+        await writeSyncSettings(true, false);
+        await writeDefaultDatabase(DATABASE_PATH);
+        await writeDatabaseConfig("/somewhere/else/photos");
+        await writeMerkleTree(false);
+
+        const plan = await planPrefetchHandler({}, context);
+
+        expect(plan.shouldRun).toBe(false);
+        expect(plan.reason).toContain("not a partial replica");
     });
 
     test("hands back a prefetch-database step for the database when a pass should run", async () => {
