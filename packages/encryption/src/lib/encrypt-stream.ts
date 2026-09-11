@@ -12,6 +12,7 @@ import {
     SUPPORTED_VERSIONS,
 } from "./encryption-constants";
 import { hashPublicKey } from "./key-utils";
+import { requireWrappableKey } from "./encrypt-buffer";
 import type { IPrivateKeyMap } from "./encryption-types";
 
 //
@@ -41,14 +42,24 @@ export function createEncryptionStream(publicKey: KeyObject): Duplex {
 
     let headerSent = false;
 
+    //
+    // Writes the header, the wrapped key and the iv, once, refusing a key the readers could not
+    // slice back out. Both entry points below have to do it, because a stream that is flushed with
+    // nothing written still produces a file.
+    //
+    function sendHeader(stream: Transform): void {
+        const encryptedKey = publicEncrypt(publicKey, key);
+        requireWrappableKey(encryptedKey.length);
+        stream.push(header);
+        stream.push(encryptedKey);
+        stream.push(iv);
+        headerSent = true;
+    }
+
     return new Transform({
         transform(chunk, encoding, callback) {
             if (!headerSent) {
-                const encryptedKey = publicEncrypt(publicKey, key);
-                this.push(header);
-                this.push(encryptedKey);
-                this.push(iv);
-                headerSent = true;
+                sendHeader(this);
             }
             this.push(cipher.update(chunk));
             callback();
@@ -56,11 +67,7 @@ export function createEncryptionStream(publicKey: KeyObject): Duplex {
 
         flush(callback) {
             if (!headerSent) {
-                const encryptedKey = publicEncrypt(publicKey, key);
-                this.push(header);
-                this.push(encryptedKey);
-                this.push(iv);
-                headerSent = true;
+                sendHeader(this);
             }
             this.push(cipher.final());
             callback();
@@ -159,13 +166,14 @@ export function createDecryptionStream(privateKeyMap: IPrivateKeyMap): Duplex {
             }
 
             if (!key) {
-                passThrough = true;
-                this.push(headerBuffer.subarray(0, headerBytesReceived));
-                headerBytesReceived = 0;
-                if (remainder.length > 0) {
-                    this.push(remainder);
-                }
-                callback();
+                // The data carries the encryption tag, so it says outright that it is encrypted and
+                // there is no key for it. Passing it through was a silent wrong answer of the worst
+                // kind on this path: a copy reading through this stream would write the ciphertext
+                // out as though it were the file, so a prefetch or a sync run without the key would
+                // fill a replica with unreadable files and report success. decryptBuffer had the
+                // same fallback, and what it produced was a checksum mismatch reported from
+                // serialization, which names a place that has nothing to do with the missing key.
+                callback(new Error(`Could not decrypt data that says it is encrypted: no private key for key hash ${keyHashHex}`));
                 return;
             }
 
