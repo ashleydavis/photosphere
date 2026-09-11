@@ -295,6 +295,39 @@ public final class HostFunctions {
     }
 
     //
+    // host.fsAppendFile(path, base64): appends the base64-decoded bytes to the sandboxed path,
+    // creating the file and its parent directories when they are not there.
+    //
+    // It exists so a write stream can cross the bridge a chunk at a time, which is what the read side
+    // already does through fsReadFileRange. Whole-file writes cannot: the bytes arrive as one base64
+    // string and are decoded into one array, so writing an 87 MB video needed an 87 MB byte[] on a
+    // Java heap whose growth limit is 256 MB. Measured on a Pixel 6 importing a real library, that
+    // allocation was refused three times over five minutes and forty-seven seconds and the video was
+    // never imported: "Failed to allocate a 90894120 byte allocation with 51397312 free bytes and
+    // 49MB until OOM, target footprint 268435456, growth limit 268435456", against a file of
+    // 90,893,534 bytes.
+    //
+    // There is deliberately no exclusive flag. Appending to a file that is not there creates it, and
+    // the write-lock's exclusive create still goes through fsWriteFile.
+    //
+    public static void fsAppendFile(File storageRoot, String candidatePath, String base64) {
+        File target = PathSandbox.resolveWithin(storageRoot, candidatePath);
+
+        File parent = target.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
+
+        byte[] data = base64Decode(base64);
+        try (FileOutputStream output = new FileOutputStream(target, true)) {
+            output.write(data);
+        }
+        catch (IOException error) {
+            throw new RuntimeException("fsAppendFile failed for \"" + candidatePath + "\": " + error.getMessage(), error);
+        }
+    }
+
+    //
     // host.fsMkdir(path, recursive): creates a directory under the sandbox root. With recursive true
     // (the only mode the storage layer uses) it creates missing parents and is a no-op when the
     // directory already exists, matching Node's fs.mkdir({ recursive: true }).
