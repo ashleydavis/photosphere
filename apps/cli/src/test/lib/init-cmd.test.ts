@@ -125,8 +125,105 @@ describe('normaliseDatabaseId', () => {
 });
 
 describe('getDefaultS3Config', () => {
+
+    // What the environment held before each test, so a machine or a runner that has AWS credentials
+    // set does not decide the result of the vault cases below.
+    const savedEnvironment = {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        region: process.env.AWS_REGION,
+        endpoint: process.env.AWS_ENDPOINT,
+    };
+
     beforeEach(() => {
         jest.clearAllMocks();
+        delete process.env.AWS_ACCESS_KEY_ID;
+        delete process.env.AWS_SECRET_ACCESS_KEY;
+        delete process.env.AWS_REGION;
+        delete process.env.AWS_ENDPOINT;
+    });
+
+    afterEach(() => {
+        process.env.AWS_ACCESS_KEY_ID = savedEnvironment.accessKeyId;
+        process.env.AWS_SECRET_ACCESS_KEY = savedEnvironment.secretAccessKey;
+        process.env.AWS_REGION = savedEnvironment.region;
+        process.env.AWS_ENDPOINT = savedEnvironment.endpoint;
+    });
+
+    test('reads the environment variables when they are set, without touching the vault', async () => {
+        const mockVault = makeMockVault(undefined);
+        mockGetVault.mockReturnValue(mockVault);
+
+        process.env.AWS_ACCESS_KEY_ID = 'AKIDENV';
+        process.env.AWS_SECRET_ACCESS_KEY = 'secretenv';
+        process.env.AWS_REGION = 'ap-southeast-2';
+        process.env.AWS_ENDPOINT = 'http://127.0.0.1:9000';
+
+        const result = await getDefaultS3Config();
+
+        expect(result).toEqual({
+            region: 'ap-southeast-2',
+            accessKeyId: 'AKIDENV',
+            secretAccessKey: 'secretenv',
+            endpoint: 'http://127.0.0.1:9000',
+        });
+        expect(mockVault.get).not.toHaveBeenCalled();
+    });
+
+    test('defaults the region when the environment names credentials but no region', async () => {
+        const mockVault = makeMockVault(undefined);
+        mockGetVault.mockReturnValue(mockVault);
+
+        process.env.AWS_ACCESS_KEY_ID = 'AKIDENV';
+        process.env.AWS_SECRET_ACCESS_KEY = 'secretenv';
+
+        const result = await getDefaultS3Config();
+
+        expect(result?.region).toBe('us-east-1');
+        expect(result?.endpoint).toBeUndefined();
+    });
+
+    test('the environment wins over the default:s3 secret, because that is the order the workers use', async () => {
+        // The CLI's pre-flight and the worker that does the work have to resolve one path to one
+        // account. When this preferred the vault, a database replicated into the bucket the
+        // environment named was then reported as not existing by a command reading the same path.
+        const mockVault = makeMockVault({
+            name: 'default:s3',
+            type: 's3-credentials',
+            value: JSON.stringify({
+                region: 'us-east-1',
+                accessKeyId: 'AKIDVAULT',
+                secretAccessKey: 'secretvault',
+                endpoint: 'https://syd1.digitaloceanspaces.com',
+            }),
+        });
+        mockGetVault.mockReturnValue(mockVault);
+
+        process.env.AWS_ACCESS_KEY_ID = 'AKIDENV';
+        process.env.AWS_SECRET_ACCESS_KEY = 'secretenv';
+        process.env.AWS_ENDPOINT = 'http://127.0.0.1:9000';
+
+        const result = await getDefaultS3Config();
+
+        expect(result?.accessKeyId).toBe('AKIDENV');
+        expect(result?.endpoint).toBe('http://127.0.0.1:9000');
+    });
+
+    test('falls back to the vault when only half the environment credentials are set', async () => {
+        const credentials = {
+            region: 'us-east-1',
+            accessKeyId: 'AKIDVAULT',
+            secretAccessKey: 'secretvault',
+            endpoint: 'https://syd1.digitaloceanspaces.com',
+        };
+        const mockVault = makeMockVault({ name: 'default:s3', type: 's3-credentials', value: JSON.stringify(credentials) });
+        mockGetVault.mockReturnValue(mockVault);
+
+        process.env.AWS_ACCESS_KEY_ID = 'AKIDENV';
+
+        const result = await getDefaultS3Config();
+
+        expect(result).toEqual(credentials);
     });
 
     test('returns credentials when the default:s3 secret exists', async () => {

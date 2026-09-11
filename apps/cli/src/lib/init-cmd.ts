@@ -50,9 +50,27 @@ export function normaliseDatabaseId(databaseId: string | undefined): string | un
 }
 
 //
-// Reads the default S3 credentials fallback from the vault.
+// Reads the S3 credentials to use for a path the database list says nothing about: the `AWS_*`
+// environment variables first, and the vault's `default:s3` secret when they are not set.
+//
+// The order matters and is not a preference. Every worker resolves such a path with
+// `resolveStorageCredentials`, which reads a vault secret only when the path's entry names one and
+// otherwise takes the environment variables, never consulting `default:s3`. When this read the vault
+// alone, the CLI's own pre-flight and the worker doing the work looked in two different accounts for
+// one path: a whole database replicated into the bucket the environment named, and `psi summary`
+// against that same path then reported no database there, having gone looking in the account the
+// vault names.
 //
 export async function getDefaultS3Config(): Promise<IS3Credentials | undefined> {
+    if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+        return {
+            region: process.env.AWS_REGION || 'us-east-1',
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+            endpoint: process.env.AWS_ENDPOINT,
+        };
+    }
+
     const vault = getVault(getDefaultVaultType());
     const secret = await vault.get('default:s3');
     if (!secret) {
