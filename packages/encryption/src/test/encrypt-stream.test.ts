@@ -1,4 +1,5 @@
 import { Readable } from "stream";
+import { createPublicKey, generateKeyPairSync } from "node:crypto";
 import { computeEncryptedLength, createEncryptionStream, createDecryptionStream } from "../lib/encrypt-stream";
 import { generateKeyPair, hashPublicKey } from "../lib/key-utils";
 import { encryptBuffer } from "../lib/encrypt-buffer";
@@ -107,6 +108,35 @@ describe("encrypt-stream", () => {
         });
     });
 
+    describe("a key the format cannot read back", () => {
+
+        // The stream path needs its own cover: it is the one every file copy in the app goes through,
+        // and it wraps the AES key in its own place rather than calling encryptBuffer.
+        const smallKeyPair = generateKeyPairSync("rsa", {
+            modulusLength: 2048,
+            publicKeyEncoding: {
+                type: "spki",
+                format: "pem",
+            },
+            privateKeyEncoding: {
+                type: "pkcs8",
+                format: "pem",
+            },
+        });
+
+        test("fails the stream rather than writing a file nothing can decrypt", async () => {
+            const enc = createEncryptionStream(createPublicKey(smallKeyPair.publicKey));
+            Readable.from(Buffer.from("secret")).pipe(enc);
+            await expect(streamToBuffer(enc)).rejects.toThrow(/wraps into 256 bytes and the file format requires 512/);
+        });
+
+        test("fails an empty stream too, because flushing one still writes a file", async () => {
+            const enc = createEncryptionStream(createPublicKey(smallKeyPair.publicKey));
+            Readable.from([]).pipe(enc);
+            await expect(streamToBuffer(enc)).rejects.toThrow(/wraps into 256 bytes/);
+        });
+    });
+
     describe("pass-through (no decryption)", () => {
         it("passes plain data through when key map has no default key", async () => {
             const plain = Buffer.from("plain file content");
@@ -116,12 +146,25 @@ describe("encrypt-stream", () => {
             expect(out.equals(plain)).toBe(true);
         });
 
-        it("passes data through when new-format header present but no matching key in map", async () => {
+        test("fails when the new-format header is there and no key in the map matches it", async () => {
+            // It used to pass the ciphertext through. On this path that is the worst version of the
+            // silent wrong answer: every file copy in the app reads through this stream, so a
+            // prefetch or a sync run without the key would write ciphertext out as though it were
+            // the file, fill a replica with unreadable files, and report success.
             const encrypted = encryptBuffer(keyPair.publicKey, Buffer.from("secret"));
             const dec = createDecryptionStream({});
             Readable.from(encrypted).pipe(dec);
-            const out = await streamToBuffer(dec);
-            expect(out.equals(encrypted)).toBe(true);
+            await expect(streamToBuffer(dec)).rejects.toThrow(/says it is encrypted/);
+        });
+
+        test("fails when the new-format header is there and the map holds the wrong key", async () => {
+            const otherKeyPair = generateKeyPair();
+            const encrypted = encryptBuffer(keyPair.publicKey, Buffer.from("secret"));
+            const dec = createDecryptionStream({
+                [hashPublicKey(otherKeyPair.publicKey).toString("hex")]: otherKeyPair.privateKey,
+            });
+            Readable.from(encrypted).pipe(dec);
+            await expect(streamToBuffer(dec)).rejects.toThrow(/says it is encrypted/);
         });
 
         it("passes plain data through when default key present but data is not encrypted (legacy decrypt throws)", async () => {

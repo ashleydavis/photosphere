@@ -1,4 +1,4 @@
-import { generateKeyPair, hashPublicKey, loadEncryptionKeys } from '../lib/key-utils';
+import { generateKeyPair, hashPublicKey, loadEncryptionKeys, loadEncryptionKeysFromPem } from '../lib/key-utils';
 import type { IStorageOptions } from '../lib/encryption-types';
 import { createCipheriv, randomBytes } from 'node:crypto';
 import { createTestTempDir } from 'node-utils';
@@ -16,6 +16,29 @@ async function createTestKeyPath(baseName: string): Promise<string> {
     await fs.mkdir(testKeysDir, { recursive: true });
     return path.join(testKeysDir, baseName);
 }
+
+describe('loadEncryptionKeysFromPem', () => {
+
+    test('builds encrypting storage options from a key pair', async () => {
+        const keyPair = generateKeyPair();
+        const { options, isEncrypted } = await loadEncryptionKeysFromPem([{
+            privateKeyPem: keyPair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+            publicKeyPem: keyPair.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+        }]);
+
+        expect(isEncrypted).toBe(true);
+        expect(options.encryptionPublicKey).toBeDefined();
+    });
+
+    test('reports no encryption for an empty key list', () => {
+        // An unencrypted database goes through here with nothing in the list, every time a storage is
+        // built, so this path must stay quiet.
+        return expect(loadEncryptionKeysFromPem([])).resolves.toEqual({
+            options: {},
+            isEncrypted: false,
+        });
+    });
+});
 
 describe('hashPublicKey', () => {
     it('returns a 32-byte buffer', () => {

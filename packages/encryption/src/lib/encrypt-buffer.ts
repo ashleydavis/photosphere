@@ -8,6 +8,7 @@ import {
     PUBLIC_KEY_HASH_LENGTH,
     SUPPORTED_TYPES,
     SUPPORTED_VERSIONS,
+    WRAPPED_KEY_LENGTH,
 } from "./encryption-constants";
 import { log } from "utils";
 import { hashPublicKey } from "./key-utils";
@@ -22,6 +23,7 @@ export function encryptBuffer(publicKey: KeyObject, data: Buffer): Buffer {
     const cipher = createCipheriv("aes-256-cbc", key, iv);
     const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
     const encryptedKey = publicEncrypt(publicKey, key);
+    requireWrappableKey(encryptedKey.length);
     const payload = Buffer.concat([encryptedKey, iv, encrypted]);
 
     const version = ENCRYPTION_FORMAT_VERSION;
@@ -40,12 +42,40 @@ export function encryptBuffer(publicKey: KeyObject, data: Buffer): Buffer {
 const TAG_BYTES = Buffer.from(ENCRYPTION_TAG, "ascii");
 
 //
-// Decrypts a buffer using a key map. Tries in order: new format, legacy format, then returns data unchanged.
+// Refuses a wrapped key that the readers could not slice back out of the file.
+//
+// Checked at the write, where the wrapped key has just been produced and its length is free to read,
+// rather than where a key is loaded: this is the one check that works everywhere, because the mobile
+// crypto shim's KeyObject carries no key details to inspect and only the wrapped length says what
+// size the key really was.
+//
+// What it prevents is losing the plaintext. Encrypting with a smaller key succeeded and wrote a file
+// that no reader here can decrypt, and said nothing at the time; making the read loud does not help,
+// because by then the only copy of the data is the unreadable file.
+//
+export function requireWrappableKey(wrappedKeyLength: number): void {
+    if (wrappedKeyLength !== WRAPPED_KEY_LENGTH) {
+        throw new Error(`This encryption key wraps into ${wrappedKeyLength} bytes and the file format requires ${WRAPPED_KEY_LENGTH}, which is 4096-bit RSA. Encrypting with it would write files that cannot be decrypted again.`);
+    }
+}
+
+//
+// Decrypts a buffer using a key map. Tries in order: new format, legacy format, then returns data
+// unchanged, which is how a file that was never encrypted reads back through an encrypted storage.
+//
+// A file carrying the encryption tag is the exception: it says outright that it is encrypted, so a
+// failure to decrypt it is a failure, not evidence that it was plaintext all along. Handing the
+// ciphertext back for one of those produces a wrong answer a long way from its cause: the caller
+// deserializes the encrypted bytes and reports whatever that happens to look like, which for a
+// database file is "Checksum mismatch: expected <the file's last 32 bytes>". That message names
+// serialization while the fault is the key, so it sends a reader to the wrong place entirely.
 //
 export function decryptBuffer(data: Buffer, privateKeyMap: IPrivateKeyMap): Buffer {
     if (data.length < 4) {
         return data;
     }
+
+    const carriesEncryptionTag = data.subarray(0, 4).equals(TAG_BYTES);
 
     //
     // Try to decrypt as new format.
@@ -54,6 +84,9 @@ export function decryptBuffer(data: Buffer, privateKeyMap: IPrivateKeyMap): Buff
         return decryptNewFormat(data, privateKeyMap);
     }
     catch (err: any) {
+        if (carriesEncryptionTag) {
+            throw new Error(`Could not decrypt data that says it is encrypted: ${err.message}`, { cause: err });
+        }
         log.verbose(`decryptBuffer: new format decryption failed, trying legacy`);
     }
 
