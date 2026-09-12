@@ -46,7 +46,7 @@ async function makeDatabase(fileNames: string[]): Promise<MockStorage> {
             name: fileName,
             hash: hashOf(fileName),
             length: fileName.length,
-            lastModified: new Date(0),
+            lastModified: new Date("2026-01-01T00:00:00.000Z"),
         });
     }
     tree.databaseMetadata = { filesImported: fileNames.length };
@@ -82,6 +82,26 @@ function makeBsonDatabase(): any {
 }
 
 describe("saving the target merkle tree during a push", () => {
+
+    //
+    // A pass that put nothing in the tree leaves it exactly as it was loaded, so writing it back
+    // sends a megabyte to say so. On a Pixel 6 pushing to an origin holding 8,481 photos that write
+    // took twenty-nine seconds of a thirty-one second pass, every five minutes, on the same
+    // connection the import was trying to use.
+    //
+    test("a push that copies nothing does not write the tree back", async () => {
+        const shared = Array.from({ length: 3 }, (_, index) => `asset/shared-${index}.jpg`);
+
+        // The target holds everything the source does and more, so the trees differ (the push is not
+        // skipped) and yet there is nothing for the push to copy.
+        const source = await makeDatabase(shared);
+        const target = await makeDatabase(shared.concat([ "asset/only-at-the-target.jpg" ]));
+        const treeWrites = countTreeWrites(target);
+
+        await pushFiles(source, target, makeBsonDatabase());
+
+        expect(treeWrites.count()).toBe(0);
+    });
 
     test("a push that copies files still saves the tree, so an interrupted one does not start again from nothing", async () => {
         const fileNames = Array.from({ length: 5 }, (_, index) => `asset/new-${index}.jpg`);

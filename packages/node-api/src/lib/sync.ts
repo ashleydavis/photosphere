@@ -221,7 +221,40 @@ export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage
     let bytesCopied = 0;
     const pushStartedAt = Date.now();
 
-    // 
+    //
+    // Says where the push's time has gone so far.
+    //
+    // A sync that is slow is otherwise just a number of files a minute, and the interesting figure is
+    // always the one that does not belong: a pass that spent forty-six minutes of its forty-six
+    // minutes writing the merkle tree said so here and nowhere else.
+    //
+    const sayWhereTheTimeWent = (): void => {
+        const loggedAt = Date.now();
+        const elapsed = Date.now() - pushStartedAt;
+        const unaccounted = elapsed - millisecondsAskingAboutTheSource - millisecondsWriting
+            - millisecondsUpdatingTheTree - millisecondsSavingTheTree
+            - millisecondsDiffingTheTrees - millisecondsDecidingWhetherToCopy - millisecondsLogging;
+        log.info(`Sync timings: ${JSON.stringify({
+            filesCopied,
+            leavesVisited,
+            nodesVisited,
+            bytesCopied,
+            elapsedMs: elapsed,
+            copyFileMs: millisecondsInsideCopyFile,
+            diffMs: millisecondsDiffingTheTrees,
+            decideMs: millisecondsDecidingWhetherToCopy,
+            openSourceMs: millisecondsOpeningTheSource,
+            sourceInfoMs: millisecondsAskingAboutTheSource,
+            writeMs: millisecondsWriting,
+            treeUpdateMs: millisecondsUpdatingTheTree,
+            treeSaveMs: millisecondsSavingTheTree,
+            loggingMs: millisecondsLogging,
+            unaccountedMs: unaccounted,
+        })}`);
+        millisecondsLogging += Date.now() - loggedAt;
+    };
+
+    //
     // Copies a single file if necessary.
     //
     const copyFile = async (fileName: string, sourceHash: Buffer): Promise<void> => {
@@ -270,6 +303,26 @@ export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage
         }
         millisecondsAskingAboutTheSource += Date.now() - askedAboutTheSourceAt;
 
+        // How long the file is, taken from the source's own tree rather than from the store holding
+        // it, because those are two different numbers whenever a database is encrypted.
+        //
+        // `readStream` above hands back what this database contains, decrypting on the way out, while
+        // `info` reports the size of the file on the disk underneath, which is the ciphertext and is
+        // 576 bytes longer. Handing the ciphertext size over as the length of a plaintext stream made
+        // the target declare a Content-Length it then fell 576 bytes short of, and S3 sat waiting for
+        // a remainder that was never coming: measured on a Pixel 6 pushing to MinIO on the same LAN,
+        // every file failed after thirty seconds with "A timeout occurred while trying to lock a
+        // resource, please reduce your request rate", three attempts each, and the sync never copied
+        // anything at all.
+        //
+        // The tree is the right place to ask. Its hash is already trusted for exactly this file (it is
+        // what decided the copy was needed and what goes up with the body), and it records the length
+        // of what the database holds, which is what is about to be sent.
+        const sourceTreeInfo = getItemInfo(sourceMerkleTree, fileName);
+        if (!sourceTreeInfo) {
+            throw new Error(`Source file "${fileName}" is in the source tree's merkle nodes but not in its sort tree.`);
+        }
+
         // Copy file from source to target.
         // The hash goes up with the file. It is already known, because it is what the merkle tree is
         // made of, and handing it over means nothing has to compute it: S3 checks the body against it
@@ -290,9 +343,9 @@ export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage
         // else) is still asked, and the copy is checked by its length. `psi verify` is the deep
         // check, and it reads everything deliberately rather than as a side effect of every sync.
         const writeStartedAt = Date.now();
-        const verifiedByTheStore = await targetAssetStorage.writeStreamHashed(fileName, sourceFileInfo.contentType, readStream, sourceFileInfo.length, sourceHash);
+        const verifiedByTheStore = await targetAssetStorage.writeStreamHashed(fileName, sourceFileInfo.contentType, readStream, sourceTreeInfo.length, sourceHash);
         millisecondsWriting += Date.now() - writeStartedAt;
-        bytesCopied += sourceFileInfo.length;
+        bytesCopied += sourceTreeInfo.length;
 
         if (!verifiedByTheStore) {
             const copiedFileInfo = await targetAssetStorage.info(fileName);
@@ -311,16 +364,18 @@ export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage
             }
         }
 
-        // Add or update file in target merkle tree, under what the source recorded: the copy has just
-        // been checked against that hash, so the two describe the same bytes, and the length and time
-        // are the source's for the same reason. Reading them back off the target would be another
-        // request per file to be told what was just sent.
+        // Add or update file in target merkle tree, under what the source's tree recorded: the copy
+        // has just been checked against that hash, so the two describe the same bytes, and the length
+        // and time are the source tree's for the same reason. Reading them back off the target would
+        // be another request per file to be told what was just sent, and off an encrypted target it
+        // would give the ciphertext's length, which would never match the source and would put the
+        // file back in the difference on every pass for ever.
         const treeStartedAt = Date.now();
         targetMerkleTree = upsertItem(targetMerkleTree!, {
             name: fileName,
             hash: sourceHash,
-            length: sourceFileInfo.length,
-            lastModified: sourceFileInfo.lastModified,
+            length: sourceTreeInfo.length,
+            lastModified: sourceTreeInfo.lastModified,
         });
         millisecondsUpdatingTheTree += Date.now() - treeStartedAt;
 
@@ -406,30 +461,13 @@ export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage
 
                 // Where the time went, said out loud often enough to be useful and rarely enough to
                 // be readable. A sync that is slow is otherwise just a number of files a minute.
-                if (filesCopied % 20 === 0) {
-                    const loggedAt = Date.now();
-                    const elapsed = Date.now() - pushStartedAt;
-                    const unaccounted = elapsed - millisecondsAskingAboutTheSource - millisecondsWriting
-                        - millisecondsUpdatingTheTree - millisecondsSavingTheTree
-                        - millisecondsDiffingTheTrees - millisecondsDecidingWhetherToCopy - millisecondsLogging;
-                    log.info(`Sync timings: ${JSON.stringify({
-                        filesCopied,
-                        leavesVisited,
-                        nodesVisited,
-                        bytesCopied,
-                        elapsedMs: elapsed,
-                        copyFileMs: millisecondsInsideCopyFile,
-                        diffMs: millisecondsDiffingTheTrees,
-                        decideMs: millisecondsDecidingWhetherToCopy,
-                        openSourceMs: millisecondsOpeningTheSource,
-                        sourceInfoMs: millisecondsAskingAboutTheSource,
-                        writeMs: millisecondsWriting,
-                        treeUpdateMs: millisecondsUpdatingTheTree,
-                        treeSaveMs: millisecondsSavingTheTree,
-                        loggingMs: millisecondsLogging,
-                        unaccountedMs: unaccounted,
-                    })}`);
-                    millisecondsLogging += Date.now() - loggedAt;
+                //
+                // `filesCopied > 0` for the reason above: zero divides by twenty exactly, so a pass
+                // that copied nothing said this on every leaf it looked at. A Pixel 6 pushing to an
+                // origin holding 8,481 photos wrote a line per leaf, which buried the one line that
+                // mattered (the copy that failed) under thousands that said the same thing.
+                if (filesCopied > 0 && filesCopied % 20 === 0) {
+                    sayWhereTheTimeWent();
                 }
             }
         } else {
@@ -498,9 +536,24 @@ export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage
         log.verbose(`Deleted asset ${assetId} from target (marked as deleted in source)`);
     }
     
-    // Save the target merkle tree one final time.
-    await retry(() => saveMerkleTree(targetMerkleTree!, targetAssetStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to save the target merkle tree after a push"); //TODO: This doesn't really need to be done unless something changed.
-    
+    // Save the target merkle tree one final time, and only when this pass put something in it.
+    //
+    // Nothing copied and nothing deleted leaves the tree exactly as it was loaded, so writing it back
+    // sends a megabyte to say that. On a Pixel 6 pushing to an origin holding 8,481 photos that one
+    // write took twenty-nine seconds of a thirty-one second pass, every five minutes, for as long as
+    // the app was running: it is the whole cost of a sync that has nothing to do, and it was
+    // competing for the connection with the import that did.
+    if (filesCopied > 0 || assetsDeleted > 0) {
+        const savedAt = Date.now();
+        await retry(() => saveMerkleTree(targetMerkleTree!, targetAssetStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to save the target merkle tree after a push");
+        millisecondsSavingTheTree += Date.now() - savedAt;
+    }
+
+
+    // Said once at the end whatever the pass did, because a pass that copied nothing is exactly the
+    // one whose time needs explaining and is the one the every-twenty-files line above never reaches.
+    sayWhereTheTimeWent();
+
     log.info(`Push completed: ${filesCopied} files copied, ${filesLeftBehind} left behind for the next pass, ${assetsDeleted} deleted from target`);
 }
 
