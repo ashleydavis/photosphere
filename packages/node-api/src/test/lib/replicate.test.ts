@@ -494,6 +494,84 @@ describe('replicate', () => {
         }
     });
 
+    test('replicates from a partial replica, leaving out the files it does not hold', async () => {
+        // A partial replica's merkle tree is the whole origin's, so it describes files the replica
+        // does not have: that is what makes it partial, and it is what every phone holds. Treating
+        // the first of those as fatal made a partial replica impossible to replicate or consolidate
+        // from, which matters most in the one case where it is the only copy left.
+        const sourceAsset = new MockStorage();
+        const destAsset = new MockStorage();
+        const sourceBdb = new BsonDatabase(new MockStorage(), "", uuidGenerator, timestampProvider);
+
+        const presentFile = 'asset/present.jpg';
+        const absentFile = 'asset/absent.jpg';
+        await sourceAsset.write(presentFile, 'image/jpeg', Buffer.from(presentFile, 'utf-8'));
+
+        let sourceTree = createTree<IDatabaseMetadata>(dbId);
+        for (const fileName of [presentFile, absentFile]) {
+            sourceTree = addItem(sourceTree, {
+                name: fileName,
+                hash: makeHash(fileName),
+                length: fileName.length,
+                lastModified: new Date(),
+            });
+        }
+        sourceTree.databaseMetadata = { filesImported: 2, isPartial: true };
+        sourceTree.merkle = buildMerkleTree(sourceTree.sort);
+        sourceTree.dirty = false;
+        await saveTree('.db/files.dat', sourceTree, sourceAsset);
+
+        const result = await replicate(
+            'mock://source',
+            sourceAsset,
+            sourceBdb,
+            uuidGenerator,
+            timestampProvider,
+            destAsset,
+            destAsset,
+            undefined,
+            undefined
+        );
+
+        expect(result.copiedFiles).toBe(1);
+        expect(result.missingFromSource).toEqual([absentFile]);
+        expect(await destAsset.fileExists(presentFile)).toBe(true);
+        expect(await destAsset.fileExists(absentFile)).toBe(false);
+    });
+
+    test('a file missing from a source that is not partial is still fatal', async () => {
+        // There the tree and the files are supposed to agree, so a gap between them is damage and
+        // must not be quietly copied around.
+        const sourceAsset = new MockStorage();
+        const destAsset = new MockStorage();
+        const sourceBdb = new BsonDatabase(new MockStorage(), "", uuidGenerator, timestampProvider);
+
+        const absentFile = 'asset/absent.jpg';
+        let sourceTree = createTree<IDatabaseMetadata>(dbId);
+        sourceTree = addItem(sourceTree, {
+            name: absentFile,
+            hash: makeHash(absentFile),
+            length: absentFile.length,
+            lastModified: new Date(),
+        });
+        sourceTree.databaseMetadata = { filesImported: 1 };
+        sourceTree.merkle = buildMerkleTree(sourceTree.sort);
+        sourceTree.dirty = false;
+        await saveTree('.db/files.dat', sourceTree, sourceAsset);
+
+        await expect(replicate(
+            'mock://source',
+            sourceAsset,
+            sourceBdb,
+            uuidGenerator,
+            timestampProvider,
+            destAsset,
+            destAsset,
+            undefined,
+            undefined
+        )).rejects.toThrow(/does not exist in the source database/);
+    });
+
     test('returns result shape with zero counts when source has no files and empty dest', async () => {
         const sourceAsset = new MockStorage();
         const destAsset = new MockStorage();

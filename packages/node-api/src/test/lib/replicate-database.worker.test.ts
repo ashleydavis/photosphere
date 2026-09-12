@@ -83,6 +83,7 @@ describe("replicateDatabaseHandler", () => {
             copiedFiles: 0,
             copiedRecords: 0,
             prunedFiles: [],
+            missingFromSource: [],
         });
     });
 
@@ -251,6 +252,7 @@ describe("replicateDatabaseHandler", () => {
             copiedFiles: 3,
             copiedRecords: 2,
             prunedFiles: ["old.jpg"],
+            missingFromSource: [],
         });
 
         const result = await replicateDatabaseHandler(makeData(), makeContext());
@@ -260,6 +262,7 @@ describe("replicateDatabaseHandler", () => {
             copiedFiles: 3,
             copiedRecords: 2,
             prunedFiles: ["old.jpg"],
+            missingFromSource: [],
         });
     });
 
