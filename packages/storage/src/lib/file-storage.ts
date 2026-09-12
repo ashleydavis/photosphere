@@ -131,10 +131,17 @@ export class FileStorage implements IStorage {
     }
     
     //
+    // What a file hands out is what it holds, so the length in the info is the answer.
+    //
+    readableLength(fileInfo: IFileInfo): number | undefined {
+        return fileInfo.length;
+    }
+
+    //
     // Writes the stream, ignoring the hash: a filesystem has nothing to check it against and keeps
     // no record of it.
     //
-    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength: number, sha256: Buffer): Promise<boolean> {
+    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength: number | undefined, sha256: Buffer): Promise<boolean> {
         await this.writeStream(filePath, contentType, inputStream);
         return false;
     }

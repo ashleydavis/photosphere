@@ -61,9 +61,16 @@ export class LazyOriginStorage implements IStorage {
     }
 
     //
+    // How many bytes a read hands out, which the local store is the one to say.
+    //
+    readableLength(fileInfo: IFileInfo): number | undefined {
+        return this.local.readableLength(fileInfo);
+    }
+
+    //
     // Writes a stream whose SHA-256 the caller already knows, into the local store.
     //
-    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength: number, sha256: Buffer): Promise<boolean> {
+    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength: number | undefined, sha256: Buffer): Promise<boolean> {
         return this.local.writeStreamHashed(filePath, contentType, inputStream, contentLength, sha256);
     }
 

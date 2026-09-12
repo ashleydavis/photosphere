@@ -303,21 +303,9 @@ export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage
         }
         millisecondsAskingAboutTheSource += Date.now() - askedAboutTheSourceAt;
 
-        // How long the file is, taken from the source's own tree rather than from the store holding
-        // it, because those are two different numbers whenever a database is encrypted.
-        //
-        // `readStream` above hands back what this database contains, decrypting on the way out, while
-        // `info` reports the size of the file on the disk underneath, which is the ciphertext and is
-        // 576 bytes longer. Handing the ciphertext size over as the length of a plaintext stream made
-        // the target declare a Content-Length it then fell 576 bytes short of, and S3 sat waiting for
-        // a remainder that was never coming: measured on a Pixel 6 pushing to MinIO on the same LAN,
-        // every file failed after thirty seconds with "A timeout occurred while trying to lock a
-        // resource, please reduce your request rate", three attempts each, and the sync never copied
-        // anything at all.
-        //
-        // The tree is the right place to ask. Its hash is already trusted for exactly this file (it is
-        // what decided the copy was needed and what goes up with the body), and it records the length
-        // of what the database holds, which is what is about to be sent.
+        // What the source's tree records for this file, which is what the target's tree is about to
+        // record for its copy. Its hash is already trusted for exactly this file: it is what decided
+        // the copy was needed and what goes up with the body.
         const sourceTreeInfo = getItemInfo(sourceMerkleTree, fileName);
         if (!sourceTreeInfo) {
             throw new Error(`Source file "${fileName}" is in the source tree's merkle nodes but not in its sort tree.`);
@@ -342,8 +330,20 @@ export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage
         // filesystem, or encrypted storage, whose stored bytes are ciphertext and hash to something
         // else) is still asked, and the copy is checked by its length. `psi verify` is the deep
         // check, and it reads everything deliberately rather than as a side effect of every sync.
+        //
+        // How many bytes that stream will produce, which is the source's to say and not the same as
+        // the size of the file it keeps.
+        //
+        // An encrypted database holds ciphertext and reads out plaintext, and it cannot say how long
+        // the plaintext is without decrypting the file, so it says it cannot. Handing the stored size
+        // over instead made the target declare a Content-Length it then fell short of by the
+        // encryption's overhead, and S3 sat waiting for a remainder that was never coming: measured
+        // on a Pixel 6 pushing to MinIO on the same LAN, every file failed after thirty seconds with
+        // "A timeout occurred while trying to lock a resource, please reduce your request rate",
+        // three attempts each, and the sync copied nothing at all for as long as it was left running.
+        //
         const writeStartedAt = Date.now();
-        const verifiedByTheStore = await targetAssetStorage.writeStreamHashed(fileName, sourceFileInfo.contentType, readStream, sourceTreeInfo.length, sourceHash);
+        const verifiedByTheStore = await targetAssetStorage.writeStreamHashed(fileName, sourceFileInfo.contentType, readStream, sourceAssetStorage.readableLength(sourceFileInfo), sourceHash);
         millisecondsWriting += Date.now() - writeStartedAt;
         bytesCopied += sourceTreeInfo.length;
 

@@ -152,7 +152,11 @@ class HashReportingStorage implements IStorage {
         return this.inner.writeStream(filePath, contentType, inputStream, contentLength);
     }
 
-    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength: number, sha256: Buffer): Promise<boolean> {
+    readableLength(fileInfo: IFileInfo): number | undefined {
+        return this.inner.readableLength(fileInfo);
+    }
+
+    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength: number | undefined, sha256: Buffer): Promise<boolean> {
         this.hashesWrittenWith.set(filePath, sha256);
         await this.inner.writeStreamHashed(filePath, contentType, inputStream, contentLength, sha256);
         return this.verifiesWhatItWrites;

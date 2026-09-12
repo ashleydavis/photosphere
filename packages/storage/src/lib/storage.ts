@@ -95,6 +95,27 @@ export interface IStorage {
     info(filePath: string): Promise<IFileInfo | undefined>;
 
     //
+    // How many bytes `readStream` hands out for a file whose stored info is the one given, or
+    // undefined when the store cannot say.
+    //
+    // For most stores this is the length in the info, because what they hand out is what they hold.
+    // Encrypted storage is the exception: it holds ciphertext and reads out plaintext, and the
+    // plaintext's length cannot be worked back out of the ciphertext's, because the format pads the
+    // last block and how much of that block is padding is only known once it has been decrypted.
+    //
+    // It exists because a copy has to say how long it is before it sends a byte. Taking the length
+    // from an encrypted store's `info` and declaring it made every upload declare a Content-Length
+    // it then fell short of: measured on a Pixel 6 pushing to MinIO on the same LAN, S3 waited
+    // thirty seconds for a remainder that was never coming and refused every file with "A timeout
+    // occurred while trying to lock a resource, please reduce your request rate", three attempts
+    // each, and the sync copied nothing at all for as long as it was left running. A store that
+    // cannot say says so, and whatever receives the copy counts the bytes itself.
+    //
+    // Nothing is read here. The answer comes from the info the caller already has.
+    //
+    readableLength(fileInfo: IFileInfo): number | undefined;
+
+    //
     // Writes a stream whose SHA-256 the caller already knows, so nothing has to compute it.
     //
     // A store that can check the bytes against it does (S3 is handed the hash and refuses a write
@@ -111,7 +132,11 @@ export interface IStorage {
     // needs nothing further to know the copy is right. False when it could not, and the caller checks
     // the copy itself.
     //
-    writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength: number, sha256: Buffer): Promise<boolean>;
+    // The length is how many bytes the stream will produce, and it is undefined when the caller could
+    // not find that out, which is what `readableLength` says of an encrypted source. A store given no
+    // length reads the stream to find out rather than declaring one it does not know.
+    //
+    writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength: number | undefined, sha256: Buffer): Promise<boolean>;
 
     //
     // The SHA-256 of a stored file, when the store can say what it is without sending the file's

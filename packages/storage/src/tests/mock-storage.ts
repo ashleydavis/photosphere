@@ -152,10 +152,17 @@ export class MockStorage implements IStorage {
     }
 
     //
+    // What this hands out is what it holds, so the length in the info is the answer.
+    //
+    readableLength(fileInfo: IFileInfo): number | undefined {
+        return fileInfo.length;
+    }
+
+    //
     // Writes the stream and remembers the hash it was given, so storedHash can answer with it the
     // way a store that keeps one does.
     //
-    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength: number, sha256: Buffer): Promise<boolean> {
+    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength: number | undefined, sha256: Buffer): Promise<boolean> {
         await this.writeStream(filePath, contentType, inputStream, contentLength);
         this.storedHashes.set(filePath, sha256);
         return true;

@@ -4,7 +4,7 @@
 
 import { Readable } from 'stream';
 import { save, load, verify, UnsupportedVersionError, BinarySerializer, BinaryDeserializer, type DeserializerMap, type MigrationMap, type ISerializer, type IDeserializer, type DeserializerFunction } from '../lib/serialization';
-import { IStorage } from 'storage';
+import { IFileInfo, IStorage } from 'storage';
 
 //
 // Mock storage implementation for testing
@@ -23,7 +23,11 @@ class MockStorage implements IStorage {
         return undefined;
     }
 
-    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength: number, sha256: Buffer): Promise<boolean> {
+    readableLength(fileInfo: IFileInfo): number | undefined {
+        return fileInfo.length;
+    }
+
+    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength: number | undefined, sha256: Buffer): Promise<boolean> {
         await this.writeStream(filePath, contentType, inputStream, contentLength);
         return false;
     }
