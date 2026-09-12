@@ -934,6 +934,20 @@ export class ClientRequest extends HttpEmitter {
     private pathForLogging: string = "";
 
     //
+    // How many body bytes have been handed to the transport, and how many the head said would follow.
+    //
+    // A request that sends fewer bytes than it declared is the worst failure this shim has: nothing
+    // here notices, and the server waits on a body that is never coming until it gives up, so what
+    // comes back names the server rather than the request. MinIO answers "A timeout occurred while
+    // trying to lock a resource, please reduce your request rate" half a minute later, which reads
+    // as a busy server and is nothing of the kind. Counting both is what lets the next line say so.
+    //
+    private bodyBytesSent = 0;
+
+    // What the Content-Length header promised, or undefined when the caller sent no such header.
+    private declaredContentLength: number | undefined = undefined;
+
+    //
     // Opens the connection and schedules the send. `socket` and, for TLS, `secureConnect` are raised on
     // microtasks before the request goes out, so a caller that pins the certificate can attach its
     // listener and abort in time.
@@ -981,6 +995,7 @@ export class ClientRequest extends HttpEmitter {
         if (this.headSent) {
             if (!this.aborted) {
                 this.transport.write(buffer);
+                this.bodyBytesSent += buffer.length;
                 this.bodyWrittenAt = Date.now();
                 this.restartInactivityTimer();
             }
@@ -1045,6 +1060,7 @@ export class ClientRequest extends HttpEmitter {
         if (this.headSent) {
             if (!this.aborted) {
                 this.transport.writeFile(path, offset, length);
+                this.bodyBytesSent += length;
                 this.bodyWrittenAt = Date.now();
                 this.restartInactivityTimer();
             }
@@ -1173,6 +1189,10 @@ export class ClientRequest extends HttpEmitter {
             const value = headers[name];
             if (value !== undefined) {
                 head += `${name}: ${value}\r\n`;
+                if (name.toLowerCase() === "content-length") {
+                    const declared = parseInt(String(value), 10);
+                    this.declaredContentLength = Number.isNaN(declared) ? undefined : declared;
+                }
             }
         }
         head += "Connection: close\r\n\r\n";
@@ -1194,11 +1214,13 @@ export class ClientRequest extends HttpEmitter {
         // with "A timeout occurred while trying to lock a resource, please reduce your request rate".
         if (this.fileBody !== undefined && this.transport.writeFile !== undefined) {
             this.transport.writeFile(this.fileBody.path, this.fileBody.offset, this.fileBody.length);
+            this.bodyBytesSent += this.fileBody.length;
         }
         else {
             for (let offset = 0; offset < body.length; offset += OUTBOUND_BODY_CHUNK_BYTES) {
                 this.transport.write(body.subarray(offset, Math.min(offset + OUTBOUND_BODY_CHUNK_BYTES, body.length)));
             }
+            this.bodyBytesSent += body.length;
         }
 
         this.bodyWrittenAt = Date.now();
@@ -1283,8 +1305,20 @@ export class ClientRequest extends HttpEmitter {
             if (requestElapsedMs >= SLOW_REQUEST_MS) {
                 console.log(`${this.methodForLogging} ${this.pathForLogging} took ${requestElapsedMs}ms: `
                     + `${this.headWrittenAt - this.startedAt}ms to the head, `
-                    + `${this.bodyWrittenAt - this.headWrittenAt}ms sending the body, `
+                    + `${this.bodyWrittenAt - this.headWrittenAt}ms sending the body `
+                    + `(${this.bodyBytesSent} of the ${this.declaredContentLength ?? "unstated"} bytes declared), `
                     + `${Date.now() - this.bodyWrittenAt}ms waiting for the answer.`);
+            }
+
+            // A body that did not match what the head promised, said here because nothing else can
+            // say it. The server is the only other party that knows, and all it can do is wait for
+            // bytes that are not coming and then blame itself: MinIO gives up after thirty seconds
+            // with "A timeout occurred while trying to lock a resource, please reduce your request
+            // rate", which sends anyone reading it to look at the server's load. The request is what
+            // was wrong, and this is the only place that holds both numbers.
+            if (this.declaredContentLength !== undefined && this.bodyBytesSent !== this.declaredContentLength) {
+                console.warn(`${this.methodForLogging} ${this.pathForLogging} declared ${this.declaredContentLength} `
+                    + `body bytes and sent ${this.bodyBytesSent}. The server answered ${parsed.statusCode}.`);
             }
 
             response = new IncomingMessage("", "", parsed.headers, this.transport as unknown as Socket) as IClientResponse;
