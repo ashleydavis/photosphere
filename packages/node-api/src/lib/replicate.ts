@@ -34,6 +34,15 @@ export interface IReplicationResult {
     // List of file names that were pruned from the destination.
     //
     prunedFiles: string[];
+
+    //
+    // Names of files the source's merkle tree describes but the source does not hold.
+    //
+    // Only ever non-empty for a partial replica, which is exactly what a phone holds: its tree is the
+    // whole origin's, and the files it has are a subset. Reported rather than silently dropped, so a
+    // replication that copied less than the tree describes says how much less.
+    //
+    missingFromSource: string[];
 }
 
 //
@@ -89,6 +98,10 @@ async function replicateFiles(
     progressCallback: ProgressCallback | undefined,
     result: IReplicationResult
 ): Promise<void> {
+
+    // Whether the source holds every file its tree describes. A partial replica does not, by
+    // definition, and copyAsset below leaves out what it cannot find rather than failing.
+    const sourceIsPartial = merkleTree.databaseMetadata?.isPartial === true;
     //
     // Collect nodes to process from the source merkle tree that are different.
     // If there's no dest merkle tree, we process the entire source tree.
@@ -147,6 +160,21 @@ async function replicateFiles(
         const assetStorage = sourceAssetStorage;
         const srcFileInfo = await retry(() => assetStorage.info(fileName));
         if (!srcFileInfo) {
+            // A partial replica's merkle tree is the whole origin's, so it describes files the
+            // replica does not hold: that is what makes it partial, and it is what every phone has.
+            // Treating the first of those as fatal made a partial replica impossible to replicate or
+            // consolidate from at all, which is the one copy of a database that exists when the
+            // origin has been lost.
+            //
+            // So a file the source does not hold is left out and recorded, the way sync.ts already
+            // leaves a file it cannot copy rather than ending the pass. A file missing from a source
+            // that is NOT partial is still fatal: there the tree and the files should agree, and a
+            // gap between them is damage rather than design.
+            if (sourceIsPartial) {
+                log.verbose(`Source file "${fileName}" is not in this partial replica, leaving it out.`);
+                result.missingFromSource.push(fileName);
+                return;
+            }
             throw new Error(`Source file "${fileName}" does not exist in the source database.`);
         }
 
@@ -538,6 +566,7 @@ export async function replicate(
         copiedFiles: 0,
         copiedRecords: 0,
         prunedFiles: [],
+        missingFromSource: [],
     };
 
     //
