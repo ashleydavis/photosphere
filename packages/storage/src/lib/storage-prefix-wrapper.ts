@@ -66,9 +66,16 @@ export class StoragePrefixWrapper implements IStorage {
     }
 
     //
+    // How many bytes a read hands out, which only the storage underneath can say.
+    //
+    readableLength(fileInfo: IFileInfo): number | undefined {
+        return this.storage.readableLength(fileInfo);
+    }
+
+    //
     // Writes a stream whose SHA-256 the caller already knows.
     //
-    writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength: number, sha256: Buffer): Promise<boolean> {
+    writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: NodeJS.ReadableStream, contentLength: number | undefined, sha256: Buffer): Promise<boolean> {
         return this.storage.writeStreamHashed(this.makeFullPath(filePath), contentType, inputStream, contentLength, sha256);
     }
 

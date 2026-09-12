@@ -98,6 +98,23 @@ describe('CloudStorage writeStreamHashed', () => {
     });
 
     //
+    // A caller that cannot say how long its stream is must not have a length invented for it.
+    //
+    // An encrypted source reads out plaintext while holding ciphertext and cannot say how long the
+    // plaintext is, so it says so. Declaring the stored size in its place made every request promise
+    // more than it sent, and S3 sat waiting thirty seconds for the rest before refusing the write.
+    //
+    test('a body of unknown length is sent without one declared', async () => {
+        const { storage, inputs } = createStorage(async () => ({}));
+
+        // False, because nothing compared what landed against the hash: the uploader reads the stream
+        // to find out how long it is and cannot carry a whole-object checksum while doing it.
+        expect(await storage.writeStreamHashed('bucket/db/thumb/four', 'image/jpeg', aBody(), undefined, hash)).toBe(false);
+
+        expect(inputs.every(input => input.ContentLength === undefined)).toBe(true);
+    });
+
+    //
     // A failed write must say so rather than report a copy that never happened.
     //
     test('a refused write is reported, naming the file', async () => {

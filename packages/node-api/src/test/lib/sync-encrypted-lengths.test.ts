@@ -1,4 +1,5 @@
 import { MockStorage } from "storage";
+import type { IFileInfo } from "storage";
 import { createTree, addItem, buildMerkleTree, saveTree, getItemInfo, loadTree } from "merkle-tree";
 import type { IDatabaseMetadata } from "../../lib/media-file-database";
 import { createHash } from "crypto";
@@ -8,17 +9,13 @@ import { pushFiles } from "../../lib/sync";
 //
 // What a push tells the target about the length of each file it sends.
 //
-// A database that is encrypted at rest holds ciphertext, and the store underneath it reports the size
-// of that ciphertext while the stream it hands out is the plaintext, 576 bytes shorter. Taking the
-// length from the store and handing it over as the length of the stream made the target declare a
-// Content-Length it then fell 576 bytes short of. Measured on a Pixel 6 pushing to MinIO on the same
-// LAN, S3 waited thirty seconds for a remainder that was never coming and refused every file with "A
-// timeout occurred while trying to lock a resource, please reduce your request rate", three attempts
-// each, and the sync copied nothing at all for as long as it was left running.
-//
-// The second half of the same fault is quieter and would have outlived the first: the target's tree
-// was written under the ciphertext length too, so it never matched the source's, and every file
-// copied stayed in the difference and was copied again on the next pass, for ever.
+// A database that is encrypted at rest holds ciphertext and reads out plaintext, and the plaintext's
+// length cannot be worked back out of the ciphertext's, so the store says it cannot say. Taking the
+// stored size instead and handing it over as the length of the stream made the target declare a
+// Content-Length it then fell short of by the encryption's overhead. Measured on a Pixel 6 pushing to
+// MinIO on the same LAN, S3 waited thirty seconds for a remainder that was never coming and refused
+// every file with "A timeout occurred while trying to lock a resource, please reduce your request
+// rate", three attempts each, and the sync copied nothing at all for as long as it was left running.
 //
 
 const dbId = "7c3d4e5f-8a9b-4c0d-9e1f-2a3b4c5d6e7f";
@@ -36,16 +33,15 @@ function hashOf(contents: string): Buffer {
 }
 
 //
-// A storage that reads and writes what the database holds while the file underneath it is longer,
-// which is what encrypted storage is: `info` describes the stored bytes and `readStream` hands back
-// the shorter plaintext.
+// A storage that reads out something shorter than the file it holds and cannot say how much shorter,
+// which is what encrypted storage is.
 //
-class StoredLongerThanItReadsStorage extends MockStorage {
+class CannotSayHowLongItReadsStorage extends MockStorage {
 
     //
     // The size of the stored file, which is what any store reports about the file on its disk.
     //
-    async info(filePath: string): Promise<any> {
+    async info(filePath: string): Promise<IFileInfo | undefined> {
         const info = await super.info(filePath);
         if (!info) {
             return undefined;
@@ -56,6 +52,13 @@ class StoredLongerThanItReadsStorage extends MockStorage {
             lastModified: info.lastModified,
         };
     }
+
+    //
+    // Unknowable, because what is read out is not what is stored.
+    //
+    readableLength(fileInfo: IFileInfo): number | undefined {
+        return undefined;
+    }
 }
 
 //
@@ -64,10 +67,11 @@ class StoredLongerThanItReadsStorage extends MockStorage {
 //
 class LengthRecordingStorage extends MockStorage {
 
-    // The length declared for each file written, by file name.
-    readonly declaredLengths: Map<string, number> = new Map();
+    // The length declared for each file written, by file name. Undefined for a write that declared
+    // none.
+    readonly declaredLengths: Map<string, number | undefined> = new Map();
 
-    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength: number, sha256: Buffer): Promise<boolean> {
+    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength: number | undefined, sha256: Buffer): Promise<boolean> {
         this.declaredLengths.set(filePath, contentLength);
         return super.writeStreamHashed(filePath, contentType, inputStream, contentLength, sha256);
     }
@@ -75,17 +79,18 @@ class LengthRecordingStorage extends MockStorage {
 
 //
 // Fills a storage with the given files and a merkle tree describing exactly them, under the lengths
-// the database holds rather than the lengths of whatever the store keeps underneath.
+// the store reports, which is what every import records.
 //
 async function fillDatabase(storage: MockStorage, fileNames: string[]): Promise<void> {
     let tree = createTree<IDatabaseMetadata>(dbId);
     for (const fileName of fileNames) {
         const contents = Buffer.from(fileName, "utf-8");
         await storage.write(fileName, "image/jpeg", contents);
+        const info = await storage.info(fileName);
         tree = addItem(tree, {
             name: fileName,
             hash: hashOf(fileName),
-            length: contents.length,
+            length: info!.length,
             lastModified: new Date("2026-01-01T00:00:00.000Z"),
         });
     }
@@ -109,8 +114,21 @@ describe("the lengths a push hands over", () => {
 
     const fileName = "asset/one.jpg";
 
-    test("the length declared for a copy is the length of what the database holds, not of the file under it", async () => {
-        const source = new StoredLongerThanItReadsStorage();
+    test("a source that cannot say how long it reads has no length declared for it", async () => {
+        const source = new CannotSayHowLongItReadsStorage();
+        await fillDatabase(source, [ fileName ]);
+
+        const target = new LengthRecordingStorage();
+        await fillDatabase(target, []);
+
+        await pushFiles(source, target, makeBsonDatabase());
+
+        expect(target.declaredLengths.has(fileName)).toBe(true);
+        expect(target.declaredLengths.get(fileName)).toBeUndefined();
+    });
+
+    test("a source that reads out what it stores has its own length declared for it", async () => {
+        const source = new MockStorage();
         await fillDatabase(source, [ fileName ]);
 
         const target = new LengthRecordingStorage();
@@ -122,7 +140,7 @@ describe("the lengths a push hands over", () => {
     });
 
     test("the target's tree records the same length as the source's, so the file is not copied again", async () => {
-        const source = new StoredLongerThanItReadsStorage();
+        const source = new CannotSayHowLongItReadsStorage();
         await fillDatabase(source, [ fileName ]);
 
         const target = new MockStorage();

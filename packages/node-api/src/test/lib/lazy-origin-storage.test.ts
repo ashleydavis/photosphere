@@ -18,7 +18,11 @@ function makeMockStorage(files: Map<string, Buffer> = new Map()): IStorage {
             throw new Error("not implemented");
         },
 
-        async writeStreamHashed(_filePath: string, _contentType: string | undefined, _inputStream: NodeJS.ReadableStream, _contentLength: number, _sha256: Buffer): Promise<boolean> {
+        readableLength(fileInfo: IFileInfo): number | undefined {
+            return fileInfo.length;
+        },
+
+        async writeStreamHashed(_filePath: string, _contentType: string | undefined, _inputStream: NodeJS.ReadableStream, _contentLength: number | undefined, _sha256: Buffer): Promise<boolean> {
             throw new Error("not implemented");
         },
 

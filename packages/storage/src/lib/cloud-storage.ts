@@ -418,6 +418,13 @@ export class CloudStorage implements IStorage {
     }
     
     //
+    // What an object hands out is what it holds, so the length in the info is the answer.
+    //
+    readableLength(fileInfo: IFileInfo): number | undefined {
+        return fileInfo.length;
+    }
+
+    //
     // Gets info about an asset.
     //
     async info(filePath: string): Promise<IFileInfo | undefined> {
@@ -604,11 +611,21 @@ export class CloudStorage implements IStorage {
     // is what knows how to send a stream: handing the stream straight to PutObject uploaded nothing
     // at all, and the sync found the file missing at the far end and reported it as a failed copy.
     //
-    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength: number, sha256: Buffer): Promise<boolean> {
+    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength: number | undefined, sha256: Buffer): Promise<boolean> {
 
         let { bucket, key } = this.parsePath(filePath);
         if (key.startsWith("/")) {
             key = key.slice(1); // Remove leading slash.
+        }
+
+        if (contentLength === undefined) {
+            // A body whose length the caller could not find out cannot have a length declared for it,
+            // and declaring one anyway is what this whole path exists to stop: a request that says it
+            // carries more than it sends leaves S3 waiting thirty seconds for the rest and then
+            // refusing the write. So the uploader is handed the stream and reads it to find out how
+            // long it is, which is what it does for any stream of unknown length.
+            await this.writeStream(filePath, contentType, inputStream);
+            return false;
         }
 
         const fitsInOnePart = contentLength <= SINGLE_PART_MAX_BYTES;

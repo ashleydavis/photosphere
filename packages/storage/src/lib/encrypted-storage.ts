@@ -55,11 +55,23 @@ export class EncryptedStorage implements IStorage {
     }
 
     //
+    // Always undefined, because this storage cannot say how long the file it reads out will be.
+    //
+    // What it holds is ciphertext and what it hands out is plaintext, and the one length cannot be
+    // turned into the other: the format pads the last block out to sixteen bytes, and how much of
+    // that block is padding is only known once it has been decrypted. The stored length is 573 to 588
+    // bytes longer than the plaintext, and which of those it is depends on the file.
+    //
+    readableLength(fileInfo: IFileInfo): number | undefined {
+        return undefined;
+    }
+
+    //
     // Writes the stream, ignoring the hash. It is the hash of the plaintext, and what reaches the
     // store underneath is ciphertext, so handing it down would have the store reject every correctly
     // written file.
     //
-    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength: number, sha256: Buffer): Promise<boolean> {
+    async writeStreamHashed(filePath: string, contentType: string | undefined, inputStream: Readable, contentLength: number | undefined, sha256: Buffer): Promise<boolean> {
         await this.writeStream(filePath, contentType, inputStream, contentLength);
         return false;
     }
@@ -76,7 +88,11 @@ export class EncryptedStorage implements IStorage {
     }
 
     //
-    // Gets info about a file.
+    // Gets info about a file, as the store underneath describes it.
+    //
+    // The length in it is the size of the stored file, which is the ciphertext, and not the length of
+    // what `readStream` hands out. `readableLength` is the one to ask for that, and here it says it
+    // cannot be known.
     //
     info(filePath: string): Promise<IFileInfo | undefined> {
         return this.storage.info(filePath);
