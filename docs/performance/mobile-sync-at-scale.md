@@ -18,7 +18,7 @@ That was the first run. Four runs later the same three questions have different 
 
 - **The prefetch finishes.** 8,491 files in 59 minutes 21 seconds, re-verified in 31 seconds on a restart.
 - **The import finishes.** Every one of the 2,308 items in the phone's library is in the replica except the one that is not a photo or a video, at 7 to 9 seconds a photo once the read-back was gone, six hours a day being all the platform allows the service that does it.
-- **The sync carries the library.** A pass that had every original and display version to push moved 3,068 files and 6.4GB in 40 minutes 37 seconds, merged 500 records in under six, and the pass after it left the origin holding everything the phone does.
+- **The sync carries the library.** A pass that had every original and display version to push moved 3,068 files and 6.4GB in 40 minutes 37 seconds, merged 500 records in under six, and the passes after it said the origin held everything the phone does. It did not, by 243 files, until the push stopped deciding with the merkle diff, which matches by hash and so never offers a file whose content is already at the far end under another name, and compared the trees by name instead.
 
 Five bugs turned up on the way to taking these measurements. Two of them are the same mistake, a `retry` left on its thirty second default around work that legitimately takes longer, and `sync.ts` already carries a comment about having been bitten by it in a third place. Only the ones that blocked the measuring were fixed; the rest are recorded here as the evidence a later change would be written against.
 
@@ -654,7 +654,7 @@ With the read-back gone the fourth build ran at 842MB PSS, of which 736MB was na
 
 ### Where it ended
 
-Five passes after the phone was pointed at the rebuilt origin, the origin's tree described 15,491 files, 9.19GiB, and held an object for every one of them: 2,436 originals, 2,300 display versions and 10,754 thumbnails. The phone's tree described nothing the origin lacked, and its import had nothing left to bring in but the one file that is not a photo or a video. The passes that carried it:
+Five passes after the phone was pointed at the rebuilt origin, the origin's tree described 15,491 files, 9.19GiB, and held an object for every one of them: 2,436 originals, 2,300 display versions and 10,754 thumbnails. The sync said the phone's tree described nothing the origin lacked, and its import had nothing left to bring in but the one file that is not a photo or a video. The sync was wrong about the first part, as the next section says. The passes that carried it:
 
 | Pass | Started | Pushed | Took |
 |---|---|---|---|
@@ -665,3 +665,13 @@ Five passes after the phone was pointed at the rebuilt origin, the origin's tree
 | 5 | 14:58:44 | 861 files, 892,535,036 bytes | 18 minutes 57 seconds |
 
 Passes 3 and 5 carried the import's last two batches as they landed, and pass 4 ran between them with nothing to carry. Every pass but the first spent most of its time in the record merge and the origin commit rather than in moving files.
+
+### What the origin was still missing
+
+Pulling the phone's tree down and walking it against the origin's name by name found 243 files of 101 assets that the phone's tree described and the origin's did not, after the five passes above had each reported nothing left behind. Every one of the 243 has content the origin already held under another name. That is what a photo imported twice leaves behind: an import run stopped before its batch is written imports the same photos again under new ids on its next run, which is the last item under Still open, and the phone's tree ended the runs with 752 hashes appearing more than once.
+
+The push decided what to copy with the merkle diff, and the merkle diff matches leaves by hash. It counts each hash on one side and matches the other side's leaves against the count in the order it visits them, so of two same-content leaves the one it called already present was whichever it visited first, whether or not that was the one the origin had. When the origin held the other one, the one it lacked was matched away and never offered, and the one it held was offered and copied nothing. No pass could ever carry those files, and the pass reported nothing left behind because a file that is never offered is never counted. The replication's copy and its prune decided the same way, so a phone prefetching from an origin holding duplicates would have fetched or pruned the wrong one of each pair, and `psi compare` decided the same way too: run against these two trees it named 141 files the origin had as missing and none of the 243 it lacked.
+
+All three now compare the trees name by name and take their lists from that. On trees already in memory it is two walks and a map of one side's names, and the identical-roots shortcut is kept.
+
+With the fix deployed and the app cold-started, the first pass found the 243 by name and pushed them all: 215,325,412 bytes in 2 minutes 49 seconds, of which 38 seconds was copying and 2 minutes 10 seconds was the three saves of the origin's tree along the way. `psi compare` between the phone's tree and the origin's then reported no differences, and the origin's summary described 15,734 files and 9.39GiB, which is what the phone's tree describes. The whole pass, from the cold start at 16:01:13 to its completion line at 16:09:29, took a little over eight minutes, most of it in the record merge and the origin commit as before.
