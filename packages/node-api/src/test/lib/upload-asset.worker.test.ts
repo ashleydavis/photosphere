@@ -10,7 +10,8 @@ jest.mock('fs', () => ({
 }));
 
 jest.mock('../../lib/hash', () => ({
-    computeAssetHash: jest.fn(),
+    computeFileHash: jest.fn(),
+    getNativeFileHasher: jest.fn(),
 }));
 
 jest.mock('storage', () => ({
@@ -117,6 +118,7 @@ function setupStorageMock() {
     const mockStorage = {
         writeStream: jest.fn().mockResolvedValue(undefined),
         info: jest.fn().mockResolvedValue({ length: 1000, lastModified: new Date() }),
+        readableLength: jest.fn((fileInfo: any) => fileInfo.length),
         readStream: jest.fn().mockResolvedValue({}),
         deleteFile: jest.fn().mockResolvedValue(undefined),
     };
@@ -203,13 +205,6 @@ describe('uploadAssetHandler', () => {
         const data = makeUploadAssetData({ dryRun: false });
         const { mockStorage } = setupStorageMock();
 
-        const { computeAssetHash } = require('../../lib/hash');
-        computeAssetHash.mockResolvedValue({
-            hash: Buffer.from('aabbcc', 'hex'),
-            length: 1000,
-            lastModified: new Date(),
-        });
-
         await uploadAssetHandler(data, context);
 
         // No write-lock or DB modules are imported by the new upload-asset handler.
@@ -238,12 +233,8 @@ describe('uploadAssetHandler', () => {
         const { mockStorage } = setupStorageMock();
         mockGetImageDetails.mockResolvedValue(makeAssetDetails());
 
-        const { computeAssetHash } = require('../../lib/hash');
-        computeAssetHash.mockResolvedValue({
-            hash: Buffer.from('aabbcc', 'hex'),
-            length: 1000,
-            lastModified: new Date(),
-        });
+        const { computeFileHash } = require('../../lib/hash');
+        computeFileHash.mockResolvedValue(Buffer.from('ddeeff', 'hex'));
 
         await uploadAssetHandler(data, context);
 
@@ -349,5 +340,72 @@ describe('uploadAssetHandler', () => {
             logicalPath: '/test/photos/img.jpg',
         });
         expect(mockStorage.deleteFile).toHaveBeenCalled();
+    });
+
+    //
+    // Reading the three copies back out of the store to learn their hashes was the unaccounted half
+    // of every import into an encrypted database: the bytes came back through the engine's own
+    // JavaScript decryption and SHA-256 at about a fifth of a megabyte a second on a Pixel 6, seven
+    // seconds a photo and seven and a half minutes for one 87MB video, as long again as writing them.
+    //
+    test('hashes the thumbnail and display from the files on disk, and never reads the store back', async () => {
+        const context = makeContext();
+        const data = makeUploadAssetData({ contentType: 'image/jpeg', dryRun: false });
+        const { mockStorage } = setupStorageMock();
+        mockGetImageDetails.mockResolvedValue(makeAssetDetails());
+
+        const { computeFileHash } = require('../../lib/hash');
+        computeFileHash.mockResolvedValue(Buffer.from('ddeeff', 'hex'));
+
+        const result = await uploadAssetHandler(data, context);
+
+        expect(mockStorage.readStream).not.toHaveBeenCalled();
+
+        const hashedPaths = computeFileHash.mock.calls.map((call: any[]) => call[0]);
+        expect(hashedPaths).toContain('/tmp/thumb.jpg');
+        expect(hashedPaths).toContain('/tmp/display.jpg');
+        expect(result!.assetData.thumbHash).toBe('ddeeff');
+        expect(result!.assetData.displayHash).toBe('ddeeff');
+    });
+
+    test("the asset's hash is the one the import already had, so its file is not hashed again", async () => {
+        const context = makeContext();
+        const data = makeUploadAssetData({ contentType: 'image/jpeg', dryRun: false });
+        setupStorageMock();
+        mockGetImageDetails.mockResolvedValue(makeAssetDetails());
+
+        const { computeFileHash } = require('../../lib/hash');
+        computeFileHash.mockResolvedValue(Buffer.from('ddeeff', 'hex'));
+
+        const result = await uploadAssetHandler(data, context);
+
+        const hashedPaths = computeFileHash.mock.calls.map((call: any[]) => call[0]);
+        expect(hashedPaths).not.toContain(data.filePath);
+        expect(result!.assetData.assetRecord.hash).toBe('aabbcc');
+    });
+
+    //
+    // What a store can say about the copy without reading it, it is asked: one that hands out what it
+    // holds is checked by length, and one that cannot say (an encrypted store) is not checked here.
+    //
+    test('a store that holds a different length than was written refuses the asset', async () => {
+        const context = makeContext();
+        const data = makeUploadAssetData({ dryRun: false, fileStat: { length: 1000, lastModified: new Date('2024-01-01') } });
+        const { mockStorage } = setupStorageMock();
+        mockStorage.info.mockResolvedValue({ length: 999, lastModified: new Date() });
+
+        await expect(uploadAssetHandler(data, context)).rejects.toThrow(`asset/${data.assetId}`);
+    });
+
+    test('a store that cannot say what length its copy reads is not checked by length', async () => {
+        const context = makeContext();
+        const data = makeUploadAssetData({ dryRun: false, fileStat: { length: 1000, lastModified: new Date('2024-01-01') } });
+        const { mockStorage } = setupStorageMock();
+        mockStorage.info.mockResolvedValue({ length: 999, lastModified: new Date() });
+        mockStorage.readableLength.mockReturnValue(undefined);
+
+        const result = await uploadAssetHandler(data, context);
+
+        expect(result!.assetData.assetRecord.hash).toBe('aabbcc');
     });
 });
