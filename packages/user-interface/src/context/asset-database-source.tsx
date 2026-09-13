@@ -39,6 +39,16 @@ export interface IAssetDatabase extends IGallerySource {
     databasePath: string | undefined;
 
     //
+    // How many loads of a database have finished, succeeded or failed, since the provider mounted.
+    //
+    // Counted so that a load finishing is visible to a render even when React never rendered the
+    // load in progress: on a fast enough device the whole load finishes before the render that would
+    // show isLoading true, the true and the false are batched into one render, and nothing that
+    // watches isLoading sees a change at all.
+    //
+    loadsFinished: number;
+
+    //
     // Sets the viewed database.
     //
     setDatabasePath(databasePath: string): void;
@@ -131,6 +141,11 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     // Set to true while loading assets.
     //
     const [ isLoading, setIsLoading ] = useState(false);
+
+    //
+    // How many loads have finished. See IAssetDatabase.loadsFinished for why it is counted.
+    //
+    const [ loadsFinished, setLoadsFinished ] = useState(0);
 
     //
     // Set to true while a background sync with the origin database is in progress.
@@ -773,6 +788,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
                 if (result.inputs?.databasePath === currentDatabasePath) {
                     loadingDatabasePath.current = undefined;
                     setIsLoading(false);
+                    setLoadsFinished(finished => finished + 1);
 
                     if (result.status !== TaskStatus.Succeeded) {
                         // Loading failed — cancel pending tasks and unsubscribe.
@@ -969,6 +985,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     const value: IAssetDatabase = {
         // Gallery source.
         isLoading,
+        loadsFinished,
         isSyncing,
         isWorking,
         isReadOnly: false,
