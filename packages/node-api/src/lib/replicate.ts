@@ -102,6 +102,16 @@ async function replicateFiles(
     // Whether the source holds every file its tree describes. A partial replica does not, by
     // definition, and copyAsset below leaves out what it cannot find rather than failing.
     const sourceIsPartial = merkleTree.databaseMetadata?.isPartial === true;
+
+    // What the copied count stood at when the destination tree was last saved part way through.
+    // The save is meant to happen every hundred files, and it is reached once per leaf, while a
+    // leaf that is already at the destination, or that a partial source does not hold, copies
+    // nothing. So a count resting on a multiple of a hundred saved the whole tree again for every
+    // one of those leaves, and at zero it did so from the first leaf of a pass that had copied
+    // nothing yet. The sync's push had the same fault, measured on a Pixel 6 at a megabyte of
+    // merkle tree written back per leaf.
+    let copiedFilesAtLastSave = 0;
+
     //
     // Collect nodes to process from the source merkle tree that are different.
     // If there's no dest merkle tree, we process the entire source tree.
@@ -259,9 +269,10 @@ Copied hash: ${copiedHash.toString("hex")}
                 await retry(() => copyAsset(merkleNode.name!, merkleNode.hash), 3, 1_000, 2, LARGE_FILE_TIMEOUT,
                     `Failed to copy file ${merkleNode.name}`);
 
-                if (result.copiedFiles % 100 === 0) {
+                if (result.copiedFiles % 100 === 0 && result.copiedFiles !== copiedFilesAtLastSave) {
                     // Save the destination merkle tree periodically. The tree of a large database is
                     // itself a large file, so it gets the same allowance as one.
+                    copiedFilesAtLastSave = result.copiedFiles;
                     await retry(() => saveMerkleTree(destMerkleTree!, destMetadataStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT,
                         "Failed to save the destination merkle tree part way through a replication");
                 }

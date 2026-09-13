@@ -539,6 +539,67 @@ describe('replicate', () => {
         expect(await destAsset.fileExists(absentFile)).toBe(false);
     });
 
+    //
+    // The save of the destination tree part way through is meant to happen every hundred files, and
+    // it is reached once per leaf, while a leaf a partial source does not hold copies nothing. So a
+    // count resting on a multiple of a hundred saved the whole tree again for every one of those
+    // leaves, and at zero from the first leaf of a pass that had copied nothing yet.
+    //
+    test('a run of leaves that copy nothing after the hundredth file does not save the tree again', async () => {
+        const sourceAsset = new MockStorage();
+        const destAsset = new MockStorage();
+        const sourceBdb = new BsonDatabase(new MockStorage(), "", uuidGenerator, timestampProvider);
+
+        // A hundred files the source holds, named so they sort first, then a long run it does not.
+        const present = Array.from({ length: 100 }, (_, index) => `asset/a-${String(index).padStart(3, '0')}.jpg`);
+        const absent = Array.from({ length: 50 }, (_, index) => `asset/z-${String(index).padStart(3, '0')}.jpg`);
+        for (const fileName of present) {
+            await sourceAsset.write(fileName, 'image/jpeg', Buffer.from(fileName, 'utf-8'));
+        }
+
+        let sourceTree = createTree<IDatabaseMetadata>(dbId);
+        for (const fileName of present.concat(absent)) {
+            sourceTree = addItem(sourceTree, {
+                name: fileName,
+                hash: makeHash(fileName),
+                length: fileName.length,
+                lastModified: new Date(),
+            });
+        }
+        sourceTree.databaseMetadata = { filesImported: present.length + absent.length, isPartial: true };
+        sourceTree.merkle = buildMerkleTree(sourceTree.sort);
+        sourceTree.dirty = false;
+        await saveTree('.db/files.dat', sourceTree, sourceAsset);
+
+        // Counts writes of the destination's tree, once the destination exists to write it into.
+        let treeWrites = 0;
+        const writeNormally = destAsset.write.bind(destAsset);
+        destAsset.write = async (fileName: string, contentType: string | undefined, data: Buffer) => {
+            if (fileName === '.db/files.dat') {
+                treeWrites += 1;
+            }
+            return writeNormally(fileName, contentType, data);
+        };
+
+        const result = await replicate(
+            'mock://source',
+            sourceAsset,
+            sourceBdb,
+            uuidGenerator,
+            timestampProvider,
+            destAsset,
+            destAsset,
+            undefined,
+            undefined
+        );
+
+        expect(result.copiedFiles).toBe(present.length);
+        expect(result.missingFromSource).toHaveLength(absent.length);
+
+        // Creating the destination, the hundredth file's save, and the one at the end.
+        expect(treeWrites).toBe(3);
+    });
+
     test('a file missing from a source that is not partial is still fatal', async () => {
         // There the tree and the files are supposed to agree, so a gap between them is damage and
         // must not be quietly copied around.
