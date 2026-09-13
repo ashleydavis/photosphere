@@ -6,7 +6,7 @@ import { LARGE_FILE_TIMEOUT } from "api";
 import { IDatabaseMetadata, ProgressCallback, createMediaFileDatabase, loadSortIndexes, createDatabase } from "./media-file-database";
 import { updateDatabaseConfig } from "api";
 import { BsonDatabase } from "bdb";
-import { findDifferingNodes, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, pruneTree, upsertItem } from "merkle-tree";
+import { compareTrees, deleteItem, findDifferingNodes, getItemInfo, IMerkleTree, MerkleNode, upsertItem } from "merkle-tree";
 import { loadMerkleTree, merkleTreeExists, saveMerkleTree, stampDatabaseStateLocked } from "./tree";
 import { loadCollectionMerkleTree, loadShardMerkleTree } from "./tree";
 import { loadDatabaseMerkleTree } from "bdb";
@@ -113,39 +113,18 @@ async function replicateFiles(
     let copiedFilesAtLastSave = 0;
 
     //
-    // Collect nodes to process from the source merkle tree that are different.
-    // If there's no dest merkle tree, we process the entire source tree.
+    // What differs between the source's tree and the destination's, by name: the names to copy
+    // across are the ones the destination lacks or holds under another hash, and the names to prune
+    // are the ones only the destination has.
     //
-    let nodesToProcess: MerkleNode[] = [];
-    let nodesToPrune: MerkleNode[] = [];
-    
-    if (destMerkleTree.merkle) {
-        //
-        // Find differences between source and destination merkle trees.
-        //
-        const diff = findMerkleTreeDifferences(merkleTree.merkle, destMerkleTree.merkle);        
-        log.verbose(`Found ${diff.onlyInTree1.length} nodes to copy, ${diff.onlyInTree2.length} nodes to prune`);
-        
-        //
-        // Collect nodes to process - only the differing MerkleNode roots from source.
-        //
-        nodesToProcess = diff.onlyInTree1;
-        
-        //
-        // Collect nodes to prune from dest that are different (only in tree2).
-        // Pruning will be done at the end.
-        //
-        nodesToPrune = diff.onlyInTree2;
-    }
-    else {
-        // If there's no dest merkle tree, process the entire source tree
-        if (merkleTree.merkle) {
-            nodesToProcess = [ merkleTree.merkle ];
-        }
-        else if (destMerkleTree.merkle) {
-            nodesToPrune = [ destMerkleTree.merkle ];
-        }
-    }
+    // By name, and not by the merkle diff, for the reason given at compareTrees: the diff matches
+    // by hash, so of two files with the same content under different names it copied whichever it
+    // visited second and pruned whichever it visited second, which is the wrong one half the time.
+    // The sync's push had the same fault, measured at 243 files left behind on a phone.
+    //
+    const comparison = compareTrees(merkleTree, destMerkleTree);
+    const namesToCopy = comparison.onlyInA.concat(comparison.modified);
+    log.verbose(`Found ${namesToCopy.length} files to copy, ${comparison.onlyInB.length} files to prune`);
 
     //
     // Copies an asset from the source storage to the destination storage.
@@ -240,69 +219,62 @@ Copied hash: ${copiedHash.toString("hex")}
     };
 
     //
-    // Process files from MerkleNode differences.
+    // Copies one of the files the comparison named.
     //
-    const processMerkleNode = async (merkleNode: MerkleNode): Promise<void> => {
+    const processFile = async (fileName: string): Promise<void> => {
         throwIfCancelled(options?.isCancelled);
 
-        if (!merkleNode.left && !merkleNode.right) {
-            // Leaf node - process the file directly
-            if (merkleNode.name && merkleNode.hash) {
-                // Skip files that don't match the path filter
-                if (options?.pathFilter) {
-                    const pathFilter = options.pathFilter.replace(/\\/g, '/'); // Normalize path separators
-                    const fileName = merkleNode.name.replace(/\\/g, '/');
-                    
-                    // Check if the file matches the filter (exact match or starts with filter + '/')
-                    if (fileName !== pathFilter && !fileName.startsWith(pathFilter + '/')) {
-                        return;
-                    }
-                }
-                
-                // The long timeout is the one the copy inside copyAsset already asks for, and it has
-                // to be repeated here or it counts for nothing: this wrapper starts a 30 second
-                // timer around the whole of copyAsset, so the generous allowances inside it can
-                // never be reached. Replicating a real library from S3 failed on the first file
-                // that took longer than 30 seconds to move, retried it twice and gave up, and the
-                // copy ended there. sync.ts already passes the long timeout at exactly this point,
-                // for the same reason.
-                await retry(() => copyAsset(merkleNode.name!, merkleNode.hash), 3, 1_000, 2, LARGE_FILE_TIMEOUT,
-                    `Failed to copy file ${merkleNode.name}`);
+        // Skip files that don't match the path filter
+        if (options?.pathFilter) {
+            const pathFilter = options.pathFilter.replace(/\\/g, '/'); // Normalize path separators
+            const normalizedFileName = fileName.replace(/\\/g, '/');
 
-                if (result.copiedFiles % 100 === 0 && result.copiedFiles !== copiedFilesAtLastSave) {
-                    // Save the destination merkle tree periodically. The tree of a large database is
-                    // itself a large file, so it gets the same allowance as one.
-                    copiedFilesAtLastSave = result.copiedFiles;
-                    await retry(() => saveMerkleTree(destMerkleTree!, destMetadataStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT,
-                        "Failed to save the destination merkle tree part way through a replication");
-                }
+            // Check if the file matches the filter (exact match or starts with filter + '/')
+            if (normalizedFileName !== pathFilter && !normalizedFileName.startsWith(pathFilter + '/')) {
+                return;
             }
-        } 
-        else {
-            // Internal node - recursively process children
-            if (merkleNode.left) {
-                await processMerkleNode(merkleNode.left);
-            }
-            if (merkleNode.right) {
-                await processMerkleNode(merkleNode.right);
-            }
+        }
+
+        const sourceFileInfo = getItemInfo(merkleTree, fileName);
+        if (!sourceFileInfo) {
+            throw new Error(`The source tree compared as holding ${fileName} and then did not have it.`);
+        }
+
+        // The long timeout is the one the copy inside copyAsset already asks for, and it has
+        // to be repeated here or it counts for nothing: this wrapper starts a 30 second
+        // timer around the whole of copyAsset, so the generous allowances inside it can
+        // never be reached. Replicating a real library from S3 failed on the first file
+        // that took longer than 30 seconds to move, retried it twice and gave up, and the
+        // copy ended there. sync.ts already passes the long timeout at exactly this point,
+        // for the same reason.
+        await retry(() => copyAsset(fileName, sourceFileInfo.hash), 3, 1_000, 2, LARGE_FILE_TIMEOUT,
+            `Failed to copy file ${fileName}`);
+
+        if (result.copiedFiles % 100 === 0 && result.copiedFiles !== copiedFilesAtLastSave) {
+            // Save the destination merkle tree periodically. The tree of a large database is
+            // itself a large file, so it gets the same allowance as one.
+            copiedFilesAtLastSave = result.copiedFiles;
+            await retry(() => saveMerkleTree(destMerkleTree!, destMetadataStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT,
+                "Failed to save the destination merkle tree part way through a replication");
         }
     };
-    
-    if (nodesToProcess.length > 0 || nodesToPrune.length > 0) {
+
+    if (namesToCopy.length > 0 || comparison.onlyInB.length > 0) {
         //
-        // Process only the nodes that differ.
+        // Process only the files that differ.
         //
 
-        for (const nodeToProcess of nodesToProcess) {
-            throwIfCancelled(options?.isCancelled);
-            await processMerkleNode(nodeToProcess);
+        for (const fileName of namesToCopy) {
+            await processFile(fileName);
         }
 
         //
-        // Prune nodes from dest that are different (only in tree2).
+        // Prune from the destination's tree the names only it has.
         //
-        result.prunedFiles = pruneTree(destMerkleTree, nodesToPrune);
+        for (const fileName of comparison.onlyInB) {
+            deleteItem(destMerkleTree, fileName);
+        }
+        result.prunedFiles = comparison.onlyInB;
 
         //
         // Saves the dest database.
