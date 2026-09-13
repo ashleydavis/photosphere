@@ -3,7 +3,7 @@ import { createTree, addItem, buildMerkleTree, saveTree } from "merkle-tree";
 import { log } from "utils";
 import type { IDatabaseMetadata } from "../../lib/media-file-database";
 import { createHash } from "crypto";
-import { pushFiles } from "../../lib/sync";
+import { pushFiles, throughTheDatabases } from "../../lib/sync";
 
 //
 // How often a push says where its time went.
@@ -117,7 +117,7 @@ describe("how often a push says where its time went", () => {
         // Every file but the last, so most leaves are walked and matched before anything is copied.
         const target = await makeDatabase(fileNames.slice(0, fileNames.length - 1));
 
-        await pushFiles(source, target, makeBsonDatabase());
+        await pushFiles(source, target, makeBsonDatabase(), throughTheDatabases(source, target));
 
         expect(timingLines).toHaveLength(1);
         expect(timingLines[0]).toContain(`"filesCopied":1`);
@@ -139,7 +139,7 @@ describe("how often a push says where its time went", () => {
         const source = await makeDatabaseWithDeletions(toCopy.concat(deleted.map(assetId => `asset/${assetId}`)), deleted);
         const target = await makeDatabase([]);
 
-        await pushFiles(source, target, makeBsonDatabase());
+        await pushFiles(source, target, makeBsonDatabase(), throughTheDatabases(source, target));
 
         // The twentieth file's line, and the one at the end of the push.
         expect(timingLines).toHaveLength(2);
@@ -150,7 +150,7 @@ describe("how often a push says where its time went", () => {
         const source = await makeDatabase(fileNames);
         const target = await makeDatabase([]);
 
-        await pushFiles(source, target, makeBsonDatabase());
+        await pushFiles(source, target, makeBsonDatabase(), throughTheDatabases(source, target));
 
         // Twenty and forty files in, then the one at the end.
         expect(timingLines).toHaveLength(3);

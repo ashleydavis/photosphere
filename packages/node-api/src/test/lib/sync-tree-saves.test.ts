@@ -2,7 +2,7 @@ import { MockStorage } from "storage";
 import { createTree, addItem, buildMerkleTree, saveTree } from "merkle-tree";
 import type { IDatabaseMetadata } from "../../lib/media-file-database";
 import { createHash } from "crypto";
-import { pushFiles } from "../../lib/sync";
+import { pushFiles, throughTheDatabases } from "../../lib/sync";
 
 //
 // The periodic save of the target's merkle tree during a push.
@@ -128,7 +128,7 @@ describe("saving the target merkle tree during a push", () => {
         const target = await makeDatabase(shared.concat([ "asset/only-at-the-target.jpg" ]));
         const treeWrites = countTreeWrites(target);
 
-        await pushFiles(source, target, makeBsonDatabase());
+        await pushFiles(source, target, makeBsonDatabase(), throughTheDatabases(source, target));
 
         expect(treeWrites.count()).toBe(0);
     });
@@ -151,7 +151,7 @@ describe("saving the target merkle tree during a push", () => {
         const target = await makeDatabase([]);
         const treeWrites = countTreeWrites(target);
 
-        await pushFiles(source, target, makeBsonDatabase());
+        await pushFiles(source, target, makeBsonDatabase(), throughTheDatabases(source, target));
 
         // The hundredth file's save, and the one at the end of the push.
         expect(treeWrites.count()).toBe(2);
@@ -163,7 +163,7 @@ describe("saving the target merkle tree during a push", () => {
         const target = await makeDatabase([]);
         const treeWrites = countTreeWrites(target);
 
-        await pushFiles(source, target, makeBsonDatabase());
+        await pushFiles(source, target, makeBsonDatabase(), throughTheDatabases(source, target));
 
         expect(treeWrites.count()).toBeGreaterThanOrEqual(1);
         for (const fileName of fileNames) {

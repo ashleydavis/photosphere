@@ -7,6 +7,7 @@ import { IDatabaseMetadata } from "./media-file-database";
 import { acquireWriteLock, releaseWriteLock, loadDatabaseState, LARGE_FILE_TIMEOUT } from "api";
 import { loadMerkleTree, saveMerkleTree, stampDatabaseState } from "./tree";
 import { retry, retryOnce, log, FatalError, WrappedError } from "utils";
+import { computeAssetHash } from "./hash";
 
 //
 // How long one step of a sync may take before the pass gives up on it.
@@ -86,7 +87,8 @@ export async function syncDatabases(
         // nothing, because the record merge and the commit had no timeout anywhere around them. A
         // pass that fails is ordinary and the loop runs another one; a pass that hangs is the end of
         // syncing until the app is restarted.
-        await retryOnceNamed(() => pushFiles(targetAssetStorage, sourceAssetStorage, sourceBsonDatabase),
+        const pull = await chooseHowToPushBytes(targetAssetStorage, targetRawStorage, sourceAssetStorage, sourceRawStorage);
+        await retryOnceNamed(() => pushFiles(targetAssetStorage, sourceAssetStorage, sourceBsonDatabase, pull),
             "pulling files from the origin");
         const sourceMerkleTree = await retry(() => loadMerkleTree(sourceAssetStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to load the source merkle tree");
         const sourceDeletedIds = new Set(sourceMerkleTree?.databaseMetadata?.deletedAssetIds || []);
@@ -120,7 +122,8 @@ export async function syncDatabases(
         // of work. The copies inside it have their own deadline, one per file, which is where a
         // stuck upload is caught. A deadline here caught nothing but honest progress: thirty minutes
         // in it gave up on a push that was uploading steadily.
-        await pushFiles(sourceAssetStorage, targetAssetStorage, targetBsonDatabase);
+        const push = await chooseHowToPushBytes(sourceAssetStorage, sourceRawStorage, targetAssetStorage, targetRawStorage);
+        await pushFiles(sourceAssetStorage, targetAssetStorage, targetBsonDatabase, push);
         const targetMerkleTree = await retry(() => loadMerkleTree(targetAssetStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to load the target merkle tree");
         const targetDeletedIds = new Set(targetMerkleTree?.databaseMetadata?.deletedAssetIds || []);
         await retryOnceNamed(() => syncDatabase(sourceBsonDatabase, targetBsonDatabase, targetDeletedIds),
@@ -158,10 +161,73 @@ function extractAssetId(filePath: string): string | undefined {
 }
 
 //
+// Where a push reads each file's bytes from and writes them to.
+//
+// Usually the two asset storages themselves, which hand out and take in what the database holds.
+// When both databases are encrypted under the same key, the raw storages underneath instead: the
+// ciphertext one holds is exactly the ciphertext the other would write, so it goes across as it is,
+// with no decryption on the way out and no encryption on the way in.
+//
+// On a phone those two are the whole cost of pushing an original. AES-256-CBC there runs in the
+// embedded engine's own JavaScript at about a fifth of a megabyte a second in each direction, so a
+// push of twenty originals measured on a Pixel 6 moved 48MB in 472 seconds, about 100KB/s on a
+// network that carries 11.8MB/s from the same phone, and a ninety megabyte video was a quarter of an
+// hour. The bytes themselves, sent as they are stored, go from the file to the socket natively.
+//
+export interface IPushBytes {
+    // The storage each file's bytes are read from.
+    source: IStorage;
+
+    // The storage each file's bytes are written to.
+    target: IStorage;
+
+    // True when the bytes are the stored ones, going across untouched, rather than what the
+    // databases hold. The hash the target is handed is then of the stored bytes, taken from the
+    // source's copy, since the tree's hash is of what the database holds and would not match.
+    verbatim: boolean;
+}
+
+//
+// A push that moves what the databases hold: read out of one asset storage, written into the other.
+//
+export function throughTheDatabases(sourceAssetStorage: IStorage, targetAssetStorage: IStorage): IPushBytes {
+    return {
+        source: sourceAssetStorage,
+        target: targetAssetStorage,
+        verbatim: false,
+    };
+}
+
+//
+// Decides how a push moves each file's bytes between two databases, given the storages they are
+// read through and the raw storages underneath them.
+//
+// Verbatim, between the raw storages, when both databases are encrypted under the same key. Each
+// encrypted database carries `.db/encryption.pub` naming the key its files are written under, and it
+// is rewritten only once every file has been re-encrypted under a new one, so two databases whose
+// key files are the same byte for byte hold files either could read. Otherwise through the asset
+// storages, which decrypt and encrypt on the way as they always have. A database that is not
+// encrypted has no key file, so a pair with one such side is never verbatim.
+//
+export async function chooseHowToPushBytes(sourceAssetStorage: IStorage, sourceRawStorage: IStorage, targetAssetStorage: IStorage, targetRawStorage: IStorage): Promise<IPushBytes> {
+    const sourceKey = await retry(() => sourceRawStorage.read(".db/encryption.pub"));
+    const targetKey = await retry(() => targetRawStorage.read(".db/encryption.pub"));
+    if (sourceKey !== undefined && targetKey !== undefined && Buffer.compare(sourceKey, targetKey) === 0) {
+        return {
+            source: sourceRawStorage,
+            target: targetRawStorage,
+            verbatim: true,
+        };
+    }
+
+    return throughTheDatabases(sourceAssetStorage, targetAssetStorage);
+}
+
+//
 // Pushes from source db to target db for a particular device based
 // on missing files detected by comparing source and target merkle trees.
 //
-export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage: IStorage, targetBsonDatabase: IBsonDatabase): Promise<void> {
+export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage: IStorage, targetBsonDatabase: IBsonDatabase, bytes: IPushBytes): Promise<void> {
 
     //
     // Load the merkle tree.
@@ -328,8 +394,22 @@ export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage
         // and refuses a write that does not match, while a store that cannot check it writes the
         // stream as usual. On a phone that is the difference between a sync and a stalled one, since
         // the SDK would otherwise hash every byte in the embedded engine's pure JavaScript SHA-256.
+        //
+        // What is sent, and what the target is told it is. Through the databases the stream is what
+        // the database holds and the hash is the tree's, which is of exactly that. Verbatim, the
+        // stream is the stored bytes themselves and the hash has to be of those, so it is taken from
+        // the source's copy, natively where there is a native hasher: the tree's hash is of the
+        // plaintext and would not match.
+        //
         const openedAt = Date.now();
-        const readStream = await sourceAssetStorage.readStream(fileName);
+        const storedInfo = bytes.verbatim ? await bytes.source.info(fileName) : sourceFileInfo;
+        if (!storedInfo) {
+            throw new Error(`Failed to find the stored bytes of ${fileName} in the source database.`);
+        }
+        const hashForTheStore = bytes.verbatim
+            ? (await computeAssetHash(await bytes.source.readStream(fileName), storedInfo)).hash
+            : sourceHash;
+        const readStream = await bytes.source.readStream(fileName);
         millisecondsOpeningTheSource += Date.now() - openedAt;
         // A store that checked the bytes against the hash as it wrote them has already told us
         // everything a check afterwards could, so nothing else is asked of it.
@@ -354,24 +434,24 @@ export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage
         // three attempts each, and the sync copied nothing at all for as long as it was left running.
         //
         const writeStartedAt = Date.now();
-        const verifiedByTheStore = await targetAssetStorage.writeStreamHashed(fileName, sourceFileInfo.contentType, readStream, sourceAssetStorage.readableLength(sourceFileInfo), sourceHash);
+        const verifiedByTheStore = await bytes.target.writeStreamHashed(fileName, sourceFileInfo.contentType, readStream, bytes.source.readableLength(storedInfo), hashForTheStore);
         millisecondsWriting += Date.now() - writeStartedAt;
         bytesCopied += sourceTreeInfo.length;
 
         if (!verifiedByTheStore) {
-            const copiedFileInfo = await targetAssetStorage.info(fileName);
+            const copiedFileInfo = await bytes.target.info(fileName);
             if (!copiedFileInfo) {
                 throw new Error(`Failed to copy ${fileName} to target db.`);
             }
 
-            const storedHash = await targetAssetStorage.storedHash(fileName);
+            const storedHash = await bytes.target.storedHash(fileName);
             if (storedHash !== undefined) {
-                if (Buffer.compare(storedHash, sourceHash) !== 0) {
+                if (Buffer.compare(storedHash, hashForTheStore) !== 0) {
                     throw new Error(`Hash of copied file ${fileName} is different to the source hash.`);
                 }
             }
-            else if (copiedFileInfo.length !== sourceFileInfo.length) {
-                throw new Error(`Copied file ${fileName} is ${copiedFileInfo.length} bytes at the target and ${sourceFileInfo.length} at the source.`);
+            else if (copiedFileInfo.length !== storedInfo.length) {
+                throw new Error(`Copied file ${fileName} is ${copiedFileInfo.length} bytes at the target and ${storedInfo.length} at the source.`);
             }
         }
 
