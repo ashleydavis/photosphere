@@ -20,6 +20,13 @@ set -euo pipefail
 
 # The pinned MinIO release. Pinned rather than tracking latest so a server-side release cannot change
 # what the tests run against overnight.
+#
+# It is fetched from the release's assets on GitHub, not from dl.min.io. MinIO archived the
+# open-source server in September 2026 and dl.min.io now answers 410 Gone for every community
+# release, this one included, which took out every S3 test on every CI runner in one morning. The
+# GitHub release still carries the same binaries, byte for byte: the linux-amd64 one downloaded from
+# there has the sha256 the release publishes for it, and it is the sha256 of the copy the tests here
+# had been running all along.
 MINIO_VERSION="RELEASE.2025-09-07T16-13-09Z"
 
 # How many times to fetch the MinIO binary before giving up. A download that arrives incomplete is
@@ -173,8 +180,10 @@ ensure_minio_binary() {
     while [ "$downloadAttempt" -le "$MINIO_DOWNLOAD_ATTEMPTS" ]; do
         partialPath="$(mktemp "$binaryPath.partial.XXXXXX")"
         log "Downloading MinIO $MINIO_VERSION for $platform (cached at $binaryPath)..."
+        # The asset is named for the platform and the release, and carries .exe on Windows, which is
+        # exactly the name the cached copy is given above.
         if curl -sL --fail -o "$partialPath" \
-            "https://dl.min.io/server/minio/release/$platform/archive/minio.$MINIO_VERSION"; then
+            "https://github.com/minio/minio/releases/download/$MINIO_VERSION/minio.$platform.$MINIO_VERSION$binaryExtension"; then
             chmod +x "$partialPath"
             if "$partialPath" --version >/dev/null 2>&1; then
                 # A rename onto the final path, which is atomic, so a concurrent downloader either sees
