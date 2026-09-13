@@ -27,6 +27,33 @@ function hashOf(contents: string): Buffer {
 }
 
 //
+// Builds a storage holding the given files and a merkle tree describing exactly them, recording the
+// given asset ids as deleted. A push walks the leaf of a deleted asset and copies nothing for it,
+// which is what a leaf that is visited without being copied looks like.
+//
+async function makeDatabaseWithDeletions(fileNames: string[], deletedAssetIds: string[]): Promise<MockStorage> {
+    const storage = new MockStorage();
+    let tree = createTree<IDatabaseMetadata>(dbId);
+    for (const fileName of fileNames) {
+        await storage.write(fileName, "image/jpeg", Buffer.from(fileName, "utf-8"));
+        tree = addItem(tree, {
+            name: fileName,
+            hash: hashOf(fileName),
+            length: fileName.length,
+            lastModified: new Date("2026-01-01T00:00:00.000Z"),
+        });
+    }
+    tree.databaseMetadata = {
+        filesImported: fileNames.length,
+        deletedAssetIds,
+    };
+    tree.merkle = buildMerkleTree(tree.sort);
+    tree.dirty = false;
+    await saveTree(".db/files.dat", tree, storage);
+    return storage;
+}
+
+//
 // Builds a storage holding the given files and a merkle tree describing exactly them.
 //
 async function makeDatabase(fileNames: string[]): Promise<MockStorage> {
@@ -49,12 +76,15 @@ async function makeDatabase(fileNames: string[]): Promise<MockStorage> {
 }
 
 //
-// A bson database that a push only flushes and commits.
+// A bson database that a push only flushes, commits, and removes deleted assets' records from.
 //
 function makeBsonDatabase(): any {
     return {
         flush: async () => {},
         commit: async () => {},
+        collection: () => ({
+            deleteOne: async () => {},
+        }),
     };
 }
 
@@ -91,6 +121,28 @@ describe("how often a push says where its time went", () => {
 
         expect(timingLines).toHaveLength(1);
         expect(timingLines[0]).toContain(`"filesCopied":1`);
+    });
+
+    //
+    // The line is meant to come every twenty files, and it is reached once per leaf, so a count
+    // resting on a multiple of twenty said the same thing again for every leaf walked and matched
+    // after it. On a Pixel 6 that was five identical lines in a row with the count stuck at sixty.
+    //
+    test("a run of leaves that copy nothing after the twentieth file says nothing more", async () => {
+        // Twenty files to copy, named so they sort first, and then a long run of leaves the push
+        // walks and copies nothing for because their assets are deleted. That is the count resting on
+        // twenty while leaf after leaf goes by, which is what a real library does: a Pixel 6 pushing
+        // to an origin it shares most of its photos with walked 479 leaves and copied 98.
+        const toCopy = Array.from({ length: 20 }, (_, index) => `asset/a-${String(index).padStart(3, "0")}.jpg`);
+        const deleted = Array.from({ length: 50 }, (_, index) => `z-${String(index).padStart(3, "0")}.jpg`);
+
+        const source = await makeDatabaseWithDeletions(toCopy.concat(deleted.map(assetId => `asset/${assetId}`)), deleted);
+        const target = await makeDatabase([]);
+
+        await pushFiles(source, target, makeBsonDatabase());
+
+        // The twentieth file's line, and the one at the end of the push.
+        expect(timingLines).toHaveLength(2);
     });
 
     test("a push that copies files says it while it works and again at the end", async () => {

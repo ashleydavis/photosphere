@@ -203,6 +203,17 @@ export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage
     // finds them in the difference and tries them again.
     let filesLeftBehind = 0;
 
+    // What filesCopied stood at when the tree was last saved and when the timings were last said.
+    //
+    // Both of those happen every so many files, and both are checked once per leaf rather than once
+    // per copy, so a count sitting on a multiple repeated them for every leaf walked and matched
+    // afterwards. Measured on a Pixel 6 pushing to an origin holding thousands of photos, the timings
+    // line came out five times in a row for leaves 417 to 421 with the count stuck at sixty, and the
+    // tree save does the same thing at every hundredth file, which is a megabyte written back per
+    // leaf to record that nothing changed.
+    let filesCopiedAtLastTreeSave = 0;
+    let filesCopiedAtLastTimingsLine = 0;
+
     // Where the time goes, in milliseconds, reported every so often while a push runs.
     //
     // Without it a slow sync is a number of files a minute and nothing else. The import path has the
@@ -446,14 +457,17 @@ export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage
                 // Save the target merkle tree every hundred files, so a push that is interrupted
                 // does not start again from nothing.
                 //
-                // `filesCopied > 0` is what makes that "every hundred files" rather than "every
-                // leaf": zero divides by a hundred exactly, so a pass that copies nothing saved the
-                // whole tree after every leaf it looked at. Measured on a Pixel 6 pushing to an S3
-                // origin holding 8,481 photos, a pass that had nothing to copy spent 42 minutes
-                // visiting 92 leaves, of which 10 milliseconds was the copying: the rest was
-                // serializing and uploading a megabyte of merkle tree, once per leaf, to record that
-                // nothing had changed.
-                if (filesCopied > 0 && filesCopied % 100 === 0) {
+                // Comparing against the count at the last save is what makes that "every hundred
+                // files" rather than "every leaf". This is reached once per leaf, and a leaf whose
+                // file is already at the far end copies nothing, so a count resting on a multiple of
+                // a hundred saved the whole tree again for each of them. Measured on a Pixel 6
+                // pushing to an S3 origin holding thousands of photos, a pass that had nothing to
+                // copy spent 42 minutes visiting 92 leaves, of which 10 milliseconds was the copying:
+                // the rest was serializing and uploading a megabyte of merkle tree, once per leaf, to
+                // record that nothing had changed. A count of zero is the starting value, so a pass
+                // that has copied nothing yet saves nothing.
+                if (filesCopied % 100 === 0 && filesCopied !== filesCopiedAtLastTreeSave) {
+                    filesCopiedAtLastTreeSave = filesCopied;
                     const savedAt = Date.now();
                     await retry(() => saveMerkleTree(targetMerkleTree!, targetAssetStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to save the target merkle tree part way through a push");
                     millisecondsSavingTheTree += Date.now() - savedAt;
@@ -462,11 +476,13 @@ export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage
                 // Where the time went, said out loud often enough to be useful and rarely enough to
                 // be readable. A sync that is slow is otherwise just a number of files a minute.
                 //
-                // `filesCopied > 0` for the reason above: zero divides by twenty exactly, so a pass
-                // that copied nothing said this on every leaf it looked at. A Pixel 6 pushing to an
-                // origin holding 8,481 photos wrote a line per leaf, which buried the one line that
-                // mattered (the copy that failed) under thousands that said the same thing.
-                if (filesCopied > 0 && filesCopied % 20 === 0) {
+                // Against the count at the last line for the reason above: this is reached once per
+                // leaf, so a count resting on a multiple of twenty said the same thing again for
+                // every leaf walked and matched afterwards. On a Pixel 6 pushing to an origin holding
+                // thousands of photos that was five identical lines for leaves 417 to 421, and the
+                // line that mattered was somewhere under them.
+                if (filesCopied % 20 === 0 && filesCopied !== filesCopiedAtLastTimingsLine) {
+                    filesCopiedAtLastTimingsLine = filesCopied;
                     sayWhereTheTimeWent();
                 }
             }
