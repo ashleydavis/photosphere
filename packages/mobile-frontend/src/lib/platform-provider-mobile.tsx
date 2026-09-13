@@ -11,6 +11,7 @@ import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskCompl
 import { pickMobileFolder, saveMobileDownloadedFile, saveMobileDownloadedFiles, setInjectedExportOutcome, setInjectedPickFolderResult } from "./mobile-export";
 import { setInjectedDeleteOutcome } from "./mobile-media-cleanup";
 import { AUTO_IMPORT_ENABLED_KEY } from "user-interface";
+import type { IImportProgressMessage } from "api/src/lib/import-assets.types";
 import type { IAutoImportSource } from "api/src/lib/auto-import-settings";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
 import { mobileConfigSettingsFile, mobileStateSettingsFile, mobileNewsStateFile, readMobileAutoImportSettings, readMobileSyncSettings, recordMobileSyncDatabase, seedMobileSyncSettings } from "./mobile-config-file";
@@ -1056,6 +1057,33 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             backgroundWorkStartedRef.current = true;
         };
 
+        // The progress line last written to the log, so the same one is not written again.
+        let lastProgressLine: string | undefined = undefined;
+
+        // The import's own log lines run inside the embedded engine and do not reach the app log, so
+        // what automatic import is doing is only visible through the progress it streams back. This
+        // still arrives while the app is on screen, whoever started the import, because the plugin
+        // emits a task message for every running task. Logged rather than only shown on screen,
+        // because a phone doing nothing and a phone quietly failing look the same in the interface.
+        const progressUnsubscribe = subscribeMobileTaskMessage((_taskId, message) => {
+            if ((message as Record<string, unknown>).type !== "import-progress") {
+                return;
+            }
+            const progress = message as unknown as IImportProgressMessage;
+            const line = `Import: ${progress.imported} imported, ${progress.skipped} already there, ${progress.failed} failed, ${progress.skippedBeforeOpening} recognised before opening.`;
+
+            // Only when it says something it did not say last time. A pass reports its running totals
+            // as it goes and the next pass starts a short while later, for as long as automatic
+            // import is on, so logging every message buries everything else in the app log under the
+            // same line repeated: the counts of a failure were once thirty identical lines deep,
+            // which is exactly when the log is worth reading.
+            if (line === lastProgressLine) {
+                return;
+            }
+            lastProgressLine = line;
+            log.info(line);
+        });
+
         ensureAutoImport().catch(error => log.exception("Failed to start automatic import", error as Error));
 
         // The settings card writes the toggle through the config store, and on mobile that store
@@ -1069,6 +1097,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         return () => {
             cancelled = true;
             autoImportChangedRef.current = undefined;
+            progressUnsubscribe();
 
             // The background import is deliberately left running. It is the whole point of it: the
             // WebView going away, which is what happens when the app leaves the screen, must not stop
