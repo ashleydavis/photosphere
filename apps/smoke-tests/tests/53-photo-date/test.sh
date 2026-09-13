@@ -128,7 +128,7 @@ wait_for_log "$TMP_DIR" "Starting automatic import." || exit 1
 # saying it found both already imported. An import reads its source to the end and stops, so the two
 # are taken in by separate passes and there is no single line saying "both are in": this is the first
 # moment at which that is true.
-wait_for_log "$TMP_DIR" '"skippedBeforeOpening":2' 240 || exit 1
+wait_for_log "$TMP_DIR" "2 recognised before opening." 240 || exit 1
 log_info "Both photos are in the database"
 
 # Read what the app actually wrote, with the CLI, from outside the app.

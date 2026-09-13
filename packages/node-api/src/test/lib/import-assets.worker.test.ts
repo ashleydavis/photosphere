@@ -1152,6 +1152,29 @@ describe('importAssetsHandler', () => {
         );
     });
 
+    test("says how much of what it skipped was recognised without opening the file", async () => {
+        // The two numbers cost wildly different amounts and the total hides that: opening an item on
+        // a phone copies the whole photo out of the library and hashes it, and an item recognised
+        // before opening costs none of that. A pass over a library that is already imported should
+        // therefore report every skip as one it never opened, and smoke tests 47 and 53 read this to
+        // prove the hash cache is doing its job across a restart.
+        autoImportScannerPushesOneItem();
+        hashFileReportsNewFile();
+        uploadSucceeds();
+        const context = makeContext();
+
+        await importAssetsHandler(autoImportData(), context);
+
+        const progressMessages = (context.sendMessage as jest.Mock).mock.calls
+            .map(call => call[0])
+            .filter(message => message.type === 'import-progress');
+        expect(progressMessages.length).toBeGreaterThan(0);
+        for (const message of progressMessages) {
+            expect(message.skippedBeforeOpening).toBe(1);
+            expect(message.skipped).toBe(1);
+        }
+    });
+
     test("reports what a manual import is doing, through the very same message", async () => {
         watchHashCache();
         hashFileReportsNewFile();

@@ -234,18 +234,17 @@ stop_app "$APP_PORT" "$TMP_DIR"
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-# Nothing hashed, nothing read back from the cache after being opened, and both photos recognised
-# before they were opened at all. That last part is what costs nothing: an item answered there is
-# never copied out of the photo library, which on a real library is a full copy and a full hash of
-# every photo already imported, every single run.
+# Both photos recognised before they were opened at all, and neither imported again. That is what
+# costs nothing: an item answered before opening is never copied out of the photo library and never
+# hashed, which on a real library is a full copy and a full hash of every photo already imported,
+# every single run.
 #
-# Matched as one substring of the timings line so the three figures have to agree in one pass rather
-# than being read from three different ones. They are adjacent in the order formatImportTimings
-# writes them.
+# Matched as one substring of the progress line so the figures have to agree in one pass rather than
+# being read from different ones: two already there, both of them answered without opening a file.
 #
 # Waited for generously because the relaunched app may already have run a pass before the WebView
 # subscribed to task messages, and the next one is a pause away.
-wait_for_log "$TMP_DIR" '"filesHashed":0,"filesFromCache":0,"skippedBeforeOpening":2' 180 || exit 1
+wait_for_log "$TMP_DIR" "Import: 0 imported, 2 already there, 0 failed, 2 recognised before opening." 180 || exit 1
 log_info "The restarted app recognised both photos without copying or hashing either"
 
 check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1

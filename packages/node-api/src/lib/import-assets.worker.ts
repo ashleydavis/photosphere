@@ -888,6 +888,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
             // What the import recognised, plus what the scanner recognised before it went to the
             // trouble of copying the photo out of the library at all.
             skipped: result.skipped.length + skippedBeforeOpening,
+            skippedBeforeOpening,
             failed: result.failedCount,
             currentItem,
         };
