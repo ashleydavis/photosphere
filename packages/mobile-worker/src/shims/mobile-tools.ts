@@ -158,10 +158,25 @@ function runImageMagickText(argv: string[]): string {
 // known output path now exists (mirroring the desktop output-file check).
 //
 function runImageMagickToFile(argv: string[], outputPath: string): void {
+    runImageMagickToOneOf(argv, [ outputPath ]);
+}
+
+//
+// Runs an ImageMagick argv that produces a file under one of the given names, and returns the name
+// it produced: the first of them that exists after a zero exit. ImageMagick chooses between them
+// itself, writing `name-0.ext` instead of `name.ext` when the input has more than one frame.
+//
+function runImageMagickToOneOf(argv: string[], outputPaths: string[]): string {
     const result = runMediaTool(getMediaHost().imageMagick, argv);
-    if (result.exitCode !== 0 || !getFsHost().fsAccess(outputPath)) {
-        throw new Error(`ImageMagick operation failed (exit code ${result.exitCode}), output not created: ${outputPath}`);
+    if (result.exitCode === 0) {
+        for (const outputPath of outputPaths) {
+            if (getFsHost().fsAccess(outputPath)) {
+                return outputPath;
+            }
+        }
     }
+
+    throw new Error(`ImageMagick operation failed (exit code ${result.exitCode}), output not created: ${outputPaths.join(" or ")}`);
 }
 
 //
@@ -333,7 +348,8 @@ export class Image {
             geometry = buildGeometry(undefined, options.height, false);
         }
 
-        const outputPath = path.join(tempDir, `temp_resize_${uuidGenerator.generate()}.${options.ext}`);
+        const outputName = `temp_resize_${uuidGenerator.generate()}`;
+        const outputPath = path.join(tempDir, `${outputName}.${options.ext}`);
         const argv = buildResizeArgs({
             inputPath: this.filePath,
             outputPath,
@@ -341,8 +357,14 @@ export class Image {
             quality: options.quality,
             format: options.format,
         });
-        runImageMagickToFile(argv, outputPath);
-        return outputPath;
+
+        // ImageMagick writes one file per frame when the input holds more than one, an animated GIF
+        // say, and names them `-0`, `-1` and so on rather than the name it was given. The first
+        // frame is the resize. The desktop looks for the same two names; here only the first was
+        // looked for, so every animated GIF in a phone's library failed to import, was reported as
+        // "output not created" with an exit code of zero, and was tried again on every pass.
+        const firstFramePath = path.join(tempDir, `${outputName}-0.${options.ext}`);
+        return runImageMagickToOneOf(argv, [ outputPath, firstFramePath ]);
     }
 
     //

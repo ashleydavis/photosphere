@@ -252,6 +252,22 @@ describe("mobile tools Image", () => {
         expect(resizeCall!.argv[2]).toBe("300x300!");
     });
 
+    //
+    // ImageMagick writes one file per frame when the input holds more than one, an animated GIF
+    // say, named `-0`, `-1` and so on instead of the name it was given. The desktop already looks
+    // for the `-0` name; here it was not looked for, so every animated GIF in a phone's library
+    // failed to import and was tried again on every pass.
+    //
+    test("resize returns the first frame's file when ImageMagick wrote one file per frame", async () => {
+        installFakeHost({ existingFiles: ["/cache/a.gif", "/cache/temp_resize_uuid-1-0.jpg"], registerOutputs: false });
+        const outputPath = await new Image("/cache/a.gif").resize(
+            { width: 300, height: 300, quality: 90, format: "jpeg", ext: "jpg" },
+            "/cache",
+            fakeUuidGenerator,
+        );
+        expect(outputPath).toBe("/cache/temp_resize_uuid-1-0.jpg");
+    });
+
     test("resize throws when the output file is not created", async () => {
         installFakeHost({ existingFiles: ["/cache/a.jpg"], registerOutputs: false });
         await expect(new Image("/cache/a.jpg").resize(
