@@ -197,6 +197,17 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     // automatic import writes to.
     const openDatabasePathRef = useRef<string | undefined>(undefined);
 
+    // Counts every open and every close, so an open whose bookkeeping finishes after the database
+    // has since been closed, or another opened in its place, can tell and stop.
+    //
+    // Being told a database was opened writes the config file twice before it says so, and on a
+    // phone under load those writes took long enough for the user to close the database in between.
+    // The late finish then recorded the closed database as the one to reopen next time, undoing the
+    // close, and told every subscriber it had just been opened, which reloaded the interface into a
+    // database nobody had open. Smoke test 45 saw it as a menu vanishing from under a tap: the
+    // databases page rebuilt itself on that late notification while the test was choosing from it.
+    const databaseGenerationRef = useRef<number>(0);
+
     // Whether a sync started by an edit is still running, so a second edit does not queue a sync
     // behind the first one holding an engine slot.
     const syncInFlightRef = useRef<boolean>(false);
@@ -221,11 +232,21 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, []);
 
     const notifyDatabaseOpened = useCallback(async (databasePath: string): Promise<void> => {
+        databaseGenerationRef.current += 1;
+        const generation = databaseGenerationRef.current;
+
         // Record the opened database as most-recent (look up its registered name, else use the path's
         // final segment) and log a line matching the desktop main process so smoke tests observe it.
         const known = await configStore.findDatabaseByPath(mobileDatabasesConfigFile, databasePath);
         const name = known?.name ?? configStore.databaseBasename(databasePath);
         await configStore.addRecentDatabase(mobileDatabasesConfigFile, known ?? { name, description: "", path: databasePath });
+
+        // Closed, or replaced, while the recents were being written: everything from here would
+        // describe a database the user is no longer in, so none of it happens.
+        if (databaseGenerationRef.current !== generation) {
+            log.info(`Database ${configStore.databaseBasename(databasePath)} was closed before its opening was recorded, so it is left closed.`);
+            return;
+        }
 
         // Recorded beside the recents update above, because it is the same fact written twice: this
         // is the database the user is in, so it is the one to reopen next time the app starts. It
@@ -233,6 +254,13 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
         // when the WebView gets round to it: Android kills an app without waiting for that, so a
         // phone stopped a second after a database was opened came back with nothing open.
         await configStore.setLastDatabase(mobileDatabasesConfigFile, databasePath);
+        if (databaseGenerationRef.current !== generation) {
+            // The close that overtook this write has already forgotten the database; forget it
+            // again, since this write just remembered it.
+            await configStore.setLastDatabase(mobileDatabasesConfigFile, undefined);
+            log.info(`Database ${configStore.databaseBasename(databasePath)} was closed before its opening was recorded, so it is left closed.`);
+            return;
+        }
         log.info(`Database opened: ${configStore.databaseBasename(databasePath)}`);
         // Remember which database an edit made from here syncs, and record it where the native loop
         // can read it, which is what makes background syncing work for the database the user is
@@ -253,6 +281,8 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
     }, []);
 
     const notifyDatabaseClosed = useCallback(async (): Promise<void> => {
+        databaseGenerationRef.current += 1;
+
         // Forgotten, so a database the user closed is not reopened for them on the next start.
         await configStore.setLastDatabase(mobileDatabasesConfigFile, undefined);
         // Nothing is open, so an edit has nothing to sync. Cleared rather than left, because a stale
