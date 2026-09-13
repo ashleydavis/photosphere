@@ -11,7 +11,7 @@ import path from "path";
 import { IDatabaseDescriptor } from "api";
 import { openStorage } from "./open-storage";
 import type { ITaskContext } from "task-queue";
-import { computeAssetHash } from "./hash";
+import { computeFileHash, getNativeFileHasher } from "./hash";
 import { IFileStat } from "./file-scanner";
 import { IAssetDetails, extractDominantColorFromThumbnail } from "./media-file-database";
 import { getVideoDetails } from "./video";
@@ -235,10 +235,33 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                     throw new Error(`Failed to get info for file ${assetPath} (${assetId})`);
                 }
 
-                hashedAsset = await retry(async () => computeAssetHash(await storage.readStream(assetPath), assetInfo), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
-                if (Buffer.compare(hashedAsset.hash, expectedHashBuffer) !== 0) {
-                    throw new Error(`Hash mismatch for file ${assetPath} (${assetId}): ${hashedAsset.hash.toString("hex")} != ${expectedHashBuffer.toString("hex")}`);
+                // The stored copy is not read back to learn its hash. The hash is the one the
+                // import already has for this file, taken natively from the file on disk before
+                // anything was written, and the thumbnail and display below are hashed the same way
+                // from the files they were made into.
+                //
+                // Reading the copy back was the unaccounted half of every import into an encrypted
+                // database. A stream out of an encrypted store has no file behind it, so the native
+                // hasher could not be used and the bytes were decrypted and hashed in the engine's
+                // own JavaScript instead, at about a fifth of a megabyte a second on a Pixel 6: a
+                // photo spent seven seconds being written and seven more being read back, and one
+                // 87MB video spent seven and a half minutes on each. Measured across 46 photos and
+                // videos, the read-back was as long as the write it was checking.
+                //
+                // What a store can say about the copy without reading it, it is asked. One that hands
+                // out what it holds is checked by length, and one that cannot say how long its copy
+                // reads (an encrypted store) is not checked here at all, which is the same trust the
+                // sync places in a store that cannot verify a write. `psi verify` is the deep check.
+                const storedLength = storage.readableLength(assetInfo);
+                if (storedLength !== undefined && storedLength !== fileStat.length) {
+                    throw new Error(`Wrote ${fileStat.length} bytes to ${assetPath} (${assetId}) and the store holds ${storedLength}.`);
                 }
+
+                hashedAsset = {
+                    hash: expectedHashBuffer,
+                    length: assetInfo.length,
+                    lastModified: assetInfo.lastModified,
+                };
             }
 
             if (context.isCancelled()) {
@@ -265,10 +288,11 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                     if (!thumbInfo) {
                         throw new Error(`Failed to get info for thumbnail ${thumbPath} (${assetId})`);
                     }
-                    const hashedThumb = await retry(async () => computeAssetHash(await storage.readStream(thumbPath), thumbInfo), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
-                    thumbHash = hashedThumb.hash;
-                    thumbLength = hashedThumb.length;
-                    thumbLastModified = hashedThumb.lastModified;
+                    // Hashed from the file it was made into, natively where there is a native
+                    // hasher, rather than read back out of the store: see the asset above.
+                    thumbHash = await retry(() => computeFileHash(assetDetails.thumbnailPath!, getNativeFileHasher()), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
+                    thumbLength = thumbInfo.length;
+                    thumbLastModified = thumbInfo.lastModified;
                 }
             }
 
@@ -296,10 +320,10 @@ export async function uploadAssetHandler(data: IUploadAssetData, context: ITaskC
                     if (!displayInfo) {
                         throw new Error(`Failed to get info for display ${displayPath} (${assetId})`);
                     }
-                    const hashedDisplay = await retry(async () => computeAssetHash(await storage.readStream(displayPath), displayInfo), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
-                    displayHash = hashedDisplay.hash;
-                    displayLength = hashedDisplay.length;
-                    displayLastModified = hashedDisplay.lastModified;
+                    // Hashed from the file it was made into, for the same reason as the thumbnail.
+                    displayHash = await retry(() => computeFileHash(assetDetails.displayPath!, getNativeFileHasher()), 3, 1_000, 2, LARGE_FILE_TIMEOUT);
+                    displayLength = displayInfo.length;
+                    displayLastModified = displayInfo.lastModified;
                 }
             }
 
