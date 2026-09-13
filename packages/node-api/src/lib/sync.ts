@@ -1,7 +1,7 @@
 import { IBsonCollection, IBsonDatabase, IInternalRecord, IRecord, mergeRecords, toExternal } from "bdb";
 import type { IAsset } from "api";
 import type { ISyncChange } from "api";
-import { deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, MerkleNode, upsertItem, buildMerkleTree } from "merkle-tree";
+import { compareTrees, deleteItem, findMerkleTreeDifferences, getItemInfo, IMerkleTree, upsertItem, buildMerkleTree, MerkleNode } from "merkle-tree";
 import { IStorage, pathJoin } from "storage";
 import { IDatabaseMetadata } from "./media-file-database";
 import { acquireWriteLock, releaseWriteLock, loadDatabaseState, LARGE_FILE_TIMEOUT } from "api";
@@ -158,6 +158,17 @@ function extractAssetId(filePath: string): string | undefined {
         return parts[parts.length - 1];
     }
     return undefined;
+}
+
+//
+// A file the source's tree describes that the target's does not, or does not under the same hash.
+//
+interface IFileToConsider {
+    // The file's name in both trees.
+    name: string;
+
+    // The hash the source's tree records for it.
+    hash: Buffer;
 }
 
 //
@@ -476,110 +487,92 @@ export async function pushFiles(sourceAssetStorage: IStorage, targetAssetStorage
     };
     
     //
-    // Collect nodes to process from the source merkle tree that are different.
-    // If there's no target merkle tree, we process the entire source tree.
+    // The files to consider: every file the source's tree describes that the target's does not, or
+    // describes under a different hash, found by name.
     //
-    let nodesToProcess: MerkleNode[] = [];
-    
-    if (targetMerkleTree.merkle) {
-        //
-        // Find differences between source and target merkle trees.
-        //
-        const diffStartedAt = Date.now();
-        const diff = findMerkleTreeDifferences(sourceMerkleTree.merkle, targetMerkleTree.merkle);
-        millisecondsDiffingTheTrees += Date.now() - diffStartedAt;
-        
-        //
-        // Collect nodes to process - only the differing MerkleNode roots from source.
-        //
-        nodesToProcess = diff.onlyInTree1;
-    } else {
-        // If there's no target merkle tree, process the entire source tree
-        if (sourceMerkleTree.merkle) {
-            nodesToProcess = [ sourceMerkleTree.merkle ];
+    // This used to be the merkle diff, and the merkle diff matches leaves by hash rather than by
+    // name, so a file whose content the target already held under another name was never offered
+    // for copying at all. A library holds such files whenever a photo has been imported twice: an
+    // import stopped before its batch was written imports the same photos again under new ids on
+    // its next run, and the records for the new ids reach the target through the record merge while
+    // their files never do. Measured on a Pixel 6 against an origin holding 15,491 files, 243 files
+    // of 101 assets were missing at the origin after five passes that had each reported nothing
+    // left behind, and only a walk of both trees by name said so.
+    //
+    const decidingWhatToConsiderAt = Date.now();
+    const comparison = compareTrees(sourceMerkleTree, targetMerkleTree);
+    const filesToConsider: IFileToConsider[] = [];
+    for (const name of comparison.onlyInA.concat(comparison.modified)) {
+        const info = getItemInfo(sourceMerkleTree, name);
+        if (!info) {
+            throw new Error(`The source tree compared as holding ${name} and then did not have it.`);
         }
+        filesToConsider.push({
+            name,
+            hash: info.hash,
+        });
     }
+    nodesVisited = filesToConsider.length;
+    millisecondsDiffingTheTrees += Date.now() - decidingWhatToConsiderAt;
 
-    //
-    // Process files from MerkleNode differences.
-    //
-    const processMerkleNode = async (merkleNode: MerkleNode): Promise<void> => {
-        nodesVisited++;
-        if (!merkleNode.left && !merkleNode.right) {
-            // Leaf node - process the file directly
-            if (merkleNode.name && merkleNode.hash) {
-                // The long timeout is the one the import path already uses for streaming large files
-                // to S3. Left at retry's thirty second default, every copy of a file that takes
-                // longer than that was abandoned and tried again from the start: on a Pixel 6, which
-                // pushes about seven megabytes a minute through the engine bridge, that is anything
-                // over about three megabytes, so a library with a video in it never finished syncing
-                // and the same file was uploaded over and over for ever.
-                // A file that will not copy is left behind rather than taken as the end of the sync.
-                //
-                // The rest of the library has nothing to do with it, and abandoning the pass on the
-                // first bad file means everything after that file in the tree never goes anywhere:
-                // measured on a Pixel 6 against a real library, one video that the server kept
-                // refusing held up all 2,292 assets, pass after pass, for as long as it was left
-                // running. The file stays missing at the far end, so the next pass finds it in the
-                // difference and tries it again.
-                try {
-                    const copyStartedAt = Date.now();
-                    await retry(() => copyFile(merkleNode.name!, merkleNode.hash), 3, 1_000, 2, LARGE_FILE_TIMEOUT,
-                        `Failed to copy file ${merkleNode.name}`);
-                    millisecondsInsideCopyFile += Date.now() - copyStartedAt;
-                }
-                catch (error: any) {
-                    filesLeftBehind++;
-                    log.exception(`Failed to copy ${merkleNode.name}, carrying on with the rest of the sync`, error);
-                    return;
-                }
-
-                // Save the target merkle tree every hundred files, so a push that is interrupted
-                // does not start again from nothing.
-                //
-                // Comparing against the count at the last save is what makes that "every hundred
-                // files" rather than "every leaf". This is reached once per leaf, and a leaf whose
-                // file is already at the far end copies nothing, so a count resting on a multiple of
-                // a hundred saved the whole tree again for each of them. Measured on a Pixel 6
-                // pushing to an S3 origin holding thousands of photos, a pass that had nothing to
-                // copy spent 42 minutes visiting 92 leaves, of which 10 milliseconds was the copying:
-                // the rest was serializing and uploading a megabyte of merkle tree, once per leaf, to
-                // record that nothing had changed. A count of zero is the starting value, so a pass
-                // that has copied nothing yet saves nothing.
-                if (filesCopied % 100 === 0 && filesCopied !== filesCopiedAtLastTreeSave) {
-                    filesCopiedAtLastTreeSave = filesCopied;
-                    const savedAt = Date.now();
-                    await retry(() => saveMerkleTree(targetMerkleTree!, targetAssetStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to save the target merkle tree part way through a push");
-                    millisecondsSavingTheTree += Date.now() - savedAt;
-                }
-
-                // Where the time went, said out loud often enough to be useful and rarely enough to
-                // be readable. A sync that is slow is otherwise just a number of files a minute.
-                //
-                // Against the count at the last line for the reason above: this is reached once per
-                // leaf, so a count resting on a multiple of twenty said the same thing again for
-                // every leaf walked and matched afterwards. On a Pixel 6 pushing to an origin holding
-                // thousands of photos that was five identical lines for leaves 417 to 421, and the
-                // line that mattered was somewhere under them.
-                if (filesCopied % 20 === 0 && filesCopied !== filesCopiedAtLastTimingsLine) {
-                    filesCopiedAtLastTimingsLine = filesCopied;
-                    sayWhereTheTimeWent();
-                }
-            }
-        } else {
-            // Internal node - recursively process children
-            if (merkleNode.left) {
-                await processMerkleNode(merkleNode.left);
-            }
-            if (merkleNode.right) {
-                await processMerkleNode(merkleNode.right);
-            }
+    for (const file of filesToConsider) {
+        // The long timeout is the one the import path already uses for streaming large files
+        // to S3. Left at retry's thirty second default, every copy of a file that takes
+        // longer than that was abandoned and tried again from the start: on a Pixel 6, which
+        // pushes about seven megabytes a minute through the engine bridge, that is anything
+        // over about three megabytes, so a library with a video in it never finished syncing
+        // and the same file was uploaded over and over for ever.
+        // A file that will not copy is left behind rather than taken as the end of the sync.
+        //
+        // The rest of the library has nothing to do with it, and abandoning the pass on the
+        // first bad file means everything after that file in the tree never goes anywhere:
+        // measured on a Pixel 6 against a real library, one video that the server kept
+        // refusing held up all 2,292 assets, pass after pass, for as long as it was left
+        // running. The file stays missing at the far end, so the next pass finds it in the
+        // difference and tries it again.
+        try {
+            const copyStartedAt = Date.now();
+            await retry(() => copyFile(file.name, file.hash), 3, 1_000, 2, LARGE_FILE_TIMEOUT,
+                `Failed to copy file ${file.name}`);
+            millisecondsInsideCopyFile += Date.now() - copyStartedAt;
         }
-    };
+        catch (error: any) {
+            filesLeftBehind++;
+            log.exception(`Failed to copy ${file.name}, carrying on with the rest of the sync`, error);
+            continue;
+        }
 
-    // Process only the nodes that differ
-    for (const nodeToProcess of nodesToProcess) {
-        await processMerkleNode(nodeToProcess);
+        // Save the target merkle tree every hundred files, so a push that is interrupted
+        // does not start again from nothing.
+        //
+        // Comparing against the count at the last save is what makes that "every hundred
+        // files" rather than "every leaf". This is reached once per leaf, and a leaf whose
+        // file is already at the far end copies nothing, so a count resting on a multiple of
+        // a hundred saved the whole tree again for each of them. Measured on a Pixel 6
+        // pushing to an S3 origin holding thousands of photos, a pass that had nothing to
+        // copy spent 42 minutes visiting 92 leaves, of which 10 milliseconds was the copying:
+        // the rest was serializing and uploading a megabyte of merkle tree, once per leaf, to
+        // record that nothing had changed. A count of zero is the starting value, so a pass
+        // that has copied nothing yet saves nothing.
+        if (filesCopied % 100 === 0 && filesCopied !== filesCopiedAtLastTreeSave) {
+            filesCopiedAtLastTreeSave = filesCopied;
+            const savedAt = Date.now();
+            await retry(() => saveMerkleTree(targetMerkleTree!, targetAssetStorage), 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to save the target merkle tree part way through a push");
+            millisecondsSavingTheTree += Date.now() - savedAt;
+        }
+
+        // Where the time went, said out loud often enough to be useful and rarely enough to
+        // be readable. A sync that is slow is otherwise just a number of files a minute.
+        //
+        // Against the count at the last line for the reason above: this is reached once per
+        // leaf, so a count resting on a multiple of twenty said the same thing again for
+        // every leaf walked and matched afterwards. On a Pixel 6 pushing to an origin holding
+        // thousands of photos that was five identical lines for leaves 417 to 421, and the
+        // line that mattered was somewhere under them.
+        if (filesCopied % 20 === 0 && filesCopied !== filesCopiedAtLastTimingsLine) {
+            filesCopiedAtLastTimingsLine = filesCopied;
+            sayWhereTheTimeWent();
+        }
     }
     
     // Delete assets that are marked as deleted in source (but not yet deleted in target)

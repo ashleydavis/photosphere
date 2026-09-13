@@ -135,3 +135,60 @@ describe('Tree Comparison', () => {
         expect(diff.modified).toEqual([]);
     });
 });
+describe('comparing trees that hold the same content under different names', () => {
+
+    function buildTreeWithContent(files: { name: string, content: string }[]): IMerkleTree<any> {
+        let tree = createTree<any>("12345678-1234-5678-9abc-123456789abc");
+        for (const file of files) {
+            const hash = crypto.createHash('sha256').update(file.content).digest();
+            tree = addItem(tree, {
+                name: file.name,
+                hash,
+                length: file.content.length,
+                lastModified: new Date(),
+            });
+        }
+        tree.merkle = buildMerkleTree(tree.sort);
+        tree.dirty = false;
+        return tree;
+    }
+
+    //
+    // The merkle diff counts hashes, so it sees one of these two as present and the other as missing
+    // according to the order it visits them, and names the wrong one when the one B holds is
+    // visited second.
+    //
+    test('a name only in A is reported even when B holds its content under another name', () => {
+        const photo = 'the same photo imported twice';
+        const treeA = buildTreeWithContent([
+            { name: 'asset/first-import', content: photo },
+            { name: 'asset/second-import', content: photo },
+        ]);
+        const treeB = buildTreeWithContent([
+            { name: 'asset/second-import', content: photo },
+        ]);
+
+        const diff = compareTrees(treeA, treeB);
+
+        expect(diff.onlyInA).toEqual(['asset/first-import']);
+        expect(diff.onlyInB).toEqual([]);
+        expect(diff.modified).toEqual([]);
+    });
+
+    test('a name only in B is reported even when A holds its content under another name', () => {
+        const photo = 'the same photo imported twice';
+        const treeA = buildTreeWithContent([
+            { name: 'asset/second-import', content: photo },
+        ]);
+        const treeB = buildTreeWithContent([
+            { name: 'asset/first-import', content: photo },
+            { name: 'asset/second-import', content: photo },
+        ]);
+
+        const diff = compareTrees(treeA, treeB);
+
+        expect(diff.onlyInA).toEqual([]);
+        expect(diff.onlyInB).toEqual(['asset/first-import']);
+        expect(diff.modified).toEqual([]);
+    });
+});
