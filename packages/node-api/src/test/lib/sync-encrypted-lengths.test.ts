@@ -4,7 +4,7 @@ import { createTree, addItem, buildMerkleTree, saveTree, getItemInfo, loadTree }
 import type { IDatabaseMetadata } from "../../lib/media-file-database";
 import { createHash } from "crypto";
 import { Readable } from "stream";
-import { pushFiles } from "../../lib/sync";
+import { pushFiles, throughTheDatabases } from "../../lib/sync";
 
 //
 // What a push tells the target about the length of each file it sends.
@@ -121,7 +121,7 @@ describe("the lengths a push hands over", () => {
         const target = new LengthRecordingStorage();
         await fillDatabase(target, []);
 
-        await pushFiles(source, target, makeBsonDatabase());
+        await pushFiles(source, target, makeBsonDatabase(), throughTheDatabases(source, target));
 
         expect(target.declaredLengths.has(fileName)).toBe(true);
         expect(target.declaredLengths.get(fileName)).toBeUndefined();
@@ -134,7 +134,7 @@ describe("the lengths a push hands over", () => {
         const target = new LengthRecordingStorage();
         await fillDatabase(target, []);
 
-        await pushFiles(source, target, makeBsonDatabase());
+        await pushFiles(source, target, makeBsonDatabase(), throughTheDatabases(source, target));
 
         expect(target.declaredLengths.get(fileName)).toBe(fileName.length);
     });
@@ -146,7 +146,7 @@ describe("the lengths a push hands over", () => {
         const target = new MockStorage();
         await fillDatabase(target, []);
 
-        await pushFiles(source, target, makeBsonDatabase());
+        await pushFiles(source, target, makeBsonDatabase(), throughTheDatabases(source, target));
 
         const sourceTree = await loadTree<IDatabaseMetadata>(".db/files.dat", source);
         const targetTree = await loadTree<IDatabaseMetadata>(".db/files.dat", target);
