@@ -642,8 +642,19 @@ export async function replicate(
         //
         // Full mode: copy database metadata from source to destination, then replicate all files.
         //
+        // Without the partial flag, whatever the source's says. A full replica is full by
+        // definition: it holds everything its source could give it, and full is what was asked for
+        // by name. Carrying the flag over from a partial source made a full copy of a phone's
+        // replica, taken to rebuild a lost origin, come out marked partial, and every sync then
+        // refused the originals and display versions pushed at it, for ever: measured on a Pixel 6,
+        // the phone imported and pushed 1,937 photos and the origin ended up holding the 250
+        // originals it started with, while its thumbnails went from 8,481 to 10,199.
+        //
         if (merkleTree.databaseMetadata) {
-            destMerkleTree.databaseMetadata = { ...merkleTree.databaseMetadata };
+            destMerkleTree.databaseMetadata = {
+                ...merkleTree.databaseMetadata,
+                isPartial: false,
+            };
         }
         else {
             destMerkleTree.databaseMetadata = { filesImported: 0 };
