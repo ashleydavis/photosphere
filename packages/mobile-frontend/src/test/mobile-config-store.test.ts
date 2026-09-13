@@ -306,4 +306,51 @@ describe("the last opened database", () => {
 
         expect(await getLastDatabase(configFile)).toEqual("photos/holiday");
     });
+
+    test("never reads the list while a write is part way through replacing it", async () => {
+        // A write replaces the whole file, and the reader answers a file it cannot parse with empty
+        // lists rather than an error, so a read landing in the middle of one reports no databases at
+        // all. The interface believed it: the databases page emptied and filled again, and an action
+        // menu open on a card went with the card while it was gone.
+        //
+        // The half-written state is held open deliberately rather than waited for on a timer, so the
+        // read is issued at exactly the moment the file holds nothing and the test says the same
+        // thing on a loaded machine as on an idle one.
+        let config: IDatabasesConfig = { databases: [], recentDatabaseNames: [], lastDatabase: undefined };
+        let holdTheNextWriteOpen = false;
+        let announceWriteStarted: () => void = () => {};
+        let allowWriteToFinish: () => void = () => {};
+        const writeHasStarted = new Promise<void>(resolve => { announceWriteStarted = resolve; });
+        const writeMayFinish = new Promise<void>(resolve => { allowWriteToFinish = resolve; });
+        const configFile: IDatabasesConfigFile = {
+            read: async () => ({ databases: [...config.databases], recentDatabaseNames: [...config.recentDatabaseNames], lastDatabase: config.lastDatabase }),
+            write: async (updated: IDatabasesConfig) => {
+                if (!holdTheNextWriteOpen) {
+                    config = updated;
+                    return;
+                }
+                config = { databases: [], recentDatabaseNames: [], lastDatabase: undefined };
+                announceWriteStarted();
+                await writeMayFinish;
+                config = updated;
+            },
+        };
+
+        await addDatabase(configFile, entry("Holiday", "photos/holiday"));
+
+        // Armed only now, so the seeding above is an ordinary write and the one held open is the one
+        // the read below has to survive.
+        holdTheNextWriteOpen = true;
+        const writing = setLastDatabase(configFile, "photos/holiday");
+        await writeHasStarted;
+
+        // Issued while the file holds nothing, and deliberately not awaited until the write has been
+        // let go: a read that waits its turn answers from the finished file, and one that does not
+        // answers from the hole in the middle of it.
+        const reading = getDatabases(configFile);
+        allowWriteToFinish();
+        await writing;
+
+        expect((await reading).map(database => database.name)).toEqual(["Holiday"]);
+    });
 });

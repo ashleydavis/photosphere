@@ -88,9 +88,18 @@ async function withConfigLock<OperationResult>(operation: () => Promise<Operatio
 //
 // Returns the configured databases.
 //
+// Read under the lock, like every write below, because a write replaces the whole file: a read that
+// lands in the middle of one sees the file part-written, and the reader answers a missing or
+// unparseable file with empty lists rather than an error. The interface then shows no databases at
+// all for a moment. Smoke test 45 caught it as a menu disappearing: the card list emptied and filled
+// again while a card's action menu was open, and the menu went with the card it belonged to, so the
+// item the test went on to tap was not there to tap.
+//
 export async function getDatabases(configFile: IDatabasesConfigFile): Promise<IDatabaseEntry[]> {
-    const config = await configFile.read();
-    return config.databases;
+    return withConfigLock(async () => {
+        const config = await configFile.read();
+        return config.databases;
+    });
 }
 
 //
@@ -141,16 +150,20 @@ export async function removeDatabase(configFile: IDatabasesConfigFile, name: str
 // Finds a database entry by name (case-insensitive).
 //
 export async function findDatabase(configFile: IDatabasesConfigFile, name: string): Promise<IDatabaseEntry | undefined> {
-    const config = await configFile.read();
-    return config.databases.find(existing => namesMatch(existing.name, name));
+    return withConfigLock(async () => {
+        const config = await configFile.read();
+        return config.databases.find(existing => namesMatch(existing.name, name));
+    });
 }
 
 //
 // Finds a database entry by its path.
 //
 export async function findDatabaseByPath(configFile: IDatabasesConfigFile, databasePath: string): Promise<IDatabaseEntry | undefined> {
-    const config = await configFile.read();
-    return config.databases.find(existing => existing.path === databasePath);
+    return withConfigLock(async () => {
+        const config = await configFile.read();
+        return config.databases.find(existing => existing.path === databasePath);
+    });
 }
 
 //
@@ -170,15 +183,17 @@ export async function setDatabaseOrigin(configFile: IDatabasesConfigFile, databa
 // configured database are dropped, matching getRecentDatabases on desktop.
 //
 export async function getRecentDatabases(configFile: IDatabasesConfigFile): Promise<IDatabaseEntry[]> {
-    const config = await configFile.read();
-    const entries: IDatabaseEntry[] = [];
-    for (const recentName of config.recentDatabaseNames) {
-        const found = config.databases.find(existing => namesMatch(existing.name, recentName));
-        if (found) {
-            entries.push(found);
+    return withConfigLock(async () => {
+        const config = await configFile.read();
+        const entries: IDatabaseEntry[] = [];
+        for (const recentName of config.recentDatabaseNames) {
+            const found = config.databases.find(existing => namesMatch(existing.name, recentName));
+            if (found) {
+                entries.push(found);
+            }
         }
-    }
-    return entries;
+        return entries;
+    });
 }
 
 //
@@ -253,8 +268,10 @@ export function databaseBasename(databasePath: string): string {
 // The path of the database to open again next time the app starts, or undefined when none should be.
 //
 export async function getLastDatabase(configFile: IDatabasesConfigFile): Promise<string | undefined> {
-    const config = await configFile.read();
-    return config.lastDatabase;
+    return withConfigLock(async () => {
+        const config = await configFile.read();
+        return config.lastDatabase;
+    });
 }
 
 //
