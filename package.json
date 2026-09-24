@@ -39,6 +39,8 @@
     "tc": "cd ./apps/cli && ./smoke-tests.sh",
     "test:cli:encrypted": "cd ./apps/cli/ && ./smoke-tests-encrypted.sh",
     "tce": "bun run test:cli:encrypted",
+    "test:cli:zig": "cd ./apps/cli && ./smoke-tests.sh --zig",
+    "test:cli:encrypted:zig": "cd ./apps/cli/ && ./smoke-tests-encrypted.sh --zig",
     "test:cli:lan-share": "cd ./apps/cli/ && ./smoke-tests-lan-share.sh",
     "tcl": "bun run test:cli:lan-share",
     "test:lan-share:cli-desktop": "./cli-desktop-lan-share-smoke-tests.sh",

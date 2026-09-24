@@ -69,6 +69,9 @@ export PHOTOSPHERE_VAULT_TYPE="plaintext"
 # Use built binary instead of bun run start (set by --binary)
 USE_BINARY=false
 
+# Use the Zig port of the CLI (apps/cli-zig) instead of the TypeScript CLI (set by --zig)
+export USE_ZIG="${USE_ZIG:-false}"
+
 # Execution mode: "parallel" (default) or "sequential"
 EXECUTION_MODE=parallel
 
@@ -162,7 +165,9 @@ log_warning() {
 
 # Get CLI command: default is from code (bun run start --); use --binary for built executable
 get_cli_command() {
-    if [ "$USE_BINARY" = "true" ]; then
+    if [ "$USE_ZIG" = "true" ]; then
+        echo "$SMOKE_TESTS_DIR/../cli-zig/zig-out/bin/psi"
+    elif [ "$USE_BINARY" = "true" ]; then
         local platform=$(detect_platform)
         local arch=$(detect_architecture)
         case "$platform" in
@@ -769,6 +774,7 @@ show_usage() {
     echo ""
     echo "Options:"
     echo "  -b, --binary          - Run tests using the built executable (default: run from code with 'bun run start --')"
+    echo "  -z, --zig             - Build and run tests using the Zig port of the CLI (apps/cli-zig)"
     echo "  -t, --tmp-dir <dir>   - Use <dir> for test databases (default: ./test/tmp)."
     echo "  --sequential          - Run independent tests sequentially instead of in parallel"
     echo "  --parallel [N]        - Run independent tests in parallel with batch size N (default: 5)"
@@ -824,6 +830,10 @@ main() {
                 USE_BINARY=true
                 shift
                 ;;
+            -z|--zig)
+                export USE_ZIG=true
+                shift
+                ;;
             -t|--tmp-dir)
                 if [ $# -lt 2 ]; then
                     log_error "Option $1 requires a directory argument"
@@ -877,6 +887,12 @@ main() {
     if [ "$USE_BINARY" = "true" ]; then
         log_info "Using built executable for smoke tests"
     fi
+
+    # Build the Zig port of the CLI (always needed by the TypeScript/Zig interop tests, and by --zig mode)
+    if [ "$USE_ZIG" = "true" ]; then
+        log_info "Using the Zig port of the CLI for smoke tests"
+    fi
+    invoke_command "Build Zig CLI" "bun run --cwd $SMOKE_TESTS_DIR/../cli-zig compile" || exit 1
 
     # Handle "to X" command
     if [ "$1" = "to" ] && [ $# -eq 2 ]; then

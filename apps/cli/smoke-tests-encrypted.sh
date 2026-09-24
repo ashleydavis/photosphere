@@ -33,6 +33,12 @@ export PHOTOSPHERE_VAULT_TYPE="plaintext"
 # Use built binary instead of bun run start (set by --binary)
 USE_BINARY=false
 
+# Use the Zig port of the CLI (apps/cli-zig) instead of the TypeScript CLI (set by --zig)
+USE_ZIG=false
+
+# Absolute path to the Zig port of the CLI.
+ZIG_CLI_DIR="$(cd "$(dirname "$0")/../cli-zig" && pwd)"
+
 # Track results
 TESTS_PASSED=0
 TESTS_FAILED=0
@@ -112,6 +118,11 @@ trap cleanup_and_show_summary EXIT
 #     Same as above; also verify list shows encryption details; export both with key1,key2; verify content matches originals.
 #   partial-encrypt
 #     Two assets in encrypted DB: one encrypted, one plain (--store-plain); list shows both states; export both with key; verify match originals.
+#   zig-verify-ts-encrypted-db
+#     Init encrypted DB and add files with the TypeScript CLI; the Zig CLI verifies it with the key.
+#   zig-replicate-ts-encrypted-db
+#     Encrypted DB created by the TypeScript CLI is replicated by the Zig CLI (encrypted to encrypted, encrypted to plain,
+#     plain to encrypted with a generated key); the TypeScript CLI verifies every replica.
 #
 ENCRYPTED_TESTS=(
     "init-encrypted"
@@ -136,6 +147,8 @@ ENCRYPTED_TESTS=(
     "partial-encrypt"
     "key-not-found-noninteractive"
     "key-not-found-message"
+    "zig-verify-ts-encrypted-db"
+    "zig-replicate-ts-encrypted-db"
 )
 
 # -----------------------------------------------------------------------------
@@ -186,7 +199,9 @@ test_failed() {
 
 # Get CLI command (binary or bun run)
 get_cli_command() {
-    if [ "$USE_BINARY" = "true" ]; then
+    if [ "$USE_ZIG" = "true" ]; then
+        echo "$ZIG_CLI_DIR/zig-out/bin/psi"
+    elif [ "$USE_BINARY" = "true" ]; then
         # Reuse same paths as main smoke-tests.sh
         local platform
         platform="$(uname | tr '[:upper:]' '[:lower:]')"
@@ -262,6 +277,8 @@ get_test_description() {
         export-with-multiple-keys) echo "Export with both keys; verify exports match originals" ;;
         multi-key-encrypt) echo "Two assets with different keys; list shows encryption; export both; verify match originals" ;;
         partial-encrypt) echo "One encrypted, one plain asset; list shows both; export with key; verify match originals" ;;
+        zig-verify-ts-encrypted-db) echo "Zig CLI verifies an encrypted DB created by the TypeScript CLI" ;;
+        zig-replicate-ts-encrypted-db) echo "Zig CLI replicates a TypeScript encrypted DB; TypeScript verifies every replica" ;;
         *) echo "" ;;
     esac
 }
@@ -1365,6 +1382,171 @@ test_key_not_found_message() {
 # Test runner
 # -----------------------------------------------------------------------------
 
+# Get the TypeScript CLI command regardless of mode (used by the TypeScript/Zig interop tests).
+get_ts_cli_command() {
+    echo "bun run start --"
+}
+
+# Get the Zig CLI command regardless of mode (used by the TypeScript/Zig interop tests).
+get_zig_cli_command() {
+    echo "$ZIG_CLI_DIR/zig-out/bin/psi"
+}
+
+# Runs a verify command and checks it passes with an intact database.
+# Usage: expect_verify_passes "description" "command"
+expect_verify_passes() {
+    local description="$1"
+    local command="$2"
+    local output
+    output=$(eval "$command" 2>&1)
+    local exit_code=$?
+    echo "$output"
+    if [ $exit_code -ne 0 ]; then
+        log_error "$description failed (exit $exit_code): $command"
+        return 1
+    fi
+    if ! echo "$output" | grep -q "Database verification passed - all files are intact"; then
+        log_error "$description did not report an intact database: $command"
+        return 1
+    fi
+    log_success "$description"
+    return 0
+}
+
+test_zig_verify_ts_encrypted_db() {
+    local name="zig-verify-ts-encrypted-db"
+    print_test_header "$name"
+
+    local ts_cli
+    ts_cli="$(get_ts_cli_command)"
+    local zig_cli
+    zig_cli="$(get_zig_cli_command)"
+
+    local test_dir="$TEST_TMP_DIR/$name"
+    local db_dir="$test_dir/encrypted-db"
+    local key_name="zig-verify-ts-enc-key"
+
+    prepare_test_dir "$test_dir"
+
+    invoke_command "Init encrypted database with TypeScript" "$ts_cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG file with TypeScript" "$ts_cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add JPG file with TypeScript" "$ts_cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    assert_database_assets_encrypted "$db_dir" || {
+        test_failed "$name"
+        return
+    }
+
+    expect_verify_passes "Verify TypeScript encrypted database with Zig" "$zig_cli verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    expect_verify_passes "Full verify of TypeScript encrypted database with Zig" "$zig_cli verify --db \"$db_dir\" --key \"$key_name\" --full --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    test_passed "$name"
+}
+
+test_zig_replicate_ts_encrypted_db() {
+    local name="zig-replicate-ts-encrypted-db"
+    print_test_header "$name"
+
+    local ts_cli
+    ts_cli="$(get_ts_cli_command)"
+    local zig_cli
+    zig_cli="$(get_zig_cli_command)"
+
+    local test_dir="$TEST_TMP_DIR/$name"
+    local src_dir="$test_dir/encrypted-db"
+    local enc_replica_dir="$test_dir/zig-encrypted-replica"
+    local plain_replica_dir="$test_dir/zig-plain-replica"
+    local reencrypted_replica_dir="$test_dir/zig-reencrypted-replica"
+    local key_name="zig-rep-ts-enc-key"
+    local dest_key_name="zig-rep-ts-enc-dest-key"
+
+    prepare_test_dir "$test_dir"
+
+    invoke_command "Init encrypted database with TypeScript" "$ts_cli init --db \"$src_dir\" --key \"$key_name\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG file with TypeScript" "$ts_cli add --db \"$src_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add JPG file with TypeScript" "$ts_cli add --db \"$src_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    # Encrypted to encrypted with the same key.
+    invoke_command "Replicate encrypted database to encrypted replica with Zig" "$zig_cli replicate --db \"$src_dir\" --dest \"$enc_replica_dir\" --key \"$key_name\" --dest-key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    assert_database_assets_encrypted "$enc_replica_dir" || {
+        test_failed "$name"
+        return
+    }
+
+    expect_verify_passes "Verify Zig encrypted replica with TypeScript" "$ts_cli verify --db \"$enc_replica_dir\" --key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    # Encrypted to plain.
+    invoke_command "Replicate encrypted database to plain replica with Zig" "$zig_cli replicate --db \"$src_dir\" --dest \"$plain_replica_dir\" --key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    if [ -f "$plain_replica_dir/.db/encryption.pub" ]; then
+        log_error "Plain replica should not contain .db/encryption.pub"
+        test_failed "$name"
+        return
+    fi
+
+    expect_verify_passes "Verify Zig plain replica with TypeScript" "$ts_cli verify --db \"$plain_replica_dir\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    # Plain to encrypted with a key generated by Zig.
+    invoke_command "Replicate plain replica to encrypted replica with a generated key with Zig" "$zig_cli replicate --db \"$plain_replica_dir\" --dest \"$reencrypted_replica_dir\" --dest-key \"$dest_key_name\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    assert_database_assets_encrypted "$reencrypted_replica_dir" || {
+        test_failed "$name"
+        return
+    }
+
+    expect_verify_passes "Verify Zig re-encrypted replica with TypeScript using the Zig-generated key" "$ts_cli verify --db \"$reencrypted_replica_dir\" --key \"$dest_key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    test_passed "$name"
+}
+
 run_single_test() {
     local name="$1"
 
@@ -1389,6 +1571,8 @@ run_single_test() {
         partial-encrypt)                 test_partial_encrypt ;;
         key-not-found-noninteractive)    test_key_not_found_noninteractive ;;
         key-not-found-message)           test_key_not_found_message ;;
+        zig-verify-ts-encrypted-db)      test_zig_verify_ts_encrypted_db ;;
+        zig-replicate-ts-encrypted-db)   test_zig_replicate_ts_encrypted_db ;;
         *)
             log_error "Unknown test: $name"
             return 1
@@ -1419,6 +1603,7 @@ show_usage() {
     echo ""
     echo "Options:"
     echo "  -b, --binary        Use built CLI binary instead of bun run start --"
+    echo "  -z, --zig           Build and use the Zig port of the CLI (apps/cli-zig)"
     echo "  -t, --tmp-dir PATH  Override test tmp directory (default: ./test/tmp-encrypted)"
     echo "  -h, --help          Show this help message"
     echo ""
@@ -1442,6 +1627,10 @@ main() {
         case "$1" in
             -b|--binary)
                 USE_BINARY=true
+                shift
+                ;;
+            -z|--zig)
+                USE_ZIG=true
                 shift
                 ;;
             -t|--tmp-dir)
@@ -1468,6 +1657,10 @@ main() {
     done
 
     set -- "${positional[@]}"
+
+    # Build the Zig port of the CLI (always needed by the TypeScript/Zig interop tests, and by --zig mode)
+    echo "Building the Zig port of the CLI"
+    bun run --cwd "$ZIG_CLI_DIR" compile || exit 1
 
     # Default command is "all"
     local command="${1:-all}"

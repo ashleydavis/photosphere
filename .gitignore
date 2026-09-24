@@ -55,3 +55,7 @@ ux-review/
 .claude/worktrees/
 .claude/permissions-log/
 .claude/permissions-debug.log
+
+# Zig build outputs
+zig-out/
+.zig-cache/

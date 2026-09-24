@@ -1,0 +1,64 @@
+[
+    {
+        "name": "save-empty",
+        "operation": "save",
+        "config": {},
+        "expected": "{}"
+    },
+    {
+        "name": "save-full",
+        "operation": "save",
+        "config": {
+            "origin": "s3:bucket:/photos",
+            "lastReplicatedAt": "2024-01-02T03:04:05.678Z",
+            "lastSyncedAt": "2024-02-02T00:00:00.000Z",
+            "lastModifiedAt": "2024-03-03T00:00:00.000Z"
+        },
+        "expected": "{\n  \"origin\": \"s3:bucket:/photos\",\n  \"lastReplicatedAt\": \"2024-01-02T03:04:05.678Z\",\n  \"lastSyncedAt\": \"2024-02-02T00:00:00.000Z\",\n  \"lastModifiedAt\": \"2024-03-03T00:00:00.000Z\"\n}"
+    },
+    {
+        "name": "save-escapes",
+        "operation": "save",
+        "config": {
+            "origin": "C:\\photos \"quoted\"\n\ttab é 😀"
+        },
+        "expected": "{\n  \"origin\": \"C:\\\\photos \\\"quoted\\\"\\n\\ttab é 😀\"\n}"
+    },
+    {
+        "name": "update-missing-file",
+        "operation": "update",
+        "config": {
+            "origin": "/src/db",
+            "lastReplicatedAt": "2024-01-02T03:04:05.678Z"
+        },
+        "expected": "{\n  \"origin\": \"/src/db\",\n  \"lastReplicatedAt\": \"2024-01-02T03:04:05.678Z\"\n}"
+    },
+    {
+        "name": "update-empty-object",
+        "initial": "{}",
+        "operation": "update",
+        "config": {
+            "lastModifiedAt": "2024-05-05T00:00:00.000Z"
+        },
+        "expected": "{\n  \"lastModifiedAt\": \"2024-05-05T00:00:00.000Z\"\n}"
+    },
+    {
+        "name": "update-keeps-order",
+        "initial": "{\n  \"lastModifiedAt\": \"old-modified\",\n  \"origin\": \"old-origin\"\n}",
+        "operation": "update",
+        "config": {
+            "origin": "/new/origin",
+            "lastReplicatedAt": "2024-01-02T03:04:05.678Z"
+        },
+        "expected": "{\n  \"lastModifiedAt\": \"old-modified\",\n  \"origin\": \"/new/origin\",\n  \"lastReplicatedAt\": \"2024-01-02T03:04:05.678Z\"\n}"
+    },
+    {
+        "name": "update-keeps-unknown-keys",
+        "initial": "{\n  \"custom\": {\n    \"nested\": [\n      1,\n      2,\n      \"x\"\n    ],\n    \"flag\": true\n  },\n  \"lastSyncedAt\": \"sync\",\n  \"count\": 42,\n  \"nothing\": null\n}",
+        "operation": "update",
+        "config": {
+            "origin": "/o"
+        },
+        "expected": "{\n  \"custom\": {\n    \"nested\": [\n      1,\n      2,\n      \"x\"\n    ],\n    \"flag\": true\n  },\n  \"lastSyncedAt\": \"sync\",\n  \"count\": 42,\n  \"nothing\": null,\n  \"origin\": \"/o\"\n}"
+    }
+]

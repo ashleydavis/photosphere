@@ -1,0 +1,5 @@
+{
+  "name": "my-photos",
+  "type": "encryption-key",
+  "value": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBg==\n-----END PRIVATE KEY-----\n"
+}

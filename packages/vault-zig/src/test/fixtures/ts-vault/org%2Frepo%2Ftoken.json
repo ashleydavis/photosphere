@@ -1,0 +1,5 @@
+{
+  "name": "org/repo/token",
+  "type": "api-key",
+  "value": "tok"
+}

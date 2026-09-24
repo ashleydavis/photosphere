@@ -1,0 +1,5 @@
+{
+  "name": "default:s3",
+  "type": "s3-credentials",
+  "value": "{\"region\":\"us-east-1\",\"accessKeyId\":\"AKIA\",\"secretAccessKey\":\"x/y+z\",\"endpoint\":\"https://s3.example.com\"}"
+}
