@@ -26,28 +26,6 @@ const separator = "=" ** 80;
 const log_start_marker = "--- Log Start ---";
 
 //
-// Equivalent of Node's `os.tmpdir()` on POSIX: TMPDIR, TMP or TEMP (without a trailing slash), else /tmp.
-//
-fn osTmpDir() []const u8 {
-    const names = [_][]const u8{ "TMPDIR", "TMP", "TEMP" };
-    for (names) |name| {
-        if (node_utils.process_env.getEnv(name)) |value| {
-            if (value.len == 0) {
-                continue;
-            }
-            if (value.len > 1 and value[value.len - 1] == '/') {
-                return value[0 .. value.len - 1];
-            }
-            return value;
-        }
-    }
-    if (builtin.os.tag == .windows) {
-        return "C:\\Windows\\Temp";
-    }
-    return "/tmp";
-}
-
-//
 // Node's name for the platform (`os.platform()`).
 //
 fn osPlatform() []const u8 {
@@ -78,7 +56,12 @@ fn osArch() []const u8 {
 //
 fn osRelease(allocator: std.mem.Allocator) ![]const u8 {
     if (builtin.os.tag == .windows) {
-        return allocator.dupe(u8, "unknown");
+        var versionInfo: std.os.windows.RTL_OSVERSIONINFOW = undefined;
+        versionInfo.dwOSVersionInfoSize = @sizeOf(std.os.windows.RTL_OSVERSIONINFOW);
+        if (std.os.windows.ntdll.RtlGetVersion(&versionInfo) != .SUCCESS) {
+            return allocator.dupe(u8, "unknown");
+        }
+        return std.fmt.allocPrint(allocator, "{d}.{d}.{d}", .{ versionInfo.dwMajorVersion, versionInfo.dwMinorVersion, versionInfo.dwBuildNumber });
     }
     const uname = std.posix.uname();
     return allocator.dupe(u8, std.mem.sliceTo(&uname.release, 0));
@@ -199,7 +182,7 @@ pub const FileLogger = struct {
         const startTime = Date{ .epochMilliseconds = std.Io.Clock.real.now(io).toMilliseconds() };
 
         // Create logs directory in Photosphere temp
-        const photosphereTempDir = try std.fs.path.join(allocator, &.{ osTmpDir(), "photosphere" });
+        const photosphereTempDir = try std.fs.path.join(allocator, &.{ try node_utils.fs.osTmpDir(allocator), "photosphere" });
         const logsDir = try std.fs.path.join(allocator, &.{ photosphereTempDir, "logs" });
         try ensureDirSync(io, logsDir);
 

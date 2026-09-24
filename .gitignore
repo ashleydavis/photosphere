@@ -30,6 +30,7 @@ deprecated/database/storage-test
 tsconfig.tsbuildinfo
 apps/cli/psi
 apps/cli/bin/
+apps/cli-zig/bin/
 apps/mk-cli/bin/
 # apps/cli/test/db
 tools/upload/log.*

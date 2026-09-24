@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const node_utils = @import("node-utils-zig");
 const utils = @import("utils-zig");
 const fs = node_utils.fs;
@@ -238,4 +239,31 @@ test "getProcessTmpDir returns TEST_TMP_DIR/tmp when set, otherwise the system t
     const currentPath = try std.process.currentPathAlloc(io, allocator);
     const expected = try std.fmt.allocPrint(allocator, "{s}/relative/dir/tmp", .{currentPath});
     try std.testing.expectEqualStrings(expected, try fs.getProcessTmpDir(allocator, io));
+}
+
+test "osTmpDir follows the os.tmpdir() rules of the platform" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    if (builtin.os.tag == .windows) {
+        try environ_map.put("SystemRoot", "C:\\Windows");
+        try std.testing.expectEqualStrings("C:\\Windows\\temp", try fs.osTmpDir(allocator));
+        try environ_map.put("TMP", "D:\\tmp\\");
+        try std.testing.expectEqualStrings("D:\\tmp", try fs.osTmpDir(allocator));
+        try environ_map.put("TEMP", "E:\\");
+        try std.testing.expectEqualStrings("E:\\", try fs.osTmpDir(allocator));
+    }
+    else {
+        try std.testing.expectEqualStrings("/tmp", try fs.osTmpDir(allocator));
+        try environ_map.put("TEMP", "/temp/");
+        try std.testing.expectEqualStrings("/temp", try fs.osTmpDir(allocator));
+        try environ_map.put("TMP", "/tmp2");
+        try std.testing.expectEqualStrings("/tmp2", try fs.osTmpDir(allocator));
+        try environ_map.put("TMPDIR", "/");
+        try std.testing.expectEqualStrings("/", try fs.osTmpDir(allocator));
+    }
 }

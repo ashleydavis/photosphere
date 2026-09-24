@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const cli = @import("cli-zig");
 
 test "userArgs skips the executable" {
@@ -13,6 +14,9 @@ test "userArgs skips the executable" {
 }
 
 test "a pipe is not a TTY and has no size" {
+    if (builtin.os.tag != .linux) {
+        return error.SkipZigTest;
+    }
     var fds: [2]i32 = undefined;
     try std.testing.expectEqual(@as(usize, 0), std.os.linux.pipe(&fds));
     defer _ = std.os.linux.close(fds[0]);
@@ -27,4 +31,20 @@ test "config holds the development version" {
     try std.testing.expectEqualStrings("dev", cli.config.version);
     try std.testing.expectEqualStrings("dev", cli.config.buildMetadata.commitHash);
     try std.testing.expect(!cli.config.buildMetadata.isNightly);
+}
+
+test "initConsole leaves the terminal alone outside Windows" {
+    if (builtin.os.tag == .windows) {
+        return error.SkipZigTest;
+    }
+    cli.tty.initConsole();
+    try std.testing.expect(cli.tty.stdin_fd == 0);
+    try std.testing.expect(cli.tty.stdout_fd == 1);
+}
+
+test "waitForConsoleInput reports no input when there is no Windows console" {
+    if (builtin.os.tag == .windows) {
+        return error.SkipZigTest;
+    }
+    try std.testing.expect(!cli.tty.waitForConsoleInput(cli.tty.stdin_fd, 10));
 }

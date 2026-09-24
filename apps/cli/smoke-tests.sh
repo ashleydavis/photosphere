@@ -166,7 +166,11 @@ log_warning() {
 # Get CLI command: default is from code (bun run start --); use --binary for built executable
 get_cli_command() {
     if [ "$USE_ZIG" = "true" ]; then
-        echo "$SMOKE_TESTS_DIR/../cli-zig/zig-out/bin/psi"
+        if [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
+            echo "$SMOKE_TESTS_DIR/../cli-zig/zig-out/bin/psi.exe"
+        else
+            echo "$SMOKE_TESTS_DIR/../cli-zig/zig-out/bin/psi"
+        fi
     elif [ "$USE_BINARY" = "true" ]; then
         local platform=$(detect_platform)
         local arch=$(detect_architecture)

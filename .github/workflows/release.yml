@@ -88,6 +88,11 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
       - name: Cache Bun dependencies
         uses: actions/cache@v4
         with:
@@ -142,6 +147,11 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
       - name: Cache Bun dependencies
         uses: actions/cache@v4
         with:
@@ -155,6 +165,33 @@ jobs:
 
       - name: Compile TypeScript
         run: bun run compile
+
+  build-zig:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Cross-compile the Zig CLI for every platform
+        working-directory: ./apps/cli-zig
+        run: bun run build-all
+
+      - name: Check every platform binary was produced
+        working-directory: ./apps/cli-zig
+        run: |
+          ls -la bin/x64/linux/psi bin/arm64/linux/psi bin/x64/win/psi.exe bin/x64/mac/psi bin/arm64/mac/psi
+          file bin/x64/linux/psi bin/arm64/linux/psi bin/x64/win/psi.exe bin/x64/mac/psi bin/arm64/mac/psi
 
   write-lock-tests:
     timeout-minutes: 20
@@ -241,6 +278,11 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
       - name: Cache Bun dependencies
         uses: actions/cache@v4
         with:
@@ -279,6 +321,16 @@ jobs:
           echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
           exit $SMOKE_TEST_EXIT_CODE
 
+      - name: Run smoke tests against the Zig CLI
+        working-directory: ./apps/cli
+        run: |
+          mkdir -p smoke-test-logs
+          ./smoke-tests.sh --zig 2>&1 | tee smoke-test-logs/smoke-tests-zig-output.log
+          SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Zig smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
+          echo "Zig smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-zig-output.log
+          exit $SMOKE_TEST_EXIT_CODE
+
   smoke-test-encrypted:
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -290,6 +342,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -316,6 +373,16 @@ jobs:
           ENCRYPTED_EXIT_CODE=${PIPESTATUS[0]}
           echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE"
           echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE" >> smoke-test-logs/smoke-tests-encrypted-output.log
+          exit $ENCRYPTED_EXIT_CODE
+
+      - name: Run encrypted smoke tests against the Zig CLI
+        working-directory: ./apps/cli
+        run: |
+          mkdir -p smoke-test-logs
+          ./smoke-tests-encrypted.sh --zig all 2>&1 | tee smoke-test-logs/smoke-tests-encrypted-zig-output.log
+          ENCRYPTED_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Zig encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE"
+          echo "Zig encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE" >> smoke-test-logs/smoke-tests-encrypted-zig-output.log
           exit $ENCRYPTED_EXIT_CODE
 
   lan-share-smoke-test:
@@ -396,6 +463,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -511,6 +583,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
@@ -686,6 +763,11 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
       - name: Cache Bun dependencies
         uses: actions/cache@v4
         with:
@@ -804,6 +886,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
 
       - name: Get lockfile hash
         id: lockfile-hash
@@ -1083,7 +1170,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, compile, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests, lan-share-smoke-test, electron-smoke-tests, cli-desktop-lan-share-smoke-tests]
+    needs: [prepare-tag, compile, build-zig, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test, smoke-test-encrypted, write-lock-tests, sync-tests, lan-share-smoke-test, electron-smoke-tests, cli-desktop-lan-share-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write

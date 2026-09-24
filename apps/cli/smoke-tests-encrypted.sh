@@ -200,7 +200,7 @@ test_failed() {
 # Get CLI command (binary or bun run)
 get_cli_command() {
     if [ "$USE_ZIG" = "true" ]; then
-        echo "$ZIG_CLI_DIR/zig-out/bin/psi"
+        get_zig_cli_command
     elif [ "$USE_BINARY" = "true" ]; then
         # Reuse same paths as main smoke-tests.sh
         local platform
@@ -1389,7 +1389,11 @@ get_ts_cli_command() {
 
 # Get the Zig CLI command regardless of mode (used by the TypeScript/Zig interop tests).
 get_zig_cli_command() {
-    echo "$ZIG_CLI_DIR/zig-out/bin/psi"
+    if [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
+        echo "$ZIG_CLI_DIR/zig-out/bin/psi.exe"
+    else
+        echo "$ZIG_CLI_DIR/zig-out/bin/psi"
+    fi
 }
 
 # Runs a verify command and checks it passes with an intact database.

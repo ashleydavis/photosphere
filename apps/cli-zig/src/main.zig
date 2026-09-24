@@ -60,11 +60,41 @@ fn forwardSignal(signal: std.posix.SIG) callconv(.c) void {
 }
 
 //
+// The Windows console control event sent by Ctrl+C (CTRL_C_EVENT).
+//
+const ctrl_c_event: std.os.windows.DWORD = 0;
+
+//
+// The Windows console control event sent by Ctrl+Break (CTRL_BREAK_EVENT).
+//
+const ctrl_break_event: std.os.windows.DWORD = 1;
+
+//
+// Registers or removes a Windows console control handler (kernel32).
+//
+extern "kernel32" fn SetConsoleCtrlHandler(handlerRoutine: ?*const fn (ctrlType: std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL, add: std.os.windows.BOOL) callconv(.winapi) std.os.windows.BOOL;
+
+//
+// Windows console control handler: Ctrl+C and Ctrl+Break reach the child too (it shares the console), so this
+// process ignores them and waits for the child. Other events (closing the console, logoff, shutdown) are not
+// handled, so they terminate this process as usual.
+//
+fn ignoreConsoleInterrupt(ctrlType: std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL {
+    if (ctrlType == ctrl_c_event or ctrlType == ctrl_break_event) {
+        return .TRUE;
+    }
+    return .FALSE;
+}
+
+//
 // Makes this process wait for the child when the user presses Ctrl+C (the child handles it) and forwards
 // SIGTERM to the child, so the exit code is always the child's.
+// On Windows there is no SIGTERM; Ctrl+C and Ctrl+Break are ignored with a console control handler (a handler,
+// unlike ignoring them outright, is not inherited by the child).
 //
 fn installSignalForwarding() void {
     if (builtin.os.tag == .windows) {
+        _ = SetConsoleCtrlHandler(ignoreConsoleInterrupt, .TRUE);
         return;
     }
     const ignore: std.posix.Sigaction = .{

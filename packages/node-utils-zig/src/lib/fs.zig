@@ -117,9 +117,32 @@ pub fn ensureDirSync(io: std.Io, dirPath: []const u8) !void {
 // Not ported: removeSync, copySync (not used by replicate or verify).
 
 //
-// Equivalent of Node's `os.tmpdir()` on POSIX: TMPDIR, TMP or TEMP (without a trailing slash), else /tmp.
+// Equivalent of Node's `os.tmpdir()`.
+// On POSIX: TMPDIR, TMP or TEMP (without a trailing slash), else /tmp.
+// On Windows: TEMP, TMP, else %SystemRoot%\temp (or %windir%\temp), without a trailing backslash unless the
+// path is a drive root.
 //
-fn osTmpDir() []const u8 {
+pub fn osTmpDir(allocator: std.mem.Allocator) ![]const u8 {
+    if (builtin.os.tag == .windows) {
+        var windowsPath: []const u8 = "";
+        const windowsNames = [_][]const u8{ "TEMP", "TMP" };
+        for (windowsNames) |name| {
+            if (windowsPath.len == 0) {
+                windowsPath = process_env.getEnv(name) orelse "";
+            }
+        }
+        if (windowsPath.len == 0) {
+            var systemRoot: []const u8 = process_env.getEnv("SystemRoot") orelse "";
+            if (systemRoot.len == 0) {
+                systemRoot = process_env.getEnv("windir") orelse "undefined";
+            }
+            windowsPath = try std.mem.concat(allocator, u8, &.{ systemRoot, "\\temp" });
+        }
+        if (windowsPath.len > 1 and std.mem.endsWith(u8, windowsPath, "\\") and !std.mem.endsWith(u8, windowsPath, ":\\")) {
+            return windowsPath[0 .. windowsPath.len - 1];
+        }
+        return windowsPath;
+    }
     const names = [_][]const u8{ "TMPDIR", "TMP", "TEMP" };
     for (names) |name| {
         if (process_env.getEnv(name)) |value| {
@@ -131,9 +154,6 @@ fn osTmpDir() []const u8 {
             }
             return value;
         }
-    }
-    if (builtin.os.tag == .windows) {
-        return "C:\\Windows\\Temp";
     }
     return "/tmp";
 }
@@ -151,5 +171,5 @@ pub fn getProcessTmpDir(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
             return std.fs.path.resolve(allocator, &.{ currentPath, testTmpDir, "tmp" });
         }
     }
-    return osTmpDir();
+    return osTmpDir(allocator);
 }

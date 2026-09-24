@@ -25,10 +25,11 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 
 ### Setup
 - `bun install` (from repo root) - You must do this before you can run any other scripts.
+- `mise install` (from repo root) - Installs Zig (pinned in `mise.toml`), needed by the `*-zig` packages and the CLI smoke tests.
 
 ### Run from repo root:
 - `bun run compile` - Compile all TypeScript
-- `bun run test:all` - Run ALL tests (unit tests + all smoke tests). Use this when asked to run "all tests".
+- `bun run test:all` - Run ALL tests (unit tests, including the Zig packages, + all smoke tests, including the Zig smoke runs). Use this when asked to run "all tests".
 - `bun run test` - Run unit tests only
 - `bun run test -- <test-name-or-pattern>` - Run a single test by name or pattern.
 - `bun run clean` - Clean all build artifacts
@@ -36,6 +37,8 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run dev:web` - Start dev-server and frontend concurrently (no Electron)
 - `bun run test:cli` - Run CLI smoke tests
 - `bun run test:cli -- <number|name>` - Run a single CLI smoke test by number or name
+- `bun run test:cli:zig` - Run the CLI smoke tests with `replicate` and `verify` running in the Zig port (apps/cli-zig)
+- `bun run test:cli:encrypted` / `bun run test:cli:encrypted:zig` - Run the encrypted CLI smoke tests against the TypeScript CLI / the Zig port
 - `bun run test:electron` - Build and run Electron smoke tests
 - `bun run test:stories` - Run the long-running Electron cycle-stories smoke test (excluded from `test:all`)
 - `bun run start -- <command> [db-path]` - Run CLI commands locally (from `apps/cli`)

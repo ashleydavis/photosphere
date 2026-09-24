@@ -5,6 +5,13 @@
     "scripts": {
         "compile": "zig build",
         "test": "zig build test --summary all",
-        "clean": "rm -rf zig-out .zig-cache"
+        "clean": "rm -rf zig-out .zig-cache bin",
+        "build-linux": "zig build -Dtarget=x86_64-linux -Dcpu=baseline --prefix bin/x64/linux --prefix-exe-dir .",
+        "build-linux-arm64": "zig build -Dtarget=aarch64-linux --prefix bin/arm64/linux --prefix-exe-dir .",
+        "build-win": "zig build -Dtarget=x86_64-windows --prefix bin/x64/win --prefix-exe-dir .",
+        "build-win-baseline": "zig build -Dtarget=x86_64-windows -Dcpu=baseline --prefix bin/x64/win --prefix-exe-dir .",
+        "build-mac-x64": "zig build -Dtarget=x86_64-macos --prefix bin/x64/mac --prefix-exe-dir .",
+        "build-mac-arm64": "zig build -Dtarget=aarch64-macos --prefix bin/arm64/mac --prefix-exe-dir .",
+        "build-all": "bun run build-linux && bun run build-linux-arm64 && bun run build-win && bun run build-mac-x64 && bun run build-mac-arm64"
     }
 }

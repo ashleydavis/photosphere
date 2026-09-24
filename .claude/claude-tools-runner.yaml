@@ -9,3 +9,10 @@ triggers:
       # - run: ./run-tests.sh
       #   cooldown: 2m
       #   timeout: 5m
+  - paths:
+      - "**/*.zig"
+      - "**/build.zig.zon"
+    commands:
+      - run: bun run compile
+        cooldown: 30s
+        timeout: 10m

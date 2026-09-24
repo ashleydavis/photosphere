@@ -33,7 +33,7 @@ get_test_dir() {
 # Get CLI command: default is from code (bun run start --); use --binary for built executable
 get_cli_command() {
     if [ "$USE_ZIG" = "true" ]; then
-        echo "$SMOKE_TESTS_DIR/../../cli-zig/zig-out/bin/psi"
+        get_zig_cli_command
     elif [ "$USE_BINARY" = "true" ]; then
         local platform=$(detect_platform)
         local arch=$(detect_architecture)
@@ -67,7 +67,11 @@ get_ts_cli_command() {
 
 # Get the Zig CLI command regardless of mode (used by the TypeScript/Zig interop tests).
 get_zig_cli_command() {
-    echo "$SMOKE_TESTS_DIR/../../cli-zig/zig-out/bin/psi"
+    if [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
+        echo "$SMOKE_TESTS_DIR/../../cli-zig/zig-out/bin/psi.exe"
+    else
+        echo "$SMOKE_TESTS_DIR/../../cli-zig/zig-out/bin/psi"
+    fi
 }
 
 # Path of the deterministic test UUID counter file (NODE_ENV=testing).

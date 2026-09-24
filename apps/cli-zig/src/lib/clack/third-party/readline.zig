@@ -9,6 +9,7 @@
 //
 
 const std = @import("std");
+const builtin = @import("builtin");
 const tty = @import("../../tty.zig");
 const string_width = @import("string-width.zig");
 
@@ -738,10 +739,10 @@ pub const PromptInput = struct {
     reader: *std.Io.Reader,
 
     // The terminal of the input, or null when the input is not a TTY (then raw mode is not changed).
-    ttyFd: ?std.posix.fd_t,
+    ttyFd: ?tty.Fd,
 
     // The terminal mode saved when raw mode was switched on, or null when raw mode is off.
-    savedMode: ?std.posix.termios,
+    savedMode: ?tty.Mode,
 
     // Allocator for the parsed key sequences.
     allocator: std.mem.Allocator,
@@ -753,7 +754,7 @@ pub const PromptInput = struct {
     //
     // Creates an input that reads from a reader (a fake terminal in tests, or a TTY when ttyFd is set).
     //
-    pub fn init(allocator: std.mem.Allocator, reader: *std.Io.Reader, ttyFd: ?std.posix.fd_t) PromptInput {
+    pub fn init(allocator: std.mem.Allocator, reader: *std.Io.Reader, ttyFd: ?tty.Fd) PromptInput {
         return .{ .reader = reader, .ttyFd = ttyFd, .savedMode = null, .allocator = allocator, .exitAtEnd = false };
     }
 
@@ -787,6 +788,9 @@ pub const PromptInput = struct {
     //
     fn waitForMore(self: *PromptInput) bool {
         const fd = self.ttyFd orelse return true;
+        if (builtin.os.tag == .windows) {
+            return tty.waitForConsoleInput(fd, 50);
+        }
         var poll_fds = [_]std.posix.pollfd{.{ .fd = fd, .events = std.posix.POLL.IN, .revents = 0 }};
         const ready = std.posix.poll(&poll_fds, 50) catch return false;
         return ready > 0;

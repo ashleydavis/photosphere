@@ -23,8 +23,10 @@ pub fn isUnicodeSupported() bool {
     const env = node_utils.process_env;
     const term = env.getEnv("TERM") orelse "";
     const termProgram = env.getEnv("TERM_PROGRAM") orelse "";
-    return (env.getEnv("WT_SESSION") orelse "").len > 0 or
-        (env.getEnv("TERMINUS_SUBLIME") orelse "").len > 0 or
+    const wtSession: []const u8 = env.getEnv("WT_SESSION") orelse "";
+    const terminusSublime: []const u8 = env.getEnv("TERMINUS_SUBLIME") orelse "";
+    return wtSession.len > 0 or
+        terminusSublime.len > 0 or
         std.mem.eql(u8, env.getEnv("ConEmuTask") orelse "", "{cmd::Cmder}") or
         std.mem.eql(u8, termProgram, "Terminus-Sublime") or
         std.mem.eql(u8, termProgram, "vscode") or
@@ -202,7 +204,7 @@ pub fn resolveInput(io: std.Io, options: CommonOptions) *PromptInput {
     }
     if (stdin_reader == null) {
         stdin_reader = std.Io.File.stdin().readerStreaming(io, &stdin_buffer);
-        const ttyFd: ?std.posix.fd_t = if (tty.isatty(tty.stdin_fd)) tty.stdin_fd else null;
+        const ttyFd: ?tty.Fd = if (tty.isatty(tty.stdin_fd)) tty.stdin_fd else null;
         stdin_input = PromptInput.init(std.heap.smp_allocator, &stdin_reader.?.interface, ttyFd);
         stdin_input.exitAtEnd = true;
     }

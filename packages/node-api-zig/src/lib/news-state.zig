@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const node_utils = @import("node-utils-zig");
 const yaml = @import("yaml.zig");
 const process_env = node_utils.process_env;
@@ -36,7 +37,7 @@ fn CONFIG_DIR(allocator: std.mem.Allocator) ![]const u8 {
             return configDir;
         }
     }
-    return std.fs.path.join(allocator, &.{ process_env.getEnv("HOME") orelse "", ".config", "photosphere" });
+    return std.fs.path.join(allocator, &.{ process_env.getEnv(if (builtin.os.tag == .windows) "USERPROFILE" else "HOME") orelse "", ".config", "photosphere" });
 }
 
 //

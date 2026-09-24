@@ -395,6 +395,7 @@ pub fn handleError(allocator: std.mem.Allocator, err: anyerror, errorType: ?[]co
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const allocator = init.arena.allocator();
+    tty.initConsole();
     node_utils.process_env.setEnvironMap(init.environ_map);
     const arguments = try init.minimal.args.toSlice(allocator);
     const argv = try allocator.alloc([]const u8, arguments.len);

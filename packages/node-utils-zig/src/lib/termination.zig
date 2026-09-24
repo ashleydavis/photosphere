@@ -90,6 +90,28 @@ fn handleSignal(signal: std.posix.SIG) callconv(.c) void {
 }
 
 //
+// The Windows console control event sent by Ctrl+C (CTRL_C_EVENT).
+//
+const ctrl_c_event: std.os.windows.DWORD = 0;
+
+//
+// Registers a Windows console control handler (kernel32).
+//
+extern "kernel32" fn SetConsoleCtrlHandler(handlerRoutine: ?*const fn (ctrlType: std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL, add: std.os.windows.BOOL) callconv(.winapi) std.os.windows.BOOL;
+
+//
+// The Windows console control handler: like Node on Windows, Ctrl+C is delivered as SIGINT (recorded for the
+// signal watcher thread). Other events are not handled, so they terminate the process as usual.
+//
+fn handleConsoleCtrl(ctrlType: std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL {
+    if (ctrlType == ctrl_c_event) {
+        pendingSignal.store(@intFromEnum(std.posix.SIG.INT), .release);
+        return .TRUE;
+    }
+    return .FALSE;
+}
+
+//
 // Handles a termination signal like the TypeScript `process.on('SIGTERM' | 'SIGINT')` handlers.
 //
 fn shutdownOnSignal(io: std.Io, signalName: []const u8, cleanupFailedCode: u8) noreturn {
@@ -130,9 +152,15 @@ fn initializeTerminationHandlers(io: std.Io) !void {
         return;
     }
 
-    if (builtin.os.tag != .windows) {
-        signalIo = io;
+    signalIo = io;
 
+    if (builtin.os.tag == .windows) {
+        //
+        // Listen for Ctrl+C (Node emits it as SIGINT on Windows; SIGTERM is never received on Windows)
+        //
+        _ = SetConsoleCtrlHandler(handleConsoleCtrl, .TRUE);
+    }
+    else {
         //
         // Listen for the SIGTERM signal (graceful shutdown request) and the SIGINT signal (Ctrl+C)
         //
@@ -143,10 +171,10 @@ fn initializeTerminationHandlers(io: std.Io) !void {
         };
         std.posix.sigaction(.TERM, &action, null);
         std.posix.sigaction(.INT, &action, null);
-
-        const watcher = try std.Thread.spawn(.{}, watchSignals, .{});
-        watcher.detach();
     }
+
+    const watcher = try std.Thread.spawn(.{}, watchSignals, .{});
+    watcher.detach();
 
     terminationCallbacksInitialized = true;
 }
