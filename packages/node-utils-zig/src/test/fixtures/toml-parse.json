@@ -1,0 +1,221 @@
+[
+    {
+        "name": "databases config",
+        "toml": "recent_database_names = [ \"photos\", \"Backup\" ]\n\n[[databases]]\nname = \"photos\"\ndescription = \"\"\npath = \"/home/user/photos\"\norigin = \"s3:bucket:/photos\"\ns3_key = \"s3-default\"\nencryption_key = \"my-key\"\n\n[[databases]]\nname = \"Backup\"\ndescription = \"The \\\"backup\\\" copy\"\npath = \"C:\\\\Users\\\\me\\\\backup\"\ngeocoding_key = \"geo\"\n",
+        "json": {
+            "recent_database_names": [
+                "photos",
+                "Backup"
+            ],
+            "databases": [
+                {
+                    "name": "photos",
+                    "description": "",
+                    "path": "/home/user/photos",
+                    "origin": "s3:bucket:/photos",
+                    "s3_key": "s3-default",
+                    "encryption_key": "my-key"
+                },
+                {
+                    "name": "Backup",
+                    "description": "The \"backup\" copy",
+                    "path": "C:\\Users\\me\\backup",
+                    "geocoding_key": "geo"
+                }
+            ]
+        }
+    },
+    {
+        "name": "legacy recent paths",
+        "toml": "recent_database_paths = [\"/a\", \"/b\"]\ndatabases = []\n",
+        "json": {
+            "recent_database_paths": [
+                "/a",
+                "/b"
+            ],
+            "databases": []
+        }
+    },
+    {
+        "name": "scalars and comments",
+        "toml": "# A comment\ntitle = \"TOML\" # trailing comment\nint = +99\nnegative = -17\nzero = 0\nbig = 9_007_199_254_740_991\nhex = 0xDEAD_BEEF\noctal = 0o755\nbinary = 0b1101\nfloat = 3.1415\nexponent = 5e+22\nsmall = 6.626e-34\nflag = true\noff = false\nliteral = 'C:\\Users\\nodejs\\templates'\nunicode = \"\\u00e9\\U0001F600\"\nescapes = \"tab\\tnewline\\nquote\\\"backslash\\\\\"\n\"quoted key\" = 1\n'literal key' = 2\nbare-key_1 = 3\n",
+        "json": {
+            "title": "TOML",
+            "int": 99,
+            "negative": -17,
+            "zero": 0,
+            "big": 9007199254740991,
+            "hex": 3735928559,
+            "octal": 493,
+            "binary": 13,
+            "float": 3.1415,
+            "exponent": 5e+22,
+            "small": 6.626e-34,
+            "flag": true,
+            "off": false,
+            "literal": "C:\\Users\\nodejs\\templates",
+            "unicode": "é😀",
+            "escapes": "tab\tnewline\nquote\"backslash\\",
+            "quoted key": 1,
+            "literal key": 2,
+            "bare-key_1": 3
+        }
+    },
+    {
+        "name": "multi-line strings",
+        "toml": "basic = \"\"\"\nRoses are red\nViolets are blue\"\"\"\ntrimmed = \"\"\"\\\n    The quick brown \\\n    fox.\"\"\"\nquotes = \"\"\"Here are two quotation marks: \"\". Simple enough.\"\"\"\nfivequotes = \"\"\"\"This,\" she said, \"is just a pointless statement.\"\"\"\"\nliteral = '''\nThe first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n'''\nliteralquotes = ''''That,' she said, 'is still pointless.''''\n",
+        "json": {
+            "basic": "Roses are red\nViolets are blue",
+            "trimmed": "The quick brown fox.",
+            "quotes": "Here are two quotation marks: \"\". Simple enough.",
+            "fivequotes": "\"This,\" she said, \"is just a pointless statement.\"",
+            "literal": "The first newline is\ntrimmed in raw strings.\n   All other whitespace\n   is preserved.\n",
+            "literalquotes": "'That,' she said, 'is still pointless.'"
+        }
+    },
+    {
+        "name": "arrays",
+        "toml": "integers = [ 1, 2, 3 ]\ncolors = [ \"red\", \"yellow\", \"green\" ]\nnested = [ [ 1, 2 ], [\"a\", 'b'] ]\nmixed = [ 0.1, 0.2, 0.5, 1, 2, 5 ]\nmultiline = [\n    1,  # one\n    2,\n    3, # trailing comma\n]\nempty = []\ntables = [ { x = 1 }, { y = 2 } ]\n",
+        "json": {
+            "integers": [
+                1,
+                2,
+                3
+            ],
+            "colors": [
+                "red",
+                "yellow",
+                "green"
+            ],
+            "nested": [
+                [
+                    1,
+                    2
+                ],
+                [
+                    "a",
+                    "b"
+                ]
+            ],
+            "mixed": [
+                0.1,
+                0.2,
+                0.5,
+                1,
+                2,
+                5
+            ],
+            "multiline": [
+                1,
+                2,
+                3
+            ],
+            "empty": [],
+            "tables": [
+                {
+                    "x": 1
+                },
+                {
+                    "y": 2
+                }
+            ]
+        }
+    },
+    {
+        "name": "tables and dotted keys",
+        "toml": "name = \"root\"\ndotted.key.here = true\nsite.\"google.com\" = true\ninline = { first = \"Tom\", last = \"Preston-Werner\", nested.deep = 1 }\nempty_inline = {}\n\n[server]\nip = \"10.0.0.1\"\n\n[server.alpha]\nrole = \"frontend\"\n\n[ dog . \"tater.man\" ]\ntype.name = \"pug\"\n\n[a.b.c]\n[a]\nd = 1\n",
+        "json": {
+            "name": "root",
+            "dotted": {
+                "key": {
+                    "here": true
+                }
+            },
+            "site": {
+                "google.com": true
+            },
+            "inline": {
+                "first": "Tom",
+                "last": "Preston-Werner",
+                "nested": {
+                    "deep": 1
+                }
+            },
+            "empty_inline": {},
+            "server": {
+                "ip": "10.0.0.1",
+                "alpha": {
+                    "role": "frontend"
+                }
+            },
+            "dog": {
+                "tater.man": {
+                    "type": {
+                        "name": "pug"
+                    }
+                }
+            },
+            "a": {
+                "b": {
+                    "c": {}
+                },
+                "d": 1
+            }
+        }
+    },
+    {
+        "name": "arrays of tables",
+        "toml": "[[products]]\nname = \"Hammer\"\nsku = 738594937\n\n[[products]]\n\n[[products]]\nname = \"Nail\"\ncolor = \"gray\"\n\n[[fruits]]\nname = \"apple\"\n\n[fruits.physical]\ncolor = \"red\"\n\n[[fruits.varieties]]\nname = \"red delicious\"\n\n[[fruits.varieties]]\nname = \"granny smith\"\n\n[[fruits]]\nname = \"banana\"\n\n[[fruits.varieties]]\nname = \"plantain\"\n",
+        "json": {
+            "products": [
+                {
+                    "name": "Hammer",
+                    "sku": 738594937
+                },
+                {},
+                {
+                    "name": "Nail",
+                    "color": "gray"
+                }
+            ],
+            "fruits": [
+                {
+                    "name": "apple",
+                    "physical": {
+                        "color": "red"
+                    },
+                    "varieties": [
+                        {
+                            "name": "red delicious"
+                        },
+                        {
+                            "name": "granny smith"
+                        }
+                    ]
+                },
+                {
+                    "name": "banana",
+                    "varieties": [
+                        {
+                            "name": "plantain"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    {
+        "name": "windows line endings",
+        "toml": "a = 1\r\nb = \"two\"\r\n\r\n[t]\r\nc = [\r\n  1,\r\n  2\r\n]\r\n",
+        "json": {
+            "a": 1,
+            "b": "two",
+            "t": {
+                "c": [
+                    1,
+                    2
+                ]
+            }
+        }
+    }
+]

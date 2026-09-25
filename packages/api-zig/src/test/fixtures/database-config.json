@@ -1,0 +1,59 @@
+[
+    {
+        "name": "save-empty",
+        "operation": "save",
+        "config": {},
+        "expected": "{}"
+    },
+    {
+        "name": "save-full",
+        "operation": "save",
+        "config": {
+            "origin": "s3:bucket:/photos"
+        },
+        "expected": "{\n  \"origin\": \"s3:bucket:/photos\"\n}"
+    },
+    {
+        "name": "save-escapes",
+        "operation": "save",
+        "config": {
+            "origin": "C:\\photos \"quoted\"\n\ttab é 😀"
+        },
+        "expected": "{\n  \"origin\": \"C:\\\\photos \\\"quoted\\\"\\n\\ttab é 😀\"\n}"
+    },
+    {
+        "name": "update-missing-file",
+        "operation": "update",
+        "config": {
+            "origin": "/src/db"
+        },
+        "expected": "{\n  \"origin\": \"/src/db\"\n}"
+    },
+    {
+        "name": "update-empty-object",
+        "initial": "{}",
+        "operation": "update",
+        "config": {
+            "origin": "/o2"
+        },
+        "expected": "{\n  \"origin\": \"/o2\"\n}"
+    },
+    {
+        "name": "update-keeps-order",
+        "initial": "{\n  \"lastModifiedAt\": \"old-modified\",\n  \"origin\": \"old-origin\"\n}",
+        "operation": "update",
+        "config": {
+            "origin": "/new/origin"
+        },
+        "expected": "{\n  \"lastModifiedAt\": \"old-modified\",\n  \"origin\": \"/new/origin\"\n}"
+    },
+    {
+        "name": "update-keeps-unknown-keys",
+        "initial": "{\n  \"custom\": {\n    \"nested\": [\n      1,\n      2,\n      \"x\"\n    ],\n    \"flag\": true\n  },\n  \"lastSyncedAt\": \"sync\",\n  \"count\": 42,\n  \"nothing\": null\n}",
+        "operation": "update",
+        "config": {
+            "origin": "/o"
+        },
+        "expected": "{\n  \"custom\": {\n    \"nested\": [\n      1,\n      2,\n      \"x\"\n    ],\n    \"flag\": true\n  },\n  \"lastSyncedAt\": \"sync\",\n  \"count\": 42,\n  \"nothing\": null,\n  \"origin\": \"/o\"\n}"
+    }
+]

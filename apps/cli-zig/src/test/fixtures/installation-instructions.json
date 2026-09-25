@@ -1,0 +1,32 @@
+[
+    {
+        "missingTools": [
+            "ImageMagick"
+        ],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mLinux:\u001b[39m\n\n\u001b[1mUbuntu/Debian:\u001b[22m\n  sudo apt update\n  sudo apt install imagemagick\n\n\u001b[1mFedora/RHEL/CentOS:\u001b[22m\n  sudo dnf install ImageMagick\n\n\u001b[1mArch Linux:\u001b[22m\n  sudo pacman -S imagemagick\n\n\u001b[1mAlpine Linux:\u001b[22m\n  sudo apk add imagemagick\n\n\u001b[1mManual/Binary installation:\u001b[22m\n  • ImageMagick:\n    1. Download the AppImage from https://imagemagick.org/script/download.php#linux\n    2. Make it executable and place it on your PATH:\n       chmod +x ImageMagick-*.AppImage && sudo mv ImageMagick-*.AppImage /usr/local/bin/magick\n    3. Run \"magick -version\" to verify\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    },
+    {
+        "missingTools": [
+            "ffmpeg"
+        ],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mLinux:\u001b[39m\n\n\u001b[1mUbuntu/Debian:\u001b[22m\n  sudo apt update\n  sudo apt install ffmpeg\n\n\u001b[1mFedora/RHEL/CentOS:\u001b[22m\n  sudo dnf install ffmpeg\n\n\u001b[1mArch Linux:\u001b[22m\n  sudo pacman -S ffmpeg\n\n\u001b[1mAlpine Linux:\u001b[22m\n  sudo apk add ffmpeg\n\n\u001b[1mManual/Binary installation:\u001b[22m\n  • ffmpeg:\n    1. Download a static build from https://github.com/BtbN/FFmpeg-Builds/releases\n       (linked from https://ffmpeg.org/download.html - includes ffprobe)\n    2. Extract the archive and copy ffmpeg and ffprobe to /usr/local/bin\n    3. Run \"ffmpeg -version\" to verify\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    },
+    {
+        "missingTools": [
+            "ffprobe"
+        ],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mLinux:\u001b[39m\n\n\u001b[1mUbuntu/Debian:\u001b[22m\n  sudo apt update\n  sudo apt install ffmpeg\n\n\u001b[1mFedora/RHEL/CentOS:\u001b[22m\n  sudo dnf install ffmpeg\n\n\u001b[1mArch Linux:\u001b[22m\n  sudo pacman -S ffmpeg\n\n\u001b[1mAlpine Linux:\u001b[22m\n  sudo apk add ffmpeg\n\n\u001b[1mManual/Binary installation:\u001b[22m\n  • ffmpeg:\n    1. Download a static build from https://github.com/BtbN/FFmpeg-Builds/releases\n       (linked from https://ffmpeg.org/download.html - includes ffprobe)\n    2. Extract the archive and copy ffmpeg and ffprobe to /usr/local/bin\n    3. Run \"ffmpeg -version\" to verify\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    },
+    {
+        "missingTools": [
+            "ImageMagick",
+            "ffprobe",
+            "ffmpeg"
+        ],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mLinux:\u001b[39m\n\n\u001b[1mUbuntu/Debian:\u001b[22m\n  sudo apt update\n  sudo apt install imagemagick ffmpeg\n\n\u001b[1mFedora/RHEL/CentOS:\u001b[22m\n  sudo dnf install ImageMagick ffmpeg\n\n\u001b[1mArch Linux:\u001b[22m\n  sudo pacman -S imagemagick ffmpeg\n\n\u001b[1mAlpine Linux:\u001b[22m\n  sudo apk add imagemagick ffmpeg\n\n\u001b[1mManual/Binary installation:\u001b[22m\n  • ImageMagick:\n    1. Download the AppImage from https://imagemagick.org/script/download.php#linux\n    2. Make it executable and place it on your PATH:\n       chmod +x ImageMagick-*.AppImage && sudo mv ImageMagick-*.AppImage /usr/local/bin/magick\n    3. Run \"magick -version\" to verify\n  • ffmpeg:\n    1. Download a static build from https://github.com/BtbN/FFmpeg-Builds/releases\n       (linked from https://ffmpeg.org/download.html - includes ffprobe)\n    2. Extract the archive and copy ffmpeg and ffprobe to /usr/local/bin\n    3. Run \"ffmpeg -version\" to verify\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    },
+    {
+        "missingTools": [],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mLinux:\u001b[39m\n\n\n\u001b[1mManual/Binary installation:\u001b[22m\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    }
+]

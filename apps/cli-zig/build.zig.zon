@@ -1,0 +1,22 @@
+.{
+    .name = .cli_zig,
+    .version = "1.0.0",
+    .fingerprint = 0x61c7857c2e421b12,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .@"utils-zig" = .{ .path = "../../packages/utils-zig" },
+        .@"node-utils-zig" = .{ .path = "../../packages/node-utils-zig" },
+        .@"tools-zig" = .{ .path = "../../packages/tools-zig" },
+        .@"encryption-zig" = .{ .path = "../../packages/encryption-zig" },
+        .@"storage-zig" = .{ .path = "../../packages/storage-zig" },
+        .@"vault-zig" = .{ .path = "../../packages/vault-zig" },
+        .@"fuzzy-match-zig" = .{ .path = "../../packages/fuzzy-match-zig" },
+        .@"task-queue-zig" = .{ .path = "../../packages/task-queue-zig" },
+        .@"serialization-zig" = .{ .path = "../../packages/serialization-zig" },
+        .@"merkle-tree-zig" = .{ .path = "../../packages/merkle-tree-zig" },
+        .@"bdb-zig" = .{ .path = "../../packages/bdb-zig" },
+        .@"api-zig" = .{ .path = "../../packages/api-zig" },
+        .@"node-api-zig" = .{ .path = "../../packages/node-api-zig" },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "index.zig", "src" },
+}

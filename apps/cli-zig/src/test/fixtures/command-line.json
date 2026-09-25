@@ -1,0 +1,883 @@
+[
+    {
+        "args": [
+            "replicate",
+            "--db",
+            "a",
+            "--dest",
+            "b",
+            "--yes"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": true,
+                "db": "a",
+                "dest": "b"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--db=a",
+            "--dest=b",
+            "-y"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": true,
+                "db": "a",
+                "dest": "b"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "-k",
+            "key1",
+            "--dk",
+            "key2",
+            "-g",
+            "-p",
+            "sub/dir",
+            "--partial",
+            "--force",
+            "-v",
+            "--tools",
+            "--cwd",
+            "/tmp"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": true,
+                "verbose": true,
+                "tools": true,
+                "yes": false,
+                "key": "key1",
+                "destKey": "key2",
+                "path": "sub/dir",
+                "partial": true,
+                "force": true,
+                "cwd": "/tmp"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--dest-key=k2",
+            "--key=k1",
+            "--full"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "destKey": "k2",
+                "key": "k1",
+                "full": true
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "-kmykey",
+            "-vy"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": false,
+                "verbose": true,
+                "tools": false,
+                "yes": true,
+                "key": "mykey"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "-vyg"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": true,
+                "verbose": true,
+                "tools": false,
+                "yes": true
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "-yk",
+            "key"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": true,
+                "key": "key"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--db",
+            "a",
+            "--db",
+            "b"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "db": "b"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--debug",
+            "--db",
+            "x"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "db": "x"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "--debug",
+            "rep",
+            "--db",
+            "x"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "db": "x"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--db",
+            "--help"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "db": "--help"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--db",
+            "-y"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "db": "-y"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--dk=abc",
+            "--path=p"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "destKey": "abc",
+                "path": "p"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--db",
+            ""
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "db": ""
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "verify",
+            "--db",
+            "a",
+            "--full",
+            "-p",
+            "x",
+            "--workers",
+            "4",
+            "--timeout",
+            "1000",
+            "--cwd",
+            "c"
+        ],
+        "outcome": {
+            "kind": "verify",
+            "options": {
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "full": true,
+                "db": "a",
+                "path": "x",
+                "workers": "4",
+                "timeout": "1000",
+                "cwd": "c"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "ver",
+            "-vy",
+            "--tools"
+        ],
+        "outcome": {
+            "kind": "verify",
+            "options": {
+                "verbose": true,
+                "tools": true,
+                "yes": true,
+                "full": false
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "ver"
+        ],
+        "outcome": {
+            "kind": "verify",
+            "options": {
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "full": false
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "ver",
+            "-p",
+            "-v"
+        ],
+        "outcome": {
+            "kind": "verify",
+            "options": {
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "full": false,
+                "path": "-v"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "ver",
+            "--timeout=5",
+            "--workers=2"
+        ],
+        "outcome": {
+            "kind": "verify",
+            "options": {
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "full": false,
+                "timeout": "5",
+                "workers": "2"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--bogus"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--bogus'\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--flul"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--flul'\n(Did you mean --full?)\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "ver",
+            "--ful"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--ful'\n(Did you mean --full?)\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--pat"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--pat'\n(Did you mean --path?)\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--paht",
+            "x"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--paht'\n(Did you mean --path?)\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--verbos"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--verbos'\n(Did you mean --verbose?)\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--dest-ke",
+            "x"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--dest-ke'\n(Did you mean --dest-key?)\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--dst",
+            "x"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--dst'\n(Did you mean --dest?)\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--debgu"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--debgu'\n(Did you mean --debug?)\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--versio"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--versio'\n(Did you mean --version?)\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "extra"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: too many arguments for 'replicate'. Expected 0 arguments but got 1.\n",
+            "code": "commander.excessArguments",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--db",
+            "a",
+            "extra",
+            "more"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: too many arguments for 'replicate'. Expected 0 arguments but got 2.\n",
+            "code": "commander.excessArguments",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "extra",
+            "--bogus"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--bogus'\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--db"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: option '--db <path>' argument missing\n",
+            "code": "commander.optionMissingArgument",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "ver",
+            "-k"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: option '-k, --key <keyfile>' argument missing\n",
+            "code": "commander.optionMissingArgument",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "ver",
+            "--workers"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: option '--workers <number>' argument missing\n",
+            "code": "commander.optionMissingArgument",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "-x"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '-x'\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "-vx"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '-x'\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "-y=foo"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '-=foo'\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--yes=true"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--yes=true'\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--",
+            "x"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: too many arguments for 'replicate'. Expected 0 arguments but got 1.\n",
+            "code": "commander.excessArguments",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--db",
+            "a",
+            "--",
+            "--b"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: too many arguments for 'replicate'. Expected 0 arguments but got 1.\n",
+            "code": "commander.excessArguments",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--help=x"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--help=x'\n(Did you mean --help?)\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--full=1"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--full=1'\n(Did you mean --full?)\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--help"
+        ],
+        "outcome": {
+            "kind": "help"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "-h"
+        ],
+        "outcome": {
+            "kind": "help"
+        }
+    },
+    {
+        "args": [
+            "ver",
+            "--bogus",
+            "--help"
+        ],
+        "outcome": {
+            "kind": "help"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--help",
+            "--db"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: option '--db <path>' argument missing\n",
+            "code": "commander.optionMissingArgument",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "ver",
+            "--version"
+        ],
+        "outcome": {
+            "kind": "version"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--db",
+            "--version"
+        ],
+        "outcome": {
+            "kind": "version"
+        }
+    },
+    {
+        "args": [
+            "--version"
+        ],
+        "outcome": {
+            "kind": "version"
+        }
+    },
+    {
+        "args": [
+            "-q",
+            "rep",
+            "--db",
+            "x"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "db": "x"
+            },
+            "quiet": true
+        }
+    },
+    {
+        "args": [
+            "--quiet",
+            "ver"
+        ],
+        "outcome": {
+            "kind": "verify",
+            "options": {
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "full": false
+            },
+            "quiet": true
+        }
+    },
+    {
+        "args": [
+            "ver",
+            "-q"
+        ],
+        "outcome": {
+            "kind": "verify",
+            "options": {
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "full": false
+            },
+            "quiet": true
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--db",
+            "x",
+            "--quiet"
+        ],
+        "outcome": {
+            "kind": "replicate",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": false,
+                "db": "x"
+            },
+            "quiet": true
+        }
+    },
+    {
+        "args": [
+            "ver",
+            "-qv"
+        ],
+        "outcome": {
+            "kind": "verify",
+            "options": {
+                "verbose": true,
+                "tools": false,
+                "yes": false,
+                "full": false
+            },
+            "quiet": true
+        }
+    },
+    {
+        "args": [
+            "ver",
+            "-vq"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '-q'\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "-qv",
+            "ver"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '-v'\n",
+            "code": "commander.unknownOption",
+            "level": "program"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--quite"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--quite'\n(Did you mean --quiet?)\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "rep",
+            "--quiet=1"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--quiet=1'\n(Did you mean --quiet?)\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    }
+]

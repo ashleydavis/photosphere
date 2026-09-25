@@ -1,0 +1,12 @@
+.{
+    .name = .storage_zig,
+    .version = "1.0.0",
+    .fingerprint = 0x5a492e8d446065a8,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .@"utils-zig" = .{ .path = "../utils-zig" },
+        .@"node-utils-zig" = .{ .path = "../node-utils-zig" },
+        .@"encryption-zig" = .{ .path = "../encryption-zig" },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src" },
+}

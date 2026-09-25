@@ -1,0 +1,32 @@
+[
+    {
+        "missingTools": [
+            "ImageMagick"
+        ],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mWindows:\u001b[39m\n\n\u001b[1mUsing Chocolatey\u001b[22m (recommended):\n  choco install imagemagick\n  Chocolatey: https://chocolatey.org/install\n\n\u001b[1mUsing Scoop:\u001b[22m\n  scoop install imagemagick\n  Scoop: https://scoop.sh\n\n\u001b[1mManual installation:\u001b[22m\n  • ImageMagick:\n    1. Download the Windows installer from https://imagemagick.org/script/download.php#windows\n    2. Run the installer and tick \"Add application directory to your system path\"\n    3. Also tick \"Install legacy utilities (e.g. convert)\"\n    4. Open a new terminal and run \"magick -version\" to verify\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    },
+    {
+        "missingTools": [
+            "ffmpeg"
+        ],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mWindows:\u001b[39m\n\n\u001b[1mUsing Chocolatey\u001b[22m (recommended):\n  choco install ffmpeg\n  Chocolatey: https://chocolatey.org/install\n\n\u001b[1mUsing Scoop:\u001b[22m\n  scoop install ffmpeg\n  Scoop: https://scoop.sh\n\n\u001b[1mManual installation:\u001b[22m\n  • ffmpeg:\n    1. Download the \"release essentials\" build from https://www.gyan.dev/ffmpeg/builds/\n       (includes ffprobe)\n    2. Extract the zip to a folder, e.g. C:\\ffmpeg\n    3. Add the bin folder (e.g. C:\\ffmpeg\\bin) to your PATH environment variable\n    4. Open a new terminal and run \"ffmpeg -version\" to verify\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    },
+    {
+        "missingTools": [
+            "ffprobe"
+        ],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mWindows:\u001b[39m\n\n\u001b[1mUsing Chocolatey\u001b[22m (recommended):\n  choco install ffmpeg\n  Chocolatey: https://chocolatey.org/install\n\n\u001b[1mUsing Scoop:\u001b[22m\n  scoop install ffmpeg\n  Scoop: https://scoop.sh\n\n\u001b[1mManual installation:\u001b[22m\n  • ffmpeg:\n    1. Download the \"release essentials\" build from https://www.gyan.dev/ffmpeg/builds/\n       (includes ffprobe)\n    2. Extract the zip to a folder, e.g. C:\\ffmpeg\n    3. Add the bin folder (e.g. C:\\ffmpeg\\bin) to your PATH environment variable\n    4. Open a new terminal and run \"ffmpeg -version\" to verify\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    },
+    {
+        "missingTools": [
+            "ImageMagick",
+            "ffprobe",
+            "ffmpeg"
+        ],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mWindows:\u001b[39m\n\n\u001b[1mUsing Chocolatey\u001b[22m (recommended):\n  choco install imagemagick ffmpeg\n  Chocolatey: https://chocolatey.org/install\n\n\u001b[1mUsing Scoop:\u001b[22m\n  scoop install imagemagick ffmpeg\n  Scoop: https://scoop.sh\n\n\u001b[1mManual installation:\u001b[22m\n  • ImageMagick:\n    1. Download the Windows installer from https://imagemagick.org/script/download.php#windows\n    2. Run the installer and tick \"Add application directory to your system path\"\n    3. Also tick \"Install legacy utilities (e.g. convert)\"\n    4. Open a new terminal and run \"magick -version\" to verify\n  • ffmpeg:\n    1. Download the \"release essentials\" build from https://www.gyan.dev/ffmpeg/builds/\n       (includes ffprobe)\n    2. Extract the zip to a folder, e.g. C:\\ffmpeg\n    3. Add the bin folder (e.g. C:\\ffmpeg\\bin) to your PATH environment variable\n    4. Open a new terminal and run \"ffmpeg -version\" to verify\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    },
+    {
+        "missingTools": [],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mWindows:\u001b[39m\n\n\n\u001b[1mManual installation:\u001b[22m\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    }
+]

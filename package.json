@@ -46,6 +46,7 @@
     "tce": "bun run test:cli:encrypted",
     "test:cli:lan-share": "cd ./apps/cli/ && bash ./smoke-tests-lan-share.sh && cd ../.. && what-changed baseline capture test:cli:lan-share",
     "tcl": "bun run test:cli:lan-share",
+    "test:cli:zig": "cd ./apps/cli && bash ./smoke-tests-zig.sh && cd ../.. && what-changed baseline capture test:cli:zig",
     "test:cli:hash-cache": "cd ./apps/cli/ && bash ./hash-cache-smoke-test.sh && cd ../.. && what-changed baseline capture test:cli:hash-cache",
     "tch": "bun run test:cli:hash-cache",
     "test:cli:sync": "cd ./apps/cli/ && bash ./sync-smoke-test.sh && cd ../.. && what-changed baseline capture test:cli:sync",

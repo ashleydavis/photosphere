@@ -1,0 +1,13 @@
+.{
+    .name = .api_zig,
+    .version = "1.0.0",
+    .fingerprint = 0x824c56b5c5077680,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .@"utils-zig" = .{ .path = "../utils-zig" },
+        .@"storage-zig" = .{ .path = "../storage-zig" },
+        .@"serialization-zig" = .{ .path = "../serialization-zig" },
+        .@"task-queue-zig" = .{ .path = "../task-queue-zig" },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src" },
+}

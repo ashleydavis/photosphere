@@ -1,0 +1,50 @@
+[
+    {
+        "milliseconds": 0,
+        "output": "0.00"
+    },
+    {
+        "milliseconds": 1,
+        "output": "0.00"
+    },
+    {
+        "milliseconds": 5,
+        "output": "0.01"
+    },
+    {
+        "milliseconds": 15,
+        "output": "0.01"
+    },
+    {
+        "milliseconds": 125,
+        "output": "0.13"
+    },
+    {
+        "milliseconds": 1005,
+        "output": "1.00"
+    },
+    {
+        "milliseconds": 1125,
+        "output": "1.13"
+    },
+    {
+        "milliseconds": 1234,
+        "output": "1.23"
+    },
+    {
+        "milliseconds": 1235,
+        "output": "1.24"
+    },
+    {
+        "milliseconds": 2675,
+        "output": "2.67"
+    },
+    {
+        "milliseconds": 99999,
+        "output": "100.00"
+    },
+    {
+        "milliseconds": 123456789,
+        "output": "123456.79"
+    }
+]
