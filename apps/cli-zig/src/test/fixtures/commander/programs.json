@@ -1,0 +1,3546 @@
+[
+    {
+        "title": "options, arguments and help text of a single command",
+        "helpWidth": null,
+        "colors": false,
+        "program": {
+            "name": "tool",
+            "description": "A tool that does things with files.",
+            "arguments": [
+                {
+                    "name": "<file>",
+                    "description": "The file to work on."
+                },
+                {
+                    "name": "[rest...]",
+                    "description": "More files."
+                }
+            ],
+            "options": [
+                {
+                    "flags": "-v, --verbose",
+                    "description": "Enables verbose logging.",
+                    "defaultValue": false
+                },
+                {
+                    "flags": "--name <name>",
+                    "description": "The name to use."
+                },
+                {
+                    "flags": "-c, --count <number>",
+                    "description": "How many times.",
+                    "defaultValue": "5"
+                },
+                {
+                    "flags": "-o, --opt [value]",
+                    "description": "An option with an optional value."
+                },
+                {
+                    "flags": "--level [level]",
+                    "description": "An optional value with a default.",
+                    "defaultValue": "low"
+                },
+                {
+                    "flags": "--no-color",
+                    "description": "Turns color off."
+                },
+                {
+                    "flags": "--no-browser",
+                    "description": "Don't open the browser automatically",
+                    "defaultValue": false
+                },
+                {
+                    "flags": "--flag",
+                    "description": "A flag with a negation."
+                },
+                {
+                    "flags": "--no-flag",
+                    "description": "The negation of the flag."
+                },
+                {
+                    "flags": "--string-default",
+                    "description": "A flag with a string default.",
+                    "defaultValue": "yes"
+                },
+                {
+                    "flags": "--sk, --source-key <keyfile>",
+                    "description": "Two long flags."
+                },
+                {
+                    "flags": "-x",
+                    "description": "A short flag only."
+                }
+            ],
+            "helpTexts": [
+                {
+                    "position": "beforeAll",
+                    "text": "BEFORE ALL"
+                },
+                {
+                    "position": "before",
+                    "text": "BEFORE"
+                },
+                {
+                    "position": "after",
+                    "text": "\nAFTER"
+                },
+                {
+                    "position": "afterAll",
+                    "text": "AFTER ALL"
+                },
+                {
+                    "position": "after",
+                    "text": ""
+                }
+            ],
+            "exitOverride": true,
+            "preActionHook": true,
+            "action": true
+        },
+        "cases": [
+            {
+                "argv": [
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "a.txt",
+                    "b.txt",
+                    "c.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            [
+                                "b.txt",
+                                "c.txt"
+                            ]
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [],
+                "stdout": "",
+                "stderr": "error: missing required argument 'file'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.missingArgument",
+                    "message": "error: missing required argument 'file'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "-v",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": true,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": true,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "-vc3",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": true,
+                            "count": "3",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": true,
+                            "count": "3",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "-c",
+                    "7",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "7",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "7",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--count=9",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "9",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "9",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--count",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "error: missing required argument 'file'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.missingArgument",
+                    "message": "error: missing required argument 'file'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "a.txt",
+                    "--count"
+                ],
+                "stdout": "",
+                "stderr": "error: option '-c, --count <number>' argument missing\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.optionMissingArgument",
+                    "message": "error: option '-c, --count <number>' argument missing"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--name",
+                    "--verbose",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "name": "--verbose"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "name": "--verbose"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--opt",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "error: missing required argument 'file'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.missingArgument",
+                    "message": "error: missing required argument 'file'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--opt",
+                    "-v",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": true,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "opt": true
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": true,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "opt": true
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "-o",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "error: missing required argument 'file'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.missingArgument",
+                    "message": "error: missing required argument 'file'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "-ovalue",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "opt": "value"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "opt": "value"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--opt=",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "opt": ""
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "opt": ""
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--level",
+                    "--",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": true,
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": true,
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--no-color",
+                    "--no-browser",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": false,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": false,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--flag",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "flag": true
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "flag": true
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--no-flag",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "flag": false
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "flag": false
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--flag",
+                    "--no-flag",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "flag": false
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "flag": false
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--string-default",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": true
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": true
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--sk",
+                    "k1",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "sourceKey": "k1"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "sourceKey": "k1"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--source-key=k2",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "sourceKey": "k2"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "sourceKey": "k2"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "-x",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "x": true
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "x": true
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "-vx",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": true,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "x": true
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": true,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "x": true
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "-xv",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": true,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "x": true
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            []
+                        ],
+                        "opts": {
+                            "verbose": true,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes",
+                            "x": true
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "-vz",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '-z'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '-z'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "-",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "-",
+                            [
+                                "a.txt"
+                            ]
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--",
+                    "-v",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "-v",
+                            [
+                                "a.txt"
+                            ]
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "a.txt",
+                    "--",
+                    "--name"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "tool",
+                        "actionCommand": "tool",
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    },
+                    {
+                        "action": "tool",
+                        "args": [
+                            "a.txt",
+                            [
+                                "--name"
+                            ]
+                        ],
+                        "opts": {
+                            "verbose": false,
+                            "count": "5",
+                            "level": "low",
+                            "color": true,
+                            "browser": false,
+                            "stringDefault": "yes"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--verbose=1",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--verbose=1'\n(Did you mean --verbose?)\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '--verbose=1'\n(Did you mean --verbose?)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--nme",
+                    "x",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--nme'\n(Did you mean --name?)\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '--nme'\n(Did you mean --name?)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--cont",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--cont'\n(Did you mean --count?)\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '--cont'\n(Did you mean --count?)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--zzzzzzzz",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--zzzzzzzz'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '--zzzzzzzz'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "-q",
+                    "a.txt"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '-q'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '-q'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "a.txt",
+                    "--bogus",
+                    "--help"
+                ],
+                "stdout": "BEFORE ALL\nBEFORE\nUsage: tool [options] <file> [rest...]\n\nA tool that does things with files.\n\nArguments:\n  file                          The file to work on.\n  rest                          More files.\n\nOptions:\n  -v, --verbose                 Enables verbose logging. (default: false)\n  --name <name>                 The name to use.\n  -c, --count <number>          How many times. (default: \"5\")\n  -o, --opt [value]             An option with an optional value.\n  --level [level]               An optional value with a default. (default:\n                                \"low\")\n  --no-color                    Turns color off.\n  --no-browser                  Don't open the browser automatically\n  --flag                        A flag with a negation.\n  --no-flag                     The negation of the flag.\n  --string-default              A flag with a string default.\n  --sk, --source-key <keyfile>  Two long flags.\n  -x                            A short flag only.\n  -h, --help                    display help for command\n\nAFTER\nAFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--help"
+                ],
+                "stdout": "BEFORE ALL\nBEFORE\nUsage: tool [options] <file> [rest...]\n\nA tool that does things with files.\n\nArguments:\n  file                          The file to work on.\n  rest                          More files.\n\nOptions:\n  -v, --verbose                 Enables verbose logging. (default: false)\n  --name <name>                 The name to use.\n  -c, --count <number>          How many times. (default: \"5\")\n  -o, --opt [value]             An option with an optional value.\n  --level [level]               An optional value with a default. (default:\n                                \"low\")\n  --no-color                    Turns color off.\n  --no-browser                  Don't open the browser automatically\n  --flag                        A flag with a negation.\n  --no-flag                     The negation of the flag.\n  --string-default              A flag with a string default.\n  --sk, --source-key <keyfile>  Two long flags.\n  -x                            A short flag only.\n  -h, --help                    display help for command\n\nAFTER\nAFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "-h"
+                ],
+                "stdout": "BEFORE ALL\nBEFORE\nUsage: tool [options] <file> [rest...]\n\nA tool that does things with files.\n\nArguments:\n  file                          The file to work on.\n  rest                          More files.\n\nOptions:\n  -v, --verbose                 Enables verbose logging. (default: false)\n  --name <name>                 The name to use.\n  -c, --count <number>          How many times. (default: \"5\")\n  -o, --opt [value]             An option with an optional value.\n  --level [level]               An optional value with a default. (default:\n                                \"low\")\n  --no-color                    Turns color off.\n  --no-browser                  Don't open the browser automatically\n  --flag                        A flag with a negation.\n  --no-flag                     The negation of the flag.\n  --string-default              A flag with a string default.\n  --sk, --source-key <keyfile>  Two long flags.\n  -x                            A short flag only.\n  -h, --help                    display help for command\n\nAFTER\nAFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "a.txt",
+                    "-h",
+                    "--name"
+                ],
+                "stdout": "",
+                "stderr": "error: option '--name <name>' argument missing\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.optionMissingArgument",
+                    "message": "error: option '--name <name>' argument missing"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--name",
+                    "--help"
+                ],
+                "stdout": "",
+                "stderr": "error: missing required argument 'file'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.missingArgument",
+                    "message": "error: missing required argument 'file'"
+                },
+                "events": []
+            }
+        ]
+    },
+    {
+        "title": "subcommands, aliases, hooks, hidden commands, required options and the help command",
+        "helpWidth": null,
+        "colors": false,
+        "program": {
+            "name": "psi",
+            "description": "The program description.",
+            "options": [
+                {
+                    "flags": "--version",
+                    "description": "output the version number",
+                    "parser": "record"
+                },
+                {
+                    "flags": "--debug",
+                    "description": "Enable debug."
+                },
+                {
+                    "flags": "-q, --quiet",
+                    "description": "Suppress optional output."
+                }
+            ],
+            "helpTexts": [
+                {
+                    "position": "beforeAll",
+                    "text": "PROGRAM BEFORE ALL"
+                },
+                {
+                    "position": "afterAll",
+                    "text": "PROGRAM AFTER ALL"
+                },
+                {
+                    "position": "after",
+                    "text": "PROGRAM AFTER"
+                }
+            ],
+            "exitOverride": true,
+            "addHelpCommand": false,
+            "preActionHook": true,
+            "commands": [
+                {
+                    "name": "replicate",
+                    "aliases": [
+                        "rep",
+                        "r"
+                    ],
+                    "description": "Replicates a database.",
+                    "options": [
+                        {
+                            "flags": "--db <path>",
+                            "description": "The database."
+                        },
+                        {
+                            "flags": "--dest <path>",
+                            "description": "The destination."
+                        },
+                        {
+                            "flags": "--dk, --dest-key <keyfile>",
+                            "description": "Destination key."
+                        },
+                        {
+                            "flags": "-v, --verbose",
+                            "description": "Enables verbose logging.",
+                            "defaultValue": false
+                        },
+                        {
+                            "flags": "--full",
+                            "description": "Full replica."
+                        },
+                        {
+                            "flags": "--force",
+                            "description": "Force it."
+                        }
+                    ],
+                    "helpTexts": [
+                        {
+                            "position": "after",
+                            "text": "\nExamples:\n  psi rep --db a --dest b"
+                        }
+                    ],
+                    "preActionHook": true,
+                    "action": true
+                },
+                {
+                    "name": "add",
+                    "aliases": [
+                        "a"
+                    ],
+                    "description": "Adds files.",
+                    "arguments": [
+                        {
+                            "name": "[files...]",
+                            "description": "The files to add."
+                        }
+                    ],
+                    "options": [
+                        {
+                            "flags": "--watch",
+                            "description": "Keep watching.",
+                            "defaultValue": false
+                        }
+                    ],
+                    "action": true
+                },
+                {
+                    "name": "check",
+                    "description": "Checks files.",
+                    "arguments": [
+                        {
+                            "name": "<files...>",
+                            "description": "The files to check."
+                        }
+                    ],
+                    "action": true
+                },
+                {
+                    "name": "export",
+                    "description": "Exports an asset.",
+                    "arguments": [
+                        {
+                            "name": "<asset-id>",
+                            "description": "The asset."
+                        },
+                        {
+                            "name": "<output-path>",
+                            "description": "Where to put it."
+                        }
+                    ],
+                    "options": [
+                        {
+                            "flags": "-t, --type <type>",
+                            "description": "Type of asset to export.",
+                            "defaultValue": "original"
+                        }
+                    ],
+                    "action": true
+                },
+                {
+                    "name": "hash-cache",
+                    "hidden": true,
+                    "description": "Hidden group.",
+                    "commands": [
+                        {
+                            "name": "hash-file <file>",
+                            "description": "Hash a file.",
+                            "action": true
+                        },
+                        {
+                            "name": "set <path> <hash> <length>",
+                            "description": "Record a hash.",
+                            "options": [
+                                {
+                                    "flags": "--db <path>",
+                                    "description": "The database.",
+                                    "mandatory": true
+                                }
+                            ],
+                            "action": true
+                        },
+                        {
+                            "name": "dir",
+                            "description": "Print the directory.",
+                            "options": [
+                                {
+                                    "flags": "--db <path>",
+                                    "description": "The database.",
+                                    "mandatory": true,
+                                    "defaultValue": "default-db"
+                                }
+                            ],
+                            "action": true
+                        }
+                    ]
+                },
+                {
+                    "name": "debug",
+                    "description": "Debug commands.",
+                    "commands": [
+                        {
+                            "name": "merkle-tree",
+                            "description": "Visualize merkle trees.",
+                            "options": [
+                                {
+                                    "flags": "--db <path>",
+                                    "description": "The database."
+                                },
+                                {
+                                    "flags": "-o, --output <path>",
+                                    "description": "Output file.",
+                                    "defaultValue": "collisions.json"
+                                }
+                            ],
+                            "action": true
+                        },
+                        {
+                            "name": "build-sort-index",
+                            "description": "Rebuilds the sort index.",
+                            "action": true
+                        }
+                    ]
+                },
+                {
+                    "name": "help [command]",
+                    "description": "Display help for command",
+                    "action": true
+                },
+                {
+                    "name": "dbs",
+                    "attach": "addCommand",
+                    "aliases": [
+                        "d"
+                    ],
+                    "description": "Manage the list of configured databases.",
+                    "commands": [
+                        {
+                            "name": "list",
+                            "aliases": [
+                                "l",
+                                "ls"
+                            ],
+                            "description": "List all configured databases.",
+                            "action": true
+                        },
+                        {
+                            "name": "add",
+                            "description": "Add a database.",
+                            "options": [
+                                {
+                                    "flags": "--yes",
+                                    "description": "Skip prompts"
+                                },
+                                {
+                                    "flags": "--name <name>",
+                                    "description": "Database name"
+                                }
+                            ],
+                            "action": true
+                        }
+                    ]
+                },
+                {
+                    "name": "bug",
+                    "description": "Generates a bug report.",
+                    "options": [
+                        {
+                            "flags": "--no-browser",
+                            "description": "Don't open the browser automatically",
+                            "defaultValue": false
+                        },
+                        {
+                            "flags": "--broken",
+                            "description": "A parser that throws.",
+                            "parser": "throw"
+                        }
+                    ],
+                    "action": true
+                }
+            ]
+        },
+        "cases": [
+            {
+                "argv": [
+                    "replicate",
+                    "--db",
+                    "a",
+                    "--dest",
+                    "b"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "replicate",
+                        "opts": {}
+                    },
+                    {
+                        "hook": "replicate",
+                        "actionCommand": "replicate",
+                        "opts": {
+                            "verbose": false,
+                            "db": "a",
+                            "dest": "b"
+                        }
+                    },
+                    {
+                        "action": "replicate",
+                        "args": [],
+                        "opts": {
+                            "verbose": false,
+                            "db": "a",
+                            "dest": "b"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "rep",
+                    "--db=a",
+                    "-v"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "replicate",
+                        "opts": {}
+                    },
+                    {
+                        "hook": "replicate",
+                        "actionCommand": "replicate",
+                        "opts": {
+                            "verbose": true,
+                            "db": "a"
+                        }
+                    },
+                    {
+                        "action": "replicate",
+                        "args": [],
+                        "opts": {
+                            "verbose": true,
+                            "db": "a"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "r",
+                    "--dk",
+                    "k"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "replicate",
+                        "opts": {}
+                    },
+                    {
+                        "hook": "replicate",
+                        "actionCommand": "replicate",
+                        "opts": {
+                            "verbose": false,
+                            "destKey": "k"
+                        }
+                    },
+                    {
+                        "action": "replicate",
+                        "args": [],
+                        "opts": {
+                            "verbose": false,
+                            "destKey": "k"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "-q",
+                    "rep",
+                    "--db",
+                    "x"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "replicate",
+                        "opts": {
+                            "quiet": true
+                        }
+                    },
+                    {
+                        "hook": "replicate",
+                        "actionCommand": "replicate",
+                        "opts": {
+                            "verbose": false,
+                            "db": "x"
+                        }
+                    },
+                    {
+                        "action": "replicate",
+                        "args": [],
+                        "opts": {
+                            "verbose": false,
+                            "db": "x"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "rep",
+                    "-q"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "replicate",
+                        "opts": {
+                            "quiet": true
+                        }
+                    },
+                    {
+                        "hook": "replicate",
+                        "actionCommand": "replicate",
+                        "opts": {
+                            "verbose": false
+                        }
+                    },
+                    {
+                        "action": "replicate",
+                        "args": [],
+                        "opts": {
+                            "verbose": false
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "--debug",
+                    "rep",
+                    "--quiet",
+                    "--db",
+                    "x"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "replicate",
+                        "opts": {
+                            "debug": true,
+                            "quiet": true
+                        }
+                    },
+                    {
+                        "hook": "replicate",
+                        "actionCommand": "replicate",
+                        "opts": {
+                            "verbose": false,
+                            "db": "x"
+                        }
+                    },
+                    {
+                        "action": "replicate",
+                        "args": [],
+                        "opts": {
+                            "verbose": false,
+                            "db": "x"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "rep",
+                    "--flul"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--flul'\n(Did you mean --full?)\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '--flul'\n(Did you mean --full?)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "rep",
+                    "--bogus"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--bogus'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '--bogus'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "rep",
+                    "--dst",
+                    "x"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--dst'\n(Did you mean --dest?)\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '--dst'\n(Did you mean --dest?)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "rep",
+                    "--debgu"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--debgu'\n(Did you mean --debug?)\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '--debgu'\n(Did you mean --debug?)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "rep",
+                    "-z"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '-z'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '-z'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "rep",
+                    "extra"
+                ],
+                "stdout": "",
+                "stderr": "error: too many arguments for 'replicate'. Expected 0 arguments but got 1.\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.excessArguments",
+                    "message": "error: too many arguments for 'replicate'. Expected 0 arguments but got 1."
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "rep",
+                    "extra",
+                    "--bogus"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--bogus'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '--bogus'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "rep",
+                    "--db"
+                ],
+                "stdout": "",
+                "stderr": "error: option '--db <path>' argument missing\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.optionMissingArgument",
+                    "message": "error: option '--db <path>' argument missing"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "rep",
+                    "--help"
+                ],
+                "stdout": "PROGRAM BEFORE ALL\nUsage: psi replicate|rep [options]\n\nReplicates a database.\n\nOptions:\n  --db <path>                 The database.\n  --dest <path>               The destination.\n  --dk, --dest-key <keyfile>  Destination key.\n  -v, --verbose               Enables verbose logging. (default: false)\n  --full                      Full replica.\n  --force                     Force it.\n  -h, --help                  display help for command\n\nExamples:\n  psi rep --db a --dest b\nPROGRAM AFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "rep",
+                    "--",
+                    "x"
+                ],
+                "stdout": "",
+                "stderr": "error: too many arguments for 'replicate'. Expected 0 arguments but got 1.\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.excessArguments",
+                    "message": "error: too many arguments for 'replicate'. Expected 0 arguments but got 1."
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--version"
+                ],
+                "stdout": "",
+                "stderr": "PROGRAM BEFORE ALL\nUsage: psi [options] [command]\n\nThe program description.\n\nOptions:\n  --version                                  output the version number\n  --debug                                    Enable debug.\n  -q, --quiet                                Suppress optional output.\n  -h, --help                                 display help for command\n\nCommands:\n  replicate|rep [options]                    Replicates a database.\n  add|a [options] [files...]                 Adds files.\n  check <files...>                           Checks files.\n  export [options] <asset-id> <output-path>  Exports an asset.\n  debug                                      Debug commands.\n  help [command]                             Display help for command\n  dbs|d                                      Manage the list of configured databases.\n  bug [options]                              Generates a bug report.\nPROGRAM AFTER\nPROGRAM AFTER ALL\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.help",
+                    "message": "(outputHelp)"
+                },
+                "events": [
+                    {
+                        "parser": "--version",
+                        "value": null,
+                        "previous": null
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "rep",
+                    "--version"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "parser": "--version",
+                        "value": null,
+                        "previous": null
+                    },
+                    {
+                        "hook": "psi",
+                        "actionCommand": "replicate",
+                        "opts": {
+                            "version": "parsed:undefined"
+                        }
+                    },
+                    {
+                        "hook": "replicate",
+                        "actionCommand": "replicate",
+                        "opts": {
+                            "verbose": false
+                        }
+                    },
+                    {
+                        "action": "replicate",
+                        "args": [],
+                        "opts": {
+                            "verbose": false
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "add"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "add",
+                        "opts": {}
+                    },
+                    {
+                        "action": "add",
+                        "args": [
+                            []
+                        ],
+                        "opts": {
+                            "watch": false
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "a",
+                    "one",
+                    "two"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "add",
+                        "opts": {}
+                    },
+                    {
+                        "action": "add",
+                        "args": [
+                            [
+                                "one",
+                                "two"
+                            ]
+                        ],
+                        "opts": {
+                            "watch": false
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "add",
+                    "--watch",
+                    "--",
+                    "--three"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "add",
+                        "opts": {}
+                    },
+                    {
+                        "action": "add",
+                        "args": [
+                            [
+                                "--three"
+                            ]
+                        ],
+                        "opts": {
+                            "watch": true
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "check"
+                ],
+                "stdout": "",
+                "stderr": "error: missing required argument 'files'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.missingArgument",
+                    "message": "error: missing required argument 'files'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "check",
+                    "one"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "check",
+                        "opts": {}
+                    },
+                    {
+                        "action": "check",
+                        "args": [
+                            [
+                                "one"
+                            ]
+                        ],
+                        "opts": {}
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "export",
+                    "id"
+                ],
+                "stdout": "",
+                "stderr": "error: missing required argument 'output-path'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.missingArgument",
+                    "message": "error: missing required argument 'output-path'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "export",
+                    "id",
+                    "out",
+                    "extra"
+                ],
+                "stdout": "",
+                "stderr": "error: too many arguments for 'export'. Expected 2 arguments but got 3.\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.excessArguments",
+                    "message": "error: too many arguments for 'export'. Expected 2 arguments but got 3."
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "export",
+                    "id",
+                    "out",
+                    "-t",
+                    "thumb"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "export",
+                        "opts": {}
+                    },
+                    {
+                        "action": "export",
+                        "args": [
+                            "id",
+                            "out"
+                        ],
+                        "opts": {
+                            "type": "thumb"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "export",
+                    "--help"
+                ],
+                "stdout": "PROGRAM BEFORE ALL\nUsage: psi export [options] <asset-id> <output-path>\n\nExports an asset.\n\nArguments:\n  asset-id           The asset.\n  output-path        Where to put it.\n\nOptions:\n  -t, --type <type>  Type of asset to export. (default: \"original\")\n  -h, --help         display help for command\nPROGRAM AFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "hash-cache",
+                    "hash-file",
+                    "f"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "hash-file",
+                        "opts": {}
+                    },
+                    {
+                        "action": "hash-file",
+                        "args": [
+                            "f"
+                        ],
+                        "opts": {}
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "hash-cache",
+                    "hash-file"
+                ],
+                "stdout": "",
+                "stderr": "error: missing required argument 'file'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.missingArgument",
+                    "message": "error: missing required argument 'file'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "hash-cache",
+                    "set",
+                    "p",
+                    "h",
+                    "l"
+                ],
+                "stdout": "",
+                "stderr": "error: required option '--db <path>' not specified\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.missingMandatoryOptionValue",
+                    "message": "error: required option '--db <path>' not specified"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "hash-cache",
+                    "set",
+                    "--db",
+                    "d",
+                    "p",
+                    "h",
+                    "l"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "set",
+                        "opts": {}
+                    },
+                    {
+                        "action": "set",
+                        "args": [
+                            "p",
+                            "h",
+                            "l"
+                        ],
+                        "opts": {
+                            "db": "d"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "hash-cache",
+                    "set",
+                    "--db",
+                    "d",
+                    "p",
+                    "h"
+                ],
+                "stdout": "",
+                "stderr": "error: missing required argument 'length'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.missingArgument",
+                    "message": "error: missing required argument 'length'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "hash-cache",
+                    "set",
+                    "--db",
+                    "d",
+                    "p",
+                    "h",
+                    "l",
+                    "x"
+                ],
+                "stdout": "",
+                "stderr": "error: too many arguments for 'set'. Expected 3 arguments but got 4.\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.excessArguments",
+                    "message": "error: too many arguments for 'set'. Expected 3 arguments but got 4."
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "hash-cache",
+                    "dir"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "dir",
+                        "opts": {}
+                    },
+                    {
+                        "action": "dir",
+                        "args": [],
+                        "opts": {
+                            "db": "default-db"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "hash-cache",
+                    "set",
+                    "--help"
+                ],
+                "stdout": "PROGRAM BEFORE ALL\nUsage: psi hash-cache set [options] <path> <hash> <length>\n\nRecord a hash.\n\nOptions:\n  --db <path>  The database.\n  -h, --help   display help for command\nPROGRAM AFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "hash-cache"
+                ],
+                "stdout": "",
+                "stderr": "PROGRAM BEFORE ALL\nUsage: psi hash-cache [options] [command]\n\nHidden group.\n\nOptions:\n  -h, --help                            display help for command\n\nCommands:\n  hash-file <file>                      Hash a file.\n  set [options] <path> <hash> <length>  Record a hash.\n  dir [options]                         Print the directory.\n  help [command]                        display help for command\nPROGRAM AFTER ALL\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.help",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "hash-cache",
+                    "--help"
+                ],
+                "stdout": "PROGRAM BEFORE ALL\nUsage: psi hash-cache [options] [command]\n\nHidden group.\n\nOptions:\n  -h, --help                            display help for command\n\nCommands:\n  hash-file <file>                      Hash a file.\n  set [options] <path> <hash> <length>  Record a hash.\n  dir [options]                         Print the directory.\n  help [command]                        display help for command\nPROGRAM AFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "hash-cache",
+                    "help",
+                    "set"
+                ],
+                "stdout": "PROGRAM BEFORE ALL\nUsage: psi hash-cache set [options] <path> <hash> <length>\n\nRecord a hash.\n\nOptions:\n  --db <path>  The database.\n  -h, --help   display help for command\nPROGRAM AFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.help",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "hash-cache",
+                    "nope"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown command 'nope'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownCommand",
+                    "message": "error: unknown command 'nope'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "debug"
+                ],
+                "stdout": "",
+                "stderr": "PROGRAM BEFORE ALL\nUsage: psi debug [options] [command]\n\nDebug commands.\n\nOptions:\n  -h, --help             display help for command\n\nCommands:\n  merkle-tree [options]  Visualize merkle trees.\n  build-sort-index       Rebuilds the sort index.\n  help [command]         display help for command\nPROGRAM AFTER ALL\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.help",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "debug",
+                    "--help"
+                ],
+                "stdout": "PROGRAM BEFORE ALL\nUsage: psi debug [options] [command]\n\nDebug commands.\n\nOptions:\n  -h, --help             display help for command\n\nCommands:\n  merkle-tree [options]  Visualize merkle trees.\n  build-sort-index       Rebuilds the sort index.\n  help [command]         display help for command\nPROGRAM AFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "debug",
+                    "help"
+                ],
+                "stdout": "PROGRAM BEFORE ALL\nUsage: psi debug [options] [command]\n\nDebug commands.\n\nOptions:\n  -h, --help             display help for command\n\nCommands:\n  merkle-tree [options]  Visualize merkle trees.\n  build-sort-index       Rebuilds the sort index.\n  help [command]         display help for command\nPROGRAM AFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.help",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "debug",
+                    "help",
+                    "merkle-tree"
+                ],
+                "stdout": "PROGRAM BEFORE ALL\nUsage: psi debug merkle-tree [options]\n\nVisualize merkle trees.\n\nOptions:\n  --db <path>          The database.\n  -o, --output <path>  Output file. (default: \"collisions.json\")\n  -h, --help           display help for command\nPROGRAM AFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.help",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "debug",
+                    "help",
+                    "nope"
+                ],
+                "stdout": "",
+                "stderr": "PROGRAM BEFORE ALL\nUsage: psi debug [options] [command]\n\nDebug commands.\n\nOptions:\n  -h, --help             display help for command\n\nCommands:\n  merkle-tree [options]  Visualize merkle trees.\n  build-sort-index       Rebuilds the sort index.\n  help [command]         display help for command\nPROGRAM AFTER ALL\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.help",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "debug",
+                    "nope"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown command 'nope'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownCommand",
+                    "message": "error: unknown command 'nope'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "debug",
+                    "merkle-tree",
+                    "--bogus"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--bogus'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '--bogus'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "debug",
+                    "merkle-tree",
+                    "-o",
+                    "x"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "merkle-tree",
+                        "opts": {}
+                    },
+                    {
+                        "action": "merkle-tree",
+                        "args": [],
+                        "opts": {
+                            "output": "x"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "debug",
+                    "merkle-tree",
+                    "--help"
+                ],
+                "stdout": "PROGRAM BEFORE ALL\nUsage: psi debug merkle-tree [options]\n\nVisualize merkle trees.\n\nOptions:\n  --db <path>          The database.\n  -o, --output <path>  Output file. (default: \"collisions.json\")\n  -h, --help           display help for command\nPROGRAM AFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "debug",
+                    "build-sort-index",
+                    "extra"
+                ],
+                "stdout": "",
+                "stderr": "error: too many arguments for 'build-sort-index'. Expected 0 arguments but got 1.\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.excessArguments",
+                    "message": "error: too many arguments for 'build-sort-index'. Expected 0 arguments but got 1."
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "debug",
+                    "--bogus"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--bogus'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '--bogus'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "help"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "help",
+                        "opts": {}
+                    },
+                    {
+                        "action": "help",
+                        "args": [
+                            null
+                        ],
+                        "opts": {}
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "help",
+                    "rep"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "help",
+                        "opts": {}
+                    },
+                    {
+                        "action": "help",
+                        "args": [
+                            "rep"
+                        ],
+                        "opts": {}
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "dbs"
+                ],
+                "stdout": "",
+                "stderr": "PROGRAM BEFORE ALL\nUsage: psi dbs|d [options] [command]\n\nManage the list of configured databases.\n\nOptions:\n  -h, --help      display help for command\n\nCommands:\n  list|l          List all configured databases.\n  add [options]   Add a database.\n  help [command]  display help for command\nPROGRAM AFTER ALL\n",
+                "result": {
+                    "kind": "exit",
+                    "exitCode": 1
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "dbs",
+                    "--help"
+                ],
+                "stdout": "PROGRAM BEFORE ALL\nUsage: psi dbs|d [options] [command]\n\nManage the list of configured databases.\n\nOptions:\n  -h, --help      display help for command\n\nCommands:\n  list|l          List all configured databases.\n  add [options]   Add a database.\n  help [command]  display help for command\nPROGRAM AFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "exit",
+                    "exitCode": 0
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "d",
+                    "ls"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "list",
+                        "opts": {}
+                    },
+                    {
+                        "action": "list",
+                        "args": [],
+                        "opts": {}
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "dbs",
+                    "add",
+                    "--nme",
+                    "x"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--nme'\n(Did you mean --name?)\n",
+                "result": {
+                    "kind": "exit",
+                    "exitCode": 1
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "dbs",
+                    "add",
+                    "--name"
+                ],
+                "stdout": "",
+                "stderr": "error: option '--name <name>' argument missing\n",
+                "result": {
+                    "kind": "exit",
+                    "exitCode": 1
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "dbs",
+                    "help",
+                    "add"
+                ],
+                "stdout": "PROGRAM BEFORE ALL\nUsage: psi dbs add [options]\n\nAdd a database.\n\nOptions:\n  --yes          Skip prompts\n  --name <name>  Database name\n  -h, --help     display help for command\nPROGRAM AFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "exit",
+                    "exitCode": 0
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "dbs",
+                    "nope"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown command 'nope'\n",
+                "result": {
+                    "kind": "exit",
+                    "exitCode": 1
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "bug"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "bug",
+                        "opts": {}
+                    },
+                    {
+                        "action": "bug",
+                        "args": [],
+                        "opts": {
+                            "browser": false
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "bug",
+                    "--no-browser"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "hook": "psi",
+                        "actionCommand": "bug",
+                        "opts": {}
+                    },
+                    {
+                        "action": "bug",
+                        "args": [],
+                        "opts": {
+                            "browser": false
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "bug",
+                    "--broken"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "thrown",
+                    "message": "parser failed"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "bug",
+                    "--help"
+                ],
+                "stdout": "PROGRAM BEFORE ALL\nUsage: psi bug [options]\n\nGenerates a bug report.\n\nOptions:\n  --no-browser  Don't open the browser automatically\n  --broken      A parser that throws.\n  -h, --help    display help for command\nPROGRAM AFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [],
+                "stdout": "",
+                "stderr": "PROGRAM BEFORE ALL\nUsage: psi [options] [command]\n\nThe program description.\n\nOptions:\n  --version                                  output the version number\n  --debug                                    Enable debug.\n  -q, --quiet                                Suppress optional output.\n  -h, --help                                 display help for command\n\nCommands:\n  replicate|rep [options]                    Replicates a database.\n  add|a [options] [files...]                 Adds files.\n  check <files...>                           Checks files.\n  export [options] <asset-id> <output-path>  Exports an asset.\n  debug                                      Debug commands.\n  help [command]                             Display help for command\n  dbs|d                                      Manage the list of configured databases.\n  bug [options]                              Generates a bug report.\nPROGRAM AFTER\nPROGRAM AFTER ALL\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.help",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--help"
+                ],
+                "stdout": "PROGRAM BEFORE ALL\nUsage: psi [options] [command]\n\nThe program description.\n\nOptions:\n  --version                                  output the version number\n  --debug                                    Enable debug.\n  -q, --quiet                                Suppress optional output.\n  -h, --help                                 display help for command\n\nCommands:\n  replicate|rep [options]                    Replicates a database.\n  add|a [options] [files...]                 Adds files.\n  check <files...>                           Checks files.\n  export [options] <asset-id> <output-path>  Exports an asset.\n  debug                                      Debug commands.\n  help [command]                             Display help for command\n  dbs|d                                      Manage the list of configured databases.\n  bug [options]                              Generates a bug report.\nPROGRAM AFTER\nPROGRAM AFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "-h"
+                ],
+                "stdout": "PROGRAM BEFORE ALL\nUsage: psi [options] [command]\n\nThe program description.\n\nOptions:\n  --version                                  output the version number\n  --debug                                    Enable debug.\n  -q, --quiet                                Suppress optional output.\n  -h, --help                                 display help for command\n\nCommands:\n  replicate|rep [options]                    Replicates a database.\n  add|a [options] [files...]                 Adds files.\n  check <files...>                           Checks files.\n  export [options] <asset-id> <output-path>  Exports an asset.\n  debug                                      Debug commands.\n  help [command]                             Display help for command\n  dbs|d                                      Manage the list of configured databases.\n  bug [options]                              Generates a bug report.\nPROGRAM AFTER\nPROGRAM AFTER ALL\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "nope"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown command 'nope'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownCommand",
+                    "message": "error: unknown command 'nope'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "replicat"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown command 'replicat'\n(Did you mean replicate?)\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownCommand",
+                    "message": "error: unknown command 'replicat'\n(Did you mean replicate?)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "ad"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown command 'ad'\n(Did you mean add?)\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownCommand",
+                    "message": "error: unknown command 'ad'\n(Did you mean add?)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "hash-cach"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown command 'hash-cach'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownCommand",
+                    "message": "error: unknown command 'hash-cach'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--bogus"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--bogus'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '--bogus'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--bogus",
+                    "rep"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--bogus'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '--bogus'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "-qv",
+                    "rep"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '-v'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '-v'"
+                },
+                "events": []
+            }
+        ]
+    },
+    {
+        "title": "wrapping at a narrow width, preformatted text and wide characters",
+        "helpWidth": 50,
+        "colors": false,
+        "program": {
+            "name": "wrap",
+            "description": "A long description of the program that goes on and on so that it has to be wrapped at the help width.\n\nA second paragraph after a blank line.",
+            "arguments": [
+                {
+                    "name": "<input>",
+                    "description": "An argument with a description that is long enough to wrap onto more lines."
+                }
+            ],
+            "options": [
+                {
+                    "flags": "--a-very-long-option-name-indeed <value>",
+                    "description": "The term is wider than the others."
+                },
+                {
+                    "flags": "--short",
+                    "description": "Short description."
+                },
+                {
+                    "flags": "--pre",
+                    "description": "Preformatted:\n  indented line one\n  indented line two"
+                },
+                {
+                    "flags": "--unicode",
+                    "description": "Arrows → and emoji 📷 count as JavaScript counts them, a character or two each, when wrapping."
+                },
+                {
+                    "flags": "--spaces",
+                    "description": "Several   spaces   between   words   that   wrap   here   and   there   again."
+                },
+                {
+                    "flags": "--no-desc",
+                    "description": ""
+                }
+            ],
+            "exitOverride": true,
+            "action": true
+        },
+        "cases": [
+            {
+                "argv": [
+                    "--help"
+                ],
+                "stdout": "Usage: wrap [options] <input>\n\nA long description of the program that goes on and\non so that it has to be wrapped at the help width.\n\nA second paragraph after a blank line.\n\nArguments:\n  input                                     An argument with a description that is long enough to wrap onto more lines.\n\nOptions:\n  --a-very-long-option-name-indeed <value>  The term is wider than the others.\n  --short                                   Short description.\n  --pre                                     Preformatted:\n    indented line one\n    indented line two\n  --unicode                                 Arrows → and emoji 📷 count as JavaScript counts them, a character or two each, when wrapping.\n  --spaces                                  Several   spaces   between   words   that   wrap   here   and   there   again.\n  --no-desc\n  -h, --help                                display help for command\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            }
+        ]
+    },
+    {
+        "title": "no wrapping below the minimum width",
+        "helpWidth": 30,
+        "colors": false,
+        "program": {
+            "name": "narrow",
+            "description": "A description that would wrap if the help width were not below the minimum width to wrap.",
+            "options": [
+                {
+                    "flags": "--option",
+                    "description": "An option description that is not wrapped either, however long it gets."
+                }
+            ],
+            "exitOverride": true,
+            "action": true
+        },
+        "cases": [
+            {
+                "argv": [
+                    "--help"
+                ],
+                "stdout": "Usage: narrow [options]\n\nA description that would wrap if the help width were not below the minimum width to wrap.\n\nOptions:\n  --option    An option description that is not wrapped either, however long it gets.\n  -h, --help  display help for command\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            }
+        ]
+    },
+    {
+        "title": "colors kept when the output shows them",
+        "helpWidth": null,
+        "colors": true,
+        "program": {
+            "name": "colorful",
+            "description": "\u001b[1mBold\u001b[22m description.",
+            "options": [
+                {
+                    "flags": "--paint",
+                    "description": "Some \u001b[31mred\u001b[39m text in a description long enough to wrap at eighty columns of help."
+                }
+            ],
+            "helpTexts": [
+                {
+                    "position": "after",
+                    "text": "\u001b[1mpsi --help\u001b[22m    Shows help."
+                }
+            ],
+            "exitOverride": true,
+            "action": true
+        },
+        "cases": [
+            {
+                "argv": [
+                    "--help"
+                ],
+                "stdout": "Usage: colorful [options]\n\n\u001b[1mBold\u001b[22m description.\n\nOptions:\n  --paint     Some \u001b[31mred\u001b[39m text in a description long enough to wrap at eighty\n              columns of help.\n  -h, --help  display help for command\n\u001b[1mpsi --help\u001b[22m    Shows help.\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            }
+        ]
+    },
+    {
+        "title": "colors stripped when the output does not show them",
+        "helpWidth": null,
+        "colors": false,
+        "program": {
+            "name": "plain",
+            "description": "\u001b[1mBold\u001b[22m description.",
+            "options": [
+                {
+                    "flags": "--paint",
+                    "description": "Some \u001b[31mred\u001b[39m text in a description long enough to wrap at eighty columns of help."
+                }
+            ],
+            "helpTexts": [
+                {
+                    "position": "after",
+                    "text": "\u001b[1mpsi --help\u001b[22m    Shows help."
+                }
+            ],
+            "exitOverride": true,
+            "action": true
+        },
+        "cases": [
+            {
+                "argv": [
+                    "--help"
+                ],
+                "stdout": "Usage: plain [options]\n\nBold description.\n\nOptions:\n  --paint     Some red text in a description long enough to wrap at eighty\n              columns of help.\n  -h, --help  display help for command\npsi --help    Shows help.\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            }
+        ]
+    },
+    {
+        "title": "options that conflict with the help flags",
+        "helpWidth": null,
+        "colors": false,
+        "program": {
+            "name": "conflicts",
+            "exitOverride": true,
+            "commands": [
+                {
+                    "name": "short",
+                    "options": [
+                        {
+                            "flags": "-h, --host <host>",
+                            "description": "The host."
+                        }
+                    ],
+                    "action": true
+                },
+                {
+                    "name": "long",
+                    "options": [
+                        {
+                            "flags": "--help",
+                            "description": "A help option of its own."
+                        }
+                    ],
+                    "action": true
+                },
+                {
+                    "name": "both",
+                    "options": [
+                        {
+                            "flags": "-h, --help",
+                            "description": "Both help flags."
+                        }
+                    ],
+                    "action": true
+                }
+            ]
+        },
+        "cases": [
+            {
+                "argv": [
+                    "short",
+                    "-h",
+                    "x"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "action": "short",
+                        "args": [],
+                        "opts": {
+                            "host": "x"
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "short",
+                    "--help"
+                ],
+                "stdout": "Usage: conflicts short [options]\n\nOptions:\n  -h, --host <host>  The host.\n  --help             display help for command\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "long",
+                    "--help"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "action": "long",
+                        "args": [],
+                        "opts": {
+                            "help": true
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "long",
+                    "-h"
+                ],
+                "stdout": "Usage: conflicts long [options]\n\nOptions:\n  --help  A help option of its own.\n  -h      display help for command\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "both",
+                    "-h"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "action": "both",
+                        "args": [],
+                        "opts": {
+                            "help": true
+                        }
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "help",
+                    "short"
+                ],
+                "stdout": "Usage: conflicts short [options]\n\nOptions:\n  -h, --host <host>  The host.\n  --help             display help for command\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.help",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "help"
+                ],
+                "stdout": "Usage: conflicts [options] [command]\n\nOptions:\n  -h, --help       display help for command\n\nCommands:\n  short [options]\n  long [options]\n  both [options]\n  help [command]   display help for command\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.help",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--help"
+                ],
+                "stdout": "Usage: conflicts [options] [command]\n\nOptions:\n  -h, --help       display help for command\n\nCommands:\n  short [options]\n  long [options]\n  both [options]\n  help [command]   display help for command\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            }
+        ]
+    },
+    {
+        "title": "a program with no action and no subcommands",
+        "helpWidth": null,
+        "colors": false,
+        "program": {
+            "name": "",
+            "options": [
+                {
+                    "flags": "--only",
+                    "description": "The only option."
+                }
+            ],
+            "exitOverride": true
+        },
+        "cases": [
+            {
+                "argv": [],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--only"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "a",
+                    "b"
+                ],
+                "stdout": "",
+                "stderr": "error: too many arguments. Expected 0 arguments but got 2.\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.excessArguments",
+                    "message": "error: too many arguments. Expected 0 arguments but got 2."
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--bogus"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown option '--bogus'\n",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 1,
+                    "code": "commander.unknownOption",
+                    "message": "error: unknown option '--bogus'"
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "--help"
+                ],
+                "stdout": "Usage: program [options]\n\nOptions:\n  --only      The only option.\n  -h, --help  display help for command\n",
+                "stderr": "",
+                "result": {
+                    "kind": "commanderError",
+                    "exitCode": 0,
+                    "code": "commander.helpDisplayed",
+                    "message": "(outputHelp)"
+                },
+                "events": []
+            }
+        ]
+    },
+    {
+        "title": "a program that does not override exit",
+        "helpWidth": null,
+        "colors": false,
+        "program": {
+            "name": "exits",
+            "commands": [
+                {
+                    "name": "run",
+                    "arguments": [
+                        {
+                            "name": "<what>",
+                            "description": ""
+                        }
+                    ],
+                    "action": true
+                }
+            ]
+        },
+        "cases": [
+            {
+                "argv": [
+                    "run",
+                    "x"
+                ],
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                    "kind": "ok"
+                },
+                "events": [
+                    {
+                        "action": "run",
+                        "args": [
+                            "x"
+                        ],
+                        "opts": {}
+                    }
+                ]
+            },
+            {
+                "argv": [
+                    "run"
+                ],
+                "stdout": "",
+                "stderr": "error: missing required argument 'what'\n",
+                "result": {
+                    "kind": "exit",
+                    "exitCode": 1
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "run",
+                    "--help"
+                ],
+                "stdout": "Usage: exits run [options] <what>\n\nOptions:\n  -h, --help  display help for command\n",
+                "stderr": "",
+                "result": {
+                    "kind": "exit",
+                    "exitCode": 0
+                },
+                "events": []
+            },
+            {
+                "argv": [
+                    "nope"
+                ],
+                "stdout": "",
+                "stderr": "error: unknown command 'nope'\n",
+                "result": {
+                    "kind": "exit",
+                    "exitCode": 1
+                },
+                "events": []
+            },
+            {
+                "argv": [],
+                "stdout": "",
+                "stderr": "Usage: exits [options] [command]\n\nOptions:\n  -h, --help      display help for command\n\nCommands:\n  run <what>\n  help [command]  display help for command\n",
+                "result": {
+                    "kind": "exit",
+                    "exitCode": 1
+                },
+                "events": []
+            }
+        ]
+    }
+]

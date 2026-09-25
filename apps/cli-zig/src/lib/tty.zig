@@ -1,6 +1,6 @@
 //
 // Stand-in for the parts of `node:tty` used by the CLI (this file has no TypeScript counterpart):
-// `isTTY`, `columns`, `rows` and `setRawMode`.
+// `isTTY`, `columns`, `rows`, `setRawMode` and `hasColors`.
 // On Windows it uses the console API like libuv does, and `initConsole` stands in for the console setup the
 // Bun runtime does at startup (UTF-8 code pages and virtual terminal processing of the output).
 //
@@ -28,6 +28,11 @@ pub const stdin_fd: Fd = if (builtin.os.tag == .windows) std_input_handle else 0
 // The file descriptor of stdout.
 //
 pub const stdout_fd: Fd = if (builtin.os.tag == .windows) std_output_handle else 1;
+
+//
+// The file descriptor of stderr.
+//
+pub const stderr_fd: Fd = if (builtin.os.tag == .windows) std_error_handle else 2;
 
 //
 // The Windows standard handle identifier of stdin (STD_INPUT_HANDLE).
@@ -391,4 +396,227 @@ pub fn waitForConsoleInput(fd: Fd, timeoutMilliseconds: u64) bool {
             return false;
         }
     }
+}
+
+//
+// Gets an environment variable from a map that may be missing.
+//
+fn environmentValue(environment: ?*const std.process.Environ.Map, key: []const u8) ?[]const u8 {
+    const map = environment orelse return null;
+    return map.get(key);
+}
+
+//
+// The color depths (bits) getColorDepth returns.
+//
+const colors_2: u8 = 1;
+const colors_16: u8 = 4;
+const colors_256: u8 = 8;
+const colors_16m: u8 = 24;
+
+//
+// The color depth of terminals by TERM (lowercased).
+//
+const term_envs = [_]struct { []const u8, u8 }{
+    .{ "eterm", colors_16 },
+    .{ "cons25", colors_16 },
+    .{ "console", colors_16 },
+    .{ "cygwin", colors_16 },
+    .{ "dtterm", colors_16 },
+    .{ "gnome", colors_16 },
+    .{ "hurd", colors_16 },
+    .{ "jfbterm", colors_16 },
+    .{ "konsole", colors_16 },
+    .{ "kterm", colors_16 },
+    .{ "mlterm", colors_16 },
+    .{ "mosh", colors_16m },
+    .{ "putty", colors_16 },
+    .{ "st", colors_16 },
+    .{ "rxvt-unicode-24bit", colors_16m },
+    .{ "terminator", colors_16m },
+    .{ "xterm-kitty", colors_16m },
+};
+
+//
+// The color depth of CI services, by the environment variable that names them.
+//
+const ci_envs = [_]struct { []const u8, u8 }{
+    .{ "APPVEYOR", colors_256 },
+    .{ "BUILDKITE", colors_256 },
+    .{ "CIRCLECI", colors_16m },
+    .{ "DRONE", colors_256 },
+    .{ "GITEA_ACTIONS", colors_16m },
+    .{ "GITHUB_ACTIONS", colors_16m },
+    .{ "GITLAB_CI", colors_256 },
+    .{ "TRAVIS", colors_256 },
+};
+
+//
+// True when a (lowercased) TERM matches one of /ansi/, /color/, /linux/, /direct/, /^con[0-9]*x[0-9]/, /^rxvt/,
+// /^screen/, /^xterm/, /^vt100/, /^vt220/.
+//
+fn termMatchesColorPattern(term: []const u8) bool {
+    const contained = [_][]const u8{ "ansi", "color", "linux", "direct" };
+    for (contained) |part| {
+        if (std.mem.indexOf(u8, term, part) != null) {
+            return true;
+        }
+    }
+    const prefixes = [_][]const u8{ "rxvt", "screen", "xterm", "vt100", "vt220" };
+    for (prefixes) |prefix| {
+        if (std.mem.startsWith(u8, term, prefix)) {
+            return true;
+        }
+    }
+    if (std.mem.startsWith(u8, term, "con")) {
+        var index: usize = 3;
+        while (index < term.len and std.ascii.isDigit(term[index])) {
+            index += 1;
+        }
+        return index + 1 < term.len and term[index] == 'x' and std.ascii.isDigit(term[index + 1]);
+    }
+    return false;
+}
+
+//
+// True when TEAMCITY_VERSION matches /^(9\.(0*[1-9]\d*)\.|\d{2,}\.)/.
+//
+fn teamCityHasColors(version: []const u8) bool {
+    var digits: usize = 0;
+    while (digits < version.len and std.ascii.isDigit(version[digits])) {
+        digits += 1;
+    }
+    if (digits >= 2 and digits < version.len and version[digits] == '.') {
+        return true;
+    }
+    if (!std.mem.startsWith(u8, version, "9.")) {
+        return false;
+    }
+    var index: usize = 2;
+    while (index < version.len and version[index] == '0') {
+        index += 1;
+    }
+    if (index >= version.len or version[index] < '1' or version[index] > '9') {
+        return false;
+    }
+    while (index < version.len and std.ascii.isDigit(version[index])) {
+        index += 1;
+    }
+    return index < version.len and version[index] == '.';
+}
+
+//
+// The number of bits of color a terminal supports, from the environment (`writeStream.getColorDepth(env)`):
+// 1 (2 colors), 4 (16), 8 (256) or 24 (16 million).
+// On Windows this assumes Windows 10 build 14931 or later (Node reads the build number from os.release()).
+//
+pub fn getColorDepth(environment: ?*const std.process.Environ.Map) u8 {
+    if (environmentValue(environment, "FORCE_COLOR")) |forceColor| {
+        if (forceColor.len == 0 or std.mem.eql(u8, forceColor, "1") or std.mem.eql(u8, forceColor, "true")) {
+            return colors_16;
+        }
+        if (std.mem.eql(u8, forceColor, "2")) {
+            return colors_256;
+        }
+        if (std.mem.eql(u8, forceColor, "3")) {
+            return colors_16m;
+        }
+        return colors_2;
+    }
+
+    const term = environmentValue(environment, "TERM");
+    if (environmentValue(environment, "NODE_DISABLE_COLORS") != null or
+        environmentValue(environment, "NO_COLOR") != null or
+        (term != null and std.mem.eql(u8, term.?, "dumb")))
+    {
+        return colors_2;
+    }
+
+    if (builtin.os.tag == .windows) {
+        return colors_16m;
+    }
+
+    if (environmentValue(environment, "TMUX")) |tmux| {
+        if (tmux.len > 0) {
+            return colors_16m;
+        }
+    }
+
+    if (environmentValue(environment, "CI")) |ci| {
+        if (ci.len > 0) {
+            for (ci_envs) |entry| {
+                if (environmentValue(environment, entry[0]) != null) {
+                    return entry[1];
+                }
+            }
+            const ciName = environmentValue(environment, "CI_NAME");
+            if (ciName != null and std.mem.eql(u8, ciName.?, "codeship")) {
+                return colors_256;
+            }
+            return colors_2;
+        }
+    }
+
+    if (environmentValue(environment, "TEAMCITY_VERSION")) |version| {
+        if (teamCityHasColors(version)) {
+            return colors_16;
+        }
+        return colors_2;
+    }
+
+    if (environmentValue(environment, "TERM_PROGRAM")) |program| {
+        if (std.mem.eql(u8, program, "iTerm.app")) {
+            const version = environmentValue(environment, "TERM_PROGRAM_VERSION");
+            if (version == null or version.?.len == 0 or (version.?.len >= 2 and version.?[0] >= '0' and version.?[0] <= '2' and version.?[1] == '.')) {
+                return colors_256;
+            }
+            return colors_16m;
+        }
+        if (std.mem.eql(u8, program, "HyperTerm") or std.mem.eql(u8, program, "MacTerm")) {
+            return colors_16m;
+        }
+        if (std.mem.eql(u8, program, "Apple_Terminal")) {
+            return colors_256;
+        }
+    }
+
+    const colorTerm = environmentValue(environment, "COLORTERM");
+    if (colorTerm != null and (std.mem.eql(u8, colorTerm.?, "truecolor") or std.mem.eql(u8, colorTerm.?, "24bit"))) {
+        return colors_16m;
+    }
+
+    if (term) |termValue| {
+        if (termValue.len > 0) {
+            if (std.mem.indexOf(u8, termValue, "truecolor") != null) {
+                return colors_16m;
+            }
+            if (std.mem.startsWith(u8, termValue, "xterm-256")) {
+                return colors_256;
+            }
+            var lowered: [256]u8 = undefined;
+            if (termValue.len <= lowered.len) {
+                const termEnv = std.ascii.lowerString(&lowered, termValue);
+                for (term_envs) |entry| {
+                    if (std.mem.eql(u8, entry[0], termEnv)) {
+                        return entry[1];
+                    }
+                }
+                if (termMatchesColorPattern(termEnv)) {
+                    return colors_16;
+                }
+            }
+        }
+    }
+
+    if (colorTerm != null and colorTerm.?.len > 0) {
+        return colors_16;
+    }
+    return colors_2;
+}
+
+//
+// True when the terminal supports at least `count` colors (`writeStream.hasColors(count, env)`).
+//
+pub fn hasColors(count: u32, environment: ?*const std.process.Environ.Map) bool {
+    return count <= (@as(u32, 1) << @intCast(getColorDepth(environment)));
 }

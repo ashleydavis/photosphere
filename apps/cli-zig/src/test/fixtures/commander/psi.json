@@ -1,0 +1,88 @@
+[
+    {
+        "args": [
+            "replicate",
+            "--help"
+        ],
+        "stdout": "Usage: psi replicate|rep [options]\n\nReplicates an asset database from source to destination location.\n\nOptions:\n  --db <path>                 The directory that contains the media file\n                              database\n  --dest <path>               The destination directory that specifies the\n                              target database\n  -k, --key <keyfile>         Path to the private key file for encryption.\n  --dk, --dest-key <keyfile>  Path to destination encryption key file\n  -g, --generate-key          Generate encryption keys if they don't exist.\n                              (default: false)\n  -p, --path <path>           Replicate only files matching this path (file or\n                              directory)\n  --partial                   Create a partial replica: copy only metadata and\n                              structure; asset files are fetched on demand from\n                              origin.\n  --full                      Create a full replica: copy all original, display,\n                              and thumbnail files (default when --yes is used).\n  --force                     Proceed with replication without confirmation,\n                              even if destination database exists, and allow\n                              replication between databases with different IDs\n                              (THIS IS DANGEROUS, use it carefully, use it\n                              rarely)\n  -v, --verbose               Enables verbose logging. (default: false)\n  --tools                     Enables output from media processing tools\n                              (ImageMagick, ffmpeg, etc.). (default: false)\n  -y, --yes                   Non-interactive mode. Use command line arguments\n                              and defaults. (default: false)\n  --cwd <path>                Set the current working directory for directory\n                              selection prompts. Defaults to the current\n                              directory from your shell/terminal. This is mostly\n                              for testing/debugging.\n  -h, --help                  display help for command\n\nExamples:\n  psi replicate --db ./photos --dest ./backup Replicates a database to a backup location.\n  psi replicate --db . --dest s3:bucket/photos Replicates the current database to S3.\n",
+        "stderr": "",
+        "exitCode": 0
+    },
+    {
+        "args": [
+            "rep",
+            "-h"
+        ],
+        "stdout": "Usage: psi replicate|rep [options]\n\nReplicates an asset database from source to destination location.\n\nOptions:\n  --db <path>                 The directory that contains the media file\n                              database\n  --dest <path>               The destination directory that specifies the\n                              target database\n  -k, --key <keyfile>         Path to the private key file for encryption.\n  --dk, --dest-key <keyfile>  Path to destination encryption key file\n  -g, --generate-key          Generate encryption keys if they don't exist.\n                              (default: false)\n  -p, --path <path>           Replicate only files matching this path (file or\n                              directory)\n  --partial                   Create a partial replica: copy only metadata and\n                              structure; asset files are fetched on demand from\n                              origin.\n  --full                      Create a full replica: copy all original, display,\n                              and thumbnail files (default when --yes is used).\n  --force                     Proceed with replication without confirmation,\n                              even if destination database exists, and allow\n                              replication between databases with different IDs\n                              (THIS IS DANGEROUS, use it carefully, use it\n                              rarely)\n  -v, --verbose               Enables verbose logging. (default: false)\n  --tools                     Enables output from media processing tools\n                              (ImageMagick, ffmpeg, etc.). (default: false)\n  -y, --yes                   Non-interactive mode. Use command line arguments\n                              and defaults. (default: false)\n  --cwd <path>                Set the current working directory for directory\n                              selection prompts. Defaults to the current\n                              directory from your shell/terminal. This is mostly\n                              for testing/debugging.\n  -h, --help                  display help for command\n\nExamples:\n  psi replicate --db ./photos --dest ./backup Replicates a database to a backup location.\n  psi replicate --db . --dest s3:bucket/photos Replicates the current database to S3.\n",
+        "stderr": "",
+        "exitCode": 0
+    },
+    {
+        "args": [
+            "verify",
+            "--help"
+        ],
+        "stdout": "Usage: psi verify|ver [options]\n\nVerifies the integrity of the media file database by checking file hashes.\n\nOptions:\n  --db <path>          The directory that contains the media file database\n  -k, --key <keyfile>  Path to the private key file for encryption.\n  -v, --verbose        Enables verbose logging. (default: false)\n  --tools              Enables output from media processing tools (ImageMagick,\n                       ffmpeg, etc.). (default: false)\n  -y, --yes            Non-interactive mode. Use command line arguments and\n                       defaults. (default: false)\n  --full               Force full verification (bypass cached hash optimization)\n                       (default: false)\n  -p, --path <path>    Verify only files matching this path (file or directory)\n  --workers <number>   Number of worker threads to use for parallel processing\n                       (default: number of CPU cores)\n  --timeout <ms>       Task timeout in milliseconds (default: 600000 = 10\n                       minutes)\n  --cwd <path>         Set the current working directory for directory selection\n                       prompts. Defaults to the current directory from your\n                       shell/terminal. This is mostly for testing/debugging.\n  -h, --help           display help for command\n\nExamples:\n  psi verify --db .                Verifies a database in the current directory.\n  psi verify --db ./photos         Verifies a database in the ./photos directory.\n  psi verify --db ./photos --full  Forces full verification of all files.\n",
+        "stderr": "",
+        "exitCode": 0
+    },
+    {
+        "args": [
+            "ver",
+            "--db",
+            "x",
+            "--help"
+        ],
+        "stdout": "Usage: psi verify|ver [options]\n\nVerifies the integrity of the media file database by checking file hashes.\n\nOptions:\n  --db <path>          The directory that contains the media file database\n  -k, --key <keyfile>  Path to the private key file for encryption.\n  -v, --verbose        Enables verbose logging. (default: false)\n  --tools              Enables output from media processing tools (ImageMagick,\n                       ffmpeg, etc.). (default: false)\n  -y, --yes            Non-interactive mode. Use command line arguments and\n                       defaults. (default: false)\n  --full               Force full verification (bypass cached hash optimization)\n                       (default: false)\n  -p, --path <path>    Verify only files matching this path (file or directory)\n  --workers <number>   Number of worker threads to use for parallel processing\n                       (default: number of CPU cores)\n  --timeout <ms>       Task timeout in milliseconds (default: 600000 = 10\n                       minutes)\n  --cwd <path>         Set the current working directory for directory selection\n                       prompts. Defaults to the current directory from your\n                       shell/terminal. This is mostly for testing/debugging.\n  -h, --help           display help for command\n\nExamples:\n  psi verify --db .                Verifies a database in the current directory.\n  psi verify --db ./photos         Verifies a database in the ./photos directory.\n  psi verify --db ./photos --full  Forces full verification of all files.\n",
+        "stderr": "",
+        "exitCode": 0
+    },
+    {
+        "args": [
+            "rep",
+            "--flul"
+        ],
+        "stdout": "",
+        "stderr": "error: unknown option '--flul'\n(Did you mean --full?)\n",
+        "exitCode": 1
+    },
+    {
+        "args": [
+            "ver",
+            "--bogus",
+            "x"
+        ],
+        "stdout": "",
+        "stderr": "error: unknown option '--bogus'\n",
+        "exitCode": 1
+    },
+    {
+        "args": [
+            "ver",
+            "extra"
+        ],
+        "stdout": "",
+        "stderr": "error: too many arguments for 'verify'. Expected 0 arguments but got 1.\n",
+        "exitCode": 1
+    },
+    {
+        "args": [
+            "rep",
+            "-x"
+        ],
+        "stdout": "",
+        "stderr": "error: unknown option '-x'\n",
+        "exitCode": 1
+    },
+    {
+        "args": [
+            "-q",
+            "rep",
+            "--dst",
+            "x"
+        ],
+        "stdout": "",
+        "stderr": "error: unknown option '--dst'\n(Did you mean --dest?)\n",
+        "exitCode": 1
+    }
+]
