@@ -44,6 +44,20 @@ stop_watch_command() {
         fi
     done
 
+    # This suite runs the TypeScript CLI as "bun run start --", so on Windows the watch is a bun
+    # process that started another bun process. The SIGKILL below only ends the outer one, which
+    # would leave the inner watch importing into this database, so the whole Windows process tree
+    # is ended first.
+    case "$OSTYPE" in
+        msys*|cygwin*)
+            local windows_pid
+            windows_pid=$(cat "/proc/$stopping_pid/winpid" 2>/dev/null || true)
+            if [ -n "$windows_pid" ]; then
+                taskkill //T //F //PID "$windows_pid" > /dev/null 2>&1 || true
+            fi
+            ;;
+    esac
+
     kill -KILL "$stopping_pid" 2>/dev/null || true
 
     for attempt in $(seq 1 20); do
