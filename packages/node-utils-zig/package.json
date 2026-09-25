@@ -1,0 +1,11 @@
+{
+  "name": "node-utils-zig",
+  "version": "1.0.0",
+  "description": "Zig port of the node-utils package (only the functions needed by psi replicate and verify).",
+  "private": true,
+  "scripts": {
+    "compile": "zig build",
+    "test": "zig build test --summary all",
+    "clean": "rm -rf zig-out .zig-cache"
+  }
+}

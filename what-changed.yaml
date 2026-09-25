@@ -65,6 +65,14 @@ targets:
       - apps/cli
       - packages
 
+  # The Zig port of psi replicate and psi verify (apps/cli-zig and the packages/*-zig ports) and the
+  # TypeScript/Zig interop tests, all in apps/cli/smoke-tests-zig.
+  - name: test:cli:zig
+    paths:
+      - apps/cli
+      - apps/cli-zig
+      - packages
+
   - name: test:electron
     paths:
       - apps/desktop

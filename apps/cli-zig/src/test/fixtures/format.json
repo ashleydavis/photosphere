@@ -1,0 +1,812 @@
+[
+    {
+        "bytes": 0,
+        "binary": true,
+        "decimals": 2,
+        "output": "0 Bytes"
+    },
+    {
+        "bytes": 0,
+        "binary": false,
+        "decimals": 2,
+        "output": "0 Bytes"
+    },
+    {
+        "bytes": 0,
+        "binary": true,
+        "decimals": 3,
+        "output": "0 Bytes"
+    },
+    {
+        "bytes": 1,
+        "binary": true,
+        "decimals": 2,
+        "output": "1 Bytes"
+    },
+    {
+        "bytes": 1,
+        "binary": false,
+        "decimals": 2,
+        "output": "1 Bytes"
+    },
+    {
+        "bytes": 1,
+        "binary": true,
+        "decimals": 3,
+        "output": "1 Bytes"
+    },
+    {
+        "bytes": 100,
+        "binary": true,
+        "decimals": 2,
+        "output": "100 Bytes"
+    },
+    {
+        "bytes": 100,
+        "binary": false,
+        "decimals": 2,
+        "output": "100 Bytes"
+    },
+    {
+        "bytes": 100,
+        "binary": true,
+        "decimals": 3,
+        "output": "100 Bytes"
+    },
+    {
+        "bytes": 999,
+        "binary": true,
+        "decimals": 2,
+        "output": "999 Bytes"
+    },
+    {
+        "bytes": 999,
+        "binary": false,
+        "decimals": 2,
+        "output": "999 Bytes"
+    },
+    {
+        "bytes": 999,
+        "binary": true,
+        "decimals": 3,
+        "output": "999 Bytes"
+    },
+    {
+        "bytes": 1000,
+        "binary": true,
+        "decimals": 2,
+        "output": "1,000 Bytes"
+    },
+    {
+        "bytes": 1000,
+        "binary": false,
+        "decimals": 2,
+        "output": "1 KB"
+    },
+    {
+        "bytes": 1000,
+        "binary": true,
+        "decimals": 3,
+        "output": "1,000 Bytes"
+    },
+    {
+        "bytes": 1023,
+        "binary": true,
+        "decimals": 2,
+        "output": "1,023 Bytes"
+    },
+    {
+        "bytes": 1023,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.02 KB"
+    },
+    {
+        "bytes": 1023,
+        "binary": true,
+        "decimals": 3,
+        "output": "1,023 Bytes"
+    },
+    {
+        "bytes": 1024,
+        "binary": true,
+        "decimals": 2,
+        "output": "1 KiB"
+    },
+    {
+        "bytes": 1024,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.02 KB"
+    },
+    {
+        "bytes": 1024,
+        "binary": true,
+        "decimals": 3,
+        "output": "1 KiB"
+    },
+    {
+        "bytes": 1025,
+        "binary": true,
+        "decimals": 2,
+        "output": "1 KiB"
+    },
+    {
+        "bytes": 1025,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.03 KB"
+    },
+    {
+        "bytes": 1025,
+        "binary": true,
+        "decimals": 3,
+        "output": "1.001 KiB"
+    },
+    {
+        "bytes": 1536,
+        "binary": true,
+        "decimals": 2,
+        "output": "1.5 KiB"
+    },
+    {
+        "bytes": 1536,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.54 KB"
+    },
+    {
+        "bytes": 1536,
+        "binary": true,
+        "decimals": 3,
+        "output": "1.5 KiB"
+    },
+    {
+        "bytes": 2048,
+        "binary": true,
+        "decimals": 2,
+        "output": "2 KiB"
+    },
+    {
+        "bytes": 2048,
+        "binary": false,
+        "decimals": 2,
+        "output": "2.05 KB"
+    },
+    {
+        "bytes": 2048,
+        "binary": true,
+        "decimals": 3,
+        "output": "2 KiB"
+    },
+    {
+        "bytes": 10239,
+        "binary": true,
+        "decimals": 2,
+        "output": "10 KiB"
+    },
+    {
+        "bytes": 10239,
+        "binary": false,
+        "decimals": 2,
+        "output": "10.2 KB"
+    },
+    {
+        "bytes": 10239,
+        "binary": true,
+        "decimals": 3,
+        "output": "9.999 KiB"
+    },
+    {
+        "bytes": 10240,
+        "binary": true,
+        "decimals": 2,
+        "output": "10 KiB"
+    },
+    {
+        "bytes": 10240,
+        "binary": false,
+        "decimals": 2,
+        "output": "10.2 KB"
+    },
+    {
+        "bytes": 10240,
+        "binary": true,
+        "decimals": 3,
+        "output": "10 KiB"
+    },
+    {
+        "bytes": 10752,
+        "binary": true,
+        "decimals": 2,
+        "output": "10.5 KiB"
+    },
+    {
+        "bytes": 10752,
+        "binary": false,
+        "decimals": 2,
+        "output": "10.8 KB"
+    },
+    {
+        "bytes": 10752,
+        "binary": true,
+        "decimals": 3,
+        "output": "10.5 KiB"
+    },
+    {
+        "bytes": 102399,
+        "binary": true,
+        "decimals": 2,
+        "output": "100 KiB"
+    },
+    {
+        "bytes": 102399,
+        "binary": false,
+        "decimals": 2,
+        "output": "102 KB"
+    },
+    {
+        "bytes": 102399,
+        "binary": true,
+        "decimals": 3,
+        "output": "100 KiB"
+    },
+    {
+        "bytes": 102400,
+        "binary": true,
+        "decimals": 2,
+        "output": "100 KiB"
+    },
+    {
+        "bytes": 102400,
+        "binary": false,
+        "decimals": 2,
+        "output": "102 KB"
+    },
+    {
+        "bytes": 102400,
+        "binary": true,
+        "decimals": 3,
+        "output": "100 KiB"
+    },
+    {
+        "bytes": 1048575,
+        "binary": true,
+        "decimals": 2,
+        "output": "1,024 KiB"
+    },
+    {
+        "bytes": 1048575,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.05 MB"
+    },
+    {
+        "bytes": 1048575,
+        "binary": true,
+        "decimals": 3,
+        "output": "1,024 KiB"
+    },
+    {
+        "bytes": 1048576,
+        "binary": true,
+        "decimals": 2,
+        "output": "1 MiB"
+    },
+    {
+        "bytes": 1048576,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.05 MB"
+    },
+    {
+        "bytes": 1048576,
+        "binary": true,
+        "decimals": 3,
+        "output": "1 MiB"
+    },
+    {
+        "bytes": 1572864,
+        "binary": true,
+        "decimals": 2,
+        "output": "1.5 MiB"
+    },
+    {
+        "bytes": 1572864,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.57 MB"
+    },
+    {
+        "bytes": 1572864,
+        "binary": true,
+        "decimals": 3,
+        "output": "1.5 MiB"
+    },
+    {
+        "bytes": 2359296,
+        "binary": true,
+        "decimals": 2,
+        "output": "2.25 MiB"
+    },
+    {
+        "bytes": 2359296,
+        "binary": false,
+        "decimals": 2,
+        "output": "2.36 MB"
+    },
+    {
+        "bytes": 2359296,
+        "binary": true,
+        "decimals": 3,
+        "output": "2.25 MiB"
+    },
+    {
+        "bytes": 2411724,
+        "binary": true,
+        "decimals": 2,
+        "output": "2.3 MiB"
+    },
+    {
+        "bytes": 2411724,
+        "binary": false,
+        "decimals": 2,
+        "output": "2.41 MB"
+    },
+    {
+        "bytes": 2411724,
+        "binary": true,
+        "decimals": 3,
+        "output": "2.3 MiB"
+    },
+    {
+        "bytes": 2306867,
+        "binary": true,
+        "decimals": 2,
+        "output": "2.2 MiB"
+    },
+    {
+        "bytes": 2306867,
+        "binary": false,
+        "decimals": 2,
+        "output": "2.31 MB"
+    },
+    {
+        "bytes": 2306867,
+        "binary": true,
+        "decimals": 3,
+        "output": "2.2 MiB"
+    },
+    {
+        "bytes": 5242880,
+        "binary": true,
+        "decimals": 2,
+        "output": "5 MiB"
+    },
+    {
+        "bytes": 5242880,
+        "binary": false,
+        "decimals": 2,
+        "output": "5.24 MB"
+    },
+    {
+        "bytes": 5242880,
+        "binary": true,
+        "decimals": 3,
+        "output": "5 MiB"
+    },
+    {
+        "bytes": 5767168,
+        "binary": true,
+        "decimals": 2,
+        "output": "5.5 MiB"
+    },
+    {
+        "bytes": 5767168,
+        "binary": false,
+        "decimals": 2,
+        "output": "5.77 MB"
+    },
+    {
+        "bytes": 5767168,
+        "binary": true,
+        "decimals": 3,
+        "output": "5.5 MiB"
+    },
+    {
+        "bytes": 12582912,
+        "binary": true,
+        "decimals": 2,
+        "output": "12 MiB"
+    },
+    {
+        "bytes": 12582912,
+        "binary": false,
+        "decimals": 2,
+        "output": "12.6 MB"
+    },
+    {
+        "bytes": 12582912,
+        "binary": true,
+        "decimals": 3,
+        "output": "12 MiB"
+    },
+    {
+        "bytes": 13107200,
+        "binary": true,
+        "decimals": 2,
+        "output": "12.5 MiB"
+    },
+    {
+        "bytes": 13107200,
+        "binary": false,
+        "decimals": 2,
+        "output": "13.1 MB"
+    },
+    {
+        "bytes": 13107200,
+        "binary": true,
+        "decimals": 3,
+        "output": "12.5 MiB"
+    },
+    {
+        "bytes": 104857600,
+        "binary": true,
+        "decimals": 2,
+        "output": "100 MiB"
+    },
+    {
+        "bytes": 104857600,
+        "binary": false,
+        "decimals": 2,
+        "output": "105 MB"
+    },
+    {
+        "bytes": 104857600,
+        "binary": true,
+        "decimals": 3,
+        "output": "100 MiB"
+    },
+    {
+        "bytes": 123456789,
+        "binary": true,
+        "decimals": 2,
+        "output": "118 MiB"
+    },
+    {
+        "bytes": 123456789,
+        "binary": false,
+        "decimals": 2,
+        "output": "123 MB"
+    },
+    {
+        "bytes": 123456789,
+        "binary": true,
+        "decimals": 3,
+        "output": "118 MiB"
+    },
+    {
+        "bytes": 987654321,
+        "binary": true,
+        "decimals": 2,
+        "output": "942 MiB"
+    },
+    {
+        "bytes": 987654321,
+        "binary": false,
+        "decimals": 2,
+        "output": "988 MB"
+    },
+    {
+        "bytes": 987654321,
+        "binary": true,
+        "decimals": 3,
+        "output": "942 MiB"
+    },
+    {
+        "bytes": 1073741824,
+        "binary": true,
+        "decimals": 2,
+        "output": "1 GiB"
+    },
+    {
+        "bytes": 1073741824,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.07 GB"
+    },
+    {
+        "bytes": 1073741824,
+        "binary": true,
+        "decimals": 3,
+        "output": "1 GiB"
+    },
+    {
+        "bytes": 1610612736,
+        "binary": true,
+        "decimals": 2,
+        "output": "1.5 GiB"
+    },
+    {
+        "bytes": 1610612736,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.61 GB"
+    },
+    {
+        "bytes": 1610612736,
+        "binary": true,
+        "decimals": 3,
+        "output": "1.5 GiB"
+    },
+    {
+        "bytes": 1234567890,
+        "binary": true,
+        "decimals": 2,
+        "output": "1.15 GiB"
+    },
+    {
+        "bytes": 1234567890,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.23 GB"
+    },
+    {
+        "bytes": 1234567890,
+        "binary": true,
+        "decimals": 3,
+        "output": "1.15 GiB"
+    },
+    {
+        "bytes": 10737418240,
+        "binary": true,
+        "decimals": 2,
+        "output": "10 GiB"
+    },
+    {
+        "bytes": 10737418240,
+        "binary": false,
+        "decimals": 2,
+        "output": "10.7 GB"
+    },
+    {
+        "bytes": 10737418240,
+        "binary": true,
+        "decimals": 3,
+        "output": "10 GiB"
+    },
+    {
+        "bytes": 107374182400,
+        "binary": true,
+        "decimals": 2,
+        "output": "100 GiB"
+    },
+    {
+        "bytes": 107374182400,
+        "binary": false,
+        "decimals": 2,
+        "output": "107 GB"
+    },
+    {
+        "bytes": 107374182400,
+        "binary": true,
+        "decimals": 3,
+        "output": "100 GiB"
+    },
+    {
+        "bytes": 1099511627776,
+        "binary": true,
+        "decimals": 2,
+        "output": "1 TiB"
+    },
+    {
+        "bytes": 1099511627776,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.1 TB"
+    },
+    {
+        "bytes": 1099511627776,
+        "binary": true,
+        "decimals": 3,
+        "output": "1 TiB"
+    },
+    {
+        "bytes": 1649267441664,
+        "binary": true,
+        "decimals": 2,
+        "output": "1.5 TiB"
+    },
+    {
+        "bytes": 1649267441664,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.65 TB"
+    },
+    {
+        "bytes": 1649267441664,
+        "binary": true,
+        "decimals": 3,
+        "output": "1.5 TiB"
+    },
+    {
+        "bytes": 1125899906842623,
+        "binary": true,
+        "decimals": 2,
+        "output": "1 PiB"
+    },
+    {
+        "bytes": 1125899906842623,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.13 PB"
+    },
+    {
+        "bytes": 1125899906842623,
+        "binary": true,
+        "decimals": 3,
+        "output": "1 PiB"
+    },
+    {
+        "bytes": 1125899906842624,
+        "binary": true,
+        "decimals": 2,
+        "output": "1 PiB"
+    },
+    {
+        "bytes": 1125899906842624,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.13 PB"
+    },
+    {
+        "bytes": 1125899906842624,
+        "binary": true,
+        "decimals": 3,
+        "output": "1 PiB"
+    },
+    {
+        "bytes": 1152921504606847000,
+        "binary": true,
+        "decimals": 2,
+        "output": "1 undefined"
+    },
+    {
+        "bytes": 1152921504606847000,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.15 undefined"
+    },
+    {
+        "bytes": 1152921504606847000,
+        "binary": true,
+        "decimals": 3,
+        "output": "1 undefined"
+    },
+    {
+        "bytes": 1029,
+        "binary": true,
+        "decimals": 2,
+        "output": "1 KiB"
+    },
+    {
+        "bytes": 1029,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.03 KB"
+    },
+    {
+        "bytes": 1029,
+        "binary": true,
+        "decimals": 3,
+        "output": "1.005 KiB"
+    },
+    {
+        "bytes": 1034,
+        "binary": true,
+        "decimals": 2,
+        "output": "1.01 KiB"
+    },
+    {
+        "bytes": 1034,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.03 KB"
+    },
+    {
+        "bytes": 1034,
+        "binary": true,
+        "decimals": 3,
+        "output": "1.01 KiB"
+    },
+    {
+        "bytes": 10291,
+        "binary": true,
+        "decimals": 2,
+        "output": "10 KiB"
+    },
+    {
+        "bytes": 10291,
+        "binary": false,
+        "decimals": 2,
+        "output": "10.3 KB"
+    },
+    {
+        "bytes": 10291,
+        "binary": true,
+        "decimals": 3,
+        "output": "10 KiB"
+    },
+    {
+        "bytes": 1048576000,
+        "binary": true,
+        "decimals": 2,
+        "output": "1,000 MiB"
+    },
+    {
+        "bytes": 1048576000,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.05 GB"
+    },
+    {
+        "bytes": 1048576000,
+        "binary": true,
+        "decimals": 3,
+        "output": "1,000 MiB"
+    },
+    {
+        "bytes": 1073217536,
+        "binary": true,
+        "decimals": 2,
+        "output": "1,024 MiB"
+    },
+    {
+        "bytes": 1073217536,
+        "binary": false,
+        "decimals": 2,
+        "output": "1.07 GB"
+    },
+    {
+        "bytes": 1073217536,
+        "binary": true,
+        "decimals": 3,
+        "output": "1,024 MiB"
+    },
+    {
+        "bytes": 6969,
+        "binary": true,
+        "decimals": 2,
+        "output": "6.81 KiB"
+    },
+    {
+        "bytes": 6969,
+        "binary": false,
+        "decimals": 2,
+        "output": "6.97 KB"
+    },
+    {
+        "bytes": 6969,
+        "binary": true,
+        "decimals": 3,
+        "output": "6.806 KiB"
+    },
+    {
+        "bytes": 7039,
+        "binary": true,
+        "decimals": 2,
+        "output": "6.87 KiB"
+    },
+    {
+        "bytes": 7039,
+        "binary": false,
+        "decimals": 2,
+        "output": "7.04 KB"
+    },
+    {
+        "bytes": 7039,
+        "binary": true,
+        "decimals": 3,
+        "output": "6.874 KiB"
+    }
+]

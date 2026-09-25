@@ -1,0 +1,32 @@
+[
+    {
+        "missingTools": [
+            "ImageMagick"
+        ],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mmacOS:\u001b[39m\n\n\u001b[1mUsing Homebrew\u001b[22m (recommended):\n  brew install imagemagick\n  Homebrew: https://brew.sh\n\n\u001b[1mUsing MacPorts:\u001b[22m\n  sudo port install ImageMagick +universal\n  MacPorts: https://www.macports.org/install.php\n\n\u001b[1mManual installation:\u001b[22m\n  • ImageMagick:\n    1. Download the macOS build from https://imagemagick.org/script/download.php#macosx\n    2. Extract it and move the contents to a folder, e.g. /usr/local/imagemagick\n    3. Add the bin folder to your PATH, e.g. add this to ~/.zshrc:\n       export PATH=\"/usr/local/imagemagick/bin:$PATH\"\n    4. Open a new terminal and run \"magick -version\" to verify\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    },
+    {
+        "missingTools": [
+            "ffmpeg"
+        ],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mmacOS:\u001b[39m\n\n\u001b[1mUsing Homebrew\u001b[22m (recommended):\n  brew install ffmpeg\n  Homebrew: https://brew.sh\n\n\u001b[1mUsing MacPorts:\u001b[22m\n  sudo port install ffmpeg +universal\n  MacPorts: https://www.macports.org/install.php\n\n\u001b[1mManual installation:\u001b[22m\n  • ffmpeg:\n    1. Download ffmpeg and ffprobe from https://evermeet.cx/ffmpeg/\n    2. Extract the archives and move both binaries to /usr/local/bin\n    3. Open a new terminal and run \"ffmpeg -version\" to verify\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    },
+    {
+        "missingTools": [
+            "ffprobe"
+        ],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mmacOS:\u001b[39m\n\n\u001b[1mUsing Homebrew\u001b[22m (recommended):\n  brew install ffmpeg\n  Homebrew: https://brew.sh\n\n\u001b[1mUsing MacPorts:\u001b[22m\n  sudo port install ffmpeg +universal\n  MacPorts: https://www.macports.org/install.php\n\n\u001b[1mManual installation:\u001b[22m\n  • ffmpeg:\n    1. Download ffmpeg and ffprobe from https://evermeet.cx/ffmpeg/\n    2. Extract the archives and move both binaries to /usr/local/bin\n    3. Open a new terminal and run \"ffmpeg -version\" to verify\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    },
+    {
+        "missingTools": [
+            "ImageMagick",
+            "ffprobe",
+            "ffmpeg"
+        ],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mmacOS:\u001b[39m\n\n\u001b[1mUsing Homebrew\u001b[22m (recommended):\n  brew install imagemagick ffmpeg\n  Homebrew: https://brew.sh\n\n\u001b[1mUsing MacPorts:\u001b[22m\n  sudo port install ImageMagick +universal\n  sudo port install ffmpeg +universal\n  MacPorts: https://www.macports.org/install.php\n\n\u001b[1mManual installation:\u001b[22m\n  • ImageMagick:\n    1. Download the macOS build from https://imagemagick.org/script/download.php#macosx\n    2. Extract it and move the contents to a folder, e.g. /usr/local/imagemagick\n    3. Add the bin folder to your PATH, e.g. add this to ~/.zshrc:\n       export PATH=\"/usr/local/imagemagick/bin:$PATH\"\n    4. Open a new terminal and run \"magick -version\" to verify\n  • ffmpeg:\n    1. Download ffmpeg and ffprobe from https://evermeet.cx/ffmpeg/\n    2. Extract the archives and move both binaries to /usr/local/bin\n    3. Open a new terminal and run \"ffmpeg -version\" to verify\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    },
+    {
+        "missingTools": [],
+        "output": "\n\u001b[1mInstallation Instructions:\u001b[22m\n\n\u001b[36mmacOS:\u001b[39m\n\n\n\u001b[1mManual installation:\u001b[22m\n\n\u001b[2mAfter installation, run this command again to verify all tools are available.\u001b[22m\n"
+    }
+]

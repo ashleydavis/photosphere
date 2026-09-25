@@ -1,0 +1,13 @@
+#!/bin/bash
+DESCRIPTION="Zig replicate/verify: Second replication (no changes)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../../smoke-tests/lib/common.sh"
+source "$SCRIPT_DIR/../lib/interop.sh"
+source "$SCRIPT_DIR/../lib/zig-functions.sh"
+trap cleanup_and_show_summary EXIT
+
+TEST_DB_DIR="$(get_test_dir 13)/test-db"
+create_db_with_5_files "$TEST_DB_DIR"
+invoke_command "First replication (setup)" "$(get_zig_cli_command) replicate --db $TEST_DB_DIR --dest $TEST_DB_DIR-replica --yes --force"
+
+test_database_replicate_second 19

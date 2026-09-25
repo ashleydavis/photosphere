@@ -84,6 +84,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 
 ### Setup
 - `bun install` (from repo root) - You must do this before you can run any other scripts.
+- `mise install` (from repo root) - Installs the pinned tools, including Zig for the `*-zig` packages.
 - `bun run setup` - One-time, per-platform environment setup after `bun install`. Fans out to each package's own `setup` script via `bun --filter '*' setup`: installs the Android SDK toolchain on Linux/macOS (`apps/android-frontend`, via `scripts/install-android-sdk.sh --install`) and the iOS CocoaPods on macOS (`apps/ios-frontend`, via `scripts/setup-ios.sh`), each skipping cleanly where it does not apply. Git hooks (`bash scripts/install-hooks.sh`) and the pinned toolchain (`mise install`) are deliberately separate steps, not part of this.
 
 ### Run from repo root:
@@ -105,6 +106,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run test:cli:sync` - CLI sync smoke tests, several processes syncing at once
 - `bun run test:cli:write-lock` - CLI write lock smoke tests, several processes writing at once
 - `bun run test:cli:hash-cache` - CLI hash cache concurrency smoke tests
+- `bun run test:cli:zig` - Zig CLI smoke tests (apps/cli/smoke-tests-zig): the Zig port of `replicate` and `verify`, and TypeScript/Zig interop
 - `bun run test:lan-share:cli-desktop` (alias `tlcd`) - CLI to desktop LAN share smoke tests, both directions
 - `bun run test:harness` - The mobile test harness's own tests (run lock, work queue and worker pool, timeout helper). Needs no device
 - `bun run test:electron` - Build and run Electron smoke tests

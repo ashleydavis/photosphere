@@ -74,3 +74,9 @@ ux-review/
 # Local Claude Code settings for this checkout. Per-machine and per-person, so it is never shared.
 .claude/settings.local.json
 apps/android-frontend/firebase-debug.log
+
+# Zig build outputs
+zig-out/
+.zig-cache/
+apps/cli-zig/bin/
+apps/cli/test/tmp-zig/

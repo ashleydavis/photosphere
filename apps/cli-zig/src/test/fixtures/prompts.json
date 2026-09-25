@@ -1,0 +1,1561 @@
+[
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Continue?"
+        },
+        "keys": [
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": true,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Continue?\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Yes \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNo\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Continue?\n\u001b[90m \u001b[39m  \u001b[2mYes\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Proceed?\n   Second line.",
+            "initialValue": false,
+            "active": "Sure",
+            "inactive": "Nope"
+        },
+        "keys": [
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": false,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Proceed?\n   Second line.\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mSure\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m Nope\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[5A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Proceed?\n   Second line.\n\u001b[90m \u001b[39m  \u001b[2mNope\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Continue?"
+        },
+        "keys": [
+            "n"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": false,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Continue?\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Yes \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNo\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[1A\n\u001b[?25h\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Continue?\n\u001b[90m \u001b[39m  \u001b[2mNo\u001b[22m\n"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Proceed?\n   Second line.",
+            "initialValue": false,
+            "active": "Sure",
+            "inactive": "Nope"
+        },
+        "keys": [
+            "n"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": false,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Proceed?\n   Second line.\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mSure\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m Nope\n\u001b[36m \u001b[39m\n\u001b[1A\n\u001b[?25h\u001b[999D\u001b[5A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Proceed?\n   Second line.\n\u001b[90m \u001b[39m  \u001b[2mNope\u001b[22m\n"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Continue?"
+        },
+        "keys": [
+            "y"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": true,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Continue?\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Yes \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNo\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[1A\n\u001b[?25h\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Continue?\n\u001b[90m \u001b[39m  \u001b[2mYes\u001b[22m\n"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Proceed?\n   Second line.",
+            "initialValue": false,
+            "active": "Sure",
+            "inactive": "Nope"
+        },
+        "keys": [
+            "y"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": true,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Proceed?\n   Second line.\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mSure\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m Nope\n\u001b[36m \u001b[39m\n\u001b[1A\n\u001b[?25h\u001b[999D\u001b[5A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Proceed?\n   Second line.\n\u001b[90m \u001b[39m  \u001b[2mSure\u001b[22m\n"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Continue?"
+        },
+        "keys": [
+            "Y"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": true,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Continue?\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Yes \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNo\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[1A\n\u001b[?25h\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Continue?\n\u001b[90m \u001b[39m  \u001b[2mYes\u001b[22m\n"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Proceed?\n   Second line.",
+            "initialValue": false,
+            "active": "Sure",
+            "inactive": "Nope"
+        },
+        "keys": [
+            "Y"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": true,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Proceed?\n   Second line.\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mSure\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m Nope\n\u001b[36m \u001b[39m\n\u001b[1A\n\u001b[?25h\u001b[999D\u001b[5A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Proceed?\n   Second line.\n\u001b[90m \u001b[39m  \u001b[2mSure\u001b[22m\n"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Continue?"
+        },
+        "keys": [
+            "\u001b[C",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": false,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Continue?\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Yes \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNo\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[4A\u001b[2B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mYes\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m No\u001b[2B\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Continue?\n\u001b[90m \u001b[39m  \u001b[2mNo\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Proceed?\n   Second line.",
+            "initialValue": false,
+            "active": "Sure",
+            "inactive": "Nope"
+        },
+        "keys": [
+            "\u001b[C",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": true,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Proceed?\n   Second line.\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mSure\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m Nope\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[5A\u001b[3B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Sure \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNope\u001b[22m\u001b[2B\u001b[999D\u001b[5A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Proceed?\n   Second line.\n\u001b[90m \u001b[39m  \u001b[2mSure\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Continue?"
+        },
+        "keys": [
+            "\u001b[C",
+            "\u001b[D",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": true,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Continue?\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Yes \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNo\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[4A\u001b[2B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mYes\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m No\u001b[2B\u001b[999D\u001b[4A\u001b[2B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Yes \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNo\u001b[22m\u001b[2B\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Continue?\n\u001b[90m \u001b[39m  \u001b[2mYes\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Proceed?\n   Second line.",
+            "initialValue": false,
+            "active": "Sure",
+            "inactive": "Nope"
+        },
+        "keys": [
+            "\u001b[C",
+            "\u001b[D",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": false,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Proceed?\n   Second line.\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mSure\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m Nope\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[5A\u001b[3B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Sure \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNope\u001b[22m\u001b[2B\u001b[999D\u001b[5A\u001b[3B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mSure\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m Nope\u001b[2B\u001b[999D\u001b[5A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Proceed?\n   Second line.\n\u001b[90m \u001b[39m  \u001b[2mNope\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Continue?"
+        },
+        "keys": [
+            "h",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": false,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Continue?\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Yes \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNo\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[4A\u001b[2B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mYes\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m No\u001b[2B\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Continue?\n\u001b[90m \u001b[39m  \u001b[2mNo\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Proceed?\n   Second line.",
+            "initialValue": false,
+            "active": "Sure",
+            "inactive": "Nope"
+        },
+        "keys": [
+            "h",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": true,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Proceed?\n   Second line.\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mSure\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m Nope\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[5A\u001b[3B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Sure \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNope\u001b[22m\u001b[2B\u001b[999D\u001b[5A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Proceed?\n   Second line.\n\u001b[90m \u001b[39m  \u001b[2mSure\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Continue?"
+        },
+        "keys": [
+            " ",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": false,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Continue?\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Yes \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNo\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[4A\u001b[2B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mYes\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m No\u001b[2B\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Continue?\n\u001b[90m \u001b[39m  \u001b[2mNo\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Proceed?\n   Second line.",
+            "initialValue": false,
+            "active": "Sure",
+            "inactive": "Nope"
+        },
+        "keys": [
+            " ",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": true,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Proceed?\n   Second line.\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mSure\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m Nope\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[5A\u001b[3B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Sure \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNope\u001b[22m\u001b[2B\u001b[999D\u001b[5A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Proceed?\n   Second line.\n\u001b[90m \u001b[39m  \u001b[2mSure\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Continue?"
+        },
+        "keys": [
+            "\u0003"
+        ],
+        "pending": false,
+        "cancelled": true,
+        "value": null,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Continue?\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Yes \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNo\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[31m■\u001b[39m  Continue?\n\u001b[90m \u001b[39m  \u001b[9m\u001b[2mYes\u001b[22m\u001b[29m\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Proceed?\n   Second line.",
+            "initialValue": false,
+            "active": "Sure",
+            "inactive": "Nope"
+        },
+        "keys": [
+            "\u0003"
+        ],
+        "pending": false,
+        "cancelled": true,
+        "value": null,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Proceed?\n   Second line.\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mSure\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m Nope\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[5A\u001b[1B\u001b[J\u001b[31m■\u001b[39m  Proceed?\n   Second line.\n\u001b[90m \u001b[39m  \u001b[9m\u001b[2mNope\u001b[22m\u001b[29m\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Continue?"
+        },
+        "keys": [
+            "\u001b[C",
+            "\u0003"
+        ],
+        "pending": false,
+        "cancelled": true,
+        "value": null,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Continue?\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Yes \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNo\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[4A\u001b[2B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mYes\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m No\u001b[2B\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[31m■\u001b[39m  Continue?\n\u001b[90m \u001b[39m  \u001b[9m\u001b[2mNo\u001b[22m\u001b[29m\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Proceed?\n   Second line.",
+            "initialValue": false,
+            "active": "Sure",
+            "inactive": "Nope"
+        },
+        "keys": [
+            "\u001b[C",
+            "\u0003"
+        ],
+        "pending": false,
+        "cancelled": true,
+        "value": null,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Proceed?\n   Second line.\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mSure\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m Nope\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[5A\u001b[3B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Sure \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNope\u001b[22m\u001b[2B\u001b[999D\u001b[5A\u001b[1B\u001b[J\u001b[31m■\u001b[39m  Proceed?\n   Second line.\n\u001b[90m \u001b[39m  \u001b[9m\u001b[2mSure\u001b[22m\u001b[29m\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Continue?"
+        },
+        "keys": [
+            "x",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": true,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Continue?\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Yes \u001b[2m/\u001b[22m \u001b[2m○\u001b[22m \u001b[2mNo\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Continue?\n\u001b[90m \u001b[39m  \u001b[2mYes\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "confirm",
+        "options": {
+            "message": "Proceed?\n   Second line.",
+            "initialValue": false,
+            "active": "Sure",
+            "inactive": "Nope"
+        },
+        "keys": [
+            "x",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": false,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Proceed?\n   Second line.\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mSure\u001b[22m \u001b[2m/\u001b[22m \u001b[32m●\u001b[39m Nope\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[5A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Proceed?\n   Second line.\n\u001b[90m \u001b[39m  \u001b[2mNope\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Pick one:",
+            "options": [
+                {
+                    "value": "full",
+                    "label": "Full",
+                    "hint": "Copy everything"
+                },
+                {
+                    "value": "partial",
+                    "label": "Partial",
+                    "hint": "Copy only metadata"
+                },
+                {
+                    "value": "none"
+                }
+            ]
+        },
+        "keys": [
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "full",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Pick one:\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Full \u001b[2m(Copy everything)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Pick one:\n\u001b[90m \u001b[39m  \u001b[2mFull\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Pick one:",
+            "options": [
+                {
+                    "value": "full",
+                    "label": "Full",
+                    "hint": "Copy everything"
+                },
+                {
+                    "value": "partial",
+                    "label": "Partial",
+                    "hint": "Copy only metadata"
+                },
+                {
+                    "value": "none"
+                }
+            ],
+            "initialValue": "partial"
+        },
+        "keys": [
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "partial",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Pick one:\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mFull\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Partial \u001b[2m(Copy only metadata)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Pick one:\n\u001b[90m \u001b[39m  \u001b[2mPartial\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Pick one:",
+            "options": [
+                {
+                    "value": "full",
+                    "label": "Full",
+                    "hint": "Copy everything"
+                },
+                {
+                    "value": "partial",
+                    "label": "Partial",
+                    "hint": "Copy only metadata"
+                },
+                {
+                    "value": "none"
+                }
+            ]
+        },
+        "keys": [
+            "\u001b[B",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "partial",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Pick one:\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Full \u001b[2m(Copy everything)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[2B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mFull\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Partial \u001b[2m(Copy only metadata)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Pick one:\n\u001b[90m \u001b[39m  \u001b[2mPartial\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Pick one:",
+            "options": [
+                {
+                    "value": "full",
+                    "label": "Full",
+                    "hint": "Copy everything"
+                },
+                {
+                    "value": "partial",
+                    "label": "Partial",
+                    "hint": "Copy only metadata"
+                },
+                {
+                    "value": "none"
+                }
+            ],
+            "initialValue": "partial"
+        },
+        "keys": [
+            "\u001b[B",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "none",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Pick one:\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mFull\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Partial \u001b[2m(Copy only metadata)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[3B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m none\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Pick one:\n\u001b[90m \u001b[39m  \u001b[2mnone\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Pick one:",
+            "options": [
+                {
+                    "value": "full",
+                    "label": "Full",
+                    "hint": "Copy everything"
+                },
+                {
+                    "value": "partial",
+                    "label": "Partial",
+                    "hint": "Copy only metadata"
+                },
+                {
+                    "value": "none"
+                }
+            ]
+        },
+        "keys": [
+            "\u001b[A",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "none",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Pick one:\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Full \u001b[2m(Copy everything)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[2B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mFull\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m none\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Pick one:\n\u001b[90m \u001b[39m  \u001b[2mnone\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Pick one:",
+            "options": [
+                {
+                    "value": "full",
+                    "label": "Full",
+                    "hint": "Copy everything"
+                },
+                {
+                    "value": "partial",
+                    "label": "Partial",
+                    "hint": "Copy only metadata"
+                },
+                {
+                    "value": "none"
+                }
+            ],
+            "initialValue": "partial"
+        },
+        "keys": [
+            "\u001b[A",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "full",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Pick one:\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mFull\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Partial \u001b[2m(Copy only metadata)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[2B\u001b[J\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Full \u001b[2m(Copy everything)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Pick one:\n\u001b[90m \u001b[39m  \u001b[2mFull\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Pick one:",
+            "options": [
+                {
+                    "value": "full",
+                    "label": "Full",
+                    "hint": "Copy everything"
+                },
+                {
+                    "value": "partial",
+                    "label": "Partial",
+                    "hint": "Copy only metadata"
+                },
+                {
+                    "value": "none"
+                }
+            ]
+        },
+        "keys": [
+            "j",
+            "j",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "none",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Pick one:\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Full \u001b[2m(Copy everything)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[2B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mFull\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Partial \u001b[2m(Copy only metadata)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[3B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m none\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Pick one:\n\u001b[90m \u001b[39m  \u001b[2mnone\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Pick one:",
+            "options": [
+                {
+                    "value": "full",
+                    "label": "Full",
+                    "hint": "Copy everything"
+                },
+                {
+                    "value": "partial",
+                    "label": "Partial",
+                    "hint": "Copy only metadata"
+                },
+                {
+                    "value": "none"
+                }
+            ],
+            "initialValue": "partial"
+        },
+        "keys": [
+            "j",
+            "j",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "full",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Pick one:\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mFull\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Partial \u001b[2m(Copy only metadata)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[3B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m none\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[2B\u001b[J\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Full \u001b[2m(Copy everything)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Pick one:\n\u001b[90m \u001b[39m  \u001b[2mFull\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Pick one:",
+            "options": [
+                {
+                    "value": "full",
+                    "label": "Full",
+                    "hint": "Copy everything"
+                },
+                {
+                    "value": "partial",
+                    "label": "Partial",
+                    "hint": "Copy only metadata"
+                },
+                {
+                    "value": "none"
+                }
+            ]
+        },
+        "keys": [
+            "k",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "none",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Pick one:\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Full \u001b[2m(Copy everything)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[2B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mFull\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m none\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Pick one:\n\u001b[90m \u001b[39m  \u001b[2mnone\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Pick one:",
+            "options": [
+                {
+                    "value": "full",
+                    "label": "Full",
+                    "hint": "Copy everything"
+                },
+                {
+                    "value": "partial",
+                    "label": "Partial",
+                    "hint": "Copy only metadata"
+                },
+                {
+                    "value": "none"
+                }
+            ],
+            "initialValue": "partial"
+        },
+        "keys": [
+            "k",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "full",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Pick one:\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mFull\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Partial \u001b[2m(Copy only metadata)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[2B\u001b[J\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Full \u001b[2m(Copy everything)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Pick one:\n\u001b[90m \u001b[39m  \u001b[2mFull\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Pick one:",
+            "options": [
+                {
+                    "value": "full",
+                    "label": "Full",
+                    "hint": "Copy everything"
+                },
+                {
+                    "value": "partial",
+                    "label": "Partial",
+                    "hint": "Copy only metadata"
+                },
+                {
+                    "value": "none"
+                }
+            ]
+        },
+        "keys": [
+            "\u001b[B",
+            "\u0003"
+        ],
+        "pending": false,
+        "cancelled": true,
+        "value": null,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Pick one:\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Full \u001b[2m(Copy everything)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[2B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mFull\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Partial \u001b[2m(Copy only metadata)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[1B\u001b[J\u001b[31m■\u001b[39m  Pick one:\n\u001b[90m \u001b[39m  \u001b[9m\u001b[2mPartial\u001b[22m\u001b[29m\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Pick one:",
+            "options": [
+                {
+                    "value": "full",
+                    "label": "Full",
+                    "hint": "Copy everything"
+                },
+                {
+                    "value": "partial",
+                    "label": "Partial",
+                    "hint": "Copy only metadata"
+                },
+                {
+                    "value": "none"
+                }
+            ],
+            "initialValue": "partial"
+        },
+        "keys": [
+            "\u001b[B",
+            "\u0003"
+        ],
+        "pending": false,
+        "cancelled": true,
+        "value": null,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Pick one:\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mFull\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Partial \u001b[2m(Copy only metadata)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[3B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m none\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[1B\u001b[J\u001b[31m■\u001b[39m  Pick one:\n\u001b[90m \u001b[39m  \u001b[9m\u001b[2mnone\u001b[22m\u001b[29m\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Pick one:",
+            "options": [
+                {
+                    "value": "full",
+                    "label": "Full",
+                    "hint": "Copy everything"
+                },
+                {
+                    "value": "partial",
+                    "label": "Partial",
+                    "hint": "Copy only metadata"
+                },
+                {
+                    "value": "none"
+                }
+            ]
+        },
+        "keys": [
+            "y",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "full",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Pick one:\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Full \u001b[2m(Copy everything)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mPartial\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Pick one:\n\u001b[90m \u001b[39m  \u001b[2mFull\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Pick one:",
+            "options": [
+                {
+                    "value": "full",
+                    "label": "Full",
+                    "hint": "Copy everything"
+                },
+                {
+                    "value": "partial",
+                    "label": "Partial",
+                    "hint": "Copy only metadata"
+                },
+                {
+                    "value": "none"
+                }
+            ],
+            "initialValue": "partial"
+        },
+        "keys": [
+            "y",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "partial",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Pick one:\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mFull\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Partial \u001b[2m(Copy only metadata)\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mnone\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[6A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Pick one:\n\u001b[90m \u001b[39m  \u001b[2mPartial\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Many:",
+            "options": [
+                {
+                    "value": "option-0",
+                    "label": "Option 0"
+                },
+                {
+                    "value": "option-1",
+                    "label": "Option 1"
+                },
+                {
+                    "value": "option-2",
+                    "label": "Option 2"
+                },
+                {
+                    "value": "option-3",
+                    "label": "Option 3"
+                },
+                {
+                    "value": "option-4",
+                    "label": "Option 4"
+                },
+                {
+                    "value": "option-5",
+                    "label": "Option 5"
+                },
+                {
+                    "value": "option-6",
+                    "label": "Option 6"
+                },
+                {
+                    "value": "option-7",
+                    "label": "Option 7"
+                },
+                {
+                    "value": "option-8",
+                    "label": "Option 8"
+                },
+                {
+                    "value": "option-9",
+                    "label": "Option 9"
+                },
+                {
+                    "value": "option-10",
+                    "label": "Option 10"
+                },
+                {
+                    "value": "option-11",
+                    "label": "Option 11"
+                }
+            ]
+        },
+        "keys": [
+            "\u001b[B",
+            "\u001b[B",
+            "\u001b[B",
+            "\u001b[B",
+            "\u001b[B",
+            "\u001b[B",
+            "\u001b[B",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "option-7",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Many:\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Option 0\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 1\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 2\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 3\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 4\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m...\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[9A\u001b[2B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 0\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Option 1\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 2\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 3\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 4\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m...\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[9A\u001b[3B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 1\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Option 2\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 3\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 4\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m...\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[9A\u001b[4B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 2\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Option 3\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 4\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m...\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[9A\u001b[2B\u001b[J\u001b[36m \u001b[39m  \u001b[2m...\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 2\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 3\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Option 4\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 5\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m...\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[9A\u001b[3B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 3\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 4\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Option 5\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 6\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m...\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[9A\u001b[3B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 4\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 5\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Option 6\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 7\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m...\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[9A\u001b[3B\u001b[J\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 5\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 6\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Option 7\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 8\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m...\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[9A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Many:\n\u001b[90m \u001b[39m  \u001b[2mOption 7\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "select",
+        "options": {
+            "message": "Many:",
+            "options": [
+                {
+                    "value": "option-0",
+                    "label": "Option 0"
+                },
+                {
+                    "value": "option-1",
+                    "label": "Option 1"
+                },
+                {
+                    "value": "option-2",
+                    "label": "Option 2"
+                },
+                {
+                    "value": "option-3",
+                    "label": "Option 3"
+                },
+                {
+                    "value": "option-4",
+                    "label": "Option 4"
+                },
+                {
+                    "value": "option-5",
+                    "label": "Option 5"
+                },
+                {
+                    "value": "option-6",
+                    "label": "Option 6"
+                },
+                {
+                    "value": "option-7",
+                    "label": "Option 7"
+                },
+                {
+                    "value": "option-8",
+                    "label": "Option 8"
+                },
+                {
+                    "value": "option-9",
+                    "label": "Option 9"
+                },
+                {
+                    "value": "option-10",
+                    "label": "Option 10"
+                },
+                {
+                    "value": "option-11",
+                    "label": "Option 11"
+                }
+            ]
+        },
+        "keys": [
+            "\u001b[A",
+            "\u001b[A",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "option-10",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Many:\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Option 0\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 1\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 2\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 3\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 4\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m...\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[9A\u001b[2B\u001b[J\u001b[36m \u001b[39m  \u001b[2m...\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 7\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 8\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 9\u001b[22m\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 10\u001b[22m\n\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Option 11\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[9A\u001b[6B\u001b[J\u001b[36m \u001b[39m  \u001b[32m●\u001b[39m Option 10\n\u001b[36m \u001b[39m  \u001b[2m○\u001b[22m \u001b[2mOption 11\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[9A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Many:\n\u001b[90m \u001b[39m  \u001b[2mOption 10\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "a",
+            "b",
+            "",
+            "c",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "ac",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7mm\u001b[27m\u001b[2my-photos\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  a█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ab█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  a█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ac█\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[2mac\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "defaultValue": "fallback",
+            "validate": "required"
+        },
+        "keys": [
+            "a",
+            "b",
+            "",
+            "c",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "ac",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  a█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ab█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  a█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ac█\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[2mac\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Key name:",
+            "initialValue": "my-photos",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "a",
+            "b",
+            "",
+            "c",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "my-photosac",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Key name:\n\u001b[36m \u001b[39m  my-photos█\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosa█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosab█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosa█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosac█\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Key name:\n\u001b[90m \u001b[39m  \u001b[2mmy-photosac\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7mm\u001b[27m\u001b[2my-photos\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "defaultValue": "fallback",
+            "validate": "required"
+        },
+        "keys": [
+            "\r"
+        ],
+        "pending": true,
+        "cancelled": false,
+        "value": null,
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[J\u001b[33m▲\u001b[39m  Name:\n\u001b[33m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[33m \u001b[39m  \u001b[33mValue is required\u001b[39m\n"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Key name:",
+            "initialValue": "my-photos",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "my-photos",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Key name:\n\u001b[36m \u001b[39m  my-photos█\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Key name:\n\u001b[90m \u001b[39m  \u001b[2mmy-photos\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "\r",
+            "x",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7mm\u001b[27m\u001b[2my-photos\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "defaultValue": "fallback",
+            "validate": "required"
+        },
+        "keys": [
+            "\r",
+            "x",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "x",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[J\u001b[33m▲\u001b[39m  Name:\n\u001b[33m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[33m \u001b[39m  \u001b[33mValue is required\u001b[39m\n\u001b[999D\u001b[3A\u001b[J\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  x█\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[2mx\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Key name:",
+            "initialValue": "my-photos",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "\r",
+            "x",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "my-photos",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Key name:\n\u001b[36m \u001b[39m  my-photos█\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Key name:\n\u001b[90m \u001b[39m  \u001b[2mmy-photos\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "a",
+            "\u001b[D",
+            "b",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "ba",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7mm\u001b[27m\u001b[2my-photos\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  a█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[7ma\u001b[27m\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  b\u001b[7ma\u001b[27m\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[2mba\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "defaultValue": "fallback",
+            "validate": "required"
+        },
+        "keys": [
+            "a",
+            "\u001b[D",
+            "b",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "ba",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  a█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[7ma\u001b[27m\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  b\u001b[7ma\u001b[27m\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[2mba\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Key name:",
+            "initialValue": "my-photos",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "a",
+            "\u001b[D",
+            "b",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "my-photosba",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Key name:\n\u001b[36m \u001b[39m  my-photos█\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosa█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photos\u001b[7ma\u001b[27m\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosb\u001b[7ma\u001b[27m\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Key name:\n\u001b[90m \u001b[39m  \u001b[2mmy-photosba\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "a",
+            "\u0003"
+        ],
+        "pending": false,
+        "cancelled": true,
+        "value": null,
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7mm\u001b[27m\u001b[2my-photos\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  a█\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[31m■\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[9m\u001b[2ma\u001b[22m\u001b[29m\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "defaultValue": "fallback",
+            "validate": "required"
+        },
+        "keys": [
+            "a",
+            "\u0003"
+        ],
+        "pending": false,
+        "cancelled": true,
+        "value": null,
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  a█\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[31m■\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[9m\u001b[2ma\u001b[22m\u001b[29m\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Key name:",
+            "initialValue": "my-photos",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "a",
+            "\u0003"
+        ],
+        "pending": false,
+        "cancelled": true,
+        "value": null,
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Key name:\n\u001b[36m \u001b[39m  my-photos█\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosa█\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[31m■\u001b[39m  Key name:\n\u001b[90m \u001b[39m  \u001b[9m\u001b[2mmy-photosa\u001b[22m\u001b[29m\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "\u0003"
+        ],
+        "pending": false,
+        "cancelled": true,
+        "value": null,
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7mm\u001b[27m\u001b[2my-photos\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[J\u001b[31m■\u001b[39m  Name:\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "defaultValue": "fallback",
+            "validate": "required"
+        },
+        "keys": [
+            "\u0003"
+        ],
+        "pending": false,
+        "cancelled": true,
+        "value": null,
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[J\u001b[31m■\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[9m\u001b[2mfallback\u001b[22m\u001b[29m\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Key name:",
+            "initialValue": "my-photos",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "\u0003"
+        ],
+        "pending": false,
+        "cancelled": true,
+        "value": null,
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Key name:\n\u001b[36m \u001b[39m  my-photos█\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[J\u001b[31m■\u001b[39m  Key name:\n\u001b[90m \u001b[39m  \u001b[9m\u001b[2mmy-photos\u001b[22m\u001b[29m\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "a",
+            "b",
+            "\u001b[D",
+            "\u001b[D",
+            "\u001b[3~",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "b",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7mm\u001b[27m\u001b[2my-photos\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  a█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ab█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  a\u001b[7mb\u001b[27m\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[7ma\u001b[27mb\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[7mb\u001b[27m\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[2mb\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "defaultValue": "fallback",
+            "validate": "required"
+        },
+        "keys": [
+            "a",
+            "b",
+            "\u001b[D",
+            "\u001b[D",
+            "\u001b[3~",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "b",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  a█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ab█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  a\u001b[7mb\u001b[27m\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[7ma\u001b[27mb\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[7mb\u001b[27m\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[2mb\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Key name:",
+            "initialValue": "my-photos",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "a",
+            "b",
+            "\u001b[D",
+            "\u001b[D",
+            "\u001b[3~",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "my-photosb",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Key name:\n\u001b[36m \u001b[39m  my-photos█\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosa█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosab█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosa\u001b[7mb\u001b[27m\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photos\u001b[7ma\u001b[27mb\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photos\u001b[7mb\u001b[27m\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Key name:\n\u001b[90m \u001b[39m  \u001b[2mmy-photosb\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "a",
+            "\t",
+            "b",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "ab",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7mm\u001b[27m\u001b[2my-photos\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  a█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ab█\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[2mab\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "defaultValue": "fallback",
+            "validate": "required"
+        },
+        "keys": [
+            "a",
+            "\t",
+            "b",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "ab",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  a█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ab█\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[2mab\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Key name:",
+            "initialValue": "my-photos",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "a",
+            "\t",
+            "b",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "my-photosab",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Key name:\n\u001b[36m \u001b[39m  my-photos█\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosa█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosab█\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Key name:\n\u001b[90m \u001b[39m  \u001b[2mmy-photosab\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "h",
+            "e",
+            "y",
+            "\u0015",
+            "o",
+            "k",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "ok",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7mm\u001b[27m\u001b[2my-photos\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  h█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  he█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  hey█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[7mm\u001b[27m\u001b[2my-photos\u001b[22m\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  o█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ok█\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[2mok\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "defaultValue": "fallback",
+            "validate": "required"
+        },
+        "keys": [
+            "h",
+            "e",
+            "y",
+            "\u0015",
+            "o",
+            "k",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "ok",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  h█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  he█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  hey█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  o█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ok█\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[2mok\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Key name:",
+            "initialValue": "my-photos",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "h",
+            "e",
+            "y",
+            "\u0015",
+            "o",
+            "k",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "ok",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Key name:\n\u001b[36m \u001b[39m  my-photos█\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosh█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photoshe█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photoshey█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  \u001b[7mm\u001b[27m\u001b[2my-photos\u001b[22m\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  o█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ok█\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Key name:\n\u001b[90m \u001b[39m  \u001b[2mok\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "w",
+            "o",
+            "r",
+            "d",
+            " ",
+            "t",
+            "w",
+            "o",
+            "\u0017",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "word ",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7mm\u001b[27m\u001b[2my-photos\u001b[22m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  w█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  wo█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  wor█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  word█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  word █\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  word t█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  word tw█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  word two█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  word █\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[2mword \u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Name:",
+            "defaultValue": "fallback",
+            "validate": "required"
+        },
+        "keys": [
+            "w",
+            "o",
+            "r",
+            "d",
+            " ",
+            "t",
+            "w",
+            "o",
+            "\u0017",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "word ",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Name:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  w█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  wo█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  wor█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  word█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  word █\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  word t█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  word tw█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  word two█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  word █\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Name:\n\u001b[90m \u001b[39m  \u001b[2mword \u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "text",
+        "options": {
+            "message": "Key name:",
+            "initialValue": "my-photos",
+            "placeholder": "my-photos"
+        },
+        "keys": [
+            "w",
+            "o",
+            "r",
+            "d",
+            " ",
+            "t",
+            "w",
+            "o",
+            "\u0017",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "my-photosword ",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Key name:\n\u001b[36m \u001b[39m  my-photos█\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosw█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photoswo█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photoswor█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosword█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosword █\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosword t█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosword tw█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosword two█\u001b[2B\u001b[999D\u001b[3A\u001b[1B\u001b[2K\u001b[G\u001b[36m \u001b[39m  my-photosword █\u001b[2B\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Key name:\n\u001b[90m \u001b[39m  \u001b[2mmy-photosword \u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "password",
+        "options": {
+            "message": "Secret:",
+            "validate": "required"
+        },
+        "keys": [
+            "s",
+            "e",
+            "c",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "sec",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Secret:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[4A\u001b[2B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ▪\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\u001b[2B\u001b[999D\u001b[4A\u001b[2B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ▪▪\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\u001b[2B\u001b[999D\u001b[4A\u001b[2B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ▪▪▪\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\u001b[2B\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Secret:\n\u001b[90m \u001b[39m  \u001b[2m▪▪▪\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "password",
+        "options": {
+            "message": "Secret:",
+            "validate": "required"
+        },
+        "keys": [
+            "\r",
+            "k",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "k",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Secret:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[33m▲\u001b[39m  Secret:\n\u001b[33m \u001b[39m\n\u001b[33m \u001b[39m  \u001b[33mValue is required\u001b[39m\n\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[36m◆\u001b[39m  Secret:\n\u001b[36m \u001b[39m  ▪\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Secret:\n\u001b[90m \u001b[39m  \u001b[2m▪\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "password",
+        "options": {
+            "message": "Secret:",
+            "validate": "required"
+        },
+        "keys": [
+            "a",
+            "b",
+            "\u0003"
+        ],
+        "pending": false,
+        "cancelled": true,
+        "value": null,
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Secret:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[4A\u001b[2B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ▪\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\u001b[2B\u001b[999D\u001b[4A\u001b[2B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ▪▪\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\u001b[2B\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[31m■\u001b[39m  Secret:\n\u001b[90m \u001b[39m  \u001b[9m\u001b[2m▪▪\u001b[22m\u001b[29m\n\u001b[90m \u001b[39m\n\u001b[?25h"
+    },
+    {
+        "prompt": "password",
+        "options": {
+            "message": "Secret:",
+            "validate": "required"
+        },
+        "keys": [
+            "a",
+            "b",
+            "\u001b[D",
+            "\r"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "ab",
+        "output": "\u001b[?25l\u001b[90m \u001b[39m\n\u001b[36m◆\u001b[39m  Secret:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m\n\u001b[999D\u001b[4A\u001b[2B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ▪\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\u001b[2B\u001b[999D\u001b[4A\u001b[2B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ▪▪\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\u001b[2B\u001b[999D\u001b[4A\u001b[2B\u001b[2K\u001b[G\u001b[36m \u001b[39m  ▪\u001b[7m▪\u001b[27m\u001b[2B\u001b[999D\u001b[4A\u001b[1B\u001b[J\u001b[32m◇\u001b[39m  Secret:\n\u001b[90m \u001b[39m  \u001b[2m▪▪\u001b[22m\n\u001b[?25h"
+    },
+    {
+        "prompt": "multiline",
+        "options": {
+            "message": "Paste:"
+        },
+        "keys": [
+            "l",
+            "1",
+            "\r",
+            "l",
+            "2",
+            "\u0004"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "l1\nl2",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Paste:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m  \u001b[2mCtrl+D to submit\u001b[22m\n\u001b[999D\u001b[3A\u001b[J\u001b[36m◆\u001b[39m  Paste:\n\u001b[36m \u001b[39m  l\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m  \u001b[2mCtrl+D to submit\u001b[22m\n\u001b[999D\u001b[3A\u001b[J\u001b[36m◆\u001b[39m  Paste:\n\u001b[36m \u001b[39m  l1\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m  \u001b[2mCtrl+D to submit\u001b[22m\n\u001b[999D\u001b[3A\u001b[J\u001b[36m◆\u001b[39m  Paste:\n\u001b[36m \u001b[39m  l1\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m  \u001b[2mCtrl+D to submit\u001b[22m\n\u001b[999D\u001b[4A\u001b[J\u001b[36m◆\u001b[39m  Paste:\n\u001b[36m \u001b[39m  l1\n\u001b[36m \u001b[39m  l\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m  \u001b[2mCtrl+D to submit\u001b[22m\n\u001b[999D\u001b[4A\u001b[J\u001b[36m◆\u001b[39m  Paste:\n\u001b[36m \u001b[39m  l1\n\u001b[36m \u001b[39m  l2\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m  \u001b[2mCtrl+D to submit\u001b[22m\n\u001b[999D\u001b[4A\u001b[J\u001b[32m◇\u001b[39m  Paste:\n\u001b[90m \u001b[39m  \u001b[2m2 lines\u001b[22m\u001b[?25h\n"
+    },
+    {
+        "prompt": "multiline",
+        "options": {
+            "message": "Paste:"
+        },
+        "keys": [
+            "x",
+            "\u0003"
+        ],
+        "pending": false,
+        "cancelled": true,
+        "value": null,
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Paste:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m  \u001b[2mCtrl+D to submit\u001b[22m\n\u001b[999D\u001b[3A\u001b[J\u001b[36m◆\u001b[39m  Paste:\n\u001b[36m \u001b[39m  x\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m  \u001b[2mCtrl+D to submit\u001b[22m\n\u001b[999D\u001b[3A\u001b[J\u001b[31m■\u001b[39m  Paste:\n\u001b[90m \u001b[39m\u001b[?25h\n"
+    },
+    {
+        "prompt": "multiline",
+        "options": {
+            "message": "Paste:"
+        },
+        "keys": [
+            "a",
+            "\r",
+            "",
+            "b",
+            "\u0004"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "ab",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Paste:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m  \u001b[2mCtrl+D to submit\u001b[22m\n\u001b[999D\u001b[3A\u001b[J\u001b[36m◆\u001b[39m  Paste:\n\u001b[36m \u001b[39m  a\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m  \u001b[2mCtrl+D to submit\u001b[22m\n\u001b[999D\u001b[3A\u001b[J\u001b[36m◆\u001b[39m  Paste:\n\u001b[36m \u001b[39m  a\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m  \u001b[2mCtrl+D to submit\u001b[22m\n\u001b[999D\u001b[4A\u001b[J\u001b[36m◆\u001b[39m  Paste:\n\u001b[36m \u001b[39m  a\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m  \u001b[2mCtrl+D to submit\u001b[22m\n\u001b[999D\u001b[3A\u001b[J\u001b[36m◆\u001b[39m  Paste:\n\u001b[36m \u001b[39m  ab\u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m  \u001b[2mCtrl+D to submit\u001b[22m\n\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Paste:\n\u001b[90m \u001b[39m  \u001b[2m1 line\u001b[22m\u001b[?25h\n"
+    },
+    {
+        "prompt": "multiline",
+        "options": {
+            "message": "Paste:"
+        },
+        "keys": [
+            "\u0004"
+        ],
+        "pending": false,
+        "cancelled": false,
+        "value": "",
+        "output": "\u001b[?25l\u001b[36m◆\u001b[39m  Paste:\n\u001b[36m \u001b[39m  \u001b[7m\u001b[8m_\u001b[28m\u001b[27m\n\u001b[36m \u001b[39m  \u001b[2mCtrl+D to submit\u001b[22m\n\u001b[999D\u001b[3A\u001b[J\u001b[32m◇\u001b[39m  Paste:\n\u001b[90m \u001b[39m  \u001b[2m0 lines\u001b[22m\u001b[?25h\n"
+    },
+    {
+        "prompt": "outro",
+        "options": {
+            "message": "\u001b[31mDone\u001b[39m"
+        },
+        "keys": [],
+        "pending": false,
+        "cancelled": false,
+        "value": null,
+        "output": "\n\u001b[31mDone\u001b[39m\n"
+    }
+]

@@ -1,0 +1,38 @@
+{
+    "shardRecords": [
+        {
+            "id": "89171cd9a6524047b8691154bf2c95a1",
+            "keys": [
+                "width",
+                "height",
+                "origFileName",
+                "origPath",
+                "contentType",
+                "hash",
+                "coordinates",
+                "fileDate",
+                "photoDate",
+                "uploadDate",
+                "properties",
+                "labels",
+                "description",
+                "micro",
+                "color"
+            ],
+            "hash": "426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c",
+            "width": 2560
+        }
+    ],
+    "filesTree": {
+        "databaseMetadata": {
+            "filesImported": 1
+        },
+        "id": "85fe592c9b924fa19ec5f87f01cf8e72",
+        "strings": [
+            "README.md",
+            "asset/89171cd9-a652-4047-b869-1154bf2c95a1",
+            "display/89171cd9-a652-4047-b869-1154bf2c95a1",
+            "thumb/89171cd9-a652-4047-b869-1154bf2c95a1"
+        ]
+    }
+}

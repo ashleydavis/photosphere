@@ -90,6 +90,11 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -107,6 +112,12 @@ jobs:
         uses: ./.github/actions/retry-install
         with:
           run: bun install
+
+      - name: Install media processing tools (the Zig CLI unit tests run the real commands)
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg
+          verify: magick|convert ffmpeg ffprobe
 
       - name: Run unit tests
         timeout-minutes: 12
@@ -159,6 +170,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -1577,9 +1593,111 @@ jobs:
           if-no-files-found: warn
           retention-days: 2
 
+  build-zig:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Cross-compile the Zig CLI for every platform
+        working-directory: ./apps/cli-zig
+        run: bun run build-all
+
+      - name: Check every platform binary was produced
+        working-directory: ./apps/cli-zig
+        run: |
+          ls -la bin/x64/linux/psi bin/arm64/linux/psi bin/x64/win/psi.exe bin/x64/mac/psi bin/arm64/mac/psi
+          file bin/x64/linux/psi bin/arm64/linux/psi bin/x64/win/psi.exe bin/x64/mac/psi bin/arm64/mac/psi
+
+  zig-smoke-tests:
+    # Runs the unit tests of every Zig package and the Zig CLI smoke tests on each platform, because the
+    # byte-identical output (gzip OS byte, paths, file times) differs between them.
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install media processing tools (Linux)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Install media processing tools (macOS)
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/install-ffmpeg-windows
+
+      - name: Install media processing tools (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/retry-install
+        with:
+          run: choco install imagemagick -y
+          verify: magick|convert
+
+      - name: Run the Zig unit tests
+        shell: bash
+        run: bun --filter '*-zig' test
+
+      - name: Run the Zig CLI smoke tests
+        working-directory: ./apps/cli
+        shell: bash
+        run: bash ./smoke-tests-zig.sh
+
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, compile, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
+    needs: [prepare-tag, compile, build-zig, zig-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write

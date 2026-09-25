@@ -1,0 +1,134 @@
+[
+    {
+        "name": "databases config",
+        "object": {
+            "databases": [
+                {
+                    "name": "photos",
+                    "description": "",
+                    "path": "/home/user/photos",
+                    "origin": "s3:bucket:/photos",
+                    "s3_key": "s3-default",
+                    "encryption_key": "my-key"
+                },
+                {
+                    "name": "Backup",
+                    "description": "The \"backup\" copy",
+                    "path": "C:\\Users\\me\\backup",
+                    "geocoding_key": "geo"
+                }
+            ],
+            "recent_database_names": [
+                "photos",
+                "Backup"
+            ]
+        },
+        "toml": "recent_database_names = [ \"photos\", \"Backup\" ]\n\n[[databases]]\nname = \"photos\"\ndescription = \"\"\npath = \"/home/user/photos\"\norigin = \"s3:bucket:/photos\"\ns3_key = \"s3-default\"\nencryption_key = \"my-key\"\n\n[[databases]]\nname = \"Backup\"\ndescription = \"The \\\"backup\\\" copy\"\npath = \"C:\\\\Users\\\\me\\\\backup\"\ngeocoding_key = \"geo\"\n"
+    },
+    {
+        "name": "empty databases config",
+        "object": {
+            "databases": [],
+            "recent_database_names": []
+        },
+        "toml": "databases = []\nrecent_database_names = []\n"
+    },
+    {
+        "name": "flat object",
+        "object": {
+            "name": "test",
+            "count": 42,
+            "flag": true
+        },
+        "toml": "name = \"test\"\ncount = 42\nflag = true\n"
+    },
+    {
+        "name": "string arrays",
+        "object": {
+            "tags": [
+                "alpha",
+                "beta",
+                "gamma"
+            ]
+        },
+        "toml": "tags = [ \"alpha\", \"beta\", \"gamma\" ]\n"
+    },
+    {
+        "name": "array of tables",
+        "object": {
+            "items": [
+                {
+                    "name": "a",
+                    "value": 1
+                },
+                {
+                    "name": "b",
+                    "value": 2
+                }
+            ]
+        },
+        "toml": "[[items]]\nname = \"a\"\nvalue = 1\n\n[[items]]\nname = \"b\"\nvalue = 2\n"
+    },
+    {
+        "name": "everything",
+        "object": {
+            "name": "test",
+            "count": 42,
+            "negative": -3,
+            "float": 1.5,
+            "big": 1e+21,
+            "tiny": 1.5e-7,
+            "flag": false,
+            "nested": {
+                "x": 1,
+                "deep": {
+                    "y": "z"
+                },
+                "list": [
+                    {
+                        "a": 1
+                    }
+                ]
+            },
+            "emptyTable": {},
+            "onlyTables": {
+                "inner": {
+                    "v": 1
+                }
+            },
+            "items": [
+                {
+                    "name": "a",
+                    "value": 1,
+                    "sub": {
+                        "k": "v"
+                    }
+                }
+            ],
+            "empty": [],
+            "tags": [
+                "alpha",
+                "beta"
+            ],
+            "mixed": [
+                1,
+                "a",
+                [
+                    2,
+                    3
+                ],
+                {
+                    "inline": true,
+                    "odd key": {}
+                }
+            ],
+            "escapes": "line1\nline2\ttab\u0001\"\\\b\f\r",
+            "key with space": 1,
+            "dotted.key": 2,
+            "": 3,
+            "unicodé": "ü",
+            "nothing": null
+        },
+        "toml": "name = \"test\"\ncount = 42\nnegative = -3\nfloat = 1.5\nbig = 1e+21\ntiny = 1.5e-7\nflag = false\nempty = []\ntags = [ \"alpha\", \"beta\" ]\nmixed = [ 1, \"a\", [ 2, 3 ], { inline = true, \"odd key\" = {} } ]\nescapes = \"line1\\nline2\\ttab\\u0001\\u007f\\\"\\\\\\b\\f\\r\"\n\"key with space\" = 1\n\"dotted.key\" = 2\n\"\" = 3\n\"unicodé\" = \"ü\"\n\n[nested]\nx = 1\n\n[nested.deep]\ny = \"z\"\n\n[[nested.list]]\na = 1\n\n[emptyTable]\n[onlyTables.inner]\nv = 1\n\n[[items]]\nname = \"a\"\nvalue = 1\n\n[items.sub]\nk = \"v\"\n"
+    }
+]
