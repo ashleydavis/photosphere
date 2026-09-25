@@ -113,15 +113,17 @@ test "psi replicate reports unknown options like commander" {
     try std.testing.expectEqualStrings("", result.stdout);
 }
 
-test "psi verify --help is delegated to the TypeScript CLI" {
+test "psi replicate and verify print what the TypeScript CLI prints" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-
-    // Delegated commands run in Bun; skip where Bun cannot be spawned.
-    if (!helpers.bunAvailable(arena.allocator())) {
-        return error.SkipZigTest;
+    const allocator = arena.allocator();
+    const fixture = try helpers.loadFixture(allocator, "commander/psi.json");
+    for (fixture.array.items) |commandCase| {
+        const args = try helpers.stringArray(allocator, commandCase.object.get("args").?);
+        errdefer std.debug.print("args={f}\n", .{std.json.fmt(args, .{})});
+        const result = try runPsi(allocator, args);
+        try std.testing.expectEqualStrings(helpers.stringField(commandCase, "stdout"), result.stdout);
+        try std.testing.expectEqualStrings(helpers.stringField(commandCase, "stderr"), result.stderr);
+        try std.testing.expectEqual(helpers.intField(commandCase, "exitCode"), @as(i64, result.exitCode));
     }
-    const result = try runPsi(arena.allocator(), &.{ "verify", "--help" });
-    try std.testing.expectEqual(@as(u8, 0), result.exitCode);
-    try std.testing.expect(std.mem.startsWith(u8, result.stdout, "Usage: psi verify|ver [options]"));
 }

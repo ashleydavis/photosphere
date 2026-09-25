@@ -1,6 +1,7 @@
 const std = @import("std");
 const cli = @import("cli-zig");
 const helpers = @import("test-helpers.zig");
+const createProgram = cli.createProgram;
 const parseCommandLine = cli.parseCommandLine;
 
 //
@@ -43,6 +44,47 @@ fn expectBase(expected: std.json.ObjectMap, actual: cli.init_cmd.IBaseCommandOpt
     try expectText(expected.get("timeout"), actual.timeout);
 }
 
+//
+// What parsing a command line with the psi program did.
+//
+const IParsed = struct {
+    // The outcome.
+    outcome: cli.ParseOutcome,
+
+    // What the hook and the actions left for run().
+    state: cli.IProgramState,
+
+    // What commander wrote to stdout.
+    stdout: []const u8,
+
+    // What commander wrote to stderr.
+    stderr: []const u8,
+};
+
+//
+// Parses a command line with the psi program, capturing what commander writes.
+//
+fn parse(allocator: std.mem.Allocator, args: []const []const u8) !IParsed {
+    const state = try allocator.create(cli.IProgramState);
+    state.* = .{
+        .allocator = allocator,
+    };
+    var stdout = std.Io.Writer.Allocating.init(allocator);
+    var stderr = std.Io.Writer.Allocating.init(allocator);
+    const program = try createProgram(allocator, state);
+    _ = program.configureOutput(.{
+        .writeOut = &stdout.writer,
+        .writeErr = &stderr.writer,
+    });
+    const outcome = try parseCommandLine(program, state, args);
+    return .{
+        .outcome = outcome,
+        .state = state.*,
+        .stdout = stdout.written(),
+        .stderr = stderr.written(),
+    };
+}
+
 test "command lines parse exactly like commander" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -52,44 +94,56 @@ test "command lines parse exactly like commander" {
         const args = try helpers.stringArray(allocator, commandCase.object.get("args").?);
         const expected = commandCase.object.get("outcome").?.object;
         const kind = expected.get("kind").?.string;
-        const outcome = try parseCommandLine(allocator, args);
+        const parsed = try parse(allocator, args);
+        const outcome = parsed.outcome;
         errdefer std.debug.print("args={f}\n", .{std.json.fmt(args, .{})});
         if (std.mem.eql(u8, kind, "replicate")) {
             const options = expected.get("options").?.object;
             try std.testing.expect(outcome == .replicate);
-            const parsed = outcome.replicate.options;
-            try std.testing.expectEqual(expected.get("quiet").?.bool, outcome.replicate.quiet);
-            try expectBase(options, parsed.base);
-            try expectText(options.get("dest"), parsed.dest);
-            try expectText(options.get("destKey"), parsed.destKey);
-            try expectFlag(options.get("generateKey"), parsed.generateKey);
-            try expectText(options.get("path"), parsed.path);
-            try expectFlag(options.get("force"), parsed.force);
-            try expectFlag(options.get("partial"), parsed.partial);
-            try expectFlag(options.get("full"), parsed.full);
+            const replicateOptions = outcome.replicate;
+            try std.testing.expectEqual(expected.get("quiet").?.bool, parsed.state.notificationsQuiet.?);
+            try expectBase(options, replicateOptions.base);
+            try expectText(options.get("dest"), replicateOptions.dest);
+            try expectText(options.get("destKey"), replicateOptions.destKey);
+            try expectFlag(options.get("generateKey"), replicateOptions.generateKey);
+            try expectText(options.get("path"), replicateOptions.path);
+            try expectFlag(options.get("force"), replicateOptions.force);
+            try expectFlag(options.get("partial"), replicateOptions.partial);
+            try expectFlag(options.get("full"), replicateOptions.full);
         }
         else if (std.mem.eql(u8, kind, "verify")) {
             const options = expected.get("options").?.object;
             try std.testing.expect(outcome == .verify);
-            const parsed = outcome.verify.options;
-            try std.testing.expectEqual(expected.get("quiet").?.bool, outcome.verify.quiet);
-            try expectBase(options, parsed.base);
-            try expectFlag(options.get("full"), parsed.full);
-            try expectText(options.get("path"), parsed.path);
+            const verifyOptions = outcome.verify;
+            try std.testing.expectEqual(expected.get("quiet").?.bool, parsed.state.notificationsQuiet.?);
+            try expectBase(options, verifyOptions.base);
+            try expectFlag(options.get("full"), verifyOptions.full);
+            try expectText(options.get("path"), verifyOptions.path);
         }
         else if (std.mem.eql(u8, kind, "error") and std.mem.eql(u8, expected.get("level").?.string, "program")) {
             // The error is the program's own (no replicate or verify command was reached), so the command
             // line is handed to the TypeScript CLI, which reports it (checked against the real CLI by generate.ts).
             try std.testing.expect(outcome == .delegate);
+            try std.testing.expectEqualStrings("", parsed.stderr);
         }
         else if (std.mem.eql(u8, kind, "error")) {
             try std.testing.expect(outcome == .failure);
             const stderr = expected.get("stderr").?.string;
+            try std.testing.expectEqualStrings(stderr, parsed.stderr);
             try std.testing.expectEqualStrings(stderr[0 .. stderr.len - 1], outcome.failure.message);
             try std.testing.expectEqualStrings(expected.get("code").?.string, outcome.failure.code);
+            try std.testing.expectEqual(@as(u8, 1), outcome.failure.exitCode);
+        }
+        else if (std.mem.eql(u8, kind, "help")) {
+            // The help of replicate and verify is rendered by the commander port (psi.json checks the text).
+            try std.testing.expect(outcome == .failure);
+            try std.testing.expectEqualStrings("commander.helpDisplayed", outcome.failure.code);
+            try std.testing.expectEqual(@as(u8, 0), outcome.failure.exitCode);
+            try std.testing.expect(std.mem.startsWith(u8, parsed.stdout, "Usage: psi "));
         }
         else {
-            // Help and --version are handed to the TypeScript CLI.
+            // --version is handed to the TypeScript CLI.
+            try std.testing.expectEqualStrings("version", kind);
             try std.testing.expect(outcome == .delegate);
         }
     }
@@ -99,22 +153,41 @@ test "other commands and empty command lines are delegated" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    try std.testing.expect(try parseCommandLine(allocator, &.{}) == .delegate);
-    try std.testing.expect(try parseCommandLine(allocator, &.{"summary"}) == .delegate);
-    try std.testing.expect(try parseCommandLine(allocator, &.{ "init", "--db", "x" }) == .delegate);
-    try std.testing.expect(try parseCommandLine(allocator, &.{"--help"}) == .delegate);
-    try std.testing.expect(try parseCommandLine(allocator, &.{ "--db", "x", "replicate" }) == .delegate);
-    try std.testing.expect(try parseCommandLine(allocator, &.{ "help", "replicate" }) == .delegate);
-    try std.testing.expect(try parseCommandLine(allocator, &.{"replicate2"}) == .delegate);
+    try std.testing.expect((try parse(allocator, &.{})).outcome == .delegate);
+    try std.testing.expect((try parse(allocator, &.{"summary"})).outcome == .delegate);
+    try std.testing.expect((try parse(allocator, &.{ "init", "--db", "x" })).outcome == .delegate);
+    try std.testing.expect((try parse(allocator, &.{"--help"})).outcome == .delegate);
+    try std.testing.expect((try parse(allocator, &.{ "--db", "x", "replicate" })).outcome == .delegate);
+    try std.testing.expect((try parse(allocator, &.{ "help", "replicate" })).outcome == .delegate);
+    try std.testing.expect((try parse(allocator, &.{"replicate2"})).outcome == .delegate);
+    try std.testing.expect((try parse(allocator, &.{ "rep", "--version" })).outcome == .delegate);
 }
 
-test "the command declarations match index.ts" {
-    try std.testing.expectEqualStrings("replicate", cli.replicateSpec.name);
-    try std.testing.expectEqualStrings("rep", cli.replicateSpec.alias);
-    try std.testing.expectEqual(@as(usize, 13), cli.replicateSpec.options.len);
-    try std.testing.expectEqualStrings("verify", cli.verifySpec.name);
-    try std.testing.expectEqualStrings("ver", cli.verifySpec.alias);
-    try std.testing.expectEqual(@as(usize, 10), cli.verifySpec.options.len);
+test "the preAction hook asks for the notifications with the program's quiet flag" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expectEqual(@as(?bool, true), (try parse(allocator, &.{ "-q", "ver" })).state.notificationsQuiet);
+    try std.testing.expectEqual(@as(?bool, false), (try parse(allocator, &.{"ver"})).state.notificationsQuiet);
+    try std.testing.expectEqual(@as(?bool, null), (try parse(allocator, &.{ "ver", "--help" })).state.notificationsQuiet);
+}
+
+test "the command definitions match index.ts" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var state: cli.IProgramState = .{
+        .allocator = allocator,
+    };
+    const program = try createProgram(allocator, &state);
+    try std.testing.expectEqualStrings("psi", program.getName());
+    try std.testing.expectEqual(@as(usize, 3), program.options.items.len);
+    const replicateDefinition = program.findCommand("rep").?;
+    try std.testing.expectEqualStrings("replicate", replicateDefinition.getName());
+    try std.testing.expectEqual(@as(usize, 13), replicateDefinition.options.items.len);
+    const verifyDefinition = program.findCommand("ver").?;
+    try std.testing.expectEqualStrings("verify", verifyDefinition.getName());
+    try std.testing.expectEqual(@as(usize, 10), verifyDefinition.options.items.len);
     try std.testing.expectEqualStrings("Task timeout in milliseconds (default: 600000 = 10 minutes)", cli.timeoutOption.description);
 }
 
