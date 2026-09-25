@@ -100,7 +100,9 @@ pub fn toFixed2(allocator: std.mem.Allocator, value: f64) ![]const u8 {
 //
 fn appendFile(io: std.Io, filePath: []const u8, content: []const u8) !void {
     const cwd = std.Io.Dir.cwd();
-    const file = try cwd.openFile(io, filePath, .{ .mode = .write_only });
+
+    // Opened for reading too: on Windows reading the length of a write only handle is denied.
+    const file = try cwd.openFile(io, filePath, .{ .mode = .read_write });
     defer file.close(io);
     const offset = try file.length(io);
     try file.writePositionalAll(io, content, offset);

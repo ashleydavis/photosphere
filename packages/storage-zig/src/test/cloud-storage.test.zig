@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const storage_zig = @import("storage-zig");
 const encryption = @import("encryption-zig");
 const utils = @import("utils-zig");
@@ -203,7 +204,13 @@ test "CloudStorage reports a connection failure as the wrapped Zig error" {
     var cloudStorage = CloudStorage.init(io, "s3:", credentials);
     defer cloudStorage.s3.deinit();
     try std.testing.expectError(error.Thrown, cloudStorage.read(allocator, io, "bucket/file"));
-    try std.testing.expectEqualStrings("Failed to read bucket/file: ConnectionRefused: ConnectionRefused", utils.errors.lastErrorMessage());
+    // Zig 0.16's std reports a refused connection on Windows as error.Unexpected (it does not map the
+    // CONNECTION_REFUSED status), so that is the Zig error wrapped there.
+    const expectedMessage = if (builtin.os.tag == .windows)
+        "Failed to read bucket/file: Unexpected: Unexpected"
+    else
+        "Failed to read bucket/file: ConnectionRefused: ConnectionRefused";
+    try std.testing.expectEqualStrings(expectedMessage, utils.errors.lastErrorMessage());
 }
 
 test "createStorage with an s3: path uses CloudStorage under the path prefix, with and without encryption" {

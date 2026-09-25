@@ -156,6 +156,29 @@ const LongSourceOperation = struct {
 };
 
 //
+// An operation that keeps its thread busy for a while without reaching a cancelation point
+// (TypeScript: synchronous work, which no timer can interrupt).
+//
+const BusyOperation = struct {
+    // The Bun toString() of the TypeScript operation this stands in for (read by retryOnce).
+    pub const source = "() => operation()";
+
+    // How long the operation keeps busy, in milliseconds.
+    busyMilliseconds: i64,
+
+    //
+    // Runs the operation.
+    //
+    pub fn run(self: *BusyOperation, io: std.Io) ![]const u8 {
+        const start = std.Io.Clock.awake.now(io);
+        while (elapsedMilliseconds(io, start) < self.busyMilliseconds) {
+            std.atomic.spinLoopHint();
+        }
+        return "finished";
+    }
+};
+
+//
 // Gets the elapsed milliseconds since `start`.
 //
 fn elapsedMilliseconds(io: std.Io, start: std.Io.Timestamp) i64 {
@@ -191,11 +214,13 @@ test "should succeed on first attempt" {
     var operation: MockOperation = .{};
     const start = std.Io.Clock.awake.now(io);
 
-    const result = try retry_module.retry(io, &operation, 3, 1_000, 2, 30_000, null);
+    // A wait long enough that a sleep could not go unnoticed on a slow machine
+    // (TypeScript mocks sleep and counts the calls instead).
+    const result = try retry_module.retry(io, &operation, 3, 10_000, 2, 30_000, null);
 
     try std.testing.expectEqualStrings("success", result);
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(io, start) < 1_000);
+    try std.testing.expect(elapsedMilliseconds(io, start) < 10_000);
 }
 
 test "should succeed after retries" {
@@ -282,14 +307,16 @@ test "should not sleep on last attempt" {
     var operation: MockOperation = .{ .alwaysFails = true };
     const start = std.Io.Clock.awake.now(io);
 
-    try std.testing.expectError(error.Thrown, retry_module.retry(io, &operation, 2, 100, 2, 30_000, null));
+    // A scale large enough that a sleep after the last attempt could not go unnoticed on a slow machine
+    // (TypeScript mocks sleep and counts the calls instead).
+    try std.testing.expectError(error.Thrown, retry_module.retry(io, &operation, 2, 100, 100, 30_000, null));
 
     try std.testing.expectEqual(@as(u32, 2), operation.calls);
 
-    // Only one sleep of 100ms (a sleep after the last attempt would add 200ms).
+    // Only one sleep of 100ms (a sleep after the last attempt would add 10000ms).
     const elapsed = elapsedMilliseconds(io, start);
     try std.testing.expect(elapsed >= 100);
-    try std.testing.expect(elapsed < 300);
+    try std.testing.expect(elapsed < 10_100);
 }
 
 test "should throw error immediately when maxAttempts is 1" {
@@ -300,11 +327,13 @@ test "should throw error immediately when maxAttempts is 1" {
     var operation: MockOperation = .{ .alwaysFails = true };
     const start = std.Io.Clock.awake.now(io);
 
-    try std.testing.expectError(error.Thrown, retry_module.retry(io, &operation, 1, 100, 2, 30_000, null));
+    // A wait long enough that a sleep could not go unnoticed on a slow machine
+    // (TypeScript mocks sleep and counts the calls instead).
+    try std.testing.expectError(error.Thrown, retry_module.retry(io, &operation, 1, 10_000, 2, 30_000, null));
 
     try std.testing.expectEqualStrings("Operation failed", errors.lastErrorMessage());
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(io, start) < 100);
+    try std.testing.expect(elapsedMilliseconds(io, start) < 10_000);
     try std.testing.expectEqualStrings("Operation failed, no more retries allowed. Last error: Error: Operation failed\n", capture.allocating.written());
 }
 
@@ -444,6 +473,15 @@ test "retryOnce should resolve with correct value when operation completes befor
     const result = try retry_module.retryOnce(io, &operation, 50);
 
     try std.testing.expectEqual(@as(u32, 42), result);
+}
+
+test "retryOnce resolves with the result of an operation that finishes without awaiting after the timeout" {
+    const io = std.testing.io;
+    var operation: BusyOperation = .{ .busyMilliseconds = 200 };
+
+    const result = try retry_module.retryOnce(io, &operation, 20);
+
+    try std.testing.expectEqualStrings("finished", result);
 }
 
 //

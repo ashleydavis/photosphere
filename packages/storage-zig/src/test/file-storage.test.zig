@@ -75,8 +75,8 @@ test "listFiles lists only files, sorted like localeCompare with numeric orderin
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
 
-    // Windows file names are case-insensitive, so "File1" and "file1" cannot both exist there.
-    const caseSensitive = builtin.os.tag != .windows;
+    // Windows and macOS (APFS by default) file names are case-insensitive, so "File1" and "file1" cannot both exist there.
+    const caseSensitive = builtin.os.tag != .windows and !builtin.os.tag.isDarwin();
     const fileNames: []const []const u8 = if (caseSensitive)
         &.{ "file10", "file2", "File1", "file1", "b.txt", "a.txt", "_x", "10", "9" }
     else

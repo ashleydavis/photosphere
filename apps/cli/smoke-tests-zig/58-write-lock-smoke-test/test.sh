@@ -214,8 +214,8 @@ check_dependencies() {
         exit 1
     fi
     
-    # Check if sha256sum is available
-    if ! command -v sha256sum &> /dev/null; then
+    # Check if sha256sum (or shasum, which macOS has instead) is available
+    if ! command -v sha256sum &> /dev/null && ! command -v shasum &> /dev/null; then
         log_error "sha256sum is required but not installed"
         exit 1
     fi
@@ -313,6 +313,31 @@ setup_test_environment() {
     log_success "Test environment setup complete"
 }
 
+# SHA-256 of a file in hex. macOS has shasum rather than GNU sha256sum.
+file_sha256() {
+    if command -v sha256sum &> /dev/null; then
+        sha256sum "$1" | cut -d' ' -f1
+    else
+        shasum -a 256 "$1" | cut -d' ' -f1
+    fi
+}
+
+# Size of a file in bytes. BSD stat (macOS) has no -c, so the bytes are counted instead.
+file_size_bytes() {
+    wc -c < "$1" | tr -d ' '
+}
+
+# Nanoseconds since the epoch. BSD date (macOS) has no %N (it prints a literal N), so there it
+# counts whole seconds.
+epoch_nanoseconds() {
+    local now
+    now="$(date +%s%N)"
+    if [[ "$now" == *N ]]; then
+        now="$(( $(date +%s) * 1000000000 ))"
+    fi
+    echo "$now"
+}
+
 # Generate a unique PNG file
 generate_png_file() {
     local file_path="$1"
@@ -365,7 +390,7 @@ worker_process() {
         sleep "$sleep_time"
         
         # Generate unique filename
-        local timestamp=$(date +%s%N)
+        local timestamp=$(epoch_nanoseconds)
         local filename="process_${process_id}_iter_${i}_${timestamp}.png"
         local file_path="$TEST_FILES_DIR/$filename"
         
@@ -376,11 +401,11 @@ worker_process() {
         fi
         
         # Calculate file hash and size
-        local file_hash=$(sha256sum "$file_path" | cut -d' ' -f1)
-        local file_size=$(stat -c%s "$file_path")
+        local file_hash=$(file_sha256 "$file_path")
+        local file_size=$(file_size_bytes "$file_path")
         
         # Add file to database and capture timing and detailed output
-        local start_time=$(date +%s%N)
+        local start_time=$(epoch_nanoseconds)
         local add_stdout_file="/tmp/stdout_p${process_id}_i${i}.tmp"
         local add_stderr_file="/tmp/stderr_p${process_id}_i${i}.tmp"
         local add_exit_code=0
@@ -408,7 +433,7 @@ worker_process() {
             rm -f "$add_stderr_file"
         fi
         
-        local end_time=$(date +%s%N)
+        local end_time=$(epoch_nanoseconds)
         local duration_ms=$(( (end_time - start_time) / 1000000 ))
         
         if [ $add_exit_code -ne 0 ]; then
@@ -642,8 +667,8 @@ validate_results() {
         fi
         
         # Verify file hash and size
-        local actual_hash=$(sha256sum "$file_path" | cut -d' ' -f1)
-        local actual_size=$(stat -c%s "$file_path")
+        local actual_hash=$(file_sha256 "$file_path")
+        local actual_size=$(file_size_bytes "$file_path")
         
         if [ "$actual_hash" != "$expected_hash" ]; then
             log_error "Hash mismatch for $filename: expected $expected_hash, got $actual_hash"

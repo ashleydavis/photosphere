@@ -88,8 +88,11 @@ fn waitForTimeout(io: std.Io, timeoutMS: u64) std.Io.Cancelable!void {
 // garbage collector. Zig cannot do that: the operation borrows memory owned by the caller (the operation
 // value, the caller's allocator and buffers) that is gone once retry returns, and a concurrent task
 // must be awaited or canceled before its storage is released. So the operation is canceled instead:
-// it stops at its next cancelation point and the timeout error is then returned (an operation with no
-// cancelation points delays the timeout error until it finishes).
+// it stops at its next cancelation point and the timeout error is then returned.
+// In TypeScript the timer can only fire while the operation is awaiting: work the operation does without
+// awaiting always runs to the end first, so an operation that settles without awaiting again beats the timer.
+// The Zig counterpart: an operation that still succeeds after the cancelation (it reached no cancelation
+// point, e.g. its thread had not even been scheduled yet when the timer fired) wins over the timer.
 // When the Io implementation cannot run tasks concurrently the operation runs without a timeout.
 //
 pub fn retryOnce(io: std.Io, operation: anytype, timeoutMS: u64) anyerror!OperationResult(@TypeOf(operation)) {
@@ -129,16 +132,29 @@ pub fn retryOnce(io: std.Io, operation: anytype, timeoutMS: u64) anyerror!Operat
         select.cancelDiscard();
         return err;
     };
-    select.cancelDiscard();
     switch (outcome) {
         .completed => |result| {
+            select.cancelDiscard();
             return result catch |err| {
                 errors.restoreError(&error_record);
                 return err;
             };
         },
         .timedOut => |sleep_result| {
+            const late_outcome = select.cancel();
+            select.cancelDiscard();
             try sleep_result;
+            if (late_outcome) |late| {
+                switch (late) {
+                    .completed => |late_result| {
+                        if (late_result) |value| {
+                            return value;
+                        }
+                        else |_| {}
+                    },
+                    .timedOut => unreachable,
+                }
+            }
             return errors.throwError("Operation timed out after {d}ms: {s}", .{ timeoutMS, operationSource });
         },
     }
