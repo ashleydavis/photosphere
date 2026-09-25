@@ -398,6 +398,12 @@ test "addTask: hands no priority to the backend when the caller named none" {
 var ordered_names: [4][]const u8 = undefined;
 
 //
+// Storage for the names in ordered_names: the task data the handler reads them from is freed when
+// the task finishes, so the names are copied here (Zig only).
+//
+var ordered_name_buffers: [4][32]u8 = undefined;
+
+//
 // Number of valid entries in ordered_names.
 //
 var ordered_count: std.atomic.Value(usize) = .init(0);
@@ -416,7 +422,8 @@ fn orderedTaskHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.V
     _ = context;
     const name = data.object.get("name").?.string;
     const index = ordered_count.fetchAdd(1, .acq_rel);
-    ordered_names[index] = name;
+    @memcpy(ordered_name_buffers[index][0..name.len], name);
+    ordered_names[index] = ordered_name_buffers[index][0..name.len];
     if (std.mem.eql(u8, name, "running")) {
         try ordered_release.wait(io);
     }

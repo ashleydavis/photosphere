@@ -120,7 +120,11 @@ fn listFiles(allocator: std.mem.Allocator, io: std.Io, dirPath: []const u8) ![][
     defer walker.deinit();
     while (try walker.next(io)) |entry| {
         if (entry.kind == .file) {
-            try files.append(allocator, try allocator.dupe(u8, entry.path));
+            const relativePath = try allocator.dupe(u8, entry.path);
+
+            // The names are compared with '/' paths, but the walker joins the path with '\' on Windows.
+            std.mem.replaceScalar(u8, relativePath, '\\', '/');
+            try files.append(allocator, relativePath);
         }
     }
     helpers.sortStrings(files.items);

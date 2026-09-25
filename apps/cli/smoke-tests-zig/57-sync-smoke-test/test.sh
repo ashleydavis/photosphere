@@ -228,8 +228,8 @@ check_dependencies() {
         exit 1
     fi
     
-    # Check if sha256sum is available
-    if ! command -v sha256sum &> /dev/null; then
+    # Check if sha256sum (or shasum, which macOS has instead) is available
+    if ! command -v sha256sum &> /dev/null && ! command -v shasum &> /dev/null; then
         log_error "sha256sum is required but not installed"
         exit 1
     fi

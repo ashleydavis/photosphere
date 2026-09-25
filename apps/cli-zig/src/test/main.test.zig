@@ -16,7 +16,13 @@ test "buildDelegateArgv runs the TypeScript entry point with bun" {
 
 test "the TypeScript entry point path is absolute and exists" {
     try std.testing.expect(std.fs.path.isAbsolute(delegate.ts_cli_path));
-    try std.testing.expect(std.mem.endsWith(u8, delegate.ts_cli_path, "apps/cli/index.ts"));
+
+    // The path is resolved by the build, so it uses the separators of the build machine ('\' on Windows).
+    var normalizedPath: [std.fs.max_path_bytes]u8 = undefined;
+    const pathCopy = normalizedPath[0..delegate.ts_cli_path.len];
+    @memcpy(pathCopy, delegate.ts_cli_path);
+    std.mem.replaceScalar(u8, pathCopy, '\\', '/');
+    try std.testing.expect(std.mem.endsWith(u8, pathCopy, "apps/cli/index.ts"));
     _ = try std.Io.Dir.cwd().statFile(std.testing.io, delegate.ts_cli_path, .{});
 }
 

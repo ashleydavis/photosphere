@@ -10,7 +10,15 @@
 # Usage: bash smoke-tests-zig.sh [test number or name]  (e.g. 07, 7, verify or 07-verify)
 
 # Absolute path to this script's directory.
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# On Windows (msys/cygwin), pwd returns a POSIX path (/d/a/...) that native .exe binaries cannot resolve,
+# and Git Bash rewrites it only where it is a whole argument, so a test comparing a path the CLI printed
+# with the one it passed would fail. pwd -W returns a Windows-style path (D:/a/...) that both bash and
+# .exe understand, as smoke-tests.sh does.
+if [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -W)"
+else
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+fi
 
 # Absolute path to the Zig port of the CLI.
 ZIG_CLI_DIR="$(cd "$SCRIPT_DIR/../cli-zig" && pwd)"

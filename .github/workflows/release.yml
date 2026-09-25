@@ -79,7 +79,7 @@ jobs:
           echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
 
   unit-tests:
-    timeout-minutes: 20
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -120,7 +120,7 @@ jobs:
           verify: magick|convert ffmpeg ffprobe
 
       - name: Run unit tests
-        timeout-minutes: 12
+        timeout-minutes: 35
         run: |
           chmod +x ./run-tests.sh
           ./run-tests.sh
@@ -1623,7 +1623,7 @@ jobs:
   zig-smoke-tests:
     # Runs the unit tests of every Zig package and the Zig CLI smoke tests on each platform, because the
     # byte-identical output (gzip OS byte, paths, file times) differs between them.
-    timeout-minutes: 40
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

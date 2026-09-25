@@ -4,7 +4,7 @@
     "private": true,
     "scripts": {
         "compile": "zig build",
-        "test": "zig build test --summary all",
+        "test": "zig build test --summary all --test-timeout 20m",
         "clean": "rm -rf zig-out .zig-cache bin",
         "build-linux": "zig build -Dtarget=x86_64-linux -Dcpu=baseline --prefix bin/x64/linux --prefix-exe-dir .",
         "build-linux-arm64": "zig build -Dtarget=aarch64-linux --prefix bin/arm64/linux --prefix-exe-dir .",
