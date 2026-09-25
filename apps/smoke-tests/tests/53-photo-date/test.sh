@@ -40,11 +40,12 @@ PULLED_DB_DIR="$TMP_DIR/pulled-db"
 # Reads one field out of `psi info` for an asset, empty when the field is absent.
 #
 # `psi info` prints the stored value rather than a formatted one, so this compares timestamps without
-# depending on the machine's locale.
+# depending on the machine's locale. NO_COLOR because the CLI colours its output whenever CI is set,
+# and the escape codes would end up in the value read here.
 read_asset_field() {
     local asset_id="$1"
     local field_label="$2"
-    (cd "$REPO_DIR/apps/cli" && bun run --silent start -- info --db "$PULLED_DB_DIR/photosphere-default" "$asset_id" 2>/dev/null) \
+    (cd "$REPO_DIR/apps/cli" && NO_COLOR=1 bun run --silent start -- info --db "$PULLED_DB_DIR/photosphere-default" "$asset_id" 2>/dev/null) \
         | grep "$field_label" \
         | head -1 \
         | sed "s/.*$field_label//" \
@@ -52,8 +53,11 @@ read_asset_field() {
 }
 
 # Everything in the database, newest first.
+#
+# NO_COLOR because the CLI colours its output whenever CI is set, and the escape codes around the asset
+# id and the file name stop find_asset_id_by_extension matching either.
 list_assets() {
-    (cd "$REPO_DIR/apps/cli" && bun run --silent start -- list --db "$PULLED_DB_DIR/photosphere-default" --page-size 200 2>/dev/null)
+    (cd "$REPO_DIR/apps/cli" && NO_COLOR=1 bun run --silent start -- list --db "$PULLED_DB_DIR/photosphere-default" --page-size 200 2>/dev/null)
 }
 
 # The asset id the database gave the one photo of a given kind.
