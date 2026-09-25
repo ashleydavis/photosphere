@@ -71,11 +71,14 @@ test "getColorDepth reads the environment like Node's getColorDepth" {
     try std.testing.expectEqual(@as(u8, 1), try colorDepthFor(&.{.{ "NO_COLOR", "" }}));
     try std.testing.expectEqual(@as(u8, 1), try colorDepthFor(&.{.{ "NODE_DISABLE_COLORS", "1" }}));
     try std.testing.expectEqual(@as(u8, 1), try colorDepthFor(&.{.{ "TERM", "dumb" }}));
-    try std.testing.expectEqual(@as(u8, 1), cli.tty.getColorDepth(null));
     if (builtin.os.tag == .windows) {
+        // Node answers 24-bit color on Windows 10 build 14931 and later whatever the rest of the
+        // environment says, and with no environment at all.
         try std.testing.expectEqual(@as(u8, 24), try colorDepthFor(&.{}));
+        try std.testing.expectEqual(@as(u8, 24), cli.tty.getColorDepth(null));
         return;
     }
+    try std.testing.expectEqual(@as(u8, 1), cli.tty.getColorDepth(null));
     try std.testing.expectEqual(@as(u8, 1), try colorDepthFor(&.{}));
     try std.testing.expectEqual(@as(u8, 24), try colorDepthFor(&.{.{ "TMUX", "1" }}));
     try std.testing.expectEqual(@as(u8, 24), try colorDepthFor(&.{ .{ "CI", "true" }, .{ "GITHUB_ACTIONS", "true" } }));
