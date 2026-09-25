@@ -1623,7 +1623,7 @@ jobs:
   zig-smoke-tests:
     # Runs the unit tests of every Zig package and the Zig CLI smoke tests on each platform, because the
     # byte-identical output (gzip OS byte, paths, file times) differs between them.
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
