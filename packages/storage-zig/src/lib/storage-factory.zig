@@ -79,11 +79,9 @@ pub const ICreateStorageResult = struct {
 
 //
 // Resolves a path to an absolute path like Node's `path.resolve(path)` (relative paths resolve against the cwd).
+// Always resolving against the cwd also gives a rooted Windows path (`\dir`) the cwd's drive, like Node.
 //
 fn resolvePath(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]const u8 {
-    if (std.fs.path.isAbsolute(path)) {
-        return std.fs.path.resolve(allocator, &.{path});
-    }
     const currentPath = try std.process.currentPathAlloc(io, allocator);
     return std.fs.path.resolve(allocator, &.{ currentPath, path });
 }

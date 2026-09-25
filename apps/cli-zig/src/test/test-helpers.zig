@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const builtin = @import("builtin");
 
 //
 // Reads and parses a JSON fixture from src/test/fixtures (the tests run with the package directory as cwd).
@@ -51,12 +52,17 @@ pub fn stringArray(allocator: std.mem.Allocator, value: std.json.Value) ![]const
 }
 
 //
-// Creates a unique temporary directory for a test and returns its path.
+// Creates a unique temporary directory for a test and returns its path (absolute; under /tmp, or on Windows,
+// which has no /tmp, under the package's .zig-cache).
 //
 pub fn makeTempDir(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
     var random_bytes: [8]u8 = undefined;
     std.testing.io.random(&random_bytes);
-    const path = try std.fmt.allocPrint(allocator, "/tmp/cli-zig-test-{s}-{x}", .{ name, std.mem.readInt(u64, &random_bytes, .little) });
+    const dirName = try std.fmt.allocPrint(allocator, "cli-zig-test-{s}-{x}", .{ name, std.mem.readInt(u64, &random_bytes, .little) });
+    const path = if (builtin.os.tag == .windows)
+        try std.fs.path.join(allocator, &.{ try std.process.currentPathAlloc(std.testing.io, allocator), ".zig-cache", "tmp-tests", dirName })
+    else
+        try std.fmt.allocPrint(allocator, "/tmp/{s}", .{dirName});
     try std.Io.Dir.cwd().createDirPath(std.testing.io, path);
     return path;
 }
@@ -128,12 +134,24 @@ pub fn splitKeys(allocator: std.mem.Allocator, bytes: []const u8) ![]const []con
 }
 
 //
-// Copies a directory tree (`cp -r`).
+// Copies a directory tree (`cp -r`, done in Zig so that it also works on Windows).
 //
 pub fn copyDirectory(allocator: std.mem.Allocator, source: []const u8, dest: []const u8) !void {
-    const result = try std.process.run(allocator, std.testing.io, .{ .argv = &.{ "cp", "-r", source, dest } });
-    if (result.term != .exited or result.term.exited != 0) {
-        return error.CopyFailed;
+    const io = std.testing.io;
+    const cwd = std.Io.Dir.cwd();
+    var sourceDir = try cwd.openDir(io, source, .{ .iterate = true });
+    defer sourceDir.close(io);
+    try cwd.createDirPath(io, dest);
+    var destDir = try cwd.openDir(io, dest, .{});
+    defer destDir.close(io);
+    var walker = try sourceDir.walk(allocator);
+    defer walker.deinit();
+    while (try walker.next(io)) |entry| {
+        switch (entry.kind) {
+            .directory => try destDir.createDirPath(io, entry.path),
+            .file => try sourceDir.copyFile(entry.path, destDir, entry.path, io, .{}),
+            else => {},
+        }
     }
 }
 
@@ -179,6 +197,15 @@ pub fn cliEnvironment(allocator: std.mem.Allocator, root: []const u8) !*std.proc
     const parent = try std.testing.environ.createMap(allocator);
     try map.put("PATH", parent.get("PATH") orelse "/usr/bin:/bin");
     try map.put("HOME", parent.get("HOME") orelse "/root");
+
+    // Windows programs need SystemRoot, and USERPROFILE is the Windows home directory.
+    if (builtin.os.tag == .windows) {
+        for ([_][]const u8{ "SystemRoot", "USERPROFILE" }) |name| {
+            if (parent.get(name)) |value| {
+                try map.put(name, value);
+            }
+        }
+    }
     const configDir = try std.fmt.allocPrint(allocator, "{s}/config", .{root});
     try std.Io.Dir.cwd().createDirPath(std.testing.io, configDir);
     try map.put("PHOTOSPHERE_CONFIG_DIR", configDir);
@@ -186,9 +213,36 @@ pub fn cliEnvironment(allocator: std.mem.Allocator, root: []const u8) !*std.proc
     try map.put("PHOTOSPHERE_VAULT_DIR", try std.fmt.allocPrint(allocator, "{s}/vault", .{root}));
     const tmpDir = try std.fmt.allocPrint(allocator, "{s}/tmp", .{root});
     try std.Io.Dir.cwd().createDirPath(std.testing.io, tmpDir);
+    // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows.
     try map.put("TMPDIR", tmpDir);
+    try map.put("TEMP", tmpDir);
     const feed = try std.fmt.allocPrint(allocator, "{s}/news.yaml", .{root});
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = feed, .data = "items: []\n" });
-    try map.put("PHOTOSPHERE_NEWS_URL", try std.fmt.allocPrint(allocator, "file://{s}", .{feed}));
+    try map.put("PHOTOSPHERE_NEWS_URL", try fileUrl(allocator, feed));
     return map;
+}
+
+//
+// Converts an absolute path to a file:// URL (forward slashes, and "file:///C:/..." for a Windows drive path).
+//
+pub fn fileUrl(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
+    const forwardSlashPath = try allocator.dupe(u8, path);
+    std.mem.replaceScalar(u8, forwardSlashPath, '\\', '/');
+    const slashBeforeDrive = if (std.mem.startsWith(u8, forwardSlashPath, "/")) "" else "/";
+    return std.fmt.allocPrint(allocator, "file://{s}{s}", .{ slashBeforeDrive, forwardSlashPath });
+}
+
+//
+// The path of the built psi binary (zig-out/bin/psi, psi.exe on Windows).
+//
+pub const psi_path = "zig-out/bin/psi" ++ builtin.os.tag.exeFileExt(builtin.cpu.arch);
+
+//
+// Returns true when bun can be spawned (the tests that compare with the TypeScript CLI need it).
+//
+pub fn bunAvailable(allocator: std.mem.Allocator) bool {
+    _ = std.process.run(allocator, std.testing.io, .{ .argv = &.{ "bun", "--version" } }) catch |err| {
+        return err != error.FileNotFound;
+    };
+    return true;
 }

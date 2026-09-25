@@ -13,7 +13,7 @@ fn setup(allocator: std.mem.Allocator, root: []const u8, feed: []const u8) !*std
     try map.put("PHOTOSPHERE_CONFIG_DIR", try std.fmt.allocPrint(allocator, "{s}/config", .{root}));
     const feedPath = try std.fmt.allocPrint(allocator, "{s}/news.yaml", .{root});
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = feedPath, .data = feed });
-    try map.put("PHOTOSPHERE_NEWS_URL", try std.fmt.allocPrint(allocator, "file://{s}", .{feedPath}));
+    try map.put("PHOTOSPHERE_NEWS_URL", try helpers.fileUrl(allocator, feedPath));
     node_utils.process_env.setEnvironMap(map);
     return map;
 }

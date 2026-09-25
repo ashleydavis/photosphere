@@ -202,9 +202,9 @@ test "emits a replicate-progress task message for each progress callback fired b
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
 
     try std.testing.expectEqual(@as(usize, 4), recording.messages.items.len);
-    const firstMessage = try std.fmt.allocPrint(allocator, "{{\"type\":\"replicate-progress\",\"databasePath\":\"{s}\",\"progress\":\"Copied 1\"}}", .{dirs.source});
+    const firstMessage = try std.fmt.allocPrint(allocator, "{{\"type\":\"replicate-progress\",\"databasePath\":{f},\"progress\":\"Copied 1\"}}", .{std.json.fmt(dirs.source, .{})});
     try std.testing.expectEqualStrings(firstMessage, recording.messages.items[0]);
-    const lastMessage = try std.fmt.allocPrint(allocator, "{{\"type\":\"replicate-progress\",\"databasePath\":\"{s}\",\"progress\":\"Copied 3 files, 1 records\"}}", .{dirs.source});
+    const lastMessage = try std.fmt.allocPrint(allocator, "{{\"type\":\"replicate-progress\",\"databasePath\":{f},\"progress\":\"Copied 3 files, 1 records\"}}", .{std.json.fmt(dirs.source, .{})});
     try std.testing.expectEqualStrings(lastMessage, recording.messages.items[3]);
 }
 

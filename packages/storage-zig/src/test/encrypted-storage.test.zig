@@ -123,6 +123,11 @@ fn runInteropScript(allocator: std.mem.Allocator, mode: []const u8, dbDir: []con
     const result = std.process.run(allocator, std.testing.io, .{
         .argv = &.{ "bun", "run", "src/test/fixtures/encrypted-storage-interop.ts", mode, dbDir },
     }) catch |err| {
+
+        // The TypeScript side of this interop test needs Bun; skip it where Bun cannot be spawned.
+        if (err == error.FileNotFound) {
+            return error.SkipZigTest;
+        }
         std.debug.print("Failed to run bun (it must be on PATH): {s}\n", .{@errorName(err)});
         return err;
     };

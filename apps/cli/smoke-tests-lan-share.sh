@@ -187,8 +187,16 @@ run_test() {
 
     test_cleanup
 
-    # Kill any lingering receivers between tests and wait for them to die.
+    # Kill any lingering receivers between tests and wait until they have exited,
+    # so their pairing broadcasts cannot be picked up by the next test's sender.
     pkill -f "bun run.*receive --yes" 2>/dev/null || true
+    for attempt in $(seq 1 50); do
+        if ! pgrep -f "bun run.*receive --yes" > /dev/null 2>&1; then
+            break
+        fi
+        sleep 0.1
+    done
+    pkill -9 -f "bun run.*receive --yes" 2>/dev/null || true
     sleep 0.3
 
     local elapsed=$(( SECONDS - start_time ))

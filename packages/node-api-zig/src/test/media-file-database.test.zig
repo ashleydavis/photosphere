@@ -3,6 +3,7 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const serialization_zig = @import("serialization-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
+const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
 const helpers = @import("test-helpers.zig");
 const media_file_database = node_api.media_file_database;
@@ -110,7 +111,12 @@ test "createDatabase throws when the directory already contains files" {
     const created = try node_api.open_storage.openStorage(allocator, io, dir, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
     try std.testing.expectError(error.Thrown, media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, null));
-    const expected = try std.fmt.allocPrint(allocator, "Cannot create new media file database in fs:{s}. This storage location already contains files! Please create your database in a new empty directory.", .{dir});
+
+    // The location is `pathJoin("fs:", path)` with forward slashes, so on Windows it reads "fs:/C:/...".
+    const forwardSlashDir = try allocator.dupe(u8, dir);
+    std.mem.replaceScalar(u8, forwardSlashDir, '\\', '/');
+    const location = try storage_zig.storage_factory.pathJoin(allocator, &.{ "fs:", forwardSlashDir });
+    const expected = try std.fmt.allocPrint(allocator, "Cannot create new media file database in {s}. This storage location already contains files! Please create your database in a new empty directory.", .{location});
     try std.testing.expectEqualStrings(expected, errors.lastErrorMessage());
 }
 

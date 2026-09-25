@@ -130,7 +130,11 @@ fn ensureDir(io: std.Io, dirPath: []const u8) !void {
     // Apply the mode explicitly because the recursive flag may create
     // intermediate directories with the process umask rather than DIR_MODE.
     // chmod is not supported on all platforms (e.g. Windows); ignore errors.
-    cwd.setFilePermissions(io, dirPath, modeToPermissions(DIR_MODE), .{}) catch {};
+    // (Zig: on Windows Node's chmod only toggles the read-only attribute, which an owner-writable mode
+    // leaves off, and Zig's setFilePermissions panics there, so it is skipped.)
+    if (builtin.os.tag != .windows) {
+        cwd.setFilePermissions(io, dirPath, modeToPermissions(DIR_MODE), .{}) catch {};
+    }
 }
 
 //
@@ -213,7 +217,10 @@ pub const PlaintextVault = struct {
         // Apply the mode explicitly; writeFile with mode may be affected by the
         // process umask on some systems.
         // chmod is not supported on all platforms (e.g. Windows); ignore errors.
-        cwd.setFilePermissions(io, filePath, modeToPermissions(FILE_MODE), .{}) catch {};
+        // (Zig: skipped on Windows, see ensureDir.)
+        if (builtin.os.tag != .windows) {
+            cwd.setFilePermissions(io, filePath, modeToPermissions(FILE_MODE), .{}) catch {};
+        }
     }
 
     //

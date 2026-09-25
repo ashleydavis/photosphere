@@ -164,7 +164,12 @@ test "reads from disk for file:// URLs" {
         \\      url: https://example.com/go
         \\
     );
-    const url = try std.fmt.allocPrint(allocator, "file://{s}/news%20feed.yaml", .{dir});
+
+    // A file URL has forward slashes and a slash before a Windows drive letter ("file:///C:/dir").
+    const forwardSlashDir = try allocator.dupe(u8, dir);
+    std.mem.replaceScalar(u8, forwardSlashDir, '\\', '/');
+    const slashBeforeDrive = if (std.mem.startsWith(u8, forwardSlashDir, "/")) "" else "/";
+    const url = try std.fmt.allocPrint(allocator, "file://{s}{s}/news%20feed.yaml", .{ slashBeforeDrive, forwardSlashDir });
     const items = try fetchNews(allocator, io, url);
     try std.testing.expectEqual(@as(usize, 1), items.len);
     try std.testing.expectEqualStrings("From file", items[0].message);

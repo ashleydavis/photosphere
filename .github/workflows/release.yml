@@ -104,6 +104,11 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Install media processing tools
+        run: |
+          sudo apt update
+          sudo apt install -y imagemagick ffmpeg
+
       - name: Run unit tests
         run: |
           chmod +x ./run-tests.sh
@@ -785,6 +790,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Show Bun zlib build (diagnostic for byte-identical gzip)
+        run: bun -e 'const z=require("zlib"),c=require("crypto");const b=Buffer.alloc(200000);for(let i=0;i<b.length;i++)b[i]=((i*7919)%251)^((i>>5)&0xff);const g=z.gzipSync(b,{level:9});console.log("zlib",process.versions.zlib,"arch",process.arch,"gzip-header",g.subarray(0,10).toString("hex"),"gzip-body-sha256",c.createHash("sha256").update(g.subarray(10)).digest("hex"))'
+
       - name: Install media processing tools
         run: |
           echo "Installing ImageMagick, ffmpeg, and tree via Homebrew..."
@@ -914,6 +922,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      - name: Show Bun zlib build (diagnostic for byte-identical gzip)
+        run: bun -e 'const z=require("zlib"),c=require("crypto");const b=Buffer.alloc(200000);for(let i=0;i<b.length;i++)b[i]=((i*7919)%251)^((i>>5)&0xff);const g=z.gzipSync(b,{level:9});console.log("zlib",process.versions.zlib,"arch",process.arch,"gzip-header",g.subarray(0,10).toString("hex"),"gzip-body-sha256",c.createHash("sha256").update(g.subarray(10)).digest("hex"))'
 
       - name: Install media processing tools
         run: |

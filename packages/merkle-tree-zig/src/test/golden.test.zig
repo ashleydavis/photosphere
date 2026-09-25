@@ -591,7 +591,14 @@ test "TypeScript loads the trees Zig saved identically" {
         try zigSummaries.append(allocator, try summarizeTree(allocator, &reloaded));
     }
 
-    const result = try std.process.run(allocator, io, .{ .argv = arguments.items });
+    const result = std.process.run(allocator, io, .{ .argv = arguments.items }) catch |err| {
+
+        // The TypeScript side of this interop test needs Bun; skip it where Bun cannot be spawned.
+        if (err == error.FileNotFound) {
+            return error.SkipZigTest;
+        }
+        return err;
+    };
     if (result.term != .exited or result.term.exited != 0) {
         std.debug.print("load-trees.ts failed: {s}\n", .{result.stderr});
         return error.TypeScriptLoadFailed;

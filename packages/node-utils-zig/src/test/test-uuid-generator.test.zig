@@ -90,6 +90,6 @@ test "the counter directory defaults to ./test/tmp" {
     defer arena.deinit();
     node_utils.process_env.setEnvironMap(null);
     const generator = try TestUuidGenerator.init(arena.allocator());
-    try std.testing.expectEqualStrings("./test/tmp/photosphere-test-uuid-counter", generator.counterFilePath);
-    try std.testing.expectEqualStrings("./test/tmp/photosphere-test-uuid-counter.lock", generator.lockFilePath);
+    try std.testing.expectEqualStrings("./test/tmp" ++ std.fs.path.sep_str ++ "photosphere-test-uuid-counter", generator.counterFilePath);
+    try std.testing.expectEqualStrings("./test/tmp" ++ std.fs.path.sep_str ++ "photosphere-test-uuid-counter.lock", generator.lockFilePath);
 }

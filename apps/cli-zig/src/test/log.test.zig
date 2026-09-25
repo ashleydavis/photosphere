@@ -58,7 +58,9 @@ test "configureLog installs the file logger unless file logging is disabled" {
     const tmpDir = try helpers.makeTempDir(allocator, "configure-log");
     defer std.Io.Dir.cwd().deleteTree(io, tmpDir) catch {};
     var environ_map = std.process.Environ.Map.init(allocator);
+    // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows.
     try environ_map.put("TMPDIR", tmpDir);
+    try environ_map.put("TEMP", tmpDir);
     node_utils.process_env.setEnvironMap(&environ_map);
     defer node_utils.process_env.setEnvironMap(null);
     const previous = utils.log.log;

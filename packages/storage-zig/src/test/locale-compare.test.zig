@@ -51,9 +51,16 @@ test "localeCompareNumeric sorts storage names exactly like TypeScript localeCom
     const namesFile = try std.fmt.allocPrint(allocator, "{s}/names.txt", .{tempDir});
     try helpers.writeFile(io, namesFile, try std.mem.join(allocator, "\n", names.items));
 
-    const result = try std.process.run(allocator, io, .{
+    const result = std.process.run(allocator, io, .{
         .argv = &.{ "bun", "run", "src/test/fixtures/locale-sort.ts", namesFile },
-    });
+    }) catch |err| {
+
+        // The TypeScript side of this interop test needs Bun; skip it where Bun cannot be spawned.
+        if (err == error.FileNotFound) {
+            return error.SkipZigTest;
+        }
+        return err;
+    };
     if (result.term != .exited or result.term.exited != 0) {
         std.debug.print("locale-sort.ts failed:\n{s}\n", .{result.stderr});
         return error.TestUnexpectedResult;

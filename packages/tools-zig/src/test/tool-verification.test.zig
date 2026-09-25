@@ -1,9 +1,10 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const tools = @import("tools-zig");
 const node_utils = @import("node-utils-zig");
 
 //
-// A fake tool: a shell script with the given name that prints the given output.
+// A fake tool: a shell script (a .cmd script on Windows) with the given name that prints the given output.
 //
 const FakeTool = struct {
     // The command name.
@@ -33,10 +34,18 @@ const FakeToolsDirectory = struct {
         const cwd = std.Io.Dir.cwd();
         try cwd.createDirPath(io, self.path);
         for (fakeTools) |fakeTool| {
-            const scriptPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ self.path, fakeTool.name });
-            const script = try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s\\n' '{s}'\n", .{fakeTool.output});
-            try cwd.writeFile(io, .{ .sub_path = scriptPath, .data = script });
-            _ = try node_utils.exec.exec(allocator, io, try std.fmt.allocPrint(allocator, "chmod +x {s}", .{scriptPath}));
+            // cmd.exe finds `<name>.cmd` on PATH, and needs no executable bit.
+            if (builtin.os.tag == .windows) {
+                const scriptPath = try std.fmt.allocPrint(allocator, "{s}/{s}.cmd", .{ self.path, fakeTool.name });
+                const script = try std.fmt.allocPrint(allocator, "@echo {s}\r\n", .{fakeTool.output});
+                try cwd.writeFile(io, .{ .sub_path = scriptPath, .data = script });
+            }
+            else {
+                const scriptPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ self.path, fakeTool.name });
+                const script = try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s\\n' '{s}'\n", .{fakeTool.output});
+                try cwd.writeFile(io, .{ .sub_path = scriptPath, .data = script });
+                _ = try node_utils.exec.exec(allocator, io, try std.fmt.allocPrint(allocator, "chmod +x {s}", .{scriptPath}));
+            }
         }
         const absolutePath = try cwd.realPathFileAlloc(io, self.path, allocator);
         self.environMap = std.process.Environ.Map.init(allocator);

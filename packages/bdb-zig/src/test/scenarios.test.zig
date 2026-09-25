@@ -197,7 +197,14 @@ fn expectTypeScriptReads(allocator: std.mem.Allocator, storage: *MemoryStorage, 
     var argv: std.ArrayList([]const u8) = .empty;
     try argv.appendSlice(allocator, &.{ "bun", "run", helpers.FIXTURES_DIR ++ "/read-database.ts", directoryPath });
     try argv.appendSlice(allocator, indexNames);
-    const result = try std.process.run(allocator, io, .{ .argv = argv.items });
+    const result = std.process.run(allocator, io, .{ .argv = argv.items }) catch |err| {
+
+        // The TypeScript side of this interop check needs Bun; skip it where Bun cannot be spawned.
+        if (err == error.FileNotFound) {
+            return error.SkipZigTest;
+        }
+        return err;
+    };
     if (result.term != .exited or result.term.exited != 0) {
         std.debug.print("read-database.ts failed:\n{s}\n", .{result.stderr});
         return error.TestUnexpectedResult;

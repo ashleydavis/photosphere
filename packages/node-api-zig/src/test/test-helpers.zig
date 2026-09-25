@@ -234,7 +234,14 @@ pub fn runBun(allocator: std.mem.Allocator, io: std.Io, script: []const u8, argu
     for (overrides) |override| {
         try childEnvironment.put(override[0], override[1]);
     }
-    const result = try std.process.run(allocator, io, .{ .argv = argv.items, .environ_map = &childEnvironment });
+    const result = std.process.run(allocator, io, .{ .argv = argv.items, .environ_map = &childEnvironment }) catch |err| {
+
+        // The TypeScript side of the interop tests needs Bun; skip them where Bun cannot be spawned.
+        if (err == error.FileNotFound) {
+            return error.SkipZigTest;
+        }
+        return err;
+    };
     if (result.term != .exited or result.term.exited != 0) {
         std.debug.print("bun {s} failed:\n{s}\n{s}\n", .{ script, result.stdout, result.stderr });
         return error.TestUnexpectedResult;

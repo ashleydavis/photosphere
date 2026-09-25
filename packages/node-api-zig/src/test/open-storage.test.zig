@@ -1,5 +1,6 @@
 const std = @import("std");
 const vault_zig = @import("vault-zig");
+const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
 const helpers = @import("test-helpers.zig");
 const openStorage = node_api.open_storage.openStorage;
@@ -78,7 +79,7 @@ test "returns storage, rawStorage, encryptionKeyPems, s3Config, storageOptions, 
     const io = std.testing.io;
     const dir = try helpers.makeTempDir(allocator, io, "open-storage-all");
     defer helpers.removeTempDir(io, dir);
-    const configDir = try setup(allocator, io, try std.fmt.allocPrint(allocator, "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = \"{s}\"\ngeocoding_key = \"open-storage-geo\"\n", .{dir}));
+    const configDir = try setup(allocator, io, try std.fmt.allocPrint(allocator, "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = '{s}'\ngeocoding_key = \"open-storage-geo\"\n", .{dir}));
     defer helpers.removeTempDir(io, configDir);
     const vault = try vault_zig.get_vault.getVault("plaintext");
     try vault.set(allocator, io, .{ .name = "open-storage-geo", .type = "api-key", .value = "google-api-key" });
@@ -89,7 +90,11 @@ test "returns storage, rawStorage, encryptionKeyPems, s3Config, storageOptions, 
     try std.testing.expect(result.s3Config == null);
     try std.testing.expectEqual(@as(usize, 0), result.encryptionKeyPems.len);
     try std.testing.expect(result.storageOptions.encryptionPublicKey == null);
-    const expectedLocation = try std.fmt.allocPrint(allocator, "fs:{s}", .{dir});
+
+    // The location is `pathJoin("fs:", path)` with forward slashes, so on Windows it reads "fs:/C:/...".
+    const forwardSlashDir = try allocator.dupe(u8, dir);
+    std.mem.replaceScalar(u8, forwardSlashDir, '\\', '/');
+    const expectedLocation = try storage_zig.storage_factory.pathJoin(allocator, &.{ "fs:", forwardSlashDir });
     try std.testing.expectEqualStrings(expectedLocation, result.storage.location);
     try std.testing.expectEqualStrings(expectedLocation, result.rawStorage.location);
 }

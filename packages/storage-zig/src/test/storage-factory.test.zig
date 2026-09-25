@@ -46,7 +46,10 @@ fn loadFixtureKeys(allocator: std.mem.Allocator) !FixtureKeys {
 // Returns Node's `path.resolve(text).replace(/\\/g, '/')` for the tests.
 //
 fn resolved(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
-    return std.fs.path.resolve(allocator, &.{text});
+    const currentPath = try std.process.currentPathAlloc(std.testing.io, allocator);
+    const resolvedPath = try std.fs.path.resolve(allocator, &.{ currentPath, text });
+    std.mem.replaceScalar(u8, resolvedPath, '\\', '/');
+    return resolvedPath;
 }
 
 //
@@ -157,9 +160,12 @@ test "rawStorage is a StoragePrefixWrapper" {
 test "storage and rawStorage have the same location" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const result = try createStorage(arena.allocator(), std.testing.io, "fs:/some/path", null, null);
+    const allocator = arena.allocator();
+    const result = try createStorage(allocator, std.testing.io, "fs:/some/path", null, null);
     try std.testing.expectEqualStrings(result.rawStorage.location, result.storage.location);
-    try std.testing.expectEqualStrings("fs:/some/path", result.storage.location);
+
+    // "fs:/some/path" on POSIX; on Windows the resolved path has the cwd's drive ("fs:/C:/some/path").
+    try std.testing.expectEqualStrings(try pathJoin(allocator, &.{ "fs:", try resolved(allocator, "/some/path") }), result.storage.location);
 }
 
 // describe('s3: prefix')
@@ -223,6 +229,7 @@ test "normalizedPath resolves a relative bare path against the current directory
     const allocator = arena.allocator();
     const result = try createStorage(allocator, std.testing.io, "some/../relative/./path/", null, null);
     const currentPath = try std.process.currentPathAlloc(std.testing.io, allocator);
+    std.mem.replaceScalar(u8, currentPath, '\\', '/');
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{s}/relative/path", .{currentPath}), result.normalizedPath);
 }
 

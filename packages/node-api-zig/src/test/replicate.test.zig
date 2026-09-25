@@ -547,7 +547,7 @@ test "replicate copies a v6 database, reports progress, and a second replicate c
 
     const config = (try node_api.open_storage.openStorage(allocator, io, destDir, null, null)).rawStorage;
     const configData = (try config.read(allocator, io, ".db/config.json")).?;
-    const expectedConfig = try std.fmt.allocPrint(allocator, "{{\n  \"origin\": \"{s}\",\n  \"lastReplicatedAt\": \"2022-01-01T00:00:00.000Z\"\n}}", .{sourceDir});
+    const expectedConfig = try std.fmt.allocPrint(allocator, "{{\n  \"origin\": {f},\n  \"lastReplicatedAt\": \"2022-01-01T00:00:00.000Z\"\n}}", .{std.json.fmt(sourceDir, .{})});
     try std.testing.expectEqualStrings(expectedConfig, configData);
 
     const secondSourceDb = try node_api.media_file_database.createMediaFileDatabase(allocator, source.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());

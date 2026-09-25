@@ -1,5 +1,6 @@
 const std = @import("std");
 const cli = @import("cli-zig");
+const helpers = @import("test-helpers.zig");
 const delegate = cli.delegate;
 
 test "buildDelegateArgv runs the TypeScript entry point with bun" {
@@ -42,10 +43,10 @@ const RunResult = struct {
 };
 
 //
-// Runs the built binary (zig-out/bin/psi) with the arguments from the apps/cli directory.
+// Runs the built binary (zig-out/bin/psi, psi.exe on Windows) with the arguments from the apps/cli directory.
 //
 fn runPsi(allocator: std.mem.Allocator, args: []const []const u8) !RunResult {
-    const psiPath = try std.Io.Dir.cwd().realPathFileAlloc(std.testing.io, "zig-out/bin/psi", allocator);
+    const psiPath = try std.Io.Dir.cwd().realPathFileAlloc(std.testing.io, helpers.psi_path, allocator);
     var argv: std.ArrayList([]const u8) = .empty;
     try argv.append(allocator, psiPath);
     try argv.appendSlice(allocator, args);
@@ -61,6 +62,11 @@ fn runPsi(allocator: std.mem.Allocator, args: []const []const u8) !RunResult {
 test "psi --version is delegated to the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+
+    // Delegated commands run in Bun; skip where Bun cannot be spawned.
+    if (!helpers.bunAvailable(arena.allocator())) {
+        return error.SkipZigTest;
+    }
     const result = try runPsi(arena.allocator(), &.{"--version"});
     try std.testing.expectEqual(@as(u8, 0), result.exitCode);
     try std.testing.expectEqualStrings("dev\n", result.stdout);
@@ -69,6 +75,11 @@ test "psi --version is delegated to the TypeScript CLI" {
 test "psi summary --help is delegated to the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+
+    // Delegated commands run in Bun; skip where Bun cannot be spawned.
+    if (!helpers.bunAvailable(arena.allocator())) {
+        return error.SkipZigTest;
+    }
     const result = try runPsi(arena.allocator(), &.{ "summary", "--help" });
     try std.testing.expectEqual(@as(u8, 0), result.exitCode);
     try std.testing.expect(std.mem.startsWith(u8, result.stdout, "Usage: psi summary|sum [options]"));
@@ -77,6 +88,11 @@ test "psi summary --help is delegated to the TypeScript CLI" {
 test "the exit code of a delegated command is passed through" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+
+    // Delegated commands run in Bun; skip where Bun cannot be spawned.
+    if (!helpers.bunAvailable(arena.allocator())) {
+        return error.SkipZigTest;
+    }
     const result = try runPsi(arena.allocator(), &.{"no-such-command"});
     try std.testing.expectEqual(@as(u8, 1), result.exitCode);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "unknown command 'no-such-command'") != null);
@@ -94,6 +110,11 @@ test "psi replicate reports unknown options like commander" {
 test "psi verify --help is delegated to the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+
+    // Delegated commands run in Bun; skip where Bun cannot be spawned.
+    if (!helpers.bunAvailable(arena.allocator())) {
+        return error.SkipZigTest;
+    }
     const result = try runPsi(arena.allocator(), &.{ "verify", "--help" });
     try std.testing.expectEqual(@as(u8, 0), result.exitCode);
     try std.testing.expect(std.mem.startsWith(u8, result.stdout, "Usage: psi verify|ver [options]"));

@@ -6,6 +6,8 @@
 const std = @import("std");
 const serialization_zig = @import("serialization-zig");
 const cloudflare_zlib_deflate = serialization_zig.cloudflare_zlib_deflate;
+const gzip_fixture_os_byte = @import("gzip-fixture-os-byte.zig");
+const builtin = @import("builtin");
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 //
@@ -155,13 +157,28 @@ const GzipCases = struct {
     cases: []const GzipCase,
 };
 
+test "gzipLevel9 writes the gzip header OS byte zlib's OS_CODE gives this platform (zutil.h)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const expected: u8 = switch (builtin.os.tag) {
+        .macos => 19,
+        .windows => 10,
+        else => 3,
+    };
+    try std.testing.expectEqual(expected, cloudflare_zlib_deflate.os_code);
+    try std.testing.expectEqual(expected, (try cloudflare_zlib_deflate.gzipLevel9(allocator, ""))[9]);
+    try std.testing.expectEqual(expected, (try cloudflare_zlib_deflate.gzipLevel9(allocator, "a"))[9]);
+}
+
 test "gzipLevel9 of empty input is byte-identical to Bun's gzipSync" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     const expected = [_]u8{ 0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    try std.testing.expectEqualSlices(u8, &expected, try cloudflare_zlib_deflate.gzipLevel9(allocator, ""));
+    try std.testing.expectEqualSlices(u8, &expected, try gzip_fixture_os_byte.normaliseGzipOsBytes(allocator, try cloudflare_zlib_deflate.gzipLevel9(allocator, "")));
 }
 
 test "gzipLevel9 of one byte is byte-identical to Bun's gzipSync" {
@@ -170,7 +187,7 @@ test "gzipLevel9 of one byte is byte-identical to Bun's gzipSync" {
     const allocator = arena.allocator();
 
     const expected = [_]u8{ 0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0x4b, 0x04, 0x00, 0x43, 0xbe, 0xb7, 0xe8, 0x01, 0x00, 0x00, 0x00 };
-    try std.testing.expectEqualSlices(u8, &expected, try cloudflare_zlib_deflate.gzipLevel9(allocator, "a"));
+    try std.testing.expectEqualSlices(u8, &expected, try gzip_fixture_os_byte.normaliseGzipOsBytes(allocator, try cloudflare_zlib_deflate.gzipLevel9(allocator, "a")));
 }
 
 test "gzipLevel9 is byte-identical to Bun's gzipSync for generated inputs (golden)" {
@@ -185,7 +202,7 @@ test "gzipLevel9 is byte-identical to Bun's gzipSync for generated inputs (golde
         const input = try generateInput(allocator, gzipCase.kind, gzipCase.size, gzipCase.seed);
         const compressed = try cloudflare_zlib_deflate.gzipLevel9(allocator, input);
         var digest: [Sha256.digest_length]u8 = undefined;
-        Sha256.hash(compressed, &digest, .{});
+        Sha256.hash(try gzip_fixture_os_byte.normaliseGzipOsBytes(allocator, compressed), &digest, .{});
         const digestHex = std.fmt.bytesToHex(digest, .lower);
         if (compressed.len != gzipCase.length or !std.mem.eql(u8, &digestHex, gzipCase.sha256)) {
             std.debug.print("gzip output differs from Bun for {s} {d} (seed {d}): length {d}, expected {d}\n", .{ gzipCase.kind, gzipCase.size, gzipCase.seed, compressed.len, gzipCase.length });
@@ -210,7 +227,7 @@ test "gzipLevel9 is byte-identical to Bun's gzipSync for the payload sections of
         const payload = try reader.take(try reader.takeInt(u32, .little));
         const expected = try reader.take(try reader.takeInt(u32, .little));
         const compressed = try cloudflare_zlib_deflate.gzipLevel9(allocator, payload);
-        if (!std.mem.eql(u8, expected, compressed)) {
+        if (!std.mem.eql(u8, expected, try gzip_fixture_os_byte.normaliseGzipOsBytes(allocator, compressed))) {
             std.debug.print("gzip output differs from Bun for {s}\n", .{name});
             return error.TestExpectedEqual;
         }

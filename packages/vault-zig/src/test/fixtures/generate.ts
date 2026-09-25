@@ -21,7 +21,7 @@ const secrets: ISecret[] = [
     { name: "org/repo/token", type: "api-key", value: "tok" },
     { name: "clé-secrète", type: "password", value: "motdepasse" },
     { name: "a%2Fb", type: "password", value: "percent" },
-    { name: "Weird_Name.!~*'()", type: "plain", value: "quote \" backslash \\ tab \t cr \r bell \u0007 del \u007f" },
+    { name: "Weird_Name.!~'()", type: "plain", value: "quote \" backslash \\ tab \t cr \r bell \u0007 del \u007f" },
     { name: "emoji-😀", type: "plain", value: "unicode é ü 中文 😀    " },
     { name: "empty", type: "", value: "" },
 ];

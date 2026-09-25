@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -24,7 +25,9 @@ test "the file logger writes the headers, entries and footers" {
     const tmpDir = try helpers.makeTempDir(allocator, "file-logger");
     defer std.Io.Dir.cwd().deleteTree(io, tmpDir) catch {};
     var environ_map = std.process.Environ.Map.init(allocator);
+    // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows.
     try environ_map.put("TMPDIR", tmpDir);
+    try environ_map.put("TEMP", tmpDir);
     node_utils.process_env.setEnvironMap(&environ_map);
     defer node_utils.process_env.setEnvironMap(null);
     cli.process_argv.setArgv(&.{ "psi", "verify", "--db", "x" });
@@ -39,7 +42,7 @@ test "the file logger writes the headers, entries and footers" {
     defer node_utils.termination.clearTerminationCallbacks();
 
     const logFile = logger.getLogFilePath();
-    try std.testing.expect(std.mem.startsWith(u8, logFile, try std.fmt.allocPrint(allocator, "{s}/photosphere/logs/psi-", .{tmpDir})));
+    try std.testing.expect(std.mem.startsWith(u8, logFile, try std.fs.path.join(allocator, &.{ tmpDir, "photosphere", "logs", "psi-" })));
     try std.testing.expect(std.mem.endsWith(u8, logFile, ".log"));
     try std.testing.expect(std.mem.endsWith(u8, logger.getErrorLogFilePath(), "-errors.log"));
     const baseName = std.fs.path.basename(logFile);
@@ -57,7 +60,12 @@ test "the file logger writes the headers, entries and footers" {
     const logContent = try std.Io.Dir.cwd().readFileAlloc(io, logFile, allocator, .unlimited);
     try std.testing.expect(std.mem.startsWith(u8, logContent, "=" ** 80 ++ "\nPhotosphere CLI Log\nStarted: "));
     try std.testing.expect(std.mem.indexOf(u8, logContent, "\nCommand: verify --db x\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, logContent, "\n--- System Information ---\nPlatform: linux\n") != null);
+    const platform = switch (builtin.os.tag) {
+        .windows => "win32",
+        .macos => "darwin",
+        else => "linux",
+    };
+    try std.testing.expect(std.mem.indexOf(u8, logContent, "\n--- System Information ---\nPlatform: " ++ platform ++ "\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, logContent, "\n--- Photosphere Version ---\ndev\nBuild Commit: dev\nBuild Date: development\nNightly Build: false\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, logContent, "\n--- Tool Versions ---\nImageMagick: ") != null);
     try std.testing.expect(std.mem.indexOf(u8, logContent, "\n--- Command ---\npsi verify --db x\n--- Log Start ---\n") != null);
@@ -93,7 +101,9 @@ test "the error log footer is only written when errors were logged" {
     const tmpDir = try helpers.makeTempDir(allocator, "file-logger-clean");
     defer std.Io.Dir.cwd().deleteTree(io, tmpDir) catch {};
     var environ_map = std.process.Environ.Map.init(allocator);
+    // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows.
     try environ_map.put("TMPDIR", tmpDir);
+    try environ_map.put("TEMP", tmpDir);
     node_utils.process_env.setEnvironMap(&environ_map);
     defer node_utils.process_env.setEnvironMap(null);
 

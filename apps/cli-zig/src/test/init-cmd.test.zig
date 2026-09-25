@@ -2,6 +2,7 @@ const std = @import("std");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
+const tools = @import("tools-zig");
 const vault_zig = @import("vault-zig");
 const task_queue = @import("task-queue-zig");
 const helpers = @import("test-helpers.zig");
@@ -407,7 +408,9 @@ test "initContext creates the session, the worker pool and the cleanup callback"
     const io = std.testing.io;
     const tmpDir = try helpers.makeTempDir(allocator, "init-context");
     defer std.Io.Dir.cwd().deleteTree(io, tmpDir) catch {};
+    // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows.
     try environment.environ_map.put("TMPDIR", tmpDir);
+    try environment.environ_map.put("TEMP", tmpDir);
     try environment.environ_map.put("TEST_TMP_DIR", tmpDir);
     try environment.environ_map.put("NODE_ENV", "testing");
     const previous = utils.log.log;
@@ -446,7 +449,9 @@ test "initContext uses the given session ID and keeps the temporary files on fai
     const io = std.testing.io;
     const tmpDir = try helpers.makeTempDir(allocator, "init-context-failure");
     defer std.Io.Dir.cwd().deleteTree(io, tmpDir) catch {};
+    // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows.
     try environment.environ_map.put("TMPDIR", tmpDir);
+    try environment.environ_map.put("TEMP", tmpDir);
     const previous = utils.log.log;
     defer utils.log.setLog(previous);
     defer node_utils.termination.clearTerminationCallbacks();
@@ -535,6 +540,11 @@ test "loadDatabase loads a database by path or registered name" {
     try environment.init();
     defer environment.deinit();
     const allocator = environment.arena.allocator();
+
+    // loadDatabase exits the process when ImageMagick or ffmpeg is missing, so it needs the tools installed.
+    if (!(try tools.verifyTools(allocator, std.testing.io)).allAvailable) {
+        return error.SkipZigTest;
+    }
     const root = try helpers.makeTempDir(allocator, "load-database");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const dbDir = try std.fmt.allocPrint(allocator, "{s}/db", .{root});

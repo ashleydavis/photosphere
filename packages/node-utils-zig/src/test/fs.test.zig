@@ -226,19 +226,38 @@ test "getProcessTmpDir returns TEST_TMP_DIR/tmp when set, otherwise the system t
     node_utils.process_env.setEnvironMap(&environ_map);
     defer node_utils.process_env.setEnvironMap(null);
 
-    try environ_map.put("TMPDIR", "/custom/tmp/");
-    try std.testing.expectEqualStrings("/custom/tmp", try fs.getProcessTmpDir(allocator, io));
-
-    _ = environ_map.swapRemove("TMPDIR");
-    try std.testing.expectEqualStrings("/tmp", try fs.getProcessTmpDir(allocator, io));
-
-    try environ_map.put("TEST_TMP_DIR", "/isolated/test");
-    try std.testing.expectEqualStrings("/isolated/test/tmp", try fs.getProcessTmpDir(allocator, io));
-
-    try environ_map.put("TEST_TMP_DIR", "relative/dir");
     const currentPath = try std.process.currentPathAlloc(io, allocator);
-    const expected = try std.fmt.allocPrint(allocator, "{s}/relative/dir/tmp", .{currentPath});
-    try std.testing.expectEqualStrings(expected, try fs.getProcessTmpDir(allocator, io));
+
+    // Windows paths and temp dir variables follow Node's win32 rules.
+    if (builtin.os.tag == .windows) {
+        try environ_map.put("TEMP", "C:\\custom\\tmp\\");
+        try std.testing.expectEqualStrings("C:\\custom\\tmp", try fs.getProcessTmpDir(allocator, io));
+
+        _ = environ_map.swapRemove("TEMP");
+        try environ_map.put("SystemRoot", "C:\\Windows");
+        try std.testing.expectEqualStrings("C:\\Windows\\temp", try fs.getProcessTmpDir(allocator, io));
+
+        try environ_map.put("TEST_TMP_DIR", "C:\\isolated\\test");
+        try std.testing.expectEqualStrings("C:\\isolated\\test\\tmp", try fs.getProcessTmpDir(allocator, io));
+
+        try environ_map.put("TEST_TMP_DIR", "relative\\dir");
+        const expected = try std.fmt.allocPrint(allocator, "{s}\\relative\\dir\\tmp", .{currentPath});
+        try std.testing.expectEqualStrings(expected, try fs.getProcessTmpDir(allocator, io));
+    }
+    else {
+        try environ_map.put("TMPDIR", "/custom/tmp/");
+        try std.testing.expectEqualStrings("/custom/tmp", try fs.getProcessTmpDir(allocator, io));
+
+        _ = environ_map.swapRemove("TMPDIR");
+        try std.testing.expectEqualStrings("/tmp", try fs.getProcessTmpDir(allocator, io));
+
+        try environ_map.put("TEST_TMP_DIR", "/isolated/test");
+        try std.testing.expectEqualStrings("/isolated/test/tmp", try fs.getProcessTmpDir(allocator, io));
+
+        try environ_map.put("TEST_TMP_DIR", "relative/dir");
+        const expected = try std.fmt.allocPrint(allocator, "{s}/relative/dir/tmp", .{currentPath});
+        try std.testing.expectEqualStrings(expected, try fs.getProcessTmpDir(allocator, io));
+    }
 }
 
 test "osTmpDir follows the os.tmpdir() rules of the platform" {

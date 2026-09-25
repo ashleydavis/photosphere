@@ -1,5 +1,6 @@
 const std = @import("std");
 const cli = @import("cli-zig");
+const node_utils = @import("node-utils-zig");
 const helpers = @import("test-helpers.zig");
 const prompts = cli.prompts;
 const PromptInput = prompts.PromptInput;
@@ -135,6 +136,12 @@ test "prompts render and answer exactly like the TypeScript prompts" {
     defer cli.picocolors.setColorSupportOverride(null);
     prompts.common.setColumnsForTesting(@as(?usize, null));
     defer prompts.common.setColumnsForTesting(null);
+
+    // The fixture was generated with TERM=xterm-256color, which also makes clack use unicode symbols on Windows.
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try environ_map.put("TERM", "xterm-256color");
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
 
     const fixture = try helpers.loadFixture(allocator, "prompts.json");
     for (fixture.array.items, 0..) |promptCase, caseIndex| {

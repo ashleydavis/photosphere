@@ -15,6 +15,7 @@
 //
 
 const std = @import("std");
+const builtin = @import("builtin");
 
 // ---------------------------------------------------------------------------------------------------------------
 // Constants (deflate.h, zutil.h)
@@ -212,9 +213,15 @@ const max_chain_length: u32 = 4096;
 const gzip_extra_flags_level_9 = 2;
 
 //
-// The gzip header OS byte (OS_CODE, Unix).
+// The gzip header OS byte (OS_CODE in zutil.h). zlib picks it at compile time from the platform Bun was built for:
+// 19 when __APPLE__ is defined (Bun builds zlib with -fno-define-target-os-macros, so the TARGET_OS_MAC value 7 is
+// not used), 10 when WIN32 is defined, and 3 (Unix) otherwise.
 //
-const os_code = 3;
+pub const os_code: u8 = switch (builtin.os.tag) {
+    .macos => 19,
+    .windows => 10,
+    else => 3,
+};
 
 // ---------------------------------------------------------------------------------------------------------------
 // Static tables (trees.c)

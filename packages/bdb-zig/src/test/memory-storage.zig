@@ -79,6 +79,9 @@ pub const MemoryStorage = struct {
             }
             const data = try directory.readFileAlloc(io, entry.path, self.allocator, .unlimited);
             const storagePath = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ prefix, entry.path });
+
+            // Storage paths use '/', but the walker joins the path with '\' on Windows.
+            std.mem.replaceScalar(u8, storagePath, '\\', '/');
             try self.putFile(storagePath, data);
         }
     }

@@ -17,7 +17,7 @@ const Clis = struct {
 //
 fn clis(allocator: std.mem.Allocator) !Clis {
     return .{
-        .zig = try std.Io.Dir.cwd().realPathFileAlloc(std.testing.io, "zig-out/bin/psi", allocator),
+        .zig = try std.Io.Dir.cwd().realPathFileAlloc(std.testing.io, helpers.psi_path, allocator),
         .ts = @import("cli-zig").delegate.ts_cli_path,
     };
 }
@@ -39,7 +39,14 @@ fn runTs(allocator: std.mem.Allocator, environment: *const std.process.Environ.M
     var argv: std.ArrayList([]const u8) = .empty;
     try argv.appendSlice(allocator, &.{ "bun", (try clis(allocator)).ts });
     try argv.appendSlice(allocator, args);
-    return helpers.runCli(allocator, argv.items, environment);
+    return helpers.runCli(allocator, argv.items, environment) catch |err| {
+
+        // Comparing with the TypeScript CLI needs Bun; skip the test where Bun cannot be spawned.
+        if (err == error.FileNotFound) {
+            return error.SkipZigTest;
+        }
+        return err;
+    };
 }
 
 //

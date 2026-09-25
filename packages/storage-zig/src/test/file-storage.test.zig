@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const storage_zig = @import("storage-zig");
 const utils = @import("utils-zig");
 const helpers = @import("test-helpers.zig");
@@ -73,14 +74,23 @@ test "listFiles lists only files, sorted like localeCompare with numeric orderin
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
-    const fileNames = [_][]const u8{ "file10", "file2", "File1", "file1", "b.txt", "a.txt", "_x", "10", "9" };
+
+    // Windows file names are case-insensitive, so "File1" and "file1" cannot both exist there.
+    const caseSensitive = builtin.os.tag != .windows;
+    const fileNames: []const []const u8 = if (caseSensitive)
+        &.{ "file10", "file2", "File1", "file1", "b.txt", "a.txt", "_x", "10", "9" }
+    else
+        &.{ "file10", "file2", "file1", "b.txt", "a.txt", "_x", "10", "9" };
     for (fileNames) |fileName| {
         try helpers.writeFile(io, try fixture.path(fileName), "x");
     }
     try std.Io.Dir.cwd().createDirPath(io, try fixture.path("dir"));
 
     const result = try fixture.fileStorage.listFiles(allocator, io, fixture.tempDir, 2, null);
-    const expected = [_][]const u8{ "_x", "9", "10", "a.txt", "b.txt", "file1", "File1", "file2", "file10" };
+    const expected: []const []const u8 = if (caseSensitive)
+        &.{ "_x", "9", "10", "a.txt", "b.txt", "file1", "File1", "file2", "file10" }
+    else
+        &.{ "_x", "9", "10", "a.txt", "b.txt", "file1", "file2", "file10" };
     try std.testing.expectEqual(expected.len, result.names.len);
     for (expected, result.names) |expectedName, actualName| {
         try std.testing.expectEqualStrings(expectedName, actualName);

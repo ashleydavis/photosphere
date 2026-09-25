@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const yaml = @import("yaml.zig");
 const fetch_module = @import("fetch.zig");
@@ -109,10 +110,14 @@ fn toLink(allocator: std.mem.Allocator, value: ?std.json.Value) !?INewsLink {
 
 //
 // Converts a `file://` URL to a path (`fileURLToPath`): the path after the host, percent-decoded.
+// On Windows the path uses backslashes and loses the slash before the drive letter ("C:\dir\file"),
+// and a host makes it a UNC path ("\\host\share\file"), like Node's win32 fileURLToPath.
 //
 fn fileURLToPath(allocator: std.mem.Allocator, url: []const u8) ![]const u8 {
     var rest = url["file://".len..];
+    var hostname: []const u8 = "";
     if (std.mem.indexOfScalar(u8, rest, '/')) |slash| {
+        hostname = rest[0..slash];
         rest = rest[slash..];
     }
     var result: std.ArrayList(u8) = .empty;
@@ -128,6 +133,15 @@ fn fileURLToPath(allocator: std.mem.Allocator, url: []const u8) ![]const u8 {
         }
         try result.append(allocator, rest[index]);
         index += 1;
+    }
+    if (builtin.os.tag == .windows) {
+        std.mem.replaceScalar(u8, result.items, '/', '\\');
+        if (hostname.len > 0 and !std.mem.eql(u8, hostname, "localhost")) {
+            return std.mem.concat(allocator, u8, &.{ "\\\\", hostname, result.items });
+        }
+        if (result.items.len >= 3 and result.items[2] == ':') {
+            return result.items[1..];
+        }
     }
     return result.items;
 }

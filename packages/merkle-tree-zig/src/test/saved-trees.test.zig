@@ -9,6 +9,7 @@
 const std = @import("std");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const memory_storage = @import("memory-storage.zig");
+const gzip_fixture_os_byte = @import("gzip-fixture-os-byte.zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const BufferSet = merkle_tree_zig.buffer_set.BufferSet;
 const BufferMap = merkle_tree_zig.buffer_map.BufferMap;
@@ -149,7 +150,7 @@ test "saves every tree in test/dbs byte-identical to TypeScript saveTree" {
         const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ TEST_DBS_DIR, relativePath });
         const original = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
         const tree = try loadTreeBytes(allocator, original, typeCode);
-        const actual = try saveTreeBytes(allocator, &tree, typeCode);
+        const actual = try gzip_fixture_os_byte.normaliseSavedFileGzipOsBytes(allocator, try saveTreeBytes(allocator, &tree, typeCode));
         if (!std.mem.eql(u8, expected, actual)) {
             std.debug.print("Saved tree differs from TypeScript: {s}\n", .{relativePath});
             return error.TestExpectedEqual;
@@ -166,7 +167,7 @@ test "saves the trees TypeScript saved for the scenarios byte-identical" {
     for ([_][]const u8{ "empty", "files", "names", "records", "shards" }) |name| {
         const expected = try readFixture(allocator, try std.fmt.allocPrint(allocator, "scenario-{s}.dat", .{name}));
         const tree = try loadTreeBytes(allocator, expected, "FTRE");
-        std.testing.expectEqualSlices(u8, expected, try saveTreeBytes(allocator, &tree, "FTRE")) catch |err| {
+        std.testing.expectEqualSlices(u8, expected, try gzip_fixture_os_byte.normaliseSavedFileGzipOsBytes(allocator, try saveTreeBytes(allocator, &tree, "FTRE"))) catch |err| {
             std.debug.print("Saved scenario tree differs from TypeScript: {s}\n", .{name});
             return err;
         };
@@ -236,9 +237,9 @@ test "saves a tree whose content hashes share XOR buckets byte-identical to Type
     }
     tree.merkle = try merkle_tree.buildMerkleTree(allocator, tree.sort);
     tree.dirty = false;
-    try std.testing.expectEqualSlices(u8, expected, try saveTreeBytes(allocator, &tree, "FTRE"));
+    try std.testing.expectEqualSlices(u8, expected, try gzip_fixture_os_byte.normaliseSavedFileGzipOsBytes(allocator, try saveTreeBytes(allocator, &tree, "FTRE")));
 
     // Loading the TypeScript file and saving it again gives the same bytes.
     const loaded = try loadTreeBytes(allocator, expected, "FTRE");
-    try std.testing.expectEqualSlices(u8, expected, try saveTreeBytes(allocator, &loaded, "FTRE"));
+    try std.testing.expectEqualSlices(u8, expected, try gzip_fixture_os_byte.normaliseSavedFileGzipOsBytes(allocator, try saveTreeBytes(allocator, &loaded, "FTRE")));
 }
