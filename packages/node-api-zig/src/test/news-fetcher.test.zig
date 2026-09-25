@@ -17,7 +17,7 @@ const FeedServer = struct {
     // The port.
     port: u16,
 
-    // Runs the accept loop.
+    // Runs the one connection the server answers.
     group: std.Io.Group,
 
     // The status of every response.
@@ -33,36 +33,36 @@ const FeedServer = struct {
         const address = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
         self.* = .{ .io = io, .server = try address.listen(io, .{ .reuse_address = true }), .port = 0, .group = .init, .status = status, .body = body };
         self.port = self.server.socket.address.getPort();
-        try self.group.concurrent(io, acceptLoop, .{self});
+        try self.group.concurrent(io, serveOne, .{self});
     }
 
     //
-    // Stops the server.
+    // Stops the server once it has answered its one request. Every test makes exactly one request, so
+    // this waits for that answer rather than canceling a blocked accept, which on Windows can miss the
+    // cancel and never return.
     //
     fn stop(self: *FeedServer) void {
-        self.group.cancel(self.io);
+        self.group.await(self.io) catch {};
         self.server.deinit(self.io);
     }
 
     //
-    // Serves connections until canceled.
+    // Accepts one connection and answers its request.
     //
-    fn acceptLoop(self: *FeedServer) void {
-        while (true) {
-            const stream = self.server.accept(self.io) catch {
-                return;
-            };
-            defer stream.close(self.io);
-            var receiveBuffer: [4096]u8 = undefined;
-            var sendBuffer: [4096]u8 = undefined;
-            var connectionReader = stream.reader(self.io, &receiveBuffer);
-            var connectionWriter = stream.writer(self.io, &sendBuffer);
-            var httpServer = std.http.Server.init(&connectionReader.interface, &connectionWriter.interface);
-            var request = httpServer.receiveHead() catch {
-                continue;
-            };
-            request.respond(self.body, .{ .status = self.status, .keep_alive = false }) catch {};
-        }
+    fn serveOne(self: *FeedServer) void {
+        const stream = self.server.accept(self.io) catch {
+            return;
+        };
+        defer stream.close(self.io);
+        var receiveBuffer: [4096]u8 = undefined;
+        var sendBuffer: [4096]u8 = undefined;
+        var connectionReader = stream.reader(self.io, &receiveBuffer);
+        var connectionWriter = stream.writer(self.io, &sendBuffer);
+        var httpServer = std.http.Server.init(&connectionReader.interface, &connectionWriter.interface);
+        var request = httpServer.receiveHead() catch {
+            return;
+        };
+        request.respond(self.body, .{ .status = self.status, .keep_alive = false }) catch {};
     }
 
     //
