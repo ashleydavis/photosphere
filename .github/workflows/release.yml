@@ -1775,10 +1775,26 @@ jobs:
       - name: Run the Zig unit tests
         shell: bash
         run: |
+          # All the Zig packages at once, as `bun --filter '*-zig' test` ran them before they moved out of
+          # the bun workspaces into packages-zig. One after another took twice as long.
+          pids=()
           for package_dir in packages-zig/*/ apps/cli-zig/; do
-            echo "Testing $package_dir"
-            (cd "$package_dir" && bun run test)
+            (cd "$package_dir" && bun run test > test-output.log 2>&1) &
+            pids+=("$!:$package_dir")
           done
+          failed=0
+          for entry in "${pids[@]}"; do
+            pid="${entry%%:*}"
+            package_dir="${entry#*:}"
+            if wait "$pid"; then
+              echo "PASS $package_dir"
+            else
+              echo "FAIL $package_dir"
+              cat "$package_dir/test-output.log"
+              failed=1
+            fi
+          done
+          exit $failed
 
       - name: Show the disk space the Zig builds use (each package that builds the AWS SDK for C has its own zig-pkg and .zig-cache)
         if: always()
