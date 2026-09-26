@@ -7,6 +7,54 @@
         .@"utils-zig" = .{ .path = "../utils-zig" },
         .@"node-utils-zig" = .{ .path = "../node-utils-zig" },
         .@"encryption-zig" = .{ .path = "../encryption-zig" },
+        // The AWS SDK for C: the versions aws-crt-cpp v0.43.7 pins as its submodules (see docs/aws-sdk.md).
+        .@"aws-c-common" = .{
+            .url = "https://github.com/awslabs/aws-c-common/archive/refs/tags/v0.14.5.tar.gz",
+            .hash = "N-V-__8AAFo8MwCNZHfxJNzJymDSOh0YbdYSkkP1b9lTk0vM",
+        },
+        .@"aws-checksums" = .{
+            .url = "https://github.com/awslabs/aws-checksums/archive/refs/tags/v0.2.10.tar.gz",
+            .hash = "N-V-__8AAJDQCwAkmI8OFkKa3G_J5sHUDPVJEDdptqOS1qlH",
+        },
+        .@"aws-c-cal" = .{
+            .url = "https://github.com/awslabs/aws-c-cal/archive/refs/tags/v0.9.15.tar.gz",
+            .hash = "N-V-__8AAMZeOQDVINHILMO0D-rxhFPFKp94GnOJLXoKg7if",
+        },
+        .@"aws-c-io" = .{
+            .url = "https://github.com/awslabs/aws-c-io/archive/refs/tags/v0.27.6.tar.gz",
+            .hash = "N-V-__8AAD8VMAAeELjCvGVCK7RjAsi3n_fsC3A4QMdRTrMk",
+        },
+        .@"aws-c-compression" = .{
+            .url = "https://github.com/awslabs/aws-c-compression/archive/refs/tags/v0.3.2.tar.gz",
+            .hash = "N-V-__8AAFKxAgAaZOfOPw3B0c1z-Haa0nQRNjA4h9cBbq78",
+        },
+        .@"aws-c-http" = .{
+            .url = "https://github.com/awslabs/aws-c-http/archive/refs/tags/v0.11.0.tar.gz",
+            .hash = "N-V-__8AAL-0MQAyqpNXj-U5dGGIf4saULGNSDPCFxABkRGZ",
+        },
+        .@"aws-c-sdkutils" = .{
+            .url = "https://github.com/awslabs/aws-c-sdkutils/archive/refs/tags/v0.2.9.tar.gz",
+            .hash = "N-V-__8AAFeHCgDAlFHefKh17w7-oZ143FMBAMDWKPZiYI3n",
+        },
+        .@"aws-c-auth" = .{
+            .url = "https://github.com/awslabs/aws-c-auth/archive/refs/tags/v0.10.4.tar.gz",
+            .hash = "N-V-__8AAN95HABBVDvaXNyJYG4fiDuqVjQFrT9wn_w7EPRb",
+        },
+        .@"aws-c-s3" = .{
+            .url = "https://github.com/awslabs/aws-c-s3/archive/refs/tags/v0.13.5.tar.gz",
+            .hash = "N-V-__8AAD5EMgA8tDhTohwilNV6mDI7cNCdjA5a9HMcFg0x",
+        },
+        // The crypto and TLS libraries of the SDK on Linux and macOS (lazy: only fetched when building for those).
+        .@"aws-lc" = .{
+            .url = "https://github.com/aws/aws-lc/archive/refs/tags/v5.5.0.tar.gz",
+            .hash = "N-V-__8AAOfQfxIGDOzgDlbc_yQwa-mN3oZ96oLj6ERzSbPL",
+            .lazy = true,
+        },
+        .@"s2n-tls" = .{
+            .url = "https://github.com/aws/s2n-tls/archive/refs/tags/v1.7.7.tar.gz",
+            .hash = "N-V-__8AAKAEUgFA60JAO9hHB1KeA_OVVL7rwx9TbLfletS7",
+            .lazy = true,
+        },
     },
-    .paths = .{ "build.zig", "build.zig.zon", "src" },
+    .paths = .{ "build.zig", "build.zig.zon", "aws", "src" },
 }

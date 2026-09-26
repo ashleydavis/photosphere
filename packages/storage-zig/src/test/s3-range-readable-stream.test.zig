@@ -124,10 +124,12 @@ test "emits an error when all chunk sizes fail" {
     const rangeStream = try fixture.stream("my-key");
     defer rangeStream.destroy(std.testing.io);
     try std.testing.expectError(error.ReadFailed, fixture.streamToBuffer(rangeStream));
-    try std.testing.expectEqualStrings("An operation failed. Retrying after: S3 unavailable\nAn operation failed. Retrying after: S3 unavailable\nOperation failed, no more retries allowed. Last error: Error: S3 unavailable\n", capturedStderr.written());
+    // The SDK reports a 503 response as its AWS_ERROR_S3_SLOW_DOWN error (it keeps the S3 error body only for errors
+    // it does not retry).
+    try std.testing.expectEqualStrings("An operation failed. Retrying after: Response code indicates throttling\nAn operation failed. Retrying after: Response code indicates throttling\nOperation failed, no more retries allowed. Last error: Error: Response code indicates throttling\n", capturedStderr.written());
     try std.testing.expectEqual(@as(?anyerror, error.Thrown), rangeStream.err);
-    try std.testing.expectEqualStrings("S3 unavailable", utils.errors.lastErrorMessage());
-    try std.testing.expectEqualStrings("ServiceUnavailable", utils.errors.lastErrorName());
+    try std.testing.expectEqualStrings("Response code indicates throttling", utils.errors.lastErrorMessage());
+    try std.testing.expectEqualStrings("AWS_ERROR_S3_SLOW_DOWN", utils.errors.lastErrorName());
 }
 
 test "tries all three chunk sizes before emitting error" {
@@ -135,15 +137,16 @@ test "tries all three chunk sizes before emitting error" {
     try fixture.init();
     defer fixture.deinit();
     try fixture.server.putObject("my-bucket/my-key", "hello world");
-    fixture.server.getObjectUnavailableMessage = "network failure";
+    fixture.server.dropGetObjectConnections = true;
     var capturedStderr: std.Io.Writer.Allocating = .init(fixture.arena.allocator());
     utils.console.setCapture(null, &capturedStderr.writer);
     defer utils.console.setCapture(null, null);
     const rangeStream = try fixture.stream("my-key");
     defer rangeStream.destroy(std.testing.io);
     try std.testing.expectError(error.ReadFailed, fixture.streamToBuffer(rangeStream));
-    try std.testing.expectEqualStrings("An operation failed. Retrying after: network failure\nAn operation failed. Retrying after: network failure\nOperation failed, no more retries allowed. Last error: Error: network failure\n", capturedStderr.written());
-    try std.testing.expectEqualStrings("network failure", utils.errors.lastErrorMessage());
+    try std.testing.expectEqualStrings("An operation failed. Retrying after: socket is closed.\nAn operation failed. Retrying after: socket is closed.\nOperation failed, no more retries allowed. Last error: Error: socket is closed.\n", capturedStderr.written());
+    try std.testing.expectEqualStrings("socket is closed.", utils.errors.lastErrorMessage());
+    try std.testing.expectEqualStrings("AWS_IO_SOCKET_CLOSED", utils.errors.lastErrorName());
     const ranges = try fixture.server.recordedRanges(fixture.arena.allocator());
     try std.testing.expectEqual(@as(usize, 3), ranges.len);
     try std.testing.expectEqualStrings(std.fmt.comptimePrint("bytes=0-{d}", .{CHUNK_SIZE_LARGE - 1}), ranges[0]);

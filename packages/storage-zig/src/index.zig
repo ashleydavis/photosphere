@@ -12,8 +12,7 @@ pub const walk_directory = @import("lib/walk-directory.zig");
 // Not re-exported: `export * from "encryption"` (import encryption-zig directly).
 
 //
-// Files with no TypeScript counterpart (AWS SDK and ICU replacements).
+// Files with no TypeScript counterpart (the binding to the AWS SDK for C, and the ICU replacement).
 //
-pub const sigv4 = @import("lib/sigv4.zig");
 pub const s3_client = @import("lib/s3-client.zig");
 pub const locale_compare = @import("lib/locale-compare.zig");
