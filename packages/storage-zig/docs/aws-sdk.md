@@ -61,6 +61,8 @@ The Zig CLI (`apps/cli-zig`) is built for macOS with `bun run build-mac-arm64` o
 
 `zig build` fetches every dependency listed in `build.zig.zon` from its GitHub URL, checks it against the hash, keeps it in Zig's global cache and extracts it into the project's `zig-pkg/` directory (git-ignored). CI needs nothing else; the release workflow caches the `p` directory of Zig's global cache (`zig env` prints the global cache directory: `~/.cache/zig` on Linux and macOS, `%LOCALAPPDATA%\zig` on Windows) keyed on the `build.zig.zon` files, which avoids downloading the archives again.
 
+Before any Zig build, CI runs `bun run --cwd packages/storage-zig fetch-deps` (`scripts/fetch-deps.sh`), which runs `zig fetch` on each URL in `build.zig.zon`, one at a time. Left to itself, `zig build` downloads the dependencies concurrently over pooled connections, and in CI that failed with `invalid HTTP response: HttpConnectionClosing` when it reused a connection GitHub had already closed. After an upgrade nothing in the script changes: it reads the URLs from `build.zig.zon`.
+
 Where `zig fetch` cannot reach GitHub but `git clone` works (a proxy that only allows git, for example), a package can be put into the cache from a local archive of the same tag. `git archive` produces the same files GitHub's archive has, and Zig hashes the files, not the archive, so the hash is the one in `build.zig.zon`:
 
 ```
