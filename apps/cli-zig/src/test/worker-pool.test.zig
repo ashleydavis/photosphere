@@ -224,6 +224,9 @@ test "runs a task on a worker and reports its outputs" {
     try registerHandlers();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    // The pool installs the worker log routing in place of the global log; put the global log back after.
+    const previousLog = utils.log.log;
+    defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 2, 10000, .{ .sessionId = "session" });
     defer pool.deinit();
     const backend = pool.queueBackend();
@@ -240,6 +243,9 @@ test "generates a task ID when none is given" {
     try registerHandlers();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    // The pool installs the worker log routing in place of the global log; put the global log back after.
+    const previousLog = utils.log.log;
+    defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
     defer pool.deinit();
     var collector = Collector{};
@@ -253,6 +259,9 @@ test "reports a failed task with the error name and message" {
     try registerHandlers();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    // The pool installs the worker log routing in place of the global log; put the global log back after.
+    const previousLog = utils.log.log;
+    defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
     defer pool.deinit();
     var collector = Collector{};
@@ -269,6 +278,9 @@ test "forwards task messages to the message callbacks" {
     try registerHandlers();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    // The pool installs the worker log routing in place of the global log; put the global log back after.
+    const previousLog = utils.log.log;
+    defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
     defer pool.deinit();
     var collector = Collector{};
@@ -294,6 +306,9 @@ test "creates workers lazily up to maxWorkers" {
     running_now.store(0, .release);
     running_max.store(0, .release);
     release_blocked.store(false, .release);
+    // The pool installs the worker log routing in place of the global log; put the global log back after.
+    const previousLog = utils.log.log;
+    defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 2, 10000, .{});
     defer pool.deinit();
     var collector = Collector{};
@@ -325,6 +340,9 @@ test "times out a task, reports it failed and replaces the worker" {
     utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
 
+    // The pool installs the worker log routing in place of the global log; put the global log back after.
+    const previousLog = utils.log.log;
+    defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 1, 50, .{});
     defer pool.deinit();
     var collector = Collector{};
@@ -346,6 +364,9 @@ test "cancelTasks drops pending tasks and signals running tasks" {
     const allocator = arena.allocator();
     running_now.store(0, .release);
     release_blocked.store(false, .release);
+    // The pool installs the worker log routing in place of the global log; put the global log back after.
+    const previousLog = utils.log.log;
+    defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
     defer pool.deinit();
     var collector = Collector{};
@@ -373,6 +394,9 @@ test "shutdown terminates the workers" {
     try registerHandlers();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    // The pool installs the worker log routing in place of the global log; put the global log back after.
+    const previousLog = utils.log.log;
+    defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 2, 10000, .{});
     defer pool.deinit();
     var collector = Collector{};
