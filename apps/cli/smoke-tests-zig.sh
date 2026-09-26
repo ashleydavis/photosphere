@@ -42,6 +42,33 @@ cd "$SCRIPT_DIR"
 echo "Building the Zig port of the CLI"
 bun run --cwd "$ZIG_CLI_DIR" compile || exit 1
 
+# The TypeScript CLI runs from its built executables, as smoke-tests.sh does: psi, mk and bdb for this
+# platform. Through `bun run start` every TypeScript command pays for starting bun twice, which on
+# Windows made the suite about three times slower than on Linux.
+case "$(uname -s)" in
+    Linux*)
+        build_script="build-linux"
+        ;;
+    Darwin*)
+        if [ "$(uname -m)" = "arm64" ]; then
+            build_script="build-mac-arm64"
+        else
+            build_script="build-mac-x64"
+        fi
+        ;;
+    CYGWIN*|MINGW*|MSYS*)
+        build_script="build-win"
+        ;;
+    *)
+        build_script="build-linux"
+        ;;
+esac
+for cli_dir in "$SCRIPT_DIR" "$SCRIPT_DIR/../mk-cli" "$SCRIPT_DIR/../bdb-cli"; do
+    echo "Building the TypeScript executable in $cli_dir ($build_script)"
+    bun run --cwd "$cli_dir" "$build_script" || exit 1
+done
+export USE_BINARY=true
+
 rm -rf "$TMP_ROOT"
 mkdir -p "$TMP_ROOT"
 

@@ -8,7 +8,7 @@ ZIG_CLI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../cli-zig" && pwd)"
 
 # Get the TypeScript CLI command.
 get_ts_cli_command() {
-    echo "bun run start --"
+    get_cli_command
 }
 
 # Get the Zig CLI command.
