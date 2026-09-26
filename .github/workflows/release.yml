@@ -95,6 +95,10 @@ jobs:
         with:
           install_args: zig
 
+      - name: Fetch the Zig package dependencies (one at a time)
+        shell: bash
+        run: bun run --cwd packages/storage-zig fetch-deps
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -175,6 +179,10 @@ jobs:
         uses: jdx/mise-action@v2
         with:
           install_args: zig
+
+      - name: Fetch the Zig package dependencies (one at a time)
+        shell: bash
+        run: bun run --cwd packages/storage-zig fetch-deps
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -1610,6 +1618,10 @@ jobs:
         with:
           install_args: zig
 
+      - name: Fetch the Zig package dependencies (one at a time)
+        shell: bash
+        run: bun run --cwd packages/storage-zig fetch-deps
+
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
         with:
@@ -1659,6 +1671,10 @@ jobs:
         with:
           install_args: zig
 
+      - name: Fetch the Zig package dependencies (one at a time)
+        shell: bash
+        run: bun run --cwd packages/storage-zig fetch-deps
+
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
         with:
@@ -1705,6 +1721,10 @@ jobs:
         uses: jdx/mise-action@v2
         with:
           install_args: zig
+
+      - name: Fetch the Zig package dependencies (one at a time)
+        shell: bash
+        run: bun run --cwd packages/storage-zig fetch-deps
 
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4

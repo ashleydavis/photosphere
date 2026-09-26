@@ -6,6 +6,7 @@
   "scripts": {
     "compile": "zig build",
     "test": "zig build test --summary all --test-timeout 20m",
-    "clean": "rm -rf zig-out .zig-cache"
+    "clean": "rm -rf zig-out .zig-cache",
+    "fetch-deps": "bash ./scripts/fetch-deps.sh"
   }
 }
