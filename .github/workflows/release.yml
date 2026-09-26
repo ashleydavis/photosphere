@@ -97,7 +97,7 @@ jobs:
 
       - name: Fetch the Zig package dependencies (one at a time)
         shell: bash
-        run: bun run --cwd packages/storage-zig fetch-deps
+        run: bun run --cwd packages-zig/storage-zig fetch-deps
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -182,7 +182,7 @@ jobs:
 
       - name: Fetch the Zig package dependencies (one at a time)
         shell: bash
-        run: bun run --cwd packages/storage-zig fetch-deps
+        run: bun run --cwd packages-zig/storage-zig fetch-deps
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -1620,7 +1620,7 @@ jobs:
 
       - name: Fetch the Zig package dependencies (one at a time)
         shell: bash
-        run: bun run --cwd packages/storage-zig fetch-deps
+        run: bun run --cwd packages-zig/storage-zig fetch-deps
 
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
@@ -1642,7 +1642,7 @@ jobs:
 
   build-zig-macos:
     # Builds the Zig CLI for macOS natively on a Mac of each architecture: the AWS SDK for C needs the macOS SDK's
-    # framework headers, which Zig only uses for a native build (see packages/storage-zig/docs/aws-sdk.md).
+    # framework headers, which Zig only uses for a native build (see packages-zig/storage-zig/docs/aws-sdk.md).
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -1673,7 +1673,7 @@ jobs:
 
       - name: Fetch the Zig package dependencies (one at a time)
         shell: bash
-        run: bun run --cwd packages/storage-zig fetch-deps
+        run: bun run --cwd packages-zig/storage-zig fetch-deps
 
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
@@ -1724,7 +1724,7 @@ jobs:
 
       - name: Fetch the Zig package dependencies (one at a time)
         shell: bash
-        run: bun run --cwd packages/storage-zig fetch-deps
+        run: bun run --cwd packages-zig/storage-zig fetch-deps
 
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
@@ -1774,7 +1774,11 @@ jobs:
 
       - name: Run the Zig unit tests
         shell: bash
-        run: bun --filter '*-zig' test
+        run: |
+          for package_dir in packages-zig/*/ apps/cli-zig/; do
+            echo "Testing $package_dir"
+            (cd "$package_dir" && bun run test)
+          done
 
       - name: Show the disk space the Zig builds use (each package that builds the AWS SDK for C has its own zig-pkg and .zig-cache)
         if: always()
