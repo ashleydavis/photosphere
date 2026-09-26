@@ -51,7 +51,7 @@ TEST_FILES_DIR="$SYNC_TEST_ROOT/sync-test-files"
 PROCESS_OUTPUT_DIR="$SYNC_TEST_ROOT/sync-test-outputs"
 
 # Default: run from code; use --binary for built executable
-USE_BINARY=false
+USE_BINARY="${USE_BINARY:-false}"
 NUM_REPLICAS=4
 NUM_ITERATIONS=10
 

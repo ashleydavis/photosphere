@@ -33,8 +33,8 @@ export PHOTOSPHERE_VAULT_DIR="${TEST_TMP_DIR}/vault"
 export PHOTOSPHERE_CONFIG_DIR="${TEST_TMP_DIR}/config"
 export PHOTOSPHERE_VAULT_TYPE="plaintext"
 
-# Use built binary instead of bun run start (set by --binary)
-USE_BINARY=false
+# Use the built binary instead of bun run start (set and exported by smoke-tests-zig.sh).
+USE_BINARY="${USE_BINARY:-false}"
 
 # Track results
 TESTS_PASSED=0
@@ -135,8 +135,11 @@ get_cli_command() {
                 echo "./bin/x64/linux/psi"
                 ;;
             darwin*)
-                # Default to x64/mac; adjust if arm64 builds are available
-                echo "./bin/x64/mac/psi"
+                if [ "$(uname -m)" = "arm64" ]; then
+                    echo "./bin/arm64/mac/psi"
+                else
+                    echo "./bin/x64/mac/psi"
+                fi
                 ;;
             msys*|mingw*|cygwin*)
                 echo "./bin/x64/win/psi.exe"

@@ -50,7 +50,7 @@ TEST_FILES_DIR="$WRITE_LOCK_TEST_ROOT/write-lock-files"
 PROCESS_OUTPUT_DIR="$WRITE_LOCK_TEST_ROOT/write-lock-outputs"
 
 # Default: run from code; use --binary for built executable
-USE_BINARY=false
+USE_BINARY="${USE_BINARY:-false}"
 NUM_PROCESSES=4
 NUM_ITERATIONS=6
 SLEEP_MIN=0.1
