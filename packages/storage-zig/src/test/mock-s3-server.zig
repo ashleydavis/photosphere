@@ -1,7 +1,7 @@
 const std = @import("std");
 const storage_zig = @import("storage-zig");
 
-const sigv4 = storage_zig.sigv4;
+const aws = @import("aws-c");
 const s3_client = storage_zig.s3_client;
 
 //
@@ -11,6 +11,72 @@ const s3_client = storage_zig.s3_client;
 // request against the test credentials and can inject failures. Connections are closed after each response, so
 // stopping the server never waits on an idle keep-alive connection.
 //
+
+//
+// A query string parameter of a request.
+//
+const IQueryParameter = struct {
+    // The decoded name.
+    name: []const u8,
+
+    // The decoded value.
+    value: []const u8,
+};
+
+//
+// A header of a request.
+//
+const IHeader = struct {
+    // The name.
+    name: []const u8,
+
+    // The value.
+    value: []const u8,
+};
+
+//
+// Encodes text for an XML text node (the server writes XML responses).
+//
+fn xmlEncode(allocator: std.mem.Allocator, text: []const u8) ![]u8 {
+    var output: std.ArrayList(u8) = .empty;
+    try s3_client.appendXmlEscaped(allocator, &output, text);
+    return output.toOwnedSlice(allocator);
+}
+
+//
+// Decodes the XML escapes of a text node with the SDK's aws_byte_buf_append_unescaped_xml.
+//
+fn xmlDecode(allocator: std.mem.Allocator, text: []const u8) ![]u8 {
+    var buffer: aws.aws_byte_buf = undefined;
+    if (aws.aws_byte_buf_init(&buffer, aws.aws_default_allocator(), text.len) != aws.AWS_OP_SUCCESS) {
+        return error.OutOfMemory;
+    }
+    defer aws.aws_byte_buf_clean_up(&buffer);
+    if (aws.aws_byte_buf_append_unescaped_xml(aws.aws_default_allocator(), s3_client.cursorOf(text), &buffer) != aws.AWS_OP_SUCCESS) {
+        return error.InvalidXml;
+    }
+    return allocator.dupe(u8, s3_client.sliceOf(aws.aws_byte_cursor_from_buf(&buffer)));
+}
+
+//
+// Returns the raw inner text of every <tag>...</tag> element of a request body (elements of the same tag do not nest
+// in the bodies the client sends).
+//
+fn xmlElements(allocator: std.mem.Allocator, xml: []const u8, tag: []const u8) ![]const []const u8 {
+    const openTag = try std.fmt.allocPrint(allocator, "<{s}>", .{tag});
+    const closeTag = try std.fmt.allocPrint(allocator, "</{s}>", .{tag});
+    var elements: std.ArrayList([]const u8) = .empty;
+    var index: usize = 0;
+    while (std.mem.indexOfPos(u8, xml, index, openTag)) |start| {
+        const contentStart = start + openTag.len;
+        const end = std.mem.indexOfPos(u8, xml, contentStart, closeTag) orelse {
+            break;
+        };
+        try elements.append(allocator, xml[contentStart..end]);
+        index = end + closeTag.len;
+    }
+    return elements.toOwnedSlice(allocator);
+}
 
 //
 // The access key id the server accepts.
@@ -85,6 +151,9 @@ const ParsedRequest = struct {
     // The raw (encoded) path.
     rawPath: []const u8,
 
+    // The raw request target (the path and the query string as they were sent).
+    target: []const u8,
+
     // The decoded bucket.
     bucket: []const u8,
 
@@ -92,10 +161,10 @@ const ParsedRequest = struct {
     key: []const u8,
 
     // The decoded query parameters.
-    query: []const sigv4.IQueryParameter,
+    query: []const IQueryParameter,
 
     // The request headers.
-    headers: []const sigv4.IHeader,
+    headers: []const IHeader,
 
     // The request body.
     body: []const u8,
@@ -197,8 +266,17 @@ pub const MockS3Server = struct {
     // Every GetObject request fails with this 503 message (null for never).
     getObjectUnavailableMessage: ?[]const u8,
 
+    // True to close the connection of every GetObject request without answering it (a network failure).
+    dropGetObjectConnections: bool,
+
     // The number of signature failures seen.
     signatureFailures: u32,
+
+    // The number of requests being answered right now.
+    requestsInFlight: u32,
+
+    // The largest number of requests that were answered at the same time.
+    maxRequestsInFlight: u32,
 
     //
     // Starts a server on an ephemeral port of 127.0.0.1.
@@ -222,9 +300,12 @@ pub const MockS3Server = struct {
             .failRangesOfAtLeast = null,
             .failGetObjectCount = 0,
             .getObjectUnavailableMessage = null,
+            .dropGetObjectConnections = false,
             .omitContentRange = false,
             .getObjectNoSuchKey = false,
             .signatureFailures = 0,
+            .requestsInFlight = 0,
+            .maxRequestsInFlight = 0,
         };
         self.port = self.server.socket.address.getPort();
         // The accept loop must not run inline on the caller (which `async` may do), so it needs real concurrency.
@@ -365,8 +446,20 @@ pub const MockS3Server = struct {
     // Reads, checks and answers one request.
     //
     fn serveRequest(self: *MockS3Server, allocator: std.mem.Allocator, request: *std.http.Server.Request) !void {
+        self.mutex.lockUncancelable(self.io);
+        self.requestsInFlight += 1;
+        self.maxRequestsInFlight = @max(self.maxRequestsInFlight, self.requestsInFlight);
+        self.mutex.unlock(self.io);
+        defer {
+            self.mutex.lockUncancelable(self.io);
+            self.requestsInFlight -= 1;
+            self.mutex.unlock(self.io);
+        }
         const parsed = try parseRequest(allocator, request);
         const response = self.handle(allocator, parsed) catch |err| blk: {
+            if (err == error.ConnectionDropped) {
+                return err;
+            }
             break :blk try errorResponse(allocator, 500, "InternalError", @errorName(err));
         };
         var headers: std.ArrayList(std.http.Header) = .empty;
@@ -411,7 +504,7 @@ pub const MockS3Server = struct {
     //
     fn handle(self: *MockS3Server, allocator: std.mem.Allocator, parsed: ParsedRequest) !MockResponse {
         try self.recordRequest(parsed);
-        if (!try verifySignature(allocator, parsed)) {
+        if (!try verifySignature(parsed)) {
             self.mutex.lockUncancelable(self.io);
             self.signatureFailures += 1;
             self.mutex.unlock(self.io);
@@ -490,7 +583,7 @@ pub const MockS3Server = struct {
                         return errorResponse(allocator, 404, "NoSuchUpload", "The specified upload does not exist.");
                     };
                     var data: std.ArrayList(u8) = .empty;
-                    const partNumbers = try s3_client.xmlElements(allocator, parsed.body, "PartNumber");
+                    const partNumbers = try xmlElements(allocator, parsed.body, "PartNumber");
                     for (partNumbers) |partNumberText| {
                         const partNumber = try std.fmt.parseInt(u32, partNumberText, 10);
                         const part = upload.parts.get(partNumber) orelse {
@@ -549,6 +642,9 @@ pub const MockS3Server = struct {
         const range = parsed.header("range");
         if (range) |rangeValue| {
             try self.ranges.append(self.allocator, try self.allocator.dupe(u8, rangeValue));
+        }
+        if (self.dropGetObjectConnections) {
+            return error.ConnectionDropped;
         }
         if (self.getObjectUnavailableMessage) |message| {
             return errorResponse(allocator, 503, "ServiceUnavailable", message);
@@ -658,13 +754,13 @@ pub const MockS3Server = struct {
         var body: std.ArrayList(u8) = .empty;
         try body.print(allocator, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ListBucketResult><Name>{s}</Name><Prefix>{s}</Prefix><KeyCount>{d}</KeyCount><MaxKeys>{d}</MaxKeys><IsTruncated>{s}</IsTruncated>", .{
             parsed.bucket,
-            try s3_client.xmlEncode(allocator, prefix),
+            try xmlEncode(allocator, prefix),
             endIndex - startIndex,
             maxKeys,
             if (isTruncated) "true" else "false",
         });
         for (entries.items[startIndex..endIndex]) |entry| {
-            const encodedName = try s3_client.xmlEncode(allocator, entry.name);
+            const encodedName = try xmlEncode(allocator, entry.name);
             if (entry.isPrefix) {
                 try body.print(allocator, "<CommonPrefixes><Prefix>{s}</Prefix></CommonPrefixes>", .{encodedName});
             }
@@ -673,7 +769,7 @@ pub const MockS3Server = struct {
             }
         }
         if (isTruncated) {
-            try body.print(allocator, "<NextContinuationToken>{s}</NextContinuationToken>", .{try s3_client.xmlEncode(allocator, entries.items[endIndex - 1].name)});
+            try body.print(allocator, "<NextContinuationToken>{s}</NextContinuationToken>", .{try xmlEncode(allocator, entries.items[endIndex - 1].name)});
         }
         try body.appendSlice(allocator, "</ListBucketResult>");
         return .{ .status = 200, .body = body.items, .headers = &.{}, .syntheticLength = null, .fill = 0 };
@@ -686,9 +782,9 @@ pub const MockS3Server = struct {
         if (parsed.header("content-md5") == null) {
             return errorResponse(allocator, 400, "InvalidRequest", "Missing required header for this request: Content-MD5");
         }
-        const keys = try s3_client.xmlElements(allocator, parsed.body, "Key");
+        const keys = try xmlElements(allocator, parsed.body, "Key");
         for (keys) |encodedKey| {
-            const key = try s3_client.xmlDecode(allocator, encodedKey);
+            const key = try xmlDecode(allocator, encodedKey);
             const objectPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ parsed.bucket, key });
             _ = self.objects.swapRemove(objectPath);
         }
@@ -736,19 +832,24 @@ fn decodePercent(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
 //
 fn parseRequest(allocator: std.mem.Allocator, request: *std.http.Server.Request) !ParsedRequest {
     const target = try allocator.dupe(u8, request.head.target);
-    var headers: std.ArrayList(sigv4.IHeader) = .empty;
+    var headers: std.ArrayList(IHeader) = .empty;
     var iterator = request.iterateHeaders();
     while (iterator.next()) |header| {
         try headers.append(allocator, .{ .name = try allocator.dupe(u8, header.name), .value = try allocator.dupe(u8, header.value) });
     }
     const method = request.head.method;
+    // A request with neither Content-Length nor Transfer-Encoding has no body (RFC 9112 section 6.3), but std.http
+    // reads such a body until the connection closes, so its length is set to zero.
+    if (request.head.content_length == null and request.head.transfer_encoding == .none) {
+        request.head.content_length = 0;
+    }
     var bodyBuffer: [4096]u8 = undefined;
     const bodyReader = request.readerExpectNone(&bodyBuffer);
     const body = try bodyReader.allocRemaining(allocator, .unlimited);
 
     const queryIndex = std.mem.indexOfScalar(u8, target, '?');
     const rawPath = if (queryIndex) |index| target[0..index] else target;
-    var query: std.ArrayList(sigv4.IQueryParameter) = .empty;
+    var query: std.ArrayList(IQueryParameter) = .empty;
     if (queryIndex) |index| {
         var parameters = std.mem.splitScalar(u8, target[index + 1 ..], '&');
         while (parameters.next()) |parameter| {
@@ -768,6 +869,7 @@ fn parseRequest(allocator: std.mem.Allocator, request: *std.http.Server.Request)
     return .{
         .method = method,
         .rawPath = rawPath,
+        .target = target,
         .bucket = if (slashIndex) |index| withoutSlash[0..index] else withoutSlash,
         .key = if (slashIndex) |index| withoutSlash[index + 1 ..] else "",
         .query = query.items,
@@ -776,10 +878,13 @@ fn parseRequest(allocator: std.mem.Allocator, request: *std.http.Server.Request)
     };
 }
 
+
 //
-// Checks the SigV4 Authorization header of a request against the test credentials and the payload hash.
+// Checks the SigV4 Authorization header of a request: the access key id, the payload hash against the body, and the
+// signature, which the SDK's signer (aws-c-auth) computes again from the signed headers the request lists, the request
+// time and the test credentials.
 //
-fn verifySignature(allocator: std.mem.Allocator, parsed: ParsedRequest) !bool {
+fn verifySignature(parsed: ParsedRequest) !bool {
     const authorization = parsed.header("authorization") orelse {
         return false;
     };
@@ -807,28 +912,108 @@ fn verifySignature(allocator: std.mem.Allocator, parsed: ParsedRequest) !bool {
         return false;
     };
     // S3 accepts "UNSIGNED-PAYLOAD" in place of the hash of the body.
-    if (!std.mem.eql(u8, payloadHash, "UNSIGNED-PAYLOAD") and !std.mem.eql(u8, payloadHash, &sigv4.sha256Hex(parsed.body))) {
+    var bodyHash: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(parsed.body, &bodyHash, .{});
+    if (!std.mem.eql(u8, payloadHash, "UNSIGNED-PAYLOAD") and !std.mem.eql(u8, payloadHash, &std.fmt.bytesToHex(bodyHash, .lower))) {
         return false;
     }
+    const amzDate = parsed.header("x-amz-date") orelse {
+        return false;
+    };
 
-    var signedHeaders: std.ArrayList(sigv4.IHeader) = .empty;
+    // The request as the client signed it: the method, the target and the signed headers, except the ones the signer
+    // adds itself.
+    const sdkAllocator = aws.aws_default_allocator();
+    const message = aws.aws_http_message_new_request(sdkAllocator) orelse {
+        return error.OutOfMemory;
+    };
+    defer _ = aws.aws_http_message_release(message);
+    _ = aws.aws_http_message_set_request_method(message, s3_client.cursorOf(@tagName(parsed.method)));
+    _ = aws.aws_http_message_set_request_path(message, s3_client.cursorOf(parsed.target));
     var names = std.mem.splitScalar(u8, authorization[signedHeadersStart..signedHeadersEnd], ';');
     while (names.next()) |name| {
-        try signedHeaders.append(allocator, .{ .name = name, .value = parsed.header(name) orelse "" });
+        if (std.mem.eql(u8, name, "x-amz-date") or std.mem.eql(u8, name, "x-amz-content-sha256")) {
+            continue;
+        }
+        const messageHeader: aws.aws_http_header = .{
+            .name = s3_client.cursorOf(name),
+            .value = s3_client.cursorOf(parsed.header(name) orelse ""),
+            .compression = aws.AWS_HTTP_HEADER_COMPRESSION_USE_CACHE,
+        };
+        _ = aws.aws_http_message_add_header(message, messageHeader);
     }
-    const signature = try sigv4.sign(allocator, .{
-        .accessKeyId = ACCESS_KEY_ID,
-        .secretAccessKey = SECRET_ACCESS_KEY,
-        .sessionToken = null,
-    }, .{
-        .method = @tagName(parsed.method),
-        .canonicalUri = parsed.rawPath,
-        .query = parsed.query,
-        .headers = signedHeaders.items,
-        .payloadHash = payloadHash,
-        .region = region,
-        .service = "s3",
-        .amzDate = parsed.header("x-amz-date") orelse "",
-    });
-    return std.mem.eql(u8, signature.authorization, authorization);
+
+    var signingDate: aws.struct_aws_date_time = undefined;
+    var amzDateCursor = s3_client.cursorOf(amzDate);
+    if (aws.aws_date_time_init_from_str_cursor(&signingDate, &amzDateCursor, aws.AWS_DATE_FORMAT_ISO_8601_BASIC) != aws.AWS_OP_SUCCESS) {
+        return false;
+    }
+    const credentials = aws.aws_credentials_new(sdkAllocator, s3_client.cursorOf(ACCESS_KEY_ID), s3_client.cursorOf(SECRET_ACCESS_KEY), s3_client.cursorOf(""), std.math.maxInt(u64)) orelse {
+        return error.OutOfMemory;
+    };
+    defer aws.aws_credentials_release(credentials);
+    var config = std.mem.zeroes(s3_client.SigningConfigAws);
+    config.config_type = aws.AWS_SIGNING_CONFIG_AWS;
+    config.algorithm = aws.AWS_SIGNING_ALGORITHM_V4;
+    config.signature_type = aws.AWS_ST_HTTP_REQUEST_HEADERS;
+    config.region = s3_client.cursorOf(region);
+    config.service = s3_client.cursorOf("s3");
+    config.date = signingDate;
+    config.signed_body_value = s3_client.cursorOf(payloadHash);
+    config.signed_body_header = aws.AWS_SBHT_X_AMZ_CONTENT_SHA256;
+    config.credentials = credentials;
+
+    const signable = aws.aws_signable_new_http_request(sdkAllocator, message) orelse {
+        return error.OutOfMemory;
+    };
+    defer aws.aws_signable_destroy(signable);
+    var signing: SigningOutcome = .{
+        .message = message,
+        .completed = false,
+        .errorCode = 0,
+    };
+    if (aws.aws_sign_request_aws(sdkAllocator, signable, @ptrCast(&config), SigningOutcome.onComplete, &signing) != aws.AWS_OP_SUCCESS) {
+        return false;
+    }
+    // With the credentials in the config the signer completes before aws_sign_request_aws returns.
+    if (!signing.completed) {
+        return error.SigningDidNotComplete;
+    }
+    if (signing.errorCode != 0) {
+        return false;
+    }
+    const headers = aws.aws_http_message_get_headers(message);
+    var expected: aws.aws_byte_cursor = undefined;
+    if (aws.aws_http_headers_get(headers, s3_client.cursorOf("Authorization"), &expected) != aws.AWS_OP_SUCCESS) {
+        return false;
+    }
+    return std.mem.eql(u8, s3_client.sliceOf(expected), authorization);
 }
+
+//
+// The result of signing a request again in verifySignature.
+//
+const SigningOutcome = struct {
+    // The request the signing result is applied to.
+    message: *aws.struct_aws_http_message,
+
+    // True once the signer called back.
+    completed: bool,
+
+    // The error of the signer (0 for success).
+    errorCode: c_int,
+
+    //
+    // The signer's completion callback: applies the signature to the request.
+    //
+    fn onComplete(result: ?*aws.struct_aws_signing_result, error_code: c_int, userdata: ?*anyopaque) callconv(.c) void {
+        const self: *SigningOutcome = @ptrCast(@alignCast(userdata.?));
+        self.completed = true;
+        self.errorCode = error_code;
+        if (error_code == 0) {
+            if (aws.aws_apply_signing_result_to_http_request(self.message, aws.aws_default_allocator(), result) != aws.AWS_OP_SUCCESS) {
+                self.errorCode = aws.aws_last_error();
+            }
+        }
+    }
+};

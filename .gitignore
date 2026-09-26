@@ -78,5 +78,6 @@ apps/android-frontend/firebase-debug.log
 # Zig build outputs
 zig-out/
 .zig-cache/
+zig-pkg/
 apps/cli-zig/bin/
 apps/cli/test/tmp-zig/
