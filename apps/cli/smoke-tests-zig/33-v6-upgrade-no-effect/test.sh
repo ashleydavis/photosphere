@@ -29,7 +29,7 @@ test_v6_database_upgrade_no_effect() {
     expect_output_string "$upgrade_output" "Database is already at the latest version (6)" "Upgrade reports database is already current"
     
     local summary_output
-    invoke_command "Check database version after upgrade" "$(get_cli_command) summary --db $temp_v6_dir --yes" 0 "summary_output"
+    invoke_command "Check database version after upgrade" "$(get_zig_cli_command) summary --db $temp_v6_dir --yes" 0 "summary_output"
     
     expect_output_string "$summary_output" "Database version: 6" "Database is still version 6"
     

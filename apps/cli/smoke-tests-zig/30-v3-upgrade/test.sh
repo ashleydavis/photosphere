@@ -34,7 +34,7 @@ test_v3_database_upgrade() {
     
     # Verify the upgraded database is now version 6
     local summary_output
-    invoke_command "Check upgraded database version" "$(get_cli_command) summary --db $temp_v3_dir --yes" 0 "summary_output"
+    invoke_command "Check upgraded database version" "$(get_zig_cli_command) summary --db $temp_v3_dir --yes" 0 "summary_output"
     
     expect_output_string "$summary_output" "Database version: 6" "Upgraded database is now version 6"
     

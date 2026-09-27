@@ -29,7 +29,7 @@ pub const ICommandExamples = struct {
 
 //
 // Centralized examples for all CLI commands
-// (only the commands implemented in Zig are ported: init, add, verify, replicate and version).
+// (only the commands implemented in Zig are ported: init, add, summary, verify, replicate and version).
 //
 pub const COMMAND_EXAMPLES = [_]ICommandExamples{
     .{
@@ -59,6 +59,19 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             .{
                 .command = "psi add --db ./photos ~/Downloads/photos",
                 .description = "Adds a directory recursively.",
+            },
+        },
+    },
+    .{
+        .commandName = "summary",
+        .examples = &.{
+            .{
+                .command = "psi summary --db .",
+                .description = "Shows a summary for the database in current directory.",
+            },
+            .{
+                .command = "psi summary --db ./photos",
+                .description = "Shows summary for the database in the ./photos directory.",
             },
         },
     },

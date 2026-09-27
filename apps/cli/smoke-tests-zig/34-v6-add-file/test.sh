@@ -26,7 +26,7 @@ test_v6_database_add_file() {
     cp -r "$v6_db_dir" "$temp_v6_dir"
     
     local initial_summary_output
-    invoke_command "Get initial asset count" "$(get_cli_command) summary --db $temp_v6_dir --yes" 0 "initial_summary_output"
+    invoke_command "Get initial asset count" "$(get_zig_cli_command) summary --db $temp_v6_dir --yes" 0 "initial_summary_output"
     
     local initial_count
     initial_count=$(echo "$initial_summary_output" | grep -o "Total files:[[:space:]]*[0-9]*" | grep -o "[0-9]*")
@@ -38,7 +38,7 @@ test_v6_database_add_file() {
     expect_output_string "$add_output" "Added" "File was added successfully"
     
     local final_summary_output
-    invoke_command "Get final asset count" "$(get_cli_command) summary --db $temp_v6_dir --yes" 0 "final_summary_output"
+    invoke_command "Get final asset count" "$(get_zig_cli_command) summary --db $temp_v6_dir --yes" 0 "final_summary_output"
     
     local final_count
     final_count=$(echo "$final_summary_output" | grep -o "Total files:[[:space:]]*[0-9]*" | grep -o "[0-9]*")

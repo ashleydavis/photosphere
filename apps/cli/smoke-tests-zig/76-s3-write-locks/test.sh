@@ -112,7 +112,7 @@ test_s3_write_locks() {
 
     local summary_output
     invoke_command "Summarise the S3 database after concurrent writes" \
-        "$(get_cli_command) summary --db \"$s3_db\" --yes" 0 "summary_output"
+        "$(get_zig_cli_command) summary --db \"$s3_db\" --yes" 0 "summary_output"
     expect_output_value "$summary_output" "Files imported:" "${#WRITER_FILES[@]}" "Every concurrent import is counted"
 
     invoke_command "Verify the S3 database with the TypeScript CLI" "$(get_cli_command) verify --db \"$s3_db\" --yes"

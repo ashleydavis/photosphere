@@ -71,7 +71,7 @@ test_s3_replicate() {
     log_info "Source root hash: $source_hash, database id: $source_id"
 
     local source_summary
-    invoke_command "Summarise the source database" "$(get_cli_command) summary --db $source_db --yes" 0 "source_summary"
+    invoke_command "Summarise the source database" "$(get_zig_cli_command) summary --db $source_db --yes" 0 "source_summary"
     local source_file_count
     source_file_count="$(parse_numeric "$source_summary" "Total files:")"
     expect_value "$([ "$source_file_count" -gt 0 ] && echo "yes" || echo "no")" "yes" "The source database has files to replicate"
@@ -85,7 +85,7 @@ test_s3_replicate() {
     expect_value "$(read_database_id "$s3_replica")" "$source_id" "The S3 replica's database id matches the source"
 
     local s3_summary
-    invoke_command "Summarise the S3 replica" "$(get_cli_command) summary --db \"$s3_replica\" --yes" 0 "s3_summary"
+    invoke_command "Summarise the S3 replica" "$(get_zig_cli_command) summary --db \"$s3_replica\" --yes" 0 "s3_summary"
     expect_output_value "$s3_summary" "Total files:" "$source_file_count" "The S3 replica reports the source's file count"
 
     # --- 2. Replicate S3 back down to a second local directory. ---
@@ -97,7 +97,7 @@ test_s3_replicate() {
     expect_value "$(read_database_id "$local_replica")" "$source_id" "The local replica's database id matches the source"
 
     local local_summary
-    invoke_command "Summarise the local replica" "$(get_cli_command) summary --db $local_replica --yes" 0 "local_summary"
+    invoke_command "Summarise the local replica" "$(get_zig_cli_command) summary --db $local_replica --yes" 0 "local_summary"
     expect_output_value "$local_summary" "Total files:" "$source_file_count" "The local replica reports the source's file count"
 
     # --- 3. A second replication picks up exactly the newly added file. ---
@@ -109,7 +109,7 @@ test_s3_replicate() {
 
     local updated_hash updated_summary updated_file_count
     updated_hash="$(read_root_hash "$source_db")"
-    invoke_command "Summarise the updated source database" "$(get_cli_command) summary --db $source_db --yes" 0 "updated_summary"
+    invoke_command "Summarise the updated source database" "$(get_zig_cli_command) summary --db $source_db --yes" 0 "updated_summary"
     updated_file_count="$(parse_numeric "$updated_summary" "Total files:")"
 
     invoke_command "Replicate the source up to S3 again" \
@@ -118,7 +118,7 @@ test_s3_replicate() {
     expect_value "$(read_root_hash "$s3_replica")" "$updated_hash" "The S3 replica's root hash matches after the incremental replication"
 
     local updated_s3_summary
-    invoke_command "Summarise the S3 replica again" "$(get_cli_command) summary --db \"$s3_replica\" --yes" 0 "updated_s3_summary"
+    invoke_command "Summarise the S3 replica again" "$(get_zig_cli_command) summary --db \"$s3_replica\" --yes" 0 "updated_s3_summary"
     expect_output_value "$updated_s3_summary" "Total files:" "$updated_file_count" "The S3 replica picked up the added file"
 
     invoke_command "Verify the S3 replica with the TypeScript CLI" "$(get_cli_command) verify --db \"$s3_replica\" --yes"

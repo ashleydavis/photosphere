@@ -61,7 +61,7 @@ test_s3_failures() {
     # Done before the emulator is stopped, because it needs a server that answers.
     local wrong_bucket_output
     invoke_command "Summarise a database in a bucket that does not exist" \
-        "$(get_cli_command) summary --db \"s3:no-such-bucket/db\" --yes" 1 "wrong_bucket_output"
+        "$(get_zig_cli_command) summary --db \"s3:no-such-bucket/db\" --yes" 1 "wrong_bucket_output"
     expect_output_string "$wrong_bucket_output" "Total files:" "A missing bucket reports no summary" "false"
 
     # --- 1. Dead endpoint. ---
@@ -74,7 +74,7 @@ test_s3_failures() {
     expect_output_string "$dead_list_output" "test.jpg" "A dead endpoint lists no assets" "false"
 
     local dead_summary_output
-    invoke_command "Summarise with the endpoint dead" "$(get_cli_command) summary --db \"$s3_db\" --yes" 1 "dead_summary_output"
+    invoke_command "Summarise with the endpoint dead" "$(get_zig_cli_command) summary --db \"$s3_db\" --yes" 1 "dead_summary_output"
     expect_output_string "$dead_summary_output" "Total files:" "A dead endpoint reports no summary" "false"
 
     # --- 3. The endpoint dies while an import is running. ---

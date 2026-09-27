@@ -96,7 +96,7 @@ test_s3_encrypted() {
     expect_output_string "$list_output" "test.mp4" "The MP4 is listed from the encrypted S3 database"
 
     local summary_output
-    invoke_command "Summarise the encrypted S3 database" "$(get_cli_command) summary --db \"$s3_db\" --key $KEY_NAME --yes" 0 "summary_output"
+    invoke_command "Summarise the encrypted S3 database" "$(get_zig_cli_command) summary --db \"$s3_db\" --key $KEY_NAME --yes" 0 "summary_output"
     expect_output_string "$summary_output" "Total files:" "Summary contains total files count"
 
     invoke_command "Verify the encrypted S3 database" "$(get_zig_cli_command) verify --db \"$s3_db\" --key $KEY_NAME --yes" 0
