@@ -24,6 +24,23 @@ suite has a Zig counterpart that passes.
 8. One commit per completed command. Then push and watch the Release workflow until it is green in about
    30 minutes (macOS is only built and tested on CI).
 
+## Recipe for doing one command quickly
+
+One command at a time, never in parallel. The time goes on builds, so build less often and smaller:
+
+1. Map first: list every TypeScript function the command reaches, grep `packages-zig` and `apps/cli-zig` for
+   each, and write down only what is missing. Port nothing that already exists.
+2. Port bottom-up, one file with its tests at a time, and run only that file's tests while working:
+   `zig build test -Dtest-file=<file>.test.zig` in the package (add the option to a package's build.zig when
+   it lacks it). Watch each new test fail once by breaking the code, then restore it.
+3. Register the command, then run only the Zig smoke tests that use it (`bun run test:cli:zig -- <number>`).
+4. Only at the end run the full local checks of step 7 once, then commit and push.
+5. Start the next command while CI runs. Fix a CI failure as soon as it is reported, in its own commit.
+6. Before pushing, run the changed packages' tests for Windows under wine
+   (`zig build test -Dtarget=x86_64-windows -fwine`); macOS is only checked on CI.
+7. Keep the build caches: never clear them and never delete single files out of them (a cache entry with a
+   missing file breaks later builds). Check free disk before a full run.
+
 ## Rules
 
 - The Zig code is a faithful port of the TypeScript: same file and function names, same order, readable side
