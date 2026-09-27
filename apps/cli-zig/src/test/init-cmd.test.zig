@@ -63,6 +63,12 @@ const TestEnvironment = struct {
         std.Io.Dir.cwd().deleteTree(std.testing.io, vaultDir) catch {};
         try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
         self.environ_map = std.process.Environ.Map.init(allocator);
+
+        // The tools (ImageMagick, ffmpeg) are found through the PATH of the process running the tests.
+        const parent = try std.testing.environ.createMap(allocator);
+        if (parent.get("PATH")) |searchPath| {
+            try self.environ_map.put("PATH", searchPath);
+        }
         try self.environ_map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
         try self.environ_map.put("PHOTOSPHERE_VAULT_DIR", vaultDir);
         node_utils.process_env.setEnvironMap(&self.environ_map);
