@@ -47,8 +47,9 @@ pub const news_fetcher = @import("lib/news-fetcher.zig");
 pub const news_state = @import("lib/news-state.zig");
 pub const state_format = @import("lib/state-format.zig");
 pub const state_file = @import("lib/state-file.zig");
+pub const lazy_origin_storage = @import("lib/lazy-origin-storage.zig");
 // Not ported: desktop-config, get-database-summary.worker, move-assets.worker,
-// hash-file.worker, lazy-origin-storage, save-asset.worker, save-assets-batch.worker, create-database.worker,
+// hash-file.worker, save-asset.worker, save-assets-batch.worker, create-database.worker,
 // prefetch-database.worker, sync-database.worker (not used by psi replicate or psi verify).
 
 //

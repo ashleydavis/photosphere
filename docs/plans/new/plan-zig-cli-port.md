@@ -92,7 +92,7 @@ To do, in order (each one uses what the earlier ones ported):
 - [x] database-id
 - [x] origin
 - [x] set-origin
-- [ ] export
+- [x] export
 - [ ] compare
 - [ ] remove
 - [ ] repair

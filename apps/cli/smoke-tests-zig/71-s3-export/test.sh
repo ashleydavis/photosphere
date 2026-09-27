@@ -51,7 +51,7 @@ expect_byte_exact_export() {
     local output_file="$4"
 
     invoke_command "Export $asset_id out of S3" \
-        "$(get_cli_command) export $asset_id \"$output_file\" --db \"$s3_db\" --yes" 0
+        "$(get_zig_cli_command) export $asset_id \"$output_file\" --db \"$s3_db\" --yes" 0
 
     if [ ! -f "$output_file" ]; then
         log_error "The export command reported success but wrote no file at $output_file"

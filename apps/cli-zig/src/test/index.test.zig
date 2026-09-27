@@ -181,10 +181,10 @@ test "commands that are not ported are unknown commands, and empty command lines
     try std.testing.expectEqualStrings("commander.helpDisplayed", help.outcome.failure.code);
     try std.testing.expect(std.mem.startsWith(u8, help.stdout, "Usage: psi "));
 
-    try expectCommanderError(allocator, &.{"export"}, "commander.unknownCommand", "error: unknown command 'export'\n");
+    try expectCommanderError(allocator, &.{"compare"}, "commander.unknownCommand", "error: unknown command 'compare'\n");
     try expectCommanderError(allocator, &.{ "check", "--db", "x" }, "commander.unknownCommand", "error: unknown command 'check'\n");
     try expectCommanderError(allocator, &.{ "--db", "x", "replicate" }, "commander.unknownOption", "error: unknown option '--db'\n");
-    try expectCommanderError(allocator, &.{ "help", "replicate" }, "commander.unknownCommand", "error: unknown command 'help'\n(Did you mean rep?)\n");
+    try expectCommanderError(allocator, &.{ "help", "replicate" }, "commander.unknownCommand", "error: unknown command 'help'\n(Did you mean one of exp, rep?)\n");
     try expectCommanderError(allocator, &.{"replicate2"}, "commander.unknownCommand", "error: unknown command 'replicate2'\n(Did you mean replicate?)\n");
 }
 
@@ -445,4 +445,27 @@ test "origin, set-origin, root-hash and database-id command lines parse like com
     const databaseId = try parse(allocator, &.{ "database-id", "--db", "d" });
     try std.testing.expect(databaseId.outcome == .databaseId);
     try std.testing.expectEqualStrings("d", databaseId.outcome.databaseId.base.db.?);
+}
+
+test "export command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "exp", "id-1", "out.jpg", "--db", "d", "--key", "k", "-t", "thumb", "--verbose", "--yes", "--cwd", "c" });
+    try std.testing.expect(parsed.outcome == .@"export");
+    const exported = parsed.outcome.@"export";
+    try std.testing.expectEqualStrings("id-1", exported.assetId);
+    try std.testing.expectEqualStrings("out.jpg", exported.outputPath);
+    try std.testing.expectEqualStrings("d", exported.options.base.db.?);
+    try std.testing.expectEqualStrings("k", exported.options.base.key.?);
+    try std.testing.expectEqualStrings("thumb", exported.options.type.?);
+    try std.testing.expectEqual(@as(?bool, true), exported.options.base.verbose);
+    try std.testing.expectEqualStrings("c", exported.options.base.cwd.?);
+
+    // The type defaults to "original".
+    const defaulted = try parse(allocator, &.{ "export", "id-1", "out.jpg" });
+    try std.testing.expectEqualStrings("original", defaulted.outcome.@"export".options.type.?);
+
+    try expectCommanderError(allocator, &.{ "export", "id-1" }, "commander.missingArgument", "error: missing required argument 'output-path'\n");
 }
