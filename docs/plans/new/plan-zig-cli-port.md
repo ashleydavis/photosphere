@@ -70,6 +70,7 @@ One command at a time, never in parallel. The time goes on builds, so build less
 - CI must stay green on Linux, Windows and macOS, and the Release workflow should finish in about 30 minutes.
 - Check the latest Release run after every push. When it fails, all focus goes on fixing it: no command work
   until the latest run is green again. Never let it stay red.
+- Never give times in UTC. Say how long from now instead (for example "in 15 minutes").
 - DO NOT NARRATE YOUR WORK. ONE PROGRESS UPDATE PER COMMAND IS ENOUGH. Messages to the user are short. No essays.
 - Every CLI command is ticked off in this plan as it is committed.
 
