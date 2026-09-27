@@ -120,6 +120,20 @@ pub fn setupEnvironment(io: std.Io) ![]const u8 {
 }
 
 //
+// Puts back the queue backend setupEnvironment installed (or none, before it has run), for a test that installed
+// a backend of its own. Every test file runs in one test program, so a test that left its own backend in place (or
+// none) would break the tests after it.
+//
+pub fn restoreQueueBackend() void {
+    if (worker_pool) |pool| {
+        task_queue_zig.queue_backend.setQueueBackend(pool.queueBackend());
+    }
+    else {
+        task_queue_zig.queue_backend.setQueueBackend(null);
+    }
+}
+
+//
 // Sets or removes an environment variable of the environment installed by setupEnvironment.
 //
 pub fn setEnv(name: []const u8, value: ?[]const u8) !void {
