@@ -4,6 +4,7 @@ const serialization_zig = @import("serialization-zig");
 const helpers = @import("test-helpers.zig");
 const js_value = bdb.js_value;
 const BsonValue = serialization_zig.bson.BsonValue;
+const BsonDocument = serialization_zig.bson.BsonDocument;
 
 //
 // Formats a JS number with js_value.writeNumber (like `Number.prototype.toString()`).
@@ -180,4 +181,54 @@ test "jsonStringifyIndented matches JSON.stringify(value, null, 2)" {
     try std.testing.expectEqualStrings("\"1970-01-01T00:00:00.000Z\"", try js_value.jsonStringifyIndented(allocator, .{ .date = 0 }));
     var elements = [_]BsonValue{ .{ .number = 1 }, .undefined };
     try std.testing.expectEqualStrings("[\n  1,\n  null\n]", try js_value.jsonStringifyIndented(allocator, .{ .array = &elements }));
+}
+
+test "isObject matches typeof object, not null and not an array" {
+    var elements = [_]BsonValue{.{ .number = 1 }};
+    try std.testing.expect(js_value.isObject(.{ .document = .empty }));
+    try std.testing.expect(js_value.isObject(.{ .date = 0 }));
+    try std.testing.expect(!js_value.isObject(.null));
+    try std.testing.expect(!js_value.isObject(.undefined));
+    try std.testing.expect(!js_value.isObject(.{ .array = &elements }));
+    try std.testing.expect(!js_value.isObject(.{ .string = "a" }));
+    try std.testing.expect(!js_value.isObject(.{ .number = 1 }));
+}
+
+test "objectKeys matches Object.keys" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const document = try BsonDocument.fromFields(allocator, &.{
+        .{
+            .key = "b",
+            .value = .undefined,
+        },
+        .{
+            .key = "a",
+            .value = .{ .number = 1 },
+        },
+    });
+    const keys = try js_value.objectKeys(allocator, .{ .document = document });
+    try std.testing.expectEqual(@as(usize, 2), keys.len);
+    try std.testing.expectEqualStrings("b", keys[0]);
+    try std.testing.expectEqualStrings("a", keys[1]);
+    try std.testing.expectEqual(@as(usize, 0), (try js_value.objectKeys(allocator, .{ .date = 0 })).len);
+    try std.testing.expectEqual(@as(usize, 0), (try js_value.objectKeys(allocator, .{ .number = 5 })).len);
+    try std.testing.expectError(error.Thrown, js_value.objectKeys(allocator, .{ .string = "ab" }));
+}
+
+test "getProperty reads a property like value[key]" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const document = try BsonDocument.fromFields(allocator, &.{
+        .{
+            .key = "a",
+            .value = .{ .number = 1 },
+        },
+    });
+    try std.testing.expectEqual(@as(f64, 1), (try js_value.getProperty(.{ .document = document }, "a")).number);
+    try std.testing.expect(try js_value.getProperty(.{ .document = document }, "missing") == .undefined);
+    try std.testing.expect(try js_value.getProperty(.{ .date = 0 }, "a") == .undefined);
+    try std.testing.expectError(error.Thrown, js_value.getProperty(.null, "a"));
 }

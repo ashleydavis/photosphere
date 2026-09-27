@@ -29,8 +29,8 @@ pub const ICommandExamples = struct {
 
 //
 // Centralized examples for all CLI commands
-// (only the commands implemented in Zig are ported: init, add, info, summary, verify, replicate, compare, version,
-// export, list and remove).
+// (only the commands implemented in Zig are ported: init, add, info, summary, verify, repair, replicate, compare,
+// version, export, list and remove).
 //
 pub const COMMAND_EXAMPLES = [_]ICommandExamples{
     .{
@@ -115,6 +115,19 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             .{
                 .command = "psi verify --db ./photos --full",
                 .description = "Forces full verification of all files.",
+            },
+        },
+    },
+    .{
+        .commandName = "repair",
+        .examples = &.{
+            .{
+                .command = "psi repair --db ./photos --source ./backup",
+                .description = "Repairs corrupted files from a backup database.",
+            },
+            .{
+                .command = "psi repair --db . --source ./backup --full",
+                .description = "Forces full repair verification of all files.",
             },
         },
     },

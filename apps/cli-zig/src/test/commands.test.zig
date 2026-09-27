@@ -625,6 +625,84 @@ test "verify reports a missing database like the TypeScript CLI" {
 }
 
 //
+// The report of `psi repair` (apps/cli/src/cmd/repair.ts) restoring the modified thumbnail of <db> from <src>.
+//
+const repair_modified_report =
+    \\
+    \\Repairing database:
+    \\  Source:    <src>
+    \\  Target:    <db>
+    \\
+    \\
+    \\🔧 Repair completed - processed 4 files.
+    \\
+    \\Files imported:   1
+    \\Total files:      4
+    \\Total size:       2.74 MiB
+    \\Nodes processed:  7
+    \\Unmodified:       3
+    \\Modified:         0
+    \\New:              0
+    \\Removed:          0
+    \\Repaired:         1
+    \\Unrepaired:       0
+    \\Records repaired: 0
+    \\
+    \\Repaired files:
+    \\  ✓ thumb/89171cd9-a652-4047-b869-1154bf2c95a1
+    \\
+    \\✅ Database repair completed successfully
+    \\
+    \\Next steps:
+    \\    # Verify the repaired database integrity
+    \\    psi verify --db <db>
+    \\
+    \\    # View database summary and tree hash
+    \\    psi summary --db <db>
+    \\
+;
+
+test "repair restores a modified file and prints the report of the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-repair");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const src = try std.fmt.allocPrint(allocator, "{s}/src", .{root});
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", src);
+    const thumb = try std.fmt.allocPrint(allocator, "{s}/thumb/89171cd9-a652-4047-b869-1154bf2c95a1", .{db});
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = thumb,
+        .data = "changed",
+    });
+
+    const result = try normalize(allocator, try normalize(allocator, try runZig(allocator, environment, &.{ "repair", "--db", db, "--source", src, "--yes" }), src, "<src>"), db, "<db>");
+    try expectResult(result, repair_modified_report, "", 0);
+
+    const original = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/thumb/89171cd9-a652-4047-b869-1154bf2c95a1", .{src}), allocator, .unlimited);
+    const repaired = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, thumb, allocator, .unlimited);
+    try std.testing.expectEqualSlices(u8, original, repaired);
+}
+
+test "repair without a source or an origin fails like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-repair-no-source");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    var result = try runZig(allocator, environment, &.{ "repair", "--db", db, "--yes" });
+    result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
+    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
+    try std.testing.expect(std.mem.startsWith(u8, result.stderr, "Source database path is required for repair command. Specify --source or set an origin (psi set-origin <path>).\n"));
+    try std.testing.expect(std.mem.startsWith(u8, result.stdout, "\nErrors, warnings, and exceptions were logged to: "));
+    try std.testing.expect(std.mem.endsWith(u8, result.stdout, "-errors.log\nTemporary files retained for inspection: <session dir>\n"));
+}
+
+//
 // The report of `psi replicate` (apps/cli/src/cmd/replicate.ts) from <db> to <dest>, with the two lines the
 // replication task logs (packages/node-api/src/lib/replicate-database.worker.ts) through the worker log, for the
 // counts of copied files and records.

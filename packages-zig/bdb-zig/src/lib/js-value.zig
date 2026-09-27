@@ -3,6 +3,7 @@ const serialization_zig = @import("serialization-zig");
 const bson = serialization_zig.bson;
 const BsonValue = bson.BsonValue;
 const BsonDocument = bson.BsonDocument;
+const errors = @import("utils-zig").errors;
 
 //
 // No TypeScript counterpart: the JavaScript language semantics that the bdb TypeScript code relies on implicitly
@@ -679,4 +680,52 @@ fn writeJsonIndented(allocator: std.mem.Allocator, writer: *std.Io.Writer, rawVa
         },
     }
     return true;
+}
+
+//
+// Evaluates `typeof value === 'object' && value !== null && !Array.isArray(value)` (the "nested object" test of
+// updateFields and updateMetadata): true for documents, dates, Long, Binary, ObjectId and the number wrappers.
+//
+pub fn isObject(value: BsonValue) bool {
+    return std.mem.eql(u8, typeOf(value), "object") and value != .null and value != .array;
+}
+
+//
+// Returns `Object.keys(value)` (also the keys `for (const key in value)` visits) for a document, a date or a number or
+// boolean primitive. Throws for the other values, whose own keys are not ported.
+//
+pub fn objectKeys(allocator: std.mem.Allocator, value: BsonValue) ![]const []const u8 {
+    switch (value) {
+        .document => |document| {
+            const keys = try allocator.alloc([]const u8, document.fields.items.len);
+            for (document.fields.items, 0..) |field, fieldIndex| {
+                keys[fieldIndex] = field.key;
+            }
+            return keys;
+        },
+        .date, .number, .boolean => {
+            return &.{};
+        },
+        else => {
+            return errors.throwError("Object.keys of a {s} value is not ported", .{@tagName(value)});
+        },
+    }
+}
+
+//
+// Returns `value[key]` for a document (undefined when it has no such field) or a date (which has no own properties).
+// Throws for the other values, whose properties are not ported.
+//
+pub fn getProperty(value: BsonValue, key: []const u8) !BsonValue {
+    switch (value) {
+        .document => |document| {
+            return document.get(key) orelse .undefined;
+        },
+        .date => {
+            return .undefined;
+        },
+        else => {
+            return errors.throwError("Reading property {s} of a {s} value is not ported", .{ key, @tagName(value) });
+        },
+    }
 }

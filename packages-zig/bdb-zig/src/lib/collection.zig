@@ -7,6 +7,8 @@ const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const sort_index = @import("sort-index.zig");
+const updateMetadata = @import("update-metadata.zig").updateMetadata;
+const updateFields = @import("update-fields.zig").updateFields;
 const merkle_tree = @import("merkle-tree.zig");
 const merkle_tree_ref = @import("merkle-tree-ref.zig");
 const shard_zig = @import("shard.zig");
@@ -47,13 +49,20 @@ pub const DirtyCallback = struct {
 //
 const MAX_CACHED_SHARDS = 8;
 
-// Not ported: ISortIndexCreationOptions, Metadata (not used by psi add, psi replicate or psi verify).
+// Not ported: ISortIndexCreationOptions (not used by psi add, psi replicate or psi verify).
 
 //
 // A record: a document with an `_id`.
 // (Zig: a record is the BSON document it is stored as; `_id` is its string field.)
 //
 pub const IRecord = bson.BsonDocument;
+
+//
+// Per-field version metadata: root timestamp plus optional nested field metadata (recursive).
+// (Zig: the metadata is the BSON document it is stored as, with an optional `timestamp` number and an optional
+// `fields` document of nested metadata documents.)
+//
+pub const Metadata = bson.BsonDocument;
 
 //
 // Convert external IRecord to internal IInternalRecord format
@@ -128,6 +137,17 @@ pub const ISortIndexInfo = struct {
 
     // The sort direction.
     direction: SortDirection,
+};
+
+//
+// The options of updateOne (TypeScript: the anonymous `{ upsert?: boolean; timestamp?: number }` type).
+//
+pub const IUpdateOptions = struct {
+    // Creates the record when it does not exist (null is TypeScript's undefined, which does not upsert).
+    upsert: ?bool = null,
+
+    // Unix timestamp in milliseconds for field metadata (null means the current time from the timestamp provider).
+    timestamp: ?i64 = null,
 };
 
 //
@@ -616,7 +636,53 @@ pub const BsonCollection = struct {
         }; // No more records
     }
 
-    // Not ported: updateOne, replaceOne (not used by psi add, psi replicate or psi verify).
+    //
+    // Updates a record.
+    //
+    pub fn updateOne(self: *BsonCollection, io: std.Io, id: []const u8, updates: bson.BsonDocument, options: IUpdateOptions) !bool {
+        const shardId = try self.getShardId(id);
+        const recordShard = try self.shard(shardId);
+
+        var existingRecord = try recordShard.record(io, id);
+
+        if (!(options.upsert orelse false)) {
+            //
+            // If not upserting, the record must exist.
+            //
+            if (existingRecord == null) {
+                return false; // Record not found.
+            }
+        }
+
+        if (existingRecord == null) {
+            // Creating new record via upsert.
+            existingRecord = .{
+                ._id = id,
+                .fields = .empty,
+                .metadata = .empty,
+            };
+        }
+
+        //
+        // Updates the record fields.
+        //
+
+        const timestamp = options.timestamp orelse self.timestampProvider.now(io);
+        const updatedRecord: IInternalRecord = .{
+            ._id = id,
+            .fields = (try updateFields(self.allocator, .{ .document = existingRecord.?.fields }, .{ .document = updates })).document,
+            .metadata = try updateMetadata(self.allocator, .{ .document = existingRecord.?.fields }, .{ .document = updates }, existingRecord.?.metadata, @floatFromInt(timestamp)),
+        };
+
+        try recordShard.setRecord(io, id, updatedRecord);
+        try self.updateRecordInSortIndexes(io, updatedRecord, existingRecord);
+
+        self.markDirty();
+
+        return true;
+    }
+
+    // Not ported: replaceOne (not used by psi add, psi replicate or psi verify).
 
     //
     // Sets an internal record directly, preserving all timestamps and metadata.

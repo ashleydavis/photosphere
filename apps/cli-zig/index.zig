@@ -1,10 +1,10 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
 // Only the `add` (alias `a`), `compare` (alias `cmp`), `database-id`, `export` (alias `exp`), `info` (alias
-// `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `replicate` (alias
-// `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `verify` (alias `ver`) and `version` commands and
-// the `--version` option are ported; the other commands are not registered yet, so commander reports them as
-// unknown commands.
+// `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `repair`,
+// `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `verify` (alias `ver`) and
+// `version` commands and the `--version` option are ported; the other commands are not registered yet, so commander
+// reports them as unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -41,6 +41,7 @@ pub const replicate = @import("src/cmd/replicate.zig");
 pub const init_command = @import("src/cmd/init.zig");
 pub const compare = @import("src/cmd/compare.zig");
 pub const remove = @import("src/cmd/remove.zig");
+pub const repair = @import("src/cmd/repair.zig");
 pub const export_command = @import("src/cmd/export.zig");
 pub const info = @import("src/cmd/info.zig");
 pub const list = @import("src/cmd/list.zig");
@@ -71,6 +72,8 @@ const initContext = init_cmd.initContext;
 const replicateCommand = replicate.replicateCommand;
 const initCommand = init_command.initCommand;
 const IInitCommandOptions = init_command.IInitCommandOptions;
+const IRepairCommandOptions = repair.IRepairCommandOptions;
+const repairCommand = repair.repairCommand;
 const IRemoveCommandOptions = remove.IRemoveCommandOptions;
 const removeCommand = remove.removeCommand;
 const ICompareCommandOptions = compare.ICompareCommandOptions;
@@ -182,7 +185,11 @@ pub const maxOption: IOptionSpec = .{
     .flags = "--max <number>",
     .description = "Maximum number of items to show in each category (default: 10)",
 };
-// Not ported: sourceDbOption, recordsOption, allOption (not used by the ported commands).
+pub const sourceDbOption: IOptionSpec = .{
+    .flags = "--source <path>",
+    .description = "The source directory that contains the database to repair from",
+};
+// Not ported: recordsOption, allOption (not used by the ported commands).
 
 //
 // Adds an option tuple to a command (`.option(...tuple)`).
@@ -262,6 +269,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the add command with these paths and options.
     add: IAddParsed,
+
+    // Run the repair command with these options.
+    repair: IRepairCommandOptions,
 
     // Run the remove command with this asset and options.
     remove: IRemoveParsed,
@@ -462,6 +472,22 @@ fn compareAction(state: *IProgramState, args: []const ArgumentValue, options: *c
             .destKey = textValue(options, "destKey"),
             .full = flagValue(options, "full"),
             .max = textValue(options, "max"),
+        },
+    };
+}
+
+//
+// The action of the repair command (`initContext(repairCommand)`): `run` calls initContext and the command.
+//
+fn repairAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .repair = .{
+            .base = baseOptions(options),
+            .source = textValue(options, "source"),
+            .sourceKey = textValue(options, "sourceKey"),
+            .full = flagValue(options, "full"),
         },
     };
 }
@@ -785,7 +811,22 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "remove"))
         .action(state, removeAction);
 
-    // Not ported: remove-orphans and repair.
+    // Not ported: remove-orphans.
+
+    const repairDefinition = program
+        .command("repair", .{})
+        .description("Repairs the integrity of the media file database by restoring files from a source database.");
+    _ = optionFrom(repairDefinition, dbOption);
+    _ = optionFrom(repairDefinition, sourceDbOption);
+    _ = optionFrom(repairDefinition, keyOption);
+    _ = repairDefinition.option("--sk, --source-key <keyfile>", "Path to source encryption key file", null);
+    _ = optionFrom(repairDefinition, verboseOption);
+    _ = optionFrom(repairDefinition, yesOption);
+    _ = repairDefinition.option("--full", "Force full verification (bypass cached hash optimization)", .{ .boolean = false });
+    _ = optionFrom(repairDefinition, cwdOption);
+    _ = repairDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "repair"))
+        .action(state, repairAction);
 
     const rootHashDefinition = program
         .command("root-hash", .{})
@@ -941,6 +982,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try addCommand(allocator, io, context, parsed.paths, &options);
+        },
+        .repair => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try repairCommand(allocator, io, context, &options);
         },
         .remove => |parsed| {
             var options = parsed.options;

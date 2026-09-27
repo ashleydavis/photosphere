@@ -492,6 +492,26 @@ test "compare command lines parse like commander" {
     try std.testing.expect(longKey.outcome.compare.max == null);
 }
 
+test "repair command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "repair", "--db", "a", "--source", "b", "--key", "k", "--sk", "sk", "--full", "--yes" });
+    try std.testing.expect(parsed.outcome == .repair);
+    const options = parsed.outcome.repair;
+    try std.testing.expectEqualStrings("a", options.base.db.?);
+    try std.testing.expectEqualStrings("b", options.source.?);
+    try std.testing.expectEqualStrings("k", options.base.key.?);
+    try std.testing.expectEqualStrings("sk", options.sourceKey.?);
+    try std.testing.expectEqual(@as(?bool, true), options.full);
+
+    const longKey = try parse(allocator, &.{ "repair", "--source-key", "x" });
+    try std.testing.expectEqualStrings("x", longKey.outcome.repair.sourceKey.?);
+    try std.testing.expectEqual(@as(?bool, false), longKey.outcome.repair.full);
+    try std.testing.expect(longKey.outcome.repair.source == null);
+}
+
 test "remove command lines parse like commander" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

@@ -168,7 +168,7 @@ test_config_timestamps() {
     # Sleep briefly so the post-repair timestamp is strictly later than pre.
     sleep 1
 
-    invoke_command "Repair damaged database" "$(get_cli_command) repair --db $repair_db_dir --source $repair_source_dir --yes" 0
+    invoke_command "Repair damaged database" "$(get_zig_cli_command) repair --db $repair_db_dir --source $repair_source_dir --yes" 0
 
     local after_repair_modified=$(read_state_field "$repair_db_dir" "lastModifiedAt")
     expect_valid_iso_date "$after_repair_modified" "lastModifiedAt set after repair"

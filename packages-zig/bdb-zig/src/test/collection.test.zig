@@ -157,8 +157,12 @@ test "should update sort index when record is updated" {
     try std.testing.expectEqual(@as(f64, 30), values[1].number); // John second
 
     // Update John's age to 20 (should move him before Alice)
-    // (Zig: updateOne is not ported; setInternalRecord replaces the record.)
-    try collection.setInternalRecord(io, try makeUser(allocator, john._id, "John Doe", 20, "user"));
+    _ = try collection.updateOne(io, john._id, try BsonDocument.fromFields(allocator, &.{
+        .{
+            .key = "age",
+            .value = .{ .number = 20 },
+        },
+    }), .{});
 
     values = try helpers.sortIndexValues(allocator, io, ageIndex);
     try std.testing.expectEqual(@as(f64, 20), values[0].number); // John first now
@@ -552,6 +556,94 @@ test "should generate an ID if not provided" {
     try std.testing.expectEqualStrings("Jane Doe", retrieved.get("name").?.string);
     try std.testing.expect(retrieved.get("_id").?.string.len > 0); // ID should have been generated
     try std.testing.expectEqual(@as(usize, 36), retrieved.get("_id").?.string.len); // UUID format
+}
+
+test "should update a record" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    var user = try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "John Doe", 30, "user");
+
+    try collection.insertOne(io, &user, null);
+
+    const updates = try BsonDocument.fromFields(allocator, &.{
+        .{
+            .key = "age",
+            .value = .{ .number = 31 },
+        },
+        .{
+            .key = "role",
+            .value = .{ .string = "admin" },
+        },
+    });
+
+    const updateResult = try collection.updateOne(io, "123e4567-e89b-12d3-a456-426614174000", updates, .{});
+    try std.testing.expect(updateResult);
+
+    const updated = (try collection.getOne(io, "123e4567-e89b-12d3-a456-426614174000")).?;
+    try std.testing.expect(updated.eql(try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "John Doe", 31, "admin")));
+}
+
+test "should return false when updating non-existent record" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    const nonExistentId = "123e4567-e89b-12d3-a456-000000000000";
+    const updates = try BsonDocument.fromFields(allocator, &.{
+        .{
+            .key = "name",
+            .value = .{ .string = "New Name" },
+        },
+    });
+
+    const updateResult = try collection.updateOne(io, nonExistentId, updates, .{});
+    try std.testing.expect(!updateResult);
+}
+
+test "should upsert a record" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    const id = "123e4567-e89b-12d3-a456-426614174001";
+    const updates = try BsonDocument.fromFields(allocator, &.{
+        .{
+            .key = "name",
+            .value = .{ .string = "Upserted User" },
+        },
+        .{
+            .key = "email",
+            .value = .{ .string = "upsert@example.com" },
+        },
+        .{
+            .key = "age",
+            .value = .{ .number = 40 },
+        },
+        .{
+            .key = "role",
+            .value = .{ .string = "guest" },
+        },
+    });
+
+    const updateResult = try collection.updateOne(io, id, updates, .{ .upsert = true });
+    try std.testing.expect(updateResult);
+
+    const upserted = (try collection.getOne(io, id)).?;
+    var expected = try BsonDocument.fromFields(allocator, &.{
+        .{
+            .key = "_id",
+            .value = .{ .string = id },
+        },
+    });
+    for (updates.fields.items) |updateField| {
+        try expected.put(allocator, updateField.key, updateField.value);
+    }
+    try std.testing.expect(upserted.eql(expected));
 }
 
 test "should paginate through records" {
