@@ -127,7 +127,7 @@ test_s3_verify_repair() {
     s3_object put --key "$orphan_key" --body "this object is in no merkle tree"
 
     local orphans_output
-    invoke_command "Find orphans in the S3 database" "$(get_cli_command) find-orphans --db \"$s3_db\" --yes" 0 "orphans_output"
+    invoke_command "Find orphans in the S3 database" "$(get_zig_cli_command) find-orphans --db \"$s3_db\" --yes" 0 "orphans_output"
     expect_output_string "$orphans_output" "00000000-0000-0000-0000-00000000beef" "The unreferenced object is reported as an orphan"
 
     invoke_command "Verify the local replica with the TypeScript CLI" "$(get_cli_command) verify --db $good_replica --yes"

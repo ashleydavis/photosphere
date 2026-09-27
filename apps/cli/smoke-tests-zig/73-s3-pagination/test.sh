@@ -82,7 +82,7 @@ test_s3_pagination() {
     # 1000 here is exactly the truncated-at-one-page failure this test exists to catch.
     local orphans_output
     invoke_command "Find orphans across more than one listing page" \
-        "$(get_cli_command) find-orphans --db \"$s3_db\" --yes" 0 "orphans_output"
+        "$(get_zig_cli_command) find-orphans --db \"$s3_db\" --yes" 0 "orphans_output"
 
     # The command's summary line reads "Found <n> orphaned file(s) ..." (apps/cli/src/cmd/find-orphans.ts).
     # A missing summary is a failure in its own right rather than a count of zero: it means the

@@ -512,6 +512,21 @@ test "repair command lines parse like commander" {
     try std.testing.expect(longKey.outcome.repair.source == null);
 }
 
+test "find-orphans command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "find-orphans", "--db", "a", "--key", "k", "--yes", "--cwd", "c" });
+    try std.testing.expect(parsed.outcome == .findOrphans);
+    const options = parsed.outcome.findOrphans;
+    try std.testing.expectEqualStrings("a", options.base.db.?);
+    try std.testing.expectEqualStrings("k", options.base.key.?);
+    try std.testing.expectEqualStrings("c", options.base.cwd.?);
+    try std.testing.expectEqual(@as(?bool, true), options.base.yes);
+    try expectCommanderError(allocator, &.{ "find-orphans", "extra" }, "commander.excessArguments", "error: too many arguments for 'find-orphans'. Expected 0 arguments but got 1.\n");
+}
+
 test "remove command lines parse like commander" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

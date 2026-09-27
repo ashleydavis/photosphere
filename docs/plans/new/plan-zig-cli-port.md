@@ -99,7 +99,7 @@ To do, in order (each one uses what the earlier ones ported):
 - [x] compare
 - [x] remove
 - [x] repair
-- [ ] find-orphans
+- [x] find-orphans
 - [ ] remove-orphans
 - [ ] upgrade
 - [ ] sync
