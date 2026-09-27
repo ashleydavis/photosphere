@@ -51,7 +51,7 @@ test_s3_failures() {
     # Prove the database really does read back while the server is up, so the failures below are the
     # server going away and not a database that never worked.
     local working_list
-    invoke_command "List the S3 database while the server is up" "$(get_cli_command) list --db \"$s3_db\" --yes" 0 "working_list"
+    invoke_command "List the S3 database while the server is up" "$(get_zig_cli_command) list --db \"$s3_db\" --yes" 0 "working_list"
     expect_output_string "$working_list" "test.jpg" "The database reads back while the server is up"
 
     invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$s3_db\" --yes"
@@ -70,7 +70,7 @@ test_s3_failures() {
     stop_s3_emulator "$S3_STATE_DIR"
 
     local dead_list_output
-    invoke_command "List with the endpoint dead" "$(get_cli_command) list --db \"$s3_db\" --yes" 1 "dead_list_output"
+    invoke_command "List with the endpoint dead" "$(get_zig_cli_command) list --db \"$s3_db\" --yes" 1 "dead_list_output"
     expect_output_string "$dead_list_output" "test.jpg" "A dead endpoint lists no assets" "false"
 
     local dead_summary_output

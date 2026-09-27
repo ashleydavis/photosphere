@@ -47,7 +47,7 @@ create_and_read_back() {
         "$(get_zig_cli_command) add \"$source_file\" --db \"$s3_path\" --yes" 0
 
     local list_output
-    invoke_command "List $s3_path" "$(get_cli_command) list --db \"$s3_path\" --yes" 0 "list_output"
+    invoke_command "List $s3_path" "$(get_zig_cli_command) list --db \"$s3_path\" --yes" 0 "list_output"
     expect_output_string "$list_output" "$expected_name" "$s3_path lists its own import"
 }
 
@@ -60,7 +60,7 @@ expect_not_listed() {
     local foreign_name="$2"
 
     local list_output
-    invoke_command "List $s3_path to check for foreign assets" "$(get_cli_command) list --db \"$s3_path\" --yes" 0 "list_output"
+    invoke_command "List $s3_path to check for foreign assets" "$(get_zig_cli_command) list --db \"$s3_path\" --yes" 0 "list_output"
     expect_output_string "$list_output" "$foreign_name" "$s3_path does not see $foreign_name" "false"
 }
 
@@ -97,7 +97,7 @@ test_s3_paths() {
         "$(get_zig_cli_command) add \"$awkward_unicode_file\" --db \"$awkward_db\" --yes" 0
 
     local awkward_list
-    invoke_command "List the awkward-names database" "$(get_cli_command) list --db \"$awkward_db\" --yes" 0 "awkward_list"
+    invoke_command "List the awkward-names database" "$(get_zig_cli_command) list --db \"$awkward_db\" --yes" 0 "awkward_list"
     expect_output_string "$awkward_list" "a photo with spaces.jpg" "The name containing a space survives the round trip"
     expect_output_string "$awkward_list" "phötö-ünïcode.png" "The name containing non-ASCII characters survives the round trip"
 

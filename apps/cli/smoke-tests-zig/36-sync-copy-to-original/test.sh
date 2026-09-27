@@ -113,7 +113,7 @@ test_sync_copy_to_original() {
     # Verify that the original database now has the file that was added to the copy
     log_info "Verifying the original database received the file from copy"
     local original_list_output
-    invoke_command "List assets in original database" "$(get_cli_command) list --db $original_dir --yes" 0 "original_list_output"
+    invoke_command "List assets in original database" "$(get_zig_cli_command) list --db $original_dir --yes" 0 "original_list_output"
     
     expect_output_string "$original_list_output" "test.png" "Synced file from copy (test.png) appears in original database"
     expect_output_string "$original_list_output" "test.jpg" "Fixture file (test.jpg) still in original database"

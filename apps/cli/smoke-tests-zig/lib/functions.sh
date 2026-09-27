@@ -227,7 +227,7 @@ test_database_list() {
 
     # Run list command and capture output for verification
     local list_output
-    invoke_command "List database files" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 10 --yes" 0 "list_output"
+    invoke_command "List database files" "$(get_zig_cli_command) list --db $TEST_DB_DIR --page-size 10 --yes" 0 "list_output"
 
     # Check that list contains expected fields and patterns
     expect_output_string "$list_output" "Database Files" "List output contains header"
@@ -269,7 +269,7 @@ test_export_assets() {
     if [ -z "$test_asset_id" ]; then
         # Fallback: try to get a list of assets using the list command
         local list_output
-        if invoke_command "List assets to find available asset IDs" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "list_output"; then
+        if invoke_command "List assets to find available asset IDs" "$(get_zig_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "list_output"; then
             # Extract the first asset ID from the list output
             # The list output should contain lines with asset IDs
             test_asset_id=$(echo "$list_output" | grep -o "[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}" | head -1)
@@ -827,7 +827,7 @@ test_remove_asset() {
     if [ -z "$test_asset_id" ]; then
         # Fallback: try to get a list of assets using the list command
         local list_output
-        if invoke_command "List assets to find available asset IDs" "$(get_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "list_output"; then
+        if invoke_command "List assets to find available asset IDs" "$(get_zig_cli_command) list --db $TEST_DB_DIR --page-size 50 --yes" 0 "list_output"; then
             # Extract the first asset ID from the list output
             test_asset_id=$(echo "$list_output" | grep -o "[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}" | head -1)
         fi
@@ -959,7 +959,7 @@ test_remove_asset() {
     # Verify that the asset ID is no longer in the database listing
     log_info "Verifying asset ID is no longer in database listing..."
     local ls_output
-    invoke_command "List database contents after removal" "$(get_cli_command) list --db $TEST_DB_DIR --yes" 0 "ls_output"
+    invoke_command "List database contents after removal" "$(get_zig_cli_command) list --db $TEST_DB_DIR --yes" 0 "ls_output"
 
     # Check that the removed asset ID is not in the output
     if echo "$ls_output" | grep -q "$test_asset_id"; then

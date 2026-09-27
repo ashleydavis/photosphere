@@ -235,6 +235,16 @@ test "setInternalRecord should upsert (update existing record)" {
     try std.testing.expectEqual(@as(f64, 21), retrieved.fields.get("age").?.number);
 }
 
+test "getSorted should return empty when sort index does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var storage = MemoryStorage.init(arena.allocator());
+    const collection = try newCollection(arena.allocator(), &storage);
+    const result = try (try collection.sortIndex("age", .asc)).getPage(io, null);
+    try std.testing.expectEqual(@as(usize, 0), result.records.len);
+    try std.testing.expectEqual(@as(u32, 0), result.totalRecords);
+}
+
 test "findByIndex should return empty when no index exists on either direction" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -591,7 +601,42 @@ test "should paginate through records" {
     }
 }
 
-// Not ported: "should create and use a sort index" (it reads the index back with getPage, which is not ported).
+//
+// The users of the TypeScript sort index tests.
+//
+fn sortIndexTestUsers(allocator: std.mem.Allocator) ![3]BsonDocument {
+    return .{
+        try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "John Doe", 30, "user"),
+        try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174002", "Alice Smith", 25, "admin"),
+        try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174003", "Bob Johnson", 35, "user"),
+    };
+}
+
+test "should create and use a sort index" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    var users = try sortIndexTestUsers(allocator);
+
+    // Insert all users
+    for (&users) |*user| {
+        try collection.insertOne(io, user, null);
+    }
+
+    // Create an index on the age field
+    try (try collection.sortIndex("age", .asc)).ensure(io, collection, .number);
+
+    // Get sorted records
+    const result = try (try collection.sortIndex("age", .asc)).getPage(io, null);
+
+    // Check that the records are sorted by age
+    try std.testing.expectEqual(users.len, result.records.len);
+    try std.testing.expectEqual(@as(f64, 25), result.records[0].get("age").?.number); // Alice
+    try std.testing.expectEqual(@as(f64, 30), result.records[1].get("age").?.number); // John
+    try std.testing.expectEqual(@as(f64, 35), result.records[2].get("age").?.number); // Bob
+}
 
 test "should find records by index value" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -634,6 +679,74 @@ test "should find records by index value" {
     for (age30Results) |age30Result| {
         try std.testing.expectEqual(@as(f64, 30), age30Result.get("age").?.number);
     }
+}
+
+test "should support pagination with sort indexes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    var users = try sortIndexTestUsers(allocator);
+
+    // Insert users
+    for (&users) |*user| {
+        try collection.insertOne(io, user, null);
+    }
+
+    // Create an index on age
+    try (try collection.sortIndex("age", .asc)).ensure(io, collection, .number);
+
+    // Get first page
+    var result = try (try collection.sortIndex("age", .asc)).getPage(io, null);
+    try std.testing.expect(result.records.len > 0);
+    try std.testing.expectEqual(@as(u32, 3), result.totalRecords);
+    try std.testing.expect(result.totalPages > 0);
+
+    // Collect all records across pages
+    var allRecords: std.ArrayList(BsonDocument) = .empty;
+    try allRecords.appendSlice(allocator, result.records);
+    var currentPageId = result.nextPageId;
+
+    while (currentPageId) |pageId| {
+        result = try (try collection.sortIndex("age", .asc)).getPage(io, pageId);
+        try allRecords.appendSlice(allocator, result.records);
+        currentPageId = result.nextPageId;
+    }
+
+    // Verify we got all records
+    try std.testing.expectEqual(@as(usize, 3), allRecords.items.len);
+
+    // Verify they're sorted correctly
+    try std.testing.expectEqual(@as(f64, 25), allRecords.items[0].get("age").?.number); // Alice
+    try std.testing.expectEqual(@as(f64, 30), allRecords.items[1].get("age").?.number); // John
+    try std.testing.expectEqual(@as(f64, 35), allRecords.items[2].get("age").?.number); // Bob
+}
+
+test "should support descending order with sort indexes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    var users = try sortIndexTestUsers(allocator);
+
+    // Insert users
+    for (&users) |*user| {
+        try collection.insertOne(io, user, null);
+    }
+
+    // Create a descending index on age
+    try (try collection.sortIndex("age", .desc)).ensure(io, collection, .number);
+
+    // Get sorted records in descending order
+    const result = try (try collection.sortIndex("age", .desc)).getPage(io, null);
+
+    // Verify records are sorted in descending order
+    try std.testing.expectEqual(users.len, result.records.len);
+    try std.testing.expectEqual(@as(f64, 35), result.records[0].get("age").?.number); // Bob first
+    try std.testing.expectEqual(@as(f64, 30), result.records[1].get("age").?.number); // John second
+    try std.testing.expectEqual(@as(f64, 25), result.records[2].get("age").?.number); // Alice last
 }
 
 test "should throw when inserting a record with a duplicate ID" {

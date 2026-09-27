@@ -37,6 +37,7 @@ pub fn build(b: *std.Build) !void {
         return;
     }
 
+    const test_file = b.option([]const u8, "test-file", "Only run the tests of this file (e.g. storage.test.zig)");
     const test_step = b.step("test", "Run unit tests");
     var test_dir = try b.build_root.handle.openDir(b.graph.io, "src/test", .{ .iterate = true });
     defer test_dir.close(b.graph.io);
@@ -45,6 +46,11 @@ pub fn build(b: *std.Build) !void {
     while (try walker.next(b.graph.io)) |entry| {
         if (entry.kind != .file or !std.mem.endsWith(u8, entry.path, ".test.zig")) {
             continue;
+        }
+        if (test_file) |only_file| {
+            if (!std.mem.eql(u8, entry.path, only_file)) {
+                continue;
+            }
         }
         const test_module = b.createModule(.{
             .root_source_file = b.path(b.fmt("src/test/{s}", .{entry.path})),

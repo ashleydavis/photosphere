@@ -142,6 +142,21 @@ pub fn writeDateString(writer: *std.Io.Writer, time: i64) !void {
 }
 
 //
+// Formats a time value like `Date.prototype.toLocaleDateString()` in the en-US locale (the only locale Bun uses)
+// with the local time zone assumed to be UTC (for example "5/27/2025"). Years before 1 are shown as era years
+// without the era, as ICU does (year 0 is "1", year -1 is "2"). NaN or out of range times are "Invalid Date".
+//
+pub fn writeLocaleDateString(writer: *std.Io.Writer, time: f64) !void {
+    if (std.math.isNan(time) or @abs(time) > @as(f64, @floatFromInt(MAX_TIME_VALUE))) {
+        try writer.writeAll("Invalid Date");
+        return;
+    }
+    const parts = dateParts(@intFromFloat(@trunc(time)));
+    const eraYear = if (parts.year > 0) parts.year else 1 - parts.year;
+    try writer.print("{d}/{d}/{d}", .{ parts.month, parts.day, eraYear });
+}
+
+//
 // Reads a fixed number of decimal digits at index (advancing it), or null when they are not all digits.
 //
 fn readDigits(text: []const u8, index: *usize, count: usize) ?i64 {
