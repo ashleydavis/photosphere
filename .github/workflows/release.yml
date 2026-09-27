@@ -1697,7 +1697,7 @@ jobs:
   zig-smoke-tests:
     # Runs the unit tests of every Zig package and the Zig CLI smoke tests on each platform, because the
     # byte-identical output (gzip OS byte, paths, file times) differs between them.
-    timeout-minutes: 90
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -1773,6 +1773,7 @@ jobs:
           verify: magick|convert
 
       - name: Run the Zig unit tests
+        timeout-minutes: 12
         shell: bash
         run: |
           # The Zig CLI and every Zig package in one build, so each dependency, the AWS SDK for C among
@@ -1788,6 +1789,7 @@ jobs:
           du -sh packages/*/zig-pkg packages/*/.zig-cache apps/*/zig-pkg apps/*/.zig-cache 2>/dev/null || true
 
       - name: Run the Zig CLI smoke tests
+        timeout-minutes: 20
         working-directory: ./apps/cli
         shell: bash
         run: bash ./smoke-tests-zig.sh

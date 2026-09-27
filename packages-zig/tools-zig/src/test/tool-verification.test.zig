@@ -181,3 +181,50 @@ test "verifyTools lists only the missing tools" {
     try std.testing.expect(status.magick.available);
     try std.testing.expect(status.ffmpeg.available);
 }
+
+test "getImageMagickType is modern after verifyImageMagick finds magick" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var directory: FakeToolsDirectory = undefined;
+    try directory.create(allocator, io, &.{
+        .{ .name = "magick", .output = "Version: ImageMagick 7.1.1-29" },
+    });
+    defer directory.destroy(io);
+
+    _ = try tools.Image.verifyImageMagick(allocator, io);
+
+    try std.testing.expectEqual(tools.image.ImageMagickType.modern, tools.Image.getImageMagickType());
+}
+
+test "getImageMagickType is legacy after verifyImageMagick finds convert and identify" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var directory: FakeToolsDirectory = undefined;
+    try directory.create(allocator, io, &.{
+        .{ .name = "convert", .output = "Version: ImageMagick 6.9.11-60" },
+        .{ .name = "identify", .output = "Version: ImageMagick 6.9.11-60" },
+    });
+    defer directory.destroy(io);
+
+    _ = try tools.Image.verifyImageMagick(allocator, io);
+
+    try std.testing.expectEqual(tools.image.ImageMagickType.legacy, tools.Image.getImageMagickType());
+}
+
+test "getImageMagickType is none when ImageMagick is not installed" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var directory: FakeToolsDirectory = undefined;
+    try directory.create(allocator, io, &.{});
+    defer directory.destroy(io);
+
+    _ = try tools.Image.verifyImageMagick(allocator, io);
+
+    try std.testing.expectEqual(tools.image.ImageMagickType.none, tools.Image.getImageMagickType());
+}

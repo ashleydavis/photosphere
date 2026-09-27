@@ -246,3 +246,29 @@ pub fn bunAvailable(allocator: std.mem.Allocator) bool {
     };
     return true;
 }
+
+//
+// Runs a CLI command line (argv[0] is the program) with the environment, from the apps/cli directory, with its
+// stdout written to a file (as `psi ... > file` does) rather than a pipe. Returns what the file holds as stdout.
+//
+pub fn runCliToFile(allocator: std.mem.Allocator, argv: []const []const u8, environment: *const std.process.Environ.Map, outputPath: []const u8) !CliResult {
+    const io = std.testing.io;
+    const cliDir = try std.Io.Dir.cwd().openDir(io, "../cli", .{});
+    defer cliDir.close(io);
+    const outputFile = try std.Io.Dir.cwd().createFile(io, outputPath, .{});
+    var child = try std.process.spawn(io, .{
+        .argv = argv,
+        .cwd = .{ .dir = cliDir },
+        .environ_map = environment,
+        .stdout = .{ .file = outputFile },
+        .stderr = .ignore,
+    });
+    const term = try child.wait(io);
+    outputFile.close(io);
+    const exitCode: u8 = switch (term) {
+        .exited => |code| code,
+        else => 255,
+    };
+    const stdout = try std.Io.Dir.cwd().readFileAlloc(io, outputPath, allocator, .unlimited);
+    return .{ .exitCode = exitCode, .stdout = stdout, .stderr = "" };
+}

@@ -44,7 +44,7 @@ suite has a Zig counterpart that passes.
 - Zig packages live in `packages-zig/`, the Zig CLI in `apps/cli-zig/`, the Zig smoke tests in
   `apps/cli/smoke-tests-zig/`. Original files (TypeScript, existing smoke tests, hooks) are not touched.
 - CI must stay green on Linux, Windows and macOS, and the Release workflow should finish in about 30 minutes.
-- Messages to the user are short. No essays.
+- Messages to the user are short. No essays. No narrating: one progress message per command committed, nothing else.
 - Every CLI command is ticked off in this plan as it is committed.
 
 ## Commands
@@ -56,7 +56,7 @@ Done:
 
 To do, in order (each one uses what the earlier ones ported):
 
-- [ ] version
+- [x] version
 - [ ] init
 - [ ] add (including `--watch`)
 - [ ] summary

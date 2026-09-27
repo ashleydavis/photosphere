@@ -45,7 +45,7 @@ fn writeStdout(text: []const u8) void {
         return;
     }
     var buffer: [1024]u8 = undefined;
-    var file_writer = std.Io.File.stdout().writer(std.Options.debug_io, &buffer);
+    var file_writer = std.Io.File.stdout().writerStreaming(std.Options.debug_io, &buffer);
     const stdout = &file_writer.interface;
     stdout.writeAll(text) catch {};
     stdout.flush() catch {};

@@ -120,8 +120,12 @@ test "command lines parse exactly like commander" {
             try expectFlag(options.get("full"), verifyOptions.full);
             try expectText(options.get("path"), verifyOptions.path);
         }
+        else if (std.mem.eql(u8, kind, "versionCommand")) {
+            try std.testing.expect(outcome == .version);
+            try std.testing.expectEqual(expected.get("quiet").?.bool, parsed.state.notificationsQuiet.?);
+        }
         else if (std.mem.eql(u8, kind, "error") and std.mem.eql(u8, expected.get("level").?.string, "program")) {
-            // The error is the program's own (no replicate or verify command was reached), so the command
+            // The error is the program's own (no command implemented in Zig was reached), so the command
             // line is handed to the TypeScript CLI, which reports it (checked against the real CLI by generate.ts).
             try std.testing.expect(outcome == .delegate);
             try std.testing.expectEqualStrings("", parsed.stderr);
@@ -135,16 +139,16 @@ test "command lines parse exactly like commander" {
             try std.testing.expectEqual(@as(u8, 1), outcome.failure.exitCode);
         }
         else if (std.mem.eql(u8, kind, "help")) {
-            // The help of replicate and verify is rendered by the commander port (psi.json checks the text).
+            // The help of the commands is rendered by the commander port (psi.json checks the text).
             try std.testing.expect(outcome == .failure);
             try std.testing.expectEqualStrings("commander.helpDisplayed", outcome.failure.code);
             try std.testing.expectEqual(@as(u8, 0), outcome.failure.exitCode);
             try std.testing.expect(std.mem.startsWith(u8, parsed.stdout, "Usage: psi "));
         }
         else {
-            // --version is handed to the TypeScript CLI.
+            // --version prints the version.
             try std.testing.expectEqualStrings("version", kind);
-            try std.testing.expect(outcome == .delegate);
+            try std.testing.expect(outcome == .versionOption);
         }
     }
 }
@@ -160,7 +164,6 @@ test "other commands and empty command lines are delegated" {
     try std.testing.expect((try parse(allocator, &.{ "--db", "x", "replicate" })).outcome == .delegate);
     try std.testing.expect((try parse(allocator, &.{ "help", "replicate" })).outcome == .delegate);
     try std.testing.expect((try parse(allocator, &.{"replicate2"})).outcome == .delegate);
-    try std.testing.expect((try parse(allocator, &.{ "rep", "--version" })).outcome == .delegate);
 }
 
 test "the preAction hook asks for the notifications with the program's quiet flag" {
@@ -188,6 +191,9 @@ test "the command definitions match index.ts" {
     const verifyDefinition = program.findCommand("ver").?;
     try std.testing.expectEqualStrings("verify", verifyDefinition.getName());
     try std.testing.expectEqual(@as(usize, 10), verifyDefinition.options.items.len);
+    const versionDefinition = program.findCommand("version").?;
+    try std.testing.expectEqualStrings("version", versionDefinition.getName());
+    try std.testing.expectEqual(@as(usize, 0), versionDefinition.options.items.len);
     try std.testing.expectEqualStrings("Task timeout in milliseconds (default: 600000 = 10 minutes)", cli.timeoutOption.description);
 }
 
@@ -229,4 +235,13 @@ test "handleError reports other errors with the bug report hint" {
     stderr_capture.clearRetainingCapacity();
     cli.handleError(allocator, error.OutOfMemory, "uncaught exception");
     try std.testing.expectEqualStrings("An uncaught exception error occurred\nError: OutOfMemory\n", stderr_capture.written());
+}
+
+test "--version is handled in Zig wherever it is given" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expect((try parse(allocator, &.{"--version"})).outcome == .versionOption);
+    try std.testing.expect((try parse(allocator, &.{ "rep", "--version" })).outcome == .versionOption);
+    try std.testing.expect((try parse(allocator, &.{ "version", "--version" })).outcome == .versionOption);
 }

@@ -879,5 +879,66 @@
             "code": "commander.unknownOption",
             "level": "command"
         }
+    },
+    {
+        "args": [
+            "version"
+        ],
+        "outcome": {
+            "kind": "versionCommand",
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "-q",
+            "version"
+        ],
+        "outcome": {
+            "kind": "versionCommand",
+            "quiet": true
+        }
+    },
+    {
+        "args": [
+            "version",
+            "extra"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: too many arguments for 'version'. Expected 0 arguments but got 1.\n",
+            "code": "commander.excessArguments",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "version",
+            "--bogus"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--bogus'\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "version",
+            "--help"
+        ],
+        "outcome": {
+            "kind": "help"
+        }
+    },
+    {
+        "args": [
+            "version",
+            "--version"
+        ],
+        "outcome": {
+            "kind": "version"
+        }
     }
 ]

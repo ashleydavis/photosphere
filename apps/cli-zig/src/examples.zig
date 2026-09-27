@@ -29,7 +29,7 @@ pub const ICommandExamples = struct {
 
 //
 // Centralized examples for all CLI commands
-// (only the commands implemented in Zig are ported: verify and replicate).
+// (only the commands implemented in Zig are ported: verify, replicate and version).
 //
 pub const COMMAND_EXAMPLES = [_]ICommandExamples{
     .{
@@ -59,6 +59,15 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             .{
                 .command = "psi replicate --db . --dest s3:bucket/photos",
                 .description = "Replicates the current database to S3.",
+            },
+        },
+    },
+    .{
+        .commandName = "version",
+        .examples = &.{
+            .{
+                .command = "psi version",
+                .description = "Shows version information for psi and its dependencies.",
             },
         },
     },

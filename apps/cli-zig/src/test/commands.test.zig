@@ -240,3 +240,78 @@ test "replicate rejects a key for an unencrypted destination like TypeScript" {
     try std.testing.expect(std.mem.indexOf(u8, zigResult.stderr, "You specified an encryption key, but the destination database is not encrypted.") != null);
     try std.testing.expect(std.mem.indexOf(u8, tsResult.stderr, "You specified an encryption key, but the destination database is not encrypted.") != null);
 }
+
+//
+// Runs the Zig CLI with the arguments, its stdout written to a file.
+//
+fn runZigToFile(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, args: []const []const u8, outputPath: []const u8) !helpers.CliResult {
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.append(allocator, (try clis(allocator)).zig);
+    try argv.appendSlice(allocator, args);
+    return helpers.runCliToFile(allocator, argv.items, environment, outputPath);
+}
+
+//
+// Runs the TypeScript CLI with the arguments, its stdout written to a file.
+//
+fn runTsToFile(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, args: []const []const u8, outputPath: []const u8) !helpers.CliResult {
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.appendSlice(allocator, &.{ "bun", (try clis(allocator)).ts });
+    try argv.appendSlice(allocator, args);
+    return helpers.runCliToFile(allocator, argv.items, environment, outputPath) catch |err| {
+
+        // Comparing with the TypeScript CLI needs Bun; skip the test where Bun cannot be spawned.
+        if (err == error.FileNotFound) {
+            return error.SkipZigTest;
+        }
+        return err;
+    };
+}
+
+test "version prints the same report as TypeScript" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-version");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    const tsResult = try runTs(allocator, environment, &.{"version"});
+    const zigResult = try runZig(allocator, environment, &.{"version"});
+    try expectSameResult(tsResult, zigResult);
+    try std.testing.expectEqual(@as(u8, 0), zigResult.exitCode);
+    try std.testing.expect(std.mem.indexOf(u8, zigResult.stdout, "Database version: 6") != null);
+
+    const tsQuiet = try runTs(allocator, environment, &.{ "-q", "version" });
+    const zigQuiet = try runZig(allocator, environment, &.{ "-q", "version" });
+    try expectSameResult(tsQuiet, zigQuiet);
+}
+
+test "version written to a file is the same as TypeScript" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-version-file");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    const tsResult = try runTsToFile(allocator, environment, &.{"version"}, try std.fmt.allocPrint(allocator, "{s}/ts.txt", .{root}));
+    const zigResult = try runZigToFile(allocator, environment, &.{"version"}, try std.fmt.allocPrint(allocator, "{s}/zig.txt", .{root}));
+    try expectSameResult(tsResult, zigResult);
+}
+
+test "--version prints the version like TypeScript" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-version-option");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    for ([_][]const []const u8{ &.{"--version"}, &.{ "ver", "--version" }, &.{ "version", "--version" } }) |args| {
+        const tsResult = try runTs(allocator, environment, args);
+        const zigResult = try runZig(allocator, environment, args);
+        try expectSameResult(tsResult, zigResult);
+        try std.testing.expectEqual(@as(u8, 0), zigResult.exitCode);
+    }
+}

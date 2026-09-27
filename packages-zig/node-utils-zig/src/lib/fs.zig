@@ -638,4 +638,55 @@ pub fn getConfigDir(allocator: std.mem.Allocator) ![]const u8 {
     return ".";
 }
 
-// Not ported: getCacheDir, readFileHead (not used by replicate or verify).
+//
+// Returns the directory Photosphere keeps data it could rebuild in: today, the hash caches.
+//
+// Each platform's own cache location, which is the one thing here not shared with the config. The
+// config uses one Unix-style path everywhere on purpose; a cache is the opposite case, because the
+// operating system, the backup tool and the disk cleaner all have opinions about where caches live
+// and each looks in its own place.
+//
+//  - macOS: ~/Library/Caches/photosphere.
+//  - Windows: LOCALAPPDATA\photosphere\cache. Local, not Roaming: a cache must not follow a roaming
+//    profile around a network.
+//  - Every other Unix: XDG_CACHE_HOME, else ~/.cache, then "photosphere" under it.
+//  - A device: the app's storage sandbox, which goes when the app is uninstalled.
+//
+// PHOTOSPHERE_CACHE_DIR overrides it, separately from PHOTOSPHERE_CONFIG_DIR.
+//
+pub fn getCacheDir(allocator: std.mem.Allocator) ![]const u8 {
+    if (process_env.getEnv("PHOTOSPHERE_CACHE_DIR")) |cacheDir| {
+        if (cacheDir.len > 0) {
+            return cacheDir;
+        }
+    }
+
+    // A device, answered first and never by asking the platform.
+    const homeDir = osHomedir();
+    if (homeDir.len == 0) {
+        return ".";
+    }
+
+    if (builtin.os.tag == .macos) {
+        return std.fs.path.join(allocator, &.{ homeDir, "Library", "Caches", "photosphere" });
+    }
+
+    if (builtin.os.tag == .windows) {
+        var localAppData: []const u8 = process_env.getEnv("LOCALAPPDATA") orelse "";
+        if (localAppData.len == 0) {
+            localAppData = try std.fs.path.join(allocator, &.{ homeDir, "AppData", "Local" });
+        }
+        return std.fs.path.join(allocator, &.{ localAppData, "photosphere", "cache" });
+    }
+
+    // Linux, and every other Unix that is not macOS. XDG_CACHE_HOME says where caches go; ~/.cache is
+    // what to use when it does not say, which is the usual case.
+    if (process_env.getEnv("XDG_CACHE_HOME")) |xdgCacheHome| {
+        if (xdgCacheHome.len > 0) {
+            return std.fs.path.join(allocator, &.{ xdgCacheHome, "photosphere" });
+        }
+    }
+    return std.fs.path.join(allocator, &.{ homeDir, ".cache", "photosphere" });
+}
+
+// Not ported: readFileHead (not used by the ported commands).
