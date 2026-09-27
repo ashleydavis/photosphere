@@ -213,6 +213,9 @@ test "the command definitions match index.ts" {
     const replicateDefinition = program.findCommand("rep").?;
     try std.testing.expectEqualStrings("replicate", replicateDefinition.getName());
     try std.testing.expectEqual(@as(usize, 13), replicateDefinition.options.items.len);
+    for ([_][]const u8{ "origin", "set-origin", "root-hash", "database-id" }) |name| {
+        try std.testing.expectEqual(@as(usize, 5), program.findCommand(name).?.options.items.len);
+    }
     const infoDefinition = program.findCommand("inf").?;
     try std.testing.expectEqualStrings("info", infoDefinition.getName());
     try std.testing.expectEqual(@as(usize, 5), infoDefinition.options.items.len);
@@ -416,4 +419,30 @@ test "info classifies inputs as paths, asset IDs or hashes" {
     try std.testing.expectEqual(cli.info.classifyInput("426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7"), .path);
     try std.testing.expectEqual(cli.info.classifyInput("photo.jpg"), .path);
     try std.testing.expectEqual(cli.info.classifyInput("89171cd9-a652-4047-b869-1154bf2c95ag"), .path);
+}
+
+test "origin, set-origin, root-hash and database-id command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const origin = try parse(allocator, &.{ "origin", "--db", "a", "--key", "k", "--yes" });
+    try std.testing.expect(origin.outcome == .origin);
+    try std.testing.expectEqualStrings("a", origin.outcome.origin.base.db.?);
+    try std.testing.expectEqualStrings("k", origin.outcome.origin.base.key.?);
+
+    const setOrigin = try parse(allocator, &.{ "set-origin", "s3:b/p", "--db", "a", "--verbose" });
+    try std.testing.expect(setOrigin.outcome == .setOrigin);
+    try std.testing.expectEqualStrings("s3:b/p", setOrigin.outcome.setOrigin.path);
+    try std.testing.expectEqualStrings("a", setOrigin.outcome.setOrigin.options.base.db.?);
+    try std.testing.expectEqual(@as(?bool, true), setOrigin.outcome.setOrigin.options.base.verbose);
+    try expectCommanderError(allocator, &.{"set-origin"}, "commander.missingArgument", "error: missing required argument 'path'\n");
+
+    const rootHash = try parse(allocator, &.{ "root-hash", "--cwd", "c" });
+    try std.testing.expect(rootHash.outcome == .rootHash);
+    try std.testing.expectEqualStrings("c", rootHash.outcome.rootHash.base.cwd.?);
+
+    const databaseId = try parse(allocator, &.{ "database-id", "--db", "d" });
+    try std.testing.expect(databaseId.outcome == .databaseId);
+    try std.testing.expectEqualStrings("d", databaseId.outcome.databaseId.base.db.?);
 }

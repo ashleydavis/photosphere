@@ -301,6 +301,38 @@ test "list prints the report of the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "list", "--db", db, "--yes" }), encrypted, "", 0);
 }
 
+test "root-hash and database-id print the values of the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-root-hash");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+
+    // The values the TypeScript CLI prints for test/dbs/v6.
+    try expectResult(try runZig(allocator, environment, &.{ "root-hash", "--db", db, "--yes" }), "c18854777b06e1b0d499230db43f74b32bf937cd892c974b673621b979f40590\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "database-id", "--db", db, "--yes" }), "85fe592c-9b92-4fa1-9ec5-f87f01cf8e72\n", "", 0);
+}
+
+test "origin and set-origin read and write the origin like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-origin");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+
+    try expectResult(try runZig(allocator, environment, &.{ "origin", "--db", db, "--yes" }), "(not set)\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "set-origin", "--db", db, "s3:bucket/x", "--yes" }), "\u{2713} Origin set to: s3:bucket/x\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "origin", "--db", db, "--yes" }), "s3:bucket/x\n", "", 0);
+
+    // The config file the TypeScript CLI writes.
+    const config = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/.db/config.json", .{db}), allocator, .unlimited);
+    try std.testing.expectEqualStrings("{\n  \"origin\": \"s3:bucket/x\"\n}", config);
+}
+
 //
 // The report of infoCommand (apps/cli/src/cmd/info.ts) for test/dbs/v6's asset looked up by hash, by ID and by an
 // ID that is not in the database.

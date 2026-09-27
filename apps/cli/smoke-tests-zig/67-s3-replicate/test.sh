@@ -38,7 +38,7 @@ trap 'cleanup_s3_and_show_summary; cleanup_and_show_summary' EXIT
 #
 read_root_hash() {
     local db_path="$1"
-    $(get_cli_command) root-hash --db "$db_path" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs
+    $(get_zig_cli_command) root-hash --db "$db_path" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs
 }
 
 #
@@ -47,7 +47,7 @@ read_root_hash() {
 #
 read_database_id() {
     local db_path="$1"
-    $(get_cli_command) database-id --db "$db_path" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs
+    $(get_zig_cli_command) database-id --db "$db_path" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs
 }
 
 test_s3_replicate() {

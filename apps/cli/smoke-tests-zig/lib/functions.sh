@@ -574,8 +574,8 @@ test_database_replicate() {
     log_info "Verifying database IDs match for original and replica"
     local source_id_output
     local replica_id_output
-    invoke_command "Get source database ID" "$(get_cli_command) database-id --db $TEST_DB_DIR --yes" 0 "source_id_output"
-    invoke_command "Get replica database ID" "$(get_cli_command) database-id --db $replica_dir --yes" 0 "replica_id_output"
+    invoke_command "Get source database ID" "$(get_zig_cli_command) database-id --db $TEST_DB_DIR --yes" 0 "source_id_output"
+    invoke_command "Get replica database ID" "$(get_zig_cli_command) database-id --db $replica_dir --yes" 0 "replica_id_output"
 
     local source_id=$(echo "$source_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local replica_id=$(echo "$replica_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
@@ -606,7 +606,7 @@ test_database_replicate() {
 
     # Verify the replica's origin points back to the source
     local origin_output
-    invoke_command "Get replica origin" "$(get_cli_command) origin --db $replica_dir --yes" 0 "origin_output"
+    invoke_command "Get replica origin" "$(get_zig_cli_command) origin --db $replica_dir --yes" 0 "origin_output"
     local origin_value=$(echo "$origin_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     expect_value "$origin_value" "$TEST_DB_DIR" "Replica origin matches source path"
 
@@ -650,7 +650,7 @@ test_verify_replica() {
 
     # Verify the replica's origin points back to the source
     local origin_output
-    invoke_command "Get replica origin" "$(get_cli_command) origin --db $replica_dir --yes" 0 "origin_output"
+    invoke_command "Get replica origin" "$(get_zig_cli_command) origin --db $replica_dir --yes" 0 "origin_output"
     local origin_value=$(echo "$origin_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     expect_value "$origin_value" "$TEST_DB_DIR" "Replica origin matches source path"
 
