@@ -646,7 +646,7 @@ const ImportTest = struct {
     // Puts the environment back and removes the directory.
     //
     fn deinit(self: *ImportTest) void {
-        setQueueBackend(null);
+        helpers.restoreQueueBackend();
         self.backend.deinit();
         self.messages.deinit();
         helpers.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
