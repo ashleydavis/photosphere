@@ -20,8 +20,19 @@ const BsonDatabase = bdb.database.BsonDatabase;
 const IBsonCollection = bdb.collection.IBsonCollection;
 const BsonDocument = bson.BsonDocument;
 const BsonValue = bson.BsonValue;
+const tools = @import("tools-zig");
+const Image = tools.Image;
+const ILocation = utils.reverse_geocode.ILocation;
 
-// Not ported: extractDominantColorFromThumbnail, FileValidator (psi add, not psi replicate or psi verify).
+//
+// Extract dominant color from thumbnail buffer using ImageMagick
+//
+pub fn extractDominantColorFromThumbnail(allocator: std.mem.Allocator, io: std.Io, inputPath: []const u8) !?[3]f64 {
+    var image = Image.init(inputPath);
+    return try image.getDominantColor(allocator, io);
+}
+
+// Not ported: FileValidator (not used by the ported commands).
 
 //
 // Progress callback for the add operation.
@@ -42,8 +53,37 @@ pub const ProgressCallback = struct {
     }
 };
 
-// Not ported: MICRO_MIN_SIZE, MICRO_QUALITY, THUMBNAIL_MIN_SIZE, THUMBNAIL_QUALITY, DISPLAY_MIN_SIZE, DISPLAY_QUALITY,
-// DatabaseMode, IDatabaseSummary (psi add and psi summary, not psi replicate or psi verify).
+//
+// Size of the micro thumbnail.
+//
+pub const MICRO_MIN_SIZE: f64 = 40;
+
+//
+// Quality of the micro thumbnail.
+//
+pub const MICRO_QUALITY: f64 = 75;
+
+//
+// Size of the thumbnail.
+//
+pub const THUMBNAIL_MIN_SIZE: f64 = 300;
+
+//
+// Quality of the thumbnail.
+//
+pub const THUMBNAIL_QUALITY: f64 = 90;
+
+//
+// Size of the display image.
+//
+pub const DISPLAY_MIN_SIZE: f64 = 1000;
+
+//
+// Quality of the display image.
+//
+pub const DISPLAY_QUALITY: f64 = 95;
+
+// Not ported: DatabaseMode, IDatabaseSummary (psi summary).
 
 //
 // Database metadata that gets embedded in the merkle tree
@@ -115,7 +155,140 @@ pub fn copyDatabaseMetadata(allocator: std.mem.Allocator, databaseMetadata: Bson
     return copy;
 }
 
-// Not ported: IAddSummary, IAssetDetailTimings, IAssetDetails (psi add, not psi replicate or psi verify).
+//
+// The counts of an import.
+//
+pub const IAddSummary = struct {
+    //
+    // The number of files added to the database.
+    //
+    filesAdded: f64 = 0,
+
+    //
+    // The number of files already in the database.
+    //
+    filesAlreadyAdded: f64 = 0,
+
+    //
+    // The number of files ignored (because they are not media files).
+    //
+    filesIgnored: f64 = 0,
+
+    //
+    // The number of files that failed to be added to the database.
+    //
+    filesFailed: f64 = 0,
+
+    //
+    // The number of files that were processed (completed or failed).
+    //
+    filesProcessed: f64 = 0,
+
+    //
+    // The total size of the files added to the database.
+    //
+    totalSize: f64 = 0,
+
+    //
+    // The average size of the files added to the database.
+    //
+    averageSize: f64 = 0,
+};
+
+//
+// How long each part of producing an asset's details took.
+//
+// Carried out with the details themselves so an import can say where its time went. The three
+// derivative images are reported apart from each other because each is a separate decode of the full
+// size original today, and whether that is worth changing is a question only the numbers answer.
+//
+pub const IAssetDetailTimings = struct {
+    // Asking the media tool for the image dimensions, which spawns it once per file.
+    probeMs: f64 = 0,
+
+    // Reading the item's own metadata: the EXIF block on a photo, the probe on a video.
+    metadataMs: f64 = 0,
+
+    // Producing each of the three derivative images.
+    microMs: f64 = 0,
+    thumbnailMs: f64 = 0,
+    displayMs: f64 = 0,
+};
+
+//
+// Represents the resolution of the image or video (TypeScript: IResolution in image.ts).
+//
+pub const IResolution = struct {
+    //
+    // The width of the image or video.
+    //
+    width: f64,
+
+    //
+    // The height of the image or video.
+    //
+    height: f64,
+};
+
+//
+// Collects the details of an asset.
+//
+pub const IAssetDetails = struct {
+    //
+    // The resolution of the image/video.
+    //
+    resolution: IResolution,
+
+    //
+    // Where the time went producing these details.
+    //
+    detailTimings: IAssetDetailTimings,
+
+    //
+    // The generated micro thumbnail of the image/video.
+    //
+    microPath: []const u8,
+
+    //
+    // The generated thumbnail of the image/video.
+    //
+    thumbnailPath: []const u8,
+
+    //
+    // The content type of the thumbnail.
+    //
+    thumbnailContentType: []const u8,
+
+    //
+    // The display image.
+    //
+    displayPath: ?[]const u8 = null,
+
+    //
+    // The content type of the display image.
+    //
+    displayContentType: ?[]const u8 = null,
+
+    //
+    // Metadata, if any.
+    //
+    metadata: ?BsonValue = null,
+
+    //
+    // GPS coordinates of the asset.
+    //
+    coordinates: ?ILocation = null,
+
+    //
+    // Date of the asset.
+    //
+    photoDate: ?[]const u8 = null,
+
+    //
+    // Duration of the video, if known.
+    //
+    duration: ?f64 = null,
+};
 
 //
 // `() => rawStorage.write('README.md', 'text/markdown', Buffer.from(DATABASE_README_CONTENT, 'utf8'))`.

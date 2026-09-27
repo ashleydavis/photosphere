@@ -239,7 +239,7 @@ pub const MultilinePrompt = struct {
     fn close(self: *MultilinePrompt) !void {
         try self.output.writeAll(cursor.show);
         try self.output.writeAll("\n");
-        setRawMode(self.input, false);
+        try setRawMode(self.input, false);
         try self.output.flush();
     }
 
@@ -249,7 +249,7 @@ pub const MultilinePrompt = struct {
     //
     pub fn prompt(self: *MultilinePrompt) !PromptOutcome {
         // Not ported: the AbortSignal option (not used by the CLI).
-        setRawMode(self.input, true);
+        try setRawMode(self.input, true);
 
         // Not ported: re-rendering on terminal resize.
         try self.render();

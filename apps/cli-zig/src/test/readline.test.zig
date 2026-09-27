@@ -105,7 +105,7 @@ test "PromptInput reads keypresses until the end of the input" {
     var reader = std.Io.Reader.fixed("a\x1b[Bz\x1b");
     var input = readline.PromptInput.init(arena.allocator(), &reader, null);
     try std.testing.expect(!input.isTTY());
-    input.setRawMode(true);
+    try input.setRawMode(true);
     try std.testing.expectEqualStrings("a", (try input.nextKeypress()).key.name.?);
     try std.testing.expectEqualStrings("down", (try input.nextKeypress()).key.name.?);
     try std.testing.expectEqualStrings("z", (try input.nextKeypress()).key.name.?);

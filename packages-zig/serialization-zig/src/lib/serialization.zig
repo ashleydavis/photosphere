@@ -5,10 +5,9 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const bson = @import("bson.zig");
-const zlib_ng_deflate = @import("zlib-ng-deflate.zig");
+const zlib = @import("zlib");
 const errors = utils.errors;
 const retry = utils.retry.retry;
-const flate = std.compress.flate;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 //
@@ -755,58 +754,96 @@ pub const CompressedBinarySerializer = struct {
 const compressed_binary_serializer_vtable = serializerVTable(CompressedBinarySerializer);
 
 //
-// Compresses data with gzip at level 9 (Node's `gzipSync(buffer, { level: 9 })`), byte-identical to Bun's output.
+// The windowBits Bun's node:zlib gives zlib for gzip and gunzip streams: the default window of 15 bits plus 16, which
+// selects the gzip wrapper.
 //
-fn gzipSync(allocator: std.mem.Allocator, buffer: []const u8) std.mem.Allocator.Error![]u8 {
-    return zlib_ng_deflate.gzipLevel9(allocator, buffer);
+const gzip_window_bits = 15 + 16;
+
+//
+// Fails with the error Bun's node:zlib raises for a zlib return code (its ZlibContext error_for_message): zlib's own
+// message for the stream when zlib set one, otherwise the given message. Running out of memory is OutOfMemory.
+//
+fn throwZlibError(stream: *const zlib.z_stream, returnCode: c_int, defaultMessage: []const u8) SerializerError {
+    if (returnCode == zlib.Z_MEM_ERROR) {
+        return error.OutOfMemory;
+    }
+    if (stream.msg) |message| {
+        return errors.throwError("{s}", .{std.mem.span(message)});
+    }
+    return errors.throwError("{s}", .{defaultMessage});
 }
 
 //
-// Gets the message zlib reports for a decompression error (the message of the error `gunzipSync` throws).
+// Compresses data with gzip at level 9 as Bun's `zlib.gzipSync(buffer, { level: 9 })` does: zlib-ng's deflate with
+// the gzip wrapper, memLevel 8 and the default strategy, given all the input with Z_FINISH.
 //
-fn zlibErrorMessage(err: flate.Decompress.Error) []const u8 {
-    return switch (err) {
-        error.BadGzipHeader, error.BadZlibHeader => "incorrect header check",
-        error.WrongGzipChecksum, error.WrongZlibChecksum => "incorrect data check",
-        error.WrongGzipSize => "incorrect length check",
-        error.EndOfStream, error.ReadFailed => "unexpected end of file",
-        error.InvalidBlockType => "invalid block type",
-        error.WrongStoredBlockNlen => "invalid stored block lengths",
-        error.InvalidDynamicBlockHeader => "too many length or distance symbols",
-        error.OversubscribedHuffmanTree, error.IncompleteHuffmanTree => "invalid code lengths set",
-        error.InvalidCode => "invalid literal/length code",
-        error.InvalidMatch => "invalid distance too far back",
-        error.MissingEndOfBlockCode => "invalid code -- missing end-of-block",
-    };
+pub fn gzipSync(allocator: std.mem.Allocator, buffer: []const u8) SerializerError![]u8 {
+    var stream = std.mem.zeroes(zlib.z_stream);
+    const initResult = zlib.deflateInit2_(&stream, 9, zlib.Z_DEFLATED, gzip_window_bits, 8, zlib.Z_DEFAULT_STRATEGY, zlib.ZLIB_VERSION, @sizeOf(zlib.z_stream));
+    if (initResult != zlib.Z_OK) {
+        return throwZlibError(&stream, initResult, "Initialization failed");
+    }
+    defer _ = zlib.deflateEnd(&stream);
+
+    // deflateBound is enough room for all the output, so a single call to deflate finishes the stream.
+    const output = try allocator.alloc(u8, zlib.deflateBound(&stream, @intCast(buffer.len)));
+    stream.next_in = @constCast(buffer.ptr);
+    stream.avail_in = @intCast(buffer.len);
+    stream.next_out = output.ptr;
+    stream.avail_out = @intCast(output.len);
+    const deflateResult = zlib.deflate(&stream, zlib.Z_FINISH);
+    if (deflateResult != zlib.Z_STREAM_END) {
+        return throwZlibError(&stream, deflateResult, "Zlib error");
+    }
+    return allocator.realloc(output, stream.total_out);
 }
 
 //
-// Decompresses gzip data (Node's `gunzipSync(buffer)`), failing with zlib's error message.
+// Decompresses gzip data as Bun's `zlib.gunzipSync(buffer)` does: zlib-ng's inflate with the gzip wrapper, given all
+// the input with Z_FINISH, decompressing any further gzip members that follow the first (trailing zero bytes are
+// padding), and failing with the message Bun's node:zlib gives the error.
 //
-fn gunzipSync(allocator: std.mem.Allocator, compressed: []const u8) DeserializerError![]u8 {
-    var input: std.Io.Reader = .fixed(compressed);
-    var decompressor = flate.Decompress.init(&input, .gzip, &.{});
-    const decompressed = decompressor.reader.allocRemaining(allocator, .unlimited) catch |err| {
-        if (err == error.OutOfMemory) {
-            return error.OutOfMemory;
-        }
-        // zlib checks the gzip magic bytes as they arrive, so a short input with the wrong magic is a header error.
-        const hasBadMagic = (compressed.len >= 1 and compressed[0] != 0x1f) or (compressed.len >= 2 and compressed[1] != 0x8b);
-        if (hasBadMagic) {
-            return errors.throwError("{s}", .{zlibErrorMessage(error.BadGzipHeader)});
-        }
-        return errors.throwError("{s}", .{zlibErrorMessage(decompressor.err orelse error.EndOfStream)});
-    };
+pub fn gunzipSync(allocator: std.mem.Allocator, compressed: []const u8) DeserializerError![]u8 {
+    var stream = std.mem.zeroes(zlib.z_stream);
+    const initResult = zlib.inflateInit2_(&stream, gzip_window_bits, zlib.ZLIB_VERSION, @sizeOf(zlib.z_stream));
+    if (initResult != zlib.Z_OK) {
+        return throwZlibError(&stream, initResult, "Initialization failed");
+    }
+    defer _ = zlib.inflateEnd(&stream);
 
-    // zlib checks the gzip trailer (std.compress.flate reads it without checking it).
-    const trailer = decompressor.container_metadata.gzip;
-    if (trailer.crc != std.hash.Crc32.hash(decompressed)) {
-        return errors.throwError("{s}", .{zlibErrorMessage(error.WrongGzipChecksum)});
+    stream.next_in = @constCast(compressed.ptr);
+    stream.avail_in = @intCast(compressed.len);
+    var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    // Like Bun, inflate into the free space of the output until a call leaves some of it unused.
+    while (true) {
+        // Bun's default chunk size (zlib.constants.Z_DEFAULT_CHUNK).
+        try output.ensureUnusedCapacity(allocator, 16 * 1024);
+        const unused = output.unusedCapacitySlice();
+        stream.next_out = unused.ptr;
+        stream.avail_out = @intCast(unused.len);
+        var result = zlib.inflate(&stream, zlib.Z_FINISH);
+        while (stream.avail_in > 0 and result == zlib.Z_STREAM_END and stream.next_in[0] != 0) {
+            // Bytes remain after the end of a gzip member: another member, or trailing garbage that fails as a header.
+            result = zlib.inflateReset(&stream);
+            if (result != zlib.Z_OK) {
+                return throwZlibError(&stream, result, "Failed to reset stream");
+            }
+            result = zlib.inflate(&stream, zlib.Z_FINISH);
+        }
+        output.items.len += unused.len - stream.avail_out;
+        if (result == zlib.Z_OK or result == zlib.Z_BUF_ERROR) {
+            if (stream.avail_out != 0) {
+                return throwZlibError(&stream, result, "unexpected end of file");
+            }
+        }
+        else if (result != zlib.Z_STREAM_END) {
+            return throwZlibError(&stream, result, "Zlib error");
+        }
+        if (stream.avail_out != 0) {
+            return output.toOwnedSlice(allocator);
+        }
     }
-    if (trailer.count != @as(u32, @truncate(decompressed.len))) {
-        return errors.throwError("{s}", .{zlibErrorMessage(error.WrongGzipSize)});
-    }
-    return decompressed;
 }
 
 //

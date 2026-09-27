@@ -1,0 +1,256 @@
+const std = @import("std");
+const tools = @import("tools-zig");
+const utils = @import("utils-zig");
+const Image = tools.Image;
+
+//
+// Generates the same ID every time, so the output paths are known.
+//
+const FixedUuidGenerator = struct {
+    // The ID to generate.
+    id: []const u8,
+
+    //
+    // Gets the IUuidGenerator interface.
+    //
+    fn uuidGenerator(self: *FixedUuidGenerator) utils.uuid_generator.IUuidGenerator {
+        return .{ .ptr = self, .vtable = &vtable };
+    }
+
+    // The functions of the generator.
+    const vtable: utils.uuid_generator.IUuidGenerator.VTable = .{ .generate = generate };
+
+    //
+    // Returns the fixed ID.
+    //
+    fn generate(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror![]const u8 {
+        _ = allocator;
+        _ = io;
+        const self: *FixedUuidGenerator = @ptrCast(@alignCast(ptr));
+        return self.id;
+    }
+};
+
+//
+// Runs an ImageMagick tool ("convert" or "identify") the way the TypeScript Image runs it for the installation
+// verifyImageMagick found (`magick` and `magick identify` for ImageMagick 7, `convert` and `identify` for
+// ImageMagick 6), and returns what it printed. The tests use it to measure the files Image wrote, and to run the
+// commands the TypeScript Image builds (packages/tools/src/lib/image.ts) so their output is the expected output.
+//
+fn runImageMagick(allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) ![]const u8 {
+    var argv: std.ArrayList([]const u8) = .empty;
+    if (Image.getImageMagickType() == .modern) {
+        try argv.append(allocator, "magick");
+        if (std.mem.eql(u8, tool, "identify")) {
+            try argv.append(allocator, "identify");
+        }
+    }
+    else {
+        try argv.append(allocator, tool);
+    }
+    try argv.appendSlice(allocator, arguments);
+    const result = try std.process.run(allocator, std.testing.io, .{ .argv = argv.items });
+    if (result.term != .exited or result.term.exited != 0) {
+        std.debug.print("ImageMagick failed:\n{s}\n{s}\n", .{ result.stdout, result.stderr });
+        return error.TestUnexpectedResult;
+    }
+    return std.mem.trimEnd(u8, result.stdout, "\r\n");
+}
+
+//
+// Reads the width, height, format and JPEG quality of an image file with ImageMagick, as "<w> <h> <format> <quality>".
+//
+fn describeImage(allocator: std.mem.Allocator, filePath: []const u8) ![]const u8 {
+    return runImageMagick(allocator, "identify", &.{ "-format", "%w %h %m %Q", filePath });
+}
+
+//
+// Reads a file.
+//
+fn readFile(allocator: std.mem.Allocator, filePath: []const u8) ![]const u8 {
+    return std.Io.Dir.cwd().readFileAlloc(std.testing.io, filePath, allocator, .unlimited);
+}
+
+//
+// Creates a temporary directory for a test.
+//
+fn makeTempDir(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
+    var random_bytes: [8]u8 = undefined;
+    std.testing.io.random(&random_bytes);
+    const path = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/image-test-{s}-{x}", .{ name, std.mem.readInt(u64, &random_bytes, .little) });
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, path);
+    return std.Io.Dir.cwd().realPathFileAlloc(std.testing.io, path, allocator);
+}
+
+//
+// Fails a test that needs ImageMagick, loudly, where it is not installed.
+//
+fn requireImageMagick(allocator: std.mem.Allocator) !void {
+    if (!(try Image.verifyImageMagick(allocator, std.testing.io)).available) {
+        std.debug.print("This test needs ImageMagick installed.\n", .{});
+        return error.RequiredToolsMissing;
+    }
+}
+
+//
+// An image file and what the TypeScript Image's getInfo reads from it.
+//
+const IExpectedImageInfo = struct {
+    // The file.
+    filePath: []const u8,
+
+    // The width, in pixels.
+    width: f64,
+
+    // The height, in pixels.
+    height: f64,
+
+    // True when the file has an EXIF DateTimeOriginal, so TypeScript sets createdAt.
+    hasCreatedAt: bool,
+};
+
+test "getInfo reads the dimensions and the date of an image like TypeScript" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try requireImageMagick(allocator);
+
+    // The sizes are those in the files' headers (the JPEG frame header, the PNG IHDR chunk and the WebP VP8 frame).
+    // test.jpg has an EXIF DateTimeOriginal ("2025:05:27 09:54:16"), so TypeScript sets createdAt to
+    // `new Date("2025-05-27 09:54:16")`; the PNG and WebP have no EXIF, so createdAt stays undefined.
+    const cases = [_]IExpectedImageInfo{
+        .{
+            .filePath = "../../test/test.jpg",
+            .width = 2560,
+            .height = 1920,
+            .hasCreatedAt = true,
+        },
+        .{
+            .filePath = "../../test/test.png",
+            .width = 100,
+            .height = 90,
+            .hasCreatedAt = false,
+        },
+        .{
+            .filePath = "../../test/test.webp",
+            .width = 100,
+            .height = 80,
+            .hasCreatedAt = false,
+        },
+    };
+    for (cases) |expected| {
+        errdefer std.debug.print("case: {s}\n", .{expected.filePath});
+        var image = Image.init(expected.filePath);
+        const info = try image.getInfo(allocator, std.testing.io);
+        try std.testing.expectEqual(expected.width, info.dimensions.width);
+        try std.testing.expectEqual(expected.height, info.dimensions.height);
+        try std.testing.expectEqual(expected.hasCreatedAt, info.createdAt != null);
+        try std.testing.expectEqualStrings(expected.filePath, info.filePath);
+        try std.testing.expectEqual(@as(?bool, false), info.hasAudio);
+        try std.testing.expect(info.duration == null);
+        try std.testing.expect(info.fps == null);
+        try std.testing.expect(info.bitrate == null);
+
+        // The information is read once.
+        try std.testing.expectEqual(info.dimensions, (try image.getDimensions(allocator, std.testing.io)));
+    }
+}
+
+test "getInfo fails for a file that does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var image = Image.init("../../test/no-such-file.jpg");
+    try std.testing.expectError(error.Thrown, image.getInfo(arena.allocator(), std.testing.io));
+    try std.testing.expectEqualStrings("File not found: ../../test/no-such-file.jpg", utils.errors.lastErrorMessage());
+}
+
+test "resize writes the image the TypeScript resize command writes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try requireImageMagick(allocator);
+    const tempDir = try makeTempDir(allocator, "resize");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch {};
+    var generator: FixedUuidGenerator = .{ .id = "fixed-id" };
+
+    var image = Image.init("../../test/test.jpg");
+    const outputPath = try image.resize(allocator, std.testing.io, .{ .width = 1333, .height = 1000, .quality = 95, .format = "jpeg", .ext = "jpg" }, tempDir, generator.uuidGenerator());
+
+    // TypeScript: path.join(tempDir, `temp_resize_${uuidGenerator.generate()}`) + '.' + options.ext.
+    try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_fixed-id.jpg" }), outputPath);
+
+    // 2560x1920 fitted inside 1333x1000 keeping the aspect ratio is 1333x1000, at the quality asked for.
+    try std.testing.expectEqualStrings("1333 1000 JPEG 95", try describeImage(allocator, outputPath));
+
+    // -strip drops the EXIF of the original.
+    try std.testing.expectEqualStrings("", try runImageMagick(allocator, "identify", &.{ "-format", "%[EXIF:*]", outputPath }));
+
+    // The same bytes as the command TypeScript builds: `<convert> "<file>" -resize <w>x<h> -strip -quality <q> jpeg:"<output>"`.
+    const referencePath = try std.fs.path.join(allocator, &.{ tempDir, "reference.jpg" });
+    _ = try runImageMagick(allocator, "convert", &.{ "../../test/test.jpg", "-resize", "1333x1000", "-strip", "-quality", "95", try std.fmt.allocPrint(allocator, "jpeg:{s}", .{referencePath}) });
+    try std.testing.expect(std.mem.eql(u8, try readFile(allocator, referencePath), try readFile(allocator, outputPath)));
+
+    // A second resize to the same path is refused.
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, .{ .width = 10, .height = 10, .quality = 95, .format = "jpeg", .ext = "jpg" }, tempDir, generator.uuidGenerator()));
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Output file already exists: {s}", .{outputPath}), utils.errors.lastErrorMessage());
+}
+
+test "transform writes the image the TypeScript transform command writes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try requireImageMagick(allocator);
+    const tempDir = try makeTempDir(allocator, "transform");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch {};
+    var generator: FixedUuidGenerator = .{ .id = "fixed-id" };
+
+    var image = Image.init("../../test/test.png");
+    const outputPath = try image.transform(allocator, std.testing.io, .{ .rotate = 90, .flipX = true }, tempDir, generator.uuidGenerator());
+
+    // TypeScript: path.join(tempDir, `temp_transform_output_${uuidGenerator.generate()}.jpg`).
+    try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_transform_output_fixed-id.jpg" }), outputPath);
+
+    // The 100x90 PNG turned a quarter turn is 90x100, written as a JPEG because of the extension.
+    try std.testing.expectEqualStrings("90 100 JPEG", (try describeImage(allocator, outputPath))[0.."90 100 JPEG".len]);
+
+    // The same bytes as the command TypeScript builds: `<convert> "<file>"  -flop -rotate 90 "<output>"`.
+    const referencePath = try std.fs.path.join(allocator, &.{ tempDir, "reference.jpg" });
+    _ = try runImageMagick(allocator, "convert", &.{ "../../test/test.png", "-flop", "-rotate", "90", referencePath });
+    try std.testing.expect(std.mem.eql(u8, try readFile(allocator, referencePath), try readFile(allocator, outputPath)));
+
+    // No transformation returns the original.
+    try std.testing.expectEqualStrings("../../test/test.png", try image.transform(allocator, std.testing.io, .{}, tempDir, generator.uuidGenerator()));
+}
+
+test "getDominantColor gives the color the TypeScript command prints" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try requireImageMagick(allocator);
+    for ([_][]const u8{ "../../test/test.jpg", "../../test/test.png" }) |filePath| {
+        errdefer std.debug.print("case: {s}\n", .{filePath});
+        var image = Image.init(filePath);
+        const color = try image.getDominantColor(allocator, std.testing.io);
+
+        // TypeScript: `<convert> "<file>" -resize 1x1! -format "%[fx:int(mean.r*255)],..." info:`, split on commas.
+        const printed = try runImageMagick(allocator, "convert", &.{ filePath, "-resize", "1x1!", "-format", "%[fx:int(mean.r*255)],%[fx:int(mean.g*255)],%[fx:int(mean.b*255)]", "info:" });
+        var components = std.mem.splitScalar(u8, printed, ',');
+        for (color) |component| {
+            try std.testing.expectEqual(try std.fmt.parseFloat(f64, components.next().?), component);
+        }
+        try std.testing.expect(components.next() == null);
+    }
+
+    // test.png is a flat grey card (204, 204, 204) with darker grey lettering, so its mean is a grey.
+    var card = Image.init("../../test/test.png");
+    const cardColor = try card.getDominantColor(allocator, std.testing.io);
+    try std.testing.expectEqual(cardColor[0], cardColor[1]);
+    try std.testing.expectEqual(cardColor[1], cardColor[2]);
+    try std.testing.expect(cardColor[0] > 150 and cardColor[0] < 204);
+}
+
+test "parseInt reads the integer at the start of the text like JavaScript" {
+    try std.testing.expectEqual(@as(f64, 2560), tools.image.parseInt("2560"));
+    try std.testing.expectEqual(@as(f64, -12), tools.image.parseInt("  -12px"));
+    try std.testing.expect(std.math.isNan(tools.image.parseInt("px")));
+}

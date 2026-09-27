@@ -14,6 +14,7 @@
         .@"api-zig" = .{ .path = "../api-zig" },
         .@"task-queue-zig" = .{ .path = "../task-queue-zig" },
         .@"vault-zig" = .{ .path = "../vault-zig" },
+        .@"tools-zig" = .{ .path = "../tools-zig" },
     },
     .paths = .{ "build.zig", "build.zig.zon", "src" },
 }

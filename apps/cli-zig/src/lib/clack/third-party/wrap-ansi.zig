@@ -150,7 +150,12 @@ fn findEscapeMatch(text: []const u8) EscapeMatch {
                 digit_end += 1;
             }
             if (digit_end > index + 1 and digit_end < text.len and text[digit_end] == 'm') {
-                const code = std.fmt.parseInt(u32, text[index + 1 .. digit_end], 10) catch 0;
+                const code = std.fmt.parseInt(u32, text[index + 1 .. digit_end], 10) catch |err| switch (err) {
+                    // A code too large for a u32 (Number.parseFloat gives a number no style has, like maxInt(u32)).
+                    error.Overflow => std.math.maxInt(u32),
+                    // Only digits were matched above.
+                    error.InvalidCharacter => unreachable,
+                };
                 return .{ .code = code };
             }
         }

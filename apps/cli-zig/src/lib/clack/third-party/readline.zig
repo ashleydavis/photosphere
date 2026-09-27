@@ -766,18 +766,19 @@ pub const PromptInput = struct {
     }
 
     //
-    // Switches raw mode on or off (`input.setRawMode(value)`); does nothing when the input is not a TTY.
+    // Switches raw mode on or off (`input.setRawMode(value)`, which throws when the terminal mode cannot be
+    // changed); does nothing when the input is not a TTY.
     //
-    pub fn setRawMode(self: *PromptInput, value: bool) void {
+    pub fn setRawMode(self: *PromptInput, value: bool) !void {
         const fd = self.ttyFd orelse return;
         if (value) {
             if (self.savedMode == null) {
-                self.savedMode = tty.enableRawMode(fd) catch null;
+                self.savedMode = try tty.enableRawMode(fd);
             }
         }
         else {
             if (self.savedMode) |mode| {
-                tty.restoreMode(fd, mode);
+                try tty.restoreMode(fd, mode);
                 self.savedMode = null;
             }
         }
@@ -786,13 +787,13 @@ pub const PromptInput = struct {
     //
     // Waits up to the escape code timeout (50ms) for more input on the terminal. Returns true when input is ready.
     //
-    fn waitForMore(self: *PromptInput) bool {
+    fn waitForMore(self: *PromptInput) !bool {
         const fd = self.ttyFd orelse return true;
         if (builtin.os.tag == .windows) {
             return tty.waitForConsoleInput(fd, 50);
         }
         var poll_fds = [_]std.posix.pollfd{.{ .fd = fd, .events = std.posix.POLL.IN, .revents = 0 }};
-        const ready = std.posix.poll(&poll_fds, 50) catch return false;
+        const ready = try std.posix.poll(&poll_fds, 50);
         return ready > 0;
     }
 
@@ -821,11 +822,15 @@ pub const PromptInput = struct {
                 }
 
                 // Incomplete escape sequence: wait for the rest, or time out.
-                if (self.waitForMore()) {
+                if (try self.waitForMore()) {
                     if (self.reader.fillMore()) |_| {
                         continue;
                     }
-                    else |_| {}
+                    else |err| switch (err) {
+                        // The input ended inside the escape sequence: what there is is parsed below.
+                        error.EndOfStream => {},
+                        else => return err,
+                    }
                 }
                 const result = (try parseKeypress(self.allocator, self.reader.buffered(), true)).?;
                 self.reader.toss(result.length);
@@ -837,7 +842,7 @@ pub const PromptInput = struct {
             self.reader.fillMore() catch |err| switch (err) {
                 error.EndOfStream => {
                     if (self.exitAtEnd) {
-                        self.setRawMode(false);
+                        try self.setRawMode(false);
                         std.process.exit(0);
                     }
                     return error.EndOfStream;

@@ -90,21 +90,6 @@ pub const MemoryStorage = struct {
         }
     }
 
-    //
-    // Writes every stored file to a directory on disk (so the TypeScript CLI code can read what Zig wrote).
-    //
-    pub fn writeToDirectory(self: *MemoryStorage, io: std.Io, directoryPath: []const u8) !void {
-        const cwd = std.Io.Dir.cwd();
-        for (self.files.keys(), self.files.values()) |filePath, data| {
-            const diskPath = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ directoryPath, filePath });
-            if (std.fs.path.dirname(diskPath)) |parent| {
-                try cwd.createDirPath(io, parent);
-            }
-            try cwd.writeFile(io, .{ .sub_path = diskPath, .data = data });
-        }
-    }
-
-    //
     // Sort predicate for paths (JavaScript's default sort order; the paths are ASCII).
     //
     fn pathLessThan(context: void, left: []const u8, right: []const u8) bool {

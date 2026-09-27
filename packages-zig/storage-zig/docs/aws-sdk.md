@@ -19,10 +19,12 @@ The versions are the set aws-crt-cpp **v0.43.7** pins as its git submodules (`cr
 | [aws-c-sdkutils](https://github.com/awslabs/aws-c-sdkutils) | v0.2.9 | The endpoint rules engine |
 | [aws-c-auth](https://github.com/awslabs/aws-c-auth) | v0.10.4 | Credentials providers, SigV4 signing |
 | [aws-c-s3](https://github.com/awslabs/aws-c-s3) | v0.13.5 | The S3 client, multipart uploads, the S3 endpoint rules |
-| [aws-lc](https://github.com/aws/aws-lc) | v5.5.0 | libcrypto on Linux (and for s2n-tls on macOS) |
+| [aws-lc](https://github.com/aws/aws-lc) | v5.5.0 | libcrypto on Linux (and for s2n-tls on macOS); a dependency of `encryption-zig`, which builds it (see below) |
 | [s2n-tls](https://github.com/aws/s2n-tls) | v1.7.7 | TLS on Linux (and on macOS when chosen at run time) |
 
-aws-lc and s2n-tls are lazy dependencies: they are only fetched when building for Linux or macOS.
+s2n-tls is a lazy dependency: it is only fetched when building for Linux or macOS.
+
+aws-lc is not in this package's `build.zig.zon`: `encryption-zig` depends on it, builds its libcrypto for every platform (the `node:crypto` functions it implements call it) in `packages-zig/encryption-zig/aws/aws-lc.zig`, links it into the `encryption-zig` module and installs it as the `crypto` artifact. `build.zig` passes that artifact to `aws/aws-sdk.zig`, so aws-c-cal and s2n-tls link the same library and it is built and linked once. On Windows, where the SDK does not use it, it is still linked through `encryption-zig`, built with aws-lc's `OPENSSL_NO_ASM` option (its Windows assembly is NASM, which Zig cannot assemble).
 
 ## How they are built
 
@@ -61,7 +63,7 @@ The Zig CLI (`apps/cli-zig`) is built for macOS with `bun run build-mac-arm64` o
 
 `zig build` fetches every dependency listed in `build.zig.zon` from its GitHub URL, checks it against the hash, keeps it in Zig's global cache and extracts it into the project's `zig-pkg/` directory (git-ignored). CI needs nothing else; the release workflow caches the `p` directory of Zig's global cache (`zig env` prints the global cache directory: `~/.cache/zig` on Linux and macOS, `%LOCALAPPDATA%\zig` on Windows) keyed on the `build.zig.zon` files, which avoids downloading the archives again.
 
-Before any Zig build, CI runs `bun run --cwd packages-zig/storage-zig fetch-deps` (`scripts/fetch-deps.sh`), which runs `zig fetch` on each URL in `build.zig.zon`, one at a time. Left to itself, `zig build` downloads the dependencies concurrently over pooled connections, and in CI that failed with `invalid HTTP response: HttpConnectionClosing` when it reused a connection GitHub had already closed. After an upgrade nothing in the script changes: it reads the URLs from `build.zig.zon`.
+Before any Zig build, CI runs `bun run --cwd packages-zig/storage-zig fetch-deps` (`scripts/fetch-deps.sh`), which runs `zig fetch` on each URL in `build.zig.zon` and in `packages-zig/encryption-zig/build.zig.zon` (aws-lc), one at a time. Left to itself, `zig build` downloads the dependencies concurrently over pooled connections, and in CI that failed with `invalid HTTP response: HttpConnectionClosing` when it reused a connection GitHub had already closed. After an upgrade nothing in the script changes: it reads the URLs from the two `build.zig.zon` files.
 
 Where `zig fetch` cannot reach GitHub but `git clone` works (a proxy that only allows git, for example), a package can be put into the cache from a local archive of the same tag. `git archive` produces the same files GitHub's archive has, and Zig hashes the files, not the archive, so the hash is the one in `build.zig.zon`:
 
@@ -77,7 +79,7 @@ cd packages-zig/storage-zig && zig fetch "$OLDPWD/aws-c-s3-v0.13.5.tar.gz"
 
 1. Pick the new aws-crt-cpp release, and read the tag each submodule under `crt/` points at (`git ls-tree <tag> crt/` in a clone of aws-crt-cpp, then `git ls-remote --tags` on each library to find the tag of that commit).
 2. For each library that changed, update its entry in `build.zig.zon`: `zig fetch --save=<name> https://github.com/<owner>/<name>/archive/refs/tags/<tag>.tar.gz` (or put the archive in the cache as above and change the `url` and `hash` by hand), and update the table above.
-3. Diff the library's build files between the old and the new tag (`CMakeLists.txt`, `cmake/*.cmake`, and for aws-c-common `include/aws/common/config.h.in`) and carry every change into its file in `aws/`: new or removed directories, explicitly listed sources, compile definitions, options and their defaults, and probes. aws-lc lists its sources explicitly in `crypto/CMakeLists.txt`, `crypto/fipsmodule/CMakeLists.txt` and `third_party/jitterentropy/CMakeLists.txt`; compare those lists with the ones in `aws/aws-lc.zig`.
+3. Diff the library's build files between the old and the new tag (`CMakeLists.txt`, `cmake/*.cmake`, and for aws-c-common `include/aws/common/config.h.in`) and carry every change into its file in `aws/`: new or removed directories, explicitly listed sources, compile definitions, options and their defaults, and probes. aws-lc lists its sources explicitly in `crypto/CMakeLists.txt`, `crypto/fipsmodule/CMakeLists.txt` and `third_party/jitterentropy/CMakeLists.txt`; compare those lists with the ones in `packages-zig/encryption-zig/aws/aws-lc.zig`, and update aws-lc's entry in `packages-zig/encryption-zig/build.zig.zon`.
 4. Evaluate any new or changed probe for each target with `zig cc -target <target>` (for s2n-tls: every `tests/features/*.c`, compiled with `-I <s2n-tls> -I <aws-lc>/include -include <s2n-tls>/utils/s2n_prelude.h -c`, the flags in `tests/features/GLOBAL.flags` and the probe's own `.flags` file) and update the results in `aws/`.
 5. If the binding uses an API that changed, update `src/lib/s3-client.zig`. If `struct aws_signing_config_aws` changed, update `SigningConfigAws` to match.
 6. Run the tests: `zig build test` in `packages-zig/storage-zig`, `bun --filter '*-zig' test` from the repository root, `bun run build-all` in `apps/cli-zig`, and the Zig CLI smoke tests (`bun run test:cli:zig`), whose S3 tests run against a local MinIO server. The macOS configuration is only compiled on a Mac: the release workflow's `zig-smoke-tests` (macos-latest) and `build-zig-macos` (an Apple Silicon and an Intel runner) jobs run these there.

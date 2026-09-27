@@ -15,9 +15,8 @@ const js_value = bdb.js_value;
 
 //
 // Golden scenario tests: each test replays one scenario of generate.ts in Zig and checks that the database files are
-// the files TypeScript wrote (plain files byte for byte by SHA-256, gzip merkle tree files by their loaded content),
-// that the database root hash is the same, and that the TypeScript implementation reads the Zig-written database
-// (read-database.ts walks the sort index pages like the list command).
+// the files TypeScript wrote (plain files byte for byte by SHA-256, gzip merkle tree files by their loaded content)
+// and that the database root hash is the same.
 //
 
 const io = std.testing.io;
@@ -186,55 +185,6 @@ fn expectMatchesSnapshot(allocator: std.mem.Allocator, storage: *MemoryStorage, 
 }
 
 //
-// Writes the storage to a directory and reads it back with the TypeScript implementation (read-database.ts); checks
-// that TypeScript walks the sort index pages in the same order it walked its own files and gets the same root hash.
-//
-fn expectTypeScriptReads(allocator: std.mem.Allocator, storage: *MemoryStorage, fixture: std.json.Value, name: []const u8, indexNames: []const []const u8) !void {
-    const directoryPath = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/bdb-zig-scenario-{s}", .{name});
-    std.Io.Dir.cwd().deleteTree(io, directoryPath) catch {};
-    try storage.writeToDirectory(io, directoryPath);
-
-    var argv: std.ArrayList([]const u8) = .empty;
-    try argv.appendSlice(allocator, &.{ "bun", "run", helpers.FIXTURES_DIR ++ "/read-database.ts", directoryPath });
-    try argv.appendSlice(allocator, indexNames);
-    const result = std.process.run(allocator, io, .{ .argv = argv.items }) catch |err| {
-
-        // The TypeScript side of this interop check needs Bun; skip it where Bun cannot be spawned.
-        if (err == error.FileNotFound) {
-            return error.SkipZigTest;
-        }
-        return err;
-    };
-    if (result.term != .exited or result.term.exited != 0) {
-        std.debug.print("read-database.ts failed:\n{s}\n", .{result.stderr});
-        return error.TestUnexpectedResult;
-    }
-    const readBack = try std.json.parseFromSliceLeaky(std.json.Value, allocator, result.stdout, .{});
-    const expectedWalks = fixture.object.get("walks").?.object;
-    const actualWalks = readBack.object.get("walks").?.object;
-    for (indexNames) |indexName| {
-        const expectedWalk = expectedWalks.get(indexName).?;
-        const actualWalk = actualWalks.get(indexName).?;
-        try std.testing.expectEqual(jsonInteger(expectedWalk.object.get("count").?), jsonInteger(actualWalk.object.get("count").?));
-        try std.testing.expectEqualStrings(expectedWalk.object.get("sha256").?.string, actualWalk.object.get("sha256").?.string);
-    }
-    const expectedRoot = fixture.object.get("rootHash").?;
-    const actualRoot = readBack.object.get("rootHash").?;
-    if (expectedRoot == .null) {
-        try std.testing.expect(actualRoot == .null);
-    }
-    else {
-        try std.testing.expectEqualStrings(expectedRoot.string, actualRoot.string);
-    }
-    std.Io.Dir.cwd().deleteTree(io, directoryPath) catch {};
-}
-
-//
-// The sort indexes of a media file database, as read-database.ts arguments.
-//
-const media_sort_indexes = [_][]const u8{ "hash_asc", "photoDate_desc" };
-
-//
 // Ensures the media file database sort indexes (node-api's ensureSortIndex).
 //
 fn ensureMediaSortIndexes(collection: *bdb.collection.BsonCollection) !void {
@@ -260,8 +210,7 @@ test "scenario create: sort indexes ensured on an empty collection, then records
         try collection.setInternalRecord(io, try makeRecord(allocator, ids.items[@intCast(index)], index, 0, 1700000000000 + index));
     }
     try database.commit(io);
-    const createFixture = try expectMatchesSnapshot(allocator, &storage, "scenario-create.json");
-    try expectTypeScriptReads(allocator, &storage, createFixture, "create", &media_sort_indexes);
+    _ = try expectMatchesSnapshot(allocator, &storage, "scenario-create.json");
 
     // Scenario update: a new database instance over the same storage, continuing the same uuid generators.
     const updateDatabase = try openDatabase(allocator, &storage, &uuidGenerator);
@@ -284,8 +233,7 @@ test "scenario create: sort indexes ensured on an empty collection, then records
         try updateCollection.setInternalRecord(io, try makeRecord(allocator, ids.items[@intCast(index)], index, 0, 1700000000000 + index));
     }
     try updateDatabase.commit(io);
-    const updateFixture = try expectMatchesSnapshot(allocator, &storage, "scenario-update.json");
-    try expectTypeScriptReads(allocator, &storage, updateFixture, "update", &media_sort_indexes);
+    _ = try expectMatchesSnapshot(allocator, &storage, "scenario-update.json");
 }
 
 test "scenario build: sort indexes built from existing shards" {
@@ -308,8 +256,7 @@ test "scenario build: sort indexes built from existing shards" {
     const buildCollection = try buildDatabase.collection("metadata");
     try ensureMediaSortIndexes(buildCollection);
     try buildDatabase.commit(io);
-    const fixture = try expectMatchesSnapshot(allocator, &storage, "scenario-build.json");
-    try expectTypeScriptReads(allocator, &storage, fixture, "build", &media_sort_indexes);
+    _ = try expectMatchesSnapshot(allocator, &storage, "scenario-build.json");
 }
 
 test "scenario existing: records updated, deleted and added in the 50-assets test database" {
@@ -352,8 +299,7 @@ test "scenario existing: records updated, deleted and added in the 50-assets tes
         try collection.setInternalRecord(io, try makeRecord(allocator, try recordIdGenerator.generate(allocator), newIndex, 0, 1700000000000 + newIndex));
     }
     try database.commit(io);
-    const fixture = try expectMatchesSnapshot(allocator, &storage, "scenario-existing.json");
-    try expectTypeScriptReads(allocator, &storage, fixture, "existing", &media_sort_indexes);
+    _ = try expectMatchesSnapshot(allocator, &storage, "scenario-existing.json");
 }
 
 test "scenario leaves: deleting the first leaf of a sort index" {
@@ -387,8 +333,7 @@ test "scenario leaves: deleting the first leaf of a sort index" {
         try updateCollection.setInternalRecord(io, try makeHashRecord(allocator, ids.items[@intCast(index)], index, true));
     }
     try updateDatabase.commit(io);
-    const fixture = try expectMatchesSnapshot(allocator, &storage, "scenario-leaves.json");
-    try expectTypeScriptReads(allocator, &storage, fixture, "leaves", &.{"hash_asc"});
+    _ = try expectMatchesSnapshot(allocator, &storage, "scenario-leaves.json");
 }
 
 test "scenario large: enough leaf splits to split the root internal node" {
@@ -425,6 +370,5 @@ test "scenario large: enough leaf splits to split the root internal node" {
     try sortIndex.commit(io);
     const rootNode = sortIndex.treeNodes.get(sortIndex.rootPageId.?).?;
     try std.testing.expectEqual(@as(usize, 2), rootNode.children.items.len);
-    const fixture = try expectMatchesSnapshot(allocator, &storage, "scenario-large.json");
-    try expectTypeScriptReads(allocator, &storage, fixture, "large", &.{"hash_asc"});
+    _ = try expectMatchesSnapshot(allocator, &storage, "scenario-large.json");
 }

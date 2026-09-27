@@ -5,6 +5,11 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .@"utils-zig" = .{ .path = "../utils-zig" },
+        // zlib-ng, the zlib Bun's node:zlib is built on (see zlib-ng/zlib-ng.zig).
+        .@"zlib-ng" = .{
+            .url = "https://github.com/zlib-ng/zlib-ng/archive/refs/tags/2.3.3.tar.gz",
+            .hash = "N-V-__8AAPaJcABkB6U-96R7h2xuXX5TlDMvwPbE4PucPI59",
+        },
     },
-    .paths = .{ "build.zig", "build.zig.zon", "src" },
+    .paths = .{ "build.zig", "build.zig.zon", "zlib-ng", "src" },
 }

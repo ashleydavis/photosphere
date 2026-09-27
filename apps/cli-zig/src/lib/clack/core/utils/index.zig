@@ -29,9 +29,9 @@ pub fn isCancel(value: anytype) bool {
 //
 // Switches raw mode of the input on or off when it is a TTY.
 //
-pub fn setRawMode(input: *readline.PromptInput, value: bool) void {
+pub fn setRawMode(input: *readline.PromptInput, value: bool) !void {
     if (input.isTTY()) {
-        input.setRawMode(value);
+        try input.setRawMode(value);
     }
 }
 
@@ -39,26 +39,9 @@ pub fn setRawMode(input: *readline.PromptInput, value: bool) void {
 
 //
 // The number of columns of process.stdout (`process.stdout.columns`), or null when stdout is not a TTY.
-// Tests can override it with setColumnsForTesting.
 //
 pub fn stdoutColumns() ?usize {
-    if (columns_override) |value| {
-        return value;
-    }
     return tty.columns(tty.stdout_fd);
-}
-
-//
-// Overrides the stdout column count (tests): the outer null restores detection, an inner null means
-// "not a TTY".
-//
-var columns_override: ??usize = null;
-
-//
-// Overrides the stdout column count seen by the prompts (used by tests); pass null to restore detection.
-//
-pub fn setColumnsForTesting(value: ??usize) void {
-    columns_override = value;
 }
 
 //

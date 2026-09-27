@@ -465,7 +465,15 @@ pub const TaskQueue = struct {
         }
         var resolver: IAwaitAllResolver = .{ .resolved = false };
         try self.awaitAllResolvers.append(transit_allocator, &resolver);
-        self.waitUntilResolved(&resolver.resolved);
+        errdefer {
+            for (self.awaitAllResolvers.items, 0..) |registered, index| {
+                if (registered == &resolver) {
+                    _ = self.awaitAllResolvers.orderedRemove(index);
+                    break;
+                }
+            }
+        }
+        try self.waitUntilResolved(&resolver.resolved);
     }
 
     //
@@ -488,7 +496,15 @@ pub const TaskQueue = struct {
             .resolved = false,
         };
         try self.awaitTaskResolvers.append(transit_allocator, &resolver);
-        self.waitUntilResolved(&resolver.resolved);
+        errdefer {
+            for (self.awaitTaskResolvers.items, 0..) |registered, index| {
+                if (registered == &resolver) {
+                    _ = self.awaitTaskResolvers.orderedRemove(index);
+                    break;
+                }
+            }
+        }
+        try self.waitUntilResolved(&resolver.resolved);
         if (resolver.copyError) |err| {
             return err;
         }
@@ -498,8 +514,9 @@ pub const TaskQueue = struct {
     //
     // Dispatches queued events until `resolved` is set, waiting for events when there are none
     // (the lock must be held; it is released while callbacks run and while waiting).
+    // An event that cannot be dispatched fails the wait (the lock is held again when it returns).
     //
-    fn waitUntilResolved(self: *TaskQueue, resolved: *bool) void {
+    fn waitUntilResolved(self: *TaskQueue, resolved: *bool) !void {
         while (!resolved.*) {
             if (!self.isDispatching and self.pendingEventsHead < self.pendingEvents.items.len) {
                 const event = self.pendingEvents.items[self.pendingEventsHead];
@@ -510,11 +527,12 @@ pub const TaskQueue = struct {
                 }
                 self.isDispatching = true;
                 self.unlock();
-                self.dispatchEvent(event);
+                const dispatch_result = self.dispatchEvent(event);
                 transit_allocator.free(event.json);
                 self.lock();
                 self.isDispatching = false;
                 self.condition.broadcast(self.io);
+                try dispatch_result;
                 continue;
             }
             self.condition.waitUncancelable(self.io, &self.mutex);
@@ -524,24 +542,18 @@ pub const TaskQueue = struct {
     //
     // Runs the callbacks for one queued event (the lock must not be held).
     //
-    fn dispatchEvent(self: *TaskQueue, event: IQueueEvent) void {
+    fn dispatchEvent(self: *TaskQueue, event: IQueueEvent) !void {
         var scratch = std.heap.ArenaAllocator.init(transit_allocator);
         defer scratch.deinit();
         const scratch_allocator = scratch.allocator();
         switch (event.kind) {
             .completed => {
-                const result = std.json.parseFromSliceLeaky(ITaskResult, scratch_allocator, event.json, .{ .allocate = .alloc_always }) catch |err| {
-                    log.exception("Failed to read task result", err);
-                    return;
-                };
-                self.notifyCompletionCallbacks(scratch_allocator, result, event.json);
+                const result = try std.json.parseFromSliceLeaky(ITaskResult, scratch_allocator, event.json, .{ .allocate = .alloc_always });
+                try self.notifyCompletionCallbacks(scratch_allocator, result, event.json);
             },
             .message => {
-                const message = std.json.parseFromSliceLeaky(ITaskMessageData, scratch_allocator, event.json, .{ .allocate = .alloc_always }) catch |err| {
-                    log.exception("Failed to read task message", err);
-                    return;
-                };
-                self.notifyMessageCallbacks(scratch_allocator, message.taskId, message.message);
+                const message = try std.json.parseFromSliceLeaky(ITaskMessageData, scratch_allocator, event.json, .{ .allocate = .alloc_always });
+                try self.notifyMessageCallbacks(scratch_allocator, message.taskId, message.message);
             },
         }
     }
@@ -552,13 +564,16 @@ pub const TaskQueue = struct {
     // `scratchAllocator` holds the result for the duration of the callbacks; `resultJson` is the
     // serialized result, parsed again for each awaitTask caller into that caller's allocator.
     //
-    fn notifyCompletionCallbacks(self: *TaskQueue, scratchAllocator: std.mem.Allocator, result: ITaskResult, resultJson: []const u8) void {
+    fn notifyCompletionCallbacks(self: *TaskQueue, scratchAllocator: std.mem.Allocator, result: ITaskResult, resultJson: []const u8) !void {
         self.lock();
+        const callbacks = scratchAllocator.dupe(ICompletionCallbackRegistration, self.completionCallbacks.items) catch |err| {
+            self.unlock();
+            return err;
+        };
         if (self.trackedTaskIds.fetchRemove(result.taskId)) |removed| {
             transit_allocator.free(removed.key);
         }
         self.numTasksInFlight -= 1;
-        const callbacks = scratchAllocator.dupe(ICompletionCallbackRegistration, self.completionCallbacks.items) catch &.{};
         self.unlock();
 
         for (callbacks) |registration| {
@@ -603,7 +618,7 @@ pub const TaskQueue = struct {
     // Only callbacks that match the message type will be invoked.
     // Callback errors are caught and logged to prevent breaking the queue.
     //
-    fn notifyMessageCallbacks(self: *TaskQueue, scratchAllocator: std.mem.Allocator, taskId: []const u8, message: std.json.Value) void {
+    fn notifyMessageCallbacks(self: *TaskQueue, scratchAllocator: std.mem.Allocator, taskId: []const u8, message: std.json.Value) !void {
         const messageType = types.messageTypeOf(message);
 
         self.lock();
@@ -612,7 +627,10 @@ pub const TaskQueue = struct {
             if (messageType == null or !std.mem.eql(u8, messageType.?, registration.entry.messageType)) {
                 continue;
             }
-            callbacks.append(scratchAllocator, registration.entry.callback) catch {};
+            callbacks.append(scratchAllocator, registration.entry.callback) catch |err| {
+                self.unlock();
+                return err;
+            };
         }
         self.unlock();
 

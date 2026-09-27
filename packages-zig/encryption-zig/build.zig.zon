@@ -5,6 +5,12 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .@"utils-zig" = .{ .path = "../utils-zig" },
+        // aws-lc, whose libcrypto implements the node:crypto functions this package uses (see aws/aws-lc.zig).
+        // storage-zig links the same libcrypto into the AWS SDK for C.
+        .@"aws-lc" = .{
+            .url = "https://github.com/aws/aws-lc/archive/refs/tags/v5.5.0.tar.gz",
+            .hash = "N-V-__8AAOfQfxIGDOzgDlbc_yQwa-mN3oZ96oLj6ERzSbPL",
+        },
     },
-    .paths = .{ "build.zig", "build.zig.zon", "src" },
+    .paths = .{ "build.zig", "build.zig.zon", "aws", "src" },
 }

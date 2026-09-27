@@ -1,27 +1,20 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const helpers = @import("test-helpers.zig");
 const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 
 //
-// The paths of the two CLIs.
+// The expected output of these tests is written out here, ported from the TypeScript CLI: the report text from
+// apps/cli/src/cmd/<command>.ts, the "No database found" and "not empty" messages from apps/cli/src/lib/init-cmd.ts,
+// the worker log prefix from apps/cli/src/lib/worker-log-bun.ts and the numbers from the files of test/dbs/v6.
 //
-const Clis = struct {
-    // The Zig binary.
-    zig: []const u8,
-
-    // The TypeScript entry point.
-    ts: []const u8,
-};
 
 //
-// Gets the paths of the two CLIs.
+// Gets the absolute path of the built Zig CLI.
 //
-fn clis(allocator: std.mem.Allocator) !Clis {
-    return .{
-        .zig = try std.Io.Dir.cwd().realPathFileAlloc(std.testing.io, helpers.psi_path, allocator),
-        .ts = @import("cli-zig").delegate.ts_cli_path,
-    };
+fn zigCliPath(allocator: std.mem.Allocator) ![]const u8 {
+    return std.Io.Dir.cwd().realPathFileAlloc(std.testing.io, helpers.psi_path, allocator);
 }
 
 //
@@ -29,44 +22,26 @@ fn clis(allocator: std.mem.Allocator) !Clis {
 //
 fn runZig(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, args: []const []const u8) !helpers.CliResult {
     var argv: std.ArrayList([]const u8) = .empty;
-    try argv.append(allocator, (try clis(allocator)).zig);
+    try argv.append(allocator, try zigCliPath(allocator));
     try argv.appendSlice(allocator, args);
     return helpers.runCli(allocator, argv.items, environment);
 }
 
 //
-// Runs the TypeScript CLI with the arguments.
+// Expects the CLI to exit with the code and write the output.
 //
-fn runTs(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, args: []const []const u8) !helpers.CliResult {
-    var argv: std.ArrayList([]const u8) = .empty;
-    try argv.appendSlice(allocator, &.{ "bun", (try clis(allocator)).ts });
-    try argv.appendSlice(allocator, args);
-    return helpers.runCli(allocator, argv.items, environment) catch |err| {
-
-        // Comparing with the TypeScript CLI needs Bun; skip the test where Bun cannot be spawned.
-        if (err == error.FileNotFound) {
-            return error.SkipZigTest;
-        }
-        return err;
-    };
+fn expectResult(result: helpers.CliResult, expectedStdout: []const u8, expectedStderr: []const u8, expectedExitCode: u8) !void {
+    try std.testing.expectEqualStrings(expectedStdout, result.stdout);
+    try std.testing.expectEqualStrings(expectedStderr, result.stderr);
+    try std.testing.expectEqual(expectedExitCode, result.exitCode);
 }
 
 //
-// Expects both CLIs to exit with the same code and write the same output.
-//
-fn expectSameResult(tsResult: helpers.CliResult, zigResult: helpers.CliResult) !void {
-    try std.testing.expectEqualStrings(tsResult.stdout, zigResult.stdout);
-    try std.testing.expectEqualStrings(tsResult.stderr, zigResult.stderr);
-    try std.testing.expectEqual(tsResult.exitCode, zigResult.exitCode);
-}
-
-//
-// Creates a test root with two copies of test/dbs/v6.
+// Creates a test root with a copy of test/dbs/v6 in <root>/db.
 //
 fn setup(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
     const root = try helpers.makeTempDir(allocator, name);
-    try helpers.copyDirectory(allocator, "../../test/dbs/v6", try std.fmt.allocPrint(allocator, "{s}/db-ts", .{root}));
-    try helpers.copyDirectory(allocator, "../../test/dbs/v6", try std.fmt.allocPrint(allocator, "{s}/db-zig", .{root}));
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", try std.fmt.allocPrint(allocator, "{s}/db", .{root}));
     return root;
 }
 
@@ -119,55 +94,170 @@ fn normalize(allocator: std.mem.Allocator, result: helpers.CliResult, path: []co
     };
 }
 
-test "verify prints the same report as TypeScript" {
+//
+// The "Next steps" verifyCommand (apps/cli/src/cmd/verify.ts) prints for a database without problems, <db>
+// standing for the database path.
+//
+const verify_next_steps_healthy =
+    \\Next steps:
+    \\    # Create a backup copy of your database
+    \\    psi replicate --db <db> --dest <other-db-path>
+    \\
+    \\    # Synchronize changes between two databases that have been independently changed
+    \\    psi sync --db <db> --dest <other-db-path>
+    \\
+    \\    # Compare this database with another location
+    \\    psi compare --db <db> --dest <other-db-path>
+    \\
+    \\    # View database summary and tree hash
+    \\    psi summary
+    \\
+;
+
+//
+// The report of `psi verify` for test/dbs/v6. Its files tree holds README.md (913 bytes) and the asset, display
+// and thumb files of its one asset (2,049,800 + 696,014 + 130,591 bytes): 4 files, 2,877,318 bytes, which
+// formatBytes (apps/cli/src/lib/format.ts) prints as 2.74 MiB, and a tree of 7 nodes. verifyDatabaseFiles
+// (packages/node-api/src/lib/verify.ts) checks files.dat, collection.dat, the 2 shard files and the 4 sort index
+// files: 8 files, 363,161 bytes, printed as 355 KiB.
+//
+const verify_v6_report =
+    \\Asset files verified.
+    \\
+    \\Files imported:    1
+    \\Total files:       4
+    \\Total size:        2.74 MiB
+    \\Files processed:   4
+    \\Nodes processed:   7
+    \\Unmodified:        4
+    \\Modified:          0
+    \\New:               0
+    \\Removed:           0
+    \\Failures:          0
+    \\Record mismatches: 0
+    \\
+    \\Database files:
+    \\  Total files:    8
+    \\  Total size:     355 KiB
+    \\  Valid files:    8
+    \\  Invalid files:  0
+    \\
+    \\✅ Database verification passed - all files are intact
+    \\
+++ "\n" ++ verify_next_steps_healthy;
+
+//
+// The report of `psi verify --full --path asset` for test/dbs/v6: only the asset file matches the path, and a
+// verification of a path skips the database files.
+//
+const verify_v6_asset_path_report =
+    \\Verified files matching: asset
+    \\
+    \\Files imported:    1
+    \\Total files:       4
+    \\Total size:        2.74 MiB
+    \\Files processed:   1
+    \\Nodes processed:   7
+    \\Unmodified:        1
+    \\Modified:          0
+    \\New:               0
+    \\Removed:           0
+    \\Failures:          0
+    \\Record mismatches: 0
+    \\
+    \\✅ Database verification passed - all files are intact
+    \\
+++ "\n" ++ verify_next_steps_healthy;
+
+test "verify prints the report of the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const root = try setup(allocator, "cmd-verify");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const dbTs = try std.fmt.allocPrint(allocator, "{s}/db-ts", .{root});
-    const dbZig = try std.fmt.allocPrint(allocator, "{s}/db-zig", .{root});
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
 
-    const tsResult = try normalize(allocator, try runTs(allocator, environment, &.{ "verify", "--db", dbTs, "--yes" }), dbTs, "<db>");
-    const zigResult = try normalize(allocator, try runZig(allocator, environment, &.{ "verify", "--db", dbZig, "--yes" }), dbZig, "<db>");
-    try expectSameResult(tsResult, zigResult);
-    try std.testing.expectEqual(@as(u8, 0), zigResult.exitCode);
-    try std.testing.expect(std.mem.indexOf(u8, zigResult.stdout, "Database verification passed") != null);
+    const result = try normalize(allocator, try runZig(allocator, environment, &.{ "verify", "--db", db, "--yes" }), db, "<db>");
+    try expectResult(result, verify_v6_report, "", 0);
 
-    const tsFull = try normalize(allocator, try runTs(allocator, environment, &.{ "ver", "--db", dbTs, "--yes", "--full", "--path", "asset" }), dbTs, "<db>");
-    const zigFull = try normalize(allocator, try runZig(allocator, environment, &.{ "ver", "--db", dbZig, "--yes", "--full", "--path", "asset" }), dbZig, "<db>");
-    try expectSameResult(tsFull, zigFull);
+    const fullResult = try normalize(allocator, try runZig(allocator, environment, &.{ "ver", "--db", db, "--yes", "--full", "--path", "asset" }), db, "<db>");
+    try expectResult(fullResult, verify_v6_asset_path_report, "", 0);
 }
 
-test "verify reports a modified file like TypeScript" {
+//
+// The report of `psi verify --full` for test/dbs/v6 with its thumb file overwritten. The totals come from the
+// files tree, so only the modified count changes; a verification that found problems prints the repair step and
+// exits with 1, which retains the session's temporary files.
+//
+const verify_v6_modified_report =
+    \\Asset files verified.
+    \\
+    \\Files imported:    1
+    \\Total files:       4
+    \\Total size:        2.74 MiB
+    \\Files processed:   4
+    \\Nodes processed:   7
+    \\Unmodified:        3
+    \\Modified:          1
+    \\New:               0
+    \\Removed:           0
+    \\Failures:          0
+    \\Record mismatches: 0
+    \\
+    \\Modified files:
+    \\  ● thumb/89171cd9-a652-4047-b869-1154bf2c95a1
+    \\
+    \\Database files:
+    \\  Total files:    8
+    \\  Total size:     355 KiB
+    \\  Valid files:    8
+    \\  Invalid files:  0
+    \\
+    \\⚠️ Asset file verification found issues - see details above
+    \\
+    \\Next steps:
+    \\    # Fix database issues by restoring from source
+    \\    psi repair --source <backup-db-path>
+    \\
+    \\Temporary files retained for inspection: <session dir>
+    \\
+;
+
+test "verify reports a modified file like the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const root = try setup(allocator, "cmd-verify-modified");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const dbTs = try std.fmt.allocPrint(allocator, "{s}/db-ts", .{root});
-    const dbZig = try std.fmt.allocPrint(allocator, "{s}/db-zig", .{root});
-    for ([_][]const u8{ dbTs, dbZig }) |db| {
-        var dir = try std.Io.Dir.cwd().openDir(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/thumb", .{db}), .{ .iterate = true });
-        defer dir.close(std.testing.io);
-        var iterator = dir.iterate();
-        const entry = (try iterator.next(std.testing.io)).?;
-        try dir.writeFile(std.testing.io, .{ .sub_path = entry.name, .data = "changed" });
-    }
-    var tsResult = try normalize(allocator, try runTs(allocator, environment, &.{ "verify", "--db", dbTs, "--yes", "--full" }), dbTs, "<db>");
-    var zigResult = try normalize(allocator, try runZig(allocator, environment, &.{ "verify", "--db", dbZig, "--yes", "--full" }), dbZig, "<db>");
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = try std.fmt.allocPrint(allocator, "{s}/thumb/89171cd9-a652-4047-b869-1154bf2c95a1", .{db}),
+        .data = "changed",
+    });
 
-    // A verification that found problems exits with 1, which retains the session's temporary files.
-    try std.testing.expectEqual(@as(u8, 1), zigResult.exitCode);
-    tsResult.stdout = try maskRetainedSessionDir(allocator, tsResult.stdout);
-    zigResult.stdout = try maskRetainedSessionDir(allocator, zigResult.stdout);
-    try expectSameResult(tsResult, zigResult);
-    try std.testing.expect(std.mem.indexOf(u8, zigResult.stdout, "Modified files:") != null);
+    var result = try normalize(allocator, try runZig(allocator, environment, &.{ "verify", "--db", db, "--yes", "--full" }), db, "<db>");
+    result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
+    try expectResult(result, verify_v6_modified_report, "", 1);
 }
 
-test "verify reports a missing database like TypeScript" {
+//
+// What loadDatabase (apps/cli/src/lib/init-cmd.ts) prints, through outro, for a database path without a files
+// tree, <missing> standing for the path, followed by the line of the termination handler that retains the session.
+//
+const verify_missing_report =
+    \\
+    \\✗ No database found at: <missing>
+    \\  The database directory must contain a ".db" folder with files.dat or tree.dat.
+    \\
+    \\To create a new database at this directory, use:
+    \\  psi init --db <missing>
+    \\Temporary files retained for inspection: <session dir>
+    \\
+;
+
+test "verify reports a missing database like the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -175,72 +265,109 @@ test "verify reports a missing database like TypeScript" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
     const missing = try std.fmt.allocPrint(allocator, "{s}/missing", .{root});
-    const tsResult = try runTs(allocator, environment, &.{ "verify", "--db", missing, "--yes" });
-    const zigResult = try runZig(allocator, environment, &.{ "verify", "--db", missing, "--yes" });
-    // The session directory in the "Temporary files retained" line is random.
-    try std.testing.expectEqual(tsResult.exitCode, zigResult.exitCode);
-    const tsFirst = tsResult.stdout[0..std.mem.indexOf(u8, tsResult.stdout, "Temporary files").?];
-    const zigFirst = zigResult.stdout[0..std.mem.indexOf(u8, zigResult.stdout, "Temporary files").?];
-    try std.testing.expectEqualStrings(tsFirst, zigFirst);
+    var result = try normalize(allocator, try runZig(allocator, environment, &.{ "verify", "--db", missing, "--yes" }), missing, "<missing>");
+    result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
+    try expectResult(result, verify_missing_report, "", 1);
 }
 
-test "replicate prints the same report as TypeScript and writes the same replica" {
+//
+// The report of `psi replicate` (apps/cli/src/cmd/replicate.ts) from <db> to <dest>, with the two lines the
+// replication task logs (packages/node-api/src/lib/replicate-database.worker.ts) through the worker log, for the
+// counts of copied files and records.
+//
+fn replicateReport(allocator: std.mem.Allocator, copiedFiles: []const u8, copiedRecords: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(allocator,
+        \\
+        \\Replicating database:
+        \\  Source:         <db>
+        \\  Destination:    <dest>
+        \\
+        \\[W1:<task>] Replication started from <db> to <dest>
+        \\[W1:<task>] Replication completed from <db> to <dest>
+        \\📊 Replication Results
+        \\
+        \\Total files imported:      1
+        \\Total files copied:        {s}
+        \\
+        \\Total records copied:      {s}
+        \\
+        \\✅ Replication completed successfully
+        \\
+        \\💡 Tip: You can run this command again anytime to update your replica when the source database changes.
+        \\
+        \\Next steps:
+        \\    # Verify the integrity of the replicated database
+        \\    psi verify --db <dest>
+        \\
+        \\    # Compare source and destination databases
+        \\    psi compare --db <db> --dest <dest>
+        \\
+        \\    # Synchronize changes between two databases that have been independently changed
+        \\    psi sync --db <db> --dest <dest>
+        \\
+        \\    # View summary of the replicated database
+        \\    psi summary --db <dest>
+        \\
+    , .{ copiedFiles, copiedRecords });
+}
+
+test "replicate prints the report of the TypeScript CLI and copies the files" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const root = try setup(allocator, "cmd-replicate");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const dbTs = try std.fmt.allocPrint(allocator, "{s}/db-ts", .{root});
-    const dbZig = try std.fmt.allocPrint(allocator, "{s}/db-zig", .{root});
-    const destTs = try std.fmt.allocPrint(allocator, "{s}/dest-ts", .{root});
-    const destZig = try std.fmt.allocPrint(allocator, "{s}/dest-zig", .{root});
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const dest = try std.fmt.allocPrint(allocator, "{s}/replica", .{root});
 
-    const tsResult = try normalize(allocator, try normalize(allocator, try runTs(allocator, environment, &.{ "replicate", "--db", dbTs, "--dest", destTs, "--yes" }), destTs, "<dest>"), dbTs, "<db>");
-    const zigResult = try normalize(allocator, try normalize(allocator, try runZig(allocator, environment, &.{ "replicate", "--db", dbZig, "--dest", destZig, "--yes" }), destZig, "<dest>"), dbZig, "<db>");
-    try expectSameResult(tsResult, zigResult);
-    try std.testing.expectEqual(@as(u8, 0), zigResult.exitCode);
+    // The new replica already holds the README.md written when it is created, so the asset, display and thumb
+    // files of the one asset are copied, with its one metadata record.
+    const result = try normalize(allocator, try normalize(allocator, try runZig(allocator, environment, &.{ "replicate", "--db", db, "--dest", dest, "--yes" }), dest, "<dest>"), db, "<db>");
+    try expectResult(result, try replicateReport(allocator, "3", "1"), "", 0);
 
     const assetId = "89171cd9-a652-4047-b869-1154bf2c95a1";
-    const tsAsset = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ destTs, assetId }), allocator, .unlimited);
-    const zigAsset = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ destZig, assetId }), allocator, .unlimited);
-    try std.testing.expectEqualSlices(u8, tsAsset, zigAsset);
+    const sourceAsset = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ db, assetId }), allocator, .unlimited);
+    const replicaAsset = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ dest, assetId }), allocator, .unlimited);
+    try std.testing.expectEqualSlices(u8, sourceAsset, replicaAsset);
 
-    // Replicating again to an existing destination with --yes updates it.
-    const tsAgain = try normalize(allocator, try normalize(allocator, try runTs(allocator, environment, &.{ "rep", "--db", dbTs, "--dest", destTs, "--yes", "--partial" }), destTs, "<dest>"), dbTs, "<db>");
-    const zigAgain = try normalize(allocator, try normalize(allocator, try runZig(allocator, environment, &.{ "rep", "--db", dbZig, "--dest", destZig, "--yes", "--partial" }), destZig, "<dest>"), dbZig, "<db>");
-    try expectSameResult(tsAgain, zigAgain);
+    // Replicating again to an existing destination with --yes updates it, and it has nothing to copy.
+    const again = try normalize(allocator, try normalize(allocator, try runZig(allocator, environment, &.{ "rep", "--db", db, "--dest", dest, "--yes", "--partial" }), dest, "<dest>"), db, "<db>");
+    try expectResult(again, try replicateReport(allocator, "0", "0"), "", 0);
 }
 
-test "replicate rejects --partial with --full like TypeScript" {
+test "replicate rejects --partial with --full like the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const root = try setup(allocator, "cmd-replicate-flags");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const dbZig = try std.fmt.allocPrint(allocator, "{s}/db-zig", .{root});
-    const zigResult = try runZig(allocator, environment, &.{ "replicate", "--db", dbZig, "--dest", "/tmp/x", "--partial", "--full", "--yes" });
-    const tsResult = try runTs(allocator, environment, &.{ "replicate", "--db", dbZig, "--dest", "/tmp/x", "--partial", "--full", "--yes" });
-    try std.testing.expectEqual(tsResult.exitCode, zigResult.exitCode);
-    try std.testing.expectEqualStrings(tsResult.stderr[0..std.mem.indexOf(u8, tsResult.stderr, "\n").?], zigResult.stderr[0..std.mem.indexOf(u8, zigResult.stderr, "\n").?]);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const result = try runZig(allocator, environment, &.{ "replicate", "--db", db, "--dest", "/tmp/x", "--partial", "--full", "--yes" });
+    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
+    try std.testing.expectEqualStrings("✗ --partial and --full cannot be used together. Please specify only one.\n", result.stderr);
 }
 
-test "replicate rejects a key for an unencrypted destination like TypeScript" {
+test "replicate rejects a key for an unencrypted destination like the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const root = try setup(allocator, "cmd-replicate-key");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const dbTs = try std.fmt.allocPrint(allocator, "{s}/db-ts", .{root});
-    const dbZig = try std.fmt.allocPrint(allocator, "{s}/db-zig", .{root});
-    // The destination is the other (unencrypted) database.
-    const tsResult = try runTs(allocator, environment, &.{ "replicate", "--db", dbTs, "--dest", dbZig, "--dest-key", "k", "--yes" });
-    const zigResult = try runZig(allocator, environment, &.{ "replicate", "--db", dbZig, "--dest", dbTs, "--dest-key", "k", "--yes" });
-    try std.testing.expectEqual(tsResult.exitCode, zigResult.exitCode);
-    try std.testing.expect(std.mem.indexOf(u8, zigResult.stderr, "You specified an encryption key, but the destination database is not encrypted.") != null);
-    try std.testing.expect(std.mem.indexOf(u8, tsResult.stderr, "You specified an encryption key, but the destination database is not encrypted.") != null);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
+
+    // The destination is another (unencrypted) database.
+    const result = try runZig(allocator, environment, &.{ "replicate", "--db", db, "--dest", dest, "--dest-key", "k", "--yes" });
+    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
+    try std.testing.expectEqualStrings(
+        \\✗ You specified an encryption key, but the destination database is not encrypted.
+        \\  Either remove the --dest-key option, or replicate to a different location to create a new encrypted database.
+        \\
+    , result.stderr);
 }
 
 //
@@ -248,29 +375,101 @@ test "replicate rejects a key for an unencrypted destination like TypeScript" {
 //
 fn runZigToFile(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, args: []const []const u8, outputPath: []const u8) !helpers.CliResult {
     var argv: std.ArrayList([]const u8) = .empty;
-    try argv.append(allocator, (try clis(allocator)).zig);
+    try argv.append(allocator, try zigCliPath(allocator));
     try argv.appendSlice(allocator, args);
     return helpers.runCliToFile(allocator, argv.items, environment, outputPath);
 }
 
 //
-// Runs the TypeScript CLI with the arguments, its stdout written to a file.
+// The name versionCommand (apps/cli/src/cmd/version.ts) gives each dependency line, in the order it prints them;
+// ImageMagick is named for the kind of ImageMagick found.
 //
-fn runTsToFile(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, args: []const []const u8, outputPath: []const u8) !helpers.CliResult {
-    var argv: std.ArrayList([]const u8) = .empty;
-    try argv.appendSlice(allocator, &.{ "bun", (try clis(allocator)).ts });
-    try argv.appendSlice(allocator, args);
-    return helpers.runCliToFile(allocator, argv.items, environment, outputPath) catch |err| {
+const version_dependency_names = [_][]const []const u8{
+    &.{ "ImageMagick", "ImageMagick (convert/identify)", "ImageMagick (magick)" },
+    &.{"ffmpeg"},
+    &.{"ffprobe"},
+};
 
-        // Comparing with the TypeScript CLI needs Bun; skip the test where Bun cannot be spawned.
-        if (err == error.FileNotFound) {
-            return error.SkipZigTest;
-        }
-        return err;
-    };
+//
+// Gets the cache directory getCacheDir (packages/node-utils/src/lib/fs.ts) returns in the CLI test environment,
+// which sets neither PHOTOSPHERE_CACHE_DIR, XDG_CACHE_HOME nor LOCALAPPDATA.
+//
+fn expectedCacheDir(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map) ![]const u8 {
+    if (builtin.os.tag == .windows) {
+        return std.fs.path.join(allocator, &.{ environment.get("USERPROFILE").?, "AppData", "Local", "photosphere", "cache" });
+    }
+    if (builtin.os.tag == .macos) {
+        return std.fs.path.join(allocator, &.{ environment.get("HOME").?, "Library", "Caches", "photosphere" });
+    }
+    return std.fs.path.join(allocator, &.{ environment.get("HOME").?, ".cache", "photosphere" });
 }
 
-test "version prints the same report as TypeScript" {
+//
+// Expects the report of versionCommand (apps/cli/src/cmd/version.ts). The versions of the tools on the machine
+// are not known here, so each dependency line is checked for its name and the closing status for agreeing with
+// which dependencies were found; the rest is exact.
+//
+fn expectVersionReport(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, root: []const u8, stdout: []const u8) !void {
+    const header =
+        \\
+        \\📋 Version Information
+        \\
+        \\Photosphere: dev
+        \\Database version: 6
+        \\
+        \\Dependencies:
+        \\
+    ;
+    try std.testing.expect(std.mem.startsWith(u8, stdout, header));
+    var lines = std.mem.splitScalar(u8, stdout[header.len..], '\n');
+    var missingTools: std.ArrayList([]const u8) = .empty;
+    var missingImageMagick = false;
+    var missingFfmpeg = false;
+    var missingFfprobe = false;
+    for (version_dependency_names, 0..) |names, dependencyIndex| {
+        const line = lines.next().?;
+        var nameMatched = false;
+        for (names) |name| {
+            if (std.mem.startsWith(u8, line, try std.fmt.allocPrint(allocator, "  {s}: ", .{name}))) {
+                nameMatched = true;
+            }
+        }
+        try std.testing.expect(nameMatched);
+        if (std.mem.endsWith(u8, line, ": Not found")) {
+            switch (dependencyIndex) {
+                0 => missingImageMagick = true,
+                1 => missingFfmpeg = true,
+                else => missingFfprobe = true,
+            }
+        }
+    }
+
+    // verifyTools (packages/tools/src/lib/tool-verification.ts) lists the missing tools in this order.
+    if (missingImageMagick) {
+        try missingTools.append(allocator, "ImageMagick");
+    }
+    if (missingFfprobe) {
+        try missingTools.append(allocator, "ffprobe");
+    }
+    if (missingFfmpeg) {
+        try missingTools.append(allocator, "ffmpeg");
+    }
+    const status = if (missingTools.items.len == 0)
+        "✅ All dependencies are available\n"
+    else
+        try std.fmt.allocPrint(allocator, "⚠️  Some dependencies are missing: {s}\nRun \"psi tools\" for installation instructions\n", .{try std.mem.join(allocator, ", ", missingTools.items)});
+    const tempDir = try std.fs.path.join(allocator, &.{ root, "tmp", "photosphere" });
+    const expectedRest = try std.fmt.allocPrint(allocator, "\nDirectories:\n  Config: {s}/config\n  Temp: {s}\n  Log files: {s}\n  Cache: {s}\n\n{s}", .{
+        root,
+        tempDir,
+        try std.fs.path.join(allocator, &.{ tempDir, "logs" }),
+        try expectedCacheDir(allocator, environment),
+        status,
+    });
+    try std.testing.expectEqualStrings(expectedRest, lines.rest());
+}
+
+test "version prints the report of the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -278,18 +477,19 @@ test "version prints the same report as TypeScript" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
 
-    const tsResult = try runTs(allocator, environment, &.{"version"});
-    const zigResult = try runZig(allocator, environment, &.{"version"});
-    try expectSameResult(tsResult, zigResult);
-    try std.testing.expectEqual(@as(u8, 0), zigResult.exitCode);
-    try std.testing.expect(std.mem.indexOf(u8, zigResult.stdout, "Database version: 6") != null);
+    const result = try runZig(allocator, environment, &.{"version"});
+    try std.testing.expectEqual(@as(u8, 0), result.exitCode);
+    try std.testing.expectEqualStrings("", result.stderr);
+    try expectVersionReport(allocator, environment, root, result.stdout);
 
-    const tsQuiet = try runTs(allocator, environment, &.{ "-q", "version" });
-    const zigQuiet = try runZig(allocator, environment, &.{ "-q", "version" });
-    try expectSameResult(tsQuiet, zigQuiet);
+    // The test environment has an empty news feed, so --quiet leaves the report as it is.
+    const quiet = try runZig(allocator, environment, &.{ "-q", "version" });
+    try std.testing.expectEqual(@as(u8, 0), quiet.exitCode);
+    try std.testing.expectEqualStrings(result.stdout, quiet.stdout);
+    try std.testing.expectEqualStrings("", quiet.stderr);
 }
 
-test "version written to a file is the same as TypeScript" {
+test "version written to a file is the report of the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -297,12 +497,12 @@ test "version written to a file is the same as TypeScript" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
 
-    const tsResult = try runTsToFile(allocator, environment, &.{"version"}, try std.fmt.allocPrint(allocator, "{s}/ts.txt", .{root}));
-    const zigResult = try runZigToFile(allocator, environment, &.{"version"}, try std.fmt.allocPrint(allocator, "{s}/zig.txt", .{root}));
-    try expectSameResult(tsResult, zigResult);
+    const result = try runZigToFile(allocator, environment, &.{"version"}, try std.fmt.allocPrint(allocator, "{s}/zig.txt", .{root}));
+    try std.testing.expectEqual(@as(u8, 0), result.exitCode);
+    try expectVersionReport(allocator, environment, root, result.stdout);
 }
 
-test "--version prints the version like TypeScript" {
+test "--version prints the version like the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -310,11 +510,10 @@ test "--version prints the version like TypeScript" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
 
+    // The version of packages/config/src/index.ts, printed by the --version option of apps/cli/index.ts.
     for ([_][]const []const u8{ &.{"--version"}, &.{ "ver", "--version" }, &.{ "version", "--version" } }) |args| {
-        const tsResult = try runTs(allocator, environment, args);
-        const zigResult = try runZig(allocator, environment, args);
-        try expectSameResult(tsResult, zigResult);
-        try std.testing.expectEqual(@as(u8, 0), zigResult.exitCode);
+        const result = try runZig(allocator, environment, args);
+        try expectResult(result, "dev\n", "", 0);
     }
 }
 
@@ -331,110 +530,184 @@ fn deterministicEnvironment(allocator: std.mem.Allocator, environment: *const st
 }
 
 //
-// Expects two databases to hold the same files with the same bytes, except the merkle tree of the files,
-// which records the modification time of README.md; its database id is compared instead.
+// Gets the tree.dat the TypeScript CLI writes for an empty sort index with the id: the one of the same index in
+// test/dbs/no-assets (created by the TypeScript CLI) with its index id replaced and its trailing SHA-256 checksum
+// of the bytes before it recomputed.
 //
-fn expectSameDatabase(allocator: std.mem.Allocator, tsDir: []const u8, zigDir: []const u8) !void {
-    const relativePaths = [_][]const u8{
-        "README.md",
-        ".db/config.json",
-        ".db/bson/indexes/metadata/hash_asc/tree.dat",
-        ".db/bson/indexes/metadata/photoDate_desc/tree.dat",
-    };
-    for (relativePaths) |relativePath| {
-        errdefer std.debug.print("file={s}\n", .{relativePath});
-        const tsBytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ tsDir, relativePath }), allocator, .unlimited);
-        const zigBytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ zigDir, relativePath }), allocator, .unlimited);
-        try std.testing.expectEqualSlices(u8, tsBytes, zigBytes);
-    }
-    const tsStorage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, tsDir, null, null);
-    const zigStorage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, zigDir, null, null);
-    const tsTree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, std.testing.io, ".db/files.dat", tsStorage.storage, "FTRE")).?;
-    const zigTree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, std.testing.io, ".db/files.dat", zigStorage.storage, "FTRE")).?;
-    try std.testing.expectEqualStrings(tsTree.id, zigTree.id);
+fn expectedEmptySortIndexTree(allocator: std.mem.Allocator, indexDirName: []const u8, indexId: []const u8) ![]const u8 {
+    const fixturePath = try std.fmt.allocPrint(allocator, "../../test/dbs/no-assets/.db/bson/indexes/metadata/{s}/tree.dat", .{indexDirName});
+    const fixture = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, fixturePath, allocator, .unlimited);
+
+    // The index id is the first string of the header, after the version, the "IDXT" type code, a reserved word,
+    // a count and the string length.
+    const fixtureId = fixture[20..56];
+    const body = try std.mem.replaceOwned(u8, allocator, fixture[0 .. fixture.len - 32], fixtureId, indexId);
+    var checksum: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(body, &checksum, .{});
+    return std.mem.concat(allocator, u8, &.{ body, &checksum });
 }
 
-test "init prints the same report as TypeScript and creates the same database" {
+//
+// Expects a database to hold what createDatabase (packages/node-api/src/lib/media-file-database.ts) writes: the
+// README.md of test/dbs/no-assets (DATABASE_README_CONTENT), a config.json of `{}`, a files tree with the
+// database id and an empty sort index for hash ascending and photoDate descending with the index ids.
+//
+fn expectCreatedDatabase(allocator: std.mem.Allocator, dbDir: []const u8, databaseId: []const u8, hashIndexId: []const u8, photoDateIndexId: []const u8) !void {
+    const cwd = std.Io.Dir.cwd();
+    const expectedReadme = try cwd.readFileAlloc(std.testing.io, "../../test/dbs/no-assets/README.md", allocator, .unlimited);
+    try std.testing.expectEqualStrings(expectedReadme, try cwd.readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ dbDir, "README.md" }), allocator, .unlimited));
+    try std.testing.expectEqualStrings("{}", try cwd.readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ dbDir, ".db/config.json" }), allocator, .unlimited));
+    try std.testing.expectEqualSlices(u8, try expectedEmptySortIndexTree(allocator, "hash_asc", hashIndexId), try cwd.readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ dbDir, ".db/bson/indexes/metadata/hash_asc/tree.dat" }), allocator, .unlimited));
+    try std.testing.expectEqualSlices(u8, try expectedEmptySortIndexTree(allocator, "photoDate_desc", photoDateIndexId), try cwd.readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ dbDir, ".db/bson/indexes/metadata/photoDate_desc/tree.dat" }), allocator, .unlimited));
+    const storage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, dbDir, null, null);
+    const tree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, std.testing.io, ".db/files.dat", storage.storage, "FTRE")).?;
+    try std.testing.expectEqualStrings(databaseId, tree.id);
+}
+
+//
+// The report of initCommand (apps/cli/src/cmd/init.ts) for a new unencrypted database at <db>.
+//
+const init_report =
+    \\
+    \\Creating a new media file database...
+    \\
+    \\✓  Created new media file database in <db>
+    \\⚠️ Important: Never modify database files manually - always use the psi tool!
+    \\
+    \\
+    \\Add media files:
+    \\    cd <db>
+    \\    psi add <file or directory>
+    \\
+    \\Or specify the path:
+    \\    psi add --db <db> <file or directory>
+    \\
+    \\Examples:
+    \\    psi add --db <db> photo.jpg   - Adds a single photo to the database
+    \\    psi add --db <db> video.mp4   - Adds a single video to the database
+    \\    psi add --db <db> directory/  - Adds all media files in a directory
+    \\
+    \\
+;
+
+test "init prints the report of the TypeScript CLI and creates the database it creates" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const root = try helpers.makeTempDir(allocator, "cmd-init");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const dbTs = try std.fmt.allocPrint(allocator, "{s}/db-ts", .{root});
-    const dbZig = try std.fmt.allocPrint(allocator, "{s}/db-zig", .{root});
-    const tsEnvironment = try deterministicEnvironment(allocator, environment, try std.fmt.allocPrint(allocator, "{s}/ids-ts", .{root}));
-    const zigEnvironment = try deterministicEnvironment(allocator, environment, try std.fmt.allocPrint(allocator, "{s}/ids-zig", .{root}));
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const deterministic = try deterministicEnvironment(allocator, environment, try std.fmt.allocPrint(allocator, "{s}/ids", .{root}));
 
-    const tsResult = try normalize(allocator, try runTs(allocator, tsEnvironment, &.{ "init", "--db", dbTs, "--yes" }), dbTs, "<db>");
-    const zigResult = try normalize(allocator, try runZig(allocator, zigEnvironment, &.{ "init", "--db", dbZig, "--yes" }), dbZig, "<db>");
-    try expectSameResult(tsResult, zigResult);
-    try std.testing.expectEqual(@as(u8, 0), zigResult.exitCode);
-    try expectSameDatabase(allocator, dbTs, dbZig);
+    // The UUIDs are those TestUuidGenerator (packages/node-utils/src/lib/test-uuid-generator.ts) gives for each
+    // counter, as recorded from it in packages-zig/utils-zig/src/test/fixtures/test-uuid-generator.json. The
+    // counter gives the session id (1), the database id (2) and the ids of the two sort indexes (3 and 4).
+    const result = try normalize(allocator, try runZig(allocator, deterministic, &.{ "init", "--db", db, "--yes" }), db, "<db>");
+    try expectResult(result, init_report, "", 0);
+    try expectCreatedDatabase(allocator, db, "5c724a85-6b64-4e6a-9e15-dfa0821821e1", "aff78597-8c6d-46c1-82eb-9619293609fa", "3eccea68-7e30-4eb2-8b12-9396b07e9458");
 
-    // A database with the identity of another database.
-    const relatedTs = try std.fmt.allocPrint(allocator, "{s}/related-ts", .{root});
-    const relatedZig = try std.fmt.allocPrint(allocator, "{s}/related-zig", .{root});
+    // A database with the identity of another database: the counter gives the session id (5) and the ids of the
+    // two sort indexes (6 and 7).
+    const related = try std.fmt.allocPrint(allocator, "{s}/related", .{root});
     const databaseId = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
-    const tsRelated = try normalize(allocator, try runTs(allocator, tsEnvironment, &.{ "i", "--db", relatedTs, "--database-id", databaseId, "-y" }), relatedTs, "<db>");
-    const zigRelated = try normalize(allocator, try runZig(allocator, zigEnvironment, &.{ "i", "--db", relatedZig, "--database-id", databaseId, "-y" }), relatedZig, "<db>");
-    try expectSameResult(tsRelated, zigRelated);
-    try expectSameDatabase(allocator, relatedTs, relatedZig);
+    const relatedResult = try normalize(allocator, try runZig(allocator, deterministic, &.{ "i", "--db", related, "--database-id", databaseId, "-y" }), related, "<db>");
+    try expectResult(relatedResult, init_report, "", 0);
+    try expectCreatedDatabase(allocator, related, databaseId, "957e5fd7-2249-430b-b7ab-c9f3d6757d9e", "39ba1bde-83f4-40f9-b443-daa2d943982a");
 }
 
-test "init refuses a directory that is not empty like TypeScript" {
+//
+// What createDatabase (apps/cli/src/lib/init-cmd.ts) prints, through outro, for a directory that is not empty,
+// followed by the line of the termination handler that retains the session.
+//
+const init_not_empty_report =
+    \\
+    \\Creating a new media file database...
+    \\
+    \\✗ The directory <db> is not empty or already contains a database.
+    \\  Please choose an empty directory or a non-existent one.
+    \\Temporary files retained for inspection: <session dir>
+    \\
+;
+
+test "init refuses a directory that is not empty like the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const root = try setup(allocator, "cmd-init-not-empty");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const dbTs = try std.fmt.allocPrint(allocator, "{s}/db-ts", .{root});
-    const dbZig = try std.fmt.allocPrint(allocator, "{s}/db-zig", .{root});
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
 
-    var tsResult = try normalize(allocator, try runTs(allocator, environment, &.{ "init", "--db", dbTs, "--yes" }), dbTs, "<db>");
-    var zigResult = try normalize(allocator, try runZig(allocator, environment, &.{ "init", "--db", dbZig, "--yes" }), dbZig, "<db>");
-    tsResult.stdout = try maskRetainedSessionDir(allocator, tsResult.stdout);
-    zigResult.stdout = try maskRetainedSessionDir(allocator, zigResult.stdout);
-    try expectSameResult(tsResult, zigResult);
-    try std.testing.expectEqual(@as(u8, 1), zigResult.exitCode);
+    var result = try normalize(allocator, try runZig(allocator, environment, &.{ "init", "--db", db, "--yes" }), db, "<db>");
+    result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
+    try expectResult(result, init_not_empty_report, "", 1);
 }
 
-test "init rejects a malformed --database-id like TypeScript" {
+test "init rejects a malformed --database-id like the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const root = try helpers.makeTempDir(allocator, "cmd-init-database-id");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const dbTs = try std.fmt.allocPrint(allocator, "{s}/db-ts", .{root});
-    const dbZig = try std.fmt.allocPrint(allocator, "{s}/db-zig", .{root});
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
 
-    const tsResult = try runTs(allocator, environment, &.{ "init", "--db", dbTs, "--database-id", "not-a-uuid", "--yes" });
-    const zigResult = try runZig(allocator, environment, &.{ "init", "--db", dbZig, "--database-id", "not-a-uuid", "--yes" });
-    try std.testing.expectEqual(tsResult.exitCode, zigResult.exitCode);
-    try std.testing.expect(std.mem.indexOf(u8, zigResult.stderr, "\"not-a-uuid\" is not a database id.") != null);
+    // normaliseDatabaseId (apps/cli/src/lib/init-cmd.ts) throws, and the error handler of apps/cli/index.ts logs
+    // it and exits with 1.
+    const result = try runZig(allocator, environment, &.{ "init", "--db", db, "--database-id", "not-a-uuid", "--yes" });
+    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "\"not-a-uuid\" is not a database id. It should be a UUID, as printed by \"psi database-id --db <database>\".") != null);
 }
 
-test "init creates an encrypted database with a generated key like TypeScript" {
+//
+// The report of initCommand (apps/cli/src/cmd/init.ts) for a new database at <db> encrypted with a generated key
+// named zig-key.
+//
+const init_encrypted_report =
+    \\
+    \\Creating a new media file database...
+    \\
+    \\✓  Created new media file database in <db>
+    \\⚠️ Important: Never modify database files manually - always use the psi tool!
+    \\
+    \\✓  Encryption key "zig-key" stored.
+    \\⚠️ Keep this key safe! You will need it to access your encrypted database.
+    \\
+    \\
+    \\Add media files:
+    \\    cd <db>
+    \\    psi add <file or directory>
+    \\
+    \\Or specify the path:
+    \\    psi add --db <db> <file or directory>
+    \\
+    \\When using your encrypted database, specify the key name:
+    \\    psi add --key zig-key <file or directory>
+    \\
+    \\Examples:
+    \\    psi add --db <db> --key zig-key photo.jpg   - Adds a single photo to the database
+    \\    psi add --db <db> --key zig-key video.mp4   - Adds a single video to the database
+    \\    psi add --db <db> --key zig-key directory/  - Adds all media files in a directory
+    \\
+    \\
+;
+
+test "init creates an encrypted database with a generated key like the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const root = try helpers.makeTempDir(allocator, "cmd-init-encrypted");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const dbTs = try std.fmt.allocPrint(allocator, "{s}/db-ts", .{root});
-    const dbZig = try std.fmt.allocPrint(allocator, "{s}/db-zig", .{root});
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
 
-    const tsResult = try normalize(allocator, try runTs(allocator, environment, &.{ "init", "--db", dbTs, "--key", "ts-key", "--generate-key", "--yes" }), dbTs, "<db>");
-    const zigResult = try normalize(allocator, try runZig(allocator, environment, &.{ "init", "--db", dbZig, "--key", "zig-key", "--generate-key", "--yes" }), dbZig, "<db>");
-    try std.testing.expectEqualStrings(tsResult.stdout, try std.mem.replaceOwned(u8, allocator, zigResult.stdout, "zig-key", "ts-key"));
-    try std.testing.expectEqualStrings(tsResult.stderr, zigResult.stderr);
-    try std.testing.expectEqual(@as(u8, 0), zigResult.exitCode);
+    const result = try normalize(allocator, try runZig(allocator, environment, &.{ "init", "--db", db, "--key", "zig-key", "--generate-key", "--yes" }), db, "<db>");
+    try expectResult(result, init_encrypted_report, "", 0);
 
-    // Each CLI opens the database the other created with its key.
-    const tsVerify = try runTs(allocator, environment, &.{ "verify", "--db", dbZig, "--key", "zig-key", "--yes" });
-    try std.testing.expectEqual(@as(u8, 0), tsVerify.exitCode);
-    const zigVerify = try runZig(allocator, environment, &.{ "verify", "--db", dbTs, "--key", "ts-key", "--yes" });
-    try std.testing.expectEqual(@as(u8, 0), zigVerify.exitCode);
+    // The public key marks the database as encrypted, and the database opens with the key.
+    _ = try std.Io.Dir.cwd().statFile(std.testing.io, try std.fs.path.join(allocator, &.{ db, ".db/encryption.pub" }), .{});
+    const verifyResult = try runZig(allocator, environment, &.{ "verify", "--db", db, "--key", "zig-key", "--yes" });
+    try std.testing.expectEqual(@as(u8, 0), verifyResult.exitCode);
+    try std.testing.expect(std.mem.indexOf(u8, verifyResult.stdout, "✅ Database verification passed - all files are intact") != null);
 }

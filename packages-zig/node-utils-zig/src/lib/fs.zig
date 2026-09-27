@@ -690,4 +690,21 @@ pub fn getCacheDir(allocator: std.mem.Allocator) ![]const u8 {
     return path.join(allocator, &.{ homeDir, ".cache", "photosphere" });
 }
 
-// Not ported: readFileHead (not used by the ported commands).
+//
+// Reads the first `byteCount` bytes of a file, or the whole file when it is shorter.
+//
+// This exists for reading a photo's EXIF header. Reading the whole photo to get at it costs a full
+// crossing of the engine bridge on a phone, and the header sits in the first few kilobytes of the file.
+//
+pub fn readFileHead(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, byteCount: usize) ![]const u8 {
+    const file = try std.Io.Dir.cwd().openFile(io, filePath, .{});
+    defer file.close(io);
+    var buffer: [64 * 1024]u8 = undefined;
+    var reader = file.reader(io, &buffer);
+    var head: std.ArrayList(u8) = .empty;
+    reader.interface.appendRemaining(allocator, &head, .limited(byteCount)) catch |err| switch (err) {
+        error.StreamTooLong => {},
+        else => return err,
+    };
+    return head.items;
+}

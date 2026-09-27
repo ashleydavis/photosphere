@@ -61,6 +61,18 @@ test "spawn pipes stdin to the child process" {
     try std.testing.expectEqualStrings("", result.stderr);
 }
 
+test "spawn fails when the child exits without reading its input" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // More than a pipe buffer holds, so the write is still going when the child exits.
+    const input = try allocator.alloc(u8, 4 * 1024 * 1024);
+    @memset(input, 'x');
+    const args: []const []const u8 = if (builtin.os.tag == .windows) &.{ "cmd", "/c", "exit 0" } else &.{ "sh", "-c", "exit 0" };
+    try std.testing.expectError(error.BrokenPipe, keychain_types.spawn(allocator, std.testing.io, args, input));
+}
+
 //
 // A fake spawn function that always succeeds with a fixed stdout.
 //

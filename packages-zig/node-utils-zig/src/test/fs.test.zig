@@ -1096,3 +1096,18 @@ test "getCacheDir is not the config directory, because nothing in it is a settin
 
     try std.testing.expect(!std.mem.eql(u8, try fs.getCacheDir(allocator), try fs.getConfigDir(allocator)));
 }
+
+test "readFileHead reads the first bytes of a file, or the whole file when it is shorter" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "head.txt");
+    try fs.outputFile(allocator, io, filePath, "0123456789");
+
+    try std.testing.expectEqualStrings("0123", try fs.readFileHead(allocator, io, filePath, 4));
+    try std.testing.expectEqualStrings("0123456789", try fs.readFileHead(allocator, io, filePath, 10));
+    try std.testing.expectEqualStrings("0123456789", try fs.readFileHead(allocator, io, filePath, 1000));
+    try std.testing.expectEqualStrings("", try fs.readFileHead(allocator, io, filePath, 0));
+    try std.testing.expectError(error.FileNotFound, fs.readFileHead(allocator, io, "no-such-file.txt", 4));
+}

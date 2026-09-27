@@ -2,7 +2,6 @@ const std = @import("std");
 const cli = @import("cli-zig");
 const helpers = @import("test-helpers.zig");
 const directory_picker = cli.directory_picker;
-const prompts = cli.prompts;
 
 //
 // Creates a directory that looks like a media database (.db/files.dat).
@@ -16,13 +15,12 @@ fn makeDatabase(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
 }
 
 //
-// Makes the prompts read the keys and write to a discarded buffer.
+// Runs a directory picker scenario of the test driver, typing the keys, and returns the directory it returned.
 //
-fn typeKeys(allocator: std.mem.Allocator, keys: []const u8) !void {
-    const input = try helpers.chunkedInput(allocator, try helpers.splitKeys(allocator, keys));
-    const output = try allocator.create(std.Io.Writer.Allocating);
-    output.* = std.Io.Writer.Allocating.init(allocator);
-    prompts.common.setDefaultStreamsForTesting(.{ .input = input, .output = &output.writer });
+fn drive(allocator: std.mem.Allocator, scenarioArguments: []const []const u8, prompts: []const helpers.IPromptKeys) !?[]const u8 {
+    var environment = std.process.Environ.Map.init(allocator);
+    const result = try helpers.runTestDriver(allocator, scenarioArguments, prompts, &environment);
+    return helpers.parseDriverResult(?[]const u8, allocator, result);
 }
 
 test "isMediaDatabase detects files.dat or tree.dat under .db" {
@@ -82,11 +80,12 @@ test "getDirectoryForCommand lets the user enter the path of a database" {
     defer std.Io.Dir.cwd().deleteTree(io, database) catch {};
     const plain = try helpers.makeTempDir(allocator, "picker-cwd");
     defer std.Io.Dir.cwd().deleteTree(io, plain) catch {};
-    defer prompts.common.setDefaultStreamsForTesting(null);
 
     // The current directory is not a database, so the options are: subdirectory, full path, cancel.
-    try typeKeys(allocator, try std.mem.concat(allocator, u8, &.{ "\x1b[B\r", database, "\r" }));
-    try std.testing.expectEqualStrings(database, try directory_picker.getDirectoryForCommand(allocator, io, .existing, false, plain));
+    try std.testing.expectEqualStrings(database, (try drive(allocator, &.{ "get-directory-for-command", "existing", plain }, &.{
+        .{ .waitFor = "Select an existing media database directory:", .keys = "\x1b[B\r" },
+        .{ .waitFor = "Enter full directory path:", .keys = try std.mem.concat(allocator, u8, &.{ database, "\r" }) },
+    })).?);
 }
 
 test "pickDirectory returns null when cancelled and '.' for the current directory" {
@@ -96,16 +95,12 @@ test "pickDirectory returns null when cancelled and '.' for the current director
     const io = std.testing.io;
     const database = try makeDatabase(allocator, "picker-pick");
     defer std.Io.Dir.cwd().deleteTree(io, database) catch {};
-    defer prompts.common.setDefaultStreamsForTesting(null);
 
-    try typeKeys(allocator, "\r");
-    try std.testing.expectEqualStrings(".", (try directory_picker.pickDirectory(allocator, io, "Pick:", database, directory_picker.validateExistingDatabase)).?);
+    try std.testing.expectEqualStrings(".", (try drive(allocator, &.{ "pick-directory", "Pick:", database, "true" }, &.{.{ .waitFor = "Pick:", .keys = "\r" }})).?);
 
-    try typeKeys(allocator, "\x03");
-    try std.testing.expect(try directory_picker.pickDirectory(allocator, io, "Pick:", database, directory_picker.validateExistingDatabase) == null);
+    try std.testing.expect(try drive(allocator, &.{ "pick-directory", "Pick:", database, "true" }, &.{.{ .waitFor = "Pick:", .keys = "\x03" }}) == null);
 
-    try typeKeys(allocator, "\x1b[A\r");
-    try std.testing.expect(try directory_picker.pickDirectory(allocator, io, "Pick:", database, null) == null);
+    try std.testing.expect(try drive(allocator, &.{ "pick-directory", "Pick:", database, "false" }, &.{.{ .waitFor = "Pick:", .keys = "\x1b[A\r" }}) == null);
 }
 
 test "pickDirectory creates a subdirectory" {
@@ -115,10 +110,11 @@ test "pickDirectory creates a subdirectory" {
     const io = std.testing.io;
     const parent = try helpers.makeTempDir(allocator, "picker-subdirectory");
     defer std.Io.Dir.cwd().deleteTree(io, parent) catch {};
-    defer prompts.common.setDefaultStreamsForTesting(null);
 
     // Current directory, subdirectory, full path, cancel (no validator). An invalid name is rejected first.
-    try typeKeys(allocator, "\x1b[B\ra/b\r\x15photos\r");
-    try std.testing.expectEqualStrings("./photos", (try directory_picker.pickDirectory(allocator, io, "Pick:", parent, null)).?);
+    try std.testing.expectEqualStrings("./photos", (try drive(allocator, &.{ "pick-directory", "Pick:", parent, "false" }, &.{
+        .{ .waitFor = "Pick:", .keys = "\x1b[B\r" },
+        .{ .waitFor = "Enter name for subdirectory:", .keys = "a/b\r\x15photos\r" },
+    })).?);
     try std.testing.expect(@import("node-utils-zig").fs.pathExists(io, try std.fs.path.join(allocator, &.{ parent, "photos" })));
 }

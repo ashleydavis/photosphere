@@ -1,5 +1,6 @@
 pub const media_file_database = @import("lib/media-file-database.zig");
-// Not ported: image, video, validation (psi add, not psi replicate or psi verify).
+pub const image = @import("lib/image.zig");
+// Not ported: video, validation.
 pub const file_scanner = @import("lib/file-scanner.zig");
 pub const verify = @import("lib/verify.zig");
 pub const verify_worker = @import("lib/verify.worker.zig");
@@ -11,6 +12,10 @@ pub const replicate_database_worker = @import("lib/replicate-database.worker.zig
 pub const tree = @import("lib/tree.zig");
 // Not ported: encrypt, decrypt, sync.
 pub const hash = @import("lib/hash.zig");
+pub const exif_parser = @import("lib/third-party/exif-parser/parser.zig");
+pub const exif_parser_exif = @import("lib/third-party/exif-parser/exif.zig");
+pub const exif_parser_jpeg = @import("lib/third-party/exif-parser/jpeg.zig");
+pub const exif_parser_bufferstream = @import("lib/third-party/exif-parser/bufferstream.zig");
 // Not ported: hash-cache, zip-utils, import, import-assets.worker, upload-asset.worker, check, check.worker,
 // load-assets.worker, apply-database-ops.
 pub const resolve_storage_credentials = @import("lib/resolve-storage-credentials.zig");

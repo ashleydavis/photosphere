@@ -1,6 +1,8 @@
 const std = @import("std");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
+const helpers = @import("test-helpers.zig");
 const task_queue = @import("task-queue-zig");
 const WorkerPoolBun = cli.worker_pool.WorkerPoolBun;
 const types = task_queue.types;
@@ -237,6 +239,43 @@ test "runs a task on a worker and reports its outputs" {
     try collector.waitForCompleted(1);
     try std.testing.expectEqual(@as(usize, 0), collector.failed);
     try std.testing.expectEqualStrings("echo hi", collector.lastOutput[0..collector.lastOutputLength]);
+}
+
+test "a worker that fails to start is logged and replaced, and its task waits" {
+    try registerHandlers();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // The test UUID generator keeps its counter under TEST_TMP_DIR: below a file, that directory cannot be
+    // created, so generating the session ID of every worker fails (TypeScript: worker.ts throws at startup).
+    const root = try helpers.makeTempDir(allocator, "worker-pool-start-failure");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const blockingFile = try std.fs.path.join(allocator, &.{ root, "file" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = blockingFile, .data = "x" });
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try environ_map.put("NODE_ENV", "testing");
+    try environ_map.put("TEST_TMP_DIR", try std.fs.path.join(allocator, &.{ blockingFile, "tmp" }));
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    var stdout_capture = std.Io.Writer.Allocating.init(allocator);
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
+    defer utils.console.setCapture(null, null);
+
+    // The pool installs the worker log routing in place of the global log; put the global log back after.
+    const previousLog = utils.log.log;
+    defer utils.log.setLog(previousLog);
+    const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
+    var collector = Collector{};
+    _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
+    _ = try pool.addTask(allocator, std.testing.io, "echo", .{ .string = "x" }, "source", null, null);
+    std.testing.io.sleep(.fromMilliseconds(100), .awake) catch {};
+    pool.deinit();
+
+    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Error from worker 1\n") != null);
+    try std.testing.expectEqual(@as(usize, 0), collector.completed);
 }
 
 test "generates a task ID when none is given" {

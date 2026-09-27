@@ -1,14 +1,12 @@
 const std = @import("std");
 const utils = @import("utils-zig");
-const aes_cbc = @import("aes-cbc.zig");
-const asn1 = @import("asn1.zig");
-const pem = @import("pem.zig");
-const rsa = @import("rsa.zig");
+const c = @import("openssl");
 
 //
 // The subset of node:crypto that the encryption package uses, so that the ported files read like the TypeScript.
-// This file has no TypeScript counterpart (node:crypto is part of Node). Error messages match the OpenSSL 3 messages
-// that Node reports for the same failures.
+// This file has no TypeScript counterpart (node:crypto is part of Node, over OpenSSL): it calls aws-lc's libcrypto,
+// built from the upstream release by aws/aws-lc.zig. Error messages match the OpenSSL 3 messages that Node reports
+// for the same failures.
 //
 
 //
@@ -17,14 +15,45 @@ const rsa = @import("rsa.zig");
 const errors = utils.errors;
 
 //
-// An RSA public key (node:crypto KeyObject of type 'public').
+// The largest number of bytes passed to one EVP_EncryptUpdate or EVP_DecryptUpdate call (their lengths are ints).
 //
-pub const PublicKey = rsa.PublicKey;
+const max_update_length: usize = 1 << 30;
 
 //
-// An RSA private key (node:crypto KeyObject of type 'private').
+// The AES block length in bytes (also the CBC IV length).
 //
-pub const PrivateKey = rsa.PrivateKey;
+const aes_block_length: usize = 16;
+
+//
+// An RSA public key (node:crypto KeyObject of type 'public'). The key is kept as its DER SubjectPublicKeyInfo in
+// memory from the allocator it was created with, and parsed into a libcrypto EVP_PKEY for each operation, so nothing
+// has to be freed.
+//
+pub const PublicKey = struct {
+    // The DER SubjectPublicKeyInfo (KeyObject.export({ type: 'spki', format: 'der' })).
+    spki: []const u8,
+
+    // The length of the modulus in bytes.
+    modulus_length: usize,
+
+    //
+    // The length of the modulus in bytes (KeyObject.asymmetricKeyDetails.modulusLength / 8).
+    //
+    pub fn modulusLength(self: *const PublicKey) usize {
+        return self.modulus_length;
+    }
+};
+
+//
+// An RSA private key (node:crypto KeyObject of type 'private'), kept as its DER PKCS#8 PrivateKeyInfo like PublicKey.
+//
+pub const PrivateKey = struct {
+    // The DER PKCS#8 PrivateKeyInfo (KeyObject.export({ type: 'pkcs8', format: 'der' })).
+    pkcs8: []const u8,
+
+    // The public half of the key.
+    public_key: PublicKey,
+};
 
 //
 // Encodings for exported keys (node:crypto KeyObject.export format option).
@@ -49,63 +78,295 @@ pub const GeneratedKeyPairPem = struct {
 };
 
 //
-// Fills a buffer with cryptographically strong random bytes (node:crypto randomBytes).
-//
-pub fn randomBytes(io: std.Io, buffer: []u8) void {
-    io.random(buffer);
-}
-
-//
-// Generates an RSA key pair and returns it as PEM (generateKeyPairSync('rsa', { modulusLength,
-// publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } })).
-//
-pub fn generateKeyPairSync(allocator: std.mem.Allocator, io: std.Io, modulusLength: usize) !GeneratedKeyPairPem {
-    const privateKey = try rsa.generateKeyPair(allocator, io, modulusLength, rsa.default_public_exponent);
-    return GeneratedKeyPairPem{
-        .publicKey = try exportPublicKey(allocator, &privateKey.public_key, .pem),
-        .privateKey = try exportPrivateKey(allocator, &privateKey, .pem),
-    };
-}
-
-//
 // Throws the error Node reports for key data it cannot decode.
 //
 fn throwUnsupportedKey() errors.ThrownError {
+    c.ERR_clear_error();
     return errors.throwError("error:1E08010C:DECODER routines::unsupported", .{});
 }
 
 //
-// Creates a private key from PEM text (node:crypto createPrivateKey). Accepts PKCS#8 ("PRIVATE KEY") and
-// PKCS#1 ("RSA PRIVATE KEY") RSA keys.
+// Takes the oldest error off libcrypto's error queue (0 when there is none) and clears the rest, so that the next
+// operation starts with an empty queue.
+//
+fn takeLibraryError() u32 {
+    const packedError = c.ERR_get_error();
+    c.ERR_clear_error();
+    return packedError;
+}
+
+//
+// Throws a packed libcrypto error with the library's own text (for failures Node has no specific message for).
+//
+fn throwPackedError(packedError: u32, operation: []const u8) errors.ThrownError {
+    if (packedError == 0) {
+        return errors.throwError("{s} failed", .{operation});
+    }
+    var text: [256]u8 = undefined;
+    _ = c.ERR_error_string_n(packedError, &text, text.len);
+    return errors.throwError("{s}", .{std.mem.sliceTo(&text, 0)});
+}
+
+//
+// Throws the oldest error on libcrypto's error queue with the library's own text, and clears the queue.
+//
+fn throwLibraryError(operation: []const u8) errors.ThrownError {
+    return throwPackedError(takeLibraryError(), operation);
+}
+
+//
+// True when a packed libcrypto error is the given reason of the given library.
+//
+fn isLibraryError(packedError: u32, library: c_int, reason: c_int) bool {
+    return c.ERR_GET_LIB(packedError) == library and c.ERR_GET_REASON(packedError) == reason;
+}
+
+//
+// Copies memory that libcrypto allocated into memory from the allocator, and frees the libcrypto copy.
+//
+fn takeLibraryBytes(allocator: std.mem.Allocator, bytes: [*c]u8, length: c_int) ![]u8 {
+    defer c.OPENSSL_free(bytes);
+    return allocator.dupe(u8, bytes[0..@intCast(length)]);
+}
+
+//
+// Creates a read-only memory BIO over text.
+//
+fn openMemoryBio(text: []const u8) !*c.BIO {
+    const length = std.math.cast(c.ossl_ssize_t, text.len) orelse {
+        return throwUnsupportedKey();
+    };
+    return c.BIO_new_mem_buf(text.ptr, length) orelse {
+        return throwLibraryError("BIO_new_mem_buf");
+    };
+}
+
+//
+// Creates an empty, writable memory BIO.
+//
+fn createMemoryBio() !*c.BIO {
+    return c.BIO_new(c.BIO_s_mem()) orelse {
+        return throwLibraryError("BIO_new");
+    };
+}
+
+//
+// Copies what was written to a memory BIO into memory from the allocator.
+//
+fn memoryBioContents(allocator: std.mem.Allocator, bio: *c.BIO) ![]u8 {
+    var contents: [*c]const u8 = null;
+    var length: usize = 0;
+    if (c.BIO_mem_contents(bio, &contents, &length) != 1) {
+        return throwLibraryError("BIO_mem_contents");
+    }
+    return allocator.dupe(u8, contents[0..length]);
+}
+
+//
+// A password callback that supplies no passphrase, so that reading an encrypted PEM key fails instead of prompting
+// on the terminal (Node fails the same way when no passphrase is given).
+//
+fn noPassphrase(buffer: [*c]u8, size: c_int, writing: c_int, userData: ?*anyopaque) callconv(.c) c_int {
+    _ = buffer;
+    _ = size;
+    _ = writing;
+    _ = userData;
+    return -1;
+}
+
+//
+// Encodes the public half of a key as DER SubjectPublicKeyInfo (i2d_PUBKEY).
+//
+fn encodeSpki(allocator: std.mem.Allocator, key: *c.EVP_PKEY) ![]u8 {
+    var der: [*c]u8 = null;
+    const length = c.i2d_PUBKEY(key, &der);
+    if (length <= 0) {
+        return throwLibraryError("i2d_PUBKEY");
+    }
+    return takeLibraryBytes(allocator, der, length);
+}
+
+//
+// Encodes a private key as DER PKCS#8 PrivateKeyInfo (EVP_PKEY2PKCS8 and i2d_PKCS8_PRIV_KEY_INFO).
+//
+fn encodePkcs8(allocator: std.mem.Allocator, key: *c.EVP_PKEY) ![]u8 {
+    const info = c.EVP_PKEY2PKCS8(key) orelse {
+        return throwLibraryError("EVP_PKEY2PKCS8");
+    };
+    defer c.PKCS8_PRIV_KEY_INFO_free(info);
+    var der: [*c]u8 = null;
+    const length = c.i2d_PKCS8_PRIV_KEY_INFO(info, &der);
+    if (length <= 0) {
+        return throwLibraryError("i2d_PKCS8_PRIV_KEY_INFO");
+    }
+    return takeLibraryBytes(allocator, der, length);
+}
+
+//
+// Makes a PublicKey from a parsed RSA key.
+//
+fn makePublicKey(allocator: std.mem.Allocator, key: *c.EVP_PKEY) !PublicKey {
+    return PublicKey{
+        .spki = try encodeSpki(allocator, key),
+        .modulus_length = @intCast(c.EVP_PKEY_size(key)),
+    };
+}
+
+//
+// Parses a public key into a libcrypto key (d2i_PUBKEY). The caller frees it with EVP_PKEY_free.
+//
+fn parsePublicKey(publicKey: *const PublicKey) !*c.EVP_PKEY {
+    var input: [*c]const u8 = publicKey.spki.ptr;
+    return c.d2i_PUBKEY(null, &input, @intCast(publicKey.spki.len)) orelse {
+        return throwLibraryError("d2i_PUBKEY");
+    };
+}
+
+//
+// Parses a private key into a libcrypto key (d2i_AutoPrivateKey). The caller frees it with EVP_PKEY_free.
+//
+fn parsePrivateKey(privateKey: *const PrivateKey) !*c.EVP_PKEY {
+    var input: [*c]const u8 = privateKey.pkcs8.ptr;
+    return c.d2i_AutoPrivateKey(null, &input, @intCast(privateKey.pkcs8.len)) orelse {
+        return throwLibraryError("d2i_AutoPrivateKey");
+    };
+}
+
+//
+// Writes a public key as SPKI PEM (PEM_write_bio_PUBKEY).
+//
+fn writePublicKeyPem(allocator: std.mem.Allocator, key: *c.EVP_PKEY) ![]u8 {
+    const bio = try createMemoryBio();
+    defer _ = c.BIO_free(bio);
+    if (c.PEM_write_bio_PUBKEY(bio, key) != 1) {
+        return throwLibraryError("PEM_write_bio_PUBKEY");
+    }
+    return memoryBioContents(allocator, bio);
+}
+
+//
+// Writes a private key as unencrypted PKCS#8 PEM (PEM_write_bio_PKCS8PrivateKey).
+//
+fn writePrivateKeyPem(allocator: std.mem.Allocator, key: *c.EVP_PKEY) ![]u8 {
+    const bio = try createMemoryBio();
+    defer _ = c.BIO_free(bio);
+    if (c.PEM_write_bio_PKCS8PrivateKey(bio, key, null, null, 0, null, null) != 1) {
+        return throwLibraryError("PEM_write_bio_PKCS8PrivateKey");
+    }
+    return memoryBioContents(allocator, bio);
+}
+
+//
+// Fills a buffer with cryptographically strong random bytes (node:crypto randomBytes), from libcrypto's RAND_bytes.
+//
+pub fn randomBytes(io: std.Io, buffer: []u8) void {
+    _ = io;
+    // RAND_bytes always succeeds: it aborts the process rather than return without random bytes.
+    std.debug.assert(c.RAND_bytes(buffer.ptr, buffer.len) == 1);
+}
+
+//
+// Generates an RSA key pair and returns it as PEM (generateKeyPairSync('rsa', { modulusLength,
+// publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } }),
+// with Node's default public exponent 0x10001).
+//
+pub fn generateKeyPairSync(allocator: std.mem.Allocator, io: std.Io, modulusLength: usize) !GeneratedKeyPairPem {
+    _ = io;
+    const bits = std.math.cast(c_int, modulusLength) orelse {
+        return errors.throwError("modulusLength {d} is too large", .{modulusLength});
+    };
+    const context = c.EVP_PKEY_CTX_new_id(c.EVP_PKEY_RSA, null) orelse {
+        return throwLibraryError("EVP_PKEY_CTX_new_id");
+    };
+    defer c.EVP_PKEY_CTX_free(context);
+    if (c.EVP_PKEY_keygen_init(context) != 1) {
+        return throwLibraryError("EVP_PKEY_keygen_init");
+    }
+    if (c.EVP_PKEY_CTX_set_rsa_keygen_bits(context, bits) != 1) {
+        return throwLibraryError("EVP_PKEY_CTX_set_rsa_keygen_bits");
+    }
+    const exponent = c.BN_new() orelse {
+        return throwLibraryError("BN_new");
+    };
+    // node:crypto's default publicExponent.
+    if (c.BN_set_word(exponent, 0x10001) != 1) {
+        c.BN_free(exponent);
+        return throwLibraryError("BN_set_word");
+    }
+    // On success the context takes ownership of the exponent.
+    if (c.EVP_PKEY_CTX_set_rsa_keygen_pubexp(context, exponent) != 1) {
+        c.BN_free(exponent);
+        return throwLibraryError("EVP_PKEY_CTX_set_rsa_keygen_pubexp");
+    }
+    var key: ?*c.EVP_PKEY = null;
+    if (c.EVP_PKEY_keygen(context, &key) != 1) {
+        return throwLibraryError("EVP_PKEY_keygen");
+    }
+    defer c.EVP_PKEY_free(key);
+    return GeneratedKeyPairPem{
+        .publicKey = try writePublicKeyPem(allocator, key.?),
+        .privateKey = try writePrivateKeyPem(allocator, key.?),
+    };
+}
+
+//
+// Makes a PrivateKey from a parsed key, which must be RSA.
+//
+fn makePrivateKey(allocator: std.mem.Allocator, key: *c.EVP_PKEY) !*const PrivateKey {
+    if (c.EVP_PKEY_id(key) != c.EVP_PKEY_RSA) {
+        return throwUnsupportedKey();
+    }
+    const privateKey = try allocator.create(PrivateKey);
+    privateKey.* = PrivateKey{
+        .pkcs8 = try encodePkcs8(allocator, key),
+        .public_key = try makePublicKey(allocator, key),
+    };
+    return privateKey;
+}
+
+//
+// Creates a private key from PEM text (node:crypto createPrivateKey), with PEM_read_bio_PrivateKey. Accepts
+// unencrypted PKCS#8 ("PRIVATE KEY") and PKCS#1 ("RSA PRIVATE KEY") RSA keys.
 //
 pub fn createPrivateKey(allocator: std.mem.Allocator, keyPem: []const u8) !*const PrivateKey {
-    const block = pem.decode(allocator, keyPem) catch |err| {
-        if (err == error.OutOfMemory) {
-            return err;
-        }
+    c.ERR_clear_error();
+    const bio = try openMemoryBio(keyPem);
+    defer _ = c.BIO_free(bio);
+    const key = c.PEM_read_bio_PrivateKey(bio, null, &noPassphrase, null) orelse {
         return throwUnsupportedKey();
     };
-    var components: asn1.RsaPrivateKeyComponents = undefined;
-    if (std.mem.eql(u8, block.label, "PRIVATE KEY")) {
-        components = asn1.decodePrivateKeyInfo(block.der) catch {
-            return throwUnsupportedKey();
-        };
+    defer c.EVP_PKEY_free(key);
+    return makePrivateKey(allocator, key);
+}
+
+//
+// Reads an RSA public key from PEM text: SPKI ("PUBLIC KEY", PEM_read_bio_PUBKEY) or PKCS#1 ("RSA PUBLIC KEY",
+// PEM_read_bio_RSAPublicKey). Returns null when the text has neither. The caller frees the key with EVP_PKEY_free.
+//
+fn readPublicKeyPem(keyPem: []const u8) !?*c.EVP_PKEY {
+    const spkiBio = try openMemoryBio(keyPem);
+    defer _ = c.BIO_free(spkiBio);
+    if (c.PEM_read_bio_PUBKEY(spkiBio, null, &noPassphrase, null)) |key| {
+        return key;
     }
-    else if (std.mem.eql(u8, block.label, "RSA PRIVATE KEY")) {
-        components = asn1.decodeRsaPrivateKey(block.der) catch {
-            return throwUnsupportedKey();
-        };
-    }
-    else {
-        return throwUnsupportedKey();
-    }
-    const key = try allocator.create(PrivateKey);
-    key.* = rsa.initPrivateKey(allocator, components) catch |err| {
-        if (err == error.OutOfMemory) {
-            return err;
-        }
-        return throwUnsupportedKey();
+    c.ERR_clear_error();
+
+    const pkcs1Bio = try openMemoryBio(keyPem);
+    defer _ = c.BIO_free(pkcs1Bio);
+    const rsaKey = c.PEM_read_bio_RSAPublicKey(pkcs1Bio, null, &noPassphrase, null) orelse {
+        c.ERR_clear_error();
+        return null;
     };
+    const key = c.EVP_PKEY_new() orelse {
+        c.RSA_free(rsaKey);
+        return throwLibraryError("EVP_PKEY_new");
+    };
+    // On success the key takes ownership of the RSA key.
+    if (c.EVP_PKEY_assign_RSA(key, rsaKey) != 1) {
+        c.RSA_free(rsaKey);
+        c.EVP_PKEY_free(key);
+        return throwLibraryError("EVP_PKEY_assign_RSA");
+    }
     return key;
 }
 
@@ -114,38 +375,18 @@ pub fn createPrivateKey(allocator: std.mem.Allocator, keyPem: []const u8) !*cons
 // PKCS#1 ("RSA PUBLIC KEY") RSA keys, and private key PEMs (the public half is returned, like Node).
 //
 pub fn createPublicKey(allocator: std.mem.Allocator, keyPem: []const u8) !*const PublicKey {
-    const block = pem.decode(allocator, keyPem) catch |err| {
-        if (err == error.OutOfMemory) {
-            return err;
-        }
-        return throwUnsupportedKey();
-    };
-    if (std.mem.eql(u8, block.label, "PRIVATE KEY") or std.mem.eql(u8, block.label, "RSA PRIVATE KEY")) {
+    c.ERR_clear_error();
+    const key = try readPublicKeyPem(keyPem) orelse {
         const privateKey = try createPrivateKey(allocator, keyPem);
         return createPublicKeyFromPrivateKey(privateKey);
-    }
-    var components: asn1.RsaPublicKeyComponents = undefined;
-    if (std.mem.eql(u8, block.label, "PUBLIC KEY")) {
-        components = asn1.decodeSubjectPublicKeyInfo(block.der) catch {
-            return throwUnsupportedKey();
-        };
-    }
-    else if (std.mem.eql(u8, block.label, "RSA PUBLIC KEY")) {
-        components = asn1.decodeRsaPublicKey(block.der) catch {
-            return throwUnsupportedKey();
-        };
-    }
-    else {
-        return throwUnsupportedKey();
-    }
-    const key = try allocator.create(PublicKey);
-    key.* = rsa.initPublicKey(allocator, components) catch |err| {
-        if (err == error.OutOfMemory) {
-            return err;
-        }
-        return throwUnsupportedKey();
     };
-    return key;
+    defer c.EVP_PKEY_free(key);
+    if (c.EVP_PKEY_id(key) != c.EVP_PKEY_RSA) {
+        return throwUnsupportedKey();
+    }
+    const publicKey = try allocator.create(PublicKey);
+    publicKey.* = try makePublicKey(allocator, key);
+    return publicKey;
 }
 
 //
@@ -159,48 +400,113 @@ pub fn createPublicKeyFromPrivateKey(privateKey: *const PrivateKey) *const Publi
 // Exports a public key as SPKI (KeyObject.export({ type: 'spki', format })).
 //
 pub fn exportPublicKey(allocator: std.mem.Allocator, publicKey: *const PublicKey, format: KeyFormat) ![]u8 {
-    const der = try asn1.encodeSubjectPublicKeyInfo(allocator, publicKey.components);
     if (format == .der) {
-        return der;
+        return allocator.dupe(u8, publicKey.spki);
     }
-    return pem.encode(allocator, "PUBLIC KEY", der);
+    const key = try parsePublicKey(publicKey);
+    defer c.EVP_PKEY_free(key);
+    return writePublicKeyPem(allocator, key);
 }
 
 //
 // Exports a private key as PKCS#8 (KeyObject.export({ type: 'pkcs8', format })).
 //
 pub fn exportPrivateKey(allocator: std.mem.Allocator, privateKey: *const PrivateKey, format: KeyFormat) ![]u8 {
-    const der = try asn1.encodePrivateKeyInfo(allocator, privateKey.components);
     if (format == .der) {
-        return der;
+        return allocator.dupe(u8, privateKey.pkcs8);
     }
-    return pem.encode(allocator, "PRIVATE KEY", der);
+    const key = try parsePrivateKey(privateKey);
+    defer c.EVP_PKEY_free(key);
+    return writePrivateKeyPem(allocator, key);
+}
+
+//
+// Sets RSA-OAEP with SHA-1 for both the OAEP hash and MGF1 on an encryption or decryption context: the padding
+// node:crypto's publicEncrypt and privateDecrypt use by default (RSA_PKCS1_OAEP_PADDING, oaepHash 'sha1').
+//
+fn setOaepPadding(context: *c.EVP_PKEY_CTX) !void {
+    if (c.EVP_PKEY_CTX_set_rsa_padding(context, c.RSA_PKCS1_OAEP_PADDING) != 1) {
+        return throwLibraryError("EVP_PKEY_CTX_set_rsa_padding");
+    }
+    if (c.EVP_PKEY_CTX_set_rsa_oaep_md(context, c.EVP_sha1()) != 1) {
+        return throwLibraryError("EVP_PKEY_CTX_set_rsa_oaep_md");
+    }
+    if (c.EVP_PKEY_CTX_set_rsa_mgf1_md(context, c.EVP_sha1()) != 1) {
+        return throwLibraryError("EVP_PKEY_CTX_set_rsa_mgf1_md");
+    }
 }
 
 //
 // Encrypts data with a public key using RSA-OAEP with SHA-1 (node:crypto publicEncrypt with default options).
 //
 pub fn publicEncrypt(allocator: std.mem.Allocator, io: std.Io, publicKey: *const PublicKey, data: []const u8) ![]u8 {
-    return rsa.publicEncrypt(allocator, io, publicKey, data) catch |err| {
-        return switch (err) {
-            error.DataTooLarge => errors.throwError("error:0200006E:rsa routines::data too large for key size", .{}),
-            else => err,
-        };
+    _ = io;
+    c.ERR_clear_error();
+    const key = try parsePublicKey(publicKey);
+    defer c.EVP_PKEY_free(key);
+    const context = c.EVP_PKEY_CTX_new(key, null) orelse {
+        return throwLibraryError("EVP_PKEY_CTX_new");
     };
+    defer c.EVP_PKEY_CTX_free(context);
+    if (c.EVP_PKEY_encrypt_init(context) != 1) {
+        return throwLibraryError("EVP_PKEY_encrypt_init");
+    }
+    try setOaepPadding(context);
+    var outputLength: usize = 0;
+    if (c.EVP_PKEY_encrypt(context, null, &outputLength, data.ptr, data.len) != 1) {
+        return throwLibraryError("EVP_PKEY_encrypt");
+    }
+    const output = try allocator.alloc(u8, outputLength);
+    if (c.EVP_PKEY_encrypt(context, output.ptr, &outputLength, data.ptr, data.len) != 1) {
+        const packedError = takeLibraryError();
+        if (isLibraryError(packedError, c.ERR_LIB_RSA, c.RSA_R_DATA_TOO_LARGE_FOR_KEY_SIZE)) {
+            return errors.throwError("error:0200006E:rsa routines::data too large for key size", .{});
+        }
+        return throwPackedError(packedError, "EVP_PKEY_encrypt");
+    }
+    return output[0..outputLength];
 }
 
 //
 // Decrypts data with a private key using RSA-OAEP with SHA-1 (node:crypto privateDecrypt with default options).
 //
+// OpenSSL 3, under Node, reads the ciphertext as a big-endian number: one longer than the modulus is refused, and a
+// shorter one is the same number as when it is padded with leading zeros. libcrypto only takes a ciphertext exactly
+// as long as the modulus, so a shorter one is padded here, which gives the error Node reports for it.
+//
 pub fn privateDecrypt(allocator: std.mem.Allocator, privateKey: *const PrivateKey, data: []const u8) ![]u8 {
-    return rsa.privateDecrypt(allocator, privateKey, data) catch |err| {
-        return switch (err) {
-            error.InvalidInputLength => errors.throwError("error:0200006C:rsa routines::data greater than mod len", .{}),
-            error.DataGreaterThanModulus => errors.throwError("error:02000084:rsa routines::data too large for modulus", .{}),
-            error.OaepDecodingError => errors.throwError("error:02000079:rsa routines::oaep decoding error", .{}),
-            else => err,
-        };
+    const modulusLength = privateKey.public_key.modulus_length;
+    if (data.len > modulusLength) {
+        return errors.throwError("error:0200006C:rsa routines::data greater than mod len", .{});
+    }
+    const ciphertext = try allocator.alloc(u8, modulusLength);
+    @memset(ciphertext[0 .. modulusLength - data.len], 0);
+    @memcpy(ciphertext[modulusLength - data.len ..], data);
+
+    c.ERR_clear_error();
+    const key = try parsePrivateKey(privateKey);
+    defer c.EVP_PKEY_free(key);
+    const context = c.EVP_PKEY_CTX_new(key, null) orelse {
+        return throwLibraryError("EVP_PKEY_CTX_new");
     };
+    defer c.EVP_PKEY_CTX_free(context);
+    if (c.EVP_PKEY_decrypt_init(context) != 1) {
+        return throwLibraryError("EVP_PKEY_decrypt_init");
+    }
+    try setOaepPadding(context);
+    var outputLength: usize = modulusLength;
+    const output = try allocator.alloc(u8, outputLength);
+    if (c.EVP_PKEY_decrypt(context, output.ptr, &outputLength, ciphertext.ptr, ciphertext.len) != 1) {
+        const packedError = takeLibraryError();
+        if (isLibraryError(packedError, c.ERR_LIB_RSA, c.RSA_R_DATA_TOO_LARGE_FOR_MODULUS)) {
+            return errors.throwError("error:02000084:rsa routines::data too large for modulus", .{});
+        }
+        if (isLibraryError(packedError, c.ERR_LIB_RSA, c.RSA_R_OAEP_DECODING_ERROR)) {
+            return errors.throwError("error:02000079:rsa routines::oaep decoding error", .{});
+        }
+        return throwPackedError(packedError, "EVP_PKEY_decrypt");
+    }
+    return output[0..outputLength];
 }
 
 //
@@ -210,34 +516,107 @@ fn checkCipherArguments(algorithm: []const u8, key: []const u8, iv: []const u8) 
     if (!std.mem.eql(u8, algorithm, "aes-256-cbc")) {
         return errors.throwError("Invalid cipher type", .{});
     }
-    if (key.len != aes_cbc.key_length) {
+    // AES-256 takes a 32-byte key.
+    if (key.len != 32) {
         return errors.throwError("Invalid key length", .{});
     }
-    if (iv.len != aes_cbc.block_length) {
+    if (iv.len != aes_block_length) {
         return errors.throwError("Invalid initialization vector", .{});
     }
 }
 
 //
-// An AES-256-CBC encryption in progress (node:crypto Cipher).
+// Creates a libcrypto AES-256-CBC context for encryption or decryption, with PKCS#7 padding (EVP_CipherInit_ex).
+//
+fn createCipherContext(key: []const u8, iv: []const u8, encrypt: bool) !*c.EVP_CIPHER_CTX {
+    const context = c.EVP_CIPHER_CTX_new() orelse {
+        return throwLibraryError("EVP_CIPHER_CTX_new");
+    };
+    if (c.EVP_CipherInit_ex(context, c.EVP_aes_256_cbc(), null, key.ptr, iv.ptr, @intFromBool(encrypt)) != 1) {
+        c.EVP_CIPHER_CTX_free(context);
+        return throwLibraryError("EVP_CipherInit_ex");
+    }
+    return context;
+}
+
+//
+// Runs data through a cipher context and appends the output to a list (EVP_CipherUpdate), in pieces short enough for
+// its int lengths.
+//
+fn cipherUpdate(context: *c.EVP_CIPHER_CTX, allocator: std.mem.Allocator, output: *std.ArrayList(u8), data: []const u8) !void {
+    var offset: usize = 0;
+    while (offset < data.len) {
+        const piece = data[offset..@min(data.len, offset + max_update_length)];
+        // An update writes at most the input and one block that was held back.
+        const room = try output.addManyAsSlice(allocator, piece.len + aes_block_length);
+        var written: c_int = 0;
+        if (c.EVP_CipherUpdate(context, room.ptr, &written, piece.ptr, @intCast(piece.len)) != 1) {
+            output.shrinkRetainingCapacity(output.items.len - room.len);
+            return throwLibraryError("EVP_CipherUpdate");
+        }
+        output.shrinkRetainingCapacity(output.items.len - room.len + @as(usize, @intCast(written)));
+        offset += piece.len;
+    }
+}
+
+//
+// Finishes a cipher context, appends the last block to a list (EVP_CipherFinal_ex) and frees the context. Returns
+// the packed libcrypto error when it fails (0 on success).
+//
+fn cipherFinal(context: *c.EVP_CIPHER_CTX, allocator: std.mem.Allocator, output: *std.ArrayList(u8)) !u32 {
+    defer c.EVP_CIPHER_CTX_free(context);
+    const room = try output.addManyAsSlice(allocator, aes_block_length);
+    var written: c_int = 0;
+    if (c.EVP_CipherFinal_ex(context, room.ptr, &written) != 1) {
+        output.shrinkRetainingCapacity(output.items.len - room.len);
+        const packedError = takeLibraryError();
+        if (packedError == 0) {
+            return throwLibraryError("EVP_CipherFinal_ex");
+        }
+        return packedError;
+    }
+    output.shrinkRetainingCapacity(output.items.len - room.len + @as(usize, @intCast(written)));
+    return 0;
+}
+
+//
+// Throws the error Node reports for a cipher used after final (ERR_CRYPTO_INVALID_STATE).
+//
+fn throwFinalized(operation: []const u8) errors.ThrownError {
+    return errors.throwError("Invalid state for operation {s}", .{operation});
+}
+
+//
+// An AES-256-CBC encryption in progress (node:crypto Cipher), over a libcrypto EVP_CIPHER_CTX. final frees the
+// context; a cipher that is dropped before final is freed with deinit.
 //
 pub const Cipher = struct {
-    // The CBC state.
-    encryptor: aes_cbc.CbcEncryptor,
+    // The libcrypto context, null once final has run.
+    context: ?*c.EVP_CIPHER_CTX,
 
     //
     // Encrypts data and appends the ciphertext produced so far to the output (like cipher.update, but
     // appending to a list so that streams can reuse one buffer).
     //
     pub fn updateInto(self: *Cipher, allocator: std.mem.Allocator, output: *std.ArrayList(u8), data: []const u8) !void {
-        try self.encryptor.update(allocator, output, data);
+        const context = self.context orelse {
+            return throwFinalized("update");
+        };
+        try cipherUpdate(context, allocator, output, data);
     }
 
     //
     // Pads and appends the last block to the output (like cipher.final).
     //
     pub fn finalInto(self: *Cipher, allocator: std.mem.Allocator, output: *std.ArrayList(u8)) !void {
-        try self.encryptor.final(allocator, output);
+        const context = self.context orelse {
+            return throwFinalized("final");
+        };
+        self.context = null;
+        const packedError = try cipherFinal(context, allocator, output);
+        if (packedError != 0) {
+            return throwPackedError(packedError, "EVP_CipherFinal_ex");
+        }
     }
 
     //
@@ -257,33 +636,55 @@ pub const Cipher = struct {
         try self.finalInto(allocator, &output);
         return output.toOwnedSlice(allocator);
     }
+
+    //
+    // Frees the libcrypto context of a cipher that final has not run on (nothing to do after final).
+    //
+    pub fn deinit(self: *Cipher) void {
+        if (self.context) |context| {
+            c.EVP_CIPHER_CTX_free(context);
+            self.context = null;
+        }
+    }
 };
 
 //
-// An AES-256-CBC decryption in progress (node:crypto Decipher).
+// An AES-256-CBC decryption in progress (node:crypto Decipher), over a libcrypto EVP_CIPHER_CTX. final frees the
+// context; a decipher that is dropped before final is freed with deinit.
 //
 pub const Decipher = struct {
-    // The CBC state.
-    decryptor: aes_cbc.CbcDecryptor,
+    // The libcrypto context, null once final has run.
+    context: ?*c.EVP_CIPHER_CTX,
 
     //
     // Decrypts data and appends the plaintext produced so far to the output (like decipher.update).
     //
     pub fn updateInto(self: *Decipher, allocator: std.mem.Allocator, output: *std.ArrayList(u8), data: []const u8) !void {
-        try self.decryptor.update(allocator, output, data);
+        const context = self.context orelse {
+            return throwFinalized("update");
+        };
+        try cipherUpdate(context, allocator, output, data);
     }
 
     //
     // Decrypts the last block, removes the padding and appends the rest to the output (like decipher.final).
     //
     pub fn finalInto(self: *Decipher, allocator: std.mem.Allocator, output: *std.ArrayList(u8)) !void {
-        self.decryptor.final(allocator, output) catch |err| {
-            return switch (err) {
-                error.WrongFinalBlockLength => errors.throwError("error:1C80006B:Provider routines::wrong final block length", .{}),
-                error.BadDecrypt => errors.throwError("error:1C800064:Provider routines::bad decrypt", .{}),
-                else => err,
-            };
+        const context = self.context orelse {
+            return throwFinalized("final");
         };
+        self.context = null;
+        const packedError = try cipherFinal(context, allocator, output);
+        if (packedError == 0) {
+            return;
+        }
+        if (isLibraryError(packedError, c.ERR_LIB_CIPHER, c.CIPHER_R_WRONG_FINAL_BLOCK_LENGTH)) {
+            return errors.throwError("error:1C80006B:Provider routines::wrong final block length", .{});
+        }
+        if (isLibraryError(packedError, c.ERR_LIB_CIPHER, c.CIPHER_R_BAD_DECRYPT)) {
+            return errors.throwError("error:1C800064:Provider routines::bad decrypt", .{});
+        }
+        return throwPackedError(packedError, "EVP_CipherFinal_ex");
     }
 
     //
@@ -303,6 +704,16 @@ pub const Decipher = struct {
         try self.finalInto(allocator, &output);
         return output.toOwnedSlice(allocator);
     }
+
+    //
+    // Frees the libcrypto context of a decipher that final has not run on (nothing to do after final).
+    //
+    pub fn deinit(self: *Decipher) void {
+        if (self.context) |context| {
+            c.EVP_CIPHER_CTX_free(context);
+            self.context = null;
+        }
+    }
 };
 
 //
@@ -310,7 +721,7 @@ pub const Decipher = struct {
 //
 pub fn createCipheriv(algorithm: []const u8, key: []const u8, iv: []const u8) !Cipher {
     try checkCipherArguments(algorithm, key, iv);
-    return Cipher{ .encryptor = aes_cbc.CbcEncryptor.init(key[0..aes_cbc.key_length].*, iv[0..aes_cbc.block_length].*) };
+    return Cipher{ .context = try createCipherContext(key, iv, true) };
 }
 
 //
@@ -318,5 +729,5 @@ pub fn createCipheriv(algorithm: []const u8, key: []const u8, iv: []const u8) !C
 //
 pub fn createDecipheriv(algorithm: []const u8, key: []const u8, iv: []const u8) !Decipher {
     try checkCipherArguments(algorithm, key, iv);
-    return Decipher{ .decryptor = aes_cbc.CbcDecryptor.init(key[0..aes_cbc.key_length].*, iv[0..aes_cbc.block_length].*) };
+    return Decipher{ .context = try createCipherContext(key, iv, false) };
 }

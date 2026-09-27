@@ -12,7 +12,7 @@ const MockWorkerPool = task_queue_zig.mock_worker_pool.MockWorkerPool;
 //
 
 //
-// The directory holding the golden fixtures and the bun scripts (tests run with the package directory as cwd).
+// The directory holding the golden fixtures (tests run with the package directory as cwd).
 //
 pub const FIXTURES_DIR = "src/test/fixtures";
 
@@ -209,54 +209,6 @@ pub fn fileExists(io: std.Io, filePath: []const u8) bool {
         return false;
     };
     return true;
-}
-
-//
-// The output of a bun script.
-//
-pub const BunResult = struct {
-    // What the script wrote to stdout.
-    stdout: []const u8,
-
-    // What the script wrote to stderr.
-    stderr: []const u8,
-};
-
-//
-// Runs a bun script of the fixtures directory with the environment installed by setupEnvironment plus the given
-// overrides, and fails the test when it does not exit with 0.
-//
-pub fn runBun(allocator: std.mem.Allocator, io: std.Io, script: []const u8, arguments: []const []const u8, overrides: []const [2][]const u8) !BunResult {
-    var argv: std.ArrayList([]const u8) = .empty;
-    try argv.appendSlice(allocator, &.{ "bun", "run", try std.fmt.allocPrint(allocator, "{s}/{s}", .{ FIXTURES_DIR, script }) });
-    try argv.appendSlice(allocator, arguments);
-    var childEnvironment = try environment.?.clone(allocator);
-    for (overrides) |override| {
-        try childEnvironment.put(override[0], override[1]);
-    }
-    const result = std.process.run(allocator, io, .{ .argv = argv.items, .environ_map = &childEnvironment }) catch |err| {
-
-        // The TypeScript side of the interop tests needs Bun; skip them where Bun cannot be spawned.
-        if (err == error.FileNotFound) {
-            return error.SkipZigTest;
-        }
-        return err;
-    };
-    if (result.term != .exited or result.term.exited != 0) {
-        std.debug.print("bun {s} failed:\n{s}\n{s}\n", .{ script, result.stdout, result.stderr });
-        return error.TestUnexpectedResult;
-    }
-    return .{ .stdout = result.stdout, .stderr = result.stderr };
-}
-
-//
-// Runs a bun script and parses the last line of its stdout as JSON.
-//
-pub fn runBunJson(allocator: std.mem.Allocator, io: std.Io, script: []const u8, arguments: []const []const u8, overrides: []const [2][]const u8) !std.json.Value {
-    const result = try runBun(allocator, io, script, arguments, overrides);
-    const trimmed = std.mem.trimEnd(u8, result.stdout, "\r\n");
-    const lastLineStart = if (std.mem.lastIndexOfScalar(u8, trimmed, '\n')) |index| index + 1 else 0;
-    return std.json.parseFromSliceLeaky(std.json.Value, allocator, trimmed[lastLineStart..], .{});
 }
 
 //

@@ -7,6 +7,8 @@ const EXIT_SUCCESS = exit_codes.EXIT_SUCCESS;
 const EXIT_TERMINATION_CALLBACKS_THREW = exit_codes.EXIT_TERMINATION_CALLBACKS_THREW;
 const EXIT_SIGTERM_CLEANUP_FAILED = exit_codes.EXIT_SIGTERM_CLEANUP_FAILED;
 const EXIT_SIGINT_CLEANUP_FAILED = exit_codes.EXIT_SIGINT_CLEANUP_FAILED;
+const EXIT_UNHANDLED_REJECTION = exit_codes.EXIT_UNHANDLED_REJECTION;
+const EXIT_UNHANDLED_REJECTION_CLEANUP_FAILED = exit_codes.EXIT_UNHANDLED_REJECTION_CLEANUP_FAILED;
 
 //
 // Set to true after the termination handlers have been initialized.
@@ -82,11 +84,29 @@ var pendingSignal: std.atomic.Value(u32) = .init(0);
 var signalIo: std.Io = undefined;
 
 //
-// The signal handler: only records the signal, because termination callbacks cannot run safely
-// inside a signal handler. The signal watcher thread runs them.
+// POSIX: the pipe that wakes the signal watcher thread (the "self-pipe": write() is async-signal-safe, so the
+// signal handler writes a byte to it and the watcher blocks in poll() until it can read it). Index 0 is the read
+// end, 1 the write end.
+//
+var signalPipe: [2]std.posix.fd_t = undefined;
+
+//
+// Windows: set by the console control handler to wake the signal watcher thread (the handler runs on a thread
+// of its own, created by the system, where ordinary synchronization can be used).
+//
+var signalEvent: std.Io.Event = .unset;
+
+//
+// The signal handler: only records the signal and wakes the watcher, because termination callbacks cannot
+// run safely inside a signal handler. The signal watcher thread runs them.
 //
 fn handleSignal(signal: std.posix.SIG) callconv(.c) void {
     pendingSignal.store(@intCast(@intFromEnum(signal)), .release);
+
+    // The write end is non-blocking: when the pipe is full the watcher already has a wake-up waiting,
+    // and nothing else can go wrong writing to a pipe whose read end this process keeps open.
+    const wakeByte = [1]u8{0};
+    _ = std.posix.system.write(signalPipe[1], &wakeByte, wakeByte.len);
 }
 
 //
@@ -106,6 +126,7 @@ extern "kernel32" fn SetConsoleCtrlHandler(handlerRoutine: ?*const fn (ctrlType:
 fn handleConsoleCtrl(ctrlType: std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL {
     if (ctrlType == ctrl_c_event) {
         pendingSignal.store(@intFromEnum(std.posix.SIG.INT), .release);
+        signalEvent.set(signalIo);
         return .TRUE;
     }
     return .FALSE;
@@ -119,10 +140,49 @@ fn shutdownOnSignal(io: std.Io, signalName: []const u8, cleanupFailedCode: u8) n
 
     invokeTerminationCallbacks(io, EXIT_SUCCESS) catch |err| {
         utils.log.log.exception(if (std.mem.eql(u8, signalName, "SIGTERM")) "Error during SIGTERM shutdown." else "Error during SIGINT shutdown.", err);
-        invokeTerminationCallbacks(io, EXIT_FAILURE) catch {};
+        invokeTerminationCallbacks(io, EXIT_FAILURE) catch |cleanupErr| {
+            shutdownOnUnhandledRejection(io, cleanupErr);
+        };
         std.process.exit(cleanupFailedCode);
     };
     std.process.exit(EXIT_SUCCESS);
+}
+
+//
+// Handles an error thrown out of a signal handler. In TypeScript the async signal handler's promise
+// rejects, which the `process.on('unhandledRejection')` handler turns into this shutdown.
+//
+fn shutdownOnUnhandledRejection(io: std.Io, err: anyerror) noreturn {
+    utils.log.log.exception("Unhandled promise rejection.", err);
+
+    var exitCode = EXIT_UNHANDLED_REJECTION;
+    invokeTerminationCallbacks(io, EXIT_UNHANDLED_REJECTION) catch |cleanupErr| {
+        utils.log.log.exception("Error during unhandled rejection shutdown.", cleanupErr);
+        exitCode = EXIT_UNHANDLED_REJECTION_CLEANUP_FAILED;
+    };
+    std.process.exit(exitCode);
+}
+
+//
+// Blocks until the signal handler (or the Windows console control handler) wakes the watcher.
+//
+fn waitForSignal() !void {
+    if (builtin.os.tag == .windows) {
+        signalEvent.waitUncancelable(signalIo);
+        signalEvent.reset();
+        return;
+    }
+    var pollFds = [1]std.posix.pollfd{.{ .fd = signalPipe[0], .events = std.posix.POLL.IN, .revents = 0 }};
+    _ = try std.posix.poll(&pollFds, -1);
+    var wakeBytes: [16]u8 = undefined;
+    const bytesRead = std.posix.read(signalPipe[0], &wakeBytes) catch |err| switch (err) {
+        // Another wake-up was already consumed: poll again.
+        error.WouldBlock => return,
+        else => return err,
+    };
+    if (bytesRead == 0) {
+        return error.EndOfStream;
+    }
 }
 
 //
@@ -137,7 +197,9 @@ fn watchSignals() void {
         if (signal == @intFromEnum(std.posix.SIG.INT)) {
             shutdownOnSignal(signalIo, "SIGINT", EXIT_SIGINT_CLEANUP_FAILED);
         }
-        std.Options.debug_io.sleep(.fromMilliseconds(20), .awake) catch {};
+        waitForSignal() catch |err| {
+            std.debug.panic("Waiting for a termination signal failed: {s}", .{@errorName(err)});
+        };
     }
 }
 
@@ -158,9 +220,14 @@ fn initializeTerminationHandlers(io: std.Io) !void {
         //
         // Listen for Ctrl+C (Node emits it as SIGINT on Windows; SIGTERM is never received on Windows)
         //
-        _ = SetConsoleCtrlHandler(handleConsoleCtrl, .TRUE);
+        if (SetConsoleCtrlHandler(handleConsoleCtrl, .TRUE) == .FALSE) {
+            return std.os.windows.unexpectedError(std.os.windows.GetLastError());
+        }
     }
     else {
+        // Both ends are non-blocking (the signal handler must never block); the watcher blocks in poll().
+        signalPipe = try std.Io.Threaded.pipe2(.{ .CLOEXEC = true, .NONBLOCK = true });
+
         //
         // Listen for the SIGTERM signal (graceful shutdown request) and the SIGINT signal (Ctrl+C)
         //

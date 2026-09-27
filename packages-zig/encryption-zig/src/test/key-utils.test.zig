@@ -28,7 +28,7 @@ test "returns a 32-byte buffer" {
     // The generated key pair is RSA-4096 and its public key matches the private key.
     //
     try std.testing.expectEqual(@as(usize, 512), keyPair.publicKey.modulusLength());
-    try std.testing.expectEqualSlices(u8, keyPair.privateKey.public_key.components.modulus, keyPair.publicKey.components.modulus);
+    try std.testing.expectEqualSlices(u8, keyPair.privateKey.public_key.spki, keyPair.publicKey.spki);
     const encrypted = try crypto.publicEncrypt(allocator, std.testing.io, keyPair.publicKey, "key");
     try std.testing.expectEqualStrings("key", try crypto.privateDecrypt(allocator, keyPair.privateKey, encrypted));
 }

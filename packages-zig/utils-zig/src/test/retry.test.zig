@@ -484,6 +484,24 @@ test "retryOnce resolves with the result of an operation that finishes without a
     try std.testing.expectEqualStrings("finished", result);
 }
 
+test "retryOnce fails when the operation cannot run concurrently" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{ .concurrent_limit = .nothing });
+    defer threaded.deinit();
+    var operation: MockOperation = .{};
+
+    try std.testing.expectError(error.ConcurrencyUnavailable, retry_module.retryOnce(threaded.io(), &operation, 1_000));
+
+    try std.testing.expectEqual(@as(u32, 0), operation.calls);
+}
+
+test "retryOnce fails and cancels the operation when the timer cannot run concurrently" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{ .concurrent_limit = .limited(1) });
+    defer threaded.deinit();
+    var operation: MockOperation = .{ .neverResolves = true };
+
+    try std.testing.expectError(error.ConcurrencyUnavailable, retry_module.retryOnce(threaded.io(), &operation, 1_000));
+}
+
 //
 // A log that keeps the verbose messages and warnings it receives.
 //

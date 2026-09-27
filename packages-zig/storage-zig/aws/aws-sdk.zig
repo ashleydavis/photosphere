@@ -8,7 +8,6 @@ const aws_c_http = @import("aws-c-http.zig");
 const aws_c_sdkutils = @import("aws-c-sdkutils.zig");
 const aws_c_auth = @import("aws-c-auth.zig");
 const aws_c_s3 = @import("aws-c-s3.zig");
-const aws_lc = @import("aws-lc.zig");
 const s2n_tls = @import("s2n-tls.zig");
 
 //
@@ -194,10 +193,11 @@ const aws_c_header =
 ;
 
 //
-// Builds the SDK for the target, links it into the module and adds the "aws-c" module translated from its headers.
+// Builds the SDK for the target over aws-lc's libcrypto (built by encryption-zig, see its aws/aws-lc.zig), links it into
+// the module and adds the "aws-c" module translated from its headers.
 // Returns false when a lazy dependency still has to be fetched (the build runner fetches it and runs the build again).
 //
-pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.ResolvedTarget) !bool {
+pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.ResolvedTarget, libcrypto: *std.Build.Step.Compile) !bool {
     const os = target.result.os.tag;
     const arch = target.result.cpu.arch;
     if (os != .linux and os != .windows and os != .macos) {
@@ -232,21 +232,19 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
     const common = try aws_c_common.build(&context, b.dependency("aws-c-common", .{}));
     const checksums = try aws_checksums.build(&context, b.dependency("aws-checksums", .{}), common);
 
-    // The crypto and TLS libraries are only built for Linux, where aws-c-cal uses aws-lc's libcrypto and aws-c-io
-    // uses s2n-tls, and for macOS, where aws-c-io's USE_S2N option is on by default (aws-crt-cpp builds aws-lc and
+    // The SDK only uses libcrypto and the TLS library on Linux, where aws-c-cal uses aws-lc's libcrypto and aws-c-io
+    // uses s2n-tls, and on macOS, where aws-c-io's USE_S2N option is on by default (aws-crt-cpp builds aws-lc and
     // s2n-tls there too, and aws-c-io picks Secure Transport or s2n-tls at run time; aws-c-cal uses CommonCrypto). On
-    // Windows the SDK uses the operating system's BCrypt and SChannel.
+    // Windows the SDK uses the operating system's BCrypt and SChannel (libcrypto is still linked into the module there,
+    // by encryption-zig, which uses it on every platform).
     var crypto: ?*std.Build.Step.Compile = null;
     var s2n: ?*std.Build.Step.Compile = null;
     if (context.isLinux or context.isMacos) {
-        const aws_lc_dependency = b.lazyDependency("aws-lc", .{}) orelse {
-            return false;
-        };
         const s2n_tls_dependency = b.lazyDependency("s2n-tls", .{}) orelse {
             return false;
         };
-        crypto = try aws_lc.build(&context, aws_lc_dependency);
-        s2n = try s2n_tls.build(&context, s2n_tls_dependency, crypto.?);
+        crypto = libcrypto;
+        s2n = try s2n_tls.build(&context, s2n_tls_dependency, libcrypto);
     }
 
     const cal = try aws_c_cal.build(&context, b.dependency("aws-c-cal", .{}), common, crypto);

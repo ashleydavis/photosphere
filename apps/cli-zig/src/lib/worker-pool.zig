@@ -8,8 +8,9 @@
 // Differences that follow from threads:
 // - A timed-out task's thread cannot be killed: the task is marked abandoned, the thread is detached and its
 //   result discarded (it frees the task when the handler returns), and a replacement worker is created.
-// - A handler error is a task failure, as in TypeScript. There is no equivalent of a worker crashing
-//   (a panic ends the process); handleWorkerCrash is used when a worker thread cannot be started.
+// - A handler error is a task failure, as in TypeScript. A panic ends the process; the worker's "error" event
+//   (handleWorkerError, then handleWorkerCrash) is used when a worker thread cannot be started, when its start-up
+//   fails (the test UUID generator or the session ID) and when a task's failure cannot be reported.
 // - Workers share the main thread's queue backend (WorkerQueueBackend is not ported), so a handler that
 //   queues child tasks adds them to this pool directly.
 //   So the "queue-task" message (IWorkerQueueTaskMessage, with its priority) and priorityOfRunningTask,
@@ -583,6 +584,9 @@ pub const WorkerPoolBun = struct {
             },
         };
         self.workers.append(pool_allocator, workerState) catch @panic("out of memory");
+
+        // Every worker has a slot reserved in retiredWorkers, so retiring it cannot fail.
+        self.retiredWorkers.ensureTotalCapacity(pool_allocator, self.retiredWorkers.items.len + self.workers.items.len) catch @panic("out of memory");
         self.ensureMonitor();
 
         const thread = std.Thread.spawn(.{}, workerMain, .{ self, workerState }) catch |err| {
@@ -632,7 +636,7 @@ pub const WorkerPoolBun = struct {
             thread.detach();
             workerState.thread = null;
         }
-        self.retiredWorkers.append(pool_allocator, workerState) catch {};
+        self.retiredWorkers.appendAssumeCapacity(workerState);
         self.workCondition.broadcast(self.io);
     }
 
@@ -663,13 +667,34 @@ pub const WorkerPoolBun = struct {
 
         // Test providers are automatically configured when NODE_ENV === "testing"
         const isTesting = std.mem.eql(u8, node_utils.process_env.getEnv("NODE_ENV") orelse "", "testing");
-        var testUuidGenerator: ?TestUuidGenerator = if (isTesting) TestUuidGenerator.init(context_allocator) catch null else null;
+        // An error thrown while the worker starts (TypeScript: thrown by the top level of the worker script).
+        var startError: ?anyerror = null;
+        var testUuidGenerator: ?TestUuidGenerator = null;
+        if (isTesting) {
+            if (TestUuidGenerator.init(context_allocator)) |generator| {
+                testUuidGenerator = generator;
+            }
+            else |err| {
+                startError = err;
+            }
+        }
         var randomUuidGenerator = RandomUuidGenerator{};
         var testTimestampProvider = TestTimestampProvider{};
         var timestampProviderImpl = TimestampProvider{};
         const uuidGenerator: IUuidGenerator = if (testUuidGenerator) |*generator| generator.uuidGenerator() else randomUuidGenerator.uuidGenerator();
         const timestampProvider: ITimestampProvider = if (isTesting) testTimestampProvider.timestampProvider() else timestampProviderImpl.timestampProvider();
-        const sessionId = workerState.options.sessionId orelse (uuidGenerator.generate(context_allocator, self.io) catch "");
+        var sessionId: []const u8 = undefined;
+        if (startError == null) {
+            if (workerState.options.sessionId) |configuredSessionId| {
+                sessionId = configuredSessionId;
+            }
+            else if (uuidGenerator.generate(context_allocator, self.io)) |generatedSessionId| {
+                sessionId = generatedSessionId;
+            }
+            else |err| {
+                startError = err;
+            }
+        }
 
         self.lock();
         defer {
@@ -678,10 +703,15 @@ pub const WorkerPoolBun = struct {
             self.unlock();
         }
 
-        // The worker is ready (TypeScript: the "worker-ready" message).
         if (workerState.terminated) {
             return;
         }
+        if (startError) |err| {
+            self.handleWorkerError(workerState, err);
+            return;
+        }
+
+        // The worker is ready (TypeScript: the "worker-ready" message).
         workerState.isReady = true;
         workerState.isIdle = true;
         self.tryDispatchPending();
@@ -696,24 +726,44 @@ pub const WorkerPoolBun = struct {
             poolTask.context = TaskContext.init(uuidGenerator, timestampProvider, sessionId, poolTask.task.id, .{ .context = poolTask, .function = sendMessageFn }, MAX_CONCURRENT_CHILD_TASKS);
             self.unlock();
 
-            const outputs = self.executeTask(poolTask);
+            const outcome = self.executeTask(poolTask);
 
             self.lock();
-            workerState.currentTask = null;
             if (poolTask.abandoned or workerState.terminated) {
                 // The task timed out or the worker was terminated: the result is discarded.
+                workerState.currentTask = null;
                 freeTask(poolTask);
                 return;
             }
-            self.handleTaskCompleted(workerState, poolTask, outputs);
+            if (outcome) |outputs| {
+                workerState.currentTask = null;
+                self.handleTaskCompleted(workerState, poolTask, outputs);
+            }
+            else |err| {
+                // Reporting the task failed (TypeScript: an unhandled rejection in the worker script).
+                self.handleWorkerError(workerState, err);
+                workerState.currentTask = null;
+                freeTask(poolTask);
+                return;
+            }
         }
     }
 
     //
-    // Executes a task handler on the worker thread (TypeScript: executeTask in worker.ts).
-    // Returns the handler outputs, or the failure.
+    // Handles an error thrown by a worker thread outside of a task handler (TypeScript: the worker's
+    // "error" event): the error is logged and the worker is replaced, failing its task (the lock must be held).
     //
-    fn executeTask(self: *WorkerPoolBun, poolTask: *IPoolTask) TaskOutcome {
+    fn handleWorkerError(self: *WorkerPoolBun, workerState: *IWorkerState, err: anyerror) void {
+        var message_buffer: [64]u8 = undefined;
+        log.exception(std.fmt.bufPrint(&message_buffer, "Error from worker {d}", .{workerState.workerId}) catch "Error from worker", err);
+        self.handleWorkerCrash(workerState);
+    }
+
+    //
+    // Executes a task handler on the worker thread (TypeScript: executeTask in worker.ts).
+    // Returns the handler outputs, or the failure; an error is returned when the failure cannot be reported.
+    //
+    fn executeTask(self: *WorkerPoolBun, poolTask: *IPoolTask) !TaskOutcome {
         const task = poolTask.task;
 
         // Set task ID for logging prefix and progress messages
@@ -726,10 +776,10 @@ pub const WorkerPoolBun = struct {
         }
         else |err| {
             const is_thrown = err == error.Thrown or err == error.FatalError;
-            const message = poolTask.arena.allocator().dupe(u8, errors.errorMessage(err)) catch "";
-            const name = poolTask.arena.allocator().dupe(u8, if (is_thrown) errors.lastErrorName() else "Error") catch "Error";
+            const message = try poolTask.arena.allocator().dupe(u8, errors.errorMessage(err));
+            const name = try poolTask.arena.allocator().dupe(u8, if (is_thrown) errors.lastErrorName() else "Error");
             if (log.verboseEnabled()) {
-                const detail = std.fmt.allocPrint(poolTask.arena.allocator(), "Task {s} failed with error {{\n  \"name\": \"{s}\",\n  \"message\": \"{s}\"\n}}", .{ task.id, name, message }) catch "";
+                const detail = try std.fmt.allocPrint(poolTask.arena.allocator(), "Task {s} failed with error {{\n  \"name\": \"{s}\",\n  \"message\": \"{s}\"\n}}", .{ task.id, name, message });
                 log.verbose(detail);
             }
             return .{ .failed = .{ .name = name, .message = message } };
@@ -813,6 +863,8 @@ pub const WorkerPoolBun = struct {
     // The body of the timeout monitor thread (TypeScript: the setTimeout callbacks).
     //
     fn monitorMain(self: *WorkerPoolBun) void {
+        // The monitor is a thread of its own, not an Io task, so nothing can cancel it.
+        _ = self.io.swapCancelProtection(.blocked);
         self.lock();
         defer self.unlock();
         while (!self.stopping) {
@@ -832,7 +884,9 @@ pub const WorkerPoolBun = struct {
             if (earliest.? > now) {
                 const wait_ms = @min(earliest.? - now, 50);
                 self.unlock();
-                self.io.sleep(.fromMilliseconds(wait_ms), .awake) catch {};
+                self.io.sleep(.fromMilliseconds(wait_ms), .awake) catch |err| switch (err) {
+                    error.Canceled => unreachable,
+                };
                 self.lock();
                 continue;
             }
@@ -842,7 +896,9 @@ pub const WorkerPoolBun = struct {
                 const poolTask = workerState.currentTask orelse workerState.assignedTask orelse continue;
                 const deadline = poolTask.deadline orelse continue;
                 if (deadline <= now) {
-                    self.handleTaskTimeout(poolTask, workerState);
+                    self.handleTaskTimeout(poolTask, workerState) catch |err| {
+                        log.exception("Error handling task timeout", err);
+                    };
                     break;
                 }
             }
@@ -852,15 +908,14 @@ pub const WorkerPoolBun = struct {
     //
     // Handles task timeout by terminating the worker and marking the task as failed (the lock must be held).
     //
-    fn handleTaskTimeout(self: *WorkerPoolBun, poolTask: *IPoolTask, workerState: *IWorkerState) void {
+    fn handleTaskTimeout(self: *WorkerPoolBun, poolTask: *IPoolTask, workerState: *IWorkerState) !void {
         // Clear the timeout (should already be cleared, but be safe)
         poolTask.deadline = null;
 
-        var buffer: [256]u8 = undefined;
-        var fixed_allocator = std.heap.FixedBufferAllocator.init(&buffer);
-        const timeoutText = formatNumber(fixed_allocator.allocator(), self.taskTimeout) catch "";
-        var message_buffer: [1024]u8 = undefined;
-        const message = std.fmt.bufPrint(&message_buffer, "[Task Queue] Task {s} timed out after {s}ms", .{ poolTask.task.id, timeoutText }) catch "[Task Queue] Task timed out";
+        const timeoutText = try formatNumber(pool_allocator, self.taskTimeout);
+        defer pool_allocator.free(timeoutText);
+        const message = try std.fmt.allocPrint(pool_allocator, "[Task Queue] Task {s} timed out after {s}ms", .{ poolTask.task.id, timeoutText });
+        defer pool_allocator.free(message);
         log.@"error"(message);
 
         // Terminate the worker: the thread cannot be killed, so its task is abandoned and the thread detached.

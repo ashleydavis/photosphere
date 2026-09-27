@@ -27,6 +27,24 @@ pub fn build(b: *std.Build) !void {
         module.addImport(dependency_name, dependency.module(dependency_name));
     }
 
+    // The process the termination tests send signals to; its path is handed to the tests as an option.
+    const termination_child_module = b.createModule(.{
+        .root_source_file = b.path("src/test/fixtures/termination-child.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    termination_child_module.addImport(module_name, module);
+    for (dependency_names) |dependency_name| {
+        const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = optimize });
+        termination_child_module.addImport(dependency_name, dependency.module(dependency_name));
+    }
+    const termination_child = b.addExecutable(.{
+        .name = "termination-child",
+        .root_module = termination_child_module,
+    });
+    const test_options = b.addOptions();
+    test_options.addOptionPath("termination_child_path", termination_child.getEmittedBin());
+
     const test_step = b.step("test", "Run unit tests");
     var test_dir = try b.build_root.handle.openDir(b.graph.io, "src/test", .{ .iterate = true });
     defer test_dir.close(b.graph.io);
@@ -42,13 +60,20 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
         });
         test_module.addImport(module_name, module);
+        test_module.addOptions("test-options", test_options);
         for (dependency_names) |dependency_name| {
             const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = optimize });
             test_module.addImport(dependency_name, dependency.module(dependency_name));
         }
         const unit_test = b.addTest(.{ .root_module = test_module });
         const run_test = b.addRunArtifact(unit_test);
-        run_test.setCwd(b.path("."));
+
+        // The termination tests read no fixtures, and the termination child path in the test options is relative
+        // to the working directory of the build runner (the top-level build root, which differs from this package
+        // when the tests run from the CLI's test-all), so they run where the build runner runs.
+        if (!std.mem.eql(u8, entry.path, "termination.test.zig")) {
+            run_test.setCwd(b.path("."));
+        }
         test_step.dependOn(&run_test.step);
     }
 }

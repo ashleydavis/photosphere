@@ -7,7 +7,7 @@ const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
 const serialization = serialization_zig.serialization;
 const bson = serialization_zig.bson;
-const gzip_fixture_os_byte = @import("gzip-fixture-os-byte.zig");
+const gzip_member = @import("gzip-member.zig");
 const BinarySerializer = serialization.BinarySerializer;
 const BinaryDeserializer = serialization.BinaryDeserializer;
 const CompressedBinarySerializer = serialization.CompressedBinarySerializer;
@@ -592,9 +592,22 @@ test "CompressedBinarySerializer output is byte-identical to Bun's gzip output (
     defer arena.deinit();
     const allocator = arena.allocator();
 
+    // The fixture is the uint32 7, the compressed block (its uint32 length, then the gzip member) and the uint32 8.
     const actual = try buildZigCompressed(allocator);
     const expected = try readFixture(allocator, "compressed-node.bin");
-    try std.testing.expectEqualSlices(u8, expected, try gzip_fixture_os_byte.normaliseGzipOsBytes(allocator, actual));
+    try std.testing.expectEqual(expected.len, actual.len);
+    try std.testing.expectEqualSlices(u8, expected[0..8], actual[0..8]);
+    try gzip_member.expectGzipMemberEqual(expected[8 .. expected.len - 4], actual[8 .. actual.len - 4]);
+    try std.testing.expectEqualSlices(u8, expected[expected.len - 4 ..], actual[actual.len - 4 ..]);
+}
+
+//
+// Checks that a compressed block (the uint32 length of the gzip member, then the member) made on this platform matches
+// one Bun made on Linux.
+//
+fn expectCompressedBlockEqual(expected: []const u8, actual: []const u8) !void {
+    try std.testing.expectEqualSlices(u8, expected[0..4], actual[0..4]);
+    try gzip_member.expectGzipMemberEqual(expected[4..], actual[4..]);
 }
 
 test "CompressedBinarySerializer output of empty and large data is byte-identical to Bun's gzip output" {
@@ -605,7 +618,7 @@ test "CompressedBinarySerializer output of empty and large data is byte-identica
     var emptyMain = try BinarySerializer.init(allocator, 1024);
     var emptySerializer = try CompressedBinarySerializer.init(allocator, emptyMain.asSerializer(), 1024);
     try emptySerializer.finish();
-    try std.testing.expectEqualSlices(u8, try readFixture(allocator, "compressed-empty-node.bin"), try gzip_fixture_os_byte.normaliseGzipOsBytes(allocator, emptyMain.getBuffer()));
+    try expectCompressedBlockEqual(try readFixture(allocator, "compressed-empty-node.bin"), emptyMain.getBuffer());
 
     var largeMain = try BinarySerializer.init(allocator, 1024);
     var largeSerializer = try CompressedBinarySerializer.init(allocator, largeMain.asSerializer(), 1024);
@@ -614,7 +627,7 @@ test "CompressedBinarySerializer output of empty and large data is byte-identica
         try largeSerializer.writeString(try std.fmt.allocPrint(allocator, "String number {d} with some content", .{index}));
     }
     try largeSerializer.finish();
-    try std.testing.expectEqualSlices(u8, try readFixture(allocator, "compressed-large-node.bin"), try gzip_fixture_os_byte.normaliseGzipOsBytes(allocator, largeMain.getBuffer()));
+    try expectCompressedBlockEqual(try readFixture(allocator, "compressed-large-node.bin"), largeMain.getBuffer());
 }
 
 test "CompressedBinaryDeserializer throws on data that is not gzip" {

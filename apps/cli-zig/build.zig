@@ -33,20 +33,11 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.option(std.builtin.OptimizeMode, "optimize", "Prioritize performance, safety, or binary size (default: ReleaseSafe)") orelse .ReleaseSafe;
 
-    //
-    // The absolute path of the TypeScript CLI entry point, used to delegate the commands that are not ported.
-    //
-    const ts_cli_path = try std.fs.path.resolve(b.allocator, &.{ b.build_root.path orelse ".", "..", "cli", "index.ts" });
-    const build_options = b.addOptions();
-    build_options.addOption([]const u8, "ts_cli_path", ts_cli_path);
-    const build_options_module = build_options.createModule();
-
     const module = b.addModule(module_name, .{
         .root_source_file = b.path("index.zig"),
         .target = target,
         .optimize = optimize,
     });
-    module.addImport("build_options", build_options_module);
     for (dependency_names) |dependency_name| {
         const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = optimize });
         module.addImport(dependency_name, dependency.module(dependency_name));
@@ -94,7 +85,6 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
     test_module.addImport(module_name, module);
-    test_module.addImport("build_options", build_options_module);
     for (dependency_names) |dependency_name| {
         const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = optimize });
         test_module.addImport(dependency_name, dependency.module(dependency_name));
@@ -103,6 +93,25 @@ pub fn build(b: *std.Build) !void {
     const run_test = b.addRunArtifact(unit_test);
     run_test.setCwd(b.path("."));
     run_test.step.dependOn(b.getInstallStep());
+
+    // The program the tests run CLI functions in, against the real process streams (installed to
+    // zig-out/test-bin, not zig-out/bin: it is not shipped).
+    const test_driver_module = b.createModule(.{
+        .root_source_file = b.path("src/test/drivers/test-driver.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    test_driver_module.addImport(module_name, module);
+    for (dependency_names) |dependency_name| {
+        const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = optimize });
+        test_driver_module.addImport(dependency_name, dependency.module(dependency_name));
+    }
+    const test_driver = b.addExecutable(.{
+        .name = "test-driver",
+        .root_module = test_driver_module,
+    });
+    const install_test_driver = b.addInstallArtifact(test_driver, .{ .dest_dir = .{ .override = .{ .custom = "test-bin" } } });
+    run_test.step.dependOn(&install_test_driver.step);
     test_step.dependOn(&run_test.step);
 
     // The tests of this CLI and of every Zig package, in this one build. The packages' dependencies are

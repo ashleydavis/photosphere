@@ -203,8 +203,8 @@ const VerifyState = struct {
             }
         }
         else if (taskResult.status == TaskStatus.Failed) {
-            const inputs = verify_worker.verifyFileDataFromJson(allocator, taskResult.inputs) catch null;
-            const fileName = if (inputs != null and inputs.?.node.name != null) inputs.?.node.name.? else "unknown";
+            const inputs = try verify_worker.verifyFileDataFromJson(allocator, taskResult.inputs);
+            const fileName = inputs.node.name orelse "unknown";
             const errorMessage = taskResult.errorMessage orelse "";
             const message = try std.fmt.allocPrint(allocator, "Failed to verify file \"{s}\": {s}", .{ fileName, errorMessage });
             if (taskResult.@"error") |taskError| {
