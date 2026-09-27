@@ -29,8 +29,8 @@ pub const ICommandExamples = struct {
 
 //
 // Centralized examples for all CLI commands
-// (only the commands implemented in Zig are ported: init, add, info, summary, verify, replicate, version,
-// export and list).
+// (only the commands implemented in Zig are ported: init, add, info, summary, verify, replicate, compare, version,
+// export, list and remove).
 //
 pub const COMMAND_EXAMPLES = [_]ICommandExamples{
     .{
@@ -132,6 +132,27 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
         },
     },
     .{
+        .commandName = "compare",
+        .examples = &.{
+            .{
+                .command = "psi compare --db ./photos --dest ./backup",
+                .description = "Compares an original database with a backup.",
+            },
+            .{
+                .command = "psi compare --db . --dest s3:bucket/photos",
+                .description = "Compares a local database with an S3 replica.",
+            },
+            .{
+                .command = "psi compare --db ./photos --dest ./backup --full",
+                .description = "Shows all differences without truncation.",
+            },
+            .{
+                .command = "psi compare --db ./photos --dest ./backup --max 20",
+                .description = "Shows up to 20 items in each category.",
+            },
+        },
+    },
+    .{
         .commandName = "version",
         .examples = &.{
             .{
@@ -175,6 +196,19 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             .{
                 .command = "psi list --db ./photos --page-size 10",
                 .description = "Lists files with 10 files per page.",
+            },
+        },
+    },
+    .{
+        .commandName = "remove",
+        .examples = &.{
+            .{
+                .command = "psi remove --db ./photos a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                .description = "Removes asset with ID from the database.",
+            },
+            .{
+                .command = "psi remove --db . f1e2d3c4-b5a6-7890-cdef-ab1234567890",
+                .description = "Removes asset from current directory database.",
             },
         },
     },

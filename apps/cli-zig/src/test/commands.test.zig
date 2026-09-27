@@ -301,6 +301,85 @@ test "list prints the report of the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "list", "--db", db, "--yes" }), encrypted, "", 0);
 }
 
+//
+// The report of compareCommand (apps/cli/src/cmd/compare.ts) for test/dbs/1-asset against test/dbs/1-asset-2 with
+// --max 1. <root> stands for the test root.
+//
+const compare_report =
+    \\
+    \\Comparing two databases:
+    \\  Source:         <root>/1-asset
+    \\  Destination:    <root>/1-asset-2
+    \\
+    \\
+    \\📊 Comparison Results
+    \\
+    \\Found differences: 3 files only in source, 3 files only in destination
+    \\
+    \\Files only in source:
+    \\  + asset/63e9c63a-9164-6376-13e9-ef4d00000000
+    \\  ... and 2 more
+    \\
+    \\Files only in destination:
+    \\  + asset/476dffbb-af9e-4cda-8006-b02f3851e86c
+    \\  ... and 2 more
+    \\
+    \\⚠️ Databases have 6 differences
+    \\
+;
+
+test "compare prints the report of the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-compare");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const source = try std.fmt.allocPrint(allocator, "{s}/1-asset", .{root});
+    const destination = try std.fmt.allocPrint(allocator, "{s}/1-asset-2", .{root});
+    try helpers.copyDirectory(allocator, "../../test/dbs/1-asset", source);
+    try helpers.copyDirectory(allocator, "../../test/dbs/1-asset-2", destination);
+
+    const result = try normalize(allocator, try runZig(allocator, environment, &.{ "compare", "--db", source, "--dest", destination, "--max", "1", "--yes" }), root, "<root>");
+    try expectResult(result, compare_report, "", 0);
+
+    // A database compared with itself (the destination comes from the origin of the source).
+    try expectResult(try runZig(allocator, environment, &.{ "set-origin", "--db", source, source, "--yes" }), try std.fmt.allocPrint(allocator, "\u{2713} Origin set to: {s}\n", .{source}), "", 0);
+    const same = try normalize(allocator, try runZig(allocator, environment, &.{ "cmp", "--db", source, "--yes" }), root, "<root>");
+    try expectResult(same, "\nComparing two databases:\n  Source:         <root>/1-asset\n  Destination:    <root>/1-asset\n\n\n\u{1F4CA} Comparison Results\n\nNo differences detected\n", "", 0);
+}
+
+test "remove deletes the asset like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-remove");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const assetId = "89171cd9-a652-4047-b869-1154bf2c95a1";
+
+    try expectResult(try runZig(allocator, environment, &.{ "rm", "--db", db, assetId, "--yes" }), "\u{2713} Successfully removed asset 89171cd9-a652-4047-b869-1154bf2c95a1 from database\n", "", 0);
+
+    // The files are gone, and the tree holds only README.md with the hash the TypeScript CLI leaves.
+    const cwd = std.Io.Dir.cwd();
+    for ([_][]const u8{ "asset", "display", "thumb" }) |directory| {
+        try std.testing.expectError(error.FileNotFound, cwd.statFile(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/{s}/{s}", .{ db, directory, assetId }), .{}));
+    }
+    const summary = try runZig(allocator, environment, &.{ "summary", "--db", db, "--yes" });
+    try std.testing.expect(std.mem.indexOf(u8, summary.stdout, "Files imported:   0\nTotal files:      1\nTotal size:       913 Bytes\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, summary.stdout, "Files hash:       94f27ca43db9c872cfa4a377f3731cb42811e82ec48f2426a541643145a777b7\n") != null);
+
+    // The record is gone and its ID is recorded as deleted.
+    const info = try runZig(allocator, environment, &.{ "info", assetId, "--db", db, "--yes" });
+    try std.testing.expect(std.mem.indexOf(u8, info.stdout, "Error: Asset not found in database") != null);
+    const storage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, db, null, null);
+    const filesTree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, std.testing.io, ".db/files.dat", storage.storage, "FTRE")).?;
+    const deletedAssetIds = filesTree.databaseMetadata.?.get("deletedAssetIds").?.array;
+    try std.testing.expectEqual(@as(usize, 1), deletedAssetIds.len);
+    try std.testing.expectEqualStrings(assetId, deletedAssetIds[0].string);
+}
+
 test "export writes the asset files and prints the report of the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

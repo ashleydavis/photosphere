@@ -96,7 +96,7 @@ test_replicate_partial() {
 
     # Compare source and partial replica - merkle trees should match (isPartial is metadata, not a leaf)
     local compare_output
-    invoke_command "Compare source and partial replica" "$(get_cli_command) compare --db $source_db_dir --dest $replica_dir --yes" 0 "compare_output"
+    invoke_command "Compare source and partial replica" "$(get_zig_cli_command) compare --db $source_db_dir --dest $replica_dir --yes" 0 "compare_output"
     expect_output_string "$compare_output" "No differences detected" "Source and partial replica have no merkle tree differences"
 
     # Verify the partial replica's origin points back to the source

@@ -25,7 +25,7 @@ test_v2_database_write_commands_fail() {
     
     # Test that remove command fails on v2 database with version error
     local remove_output
-    invoke_command "Run remove on v2 database (should fail)" "$(get_cli_command) remove 27165d3c-207b-46b6-ab4e-bc92a09aeda3 --db $v2_db_dir --yes" 1 "remove_output"
+    invoke_command "Run remove on v2 database (should fail)" "$(get_zig_cli_command) remove 27165d3c-207b-46b6-ab4e-bc92a09aeda3 --db $v2_db_dir --yes" 1 "remove_output"
     
     # Check that error message mentions upgrade
     expect_output_string "$remove_output" "upgrade" "Remove command error message suggests running upgrade command"
