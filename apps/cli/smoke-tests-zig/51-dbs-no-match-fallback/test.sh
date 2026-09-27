@@ -18,7 +18,7 @@ test_dbs_no_match_fallback() {
     # Create a plain (unencrypted) database.
     invoke_command "Init plain database" "$(get_zig_cli_command) init --db \"$db_dir\" --yes" 0
 
-    invoke_command "Add PNG to plain database" "$(get_cli_command) add --db \"$db_dir\" \"$TEST_FILES_DIR/test.png\" --yes" 0
+    invoke_command "Add PNG to plain database" "$(get_zig_cli_command) add --db \"$db_dir\" \"$TEST_FILES_DIR/test.png\" --yes" 0
 
     # Clear databases.json so there's no match.
     seed_databases_config '[]'

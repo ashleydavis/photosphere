@@ -325,7 +325,11 @@ test "commit should flush dirty state and allow flush to succeed" {
 
     try collection.commit(io);
     try std.testing.expect(!collection.dirty());
-    // Not ported: flush. The commit wrote the shard, its merkle tree and the collection merkle tree.
+
+    // flush should succeed after commit
+    try collection.flush();
+
+    // The commit wrote the shard, its merkle tree and the collection merkle tree.
     const shardId = try collection.getShardId("123e4567-e89b-12d3-a456-426614174000");
     try std.testing.expect(storage.getFile(try std.fmt.allocPrint(allocator, "collections/users/shards/{s}", .{shardId})) != null);
     try std.testing.expect(storage.getFile(try std.fmt.allocPrint(allocator, "collections/users/shards/{s}.dat", .{shardId})) != null);
@@ -476,4 +480,205 @@ test "iterateShards reads the shards a listing finds as well as the ones held in
         totalRecords += shardRecords.len;
     }
     try std.testing.expectEqual(@as(usize, 2), totalRecords);
+}
+
+//
+// Builds a TestUser record in external form (TypeScript: the TestUser object literal).
+//
+fn makeExternalUser(allocator: std.mem.Allocator, id: []const u8, name: []const u8, age: f64, role: []const u8) !BsonDocument {
+    return BsonDocument.fromFields(allocator, &.{
+        .{
+            .key = "_id",
+            .value = .{ .string = id },
+        },
+        .{
+            .key = "name",
+            .value = .{ .string = name },
+        },
+        .{
+            .key = "email",
+            .value = .{ .string = try std.fmt.allocPrint(allocator, "{s}@example.com", .{name}) },
+        },
+        .{
+            .key = "age",
+            .value = .{ .number = age },
+        },
+        .{
+            .key = "role",
+            .value = .{ .string = role },
+        },
+    });
+}
+
+test "should insert and retrieve a record" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    var user = try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "John Doe", 30, "user");
+
+    try collection.insertOne(io, &user, null);
+
+    // (Zig: getOne is not ported; the record is read from its shard and turned back into its external form.)
+    const retrieved = try bdb.collection.toExternal(allocator, (try getRecord(collection, "123e4567-e89b-12d3-a456-426614174000")).?);
+    try std.testing.expect(retrieved.eql(user));
+}
+
+test "should generate an ID if not provided" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    var user = try makeExternalUser(allocator, "", "Jane Doe", 25, "admin"); // Empty ID will be replaced
+
+    try collection.insertOne(io, &user, null);
+
+    // Get all records to find the one we inserted
+    const result = try collection.getAll(io, null);
+    try std.testing.expectEqual(@as(usize, 1), result.records.len);
+
+    const retrieved = result.records[0];
+    try std.testing.expectEqualStrings("Jane Doe", retrieved.get("name").?.string);
+    try std.testing.expect(retrieved.get("_id").?.string.len > 0); // ID should have been generated
+    try std.testing.expectEqual(@as(usize, 36), retrieved.get("_id").?.string.len); // UUID format
+}
+
+test "should paginate through records" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    var users = [_]BsonDocument{
+        try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "User 1", 30, "user"),
+        try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174002", "User 2", 35, "admin"),
+        try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174003", "User 3", 25, "user"),
+    };
+
+    // Insert all users
+    for (&users) |*user| {
+        try collection.insertOne(io, user, null);
+    }
+
+    // Get first page
+    var result = try collection.getAll(io, null);
+    try std.testing.expect(result.records.len > 0);
+    try std.testing.expect(result.next != null);
+
+    var allUsers: std.ArrayList(BsonDocument) = .empty;
+    try allUsers.appendSlice(allocator, result.records);
+
+    // Continue pagination if there are more pages
+    while (result.next) |next| {
+        result = try collection.getAll(io, next);
+        try allUsers.appendSlice(allocator, result.records);
+    }
+
+    // Check that all users were retrieved
+    try std.testing.expectEqual(users.len, allUsers.items.len);
+
+    // Check that each user was retrieved
+    for (users) |user| {
+        var found = false;
+        for (allUsers.items) |retrieved| {
+            if (std.mem.eql(u8, retrieved.get("_id").?.string, user.get("_id").?.string)) {
+                found = true;
+            }
+        }
+        try std.testing.expect(found);
+    }
+}
+
+// Not ported: "should create and use a sort index" (it reads the index back with getPage, which is not ported).
+
+test "should find records by index value" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    var users = [_]BsonDocument{
+        try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "User 1", 30, "user"),
+        try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174002", "User 2", 35, "admin"),
+        try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174003", "User 3", 30, "user"),
+    };
+
+    // Insert all users
+    for (&users) |*user| {
+        try collection.insertOne(io, user, null);
+    }
+
+    // Create an index on the role field
+    try (try collection.sortIndex("role", .asc)).ensure(io, collection, .string);
+
+    // Find users with role 'user'
+    const userRoleResults = try (try collection.sortIndex("role", .asc)).findByValue(io, .{ .string = "user" }, null);
+    try std.testing.expectEqual(@as(usize, 2), userRoleResults.len);
+    for (userRoleResults) |userRoleResult| {
+        try std.testing.expectEqualStrings("user", userRoleResult.get("role").?.string);
+    }
+
+    // Find users with role 'admin'
+    const adminRoleResults = try (try collection.sortIndex("role", .asc)).findByValue(io, .{ .string = "admin" }, null);
+    try std.testing.expectEqual(@as(usize, 1), adminRoleResults.len);
+    try std.testing.expectEqualStrings("admin", adminRoleResults[0].get("role").?.string);
+
+    // Create an index on the age field
+    try (try collection.sortIndex("age", .asc)).ensure(io, collection, .number);
+
+    // Find users with age 30
+    const age30Results = try (try collection.sortIndex("age", .asc)).findByValue(io, .{ .number = 30 }, null);
+    try std.testing.expectEqual(@as(usize, 2), age30Results.len);
+    for (age30Results) |age30Result| {
+        try std.testing.expectEqual(@as(f64, 30), age30Result.get("age").?.number);
+    }
+}
+
+test "should throw when inserting a record with a duplicate ID" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    var user = try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "John Doe", 30, "user");
+
+    try collection.insertOne(io, &user, null);
+
+    try std.testing.expectError(error.Thrown, collection.insertOne(io, &user, null));
+}
+
+test "flush should throw when collection is dirty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    var user = try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "Dirty", 30, "user");
+
+    try collection.insertOne(io, &user, null);
+
+    // flush without commit should throw because the collection is dirty
+    try std.testing.expectError(error.Thrown, collection.flush());
+}
+
+//
+// insertOne stores the record's fields apart from its id and stamps the time it was written, as
+// toInternal does. (No TypeScript counterpart: TypeScript tests read the record back through getOne.)
+//
+test "insertOne stores the fields apart from the id and stamps the write time" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    var user = try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "John Doe", 30, "user");
+
+    try collection.insertOne(io, &user, 1234);
+
+    const stored = (try getRecord(collection, "123e4567-e89b-12d3-a456-426614174000")).?;
+    try std.testing.expect(stored.fields.get("_id") == null);
+    try std.testing.expectEqualStrings("name", stored.fields.fields.items[0].key);
+    try std.testing.expectEqual(@as(f64, 1234), stored.metadata.get("timestamp").?.number);
 }

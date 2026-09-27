@@ -182,7 +182,7 @@ test "commands that are not ported are unknown commands, and empty command lines
     try std.testing.expect(std.mem.startsWith(u8, help.stdout, "Usage: psi "));
 
     try expectCommanderError(allocator, &.{"summary"}, "commander.unknownCommand", "error: unknown command 'summary'\n");
-    try expectCommanderError(allocator, &.{ "add", "--db", "x" }, "commander.unknownCommand", "error: unknown command 'add'\n");
+    try expectCommanderError(allocator, &.{ "check", "--db", "x" }, "commander.unknownCommand", "error: unknown command 'check'\n");
     try expectCommanderError(allocator, &.{ "--db", "x", "replicate" }, "commander.unknownOption", "error: unknown option '--db'\n");
     try expectCommanderError(allocator, &.{ "help", "replicate" }, "commander.unknownCommand", "error: unknown command 'help'\n(Did you mean rep?)\n");
     try expectCommanderError(allocator, &.{"replicate2"}, "commander.unknownCommand", "error: unknown command 'replicate2'\n(Did you mean replicate?)\n");
@@ -207,6 +207,9 @@ test "the command definitions match index.ts" {
     const program = try createProgram(allocator, &state);
     try std.testing.expectEqualStrings("psi", program.getName());
     try std.testing.expectEqual(@as(usize, 3), program.options.items.len);
+    const addDefinition = program.findCommand("a").?;
+    try std.testing.expectEqualStrings("add", addDefinition.getName());
+    try std.testing.expectEqual(@as(usize, 11), addDefinition.options.items.len);
     const replicateDefinition = program.findCommand("rep").?;
     try std.testing.expectEqualStrings("replicate", replicateDefinition.getName());
     try std.testing.expectEqual(@as(usize, 13), replicateDefinition.options.items.len);
@@ -220,6 +223,60 @@ test "the command definitions match index.ts" {
     try std.testing.expectEqualStrings("version", versionDefinition.getName());
     try std.testing.expectEqual(@as(usize, 0), versionDefinition.options.items.len);
     try std.testing.expectEqualStrings("Task timeout in milliseconds (default: 600000 = 10 minutes)", cli.timeoutOption.description);
+}
+
+test "add command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // The files are the variadic [files...] argument; --dry-run, --watch and --cleanup default to false (index.ts).
+    const plain = try parse(allocator, &.{ "add", "--db", "a", "x.jpg", "dir", "--yes" });
+    try std.testing.expect(plain.outcome == .add);
+    try std.testing.expectEqual(@as(usize, 2), plain.outcome.add.paths.len);
+    try std.testing.expectEqualStrings("x.jpg", plain.outcome.add.paths[0]);
+    try std.testing.expectEqualStrings("dir", plain.outcome.add.paths[1]);
+    try std.testing.expectEqualStrings("a", plain.outcome.add.options.base.db.?);
+    try std.testing.expectEqual(@as(?bool, true), plain.outcome.add.options.base.yes);
+    try std.testing.expectEqual(@as(?bool, false), plain.outcome.add.options.base.verbose);
+    try std.testing.expectEqual(@as(?bool, false), plain.outcome.add.options.dryRun);
+    try std.testing.expectEqual(@as(?bool, false), plain.outcome.add.options.watch);
+    try std.testing.expectEqual(@as(?bool, false), plain.outcome.add.options.cleanup);
+    try std.testing.expectEqual(@as(?bool, false), plain.state.notificationsQuiet);
+
+    // The alias, every option of the command, and no files.
+    const everything = try parse(allocator, &.{ "-q", "a", "-k", "key1", "-v", "--tools", "--cwd", "/tmp", "--session-id", "s1", "--dry-run", "--workers", "3", "--watch", "--cleanup" });
+    try std.testing.expect(everything.outcome == .add);
+    try std.testing.expectEqual(@as(usize, 0), everything.outcome.add.paths.len);
+    try std.testing.expectEqual(@as(?[]const u8, null), everything.outcome.add.options.base.db);
+    try std.testing.expectEqualStrings("key1", everything.outcome.add.options.base.key.?);
+    try std.testing.expectEqual(@as(?bool, true), everything.outcome.add.options.base.verbose);
+    try std.testing.expectEqual(@as(?bool, true), everything.outcome.add.options.base.tools);
+    try std.testing.expectEqual(@as(?bool, false), everything.outcome.add.options.base.yes);
+    try std.testing.expectEqualStrings("/tmp", everything.outcome.add.options.base.cwd.?);
+    try std.testing.expectEqualStrings("s1", everything.outcome.add.options.base.sessionId.?);
+    try std.testing.expectEqualStrings("3", everything.outcome.add.options.base.workers.?);
+    try std.testing.expectEqual(@as(?bool, true), everything.outcome.add.options.dryRun);
+    try std.testing.expectEqual(@as(?bool, true), everything.outcome.add.options.watch);
+    try std.testing.expectEqual(@as(?bool, true), everything.outcome.add.options.cleanup);
+    try std.testing.expectEqual(@as(?bool, true), everything.state.notificationsQuiet);
+
+    // Each flag sets only its own option.
+    const cleanupOnly = try parse(allocator, &.{ "add", "--cleanup" });
+    try std.testing.expectEqual(@as(?bool, true), cleanupOnly.outcome.add.options.cleanup);
+    try std.testing.expectEqual(@as(?bool, false), cleanupOnly.outcome.add.options.watch);
+    try std.testing.expectEqual(@as(?bool, false), cleanupOnly.outcome.add.options.dryRun);
+    const watchOnly = try parse(allocator, &.{ "add", "--watch" });
+    try std.testing.expectEqual(@as(?bool, false), watchOnly.outcome.add.options.cleanup);
+    try std.testing.expectEqual(@as(?bool, true), watchOnly.outcome.add.options.watch);
+    try std.testing.expectEqual(@as(?bool, false), watchOnly.outcome.add.options.dryRun);
+
+    // add has no --timeout option, and --help shows the help of the command.
+    try expectCommanderError(allocator, &.{ "add", "--timeout", "5" }, "commander.unknownOption", "error: unknown option '--timeout'\n");
+    const help = try parse(allocator, &.{ "add", "--help" });
+    try std.testing.expect(help.outcome == .failure);
+    try std.testing.expectEqualStrings("commander.helpDisplayed", help.outcome.failure.code);
+    try std.testing.expect(std.mem.startsWith(u8, help.stdout, "Usage: psi add|a [options] [files...]\n\nAdds files and directories to the media file database"));
 }
 
 test "handleError reports fatal errors in red without the bug report hint" {

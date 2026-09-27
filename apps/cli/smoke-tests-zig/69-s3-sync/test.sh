@@ -148,7 +148,7 @@ test_s3_sync() {
     # --- 2. A file added locally syncs up to S3. ---
 
     invoke_command "Add a WEBP to the local database" \
-        "$(get_cli_command) add --db $local_db $TEST_FILES_DIR/test.webp --yes" 0
+        "$(get_zig_cli_command) add --db $local_db $TEST_FILES_DIR/test.webp --yes" 0
     expect_hashes_diverged "$local_db" "$s3_db" "The local add moved the local root hash away from S3's"
 
     local sync_up_output
@@ -164,7 +164,7 @@ test_s3_sync() {
 
     local add_on_s3_output
     invoke_command "Add a JPEG directly to the S3 database" \
-        "$(get_cli_command) add --db \"$s3_db\" $TEST_FILES_DIR/multiple-files/test-1.jpeg --verbose --yes" 0 "add_on_s3_output"
+        "$(get_zig_cli_command) add --db \"$s3_db\" $TEST_FILES_DIR/multiple-files/test-1.jpeg --verbose --yes" 0 "add_on_s3_output"
     local s3_added_asset_id
     s3_added_asset_id="$(asset_id_from_add_output "$add_on_s3_output")"
     if [ -z "$s3_added_asset_id" ]; then

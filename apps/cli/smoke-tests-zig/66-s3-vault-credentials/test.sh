@@ -78,7 +78,7 @@ test_s3_vault_credentials() {
     unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_ENDPOINT AWS_REGION
 
     invoke_command "Add an image to the database by name" \
-        "$(get_cli_command) add $TEST_FILES_DIR/test.jpg --db $DB_NAME --yes" 0
+        "$(get_zig_cli_command) add $TEST_FILES_DIR/test.jpg --db $DB_NAME --yes" 0
 
     local summary_output
     invoke_command "Summarise the database by name" "$(get_cli_command) summary --db $DB_NAME --yes" 0 "summary_output"

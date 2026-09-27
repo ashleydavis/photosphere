@@ -79,9 +79,40 @@ pub const BufferSet = struct {
         return self;
     }
 
-    // Not ported: has (not reached by psi replicate or psi verify)
+    //
+    // Returns true when a buffer with the same content is in the set.
+    //
+    pub fn has(self: *const BufferSet, buffer: []const u8) !bool {
+        const hash = try _hash(buffer);
+        const bucket = self._map.get(hash) orelse {
+            return false;
+        };
 
-    // Not ported: delete (not reached by psi replicate or psi verify)
+        return findBufferIndex(bucket.items, buffer) != null;
+    }
+
+    //
+    // Removes the buffer with the same content from the set. Returns false when there is none.
+    //
+    pub fn delete(self: *BufferSet, buffer: []const u8) !bool {
+        const hash = try _hash(buffer);
+        const bucket = self._map.getPtr(hash) orelse {
+            return false;
+        };
+
+        const index = findBufferIndex(bucket.items, buffer) orelse {
+            return false;
+        };
+
+        _ = bucket.orderedRemove(index);
+
+        // Remove bucket if empty
+        if (bucket.items.len == 0) {
+            _ = self._map.orderedRemove(hash);
+        }
+
+        return true;
+    }
 
     // Not ported: clear (not reached by psi replicate or psi verify)
 

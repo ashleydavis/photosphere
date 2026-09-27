@@ -1111,3 +1111,20 @@ test "readFileHead reads the first bytes of a file, or the whole file when it is
     try std.testing.expectEqualStrings("", try fs.readFileHead(allocator, io, filePath, 0));
     try std.testing.expectError(error.FileNotFound, fs.readFileHead(allocator, io, "no-such-file.txt", 4));
 }
+
+test "mathRandom returns numbers in [0, 1) that vary like Math.random()" {
+    var smallest: f64 = 1;
+    var largest: f64 = 0;
+    var count: usize = 0;
+    while (count < 1000) : (count += 1) {
+        const value = fs.mathRandom(std.testing.io);
+        try std.testing.expect(value >= 0);
+        try std.testing.expect(value < 1);
+        smallest = @min(smallest, value);
+        largest = @max(largest, value);
+    }
+
+    // A thousand uniform draws all landing in one tenth of the range would mean the bits are not being spread.
+    try std.testing.expect(smallest < 0.1);
+    try std.testing.expect(largest > 0.9);
+}

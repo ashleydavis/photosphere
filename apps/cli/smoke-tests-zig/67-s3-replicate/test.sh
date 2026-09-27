@@ -105,7 +105,7 @@ test_s3_replicate() {
     # test.webp is the one standard fixture create_db_with_5_files does not add, so this genuinely
     # adds a sixth file rather than being rejected as a duplicate.
     invoke_command "Add one more file to the source" \
-        "$(get_cli_command) add --db $source_db $TEST_FILES_DIR/test.webp --yes" 0
+        "$(get_zig_cli_command) add --db $source_db $TEST_FILES_DIR/test.webp --yes" 0
 
     local updated_hash updated_summary updated_file_count
     updated_hash="$(read_root_hash "$source_db")"

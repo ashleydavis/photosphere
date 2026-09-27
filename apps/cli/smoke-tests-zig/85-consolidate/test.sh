@@ -16,7 +16,7 @@ NEW_LOCAL="$TEST_DIR/new-local"
 NEW_REMOTE="$TEST_DIR/new-remote"
 
 invoke_command "Initialize a database" "$(get_zig_cli_command) init --db $NEW_LOCAL --yes"
-invoke_command "Add a photo" "$CLI_COMMAND add --db $NEW_LOCAL $TEST_FILES_DIR/test.png --yes"
+invoke_command "Add a photo" "$(get_zig_cli_command) add --db $NEW_LOCAL $TEST_FILES_DIR/test.png --yes"
 
 invoke_command "Consolidate into a remote that does not exist yet" "$CLI_COMMAND consolidate --db $NEW_LOCAL $NEW_REMOTE --yes"
 
@@ -44,10 +44,10 @@ invoke_command "Initialize an unrelated remote database" "$(get_zig_cli_command)
 
 # The same photo goes into both, so consolidation has something it must not duplicate. Each of them
 # also has a photo of its own.
-invoke_command "Add the shared photo locally" "$CLI_COMMAND add --db $LOCAL_DB $TEST_FILES_DIR/test.png --yes"
-invoke_command "Add the shared photo remotely" "$CLI_COMMAND add --db $REMOTE_DB $TEST_FILES_DIR/test.png --yes"
-invoke_command "Add a local-only photo" "$CLI_COMMAND add --db $LOCAL_DB $TEST_FILES_DIR/test.jpg --yes"
-invoke_command "Add a remote-only photo" "$CLI_COMMAND add --db $REMOTE_DB $TEST_FILES_DIR/test.webp --yes"
+invoke_command "Add the shared photo locally" "$(get_zig_cli_command) add --db $LOCAL_DB $TEST_FILES_DIR/test.png --yes"
+invoke_command "Add the shared photo remotely" "$(get_zig_cli_command) add --db $REMOTE_DB $TEST_FILES_DIR/test.png --yes"
+invoke_command "Add a local-only photo" "$(get_zig_cli_command) add --db $LOCAL_DB $TEST_FILES_DIR/test.jpg --yes"
+invoke_command "Add a remote-only photo" "$(get_zig_cli_command) add --db $REMOTE_DB $TEST_FILES_DIR/test.webp --yes"
 
 # Sync refuses these two, and must keep refusing them until they have been consolidated.
 invoke_command "Sync refuses two unrelated databases" "$CLI_COMMAND sync --db $LOCAL_DB --dest $REMOTE_DB --yes" 1

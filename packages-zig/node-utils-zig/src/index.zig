@@ -8,3 +8,4 @@ pub const path = @import("lib/path.zig");
 pub const toml = @import("lib/toml.zig");
 pub const process_env = @import("lib/process-env.zig");
 pub const yaml = @import("lib/yaml.zig");
+pub const photo_folders = @import("lib/photo-folders.zig");

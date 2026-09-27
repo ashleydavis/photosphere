@@ -1,0 +1,45 @@
+const std = @import("std");
+const node_utils = @import("node-utils-zig");
+const path = node_utils.path;
+const getCacheDir = node_utils.fs.getCacheDir;
+const Sha256 = std.crypto.hash.sha2.Sha256;
+
+//
+// Where this machine keeps what it has worked out about one database.
+//
+// Everything under here is local to this machine and belongs to one database: the hash cache today,
+// and whatever else later needs to be remembered about a database without being part of it. It is
+// never uploaded, never synced and never replicated, and losing it costs only the time to work the
+// contents out again.
+//
+// It is deliberately not inside the database. A database can be an S3 bucket with no local directory
+// at all, and a database on shared storage is opened by several machines at once: a file kept there
+// would be read and written by all of them with no lock and no merge, so the last writer would erase
+// what the others had learnt. What each machine knows is also useless to the others, because it is
+// keyed by that machine's own file paths and that device's own photo library ids.
+//
+
+//
+// The directory this machine keeps its own record of one database in.
+//
+// The database path is hashed rather than used directly: it can be a Windows path, a URL-ish
+// "s3:bucket:/path", or anything else the storage layer accepts, none of which is safe to paste into
+// a directory name. The hash is stable for a given path, which is all that is needed, and the
+// commands that report on these directories print the whole path so nobody has to decode it.
+//
+pub fn getDatabaseCacheDir(allocator: std.mem.Allocator, databasePath: []const u8) ![]const u8 {
+    var digest: [Sha256.digest_length]u8 = undefined;
+    Sha256.hash(databasePath, &digest, .{});
+    const databaseKey = std.fmt.bytesToHex(digest, .lower)[0..16];
+    return path.join(allocator, &.{ try getCacheDir(allocator), databaseKey });
+}
+
+//
+// Where this machine keeps its record of what it imported into one database.
+//
+// This is the only place the path is worked out. Nothing else derives it, in TypeScript or in a
+// smoke test's shell, because a second derivation goes stale silently the moment this one changes.
+//
+pub fn getImportRecordPath(allocator: std.mem.Allocator, databasePath: []const u8) ![]const u8 {
+    return path.join(allocator, &.{ try getDatabaseCacheDir(allocator, databasePath), "imports.dat" });
+}

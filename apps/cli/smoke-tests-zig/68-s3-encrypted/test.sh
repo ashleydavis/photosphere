@@ -62,7 +62,7 @@ test_s3_encrypted() {
         "$(get_zig_cli_command) init --db \"$s3_db\" --key $KEY_NAME --generate-key --yes" 0
 
     invoke_command "Add a JPG to the encrypted S3 database" \
-        "$(get_cli_command) add $TEST_FILES_DIR/test.jpg --db \"$s3_db\" --key $KEY_NAME --yes" 0
+        "$(get_zig_cli_command) add $TEST_FILES_DIR/test.jpg --db \"$s3_db\" --key $KEY_NAME --yes" 0
 
     # --- The bytes in the bucket must not be the source file's bytes. ---
 
@@ -88,7 +88,7 @@ test_s3_encrypted() {
     # --- The database still reads back correctly through the encryption layer. ---
 
     invoke_command "Add an MP4 to the encrypted S3 database" \
-        "$(get_cli_command) add $TEST_FILES_DIR/multiple-files/test.mp4 --db \"$s3_db\" --key $KEY_NAME --yes" 0
+        "$(get_zig_cli_command) add $TEST_FILES_DIR/multiple-files/test.mp4 --db \"$s3_db\" --key $KEY_NAME --yes" 0
 
     local list_output
     invoke_command "List the encrypted S3 database" "$(get_cli_command) list --db \"$s3_db\" --key $KEY_NAME --yes" 0 "list_output"

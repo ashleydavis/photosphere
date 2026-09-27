@@ -192,3 +192,17 @@ test "still breaks a lock that has aged past the timeout and takes it" {
     try std.testing.expectEqual(true, try storage.acquireWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-b"));
     try std.testing.expect(sender.wasSent("DeleteObjectCommand"));
 }
+
+//
+// readableLength has no test of its own in TypeScript; what it says of an S3 object is pinned here.
+//
+test "readableLength is the length in the info, because an object hands out what it holds" {
+    var storage = CloudStorage.init(std.testing.io, "s3:", null);
+    defer storage.s3.deinit();
+
+    try std.testing.expectEqual(@as(?u64, 1234), storage.storage().readableLength(.{
+        .contentType = null,
+        .length = 1234,
+        .lastModified = 0,
+    }));
+}

@@ -16,6 +16,7 @@ const IMerkleTree = merkle_tree_zig.merkle_tree.IMerkleTree;
 const BsonCollection = collection_zig.BsonCollection;
 const IBsonCollection = collection_zig.IBsonCollection;
 const MerkleRef = merkle_tree_ref.MerkleRef;
+const errors = utils.errors;
 
 //
 // (Zig: IBsonDatabase has a single implementation, so callers use *BsonDatabase directly.)
@@ -167,7 +168,24 @@ pub const BsonDatabase = struct {
         self.clearDirty();
     }
 
-    // Not ported: flush (psi replicate and psi verify never flush a database).
+    //
+    // Drops every cached collection's shards, sort indexes and merkle trees, and the database merkle tree, so the
+    // next access reloads them from storage. Throws when the database has uncommitted changes.
+    //
+    pub fn flush(self: *BsonDatabase) !void {
+        if (self.dirty) {
+            return errors.throwError("Cannot flush: database has uncommitted changes. Call commit() first.", .{});
+        }
+
+        for (self._collections.values()) |coll| {
+            try coll.flush();
+        }
+
+        if (self._merkleRef) |merkleRef| {
+            try merkleRef.flush();
+        }
+        self._merkleRef = null;
+    }
 
     //
     // Returns the database-level merkle ref, creating it on first use.

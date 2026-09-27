@@ -541,7 +541,7 @@ test_replicate_to_encrypted() {
         return
     }
 
-    invoke_command "Add PNG file to plain database" "$cli add --db \"$src_dir\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to plain database" "$(get_zig_cli_command) add --db \"$src_dir\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -594,7 +594,7 @@ test_replicate_from_encrypted() {
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -651,7 +651,7 @@ test_encrypt_plain() {
         return
     }
 
-    invoke_command "Add PNG file to plain database" "$cli add --db \"$plain_dir\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to plain database" "$(get_zig_cli_command) add --db \"$plain_dir\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -703,7 +703,7 @@ test_encrypt_generate_key_file() {
         return
     }
 
-    invoke_command "Add PNG file to plain database" "$cli add --db \"$plain_dir\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to plain database" "$(get_zig_cli_command) add --db \"$plain_dir\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -746,7 +746,7 @@ test_encrypt_reencrypt() {
         return
     }
 
-    invoke_command "Add PNG file with key1" "$cli add --db \"$enc1_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file with key1" "$(get_zig_cli_command) add --db \"$enc1_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -810,7 +810,7 @@ test_encrypt_old_to_new_format() {
         return
     }
 
-    invoke_command "Add PNG file to simulated old-format database" "$cli add --db \"$old_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to simulated old-format database" "$(get_zig_cli_command) add --db \"$old_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -856,7 +856,7 @@ test_decrypt_encrypted() {
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -913,7 +913,7 @@ test_add_encrypted_file() {
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -951,7 +951,7 @@ test_export_encrypted_file() {
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1009,7 +1009,7 @@ test_verify_encrypted_db() {
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1050,7 +1050,7 @@ test_delete_encrypted_file() {
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1097,7 +1097,7 @@ test_list_encrypted_files() {
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1161,7 +1161,7 @@ test_replicate_decrypted_from_encrypted() {
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1229,13 +1229,13 @@ test_export_with_multiple_keys() {
     }
 
     # Add first file with key1 (encrypted with key1).
-    invoke_command "Add first PNG with key1" "$cli add --db \"$db_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add first PNG with key1" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
 
     # Add second file with key2,key1 so key2 is write key (encrypted with key2).
-    invoke_command "Add second JPG with key2" "$cli add --db \"$db_dir\" --key \"$key2_name,$key1_name\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+    invoke_command "Add second JPG with key2" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key2_name,$key1_name\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1321,12 +1321,12 @@ test_multi_key_encrypt() {
         return
     }
 
-    invoke_command "Add PNG and JPG to DB1 (key1)" "$cli add --db \"$db1_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+    invoke_command "Add PNG and JPG to DB1 (key1)" "$(get_zig_cli_command) add --db \"$db1_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG and JPG to DB2 (key2)" "$cli add --db \"$db2_dir\" --key \"$key2_name\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+    invoke_command "Add PNG and JPG to DB2 (key2)" "$(get_zig_cli_command) add --db \"$db2_dir\" --key \"$key2_name\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1396,12 +1396,12 @@ test_partial_encrypt() {
         return
     }
 
-    invoke_command "Add PNG (encrypted)" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add PNG (encrypted)" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add JPG (encrypted)" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+    invoke_command "Add JPG (encrypted)" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
         test_failed "$name"
         return
     }

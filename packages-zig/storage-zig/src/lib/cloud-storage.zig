@@ -406,7 +406,15 @@ pub const CloudStorage = struct {
         return response.Contents != null and response.Contents.?.len > 0;
     }
 
-    // Not ported: readableLength, storedHash, writeStreamHashed (not reached by psi replicate or psi verify).
+    //
+    // What an object hands out is what it holds, so the length in the info is the answer.
+    //
+    pub fn readableLength(self: *CloudStorage, fileInfo: IFileInfo) ?u64 {
+        _ = self;
+        return fileInfo.length;
+    }
+
+    // Not ported: storedHash, writeStreamHashed (not reached by psi add, psi replicate or psi verify).
 
     //
     // Gets info about an asset.

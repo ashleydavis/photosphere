@@ -1227,3 +1227,80 @@ test "TaskQueue.init throws when no backend is registered" {
     setQueueBackend(null);
     try std.testing.expectError(error.Thrown, TaskQueue.init(arena.allocator(), std.testing.io, uuid_generator.uuidGenerator(), "x"));
 }
+
+//
+// Records the type of every message it receives (the callback of onAnyTaskMessage).
+//
+const MessageTypeRecorder = struct {
+    // Allocator for the copies.
+    allocator: std.mem.Allocator,
+
+    // The type of each message received, in order.
+    messageTypes: std.ArrayList([]const u8),
+
+    //
+    // The message callback.
+    //
+    fn record(context: ?*anyopaque, data: types.ITaskMessageData) anyerror!void {
+        const self: *MessageTypeRecorder = @ptrCast(@alignCast(context.?));
+        try self.messageTypes.append(self.allocator, try self.allocator.dupe(u8, data.message.object.get("type").?.string));
+    }
+};
+
+//
+// onAnyTaskMessage has no test of its own in TypeScript; it is what addPaths counts an import's
+// progress with, so what it does is pinned here.
+//
+test "onAnyTaskMessage delivers every message of a tracked task, whatever its type, in order" {
+    var fixture: Fixture = undefined;
+    try fixture.init(2);
+    defer fixture.deinit();
+    try registerHandler("progress-task", progressHandler);
+
+    var recorder: MessageTypeRecorder = .{
+        .allocator = fixture.allocator(),
+        .messageTypes = .empty,
+    };
+    const unsubscribe = try fixture.queue.onAnyTaskMessage(.{
+        .context = &recorder,
+        .function = MessageTypeRecorder.record,
+    });
+
+    const taskId = try fixture.queue.addTask("progress-task", .null, null, null);
+    _ = try fixture.queue.awaitTask(taskId);
+
+    try std.testing.expectEqual(@as(usize, 3), recorder.messageTypes.items.len);
+    try std.testing.expectEqualStrings("replicate-progress", recorder.messageTypes.items[0]);
+    try std.testing.expectEqualStrings("other", recorder.messageTypes.items[1]);
+    try std.testing.expectEqualStrings("replicate-progress", recorder.messageTypes.items[2]);
+
+    // After unsubscribing no more messages are delivered.
+    unsubscribe.call();
+    const secondTaskId = try fixture.queue.addTask("progress-task", .null, null, null);
+    _ = try fixture.queue.awaitTask(secondTaskId);
+    try std.testing.expectEqual(@as(usize, 3), recorder.messageTypes.items.len);
+}
+
+test "shutdown: onAnyTaskMessage callbacks receive nothing after shutdown" {
+    var fixture: Fixture = undefined;
+    try fixture.init(2);
+    defer fixture.deinit();
+    try registerHandler("progress-task", progressHandler);
+
+    var recorder: MessageTypeRecorder = .{
+        .allocator = fixture.allocator(),
+        .messageTypes = .empty,
+    };
+    _ = try fixture.queue.onAnyTaskMessage(.{
+        .context = &recorder,
+        .function = MessageTypeRecorder.record,
+    });
+
+    fixture.queue.shutdown();
+
+    _ = try fixture.queue.addTask("progress-task", .null, null, null);
+    sleepMs(100);
+    try fixture.queue.awaitAllTasks();
+
+    try std.testing.expectEqual(@as(usize, 0), recorder.messageTypes.items.len);
+}

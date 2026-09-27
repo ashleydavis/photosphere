@@ -1,8 +1,8 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `init` (alias `i`), `replicate` (alias `rep`), `verify` (alias `ver`) and `version` commands and the
-// `--version` option are ported; the other commands are not registered yet, so commander reports them as
-// unknown commands.
+// Only the `add` (alias `a`), `init` (alias `i`), `replicate` (alias `rep`), `verify` (alias `ver`) and `version`
+// commands and the `--version` option are ported; the other commands are not registered yet, so commander reports
+// them as unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -34,6 +34,7 @@ pub const storage_helper = @import("src/lib/storage-helper.zig");
 pub const init_cmd = @import("src/lib/init-cmd.zig");
 pub const worker_pool = @import("src/lib/worker-pool.zig");
 pub const worker_log_bun = @import("src/lib/worker-log-bun.zig");
+pub const add = @import("src/cmd/add.zig");
 pub const replicate = @import("src/cmd/replicate.zig");
 pub const init_command = @import("src/cmd/init.zig");
 pub const verify = @import("src/cmd/verify.zig");
@@ -48,6 +49,8 @@ const OptionValue = commander.OptionValue;
 const OptionValues = commander.OptionValues;
 const ArgumentValue = commander.ArgumentValue;
 const CommanderError = commander.CommanderError;
+const IAddCommandOptions = add.IAddCommandOptions;
+const addCommand = add.addCommand;
 const IReplicateCommandOptions = replicate.IReplicateCommandOptions;
 const IVerifyCommandOptions = verify.IVerifyCommandOptions;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
@@ -133,8 +136,12 @@ pub const databaseIdOption: IOptionSpec = .{
     .flags = "--database-id <id>",
     .description = "Create the database with this identity instead of a new one, so it is related to the database that already has that identity and the two can sync. Get it from `psi database-id`.",
 };
-// Not ported: sourceDbOption, recordsOption, allOption, fullOption, maxOption, dryRunOption (not used by the
-// ported commands).
+pub const dryRunOption: IOptionSpec = .{
+    .flags = "--dry-run",
+    .description = "Run without making any database changes (merkle tree and metadata updates are skipped)",
+    .defaultValue = .{ .boolean = false },
+};
+// Not ported: sourceDbOption, recordsOption, allOption, fullOption, maxOption (not used by the ported commands).
 
 //
 // Adds an option tuple to a command (`.option(...tuple)`).
@@ -144,12 +151,26 @@ fn optionFrom(command: *Command, spec: IOptionSpec) *Command {
 }
 
 //
+// What the add command runs with: its files and its options (TypeScript: the arguments commander passes the action).
+//
+pub const IAddParsed = struct {
+    // The media files (or directories) to add.
+    paths: []const []const u8,
+
+    // The options of the command.
+    options: IAddCommandOptions,
+};
+
+//
 // The command a parsed command line runs.
 //
 pub const ParseOutcome = union(enum) {
 
     // Commander stopped the parse: it has written the help or the error.
     failure: CommanderError,
+
+    // Run the add command with these paths and options.
+    add: IAddParsed,
 
     // Run the replicate command with these options.
     replicate: IReplicateCommandOptions,
@@ -252,6 +273,27 @@ fn baseOptions(values: *const OptionValues) IBaseCommandOptions {
 }
 
 //
+// The action of the add command (`initContext(addCommand)`): `run` calls initContext and the command.
+//
+fn addAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+
+    // [files...] is variadic, so commander always passes it as a list.
+    const paths = args[0].list;
+    state.outcome = .{
+        .add = .{
+            .paths = paths,
+            .options = .{
+                .base = baseOptions(options),
+                .dryRun = flagValue(options, "dryRun"),
+                .watch = flagValue(options, "watch"),
+                .cleanup = flagValue(options, "cleanup"),
+            },
+        },
+    };
+}
+
+//
 // The action of the init command (`initContext(initCommand)`): `run` calls initContext and the command.
 //
 fn initAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
@@ -328,7 +370,27 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
 
     _ = program.hook(.preAction, state, preActionHook);
 
-    // Not ported: the commands before init.
+    const addDefinition = program
+        .command("add", .{})
+        .alias("a")
+        .description("Adds files and directories to the media file database, once or by watching for more.")
+        .argument("[files...]", "The media files (or directories) to add. With --watch, the folders to watch: defaults to this operating system's photo folders.");
+    _ = optionFrom(addDefinition, dbOption);
+    _ = optionFrom(addDefinition, keyOption);
+    _ = optionFrom(addDefinition, verboseOption);
+    _ = optionFrom(addDefinition, toolsOption);
+    _ = optionFrom(addDefinition, yesOption);
+    _ = optionFrom(addDefinition, cwdOption);
+    _ = optionFrom(addDefinition, sessionIdOption);
+    _ = optionFrom(addDefinition, dryRunOption);
+    _ = optionFrom(addDefinition, workersOption);
+    _ = addDefinition
+        .option("--watch", "Keep watching the named folders and import what turns up, rather than importing them once.", .{ .boolean = false })
+        .option("--cleanup", "Delete the source files the database is confirmed to hold, once the import has finished.", .{ .boolean = false })
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "add"))
+        .action(state, addAction);
+
+    // Not ported: the commands between add and init.
 
     const initDefinition = program
         .command("init", .{})
@@ -462,6 +524,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
                 exit(io, 0);
             }
             return utils.errors.throwError("{s}", .{failure.message});
+        },
+        .add => |parsed| {
+            var options = parsed.options;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try addCommand(allocator, io, context, parsed.paths, &options);
         },
         .replicate => |parsed| {
             var options = parsed;

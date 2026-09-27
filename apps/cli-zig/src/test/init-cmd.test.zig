@@ -640,6 +640,25 @@ test "resolveSecretsFromEntry fetches S3 credentials only for s3 paths" {
     try std.testing.expect(local.encryptionKeyName == null);
 }
 
+test "resolveGeocodingApiKey reads the named vault secret, or else the trimmed GOOGLE_API_KEY" {
+    var environment: TestEnvironment = undefined;
+    try environment.init();
+    defer environment.deinit();
+    const allocator = environment.arena.allocator();
+    try environment.storeSecret("geo", "api-key", "vault-key");
+    try environment.environ_map.put("GOOGLE_API_KEY", "  env-key\n");
+
+    // A key name reads the vault and never the environment.
+    try std.testing.expectEqualStrings("vault-key", (try init_cmd.resolveGeocodingApiKey(allocator, std.testing.io, "geo")).?);
+    try std.testing.expect((try init_cmd.resolveGeocodingApiKey(allocator, std.testing.io, "missing")) == null);
+
+    // No key name (or an empty one, which is falsy) reads the environment.
+    try std.testing.expectEqualStrings("env-key", (try init_cmd.resolveGeocodingApiKey(allocator, std.testing.io, null)).?);
+    try std.testing.expectEqualStrings("env-key", (try init_cmd.resolveGeocodingApiKey(allocator, std.testing.io, "")).?);
+    _ = environment.environ_map.swapRemove("GOOGLE_API_KEY");
+    try std.testing.expect((try init_cmd.resolveGeocodingApiKey(allocator, std.testing.io, null)) == null);
+}
+
 test "loadDatabase loads a database by path or registered name" {
     var environment: TestEnvironment = undefined;
     try environment.init();

@@ -98,6 +98,17 @@ const IMessageCallbackRegistration = struct {
 };
 
 //
+// A callback for every task message, with the key that identifies it for unsubscribing.
+//
+const IAnyMessageCallbackRegistration = struct {
+    // Identifies the registration.
+    key: usize,
+
+    // The callback.
+    callback: TaskMessageCallback,
+};
+
+//
 // Generic task queue implementation with an abstraction for workers.
 //
 // Zig threading model: the backend reports completions and messages from any thread. They are queued
@@ -143,7 +154,10 @@ pub const TaskQueue = struct {
     //
     messageCallbacks: std.ArrayList(IMessageCallbackRegistration),
 
-    // Not ported: anyMessageCallbacks (TaskQueue.onAnyTaskMessage is not used by psi replicate or psi verify).
+    //
+    // Callbacks invoked for every message emitted by a tracked task (regardless of type).
+    //
+    anyMessageCallbacks: std.ArrayList(IAnyMessageCallbackRegistration),
 
     //
     // Count of tasks that have been added but not yet completed.
@@ -224,6 +238,7 @@ pub const TaskQueue = struct {
             .backend = backend,
             .completionCallbacks = .empty,
             .messageCallbacks = .empty,
+            .anyMessageCallbacks = .empty,
             .numTasksInFlight = 0,
             .trackedTaskIds = .empty,
             .awaitAllResolvers = .empty,
@@ -267,6 +282,7 @@ pub const TaskQueue = struct {
         }
         self.completionCallbacks.deinit(transit_allocator);
         self.messageCallbacks.deinit(transit_allocator);
+        self.anyMessageCallbacks.deinit(transit_allocator);
         self.trackedTaskIds.deinit(transit_allocator);
         self.awaitAllResolvers.deinit(transit_allocator);
         self.awaitTaskResolvers.deinit(transit_allocator);
@@ -450,7 +466,41 @@ pub const TaskQueue = struct {
         }
     }
 
-    // Not ported: onAnyTaskMessage (not used by psi replicate or psi verify).
+    //
+    // Registers a callback that will be called for every message sent by any tracked task,
+    // regardless of the message type.
+    // Returns an unsubscribe function to remove the callback.
+    //
+    pub fn onAnyTaskMessage(self: *TaskQueue, callback: TaskMessageCallback) !UnsubscribeFn {
+        self.lock();
+        defer self.unlock();
+        const key = self.nextCallbackKey;
+        self.nextCallbackKey += 1;
+        try self.anyMessageCallbacks.append(transit_allocator, .{
+            .key = key,
+            .callback = callback,
+        });
+        return .{
+            .context = self,
+            .key = key,
+            .function = unsubscribeAnyMessageCallback,
+        };
+    }
+
+    //
+    // Removes a callback registered with onAnyTaskMessage (the function onAnyTaskMessage returned).
+    //
+    fn unsubscribeAnyMessageCallback(context: ?*anyopaque, key: usize) void {
+        const self: *TaskQueue = @ptrCast(@alignCast(context.?));
+        self.lock();
+        defer self.unlock();
+        for (self.anyMessageCallbacks.items, 0..) |registration, index| {
+            if (registration.key == key) {
+                _ = self.anyMessageCallbacks.orderedRemove(index);
+                return;
+            }
+        }
+    }
 
     //
     // Returns when all currently in-flight tasks have completed, running the queue's callbacks
@@ -640,7 +690,21 @@ pub const TaskQueue = struct {
             };
         }
 
-        // Not ported: anyMessageCallbacks (TaskQueue.onAnyTaskMessage is not used by psi replicate or psi verify).
+        self.lock();
+        const anyCallbacks = scratchAllocator.dupe(IAnyMessageCallbackRegistration, self.anyMessageCallbacks.items) catch |err| {
+            self.unlock();
+            return err;
+        };
+        self.unlock();
+
+        for (anyCallbacks) |registration| {
+            registration.callback.call(.{
+                .taskId = taskId,
+                .message = message,
+            }) catch |err| {
+                log.exception("Error in any task message callback", err);
+            };
+        }
     }
 
     //
@@ -675,6 +739,7 @@ pub const TaskQueue = struct {
             transit_allocator.free(registration.entry.messageType);
         }
         self.messageCallbacks.clearRetainingCapacity();
+        self.anyMessageCallbacks.clearRetainingCapacity();
         self.completionCallbacks.clearRetainingCapacity();
 
         for (self.pendingEvents.items[self.pendingEventsHead..]) |event| {

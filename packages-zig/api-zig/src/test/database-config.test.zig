@@ -57,7 +57,16 @@ const MemoryStorage = struct {
         .checkWriteLock = checkWriteLock,
         .acquireWriteLock = acquireWriteLock,
         .releaseWriteLock = releaseWriteLock,
+        .readableLength = readableLength,
     };
+
+    //
+    // Hands out what it holds, so the length in the info.
+    //
+    fn readableLength(pointer: *anyopaque, fileInfo: IFileInfo) ?u64 {
+        _ = pointer;
+        return fileInfo.length;
+    }
 
     //
     // Not used by the tests.

@@ -1,6 +1,7 @@
 const std = @import("std");
 const storage_zig = @import("storage-zig");
 const utils = @import("utils-zig");
+const encryption = @import("encryption-zig");
 const RecordingStorage = @import("recording-storage.zig").RecordingStorage;
 
 const StoragePrefixWrapper = storage_zig.storage_prefix_wrapper.StoragePrefixWrapper;
@@ -84,4 +85,36 @@ test "a prefix that ends with a colon is concatenated with the path" {
     var wrapper = try StoragePrefixWrapper.init(allocator, recording.storage(), "fs:");
     _ = try wrapper.fileExists(allocator, std.testing.io, "/some//path");
     try std.testing.expectEqualStrings("fileExists fs:/some//path", recording.calls.items[0]);
+}
+
+//
+// readableLength has no test of its own in TypeScript; that the wrapper asks the storage underneath is
+// pinned here, with an encrypted storage underneath because it is the one store that answers differently
+// from the length in the info.
+//
+test "readableLength asks the storage underneath" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var recording = RecordingStorage.init(allocator);
+    const fileInfo: storage_zig.storage.IFileInfo = .{
+        .contentType = null,
+        .length = 1234,
+        .lastModified = 0,
+    };
+
+    var plainWrapper = try StoragePrefixWrapper.init(allocator, recording.storage(), "/db");
+    try std.testing.expectEqual(@as(?u64, 1234), plainWrapper.storage().readableLength(fileInfo));
+
+    const io = std.testing.io;
+    const cwd = std.Io.Dir.cwd();
+    const privateKeyPem = try cwd.readFileAlloc(io, "../encryption-zig/src/test/fixtures/ts-private.pem", allocator, .unlimited);
+    const publicKeyPem = try cwd.readFileAlloc(io, "../encryption-zig/src/test/fixtures/ts-public.pem", allocator, .unlimited);
+    const loaded = try encryption.key_utils.loadEncryptionKeysFromPem(allocator, &.{.{
+        .privateKeyPem = privateKeyPem,
+        .publicKeyPem = publicKeyPem,
+    }});
+    var encryptedStorage = storage_zig.encrypted_storage.EncryptedStorage.init(recording.storage().location, recording.storage(), loaded.options.decryptionKeyMap.?, loaded.options.encryptionPublicKey.?);
+    var encryptedWrapper = try StoragePrefixWrapper.init(allocator, encryptedStorage.storage(), "/db");
+    try std.testing.expectEqual(@as(?u64, null), encryptedWrapper.storage().readableLength(fileInfo));
 }

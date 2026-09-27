@@ -401,6 +401,25 @@ fn throwResultError(allocator: std.mem.Allocator, result: *const MetaRequestCall
 }
 
 //
+// Whether a finished meta request failed because the server had closed its pooled connection, so it can be sent
+// again on a new one. With no response at all, "socket is closed" means the request could not be written, so it
+// never reached the server, whatever its method. "The connection has closed or is closing" can also come after
+// the request was written, when the server may have acted on it, so only a GET or HEAD, which change nothing, is
+// sent again for it. A body streamed with aws_s3_meta_request_poll_write cannot be replayed, so its request never
+// is. (No TypeScript counterpart: see S3Client.run.)
+//
+pub fn canResendOnClosedConnection(errorCode: c_int, responseStatus: c_int, method: []const u8, streamedBody: bool) bool {
+    if (responseStatus != 0 or streamedBody) {
+        return false;
+    }
+    if (errorCode == aws.AWS_IO_SOCKET_CLOSED) {
+        return true;
+    }
+    const readOnly = std.mem.eql(u8, method, "GET") or std.mem.eql(u8, method, "HEAD");
+    return errorCode == aws.AWS_ERROR_HTTP_CONNECTION_CLOSED and readOnly;
+}
+
+//
 // One meta request (one S3 operation run by aws-c-s3) and what its callbacks received. The callbacks run on the
 // SDK's threads while the calling thread waits for them, so every field is guarded by `mutex`.
 //
@@ -1250,7 +1269,31 @@ pub const S3Client = struct {
     // Runs one operation as an aws-c-s3 meta request and waits for it. Returns the finished call (response headers
     // and body) when it succeeded and throws the S3 or SDK error when it did not.
     //
+    // A request sent on a pooled connection the server had already closed is sent once more, on a new connection,
+    // when canResendOnClosedConnection says that is safe. Node's HTTP agent, which the JavaScript SDK sends through,
+    // drops a keep-alive socket as soon as the server closes it and so never sends a request on one; aws-c-http
+    // notices the close on its event loop and can hand the connection out in the moment before it has. S3 servers
+    // close the connection after some error responses (MinIO does after a refused conditional PutObject), so the
+    // read of the write lock that follows a refused lock write failed with "socket is closed" or "The connection
+    // has closed or is closing" and failed the import with it. The server never answered the request, so this is
+    // not the retry `maxAttempts: 1` turns off.
+    //
     fn run(self: *S3Client, allocator: std.mem.Allocator, request: OperationRequest) !*MetaRequestCall {
+        var call = try self.sendOnce(allocator, request);
+        if (canResendOnClosedConnection(call.errorCode, call.responseStatus, request.method, request.bodyStream != null)) {
+            call = try self.sendOnce(allocator, request);
+        }
+        if (call.errorCode != 0) {
+            return throwResultError(allocator, call);
+        }
+        return call;
+    }
+
+    //
+    // Sends one operation as an aws-c-s3 meta request and waits for it. Returns the finished call, whether the
+    // operation succeeded or not (run() throws its error).
+    //
+    fn sendOnce(self: *S3Client, allocator: std.mem.Allocator, request: OperationRequest) !*MetaRequestCall {
         const runtime = try self.getRuntime();
         const sdkAllocator = aws.aws_default_allocator();
 
@@ -1367,9 +1410,6 @@ pub const S3Client = struct {
         }
         if (call.outOfMemory) {
             return error.OutOfMemory;
-        }
-        if (call.errorCode != 0) {
-            return throwResultError(allocator, call);
         }
         return call;
     }

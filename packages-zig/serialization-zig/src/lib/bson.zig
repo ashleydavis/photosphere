@@ -312,7 +312,7 @@ pub const BsonDocument = struct {
 // Returns the numeric value of a key when it is a JS array index (canonical decimal below 2^32 - 1), otherwise null.
 // JS objects order such keys before all other keys.
 //
-fn parseArrayIndex(key: []const u8) ?u32 {
+pub fn parseArrayIndex(key: []const u8) ?u32 {
     if (key.len == 0 or key.len > 10) {
         return null;
     }

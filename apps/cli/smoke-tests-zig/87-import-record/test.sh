@@ -107,7 +107,7 @@ invoke_command "Initialize the local database" "$(get_zig_cli_command) init --db
 # --- 1. A manual import is recorded, and badged as manual. ---
 
 cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/asked-for.png"
-invoke_command "Import a photo by hand" "$CLI_COMMAND add --db $LOCAL_DB $WATCH_DIR/asked-for.png --yes"
+invoke_command "Import a photo by hand" "$(get_zig_cli_command) add --db $LOCAL_DB $WATCH_DIR/asked-for.png --yes"
 
 RECORD_FILE="$(find_record_naming "asked-for.png")"
 if [ -z "$RECORD_FILE" ]; then
@@ -144,7 +144,7 @@ log_success "The manual import is recorded and badged manual"
 # is no bounded version of it to run instead.
 WATCH_LOG="$TEST_DIR/watch.log"
 set -m
-env NODE_ENV=testing $CLI_COMMAND add --db "$LOCAL_DB" "$WATCH_DIR" --watch --yes > "$WATCH_LOG" 2>&1 &
+env NODE_ENV=testing $(get_zig_cli_command) add --db "$LOCAL_DB" "$WATCH_DIR" --watch --yes > "$WATCH_LOG" 2>&1 &
 WATCH_PID=$!
 set +m
 
@@ -238,7 +238,7 @@ expect_output_value "$REPLICA_SUMMARY" "Files imported:" 2 "Both photos reached 
 invoke_command "Initialize a second database" "$(get_zig_cli_command) init --db $OTHER_DB --yes"
 
 cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/into-the-other.png"
-invoke_command "Import a photo into the second database" "$CLI_COMMAND add --db $OTHER_DB $WATCH_DIR/into-the-other.png --yes"
+invoke_command "Import a photo into the second database" "$(get_zig_cli_command) add --db $OTHER_DB $WATCH_DIR/into-the-other.png --yes"
 
 OTHER_RECORD_FILE="$(find_record_naming "into-the-other.png")"
 if [ -z "$OTHER_RECORD_FILE" ]; then

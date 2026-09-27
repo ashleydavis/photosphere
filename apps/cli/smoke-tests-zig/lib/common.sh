@@ -952,11 +952,11 @@ create_db_with_5_files() {
 # Populate a pre-initialized database with the 5 standard test files (PNG, JPG, MP4, 2 from multiple-files).
 populate_db_with_5_files() {
     local db_dir="$1"
-    invoke_command "Add PNG file" "$(get_cli_command) add --db $db_dir $TEST_FILES_DIR/test.png --yes"
-    invoke_command "Add JPG file" "$(get_cli_command) add --db $db_dir $TEST_FILES_DIR/test.jpg --yes"
-    invoke_command "Add MP4 file" "$(get_cli_command) add --db $db_dir $TEST_FILES_DIR/multiple-files/test.mp4 --yes"
+    invoke_command "Add PNG file" "$(get_zig_cli_command) add --db $db_dir $TEST_FILES_DIR/test.png --yes"
+    invoke_command "Add JPG file" "$(get_zig_cli_command) add --db $db_dir $TEST_FILES_DIR/test.jpg --yes"
+    invoke_command "Add MP4 file" "$(get_zig_cli_command) add --db $db_dir $TEST_FILES_DIR/multiple-files/test.mp4 --yes"
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
-        invoke_command "Add multiple images" "$(get_cli_command) add --db $db_dir $MULTIPLE_IMAGES_DIR/ --yes"
+        invoke_command "Add multiple images" "$(get_zig_cli_command) add --db $db_dir $MULTIPLE_IMAGES_DIR/ --yes"
     fi
 }
 

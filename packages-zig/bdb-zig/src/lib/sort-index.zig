@@ -1362,7 +1362,16 @@ pub const SortIndex = struct {
         self._dirty = false;
     }
 
-    // Not ported: flush (psi replicate and psi verify never flush a database).
+    //
+    // Ejects all cached leaf data from memory. Throws if there are uncommitted changes.
+    //
+    pub fn flush(self: *SortIndex) !void {
+        if (self.dirty()) {
+            return errors.throwError("Sort index {s}-{s} is dirty, can't flush the cache.", .{ self.fieldName, @tagName(self.direction) });
+        }
+        self.leafCache.clearRetainingCapacity();
+        self._dirty = false;
+    }
 
     // Get a node from cache or map
     fn getNode(self: *SortIndex, pageId: []const u8) ?*IBTreeNode {
