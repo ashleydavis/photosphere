@@ -69,7 +69,8 @@ pub fn makeTempDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !
     var randomBytes: [8]u8 = undefined;
     io.random(&randomBytes);
     const currentPath = try std.process.currentPathAlloc(io, allocator);
-    const tempDir = try std.fmt.allocPrint(allocator, "{s}/.zig-cache/tmp-tests/{s}-{s}", .{ currentPath, name, &std.fmt.bytesToHex(randomBytes, .lower) });
+    // Joined with the platform separator, as createTestTempDir's path.join does.
+    const tempDir = try std.fs.path.join(allocator, &.{ currentPath, ".zig-cache", "tmp-tests", try std.fmt.allocPrint(allocator, "{s}-{s}", .{ name, &std.fmt.bytesToHex(randomBytes, .lower) }) });
     const cwd = std.Io.Dir.cwd();
     cwd.deleteTree(io, tempDir) catch {};
     try cwd.createDirPath(io, tempDir);

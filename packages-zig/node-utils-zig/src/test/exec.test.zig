@@ -91,3 +91,36 @@ test "execLogged reports a failed validation as a failure to execute the command
     try std.testing.expectError(error.Thrown, node_utils.exec.execLogged(arena.allocator(), std.testing.io, "echo", "echo hello", .{ .context = &unused, .function = failValidation }));
     try std.testing.expectEqualStrings("Failed to execute command: echo hello", utils.errors.lastErrorMessage());
 }
+
+test "exec hands the quotes in the command to the shell untouched" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    // Quoted arguments holding spaces and %, like `magick identify -format "%w %h" "<file>"`. cmd.exe on
+    // Windows echoes the arguments as they reach it, quotes included, and ends lines with CRLF.
+    if (builtin.os.tag == .windows) {
+        const result = try exec(arena.allocator(), std.testing.io, "echo \"%w %h\" \"file name.jpg\"");
+        try std.testing.expectEqualStrings("\"%w %h\" \"file name.jpg\"\r\n", result.stdout);
+    }
+    else {
+        const result = try exec(arena.allocator(), std.testing.io, "echo \"%w %h\" \"file name.jpg\"");
+        try std.testing.expectEqualStrings("%w %h file name.jpg\n", result.stdout);
+    }
+}
+
+test "exec reads stdout and stderr together so a command filling stderr does not block" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    // More than a pipe buffer holds goes to stderr before anything goes to stdout.
+    if (builtin.os.tag == .windows) {
+        const result = try exec(arena.allocator(), std.testing.io, "(for /L %i in (1,1,10000) do @echo stderr line %i>&2)& echo done");
+        try std.testing.expectEqualStrings("done\r\n", result.stdout);
+        try std.testing.expect(result.stderr.len > 128 * 1024);
+    }
+    else {
+        const result = try exec(arena.allocator(), std.testing.io, "i=0; while [ $i -lt 10000 ]; do echo stderr line $i 1>&2; i=$((i+1)); done; echo done");
+        try std.testing.expectEqualStrings("done\n", result.stdout);
+        try std.testing.expect(result.stderr.len > 128 * 1024);
+    }
+}
