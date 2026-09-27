@@ -68,7 +68,7 @@ One command at a time, never in parallel. The time goes on builds, so build less
 - Zig packages live in `packages-zig/`, the Zig CLI in `apps/cli-zig/`, the Zig smoke tests in
   `apps/cli/smoke-tests-zig/`. Original files (TypeScript, existing smoke tests, hooks) are not touched.
 - CI must stay green on Linux, Windows and macOS, and the Release workflow should finish in about 30 minutes.
-- Messages to the user are short. No essays. No narrating: one progress message per command committed, nothing else.
+- DO NOT NARRATE YOUR WORK. ONE PROGRESS UPDATE PER COMMAND IS ENOUGH. Messages to the user are short. No essays.
 - Every CLI command is ticked off in this plan as it is committed.
 
 ## Commands
