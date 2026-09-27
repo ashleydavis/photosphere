@@ -798,7 +798,7 @@ test_repair_ok_database() {
 
     # Run repair on the intact database using replica as source
     local repair_output
-    invoke_command "Repair intact database" "$(get_cli_command) repair --db $TEST_DB_DIR --source $replica_dir --yes" 0 "repair_output"
+    invoke_command "Repair intact database" "$(get_zig_cli_command) repair --db $TEST_DB_DIR --source $replica_dir --yes" 0 "repair_output"
 
     # Check that repair reports no issues found
     expect_output_string "$repair_output" "Database repair completed - no issues found" "Repair of OK database shows no issues"
@@ -1036,7 +1036,7 @@ test_repair_damaged_database() {
     # Run repair to fix the issues
     log_info "Running repair to fix issues..."
     local repair_output
-    invoke_command "Repair damaged database" "$(get_cli_command) repair --db $damaged_dir --source $replica_dir --yes --full" 0 "repair_output"
+    invoke_command "Repair damaged database" "$(get_zig_cli_command) repair --db $damaged_dir --source $replica_dir --yes --full" 0 "repair_output"
 
     # Repair should fix the issues
     expect_output_string "$repair_output" "Database repair completed successfully" "Repair completes successfully"

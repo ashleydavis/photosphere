@@ -4,9 +4,9 @@ pub const video = @import("lib/video.zig");
 pub const validation = @import("lib/validation.zig");
 pub const file_scanner = @import("lib/file-scanner.zig");
 pub const verify = @import("lib/verify.zig");
+pub const repair = @import("lib/repair.zig");
 pub const verify_worker = @import("lib/verify.worker.zig");
 pub const task_handlers = @import("lib/task-handlers.zig");
-// Not ported: repair.
 pub const replicate = @import("lib/replicate.zig");
 pub const replicate_database = @import("lib/replicate-database.zig");
 pub const replicate_database_worker = @import("lib/replicate-database.worker.zig");

@@ -98,7 +98,7 @@ To do, in order (each one uses what the earlier ones ported):
 - [x] export
 - [x] compare
 - [x] remove
-- [ ] repair
+- [x] repair
 - [ ] find-orphans
 - [ ] remove-orphans
 - [ ] upgrade

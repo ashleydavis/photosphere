@@ -97,7 +97,7 @@ test_s3_verify_repair() {
     # --- 3. Repair from the local replica restores it. ---
 
     invoke_command "Repair the S3 database from the local replica" \
-        "$(get_cli_command) repair --db \"$s3_db\" --source $good_replica --yes" 0
+        "$(get_zig_cli_command) repair --db \"$s3_db\" --source $good_replica --yes" 0
 
     local verify_repaired_output
     invoke_command "Verify after the repair" "$(get_zig_cli_command) verify --db \"$s3_db\" --yes" 0 "verify_repaired_output"
@@ -114,7 +114,7 @@ test_s3_verify_repair() {
     expect_output_value "$verify_modified_output" "Modified:" "1" "A full verify reports the overwritten asset object as modified"
 
     invoke_command "Repair the overwritten object from the local replica" \
-        "$(get_cli_command) repair --db \"$s3_db\" --source $good_replica --full --yes" 0
+        "$(get_zig_cli_command) repair --db \"$s3_db\" --source $good_replica --full --yes" 0
 
     local verify_repaired_again_output
     invoke_command "Fully verify after the second repair" "$(get_zig_cli_command) verify --db \"$s3_db\" --full --yes" 0 "verify_repaired_again_output"
