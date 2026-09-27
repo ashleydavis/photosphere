@@ -289,7 +289,7 @@ test_export_assets() {
 
     # Test 1: Export original asset to specific file
     local export_output
-    invoke_command "Export original asset to specific file" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/exported-original.png --verbose --yes" 0 "export_output"
+    invoke_command "Export original asset to specific file" "$(get_zig_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/exported-original.png --verbose --yes" 0 "export_output"
 
     # Verify the exported file exists
     check_exists "$export_dir/exported-original.png" "Exported original file"
@@ -315,7 +315,7 @@ test_export_assets() {
     fi
 
     log_info "Using asset ID for the display export test: $display_asset_id"
-    invoke_command "Export display version to directory" "$(get_cli_command) export --db $TEST_DB_DIR $display_asset_id $export_dir/ --type display --verbose --yes"
+    invoke_command "Export display version to directory" "$(get_zig_cli_command) export --db $TEST_DB_DIR $display_asset_id $export_dir/ --type display --verbose --yes"
 
     # A missing _display file is now fatal. It used to be a log_warning that the test carried straight
     # on from, so an export that wrote nothing at all still passed this section.
@@ -337,16 +337,16 @@ test_export_assets() {
         log_error "Asset $test_asset_id has no thumbnail at $thumb_file, so the thumbnail export cannot be tested"
         exit 1
     fi
-    invoke_command "Export thumbnail version" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/thumb.jpg --type thumb --verbose --yes"
+    invoke_command "Export thumbnail version" "$(get_zig_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/thumb.jpg --type thumb --verbose --yes"
 
     check_exists "$export_dir/thumb.jpg" "Exported thumbnail file"
 
     # Test 4: Try to export non-existent asset (should fail)
     local invalid_asset_id="00000000-0000-0000-0000-000000000000"
-    invoke_command "Export non-existent asset (should fail)" "$(get_cli_command) export --db $TEST_DB_DIR $invalid_asset_id $export_dir/should-not-exist.png --yes" 1
+    invoke_command "Export non-existent asset (should fail)" "$(get_zig_cli_command) export --db $TEST_DB_DIR $invalid_asset_id $export_dir/should-not-exist.png --yes" 1
 
     # Test 5: Export the same asset explicitly as original type
-    invoke_command "Export asset as original explicitly" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/explicit-original.png --type original --verbose --yes"
+    invoke_command "Export asset as original explicitly" "$(get_zig_cli_command) export --db $TEST_DB_DIR $test_asset_id $export_dir/explicit-original.png --type original --verbose --yes"
 
     check_exists "$export_dir/explicit-original.png" "Explicitly exported original file"
 
@@ -862,7 +862,7 @@ test_remove_asset() {
     expect_value "$files_after" "$expected_files" "Asset count decreased by 1 after removal"
 
     # Try to export the removed asset (should fail)
-    invoke_command "Try to export removed asset (should fail)" "$(get_cli_command) export --db $TEST_DB_DIR $test_asset_id $TEST_TMP_DIR/should-fail.png --yes" 1
+    invoke_command "Try to export removed asset (should fail)" "$(get_zig_cli_command) export --db $TEST_DB_DIR $test_asset_id $TEST_TMP_DIR/should-fail.png --yes" 1
 
     # Verify the asset files no longer exist in storage
     local original_file="$TEST_DB_DIR/asset/$test_asset_id"

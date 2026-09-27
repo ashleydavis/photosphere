@@ -29,8 +29,8 @@ pub const ICommandExamples = struct {
 
 //
 // Centralized examples for all CLI commands
-// (only the commands implemented in Zig are ported: init, add, info, summary, verify, replicate, version and
-// list).
+// (only the commands implemented in Zig are ported: init, add, info, summary, verify, replicate, version,
+// export and list).
 //
 pub const COMMAND_EXAMPLES = [_]ICommandExamples{
     .{
@@ -137,6 +137,27 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             .{
                 .command = "psi version",
                 .description = "Shows version information for psi and its dependencies.",
+            },
+        },
+    },
+    .{
+        .commandName = "export",
+        .examples = &.{
+            .{
+                .command = "psi export --db ./photos a1b2c3d4-e5f6-7890-abcd-ef1234567890 ./exported-photo.jpg",
+                .description = "Exports original asset with ID to a specific file.",
+            },
+            .{
+                .command = "psi export --db ./photos f1e2d3c4-b5a6-7890-cdef-ab1234567890 ./exports/",
+                .description = "Exports original asset to a directory (keeps original name).",
+            },
+            .{
+                .command = "psi export --db . 12345678-9abc-def0-1234-567890abcdef ~/Downloads/my-photo.jpg --type display",
+                .description = "Exports display version of asset.",
+            },
+            .{
+                .command = "psi export --db ./photos a1b2c3d4-e5f6-7890-abcd-ef1234567890 ./thumbs/ --type thumb",
+                .description = "Exports thumbnail version to directory.",
             },
         },
     },

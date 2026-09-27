@@ -7,6 +7,10 @@ const bdb = @import("bdb-zig");
 const api = @import("api-zig");
 const tree = @import("tree.zig");
 const retry_operations = @import("retry-operations.zig");
+const resolve_storage_credentials = @import("resolve-storage-credentials.zig");
+const lazy_origin_storage = @import("lazy-origin-storage.zig");
+const encryption = @import("encryption-zig");
+const LazyOriginStorage = lazy_origin_storage.LazyOriginStorage;
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const bson = serialization_zig.bson;
 const errors = utils.errors;
@@ -569,7 +573,58 @@ pub fn getDatabaseSummary(allocator: std.mem.Allocator, io: std.Io, assetStorage
 }
 
 // Not ported: streamAsset, writeAsset, writeAssetStream, writeAssetStreamVerified, removeAsset,
-// isDatabasePartial, createLazyDatabaseStorage, openLazyOriginStorage, checkDatabaseExists (not reached by psi replicate or psi verify).
+// isDatabasePartial, createLazyDatabaseStorage (not reached by the ported commands).
+
+//
+// Wraps an already-open local storage so that files a partial database does not hold are fetched
+// from its origin. A full database, or one with no origin, is handed back unchanged.
+//
+// This exists alongside createLazyDatabaseStorage because a caller that has already opened the
+// database (and resolved its encryption keys and S3 credentials) should not open it a second time
+// just to add the wrapper.
+//
+// Reach for this only on a read path that wants the whole database, such as exporting an original
+// that has been dropped locally. It must not be used for sync, replicate, repair or verify: those
+// compare the local database against its origin, and a local read that falls back to the origin
+// makes the two look identical when they are not.
+//
+pub fn openLazyOriginStorage(allocator: std.mem.Allocator, io: std.Io, localStorage: IStorage, localRawStorage: IStorage) !IStorage {
+    const config = try api.database_config.loadDatabaseConfig(allocator, io, localRawStorage);
+    const origin = configOrigin(config) orelse {
+        return localStorage;
+    };
+
+    const merkleTree = try tree.loadMerkleTree(allocator, io, localStorage);
+    if (merkleTree == null or !isPartialDatabase(merkleTree.?.databaseMetadata)) {
+        return localStorage;
+    }
+
+    const credentials = try resolve_storage_credentials.resolveStorageCredentials(allocator, io, origin, null, null);
+    const loadedKeys = try encryption.key_utils.loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
+    const originStorage = (try storage_zig.storage_factory.createStorage(allocator, io, origin, credentials.s3Config, loadedKeys.options)).storage;
+    const lazyStorage = try allocator.create(LazyOriginStorage);
+    lazyStorage.* = LazyOriginStorage.init(localStorage, originStorage);
+    return lazyStorage.storage();
+}
+
+//
+// Gets `config?.origin` when it is a non-empty string, the only truthy origin a path can be made from.
+// (No TypeScript counterpart: the expression is inline.)
+//
+fn configOrigin(config: ?std.json.Value) ?[]const u8 {
+    const value = config orelse return null;
+    const object = switch (value) {
+        .object => |object| object,
+        else => return null,
+    };
+    const origin = object.get("origin") orelse return null;
+    return switch (origin) {
+        .string => |text| if (text.len > 0) text else null,
+        else => null,
+    };
+}
+
+// Not ported: checkDatabaseExists (not reached by the ported commands).
 
 //
 // README content for database directories

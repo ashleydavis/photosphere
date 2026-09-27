@@ -123,7 +123,7 @@ test_s3_large_file() {
 
     local exported="$TEST_DIR/exported-video.mp4"
     invoke_command "Export the large video back out of S3" \
-        "$(get_cli_command) export $asset_id \"$exported\" --db \"$s3_db\" --yes" 0
+        "$(get_zig_cli_command) export $asset_id \"$exported\" --db \"$s3_db\" --yes" 0
 
     if [ ! -f "$exported" ]; then
         log_error "The export command reported success but wrote no file at $exported"

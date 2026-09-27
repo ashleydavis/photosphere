@@ -301,6 +301,37 @@ test "list prints the report of the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "list", "--db", db, "--yes" }), encrypted, "", 0);
 }
 
+test "export writes the asset files and prints the report of the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-export");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const assetId = "89171cd9-a652-4047-b869-1154bf2c95a1";
+    const cwd = std.Io.Dir.cwd();
+
+    // The original to a file path (its directory is created).
+    const original = try std.fmt.allocPrint(allocator, "{s}/out/original.jpg", .{root});
+    try expectResult(try runZig(allocator, environment, &.{ "export", "--db", db, assetId, original, "--yes" }), try std.fmt.allocPrint(allocator, "\u{2713} Successfully exported original version of asset {s} to {s}\n", .{ assetId, original }), "", 0);
+    try std.testing.expectEqualSlices(u8, try cwd.readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ db, assetId }), allocator, .unlimited), try cwd.readFileAlloc(std.testing.io, original, allocator, .unlimited));
+
+    // The display and thumb versions to a directory, named after the original file with the type.
+    const outDir = try std.fmt.allocPrint(allocator, "{s}/out", .{root});
+    const display = try std.fmt.allocPrint(allocator, "{s}/test_display.jpg", .{outDir});
+    try expectResult(try runZig(allocator, environment, &.{ "exp", "--db", db, assetId, outDir, "--type", "display", "--yes" }), try std.fmt.allocPrint(allocator, "\u{2713} Successfully exported display version of asset {s} to {s}\n", .{ assetId, display }), "", 0);
+    try std.testing.expectEqualSlices(u8, try cwd.readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/display/{s}", .{ db, assetId }), allocator, .unlimited), try cwd.readFileAlloc(std.testing.io, display, allocator, .unlimited));
+    const thumb = try std.fmt.allocPrint(allocator, "{s}/test_thumb.jpg", .{outDir});
+    try expectResult(try runZig(allocator, environment, &.{ "export", "--db", db, assetId, outDir, "-t", "thumb", "--yes" }), try std.fmt.allocPrint(allocator, "\u{2713} Successfully exported thumb version of asset {s} to {s}\n", .{ assetId, thumb }), "", 0);
+    try std.testing.expectEqualSlices(u8, try cwd.readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/thumb/{s}", .{ db, assetId }), allocator, .unlimited), try cwd.readFileAlloc(std.testing.io, thumb, allocator, .unlimited));
+
+    // An asset that is not in the database.
+    const missing = try runZig(allocator, environment, &.{ "export", "--db", db, "00000000-0000-0000-0000-000000000000", original, "--yes" });
+    try std.testing.expectEqual(@as(u8, 1), missing.exitCode);
+    try std.testing.expect(std.mem.startsWith(u8, missing.stderr, "Asset 00000000-0000-0000-0000-000000000000 not found in database.\n"));
+}
+
 test "root-hash and database-id print the values of the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

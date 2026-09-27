@@ -963,7 +963,7 @@ test_export_encrypted_file() {
     }
 
     local export_path="$export_dir/exported.png"
-    invoke_command "Export encrypted asset" "$cli export --db \"$db_dir\" --key \"$key_name\" \"$asset_id\" \"$export_path\" --yes" || {
+    invoke_command "Export encrypted asset" "$(get_zig_cli_command) export --db \"$db_dir\" --key \"$key_name\" \"$asset_id\" \"$export_path\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1257,12 +1257,12 @@ test_export_with_multiple_keys() {
     local export1="$export_dir/export1.png"
     local export2="$export_dir/export2.jpg"
 
-    invoke_command "Export first asset with both keys" "$cli export --db \"$db_dir\" --key \"$multi_keys\" \"$asset_id1\" \"$export1\" --yes" || {
+    invoke_command "Export first asset with both keys" "$(get_zig_cli_command) export --db \"$db_dir\" --key \"$multi_keys\" \"$asset_id1\" \"$export1\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Export second asset with both keys" "$cli export --db \"$db_dir\" --key \"$multi_keys\" \"$asset_id2\" \"$export2\" --yes" || {
+    invoke_command "Export second asset with both keys" "$(get_zig_cli_command) export --db \"$db_dir\" --key \"$multi_keys\" \"$asset_id2\" \"$export2\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1353,8 +1353,8 @@ test_multi_key_encrypt() {
     local multi_keys="$key1_name,$key2_name"
     local export1="$export_dir/out1.png"
     local export2="$export_dir/out2.jpg"
-    invoke_command "Export PNG (key1)" "$cli export --db \"$db1_dir\" --key \"$multi_keys\" \"$asset_id_png\" \"$export1\" --yes" || { test_failed "$name"; return; }
-    invoke_command "Export JPG (key2)" "$cli export --db \"$db1_dir\" --key \"$multi_keys\" \"$asset_id_jpg_db1\" \"$export2\" --yes" || { test_failed "$name"; return; }
+    invoke_command "Export PNG (key1)" "$(get_zig_cli_command) export --db \"$db1_dir\" --key \"$multi_keys\" \"$asset_id_png\" \"$export1\" --yes" || { test_failed "$name"; return; }
+    invoke_command "Export JPG (key2)" "$(get_zig_cli_command) export --db \"$db1_dir\" --key \"$multi_keys\" \"$asset_id_jpg_db1\" \"$export2\" --yes" || { test_failed "$name"; return; }
 
     if ! cmp -s "$TEST_FILES_DIR/test.png" "$export1"; then
         log_error "Exported PNG does not match original"
@@ -1426,8 +1426,8 @@ test_partial_encrypt() {
 
     local export1="$export_dir/out.png"
     local export2="$export_dir/out.jpg"
-    invoke_command "Export PNG (encrypted)" "$cli export --db \"$db_dir\" --key \"$key_name\" \"$asset_id1\" \"$export1\" --yes" || { test_failed "$name"; return; }
-    invoke_command "Export JPG (plain)" "$cli export --db \"$db_dir\" --key \"$key_name\" \"$asset_id2\" \"$export2\" --yes" || { test_failed "$name"; return; }
+    invoke_command "Export PNG (encrypted)" "$(get_zig_cli_command) export --db \"$db_dir\" --key \"$key_name\" \"$asset_id1\" \"$export1\" --yes" || { test_failed "$name"; return; }
+    invoke_command "Export JPG (plain)" "$(get_zig_cli_command) export --db \"$db_dir\" --key \"$key_name\" \"$asset_id2\" \"$export2\" --yes" || { test_failed "$name"; return; }
 
     if ! cmp -s "$TEST_FILES_DIR/test.png" "$export1"; then
         log_error "Exported PNG does not match original"

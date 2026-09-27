@@ -1,8 +1,8 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `add` (alias `a`), `database-id`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and
-// `l`), `origin`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `verify` (alias
-// `ver`) and `version` commands and the `--version` option are ported; the other commands are not registered yet,
+// Only the `add` (alias `a`), `database-id`, `export` (alias `exp`), `info` (alias `inf`), `init` (alias `i`),
+// `list` (aliases `ls` and `l`), `origin`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias
+// `sum`), `verify` (alias `ver`) and `version` commands and the `--version` option are ported; the other commands are not registered yet,
 // so commander reports them as unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
@@ -38,6 +38,7 @@ pub const worker_log_bun = @import("src/lib/worker-log-bun.zig");
 pub const add = @import("src/cmd/add.zig");
 pub const replicate = @import("src/cmd/replicate.zig");
 pub const init_command = @import("src/cmd/init.zig");
+pub const export_command = @import("src/cmd/export.zig");
 pub const info = @import("src/cmd/info.zig");
 pub const list = @import("src/cmd/list.zig");
 pub const origin = @import("src/cmd/origin.zig");
@@ -67,6 +68,8 @@ const initContext = init_cmd.initContext;
 const replicateCommand = replicate.replicateCommand;
 const initCommand = init_command.initCommand;
 const IInitCommandOptions = init_command.IInitCommandOptions;
+const IExportCommandOptions = export_command.IExportCommandOptions;
+const exportCommand = export_command.exportCommand;
 const IInfoCommandOptions = info.IInfoCommandOptions;
 const infoCommand = info.infoCommand;
 const IListCommandOptions = list.IListCommandOptions;
@@ -196,6 +199,21 @@ pub const ISetOriginParsed = struct {
 };
 
 //
+// What the export command runs with: its asset ID, output path and options (TypeScript: the arguments commander
+// passes the action).
+//
+pub const IExportParsed = struct {
+    // The ID of the asset to export.
+    assetId: []const u8,
+
+    // The path where the asset should be exported.
+    outputPath: []const u8,
+
+    // The options of the command.
+    options: IExportCommandOptions,
+};
+
+//
 // What the info command runs with: its inputs and its options (TypeScript: the arguments commander passes the action).
 //
 pub const IInfoParsed = struct {
@@ -216,6 +234,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the add command with these paths and options.
     add: IAddParsed,
+
+    // Run the export command with this asset, output path and options.
+    @"export": IExportParsed,
 
     // Run the info command with these inputs and options.
     info: IInfoParsed,
@@ -395,6 +416,23 @@ fn replicateAction(state: *IProgramState, args: []const ArgumentValue, options: 
 }
 
 //
+// The action of the export command (`initContext(exportCommand)`): `run` calls initContext and the command.
+//
+fn exportAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+    state.outcome = .{
+        .@"export" = .{
+            .assetId = args[0].string,
+            .outputPath = args[1].string,
+            .options = .{
+                .base = baseOptions(options),
+                .type = textValue(options, "type"),
+            },
+        },
+    };
+}
+
+//
 // The action of the info command (`initContext(infoCommand)`): `run` calls initContext and the command.
 //
 fn infoAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
@@ -557,7 +595,25 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "add"))
         .action(state, addAction);
 
-    // Not ported: the commands between add and info.
+    // Not ported: bug, check, compare and examples.
+
+    const exportDefinition = program
+        .command("export", .{})
+        .alias("exp")
+        .description("Exports an asset by ID to a specified path.")
+        .argument("<asset-id>", "The ID of the asset to export.")
+        .argument("<output-path>", "The path where the asset should be exported.");
+    _ = optionFrom(exportDefinition, dbOption);
+    _ = optionFrom(exportDefinition, keyOption);
+    _ = exportDefinition.option("-t, --type <type>", "Type of asset to export: original, display, or thumb (default: original)", .{ .string = "original" });
+    _ = optionFrom(exportDefinition, verboseOption);
+    _ = optionFrom(exportDefinition, yesOption);
+    _ = optionFrom(exportDefinition, cwdOption);
+    _ = exportDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "export"))
+        .action(state, exportAction);
+
+    // Not ported: find-orphans, hash, hash-cache, debug and help.
 
     const infoDefinition = program
         .command("info", .{})
@@ -784,6 +840,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try addCommand(allocator, io, context, parsed.paths, &options);
+        },
+        .@"export" => |parsed| {
+            var options = parsed.options;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try exportCommand(allocator, io, context, parsed.assetId, parsed.outputPath, &options);
         },
         .info => |parsed| {
             var options = parsed.options;
