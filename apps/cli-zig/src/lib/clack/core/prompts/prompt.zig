@@ -246,7 +246,7 @@ pub const Prompt = struct {
         }
         if (self.state == .submit or self.state == .cancel) {
             try self.output.writeAll(cursor.show);
-            setRawMode(self.input, false);
+            try setRawMode(self.input, false);
             self.outcome = if (self.state == .submit) .submit else .cancel;
         }
     }
@@ -273,7 +273,7 @@ pub const Prompt = struct {
             try self._setUserInput(initialUserInput, true);
         }
 
-        setRawMode(self.input, true);
+        try setRawMode(self.input, true);
         // Not ported: re-rendering on terminal resize.
 
         try self.render();
@@ -390,7 +390,7 @@ pub const Prompt = struct {
     //
     pub fn close(self: *Prompt) !void {
         try self.output.writeAll("\n");
-        setRawMode(self.input, false);
+        try setRawMode(self.input, false);
         if (self.rl) |*interface| {
             interface.close();
         }

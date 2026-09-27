@@ -133,56 +133,108 @@ test "the other methods forward to the wrapped storage unchanged" {
 }
 
 //
-// Runs the TypeScript interop script and fails the test when it reports a failure.
+// The directory of the encryption-zig golden fixtures that the TypeScript encryption package wrote with ts-public.pem.
 //
-fn runInteropScript(allocator: std.mem.Allocator, mode: []const u8, dbDir: []const u8) !void {
-    const result = std.process.run(allocator, std.testing.io, .{
-        .argv = &.{ "bun", "run", "src/test/fixtures/encrypted-storage-interop.ts", mode, dbDir },
-    }) catch |err| {
+const encryption_fixtures_dir = "../encryption-zig/src/test/fixtures";
 
-        // The TypeScript side of this interop test needs Bun; skip it where Bun cannot be spawned.
-        if (err == error.FileNotFound) {
-            return error.SkipZigTest;
-        }
-        std.debug.print("Failed to run bun (it must be on PATH): {s}\n", .{@errorName(err)});
-        return err;
-    };
-    if (result.term != .exited or result.term.exited != 0) {
-        std.debug.print("encrypted-storage-interop.ts {s} failed:\n{s}\n{s}\n", .{ mode, result.stdout, result.stderr });
-        return error.TestUnexpectedResult;
+//
+// The 44-byte header TypeScript wrote at the start of every file it encrypted with ts-public.pem: "PSEN", version 1
+// (little endian), "A2CB" and the SHA-256 hash of the public key (encryption-zig fixture ts-public-hash.hex).
+//
+const ts_key_header = "PSEN" ++ "\x01\x00\x00\x00" ++ "A2CB" ++
+    "\x95\x12\x45\x25\x51\x10\x55\x81\x60\x76\x53\x9f\x2c\x22\x82\x12" ++
+    "\x57\x39\x8d\x71\x17\x8a\x1f\x70\x96\x3e\x22\xd6\x96\x64\xbe\x2c";
+
+//
+// A file TypeScript encrypted, and the plaintext size and encrypted length of the fixture.
+//
+const TypeScriptEncryptedFile = struct {
+    // The fixture file name in encryption-zig/src/test/fixtures.
+    fileName: []const u8,
+
+    // The size of the plaintext in bytes.
+    plainSize: usize,
+
+    // The length of the encrypted fixture file in bytes.
+    encryptedLength: usize,
+};
+
+//
+// The files the TypeScript encryption package wrote with encryptBuffer (new-*) and createEncryptionStream (stream-*).
+//
+const ts_encrypted_files = [_]TypeScriptEncryptedFile{
+    .{ .fileName = "new-0.bin", .plainSize = 0, .encryptedLength = 588 },
+    .{ .fileName = "new-17.bin", .plainSize = 17, .encryptedLength = 604 },
+    .{ .fileName = "new-1048576.bin", .plainSize = 1048576, .encryptedLength = 1049164 },
+    .{ .fileName = "stream-0.bin", .plainSize = 0, .encryptedLength = 588 },
+    .{ .fileName = "stream-16.bin", .plainSize = 16, .encryptedLength = 604 },
+    .{ .fileName = "stream-17.bin", .plainSize = 17, .encryptedLength = 604 },
+};
+
+//
+// Creates the plaintext of the encryption-zig fixtures (makePlaintext of its generate.ts): byte i is (i * 31 + 7) mod 256.
+//
+fn makeFixturePlaintext(allocator: std.mem.Allocator, size: usize) ![]u8 {
+    const plain = try allocator.alloc(u8, size);
+    for (plain, 0..) |*byte, index| {
+        byte.* = @truncate(index *% 31 +% 7);
     }
-    try std.testing.expectEqualStrings("OK\n", result.stdout);
+    return plain;
 }
 
-test "EncryptedStorage files are readable by TypeScript and TypeScript files are readable by Zig" {
+test "EncryptedStorage reads the files TypeScript encrypted" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const dbDir = try helpers.makeTempDir(allocator, io, "encrypted-storage-interop");
+    const dbDir = try helpers.makeTempDir(allocator, io, "encrypted-storage-ts-files");
     defer helpers.removeTempDir(io, dbDir);
-
-    const plain = try helpers.makeData(allocator, 200 * 1024 + 17);
     const created = try createStorage(allocator, io, dbDir, null, try loadFixtureOptions(allocator));
     try std.testing.expectEqualStrings("encrypted-fs", created.@"type");
-    try created.rawStorage.write(allocator, io, "plain.bin", null, plain);
 
-    // Zig writes, TypeScript reads.
-    try created.storage.write(allocator, io, "zig-write.bin", null, plain);
-    var input = std.Io.Reader.fixed(plain);
-    try created.storage.writeStream(allocator, io, "zig-stream.bin", null, &input, null);
-    try runInteropScript(allocator, "verify", dbDir);
+    // The plaintext fixture TypeScript wrote matches the formula of its generator.
+    const plain17 = try std.Io.Dir.cwd().readFileAlloc(io, encryption_fixtures_dir ++ "/plain-17.bin", allocator, .unlimited);
+    try std.testing.expectEqualSlices(u8, "\x07\x26\x45\x64\x83\xa2\xc1\xe0\xff\x1e\x3d\x5c\x7b\x9a\xb9\xd8\xf7", plain17);
+    try std.testing.expectEqualSlices(u8, plain17, try makeFixturePlaintext(allocator, 17));
 
-    // TypeScript writes, Zig reads.
-    try runInteropScript(allocator, "write", dbDir);
-    const fileNames = [_][]const u8{ "ts-write.bin", "ts-stream.bin" };
-    for (fileNames) |fileName| {
-        const raw = (try created.rawStorage.read(allocator, io, fileName)).?;
-        try std.testing.expectEqualStrings("PSEN", raw[0..4]);
-        try std.testing.expectEqualSlices(u8, plain, (try created.storage.read(allocator, io, fileName)).?);
-        const stream = try created.storage.readStream(allocator, io, fileName);
+    for (ts_encrypted_files) |tsFile| {
+        const fixturePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ encryption_fixtures_dir, tsFile.fileName });
+        const encrypted = try std.Io.Dir.cwd().readFileAlloc(io, fixturePath, allocator, .unlimited);
+        try std.testing.expectEqual(tsFile.encryptedLength, encrypted.len);
+        try created.rawStorage.write(allocator, io, tsFile.fileName, null, encrypted);
+
+        const plain = try makeFixturePlaintext(allocator, tsFile.plainSize);
+        try std.testing.expectEqualSlices(u8, plain, (try created.storage.read(allocator, io, tsFile.fileName)).?);
+        const stream = try created.storage.readStream(allocator, io, tsFile.fileName);
         defer stream.destroy(io);
         try std.testing.expectEqualSlices(u8, plain, try helpers.readAll(allocator, stream.reader()));
-        try std.testing.expectEqual(@as(u64, raw.len), (try created.storage.info(allocator, io, fileName)).?.length);
+        try std.testing.expectEqual(@as(u64, tsFile.encryptedLength), (try created.storage.info(allocator, io, tsFile.fileName)).?.length);
+    }
+}
+
+test "EncryptedStorage writes files with the header and length TypeScript writes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dbDir = try helpers.makeTempDir(allocator, io, "encrypted-storage-zig-files");
+    defer helpers.removeTempDir(io, dbDir);
+    const created = try createStorage(allocator, io, dbDir, null, try loadFixtureOptions(allocator));
+
+    for (ts_encrypted_files) |tsFile| {
+        const plain = try makeFixturePlaintext(allocator, tsFile.plainSize);
+        const writeName = try std.fmt.allocPrint(allocator, "zig-write-{s}", .{tsFile.fileName});
+        try created.storage.write(allocator, io, writeName, null, plain);
+        const streamName = try std.fmt.allocPrint(allocator, "zig-stream-{s}", .{tsFile.fileName});
+        var input = std.Io.Reader.fixed(plain);
+        try created.storage.writeStream(allocator, io, streamName, null, &input, null);
+
+        for ([_][]const u8{ writeName, streamName }) |fileName| {
+            const raw = (try created.rawStorage.read(allocator, io, fileName)).?;
+            try std.testing.expectEqual(tsFile.encryptedLength, raw.len);
+            try std.testing.expectEqualSlices(u8, ts_key_header, raw[0..ts_key_header.len]);
+            try std.testing.expectEqualSlices(u8, plain, (try created.storage.read(allocator, io, fileName)).?);
+            try std.testing.expectEqual(@as(u64, tsFile.encryptedLength), (try created.storage.info(allocator, io, fileName)).?.length);
+        }
     }
 }

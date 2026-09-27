@@ -111,8 +111,9 @@ fn spawnChildProcess(allocator: std.mem.Allocator, io: std.Io, args: []const []c
     defer child.kill(io);
 
     if (stdinData) |data| {
-        // Like Node, a child that exits without reading its input does not fail the command.
-        child.stdin.?.writeStreamingAll(io, data) catch {};
+        // TypeScript attaches no error listener to child.stdin, so a failed write (EPIPE when the child exits
+        // without reading its input) is not ignored there either: it fails the command.
+        try child.stdin.?.writeStreamingAll(io, data);
     }
     child.stdin.?.close(io);
     child.stdin = null;

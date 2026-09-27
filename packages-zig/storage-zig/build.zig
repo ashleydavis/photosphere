@@ -27,8 +27,13 @@ pub fn build(b: *std.Build) !void {
         const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = optimize });
         module.addImport(dependency_name, dependency.module(dependency_name));
     }
-    // The AWS SDK for C, which the S3 client binds to. False means a lazy dependency is being fetched first.
-    if (!try aws_sdk.addAwsSdk(b, module, target)) {
+    // The AWS SDK for C, which the S3 client binds to, over the aws-lc libcrypto that encryption-zig builds and links
+    // (the same library, so it is linked once). False means a lazy dependency is being fetched first.
+    const encryption = b.dependency("encryption-zig", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    if (!try aws_sdk.addAwsSdk(b, module, target, encryption.artifact("crypto"))) {
         return;
     }
 

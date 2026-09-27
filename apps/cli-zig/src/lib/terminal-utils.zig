@@ -8,31 +8,9 @@ const tty = @import("tty.zig");
 const log = &utils.log.log;
 
 //
-// When set, output is written here instead of stdout (used by tests).
-//
-var captured_output: ?*std.Io.Writer = null;
-
-//
-// When set, overrides whether stdout is a TTY (used by tests).
-//
-var tty_override: ?bool = null;
-
-//
-// Redirects the output of this module and overrides the TTY check (pass nulls to restore). Used by tests.
-// This function has no TypeScript counterpart.
-//
-pub fn setOutputForTesting(writer: ?*std.Io.Writer, isTTY: ?bool) void {
-    captured_output = writer;
-    tty_override = isTTY;
-}
-
-//
 // True when stdout is a TTY (`process.stdout.isTTY`).
 //
 fn stdoutIsTTY() bool {
-    if (tty_override) |value| {
-        return value;
-    }
     return tty.isatty(tty.stdout_fd);
 }
 
@@ -40,10 +18,6 @@ fn stdoutIsTTY() bool {
 // Writes text to stdout (`process.stdout.write`), ignoring write errors.
 //
 fn writeStdout(text: []const u8) void {
-    if (captured_output) |writer| {
-        writer.writeAll(text) catch {};
-        return;
-    }
     var buffer: [1024]u8 = undefined;
     var file_writer = std.Io.File.stdout().writerStreaming(std.Options.debug_io, &buffer);
     const stdout = &file_writer.interface;

@@ -353,16 +353,18 @@ pub fn enableRawMode(fd: Fd) !Mode {
 }
 
 //
-// Restores a terminal mode saved by enableRawMode.
+// Restores a terminal mode saved by enableRawMode (like libuv's uv_tty_set_mode, a failure is an error, which
+// Node's setRawMode throws).
 //
-pub fn restoreMode(fd: Fd, mode: Mode) void {
+pub fn restoreMode(fd: Fd, mode: Mode) !void {
     if (builtin.os.tag == .windows) {
-        if (GetStdHandle(fd)) |handle| {
-            _ = SetConsoleMode(handle, mode);
+        const handle = GetStdHandle(fd) orelse return error.NotATerminal;
+        if (!SetConsoleMode(handle, mode).toBool()) {
+            return error.NotATerminal;
         }
         return;
     }
-    std.posix.tcsetattr(fd, .FLUSH, mode) catch {};
+    try std.posix.tcsetattr(fd, .FLUSH, mode);
 }
 
 //

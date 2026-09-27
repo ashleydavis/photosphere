@@ -134,8 +134,9 @@ test "prompts render and answer exactly like the TypeScript prompts" {
     const allocator = arena.allocator();
     cli.picocolors.setColorSupportOverride(true);
     defer cli.picocolors.setColorSupportOverride(null);
-    prompts.common.setColumnsForTesting(@as(?usize, null));
-    defer prompts.common.setColumnsForTesting(null);
+    // The fixture was generated with stdout not a TTY (no process.stdout.columns), and the build runner gives
+    // the tests a pipe for stdout.
+    try std.testing.expect(cli.tty.columns(cli.tty.stdout_fd) == null);
 
     // The fixture was generated with TERM=xterm-256color, which also makes clack use unicode symbols on Windows.
     var environ_map = std.process.Environ.Map.init(allocator);

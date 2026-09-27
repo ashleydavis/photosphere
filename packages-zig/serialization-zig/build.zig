@@ -1,4 +1,5 @@
 const std = @import("std");
+const zlib_ng = @import("zlib-ng/zlib-ng.zig");
 
 //
 // The name of the module exposed by this package.
@@ -26,6 +27,8 @@ pub fn build(b: *std.Build) !void {
         const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = optimize });
         module.addImport(dependency_name, dependency.module(dependency_name));
     }
+    // zlib-ng, which gzip compression and decompression bind to.
+    try zlib_ng.addZlibNg(b, module, target);
 
     const test_step = b.step("test", "Run unit tests");
     var test_dir = try b.build_root.handle.openDir(b.graph.io, "src/test", .{ .iterate = true });

@@ -221,14 +221,38 @@ test "loadDatabasesConfig reads a databases.toml written by TypeScript like Type
     const configDir = try useNewConfigDir(allocator, io);
     defer helpers.removeTempDir(io, configDir);
 
+    // The config TypeScript's updateDatabasesConfig was handed: every optional field on the first entry, none on
+    // the second, and strings that TOML has to escape.
     const configJson =
         \\{"databases":[{"name":"Photos \"main\"","description":"My photos","path":"/home/me/photos","origin":"s3:bucket:/x","s3Key":"s3-creds","encryptionKey":"enc","geocodingKey":"geo"},{"name":"b","description":"","path":"C:\\data\\b"}],"recentDatabaseNames":["b","Photos \"main\""],"lastDatabase":"/home/me/photos"}
     ;
-    _ = try helpers.runBun(allocator, io, "databases-config-ts.ts", &.{ "save", configJson }, &.{.{ "PHOTOSPHERE_CONFIG_DIR", configDir }});
 
-    const loadedByTs = try helpers.runBunJson(allocator, io, "databases-config-ts.ts", &.{"load"}, &.{.{ "PHOTOSPHERE_CONFIG_DIR", configDir }});
-    const loadedByZig = try databases_config.loadDatabasesConfig(allocator, io);
-    const zigJson = try std.json.Stringify.valueAlloc(allocator, loadedByZig, .{ .emit_null_optional_fields = false });
-    const tsJson = try std.json.Stringify.valueAlloc(allocator, loadedByTs, .{});
-    try std.testing.expectEqualStrings(tsJson, zigJson);
+    // The file it writes: databasesConfigToToml (packages/node-api/src/lib/databases-config.ts) gives
+    // `{ databases, recent_database_names, last_database }` with each entry's keys in databaseEntryToToml's order, and
+    // smol-toml's stringify puts the plain keys first, then each array of tables as `[[databases]]` blocks separated
+    // by a blank line, with every string written as JSON.stringify writes it.
+    try writeToml(allocator, io, configDir,
+        \\recent_database_names = [ "b", "Photos \"main\"" ]
+        \\last_database = "/home/me/photos"
+        \\
+        \\[[databases]]
+        \\name = "Photos \"main\""
+        \\description = "My photos"
+        \\path = "/home/me/photos"
+        \\origin = "s3:bucket:/x"
+        \\s3_key = "s3-creds"
+        \\encryption_key = "enc"
+        \\geocoding_key = "geo"
+        \\
+        \\[[databases]]
+        \\name = "b"
+        \\description = ""
+        \\path = "C:\\data\\b"
+        \\
+    );
+
+    // TypeScript's loadDatabasesConfig reads back the config it was handed (tomlToDatabasesConfig undoes
+    // databasesConfigToToml).
+    const loaded = try databases_config.loadDatabasesConfig(allocator, io);
+    try std.testing.expectEqualStrings(configJson, try std.json.Stringify.valueAlloc(allocator, loaded, .{ .emit_null_optional_fields = false }));
 }

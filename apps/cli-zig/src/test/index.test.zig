@@ -133,12 +133,6 @@ test "command lines parse exactly like commander" {
             try std.testing.expect(outcome == .version);
             try std.testing.expectEqual(expected.get("quiet").?.bool, parsed.state.notificationsQuiet.?);
         }
-        else if (std.mem.eql(u8, kind, "error") and std.mem.eql(u8, expected.get("level").?.string, "program")) {
-            // The error is the program's own (no command implemented in Zig was reached), so the command
-            // line is handed to the TypeScript CLI, which reports it (checked against the real CLI by generate.ts).
-            try std.testing.expect(outcome == .delegate);
-            try std.testing.expectEqualStrings("", parsed.stderr);
-        }
         else if (std.mem.eql(u8, kind, "error")) {
             try std.testing.expect(outcome == .failure);
             const stderr = expected.get("stderr").?.string;
@@ -162,17 +156,36 @@ test "command lines parse exactly like commander" {
     }
 }
 
-test "other commands and empty command lines are delegated" {
+//
+// Checks that parsing a command line stops with a commander error with this code and stderr.
+//
+fn expectCommanderError(allocator: std.mem.Allocator, args: []const []const u8, code: []const u8, stderr: []const u8) !void {
+    const parsed = try parse(allocator, args);
+    try std.testing.expect(parsed.outcome == .failure);
+    try std.testing.expectEqualStrings(code, parsed.outcome.failure.code);
+    try std.testing.expectEqualStrings(stderr, parsed.stderr);
+}
+
+test "commands that are not ported are unknown commands, and empty command lines show the help" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    try std.testing.expect((try parse(allocator, &.{})).outcome == .delegate);
-    try std.testing.expect((try parse(allocator, &.{"summary"})).outcome == .delegate);
-    try std.testing.expect((try parse(allocator, &.{ "add", "--db", "x" })).outcome == .delegate);
-    try std.testing.expect((try parse(allocator, &.{"--help"})).outcome == .delegate);
-    try std.testing.expect((try parse(allocator, &.{ "--db", "x", "replicate" })).outcome == .delegate);
-    try std.testing.expect((try parse(allocator, &.{ "help", "replicate" })).outcome == .delegate);
-    try std.testing.expect((try parse(allocator, &.{"replicate2"})).outcome == .delegate);
+
+    const empty = try parse(allocator, &.{});
+    try std.testing.expect(empty.outcome == .failure);
+    try std.testing.expectEqualStrings("commander.help", empty.outcome.failure.code);
+    try std.testing.expect(std.mem.startsWith(u8, empty.stderr, "Usage: psi "));
+
+    const help = try parse(allocator, &.{"--help"});
+    try std.testing.expect(help.outcome == .failure);
+    try std.testing.expectEqualStrings("commander.helpDisplayed", help.outcome.failure.code);
+    try std.testing.expect(std.mem.startsWith(u8, help.stdout, "Usage: psi "));
+
+    try expectCommanderError(allocator, &.{"summary"}, "commander.unknownCommand", "error: unknown command 'summary'\n");
+    try expectCommanderError(allocator, &.{ "add", "--db", "x" }, "commander.unknownCommand", "error: unknown command 'add'\n");
+    try expectCommanderError(allocator, &.{ "--db", "x", "replicate" }, "commander.unknownOption", "error: unknown option '--db'\n");
+    try expectCommanderError(allocator, &.{ "help", "replicate" }, "commander.unknownCommand", "error: unknown command 'help'\n(Did you mean rep?)\n");
+    try expectCommanderError(allocator, &.{"replicate2"}, "commander.unknownCommand", "error: unknown command 'replicate2'\n(Did you mean replicate?)\n");
 }
 
 test "the preAction hook asks for the notifications with the program's quiet flag" {

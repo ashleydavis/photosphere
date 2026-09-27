@@ -54,3 +54,40 @@ test "exec passes process.env to the command" {
         try std.testing.expectEqualStrings("from-env\n", result.stdout);
     }
 }
+
+test "execLogged returns the output of the command" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const result = try node_utils.exec.execLogged(arena.allocator(), std.testing.io, "echo", "echo hello", null);
+    const expected = if (builtin.os.tag == .windows) "hello\r\n" else "hello\n";
+    try std.testing.expectEqualStrings(expected, result.stdout);
+}
+
+test "execLogged reports a command that fails as a failure to execute it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expectError(error.Thrown, node_utils.exec.execLogged(arena.allocator(), std.testing.io, "sh", "exit 3", null));
+    try std.testing.expectEqualStrings("Failed to execute command: exit 3", utils.errors.lastErrorMessage());
+}
+
+//
+// A validation that always fails.
+//
+fn failValidation(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!?[]const u8 {
+    _ = context;
+    _ = allocator;
+    _ = io;
+    return "the output is missing";
+}
+
+test "execLogged reports a failed validation as a failure to execute the command" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    // The failure is reported on stdout, which the test runner reads its own messages from.
+    var output = std.Io.Writer.Allocating.init(arena.allocator());
+    utils.console.setCapture(&output.writer, &output.writer);
+    defer utils.console.setCapture(null, null);
+    var unused: u8 = 0;
+    try std.testing.expectError(error.Thrown, node_utils.exec.execLogged(arena.allocator(), std.testing.io, "echo", "echo hello", .{ .context = &unused, .function = failValidation }));
+    try std.testing.expectEqualStrings("Failed to execute command: echo hello", utils.errors.lastErrorMessage());
+}

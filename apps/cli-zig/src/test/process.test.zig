@@ -13,18 +13,45 @@ test "userArgs skips the executable" {
     try std.testing.expectEqual(@as(usize, 0), cli.process_argv.userArgs().len);
 }
 
+//
+// Opens a pipe (the Linux system call, or libc's pipe on macOS).
+//
+fn openPipe() ![2]i32 {
+    var fds: [2]i32 = undefined;
+    if (builtin.os.tag == .linux) {
+        try std.testing.expectEqual(@as(usize, 0), std.os.linux.pipe(&fds));
+    }
+    else {
+        try std.testing.expectEqual(@as(c_int, 0), std.c.pipe(&fds));
+    }
+    return fds;
+}
+
+//
+// Closes a file descriptor (the Linux system call, or libc's close on macOS).
+//
+fn closeDescriptor(fd: i32) void {
+    if (builtin.os.tag == .linux) {
+        _ = std.os.linux.close(fd);
+    }
+    else {
+        _ = std.c.close(fd);
+    }
+}
+
 test "a pipe is not a TTY and has no size" {
-    if (builtin.os.tag != .linux) {
+    if (builtin.os.tag == .windows) {
+        // Windows pipes are handles, not file descriptors; tty works on the console handles there.
         return error.SkipZigTest;
     }
-    var fds: [2]i32 = undefined;
-    try std.testing.expectEqual(@as(usize, 0), std.os.linux.pipe(&fds));
-    defer _ = std.os.linux.close(fds[0]);
-    defer _ = std.os.linux.close(fds[1]);
+    const fds = try openPipe();
+    defer closeDescriptor(fds[0]);
+    defer closeDescriptor(fds[1]);
     try std.testing.expect(!cli.tty.isatty(fds[0]));
     try std.testing.expect(cli.tty.columns(fds[1]) == null);
     try std.testing.expect(cli.tty.rows(fds[1]) == null);
     try std.testing.expectError(error.NotATerminal, cli.tty.enableRawMode(fds[0]));
+    try std.testing.expectError(error.NotATerminal, cli.tty.restoreMode(fds[0], std.mem.zeroes(std.posix.termios)));
 }
 
 test "config holds the development version" {

@@ -93,7 +93,8 @@ fn waitForTimeout(io: std.Io, timeoutMS: u64) std.Io.Cancelable!void {
 // awaiting always runs to the end first, so an operation that settles without awaiting again beats the timer.
 // The Zig counterpart: an operation that still succeeds after the cancelation (it reached no cancelation
 // point, e.g. its thread had not even been scheduled yet when the timer fired) wins over the timer.
-// When the Io implementation cannot run tasks concurrently the operation runs without a timeout.
+// The operation and the timer must both run concurrently (as they do in TypeScript): when the Io
+// implementation cannot run either of them concurrently, error.ConcurrencyUnavailable is returned.
 //
 pub fn retryOnce(io: std.Io, operation: anytype, timeoutMS: u64) anyerror!OperationResult(@TypeOf(operation)) {
     const OperationT = @TypeOf(operation);
@@ -124,10 +125,11 @@ pub fn retryOnce(io: std.Io, operation: anytype, timeoutMS: u64) anyerror!Operat
     var outcome_buffer: [2]Outcome = undefined;
     var select = std.Io.Select(Outcome).init(io, &outcome_buffer);
     var error_record: errors.ErrorRecord = undefined;
-    select.concurrent(.completed, OperationTask(OperationT).run, .{ operation, io, &error_record }) catch {
-        return operation.run(io);
+    try select.concurrent(.completed, OperationTask(OperationT).run, .{ operation, io, &error_record });
+    select.concurrent(.timedOut, waitForTimeout, .{ io, timeoutMS }) catch |err| {
+        select.cancelDiscard();
+        return err;
     };
-    select.concurrent(.timedOut, waitForTimeout, .{ io, timeoutMS }) catch {};
     const outcome = select.await() catch |err| {
         select.cancelDiscard();
         return err;

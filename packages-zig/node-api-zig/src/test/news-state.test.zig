@@ -268,32 +268,30 @@ test "returns [] when the file does not exist" {
     try std.testing.expectEqual(@as(usize, 0), (try news_state.getShownNewsIds(allocator, io)).len);
 }
 
-test "TypeScript and Zig read and write the same state file" {
+test "news changes keep every other section of a state file the desktop app wrote, as TypeScript writes it" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const configDir = try freshConfigDir(allocator, io, "news-interop");
-    const overrides = [_][2][]const u8{.{ "PHOTOSPHERE_CONFIG_DIR", configDir }};
+    const configDir = try freshConfigDir(allocator, io, "news-every-section");
 
-    // A state file the desktop app wrote, with every section, then news from TypeScript and from Zig.
+    // A state file with every section, including values the reader drops (a feed item with a colour nobody
+    // defined, a ui value that is not a boolean, number, string or list of strings).
     try writeState(allocator, io, configDir, "desktop:\n  last_folder: /home/someone/My Photos\n  dev_tools_open: false\nsearches:\n  recent:\n    - 'yes'\n    - beach\ngallery:\n  sort: date\n  row_height: 180.5\nnews:\n  feed:\n    - id: f1\n      message: 'Hello: world'\n      color: primary\n      duration: 5000\n    - id: f2\n      message: bad colour\n      color: purple\nui:\n  '1': one\n  sidebar-collapsed: true\n  widths:\n    - '10'\n    - wide\n  bad:\n    nested: map\n");
-    _ = try helpers.runBunJson(allocator, io, "news-state-ts.ts", &.{ "add", "ts-1", "ts-2" }, &overrides);
-    const tsFile = try readState(allocator, io, configDir);
-    try news_state.addShownNewsIds(allocator, io, &.{"zig-1"});
+    try news_state.addShownNewsIds(allocator, io, &.{ "first-1", "first-2" });
+    try news_state.addShownNewsIds(allocator, io, &.{ "second-1", "first-1" });
     try news_state.setLastShownUpdateVersion(allocator, io, "9.9.9");
-    const zigFile = try readState(allocator, io, configDir);
 
-    // Zig writes what TypeScript writes: TypeScript making the same two changes to its own file gives the
-    // same bytes.
-    _ = try helpers.runBunJson(allocator, io, "news-state-ts.ts", &.{ "add", "zig-1" }, &overrides);
-    try writeState(allocator, io, configDir, tsFile);
-    _ = try helpers.runBunJson(allocator, io, "news-state-ts.ts", &.{ "add", "zig-1" }, &overrides);
-    _ = try helpers.runBunJson(allocator, io, "news-state-ts.ts", &.{ "set-version", "9.9.9" }, &overrides);
-    try std.testing.expectEqualStrings(try readState(allocator, io, configDir), zigFile);
+    // What TypeScript writes after the same three calls: updateStateFile reads the file through yamlToStateFile
+    // and writes stateFileToYaml of it with js-yaml's dump (packages/node-api/src/lib/state-format.ts), so the
+    // sections come out in the order stateFileToYaml builds them, the news section gains shown_news_ids and
+    // last_shown_update_version ahead of feed, the dropped values are gone, and js-yaml quotes the strings that
+    // would read back as something else ('yes', 'Hello: world', '1', '10').
+    try std.testing.expectEqualStrings(
+        "desktop:\n  last_folder: /home/someone/My Photos\n  dev_tools_open: false\nsearches:\n  recent:\n    - 'yes'\n    - beach\ngallery:\n  sort: date\n  row_height: 180.5\nnews:\n  shown_news_ids:\n    - first-1\n    - first-2\n    - second-1\n  last_shown_update_version: 9.9.9\n  feed:\n    - id: f1\n      message: 'Hello: world'\n      color: primary\n      duration: 5000\n    - id: f2\n      message: bad colour\nui:\n  '1': one\n  sidebar-collapsed: true\n  widths:\n    - '10'\n    - wide\n",
+        try readState(allocator, io, configDir),
+    );
 
-    const loaded = try helpers.runBunJson(allocator, io, "news-state-ts.ts", &.{"load"}, &overrides);
-    const zigLoaded = try news_state.loadNewsState(allocator, io);
-    try std.testing.expectEqualStrings("{\"shownNewsIds\":[\"ts-1\",\"ts-2\",\"zig-1\"],\"lastShownUpdateVersion\":\"9.9.9\",\"feed\":[{\"id\":\"f1\",\"message\":\"Hello: world\",\"color\":\"primary\",\"duration\":5000},{\"id\":\"f2\",\"message\":\"bad colour\"}]}", try stateJson(allocator, zigLoaded));
-    try std.testing.expectEqualStrings("{\"shownNewsIds\":[\"ts-1\",\"ts-2\",\"zig-1\"],\"feed\":[{\"id\":\"f1\",\"message\":\"Hello: world\",\"color\":\"primary\",\"duration\":5000},{\"id\":\"f2\",\"message\":\"bad colour\"}],\"lastShownUpdateVersion\":\"9.9.9\"}", try std.json.Stringify.valueAlloc(allocator, loaded, .{}));
+    // And what TypeScript's loadNewsState reads back from it.
+    try std.testing.expectEqualStrings("{\"shownNewsIds\":[\"first-1\",\"first-2\",\"second-1\"],\"lastShownUpdateVersion\":\"9.9.9\",\"feed\":[{\"id\":\"f1\",\"message\":\"Hello: world\",\"color\":\"primary\",\"duration\":5000},{\"id\":\"f2\",\"message\":\"bad colour\"}]}", try stateJson(allocator, try news_state.loadNewsState(allocator, io)));
 }

@@ -77,9 +77,6 @@ pub const Validator = *const fn (allocator: std.mem.Allocator, io: std.Io, path:
 // The state of the subdirectory name validator.
 //
 const SubdirectoryValidateContext = struct {
-    // Allocator for the joined path.
-    allocator: std.mem.Allocator,
-
     // Io used to check whether the directory exists.
     io: std.Io,
 
@@ -101,7 +98,12 @@ fn validateSubdirectoryName(context: ?*anyopaque, value: ?[]const u8) ?[]const u
         return "Directory name contains invalid characters";
     }
     // Check if directory already exists
-    const newPath = join(self.allocator, self.currentPath, name) catch return null;
+    var pathBuffer: [std.fs.max_path_bytes]u8 = undefined;
+    var pathAllocator = std.heap.FixedBufferAllocator.init(&pathBuffer);
+    const newPath = join(pathAllocator.allocator(), self.currentPath, name) catch |err| switch (err) {
+        // Longer than any path the system accepts, so it cannot exist (Node's existsSync returns false for it).
+        error.OutOfMemory => return null,
+    };
     if (pathExists(self.io, newPath)) {
         return "Directory already exists";
     }
@@ -186,7 +188,7 @@ pub fn pickDirectory(
     }
     else if (std.mem.eql(u8, choiceValue, "subdirectory")) {
         const validateContext = try allocator.create(SubdirectoryValidateContext);
-        validateContext.* = .{ .allocator = allocator, .io = io, .currentPath = currentPath };
+        validateContext.* = .{ .io = io, .currentPath = currentPath };
         const subdirName = try text(allocator, io, .{
             .message = "Enter name for subdirectory:",
             .placeholder = "my-photos",

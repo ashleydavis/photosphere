@@ -10,3 +10,5 @@ pub const timestamp_provider = @import("lib/timestamp-provider.zig");
 pub const errors = @import("lib/errors.zig");
 pub const console = @import("lib/console.zig");
 pub const format = @import("lib/format.zig");
+pub const image = @import("lib/image.zig");
+pub const reverse_geocode = @import("lib/reverse-geocode.zig");

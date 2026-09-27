@@ -42,4 +42,50 @@ pub fn exec(allocator: std.mem.Allocator, io: std.Io, command: []const u8) !Exec
     return .{ .stdout = result.stdout, .stderr = result.stderr };
 }
 
-// Not ported: execLogged (not used by replicate or verify).
+//
+// Checks the result of a command run with execLogged: returns the reason it failed, or null when it did not
+// (TypeScript: the optional `validate` callback, `() => Promise<string | undefined>`).
+//
+pub const IValidate = struct {
+    // The state the check reads.
+    context: *anyopaque,
+
+    // The check.
+    function: *const fn (context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!?[]const u8,
+};
+
+//
+// Runs the command and adds logging for the tool used.
+//
+pub fn execLogged(allocator: std.mem.Allocator, io: std.Io, tool: []const u8, command: []const u8, validate: ?IValidate) !ExecResult {
+    const log = &utils.log.log;
+    log.verbose(try std.fmt.allocPrint(allocator, "Executing {s} with command: \"{s}\"", .{ tool, command }));
+    return execLoggedInner(allocator, io, tool, command, validate) catch |err| {
+        const msg = try std.fmt.allocPrint(allocator, "Failed to execute command: {s}", .{command});
+        log.exception(msg, err);
+        return errors.throwError("{s}", .{msg});
+    };
+}
+
+//
+// The body of the try block of execLogged.
+//
+fn execLoggedInner(allocator: std.mem.Allocator, io: std.Io, tool: []const u8, command: []const u8, validate: ?IValidate) !ExecResult {
+    const log = &utils.log.log;
+    const result = try exec(allocator, io, command);
+    log.tool(tool, .{ .stdout = result.stdout, .stderr = result.stderr });
+    if (validate) |check| {
+        const validationFailedReason = try check.function(check.context, allocator, io);
+        if (validationFailedReason) |reason| {
+            const msg = try std.fmt.allocPrint(allocator, "Validation failed for command: {s}\nReason: {s}", .{ command, reason });
+            log.@"error"(msg);
+            log.info(try std.fmt.allocPrint(allocator, "===\nCommand: {s}\nCommand stdout:\n{s}\nCommand stderr:\n{s}\n===", .{
+                command,
+                if (result.stdout.len > 0) result.stdout else "No output",
+                if (result.stderr.len > 0) result.stderr else "No error",
+            }));
+            return errors.throwError("{s}", .{msg});
+        }
+    }
+    return result;
+}

@@ -5,13 +5,15 @@
 // - test-db-trees.json: every tree in test/dbs/v2..v6 must load exactly as TypeScript loads it.
 // - scenarios.json and scenario-*.dat: replaying the same add/upsert/update/delete/prune/build sequence must give the
 //   same results and trees as TypeScript, and the trees TypeScript saved must load identically.
-// The reverse direction (TypeScript loads trees that Zig saved) runs src/test/fixtures/load-trees.ts with bun.
+// - the trees Zig saves must load back to the TypeScript summaries, and the replayed scenario trees Zig saves must be
+//   byte-identical to scenario-*.dat.
 //
 
 const std = @import("std");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const serialization_zig = @import("serialization-zig");
 const memory_storage = @import("memory-storage.zig");
+const saved_file = @import("saved-file.zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const merkle_diff = merkle_tree_zig.merkle_diff;
 const bson = serialization_zig.bson;
@@ -314,6 +316,15 @@ fn loadTreeFile(allocator: std.mem.Allocator, filePath: []const u8, typeCode: []
 }
 
 //
+// Loads a tree from the bytes of a tree file through the in-memory storage.
+//
+fn loadTreeBytes(allocator: std.mem.Allocator, bytes: []const u8, typeCode: []const u8) !IMerkleTree {
+    var storage = MemoryStorage.init(allocator);
+    try storage.putFile("tree.dat", bytes);
+    return (try merkle_tree.loadTree(allocator, io, "tree.dat", storage.asStorage(), typeCode)).?;
+}
+
+//
 // Saves a tree and returns the bytes of the file.
 //
 fn saveTreeBytes(allocator: std.mem.Allocator, tree: *const IMerkleTree, typeCode: []const u8) ![]const u8 {
@@ -549,65 +560,45 @@ test "loads the trees TypeScript saved identically" {
     }
 }
 
-test "TypeScript loads the trees Zig saved identically" {
+test "trees Zig saves load back exactly like the trees TypeScript loaded" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-    const tmpPath = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/{s}", .{tmp.sub_path});
-
-    // The trees Zig saves: every test database tree (re-saved in the current format) and every scenario's final tree.
-    var arguments: std.ArrayList([]const u8) = .empty;
-    try arguments.appendSlice(allocator, &.{ "bun", "run", FIXTURES_DIR ++ "/load-trees.ts" });
-    var zigSummaries: std.ArrayList(TreeSummary) = .empty;
-
+    // Every test database tree, re-saved by Zig in the current format, must load back to the summary TypeScript
+    // recorded for the original tree in test-db-trees.json (apart from the version, which saving upgrades).
     const testDbFixture = try readFixture(TestDbTreesFixture, allocator, "test-db-trees.json");
-    for (testDbFixture.trees, 0..) |testDbTree, index| {
+    for (testDbFixture.trees) |testDbTree| {
         const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ TEST_DBS_DIR, testDbTree.file });
         const tree = try loadTreeFile(allocator, filePath, testDbTree.typeCode);
-        const fileName = try std.fmt.allocPrint(allocator, "db-{d}.dat", .{index});
-        try tmp.dir.writeFile(io, .{ .sub_path = fileName, .data = try saveTreeBytes(allocator, &tree, testDbTree.typeCode) });
-        try arguments.append(allocator, try std.fmt.allocPrint(allocator, "{s}/{s}:{s}", .{ tmpPath, fileName, testDbTree.typeCode }));
+        const reloaded = try loadTreeBytes(allocator, try saveTreeBytes(allocator, &tree, testDbTree.typeCode), testDbTree.typeCode);
+        var expected = testDbTree.summary;
+        expected.version = merkle_tree.CURRENT_DATABASE_VERSION;
 
-        // What Zig loads back from its own file must match the tree it saved (apart from the new version and metadata).
-        const reloaded = try loadTreeFile(allocator, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ tmpPath, fileName }), testDbTree.typeCode);
-        const originalSummary = try summarizeTree(allocator, &tree);
-        const reloadedSummary = try summarizeTree(allocator, &reloaded);
-        try std.testing.expectEqual(merkle_tree.CURRENT_DATABASE_VERSION, reloadedSummary.version);
-        try std.testing.expectEqualStrings(originalSummary.sortShape, reloadedSummary.sortShape);
-        try expectStringLists(originalSummary.merkleNodes, reloadedSummary.merkleNodes);
-        try zigSummaries.append(allocator, reloadedSummary);
+        // A tree saved without metadata loads with an empty document (TypeScript loads `{}`).
+        if (expected.metadataBson == null) {
+            expected.metadataBson = "0500000000";
+        }
+        expectSummary(expected, try summarizeTree(allocator, &reloaded)) catch |err| {
+            std.debug.print("Re-saved tree loads differently from TypeScript: {s}\n", .{testDbTree.file});
+            return err;
+        };
     }
+}
+
+test "saves the replayed scenario trees byte-identical to the trees TypeScript saved" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
 
     const scenarioFixture = try readFixture(ScenariosFixture, allocator, "scenarios.json");
     for (scenarioFixture.scenarios) |scenario| {
         const replay = try replayScenario(allocator, scenario);
-        const fileName = try std.fmt.allocPrint(allocator, "scenario-{s}.dat", .{scenario.name});
-        try tmp.dir.writeFile(io, .{ .sub_path = fileName, .data = try saveTreeBytes(allocator, &replay.tree, "FTRE") });
-        try arguments.append(allocator, try std.fmt.allocPrint(allocator, "{s}/{s}:FTRE", .{ tmpPath, fileName }));
-        const reloaded = try loadTreeFile(allocator, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ tmpPath, fileName }), "FTRE");
-        try zigSummaries.append(allocator, try summarizeTree(allocator, &reloaded));
-    }
-
-    const result = std.process.run(allocator, io, .{ .argv = arguments.items }) catch |err| {
-
-        // The TypeScript side of this interop test needs Bun; skip it where Bun cannot be spawned.
-        if (err == error.FileNotFound) {
-            return error.SkipZigTest;
-        }
-        return err;
-    };
-    if (result.term != .exited or result.term.exited != 0) {
-        std.debug.print("load-trees.ts failed: {s}\n", .{result.stderr});
-        return error.TypeScriptLoadFailed;
-    }
-    const typeScriptSummaries = try std.json.parseFromSliceLeaky([]const TreeSummary, allocator, result.stdout, .{ .ignore_unknown_fields = true });
-    try std.testing.expectEqual(zigSummaries.items.len, typeScriptSummaries.len);
-    for (typeScriptSummaries, zigSummaries.items, 0..) |typeScriptSummary, zigSummary, index| {
-        expectSummary(typeScriptSummary, zigSummary) catch |err| {
-            std.debug.print("TypeScript loads Zig-saved tree {d} differently\n", .{index});
+        const filePath = try std.fmt.allocPrint(allocator, "{s}/scenario-{s}.dat", .{ FIXTURES_DIR, scenario.name });
+        const expected = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+        const actual = try saveTreeBytes(allocator, &replay.tree, "FTRE");
+        saved_file.expectSavedFileMatches(expected, actual) catch |err| {
+            std.debug.print("Zig-saved scenario tree differs from the one TypeScript saved: {s}\n", .{scenario.name});
             return err;
         };
     }

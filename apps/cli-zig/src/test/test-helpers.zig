@@ -238,16 +238,6 @@ pub fn fileUrl(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
 pub const psi_path = "zig-out/bin/psi" ++ builtin.os.tag.exeFileExt(builtin.cpu.arch);
 
 //
-// Returns true when bun can be spawned (the tests that compare with the TypeScript CLI need it).
-//
-pub fn bunAvailable(allocator: std.mem.Allocator) bool {
-    _ = std.process.run(allocator, std.testing.io, .{ .argv = &.{ "bun", "--version" } }) catch |err| {
-        return err != error.FileNotFound;
-    };
-    return true;
-}
-
-//
 // Runs a CLI command line (argv[0] is the program) with the environment, from the apps/cli directory, with its
 // stdout written to a file (as `psi ... > file` does) rather than a pipe. Returns what the file holds as stdout.
 //
@@ -271,4 +261,133 @@ pub fn runCliToFile(allocator: std.mem.Allocator, argv: []const []const u8, envi
     };
     const stdout = try std.Io.Dir.cwd().readFileAlloc(io, outputPath, allocator, .unlimited);
     return .{ .exitCode = exitCode, .stdout = stdout, .stderr = "" };
+}
+
+//
+// The path of the test driver (src/test/drivers/test-driver.zig), installed to zig-out/test-bin.
+//
+pub const test_driver_path = "zig-out/test-bin/test-driver" ++ builtin.os.tag.exeFileExt(builtin.cpu.arch);
+
+//
+// The result of running a scenario of the test driver.
+//
+pub const IDriverResult = struct {
+    // The exit code of the driver.
+    exitCode: u8,
+
+    // What the driver wrote to stdout (the prompts render there).
+    stdout: []const u8,
+
+    // What the driver wrote to stderr.
+    stderr: []const u8,
+
+    // The JSON of the value the scenario returned.
+    resultJson: []const u8,
+};
+
+//
+// Keys typed into one prompt of the test driver: once the prompt's text has appeared on stdout, the keys are
+// written to stdin in one go. Like TypeScript, a prompt drops the rest of the chunk it was reading when it
+// finishes, so each prompt's keys are only written once that prompt is showing (as a person types them).
+//
+pub const IPromptKeys = struct {
+    // Text of the prompt (its message) to wait for on stdout.
+    waitFor: []const u8,
+
+    // The keys to type into it.
+    keys: []const u8,
+};
+
+//
+// How long the driver may take to show a prompt before the test fails (it is waiting for input that will
+// never come, so without a limit the test would hang).
+//
+const prompt_wait_limit_seconds = 60;
+
+//
+// Prints what the driver wrote so far, for a failure.
+//
+fn printDriverOutput(scenarioArguments: []const []const u8, problem: []const u8, stdout: []const u8, stderr: []const u8) void {
+    std.debug.print("test driver {f}: {s}\nstdout:\n{s}\nstderr:\n{s}\n", .{ std.json.fmt(scenarioArguments, .{}), problem, stdout, stderr });
+}
+
+//
+// Runs a scenario of the test driver with the environment, typing the keys of each prompt on its stdin (a pipe,
+// so the prompts see an input that is not a TTY, as they do when psi is fed from a pipe). Fails when the driver
+// fails, or when a prompt does not appear.
+//
+pub fn runTestDriver(allocator: std.mem.Allocator, scenarioArguments: []const []const u8, prompts: []const IPromptKeys, environment: *const std.process.Environ.Map) !IDriverResult {
+    const io = std.testing.io;
+    const resultDir = try makeTempDir(allocator, "driver-result");
+    defer std.Io.Dir.cwd().deleteTree(io, resultDir) catch {};
+    const resultPath = try std.fs.path.join(allocator, &.{ resultDir, "result.json" });
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.appendSlice(allocator, &.{ test_driver_path, resultPath });
+    try argv.appendSlice(allocator, scenarioArguments);
+
+    var child = try std.process.spawn(io, .{
+        .argv = argv.items,
+        .environ_map = environment,
+        .stdin = .pipe,
+        .stdout = .pipe,
+        .stderr = .pipe,
+    });
+    defer child.kill(io);
+
+    var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+    var multi_reader: std.Io.File.MultiReader = undefined;
+    multi_reader.init(allocator, io, multi_reader_buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
+    defer multi_reader.deinit();
+
+    var searchStart: usize = 0;
+    for (prompts) |prompt| {
+        while (true) {
+            const shown = multi_reader.reader(0).buffered();
+            if (std.mem.indexOfPos(u8, shown, searchStart, prompt.waitFor)) |position| {
+                searchStart = position + prompt.waitFor.len;
+                break;
+            }
+            multi_reader.fill(64, .{ .duration = .{ .raw = .fromSeconds(prompt_wait_limit_seconds), .clock = .awake } }) catch |err| {
+                const problem = try std.fmt.allocPrint(allocator, "the prompt \"{s}\" did not appear ({t})", .{ prompt.waitFor, err });
+                printDriverOutput(scenarioArguments, problem, multi_reader.reader(0).buffered(), multi_reader.reader(1).buffered());
+                return error.PromptDidNotAppear;
+            };
+        }
+        try child.stdin.?.writeStreamingAll(io, prompt.keys);
+    }
+    child.stdin.?.close(io);
+    child.stdin = null;
+
+    while (true) {
+        multi_reader.fill(64, .none) catch |err| {
+            if (err == error.EndOfStream) {
+                break;
+            }
+            return err;
+        };
+    }
+    try multi_reader.checkAnyError();
+    const term = try child.wait(io);
+    const stdout = try multi_reader.toOwnedSlice(0);
+    const stderr = try multi_reader.toOwnedSlice(1);
+    const exitCode: u8 = switch (term) {
+        .exited => |code| code,
+        else => 255,
+    };
+    if (exitCode != 0) {
+        printDriverOutput(scenarioArguments, try std.fmt.allocPrint(allocator, "exited with code {d}", .{exitCode}), stdout, stderr);
+        return error.TestDriverFailed;
+    }
+    const resultJson = std.Io.Dir.cwd().readFileAlloc(io, resultPath, allocator, .unlimited) catch |err| {
+        printDriverOutput(scenarioArguments, "returned no result (it ran out of input)", stdout, stderr);
+        return err;
+    };
+    return .{ .exitCode = exitCode, .stdout = stdout, .stderr = stderr, .resultJson = resultJson };
+}
+
+//
+// Parses the result of a test driver scenario.
+//
+pub fn parseDriverResult(comptime T: type, allocator: std.mem.Allocator, result: IDriverResult) !T {
+    return std.json.parseFromSliceLeaky(T, allocator, result.resultJson, .{ .allocate = .alloc_always });
 }

@@ -5,7 +5,6 @@ const color = @import("../../picocolors.zig");
 const tty = @import("../../tty.zig");
 const readline = @import("../third-party/readline.zig");
 const State = @import("../core/types.zig").ClackState;
-const core_utils = @import("../core/utils/index.zig");
 const PromptInput = readline.PromptInput;
 
 //
@@ -136,11 +135,6 @@ pub fn symbol(allocator: std.mem.Allocator, state: State) ![]const u8 {
 }
 
 //
-// Overrides the stdout column count seen by the prompts (used by tests); pass null to restore detection.
-//
-pub const setColumnsForTesting = core_utils.setColumnsForTesting;
-
-//
 // The streams of a prompt (TypeScript: `input?: Readable; output?: Writable; signal?: AbortSignal`).
 // Null streams default to process.stdin and process.stdout. The AbortSignal is not ported.
 //
@@ -178,29 +172,11 @@ var stdout_buffer: [4096]u8 = undefined;
 var stdout_writer: ?std.Io.File.Writer = null;
 
 //
-// Streams used instead of process.stdin and process.stdout when a prompt has no streams (tests only).
-//
-var default_streams_override: ?CommonOptions = null;
-
-//
-// Replaces the default streams of the prompts (process.stdin and process.stdout) for tests; pass null to
-// restore them. This function has no TypeScript counterpart.
-//
-pub fn setDefaultStreamsForTesting(streams: ?CommonOptions) void {
-    default_streams_override = streams;
-}
-
-//
 // Gets the input stream of a prompt (process.stdin by default).
 //
 pub fn resolveInput(io: std.Io, options: CommonOptions) *PromptInput {
     if (options.input) |input| {
         return input;
-    }
-    if (default_streams_override) |streams| {
-        if (streams.input) |input| {
-            return input;
-        }
     }
     if (stdin_reader == null) {
         stdin_reader = std.Io.File.stdin().readerStreaming(io, &stdin_buffer);
@@ -217,11 +193,6 @@ pub fn resolveInput(io: std.Io, options: CommonOptions) *PromptInput {
 pub fn resolveOutput(io: std.Io, options: CommonOptions) *std.Io.Writer {
     if (options.output) |output| {
         return output;
-    }
-    if (default_streams_override) |streams| {
-        if (streams.output) |output| {
-            return output;
-        }
     }
     if (stdout_writer == null) {
         stdout_writer = std.Io.File.stdout().writerStreaming(io, &stdout_buffer);

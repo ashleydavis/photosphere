@@ -6,6 +6,7 @@
     .dependencies = .{
         .@"utils-zig" = .{ .path = "../utils-zig" },
         .@"node-utils-zig" = .{ .path = "../node-utils-zig" },
+        .@"serialization-zig" = .{ .path = "../serialization-zig" },
     },
     .paths = .{ "build.zig", "build.zig.zon", "src" },
 }

@@ -1,8 +1,8 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
 // Only the `init` (alias `i`), `replicate` (alias `rep`), `verify` (alias `ver`) and `version` commands and the
-// `--version` option are implemented in Zig; every other command line (including no arguments and program help)
-// is handed to the TypeScript CLI (src/main.zig).
+// `--version` option are ported; the other commands are not registered yet, so commander reports them as
+// unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -38,7 +38,6 @@ pub const replicate = @import("src/cmd/replicate.zig");
 pub const init_command = @import("src/cmd/init.zig");
 pub const verify = @import("src/cmd/verify.zig");
 pub const version_cmd = @import("src/cmd/version.zig");
-pub const delegate = @import("src/main.zig");
 pub const print_notifications = @import("src/lib/print-notifications.zig");
 pub const check_for_updates = @import("src/lib/check-for-updates.zig");
 pub const check_for_news = @import("src/lib/check-for-news.zig");
@@ -148,8 +147,6 @@ fn optionFrom(command: *Command, spec: IOptionSpec) *Command {
 // The command a parsed command line runs.
 //
 pub const ParseOutcome = union(enum) {
-    // The command line is handed to the TypeScript CLI.
-    delegate,
 
     // Commander stopped the parse: it has written the help or the error.
     failure: CommanderError,
@@ -182,8 +179,8 @@ pub const IProgramState = struct {
     // The quiet flag the preAction hook prints the notifications with, or null when the hook did not ask for them.
     notificationsQuiet: ?bool = null,
 
-    // The command the action asks to run.
-    outcome: ParseOutcome = .delegate,
+    // The command the action asks to run (null until an action runs).
+    outcome: ?ParseOutcome = null,
 };
 
 //
@@ -325,13 +322,13 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .optionWithArgParser("--version", "output the version number", state, versionOption)
         .option("--debug", "Enable debug REST API server", null)
         .option("-q, --quiet", "Suppress optional output (update and news notifications). Give it before the command name.", null)
-        // Not ported: .addHelpText('after', ...) (the program help is shown by the TypeScript CLI).
+        // Not ported yet: .addHelpText('after', ...).
         .exitOverride() // Prevent commander from calling process.exit
         .addHelpCommand(false); // Disable default help command so we can add it in alphabetical order
 
     _ = program.hook(.preAction, state, preActionHook);
 
-    // Not ported: the commands before init (the TypeScript CLI runs them).
+    // Not ported: the commands before init.
 
     const initDefinition = program
         .command("init", .{})
@@ -350,7 +347,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "init"))
         .action(state, initAction);
 
-    // Not ported: the commands between init and replicate (the TypeScript CLI runs them).
+    // Not ported: the commands between init and replicate.
 
     const replicateDefinition = program
         .command("replicate", .{})
@@ -374,7 +371,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "replicate"))
         .action(state, replicateAction);
 
-    // Not ported: summary and sync (the TypeScript CLI runs them).
+    // Not ported: summary and sync.
 
     const verifyDefinition = program
         .command("verify", .{})
@@ -401,27 +398,14 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "version"))
         .action(state, versionAction);
 
-    // Not ported: the commands after version, the secrets and dbs command groups (the TypeScript CLI runs them).
+    // Not ported: the commands after version, the secrets and dbs command groups.
     return program;
 }
 
 //
-// Parses the command line like `program.parseAsync(process.argv)`. The program parses its own options first
-// (as commander's `_parseCommand` does), which tells which command the command line names: when that is not a
-// command implemented in Zig (other commands, no command, help), the command line is handed to the
-// TypeScript CLI.
+// Parses the command line like `program.parseAsync(process.argv)`.
 //
 pub fn parseCommandLine(program: *Command, state: *IProgramState, userArgs: []const []const u8) !ParseOutcome {
-    const programParse = program.parseOptions(userArgs) catch |err| {
-        if (err == error.VersionOption) {
-            return .versionOption;
-        }
-        return err;
-    };
-    if (programParse.operands.len == 0 or program.findCommand(programParse.operands[0]) == null) {
-        return .delegate;
-    }
-
     program.parse(userArgs) catch |err| {
         if (err == error.VersionOption) {
             return .versionOption;
@@ -431,7 +415,7 @@ pub fn parseCommandLine(program: *Command, state: *IProgramState, userArgs: []co
         }
         return err;
     };
-    return state.outcome;
+    return state.outcome.?;
 }
 
 //
@@ -455,8 +439,7 @@ fn isQuietCommanderError(code: []const u8) bool {
 }
 
 //
-// Runs the command line: parses it, then runs the command or delegates it. Returns the exit code for
-// delegated command lines; commands exit the process themselves.
+// Runs the command line: parses it, then runs the command. Commands exit the process themselves.
 //
 fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !u8 {
     var state: IProgramState = .{
@@ -465,16 +448,18 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
     const program = try createProgram(allocator, &state);
     const outcome = try parseCommandLine(program, &state, userArgs);
     switch (outcome) {
-        .delegate => return delegate.delegateToTypeScript(allocator, io, userArgs),
         .failure => |failure| {
             // Commander has written the help or the error. main() exits with 0 for help and quietly with 1 for
-            // these codes, and rethrows any other error (like an option missing its value) to main().catch.
-            // (Its exit with 0 when there are no arguments is not reached: no arguments are handed to TypeScript.)
+            // these codes, exits with 0 when there are no arguments, and rethrows any other error (like an
+            // option missing its value) to main().catch.
             if (isHelpCode(failure.code)) {
                 exit(io, 0);
             }
             if (isQuietCommanderError(failure.code)) {
                 exit(io, 1);
+            }
+            if (userArgs.len == 0) {
+                exit(io, 0);
             }
             return utils.errors.throwError("{s}", .{failure.message});
         },

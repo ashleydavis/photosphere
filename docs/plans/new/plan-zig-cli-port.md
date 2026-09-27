@@ -29,7 +29,10 @@ suite has a Zig counterpart that passes.
 - The Zig code is a faithful port of the TypeScript: same file and function names, same order, readable side
   by side. No additions, no embellishments, no overreach. TypeScript quirks are reproduced.
 - Port the minimum code needed for the command being ported, nothing for later commands.
-- Never change TypeScript code.
+- Banned from changing TypeScript code and TypeScript tests.
+- DO NOT USE BUN. No Zig code, Zig test or Zig build step runs bun or any TypeScript. The Zig CLI never hands a
+  command to the TypeScript CLI: a command that is not ported yet is an unknown command. Expected values are
+  written into the Zig tests, ported from the TypeScript tests.
 - Data written to a database is byte-identical to what the TypeScript CLI writes.
 - No hand-rolled replacements for third-party libraries. Use the real library (as with the AWS SDK for C,
   built by the Zig build system from unmodified upstream sources). No vendoring or patching. If a library
