@@ -258,8 +258,8 @@ verify_root_hashes_match() {
     # Get aggregate root hash (includes both files and BSON database merkle trees)
     local original_hash_output
     local replica_hash_output
-    invoke_command "Get original aggregate root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get replica aggregate root hash" "$(get_cli_command) root-hash --db $replica_dir --yes" 0 "replica_hash_output"
+    invoke_command "Get original aggregate root hash" "$(get_zig_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get replica aggregate root hash" "$(get_zig_cli_command) root-hash --db $replica_dir --yes" 0 "replica_hash_output"
     
     local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local replica_hash=$(echo "$replica_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
@@ -289,7 +289,7 @@ test_passed() {
     # Capture database hash if database exists
     if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/files.dat" ]; then
         local hash_output
-        if hash_output=$($(get_cli_command) root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
+        if hash_output=$($(get_zig_cli_command) root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
             TEST_RESULTS+=("PASS:$hash_output")
         else
             TEST_RESULTS+=("PASS:hash_failed")
@@ -308,7 +308,7 @@ test_failed() {
     # Capture database hash if database exists
     if [ -d "$TEST_DB_DIR" ] && [ -f "$TEST_DB_DIR/.db/files.dat" ]; then
         local hash_output
-        if hash_output=$($(get_cli_command) root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
+        if hash_output=$($(get_zig_cli_command) root-hash --db "$TEST_DB_DIR" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs); then
             TEST_RESULTS+=("FAIL:$test_name:$hash_output")
         else
             TEST_RESULTS+=("FAIL:$test_name:hash_failed")
@@ -690,7 +690,7 @@ invoke_command() {
                 # Check if database exists and print root hash
                 if [ -n "$db_path" ] && [ -d "$db_path" ] && [ -f "$db_path/.db/files.dat" ]; then
                     echo ""
-                    echo -e "[@@@@@@] ${YELLOW}[ROOT-HASH]${NC} $($(get_cli_command) root-hash --db "$db_path" --yes 2>/dev/null || echo "N/A")"
+                    echo -e "[@@@@@@] ${YELLOW}[ROOT-HASH]${NC} $($(get_zig_cli_command) root-hash --db "$db_path" --yes 2>/dev/null || echo "N/A")"
                     echo ""
                     # echo -e "[@@@@@@] ${YELLOW}[MERKLE-TREE]${NC}"
                     # $(get_mk_command) show "$db_path/.db/files.dat" 2>/dev/null | sed 's/^/[@@@@@@] /' || echo "[@@@@@@] N/A"

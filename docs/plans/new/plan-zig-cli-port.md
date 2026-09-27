@@ -88,10 +88,10 @@ To do, in order (each one uses what the earlier ones ported):
 - [x] summary
 - [x] list
 - [x] info
-- [ ] root-hash
-- [ ] database-id
-- [ ] origin
-- [ ] set-origin
+- [x] root-hash
+- [x] database-id
+- [x] origin
+- [x] set-origin
 - [ ] export
 - [ ] compare
 - [ ] remove

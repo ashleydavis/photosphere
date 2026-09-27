@@ -81,8 +81,8 @@ test_replicate_with_deleted_asset() {
     log_info "Verifying database IDs match for source and replica"
     local source_id_output
     local replica_id_output
-    invoke_command "Get source database ID" "$(get_cli_command) database-id --db $source_dir --yes" 0 "source_id_output"
-    invoke_command "Get replica database ID" "$(get_cli_command) database-id --db $replica_dir --yes" 0 "replica_id_output"
+    invoke_command "Get source database ID" "$(get_zig_cli_command) database-id --db $source_dir --yes" 0 "source_id_output"
+    invoke_command "Get replica database ID" "$(get_zig_cli_command) database-id --db $replica_dir --yes" 0 "replica_id_output"
     
     local source_id=$(echo "$source_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local replica_id=$(echo "$replica_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)

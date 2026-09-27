@@ -41,8 +41,8 @@ test_sync_original_to_copy() {
     log_info "Verifying original and copy have the same root hash"
     local original_hash_output
     local copy_hash_output
-    invoke_command "Get original database root hash" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
+    invoke_command "Get original database root hash" "$(get_zig_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash" "$(get_zig_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
     
     local original_hash=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local copy_hash=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
@@ -66,8 +66,8 @@ test_sync_original_to_copy() {
     
     # Get root hashes and verify they are now different
     log_info "Verifying original and copy now have different root hashes"
-    invoke_command "Get original database root hash after add" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash (unchanged)" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
+    invoke_command "Get original database root hash after add" "$(get_zig_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash (unchanged)" "$(get_zig_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
     
     local original_hash_after=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local copy_hash_before_sync=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
@@ -91,8 +91,8 @@ test_sync_original_to_copy() {
     
     # Get root hashes and verify they are now the same again
     log_info "Verifying original and copy have the same root hash after sync"
-    invoke_command "Get original database root hash after sync" "$(get_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
-    invoke_command "Get copy database root hash after sync" "$(get_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
+    invoke_command "Get original database root hash after sync" "$(get_zig_cli_command) root-hash --db $original_dir --yes" 0 "original_hash_output"
+    invoke_command "Get copy database root hash after sync" "$(get_zig_cli_command) root-hash --db $copy_dir --yes" 0 "copy_hash_output"
     
     local original_hash_final=$(echo "$original_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local copy_hash_final=$(echo "$copy_hash_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)

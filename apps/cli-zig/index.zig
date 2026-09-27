@@ -1,8 +1,9 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `add` (alias `a`), `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `replicate`
-// (alias `rep`), `summary` (alias `sum`), `verify` (alias `ver`) and `version` commands and the `--version` option are ported; the other
-// commands are not registered yet, so commander reports them as unknown commands.
+// Only the `add` (alias `a`), `database-id`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and
+// `l`), `origin`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `verify` (alias
+// `ver`) and `version` commands and the `--version` option are ported; the other commands are not registered yet,
+// so commander reports them as unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -39,6 +40,10 @@ pub const replicate = @import("src/cmd/replicate.zig");
 pub const init_command = @import("src/cmd/init.zig");
 pub const info = @import("src/cmd/info.zig");
 pub const list = @import("src/cmd/list.zig");
+pub const origin = @import("src/cmd/origin.zig");
+pub const set_origin = @import("src/cmd/set-origin.zig");
+pub const root_hash = @import("src/cmd/root-hash.zig");
+pub const database_id = @import("src/cmd/database-id.zig");
 pub const summary = @import("src/cmd/summary.zig");
 pub const verify = @import("src/cmd/verify.zig");
 pub const version_cmd = @import("src/cmd/version.zig");
@@ -66,6 +71,14 @@ const IInfoCommandOptions = info.IInfoCommandOptions;
 const infoCommand = info.infoCommand;
 const IListCommandOptions = list.IListCommandOptions;
 const listCommand = list.listCommand;
+const IOriginCommandOptions = origin.IOriginCommandOptions;
+const originCommand = origin.originCommand;
+const ISetOriginCommandOptions = set_origin.ISetOriginCommandOptions;
+const setOriginCommand = set_origin.setOriginCommand;
+const IRootHashCommandOptions = root_hash.IRootHashCommandOptions;
+const rootHashCommand = root_hash.rootHashCommand;
+const IDatabaseIdCommandOptions = database_id.IDatabaseIdCommandOptions;
+const databaseIdCommand = database_id.databaseIdCommand;
 const summaryCommand = summary.summaryCommand;
 const verifyCommand = verify.verifyCommand;
 const versionCommand = version_cmd.versionCommand;
@@ -171,6 +184,18 @@ pub const IAddParsed = struct {
 };
 
 //
+// What the set-origin command runs with: its path and its options (TypeScript: the arguments commander passes the
+// action).
+//
+pub const ISetOriginParsed = struct {
+    // Path or URI of the origin database.
+    path: []const u8,
+
+    // The options of the command.
+    options: ISetOriginCommandOptions,
+};
+
+//
 // What the info command runs with: its inputs and its options (TypeScript: the arguments commander passes the action).
 //
 pub const IInfoParsed = struct {
@@ -200,6 +225,18 @@ pub const ParseOutcome = union(enum) {
 
     // Run the replicate command with these options.
     replicate: IReplicateCommandOptions,
+
+    // Run the origin command with these options.
+    origin: IOriginCommandOptions,
+
+    // Run the set-origin command with this path and these options.
+    setOrigin: ISetOriginParsed,
+
+    // Run the root-hash command with these options.
+    rootHash: IRootHashCommandOptions,
+
+    // Run the database-id command with these options.
+    databaseId: IDatabaseIdCommandOptions,
 
     // Run the summary command with these options.
     summary: ISummaryCommandOptions,
@@ -389,6 +426,63 @@ fn listAction(state: *IProgramState, args: []const ArgumentValue, options: *cons
 }
 
 //
+// The action of the origin command (`initContext(originCommand)`): `run` calls initContext and the command.
+//
+fn originAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .origin = .{
+            .base = baseOptions(options),
+        },
+    };
+}
+
+//
+// The action of the set-origin command
+// (`initContext((ctx, path, options) => setOriginCommand(ctx, options, path))`): `run` calls initContext and the
+// command.
+//
+fn setOriginAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+    state.outcome = .{
+        .setOrigin = .{
+            .path = args[0].string,
+            .options = .{
+                .base = baseOptions(options),
+            },
+        },
+    };
+}
+
+//
+// The action of the root-hash command (`initContext(rootHashCommand)`): `run` calls initContext and the command.
+//
+fn rootHashAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .rootHash = .{
+            .base = baseOptions(options),
+        },
+    };
+}
+
+//
+// The action of the database-id command (`initContext(databaseIdCommand)`): `run` calls initContext and the
+// command.
+//
+fn databaseIdAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .databaseId = .{
+            .base = baseOptions(options),
+        },
+    };
+}
+
+//
 // The action of the summary command (`initContext(summaryCommand)`): `run` calls initContext and the command.
 //
 fn summaryAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
@@ -496,7 +590,28 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "init"))
         .action(state, initAction);
 
-    // Not ported: origin, set-origin and consolidate.
+    const originDefinition = program
+        .command("origin", .{})
+        .description("Shows the origin database path (from .db/config.json).");
+    _ = optionFrom(originDefinition, dbOption);
+    _ = optionFrom(originDefinition, keyOption);
+    _ = optionFrom(originDefinition, verboseOption);
+    _ = optionFrom(originDefinition, yesOption);
+    _ = optionFrom(originDefinition, cwdOption);
+    _ = originDefinition.action(state, originAction);
+
+    const setOriginDefinition = program
+        .command("set-origin", .{})
+        .description("Sets the origin database path in .db/config.json (used as default --dest or --source for sync, replicate, repair, compare).")
+        .argument("<path>", "Path or URI of the origin database");
+    _ = optionFrom(setOriginDefinition, dbOption);
+    _ = optionFrom(setOriginDefinition, keyOption);
+    _ = optionFrom(setOriginDefinition, verboseOption);
+    _ = optionFrom(setOriginDefinition, yesOption);
+    _ = optionFrom(setOriginDefinition, cwdOption);
+    _ = setOriginDefinition.action(state, setOriginAction);
+
+    // Not ported: consolidate.
 
     const listDefinition = program
         .command("list", .{})
@@ -513,7 +628,27 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "list"))
         .action(state, listAction);
 
-    // Not ported: the commands between list and replicate.
+    // Not ported: mcp, news, remove, remove-orphans and repair.
+
+    const rootHashDefinition = program
+        .command("root-hash", .{})
+        .description("Displays the aggregate root hash of the database.");
+    _ = optionFrom(rootHashDefinition, dbOption);
+    _ = optionFrom(rootHashDefinition, keyOption);
+    _ = optionFrom(rootHashDefinition, verboseOption);
+    _ = optionFrom(rootHashDefinition, yesOption);
+    _ = optionFrom(rootHashDefinition, cwdOption);
+    _ = rootHashDefinition.action(state, rootHashAction);
+
+    const databaseIdDefinition = program
+        .command("database-id", .{})
+        .description("Displays the database ID (UUID) of the database.");
+    _ = optionFrom(databaseIdDefinition, dbOption);
+    _ = optionFrom(databaseIdDefinition, keyOption);
+    _ = optionFrom(databaseIdDefinition, verboseOption);
+    _ = optionFrom(databaseIdDefinition, yesOption);
+    _ = optionFrom(databaseIdDefinition, cwdOption);
+    _ = databaseIdDefinition.action(state, databaseIdAction);
 
     const replicateDefinition = program
         .command("replicate", .{})
@@ -673,6 +808,38 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try listCommand(allocator, io, context, &options);
+        },
+        .origin => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try originCommand(allocator, io, context, &options);
+        },
+        .setOrigin => |parsed| {
+            var options = parsed.options;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try setOriginCommand(allocator, io, context, &options, parsed.path);
+        },
+        .rootHash => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try rootHashCommand(allocator, io, context, &options);
+        },
+        .databaseId => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try databaseIdCommand(allocator, io, context, &options);
         },
         .summary => |parsed| {
             var options = parsed;

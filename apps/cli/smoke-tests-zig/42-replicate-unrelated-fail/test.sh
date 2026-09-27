@@ -39,8 +39,8 @@ test_replicate_unrelated_databases_fail() {
     log_info "Getting database IDs to confirm they are different"
     local first_id_output
     local second_id_output
-    invoke_command "Get first database ID" "$(get_cli_command) database-id --db $first_db_dir --yes" 0 "first_id_output"
-    invoke_command "Get second database ID" "$(get_cli_command) database-id --db $second_db_dir --yes" 0 "second_id_output"
+    invoke_command "Get first database ID" "$(get_zig_cli_command) database-id --db $first_db_dir --yes" 0 "first_id_output"
+    invoke_command "Get second database ID" "$(get_zig_cli_command) database-id --db $second_db_dir --yes" 0 "second_id_output"
     
     local first_id=$(echo "$first_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     local second_id=$(echo "$second_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
