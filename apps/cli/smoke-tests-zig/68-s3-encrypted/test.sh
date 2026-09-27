@@ -59,7 +59,7 @@ test_s3_encrypted() {
     log_info "Database path: $s3_db"
 
     invoke_command "Initialize an encrypted database on S3" \
-        "$(get_cli_command) init --db \"$s3_db\" --key $KEY_NAME --generate-key --yes" 0
+        "$(get_zig_cli_command) init --db \"$s3_db\" --key $KEY_NAME --generate-key --yes" 0
 
     invoke_command "Add a JPG to the encrypted S3 database" \
         "$(get_cli_command) add $TEST_FILES_DIR/test.jpg --db \"$s3_db\" --key $KEY_NAME --yes" 0

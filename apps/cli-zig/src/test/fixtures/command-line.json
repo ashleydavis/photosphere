@@ -940,5 +940,125 @@
         "outcome": {
             "kind": "version"
         }
+    },
+    {
+        "args": [
+            "init",
+            "--db",
+            "a",
+            "--yes"
+        ],
+        "outcome": {
+            "kind": "init",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": true,
+                "db": "a"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "i",
+            "-k",
+            "key",
+            "-g",
+            "-v",
+            "--tools",
+            "--cwd",
+            "c",
+            "--session-id",
+            "s",
+            "--database-id",
+            "d"
+        ],
+        "outcome": {
+            "kind": "init",
+            "options": {
+                "generateKey": true,
+                "verbose": true,
+                "tools": true,
+                "yes": false,
+                "key": "key",
+                "cwd": "c",
+                "sessionId": "s",
+                "databaseId": "d"
+            },
+            "quiet": false
+        }
+    },
+    {
+        "args": [
+            "-q",
+            "init",
+            "-y"
+        ],
+        "outcome": {
+            "kind": "init",
+            "options": {
+                "generateKey": false,
+                "verbose": false,
+                "tools": false,
+                "yes": true
+            },
+            "quiet": true
+        }
+    },
+    {
+        "args": [
+            "init",
+            "extra"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: too many arguments for 'init'. Expected 0 arguments but got 1.\n",
+            "code": "commander.excessArguments",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "init",
+            "--bogus"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: unknown option '--bogus'\n",
+            "code": "commander.unknownOption",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "init",
+            "--db"
+        ],
+        "outcome": {
+            "kind": "error",
+            "stderr": "error: option '--db <path>' argument missing\n",
+            "code": "commander.optionMissingArgument",
+            "level": "command"
+        }
+    },
+    {
+        "args": [
+            "init",
+            "--help"
+        ],
+        "outcome": {
+            "kind": "help"
+        }
+    },
+    {
+        "args": [
+            "i",
+            "--version"
+        ],
+        "outcome": {
+            "kind": "version"
+        }
     }
 ]

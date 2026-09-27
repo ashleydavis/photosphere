@@ -1,0 +1,13 @@
+#!/bin/bash
+DESCRIPTION="Export assets by ID"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/common.sh"
+source "$SCRIPT_DIR/../lib/functions.sh"
+trap cleanup_and_show_summary EXIT
+
+TEST_DB_DIR="$(get_test_dir 12)/test-db"
+create_db_with_5_files "$TEST_DB_DIR"
+
+test_export_assets 12
+
+invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db $TEST_DB_DIR --yes"

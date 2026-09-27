@@ -1,5 +1,7 @@
 const std = @import("std");
 const helpers = @import("test-helpers.zig");
+const storage_zig = @import("storage-zig");
+const merkle_tree_zig = @import("merkle-tree-zig");
 
 //
 // The paths of the two CLIs.
@@ -314,4 +316,125 @@ test "--version prints the version like TypeScript" {
         try expectSameResult(tsResult, zigResult);
         try std.testing.expectEqual(@as(u8, 0), zigResult.exitCode);
     }
+}
+
+//
+// Copies the CLI test environment, with deterministic IDs (NODE_ENV=testing) from a UUID counter of its own.
+//
+fn deterministicEnvironment(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, counterDir: []const u8) !*std.process.Environ.Map {
+    const copy = try allocator.create(std.process.Environ.Map);
+    copy.* = try environment.clone(allocator);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, counterDir);
+    try copy.put("NODE_ENV", "testing");
+    try copy.put("TEST_TMP_DIR", counterDir);
+    return copy;
+}
+
+//
+// Expects two databases to hold the same files with the same bytes, except the merkle tree of the files,
+// which records the modification time of README.md; its database id is compared instead.
+//
+fn expectSameDatabase(allocator: std.mem.Allocator, tsDir: []const u8, zigDir: []const u8) !void {
+    const relativePaths = [_][]const u8{
+        "README.md",
+        ".db/config.json",
+        ".db/bson/indexes/metadata/hash_asc/tree.dat",
+        ".db/bson/indexes/metadata/photoDate_desc/tree.dat",
+    };
+    for (relativePaths) |relativePath| {
+        errdefer std.debug.print("file={s}\n", .{relativePath});
+        const tsBytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ tsDir, relativePath }), allocator, .unlimited);
+        const zigBytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ zigDir, relativePath }), allocator, .unlimited);
+        try std.testing.expectEqualSlices(u8, tsBytes, zigBytes);
+    }
+    const tsStorage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, tsDir, null, null);
+    const zigStorage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, zigDir, null, null);
+    const tsTree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, std.testing.io, ".db/files.dat", tsStorage.storage, "FTRE")).?;
+    const zigTree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, std.testing.io, ".db/files.dat", zigStorage.storage, "FTRE")).?;
+    try std.testing.expectEqualStrings(tsTree.id, zigTree.id);
+}
+
+test "init prints the same report as TypeScript and creates the same database" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-init");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const dbTs = try std.fmt.allocPrint(allocator, "{s}/db-ts", .{root});
+    const dbZig = try std.fmt.allocPrint(allocator, "{s}/db-zig", .{root});
+    const tsEnvironment = try deterministicEnvironment(allocator, environment, try std.fmt.allocPrint(allocator, "{s}/ids-ts", .{root}));
+    const zigEnvironment = try deterministicEnvironment(allocator, environment, try std.fmt.allocPrint(allocator, "{s}/ids-zig", .{root}));
+
+    const tsResult = try normalize(allocator, try runTs(allocator, tsEnvironment, &.{ "init", "--db", dbTs, "--yes" }), dbTs, "<db>");
+    const zigResult = try normalize(allocator, try runZig(allocator, zigEnvironment, &.{ "init", "--db", dbZig, "--yes" }), dbZig, "<db>");
+    try expectSameResult(tsResult, zigResult);
+    try std.testing.expectEqual(@as(u8, 0), zigResult.exitCode);
+    try expectSameDatabase(allocator, dbTs, dbZig);
+
+    // A database with the identity of another database.
+    const relatedTs = try std.fmt.allocPrint(allocator, "{s}/related-ts", .{root});
+    const relatedZig = try std.fmt.allocPrint(allocator, "{s}/related-zig", .{root});
+    const databaseId = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+    const tsRelated = try normalize(allocator, try runTs(allocator, tsEnvironment, &.{ "i", "--db", relatedTs, "--database-id", databaseId, "-y" }), relatedTs, "<db>");
+    const zigRelated = try normalize(allocator, try runZig(allocator, zigEnvironment, &.{ "i", "--db", relatedZig, "--database-id", databaseId, "-y" }), relatedZig, "<db>");
+    try expectSameResult(tsRelated, zigRelated);
+    try expectSameDatabase(allocator, relatedTs, relatedZig);
+}
+
+test "init refuses a directory that is not empty like TypeScript" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-init-not-empty");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const dbTs = try std.fmt.allocPrint(allocator, "{s}/db-ts", .{root});
+    const dbZig = try std.fmt.allocPrint(allocator, "{s}/db-zig", .{root});
+
+    var tsResult = try normalize(allocator, try runTs(allocator, environment, &.{ "init", "--db", dbTs, "--yes" }), dbTs, "<db>");
+    var zigResult = try normalize(allocator, try runZig(allocator, environment, &.{ "init", "--db", dbZig, "--yes" }), dbZig, "<db>");
+    tsResult.stdout = try maskRetainedSessionDir(allocator, tsResult.stdout);
+    zigResult.stdout = try maskRetainedSessionDir(allocator, zigResult.stdout);
+    try expectSameResult(tsResult, zigResult);
+    try std.testing.expectEqual(@as(u8, 1), zigResult.exitCode);
+}
+
+test "init rejects a malformed --database-id like TypeScript" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-init-database-id");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const dbTs = try std.fmt.allocPrint(allocator, "{s}/db-ts", .{root});
+    const dbZig = try std.fmt.allocPrint(allocator, "{s}/db-zig", .{root});
+
+    const tsResult = try runTs(allocator, environment, &.{ "init", "--db", dbTs, "--database-id", "not-a-uuid", "--yes" });
+    const zigResult = try runZig(allocator, environment, &.{ "init", "--db", dbZig, "--database-id", "not-a-uuid", "--yes" });
+    try std.testing.expectEqual(tsResult.exitCode, zigResult.exitCode);
+    try std.testing.expect(std.mem.indexOf(u8, zigResult.stderr, "\"not-a-uuid\" is not a database id.") != null);
+}
+
+test "init creates an encrypted database with a generated key like TypeScript" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-init-encrypted");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const dbTs = try std.fmt.allocPrint(allocator, "{s}/db-ts", .{root});
+    const dbZig = try std.fmt.allocPrint(allocator, "{s}/db-zig", .{root});
+
+    const tsResult = try normalize(allocator, try runTs(allocator, environment, &.{ "init", "--db", dbTs, "--key", "ts-key", "--generate-key", "--yes" }), dbTs, "<db>");
+    const zigResult = try normalize(allocator, try runZig(allocator, environment, &.{ "init", "--db", dbZig, "--key", "zig-key", "--generate-key", "--yes" }), dbZig, "<db>");
+    try std.testing.expectEqualStrings(tsResult.stdout, try std.mem.replaceOwned(u8, allocator, zigResult.stdout, "zig-key", "ts-key"));
+    try std.testing.expectEqualStrings(tsResult.stderr, zigResult.stderr);
+    try std.testing.expectEqual(@as(u8, 0), zigResult.exitCode);
+
+    // Each CLI opens the database the other created with its key.
+    const tsVerify = try runTs(allocator, environment, &.{ "verify", "--db", dbZig, "--key", "zig-key", "--yes" });
+    try std.testing.expectEqual(@as(u8, 0), tsVerify.exitCode);
+    const zigVerify = try runZig(allocator, environment, &.{ "verify", "--db", dbTs, "--key", "ts-key", "--yes" });
+    try std.testing.expectEqual(@as(u8, 0), zigVerify.exitCode);
 }

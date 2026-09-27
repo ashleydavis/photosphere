@@ -120,6 +120,15 @@ test "command lines parse exactly like commander" {
             try expectFlag(options.get("full"), verifyOptions.full);
             try expectText(options.get("path"), verifyOptions.path);
         }
+        else if (std.mem.eql(u8, kind, "init")) {
+            const options = expected.get("options").?.object;
+            try std.testing.expect(outcome == .init);
+            const initOptions = outcome.init;
+            try std.testing.expectEqual(expected.get("quiet").?.bool, parsed.state.notificationsQuiet.?);
+            try expectBase(options, initOptions.base);
+            try expectFlag(options.get("generateKey"), initOptions.generateKey);
+            try expectText(options.get("databaseId"), initOptions.databaseId);
+        }
         else if (std.mem.eql(u8, kind, "versionCommand")) {
             try std.testing.expect(outcome == .version);
             try std.testing.expectEqual(expected.get("quiet").?.bool, parsed.state.notificationsQuiet.?);
@@ -159,7 +168,7 @@ test "other commands and empty command lines are delegated" {
     const allocator = arena.allocator();
     try std.testing.expect((try parse(allocator, &.{})).outcome == .delegate);
     try std.testing.expect((try parse(allocator, &.{"summary"})).outcome == .delegate);
-    try std.testing.expect((try parse(allocator, &.{ "init", "--db", "x" })).outcome == .delegate);
+    try std.testing.expect((try parse(allocator, &.{ "add", "--db", "x" })).outcome == .delegate);
     try std.testing.expect((try parse(allocator, &.{"--help"})).outcome == .delegate);
     try std.testing.expect((try parse(allocator, &.{ "--db", "x", "replicate" })).outcome == .delegate);
     try std.testing.expect((try parse(allocator, &.{ "help", "replicate" })).outcome == .delegate);
@@ -191,6 +200,9 @@ test "the command definitions match index.ts" {
     const verifyDefinition = program.findCommand("ver").?;
     try std.testing.expectEqualStrings("verify", verifyDefinition.getName());
     try std.testing.expectEqual(@as(usize, 10), verifyDefinition.options.items.len);
+    const initDefinition = program.findCommand("i").?;
+    try std.testing.expectEqualStrings("init", initDefinition.getName());
+    try std.testing.expectEqual(@as(usize, 9), initDefinition.options.items.len);
     const versionDefinition = program.findCommand("version").?;
     try std.testing.expectEqualStrings("version", versionDefinition.getName());
     try std.testing.expectEqual(@as(usize, 0), versionDefinition.options.items.len);

@@ -13,6 +13,7 @@ const buildMetadata = config.buildMetadata;
 const getCacheDir = node_utils.fs.getCacheDir;
 const getConfigDir = node_utils.fs.getConfigDir;
 const getProcessTmpDir = node_utils.fs.getProcessTmpDir;
+const join = node_utils.path.join;
 const CURRENT_DATABASE_VERSION = merkle_tree.merkle_tree.CURRENT_DATABASE_VERSION;
 
 //
@@ -96,8 +97,8 @@ pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io) !void {
     log.info(try pc.bold(allocator, "Directories:"));
     const configDir = try getConfigDir(allocator);
     log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "Config"), try pc.cyan(allocator, configDir) }));
-    log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "Temp"), try pc.cyan(allocator, try std.fs.path.join(allocator, &.{ try getProcessTmpDir(allocator, io), "photosphere" })) }));
-    log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "Log files"), try pc.cyan(allocator, try std.fs.path.join(allocator, &.{ try getProcessTmpDir(allocator, io), "photosphere", "logs" })) }));
+    log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "Temp"), try pc.cyan(allocator, try join(allocator, &.{ try getProcessTmpDir(allocator, io), "photosphere" })) }));
+    log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "Log files"), try pc.cyan(allocator, try join(allocator, &.{ try getProcessTmpDir(allocator, io), "photosphere", "logs" })) }));
     // Where this machine keeps what it has worked out about each database, the hash caches among
     // them. A directory per database rather than one file, and this command has no database in hand
     // to name a single one, so it names the root they all sit under.

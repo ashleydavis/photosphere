@@ -1,0 +1,260 @@
+[
+    {
+        "segments": [],
+        "posix": ".",
+        "win32": "."
+    },
+    {
+        "segments": [
+            ""
+        ],
+        "posix": ".",
+        "win32": "."
+    },
+    {
+        "segments": [
+            "",
+            ""
+        ],
+        "posix": ".",
+        "win32": "."
+    },
+    {
+        "segments": [
+            "."
+        ],
+        "posix": ".",
+        "win32": "."
+    },
+    {
+        "segments": [
+            "/"
+        ],
+        "posix": "/",
+        "win32": "\\"
+    },
+    {
+        "segments": [
+            "//"
+        ],
+        "posix": "/",
+        "win32": "\\"
+    },
+    {
+        "segments": [
+            "///a"
+        ],
+        "posix": "/a",
+        "win32": "\\a"
+    },
+    {
+        "segments": [
+            "a",
+            "b"
+        ],
+        "posix": "a/b",
+        "win32": "a\\b"
+    },
+    {
+        "segments": [
+            "a/",
+            "b/"
+        ],
+        "posix": "a/b/",
+        "win32": "a\\b\\"
+    },
+    {
+        "segments": [
+            "/a/b",
+            "../c"
+        ],
+        "posix": "/a/c",
+        "win32": "\\a\\c"
+    },
+    {
+        "segments": [
+            "/a/b",
+            "../../../c"
+        ],
+        "posix": "/c",
+        "win32": "\\c"
+    },
+    {
+        "segments": [
+            "a",
+            "..",
+            "..",
+            "b"
+        ],
+        "posix": "../b",
+        "win32": "..\\b"
+    },
+    {
+        "segments": [
+            "a/./b",
+            "./c/"
+        ],
+        "posix": "a/b/c/",
+        "win32": "a\\b\\c\\"
+    },
+    {
+        "segments": [
+            "/tmp/x",
+            "photosphere",
+            "logs"
+        ],
+        "posix": "/tmp/x/photosphere/logs",
+        "win32": "\\tmp\\x\\photosphere\\logs"
+    },
+    {
+        "segments": [
+            "/tmp/x/",
+            "/photosphere"
+        ],
+        "posix": "/tmp/x/photosphere",
+        "win32": "\\tmp\\x\\photosphere"
+    },
+    {
+        "segments": [
+            "relative/dir",
+            "tmp"
+        ],
+        "posix": "relative/dir/tmp",
+        "win32": "relative\\dir\\tmp"
+    },
+    {
+        "segments": [
+            "..",
+            "a"
+        ],
+        "posix": "../a",
+        "win32": "..\\a"
+    },
+    {
+        "segments": [
+            "a",
+            "..",
+            ".."
+        ],
+        "posix": "..",
+        "win32": ".."
+    },
+    {
+        "segments": [
+            "a\\b",
+            "c"
+        ],
+        "posix": "a\\b/c",
+        "win32": "a\\b\\c"
+    },
+    {
+        "segments": [
+            "D:\\a\\b/c",
+            "tmp",
+            "photosphere"
+        ],
+        "posix": "D:\\a\\b/c/tmp/photosphere",
+        "win32": "D:\\a\\b\\c\\tmp\\photosphere"
+    },
+    {
+        "segments": [
+            "D:/a/b",
+            "tmp"
+        ],
+        "posix": "D:/a/b/tmp",
+        "win32": "D:\\a\\b\\tmp"
+    },
+    {
+        "segments": [
+            "C:"
+        ],
+        "posix": "C:",
+        "win32": "C:."
+    },
+    {
+        "segments": [
+            "C:",
+            "a"
+        ],
+        "posix": "C:/a",
+        "win32": "C:\\a"
+    },
+    {
+        "segments": [
+            "C:\\"
+        ],
+        "posix": "C:\\",
+        "win32": "C:\\"
+    },
+    {
+        "segments": [
+            "C:\\..",
+            "a"
+        ],
+        "posix": "C:\\../a",
+        "win32": "C:\\a"
+    },
+    {
+        "segments": [
+            "\\\\server\\share",
+            "x"
+        ],
+        "posix": "\\\\server\\share/x",
+        "win32": "\\\\server\\share\\x"
+    },
+    {
+        "segments": [
+            "//server/share"
+        ],
+        "posix": "/server/share",
+        "win32": "\\\\server\\share\\"
+    },
+    {
+        "segments": [
+            "//server/share/",
+            "x/"
+        ],
+        "posix": "/server/share/x/",
+        "win32": "\\\\server\\share\\x\\"
+    },
+    {
+        "segments": [
+            "\\\\\\a",
+            "b"
+        ],
+        "posix": "\\\\\\a/b",
+        "win32": "\\a\\b"
+    },
+    {
+        "segments": [
+            "\\",
+            "a"
+        ],
+        "posix": "\\/a",
+        "win32": "\\a"
+    },
+    {
+        "segments": [
+            "a",
+            "\\\\b"
+        ],
+        "posix": "a/\\\\b",
+        "win32": "a\\b"
+    },
+    {
+        "segments": [
+            "c:/ignore",
+            "c:/some/file"
+        ],
+        "posix": "c:/ignore/c:/some/file",
+        "win32": "c:\\ignore\\c:\\some\\file"
+    },
+    {
+        "segments": [
+            "...",
+            "...."
+        ],
+        "posix": ".../....",
+        "win32": "...\\...."
+    }
+]

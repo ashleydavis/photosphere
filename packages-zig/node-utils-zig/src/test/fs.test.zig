@@ -718,7 +718,7 @@ test "getConfigDir is .config/photosphere under the home directory on desktop an
     const home_variable = if (builtin.os.tag == .windows) "USERPROFILE" else "HOME";
     try environ_map.put(home_variable, "/some-home");
 
-    const expected = try std.fs.path.join(allocator, &.{ "/some-home", ".config", "photosphere" });
+    const expected = try node_utils.path.join(allocator, &.{ "/some-home", ".config", "photosphere" });
     try std.testing.expectEqualStrings(expected, try fs.getConfigDir(allocator));
 }
 
@@ -1059,7 +1059,7 @@ test "getCacheDir falls back to AppData/Local on Windows when LOCALAPPDATA is no
     try cacheDirEnvironment(&environ_map);
     defer node_utils.process_env.setEnvironMap(null);
 
-    try std.testing.expectEqualStrings("/some-home\\AppData\\Local\\photosphere\\cache", try fs.getCacheDir(allocator));
+    try std.testing.expectEqualStrings("\\some-home\\AppData\\Local\\photosphere\\cache", try fs.getCacheDir(allocator));
 }
 
 test "getCacheDir is the storage sandbox root when there is no home directory" {

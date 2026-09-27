@@ -87,6 +87,43 @@
     },
     {
         "args": [
+            "init",
+            "--help"
+        ],
+        "stdout": "Usage: psi init|i [options]\n\nInitializes a new media file database.\n\nOptions:\n  --db <path>          The directory that contains the media file database\n  -k, --key <keyfile>  Path to the private key file for encryption.\n  -g, --generate-key   Generate encryption keys if they don't exist. (default:\n                       false)\n  -v, --verbose        Enables verbose logging. (default: false)\n  --tools              Enables output from media processing tools (ImageMagick,\n                       ffmpeg, etc.). (default: false)\n  -y, --yes            Non-interactive mode. Use command line arguments and\n                       defaults. (default: false)\n  --cwd <path>         Set the current working directory for directory selection\n                       prompts. Defaults to the current directory from your\n                       shell/terminal. This is mostly for testing/debugging.\n  --session-id <id>    Set session identifier for write lock tracking. Defaults\n                       to a random UUID.\n  --database-id <id>   Create the database with this identity instead of a new\n                       one, so it is related to the database that already has\n                       that identity and the two can sync. Get it from `psi\n                       database-id`.\n  -h, --help           display help for command\n\nExamples:\n  psi init --db .                  Creates a database in current directory.\n  psi init --db ./photos           Creates a database in ./photos directory.\n",
+        "stderr": "",
+        "exitCode": 0
+    },
+    {
+        "args": [
+            "i",
+            "-h"
+        ],
+        "stdout": "Usage: psi init|i [options]\n\nInitializes a new media file database.\n\nOptions:\n  --db <path>          The directory that contains the media file database\n  -k, --key <keyfile>  Path to the private key file for encryption.\n  -g, --generate-key   Generate encryption keys if they don't exist. (default:\n                       false)\n  -v, --verbose        Enables verbose logging. (default: false)\n  --tools              Enables output from media processing tools (ImageMagick,\n                       ffmpeg, etc.). (default: false)\n  -y, --yes            Non-interactive mode. Use command line arguments and\n                       defaults. (default: false)\n  --cwd <path>         Set the current working directory for directory selection\n                       prompts. Defaults to the current directory from your\n                       shell/terminal. This is mostly for testing/debugging.\n  --session-id <id>    Set session identifier for write lock tracking. Defaults\n                       to a random UUID.\n  --database-id <id>   Create the database with this identity instead of a new\n                       one, so it is related to the database that already has\n                       that identity and the two can sync. Get it from `psi\n                       database-id`.\n  -h, --help           display help for command\n\nExamples:\n  psi init --db .                  Creates a database in current directory.\n  psi init --db ./photos           Creates a database in ./photos directory.\n",
+        "stderr": "",
+        "exitCode": 0
+    },
+    {
+        "args": [
+            "init",
+            "extra"
+        ],
+        "stdout": "",
+        "stderr": "error: too many arguments for 'init'. Expected 0 arguments but got 1.\n",
+        "exitCode": 1
+    },
+    {
+        "args": [
+            "init",
+            "--dbb",
+            "x"
+        ],
+        "stdout": "",
+        "stderr": "error: unknown option '--dbb'\n(Did you mean --db?)\n",
+        "exitCode": 1
+    },
+    {
+        "args": [
             "version",
             "--help"
         ],

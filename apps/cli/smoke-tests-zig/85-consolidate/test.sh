@@ -15,7 +15,7 @@ CLI_COMMAND=$(get_cli_command)
 NEW_LOCAL="$TEST_DIR/new-local"
 NEW_REMOTE="$TEST_DIR/new-remote"
 
-invoke_command "Initialize a database" "$CLI_COMMAND init --db $NEW_LOCAL --yes"
+invoke_command "Initialize a database" "$(get_zig_cli_command) init --db $NEW_LOCAL --yes"
 invoke_command "Add a photo" "$CLI_COMMAND add --db $NEW_LOCAL $TEST_FILES_DIR/test.png --yes"
 
 invoke_command "Consolidate into a remote that does not exist yet" "$CLI_COMMAND consolidate --db $NEW_LOCAL $NEW_REMOTE --yes"
@@ -39,8 +39,8 @@ expect_value "$NEW_REMOTE_ASSETS" 1 "Connecting again did not duplicate anything
 LOCAL_DB="$TEST_DIR/local-db"
 REMOTE_DB="$TEST_DIR/remote-db"
 
-invoke_command "Initialize the local database" "$CLI_COMMAND init --db $LOCAL_DB --yes"
-invoke_command "Initialize an unrelated remote database" "$CLI_COMMAND init --db $REMOTE_DB --yes"
+invoke_command "Initialize the local database" "$(get_zig_cli_command) init --db $LOCAL_DB --yes"
+invoke_command "Initialize an unrelated remote database" "$(get_zig_cli_command) init --db $REMOTE_DB --yes"
 
 # The same photo goes into both, so consolidation has something it must not duplicate. Each of them
 # also has a photo of its own.

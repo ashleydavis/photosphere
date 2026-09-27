@@ -153,6 +153,8 @@ const verboseOption: [string, string, boolean] = ["-v, --verbose", "Enables verb
 const toolsOption: [string, string, boolean] = ["--tools", "Enables output from media processing tools (ImageMagick, ffmpeg, etc.).", false];
 const yesOption: [string, string, boolean] = ["-y, --yes", "Non-interactive mode. Use command line arguments and defaults.", false];
 const cwdOption: [string, string] = ["--cwd <path>", "Set the current working directory for directory selection prompts. Defaults to the current directory from your shell/terminal. This is mostly for testing/debugging."];
+const sessionIdOption: [string, string] = ["--session-id <id>", "Set session identifier for write lock tracking. Defaults to a random UUID."];
+const databaseIdOption: [string, string] = ["--database-id <id>", "Create the database with this identity instead of a new one, so it is related to the database that already has that identity and the two can sync. Get it from `psi database-id`."];
 const workersOption: [string, string] = ["--workers <number>", "Number of worker threads to use for parallel processing (default: number of CPU cores)"];
 const timeoutOption: [string, string] = ["--timeout <ms>", "Task timeout in milliseconds (default: 600000 = 10 minutes)"];
 
@@ -178,6 +180,21 @@ function parseWithCommander(args: string[]): any {
         .configureOutput({ writeErr: (message: string) => { errorOutput += message; }, writeOut: () => {} })
         .addHelpCommand(false)
         .hook("preSubcommand", () => { errorLevel = "command"; });
+    program
+        .command("init")
+        .alias("i")
+        .option(...dbOption)
+        .option(...keyOption)
+        .option(...generateKeyOption)
+        .option(...verboseOption)
+        .option(...toolsOption)
+        .option(...yesOption)
+        .option(...cwdOption)
+        .option(...sessionIdOption)
+        .option(...databaseIdOption)
+        .exitOverride()
+        .configureOutput({ writeErr: (message: string) => { errorOutput += message; }, writeOut: () => {} })
+        .action((options: any) => { outcome = { kind: "init", options, quiet: program.opts().quiet === true }; });
     program
         .command("replicate")
         .alias("rep")
@@ -300,6 +317,14 @@ const commandLines: string[][] = [
     ["version", "--bogus"],
     ["version", "--help"],
     ["version", "--version"],
+    ["init", "--db", "a", "--yes"],
+    ["i", "-k", "key", "-g", "-v", "--tools", "--cwd", "c", "--session-id", "s", "--database-id", "d"],
+    ["-q", "init", "-y"],
+    ["init", "extra"],
+    ["init", "--bogus"],
+    ["init", "--db"],
+    ["init", "--help"],
+    ["i", "--version"],
 ];
 const commandCases: any[] = [];
 for (const args of commandLines) {

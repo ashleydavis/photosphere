@@ -17,7 +17,7 @@ test_create_database() {
 
     log_info "Database path: $TEST_DB_DIR"
 
-    invoke_command "Initialize new database" "$(get_cli_command) init --db $TEST_DB_DIR --yes"
+    invoke_command "Initialize new database" "$(get_zig_cli_command) init --db $TEST_DB_DIR --yes"
 
     # Check if required files were created (v6 layout: BSON under .db/bson)
     check_exists "$TEST_DB_DIR" "Database directory"
@@ -182,7 +182,7 @@ test_add_duplicate_images() {
     rm -rf "$db_dir"
 
     log_info "Creating new database at: $db_dir"
-    invoke_command "Initialize new database" "$(get_cli_command) init --db $db_dir --yes"
+    invoke_command "Initialize new database" "$(get_zig_cli_command) init --db $db_dir --yes"
 
     local add_output
     invoke_command "Add duplicate images directory" "$(get_cli_command) add --db $db_dir $DUPLICATE_IMAGES_DIR/ --yes" 0 "add_output"
@@ -192,6 +192,8 @@ test_add_duplicate_images() {
 
     local files_imported=$(parse_numeric "$summary_output" "Files imported:" "0")
     expect_value "$files_imported" "1" "Database should have exactly 1 asset after importing two identical files"
+
+    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db $db_dir --yes"
 
     rm -rf "$db_dir"
     test_passed
@@ -779,7 +781,7 @@ test_cannot_create_over_existing() {
 
     log_info "Database path: $TEST_DB_DIR"
 
-    invoke_command "Fail to create database over existing" "$(get_cli_command) init --db $TEST_DB_DIR --yes" 1
+    invoke_command "Fail to create database over existing" "$(get_zig_cli_command) init --db $TEST_DB_DIR --yes" 1
     test_passed
 }
 

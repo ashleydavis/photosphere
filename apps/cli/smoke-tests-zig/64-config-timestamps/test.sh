@@ -94,7 +94,7 @@ test_config_timestamps() {
     # ── 1. add bumps lastModifiedAt ──────────────────────────────────────────
     local db_dir="$test_dir/db-add"
     rm -rf "$db_dir"
-    invoke_command "Initialize database" "$(get_cli_command) init --db $db_dir --yes"
+    invoke_command "Initialize database" "$(get_zig_cli_command) init --db $db_dir --yes"
 
     local before_modified=$(read_state_field "$db_dir" "lastModifiedAt")
     if [ -n "$before_modified" ]; then
@@ -113,7 +113,7 @@ test_config_timestamps() {
     local replica_dir="$test_dir/db-sync-replica"
     rm -rf "$source_dir" "$replica_dir"
 
-    invoke_command "Initialize sync source database" "$(get_cli_command) init --db $source_dir --yes"
+    invoke_command "Initialize sync source database" "$(get_zig_cli_command) init --db $source_dir --yes"
     invoke_command "Add file to sync source" "$(get_cli_command) add --db $source_dir $TEST_FILES_DIR/test.jpg --yes"
     invoke_command "Replicate to create sync target" "$(get_zig_cli_command) replicate --db $source_dir --dest $replica_dir --yes --force"
 
@@ -142,7 +142,7 @@ test_config_timestamps() {
     local repair_source_dir="$test_dir/db-repair-source"
     rm -rf "$repair_db_dir" "$repair_source_dir"
 
-    invoke_command "Initialize repair source database" "$(get_cli_command) init --db $repair_source_dir --yes"
+    invoke_command "Initialize repair source database" "$(get_zig_cli_command) init --db $repair_source_dir --yes"
     invoke_command "Add file to repair source" "$(get_cli_command) add --db $repair_source_dir $TEST_FILES_DIR/test.png --yes"
 
     # The repair target is a plain copy of the source rather than a replica of it. Replication does

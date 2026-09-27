@@ -204,3 +204,48 @@ fs.writeFileSync(path.join(__dirname, "toml-parse.json"), JSON.stringify(parseFi
 
 const stringifyFixture = stringifyCases.map(stringifyCase => ({ name: stringifyCase.name, object: stringifyCase.object, toml: stringify(stringifyCase.object) }));
 fs.writeFileSync(path.join(__dirname, "toml-stringify.json"), JSON.stringify(stringifyFixture, null, 4) + "\n");
+
+//
+// path.join, both flavours, for the port in src/lib/path.zig.
+//
+const joinCases: string[][] = [
+    [],
+    [""],
+    ["", ""],
+    ["."],
+    ["/"],
+    ["//"],
+    ["///a"],
+    ["a", "b"],
+    ["a/", "b/"],
+    ["/a/b", "../c"],
+    ["/a/b", "../../../c"],
+    ["a", "..", "..", "b"],
+    ["a/./b", "./c/"],
+    ["/tmp/x", "photosphere", "logs"],
+    ["/tmp/x/", "/photosphere"],
+    ["relative/dir", "tmp"],
+    ["..", "a"],
+    ["a", "..", ".."],
+    ["a\\b", "c"],
+    ["D:\\a\\b/c", "tmp", "photosphere"],
+    ["D:/a/b", "tmp"],
+    ["C:"],
+    ["C:", "a"],
+    ["C:\\"],
+    ["C:\\..", "a"],
+    ["\\\\server\\share", "x"],
+    ["//server/share"],
+    ["//server/share/", "x/"],
+    ["\\\\\\a", "b"],
+    ["\\", "a"],
+    ["a", "\\\\b"],
+    ["c:/ignore", "c:/some/file"],
+    ["...", "...."],
+];
+const joinFixture = joinCases.map(segments => ({
+    segments,
+    posix: path.posix.join(...segments),
+    win32: path.win32.join(...segments),
+}));
+fs.writeFileSync(path.join(__dirname, "path-join.json"), JSON.stringify(joinFixture, null, 4) + "\n");

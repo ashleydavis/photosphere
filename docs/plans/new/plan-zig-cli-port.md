@@ -63,7 +63,7 @@ To do, in order (each one uses what the earlier ones ported):
 - [x] version
 - [x] restructure `apps/cli/smoke-tests-zig/` to mirror the TypeScript smoke suites (no interop.sh, zig-functions.sh or
   encrypted-functions.sh overrides)
-- [ ] init
+- [x] init
 - [ ] add (including `--watch`)
 - [ ] summary
 - [ ] list
