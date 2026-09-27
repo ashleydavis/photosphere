@@ -100,7 +100,7 @@ To do, in order (each one uses what the earlier ones ported):
 - [x] remove
 - [x] repair
 - [x] find-orphans
-- [ ] remove-orphans
+- [x] remove-orphans
 - [ ] upgrade
 - [ ] sync
 - [ ] consolidate

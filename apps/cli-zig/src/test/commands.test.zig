@@ -763,6 +763,71 @@ test "find-orphans prints the report of the TypeScript CLI" {
 }
 
 //
+// The report of `psi remove-orphans --yes` (apps/cli/src/cmd/remove-orphans.ts) for <db> with two stray files.
+//
+const remove_orphans_report =
+    \\
+    \\Finding orphaned files in database:
+    \\  Database: <db>
+    \\
+    \\
+    \\🗑️  Remove Orphaned Files
+    \\
+    \\  ✗ asset/orphan-1
+    \\  ✗ other/file
+    \\
+    \\
+    \\✓ Successfully deleted 2 orphaned file(s)
+    \\
+;
+
+//
+// The report of `psi remove-orphans` (apps/cli/src/cmd/remove-orphans.ts) for <db> without stray files.
+//
+const remove_orphans_none_report =
+    \\
+    \\Finding orphaned files in database:
+    \\  Database: <db>
+    \\
+    \\
+    \\🗑️  Remove Orphaned Files
+    \\
+    \\✓ No orphaned files found
+    \\
+;
+
+test "remove-orphans deletes the orphans and prints the report of the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-remove-orphans");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const cwd = std.Io.Dir.cwd();
+    const orphan = try std.fmt.allocPrint(allocator, "{s}/asset/orphan-1", .{db});
+    const other = try std.fmt.allocPrint(allocator, "{s}/other/file", .{db});
+    try cwd.createDirPath(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/other", .{db}));
+    try cwd.writeFile(std.testing.io, .{
+        .sub_path = orphan,
+        .data = "x",
+    });
+    try cwd.writeFile(std.testing.io, .{
+        .sub_path = other,
+        .data = "x",
+    });
+
+    const result = try normalize(allocator, try runZig(allocator, environment, &.{ "remove-orphans", "--db", db, "--yes" }), db, "<db>");
+    try expectResult(result, remove_orphans_report, "", 0);
+    try std.testing.expectError(error.FileNotFound, cwd.access(std.testing.io, orphan, .{}));
+    try std.testing.expectError(error.FileNotFound, cwd.access(std.testing.io, other, .{}));
+    try cwd.access(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset/89171cd9-a652-4047-b869-1154bf2c95a1", .{db}), .{});
+
+    const again = try normalize(allocator, try runZig(allocator, environment, &.{ "remove-orphans", "--db", db, "--yes" }), db, "<db>");
+    try expectResult(again, remove_orphans_none_report, "", 0);
+}
+
+//
 // The report of `psi replicate` (apps/cli/src/cmd/replicate.ts) from <db> to <dest>, with the two lines the
 // replication task logs (packages/node-api/src/lib/replicate-database.worker.ts) through the worker log, for the
 // counts of copied files and records.

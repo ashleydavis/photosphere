@@ -1,7 +1,7 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
 // Only the `add` (alias `a`), `compare` (alias `cmp`), `database-id`, `export` (alias `exp`), `find-orphans`, `info` (alias
-// `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `repair`,
+// `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `remove-orphans`, `repair`,
 // `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `verify` (alias `ver`) and
 // `version` commands and the `--version` option are ported; the other commands are not registered yet, so commander
 // reports them as unknown commands.
@@ -44,6 +44,7 @@ pub const remove = @import("src/cmd/remove.zig");
 pub const repair = @import("src/cmd/repair.zig");
 pub const find_orphans_command = @import("src/cmd/find-orphans.zig");
 pub const find_orphans = @import("src/lib/find-orphans.zig");
+pub const remove_orphans = @import("src/cmd/remove-orphans.zig");
 pub const export_command = @import("src/cmd/export.zig");
 pub const info = @import("src/cmd/info.zig");
 pub const list = @import("src/cmd/list.zig");
@@ -78,6 +79,8 @@ const IRepairCommandOptions = repair.IRepairCommandOptions;
 const repairCommand = repair.repairCommand;
 const IFindOrphansCommandOptions = find_orphans_command.IFindOrphansCommandOptions;
 const findOrphansCommand = find_orphans_command.findOrphansCommand;
+const IRemoveOrphansCommandOptions = remove_orphans.IRemoveOrphansCommandOptions;
+const removeOrphansCommand = remove_orphans.removeOrphansCommand;
 const IRemoveCommandOptions = remove.IRemoveCommandOptions;
 const removeCommand = remove.removeCommand;
 const ICompareCommandOptions = compare.ICompareCommandOptions;
@@ -282,6 +285,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the find-orphans command with these options.
     findOrphans: IFindOrphansCommandOptions,
+
+    // Run the remove-orphans command with these options.
+    removeOrphans: IRemoveOrphansCommandOptions,
 
     // Run the compare command with these options.
     compare: ICompareCommandOptions,
@@ -508,6 +514,20 @@ fn findOrphansAction(state: *IProgramState, args: []const ArgumentValue, options
     _ = command;
     state.outcome = .{
         .findOrphans = .{
+            .base = baseOptions(options),
+        },
+    };
+}
+
+//
+// The action of the remove-orphans command (`initContext(removeOrphansCommand)`): `run` calls initContext and the
+// command.
+//
+fn removeOrphansAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .removeOrphans = .{
             .base = baseOptions(options),
         },
     };
@@ -844,7 +864,17 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "remove"))
         .action(state, removeAction);
 
-    // Not ported: remove-orphans.
+    const removeOrphansDefinition = program
+        .command("remove-orphans", .{})
+        .description("Find and remove files that are no longer in the merkle tree.");
+    _ = optionFrom(removeOrphansDefinition, dbOption);
+    _ = optionFrom(removeOrphansDefinition, keyOption);
+    _ = optionFrom(removeOrphansDefinition, verboseOption);
+    _ = optionFrom(removeOrphansDefinition, yesOption);
+    _ = optionFrom(removeOrphansDefinition, cwdOption);
+    _ = removeOrphansDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "remove-orphans"))
+        .action(state, removeOrphansAction);
 
     const repairDefinition = program
         .command("repair", .{})
@@ -1031,6 +1061,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try findOrphansCommand(allocator, io, context, &options);
+        },
+        .removeOrphans => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try removeOrphansCommand(allocator, io, context, &options);
         },
         .remove => |parsed| {
             var options = parsed.options;
