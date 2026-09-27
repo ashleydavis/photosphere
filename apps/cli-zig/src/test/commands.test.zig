@@ -703,6 +703,66 @@ test "repair without a source or an origin fails like the TypeScript CLI" {
 }
 
 //
+// The report of `psi find-orphans` (apps/cli/src/cmd/find-orphans.ts) for <db> with two stray files.
+//
+const find_orphans_report =
+    \\
+    \\Finding orphaned files in database:
+    \\  Database: <db>
+    \\
+    \\
+    \\📋 Orphaned Files
+    \\
+    \\  ✗ asset/orphan-1
+    \\  ✗ other/file
+    \\
+    \\⚠️  Found 2 orphaned file(s) that exist in storage but are not tracked in the merkle tree.
+    \\     Use 'psi remove-orphans' to remove them.
+    \\
+;
+
+//
+// The report of `psi find-orphans` (apps/cli/src/cmd/find-orphans.ts) for <db> without stray files.
+//
+const find_orphans_none_report =
+    \\
+    \\Finding orphaned files in database:
+    \\  Database: <db>
+    \\
+    \\
+    \\📋 Orphaned Files
+    \\
+    \\✓ No orphaned files found
+    \\
+;
+
+test "find-orphans prints the report of the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-find-orphans");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+
+    const clean = try normalize(allocator, try runZig(allocator, environment, &.{ "find-orphans", "--db", db, "--yes" }), db, "<db>");
+    try expectResult(clean, find_orphans_none_report, "", 0);
+
+    const cwd = std.Io.Dir.cwd();
+    try cwd.createDirPath(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/other", .{db}));
+    try cwd.writeFile(std.testing.io, .{
+        .sub_path = try std.fmt.allocPrint(allocator, "{s}/asset/orphan-1", .{db}),
+        .data = "x",
+    });
+    try cwd.writeFile(std.testing.io, .{
+        .sub_path = try std.fmt.allocPrint(allocator, "{s}/other/file", .{db}),
+        .data = "x",
+    });
+    const result = try normalize(allocator, try runZig(allocator, environment, &.{ "find-orphans", "--db", db, "--yes" }), db, "<db>");
+    try expectResult(result, find_orphans_report, "", 0);
+}
+
+//
 // The report of `psi replicate` (apps/cli/src/cmd/replicate.ts) from <db> to <dest>, with the two lines the
 // replication task logs (packages/node-api/src/lib/replicate-database.worker.ts) through the worker log, for the
 // counts of copied files and records.

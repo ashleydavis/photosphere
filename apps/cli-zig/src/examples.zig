@@ -30,7 +30,7 @@ pub const ICommandExamples = struct {
 //
 // Centralized examples for all CLI commands
 // (only the commands implemented in Zig are ported: init, add, info, summary, verify, repair, replicate, compare,
-// version, export, list and remove).
+// version, export, list, remove and find-orphans).
 //
 pub const COMMAND_EXAMPLES = [_]ICommandExamples{
     .{
@@ -209,6 +209,19 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             .{
                 .command = "psi list --db ./photos --page-size 10",
                 .description = "Lists files with 10 files per page.",
+            },
+        },
+    },
+    .{
+        .commandName = "find-orphans",
+        .examples = &.{
+            .{
+                .command = "psi find-orphans --db .",
+                .description = "Finds orphaned files in the current directory database.",
+            },
+            .{
+                .command = "psi find-orphans --db ./photos",
+                .description = "Finds orphaned files in the ./photos database.",
             },
         },
     },

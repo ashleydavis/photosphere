@@ -59,7 +59,7 @@ test_piped_output() {
     # The reader that is slow to start. Everything the command prints has to survive it.
     log_info "Running find-orphans into a reader that waits ${READER_DELAY_SECONDS}s before reading ..."
     local stderr_path="$TEST_DIR/find-orphans-stderr.txt"
-    eval "$(get_cli_command) find-orphans --db \"$db_path\" --yes" 2> "$stderr_path" \
+    eval "$(get_zig_cli_command) find-orphans --db \"$db_path\" --yes" 2> "$stderr_path" \
         | { sleep "$READER_DELAY_SECONDS"; cat; } > "$capture_path"
 
     # The last thing the command prints. If the exit dropped anything at all, this is what went.
