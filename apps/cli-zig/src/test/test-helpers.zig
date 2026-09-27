@@ -209,6 +209,8 @@ pub fn cliEnvironment(allocator: std.mem.Allocator, root: []const u8) !*std.proc
     const configDir = try std.fmt.allocPrint(allocator, "{s}/config", .{root});
     try std.Io.Dir.cwd().createDirPath(std.testing.io, configDir);
     try map.put("PHOTOSPHERE_CONFIG_DIR", configDir);
+    // picocolors turns colour on for every process on Windows; the expected output of the tests has none.
+    try map.put("NO_COLOR", "1");
     try map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
     try map.put("PHOTOSPHERE_VAULT_DIR", try std.fmt.allocPrint(allocator, "{s}/vault", .{root}));
     const tmpDir = try std.fmt.allocPrint(allocator, "{s}/tmp", .{root});

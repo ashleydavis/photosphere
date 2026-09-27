@@ -1772,6 +1772,18 @@ jobs:
           run: choco install imagemagick -y
           verify: magick|convert
 
+      # Every run compiled the Zig CLI, every package and the AWS SDK for C from nothing, which took the
+      # Windows unit test step past its timeout. Zig's cache is content addressed, so the one from an
+      # earlier run holds most of what this run compiles. It only grows, so it is saved at the end of the
+      # job only while it is under 6 GB.
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/cli-zig/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-
+
       - name: Run the Zig unit tests
         timeout-minutes: 12
         shell: bash
@@ -1818,6 +1830,19 @@ jobs:
         working-directory: ./apps/cli
         shell: bash
         run: ./sync-smoke-test-zig.sh
+
+      - name: Measure the Zig build cache
+        id: zig-build-cache-size
+        if: always()
+        shell: bash
+        run: echo "megabytes=$(du -sm apps/cli-zig/.zig-cache | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Save the Zig build cache
+        if: always() && steps.zig-build-cache-size.outputs.megabytes < 6144
+        uses: actions/cache/save@v4
+        with:
+          path: apps/cli-zig/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
 
   create-release:
     timeout-minutes: 20
