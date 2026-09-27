@@ -1789,10 +1789,35 @@ jobs:
           du -sh packages/*/zig-pkg packages/*/.zig-cache apps/*/zig-pkg apps/*/.zig-cache 2>/dev/null || true
 
       - name: Run the Zig CLI smoke tests
-        timeout-minutes: 20
+        timeout-minutes: 14
         working-directory: ./apps/cli
         shell: bash
-        run: bash ./smoke-tests-zig.sh
+        run: ./smoke-tests-zig.sh --binary
+
+      - name: Test the Zig version command
+        working-directory: ./apps/cli
+        shell: bash
+        run: |
+          echo "Testing version command after building..."
+          ../cli-zig/zig-out/bin/psi version
+
+      - name: Run the Zig CLI encrypted smoke tests
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        shell: bash
+        run: ./smoke-tests-encrypted-zig.sh all
+
+      - name: Run the Zig CLI write lock smoke tests
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        shell: bash
+        run: ./write-lock-smoke-test-zig.sh
+
+      - name: Run the Zig CLI sync smoke tests
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        shell: bash
+        run: ./sync-smoke-test-zig.sh
 
   create-release:
     timeout-minutes: 20
