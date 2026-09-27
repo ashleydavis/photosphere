@@ -99,18 +99,26 @@ fn writeProgressOnTerminal(allocator: std.mem.Allocator, message: []const u8, ve
         terminal.slave.close(io);
         return err;
     };
-    terminal.slave.close(io);
+
+    // The slave stays open here until the master has been read: macOS discards what is waiting on the master
+    // once the last slave descriptor is closed (Linux keeps it). With the child gone, everything it wrote is
+    // already waiting, so the master is read until nothing more is ready.
+    defer terminal.slave.close(io);
     const term = try child.wait(io);
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, term);
 
-    // With the slave closed everywhere, reading the master gives what was written, then fails with EIO.
     var output: std.ArrayList(u8) = .empty;
     var buffer: [4096]u8 = undefined;
     while (true) {
-        const count = terminal.master.readStreaming(io, &.{&buffer}) catch |err| switch (err) {
-            error.InputOutput, error.EndOfStream => break,
-            else => return err,
-        };
+        var pollFds = [1]std.posix.pollfd{.{
+            .fd = terminal.master.handle,
+            .events = std.posix.POLL.IN,
+            .revents = 0,
+        }};
+        if (try std.posix.poll(&pollFds, 0) == 0) {
+            break;
+        }
+        const count = try terminal.master.readStreaming(io, &.{&buffer});
         if (count == 0) {
             break;
         }
