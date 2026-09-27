@@ -795,9 +795,9 @@ test "sits under the platform cache directory, not the process temp directory" {
     // to say it had.
     const runRoot = try helpers.makeTempDir(allocator, io, "hash-cache-home-check");
     defer helpers.removeTempDir(io, runRoot);
-    try helpers.setEnv("PHOTOSPHERE_CACHE_DIR", try std.fmt.allocPrint(allocator, "{s}/cache", .{runRoot}));
+    try helpers.setEnv("PHOTOSPHERE_CACHE_DIR", try path.join(allocator, &.{ runRoot, "cache" }));
     defer helpers.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
-    try helpers.setEnv("PHOTOSPHERE_TMP_DIR", try std.fmt.allocPrint(allocator, "{s}/scratch", .{runRoot}));
+    try helpers.setEnv("PHOTOSPHERE_TMP_DIR", try path.join(allocator, &.{ runRoot, "scratch" }));
     defer helpers.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
 
     const cacheDir = try getHashCacheDir(allocator, "/photos/one");
@@ -824,9 +824,9 @@ test "is still found once the process temp directory has been taken away" {
     // directory is swept by something the app never hears about.
     const runRoot = try helpers.makeTempDir(allocator, io, "hash-cache-survives-temp");
     defer helpers.removeTempDir(io, runRoot);
-    try helpers.setEnv("PHOTOSPHERE_CACHE_DIR", try std.fmt.allocPrint(allocator, "{s}/cache", .{runRoot}));
+    try helpers.setEnv("PHOTOSPHERE_CACHE_DIR", try path.join(allocator, &.{ runRoot, "cache" }));
     defer helpers.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
-    try helpers.setEnv("PHOTOSPHERE_TMP_DIR", try std.fmt.allocPrint(allocator, "{s}/scratch", .{runRoot}));
+    try helpers.setEnv("PHOTOSPHERE_TMP_DIR", try path.join(allocator, &.{ runRoot, "scratch" }));
     defer helpers.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
     try std.Io.Dir.cwd().createDirPath(io, try getProcessTmpDir(allocator, io));
 

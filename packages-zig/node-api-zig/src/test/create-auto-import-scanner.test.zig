@@ -343,7 +343,11 @@ test "a photo whose modified time no longer matches is pushed" {
     try context.recordAsImported("asset-1");
     const stat = try std.Io.Dir.cwd().statFile(io, context.photoPath, .{});
     const movedOn: std.Io.Timestamp = .{ .nanoseconds = stat.mtime.nanoseconds + 60000 * std.time.ns_per_ms };
-    try std.Io.Dir.cwd().setTimestamps(io, context.photoPath, .{
+    // Set through the open file, like libuv's utimes on Windows: Zig 0.16 panics in Dir.setTimestamps
+    // on Windows ("TODO implement dirSetTimestamps windows"), while File.setTimestamps is implemented.
+    const photoFile = try std.Io.Dir.cwd().openFile(io, context.photoPath, .{ .mode = .write_only });
+    defer photoFile.close(io);
+    try photoFile.setTimestamps(io, .{
         .access_timestamp = .{ .new = movedOn },
         .modify_timestamp = .{ .new = movedOn },
     });
