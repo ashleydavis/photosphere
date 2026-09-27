@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const helpers = @import("test-helpers.zig");
 const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
+const node_path = @import("node-utils-zig").path;
 
 //
 // The expected output of these tests is written out here, ported from the TypeScript CLI: the report text from
@@ -398,10 +399,10 @@ test "export writes the asset files and prints the report of the TypeScript CLI"
 
     // The display and thumb versions to a directory, named after the original file with the type.
     const outDir = try std.fmt.allocPrint(allocator, "{s}/out", .{root});
-    const display = try std.fmt.allocPrint(allocator, "{s}/test_display.jpg", .{outDir});
+    const display = try node_path.join(allocator, &.{ outDir, "test_display.jpg" });
     try expectResult(try runZig(allocator, environment, &.{ "exp", "--db", db, assetId, outDir, "--type", "display", "--yes" }), try std.fmt.allocPrint(allocator, "\u{2713} Successfully exported display version of asset {s} to {s}\n", .{ assetId, display }), "", 0);
     try std.testing.expectEqualSlices(u8, try cwd.readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/display/{s}", .{ db, assetId }), allocator, .unlimited), try cwd.readFileAlloc(std.testing.io, display, allocator, .unlimited));
-    const thumb = try std.fmt.allocPrint(allocator, "{s}/test_thumb.jpg", .{outDir});
+    const thumb = try node_path.join(allocator, &.{ outDir, "test_thumb.jpg" });
     try expectResult(try runZig(allocator, environment, &.{ "export", "--db", db, assetId, outDir, "-t", "thumb", "--yes" }), try std.fmt.allocPrint(allocator, "\u{2713} Successfully exported thumb version of asset {s} to {s}\n", .{ assetId, thumb }), "", 0);
     try std.testing.expectEqualSlices(u8, try cwd.readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/thumb/{s}", .{ db, assetId }), allocator, .unlimited), try cwd.readFileAlloc(std.testing.io, thumb, allocator, .unlimited));
 
@@ -531,7 +532,7 @@ test "info prints the report of the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "inf", lookups[0], lookups[1], lookups[2], "--db", db, "--yes" }), info_v6_report, "", 0);
 
     // A file path is hashed and analyzed; a path that does not exist shows nothing.
-    const file = try std.fmt.allocPrint(allocator, "{s}/test.png", .{root});
+    const file = try node_path.join(allocator, &.{ root, "test.png" });
     try std.Io.Dir.cwd().copyFile("../../test/test.png", std.Io.Dir.cwd(), file, std.testing.io, .{});
     const expected = try std.mem.replaceOwned(u8, allocator, info_png_report, "<file>", file);
     const result = try runZig(allocator, environment, &.{ "info", file, try std.fmt.allocPrint(allocator, "{s}/missing.jpg", .{root}), "--yes" });
