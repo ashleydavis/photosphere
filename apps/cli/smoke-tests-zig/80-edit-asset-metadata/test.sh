@@ -60,7 +60,7 @@ test_edit_asset_metadata() {
     # whole test vacuous and it would still go green.
     local before_output
     invoke_command "Read the asset before the edit" \
-        "$(get_cli_command) info $record_id --db \"$db_dir\" --yes" 0 "before_output"
+        "$(get_zig_cli_command) info $record_id --db \"$db_dir\" --yes" 0 "before_output"
     expect_output_string "$before_output" "$new_description" "The description is not set before the edit" "false"
 
     invoke_command "Set the description in the database" \
@@ -68,7 +68,7 @@ test_edit_asset_metadata() {
 
     local after_output
     invoke_command "Read the asset after the edit" \
-        "$(get_cli_command) info $record_id --db \"$db_dir\" --yes" 0 "after_output"
+        "$(get_zig_cli_command) info $record_id --db \"$db_dir\" --yes" 0 "after_output"
     expect_output_string "$after_output" "$new_description" "The edited description is reported by 'psi info'"
 
     invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes"

@@ -35,7 +35,7 @@ test_view_media_files() {
 
     # Capture the output to validate it
     local info_output
-    invoke_command "Show info for test files" "$(get_cli_command) info $TEST_FILES_DIR/ --yes" 0 "info_output"
+    invoke_command "Show info for test files" "$(get_zig_cli_command) info $TEST_FILES_DIR/ --yes" 0 "info_output"
 
     # Check that info output doesn't contain "Type: undefined" which indicates a bug
     expect_output_string "$info_output" "Type: undefined" "Info output should not contain 'Type: undefined'" "false"

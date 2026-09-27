@@ -1,7 +1,7 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `add` (alias `a`), `init` (alias `i`), `list` (aliases `ls` and `l`), `replicate` (alias `rep`), `summary`
-// (alias `sum`), `verify` (alias `ver`) and `version` commands and the `--version` option are ported; the other
+// Only the `add` (alias `a`), `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `replicate`
+// (alias `rep`), `summary` (alias `sum`), `verify` (alias `ver`) and `version` commands and the `--version` option are ported; the other
 // commands are not registered yet, so commander reports them as unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
@@ -37,6 +37,7 @@ pub const worker_log_bun = @import("src/lib/worker-log-bun.zig");
 pub const add = @import("src/cmd/add.zig");
 pub const replicate = @import("src/cmd/replicate.zig");
 pub const init_command = @import("src/cmd/init.zig");
+pub const info = @import("src/cmd/info.zig");
 pub const list = @import("src/cmd/list.zig");
 pub const summary = @import("src/cmd/summary.zig");
 pub const verify = @import("src/cmd/verify.zig");
@@ -61,6 +62,8 @@ const initContext = init_cmd.initContext;
 const replicateCommand = replicate.replicateCommand;
 const initCommand = init_command.initCommand;
 const IInitCommandOptions = init_command.IInitCommandOptions;
+const IInfoCommandOptions = info.IInfoCommandOptions;
+const infoCommand = info.infoCommand;
 const IListCommandOptions = list.IListCommandOptions;
 const listCommand = list.listCommand;
 const summaryCommand = summary.summaryCommand;
@@ -168,6 +171,17 @@ pub const IAddParsed = struct {
 };
 
 //
+// What the info command runs with: its inputs and its options (TypeScript: the arguments commander passes the action).
+//
+pub const IInfoParsed = struct {
+    // The file paths, asset IDs or hashes to show.
+    inputs: []const []const u8,
+
+    // The options of the command.
+    options: IInfoCommandOptions,
+};
+
+//
 // The command a parsed command line runs.
 //
 pub const ParseOutcome = union(enum) {
@@ -177,6 +191,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the add command with these paths and options.
     add: IAddParsed,
+
+    // Run the info command with these inputs and options.
+    info: IInfoParsed,
 
     // Run the list command with these options.
     list: IListCommandOptions,
@@ -341,6 +358,23 @@ fn replicateAction(state: *IProgramState, args: []const ArgumentValue, options: 
 }
 
 //
+// The action of the info command (`initContext(infoCommand)`): `run` calls initContext and the command.
+//
+fn infoAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+
+    // <files...> is variadic, so commander always passes it as a list.
+    state.outcome = .{
+        .info = .{
+            .inputs = args[0].list,
+            .options = .{
+                .base = baseOptions(options),
+            },
+        },
+    };
+}
+
+//
 // The action of the list command (`initContext(listCommand)`): `run` calls initContext and the command.
 //
 fn listAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
@@ -429,7 +463,21 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "add"))
         .action(state, addAction);
 
-    // Not ported: the commands between add and init.
+    // Not ported: the commands between add and info.
+
+    const infoDefinition = program
+        .command("info", .{})
+        .alias("inf")
+        .description("Displays detailed information about media files including EXIF data, metadata, and technical specifications.");
+    _ = optionFrom(infoDefinition, dbOption);
+    _ = optionFrom(infoDefinition, verboseOption);
+    _ = optionFrom(infoDefinition, toolsOption);
+    _ = optionFrom(infoDefinition, yesOption);
+    _ = optionFrom(infoDefinition, cwdOption);
+    _ = infoDefinition
+        .argument("<files...>", "File path(s), asset ID(s), or hash(es). --db is required only when looking up by asset ID or hash.")
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "info"))
+        .action(state, infoAction);
 
     const initDefinition = program
         .command("init", .{})
@@ -601,6 +649,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try addCommand(allocator, io, context, parsed.paths, &options);
+        },
+        .info => |parsed| {
+            var options = parsed.options;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try infoCommand(allocator, io, context, parsed.inputs, &options);
         },
         .replicate => |parsed| {
             var options = parsed;

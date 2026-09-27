@@ -558,7 +558,19 @@ pub const BsonCollection = struct {
         self.markDirty();
     }
 
-    // Not ported: getOne (not used by psi add, psi replicate or psi verify).
+    //
+    // Gets one record by ID (null when it does not exist).
+    //
+    pub fn getOne(self: *BsonCollection, io: std.Io, id: []const u8) !?IRecord {
+        const shardId = try self.getShardId(id);
+        const recordShard = try self.shard(shardId);
+
+        const record = try recordShard.record(io, id) orelse {
+            return null; // Record not found
+        };
+
+        return try toExternal(self.allocator, record);
+    }
 
     //
     // Iterate all records in the collection without loading all into memory.

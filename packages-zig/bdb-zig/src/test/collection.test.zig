@@ -75,7 +75,7 @@ test "should delete a record" {
     try collection.setInternalRecord(io, user);
 
     try std.testing.expect(try collection.deleteOne(io, user._id));
-    try std.testing.expect((try getRecord(collection, user._id)) == null);
+    try std.testing.expect((try collection.getOne(io, user._id)) == null);
 }
 
 test "should return false when deleting non-existent record" {
@@ -530,8 +530,7 @@ test "should insert and retrieve a record" {
 
     try collection.insertOne(io, &user, null);
 
-    // (Zig: getOne is not ported; the record is read from its shard and turned back into its external form.)
-    const retrieved = try bdb.collection.toExternal(allocator, (try getRecord(collection, "123e4567-e89b-12d3-a456-426614174000")).?);
+    const retrieved = (try collection.getOne(io, "123e4567-e89b-12d3-a456-426614174000")).?;
     try std.testing.expect(retrieved.eql(user));
 }
 

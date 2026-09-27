@@ -87,7 +87,7 @@ To do, in order (each one uses what the earlier ones ported):
 - [x] add (including `--watch`)
 - [x] summary
 - [x] list
-- [ ] info
+- [x] info
 - [ ] root-hash
 - [ ] database-id
 - [ ] origin
