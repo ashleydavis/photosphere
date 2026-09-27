@@ -34,7 +34,7 @@ test_replicate_with_deleted_asset() {
     # Delete the asset from the source database
     log_info "Deleting asset '$test_asset_id' from source database"
     local remove_output
-    invoke_command "Remove asset from source database" "$(get_cli_command) remove --db $source_dir $test_asset_id --verbose --yes" 0 "remove_output"
+    invoke_command "Remove asset from source database" "$(get_zig_cli_command) remove --db $source_dir $test_asset_id --verbose --yes" 0 "remove_output"
     
     # Check that removal was successful
     expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
@@ -99,7 +99,7 @@ test_replicate_with_deleted_asset() {
     # Compare databases to verify they are identical
     log_info "Comparing databases to verify they are identical"
     local compare_output
-    invoke_command "Compare databases after replication" "$(get_cli_command) compare --db $source_dir --dest $replica_dir --yes" 0 "compare_output"
+    invoke_command "Compare databases after replication" "$(get_zig_cli_command) compare --db $source_dir --dest $replica_dir --yes" 0 "compare_output"
     
     # Check that comparison shows no differences
     expect_output_string "$compare_output" "No differences detected" "No differences detected after replication"

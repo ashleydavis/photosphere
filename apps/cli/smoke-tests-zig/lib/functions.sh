@@ -702,13 +702,13 @@ test_database_compare() {
 
     # Test comparison between original and replica (should show no differences)
     local compare_output
-    invoke_command "Compare original database with replica" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
+    invoke_command "Compare original database with replica" "$(get_zig_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
 
     # Check that comparison shows no differences for identical databases
     expect_output_string "$compare_output" "No differences detected" "No differences detected between databases"
 
     # Test comparison with self (database vs itself)
-    invoke_command "Compare database with itself" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $TEST_DB_DIR --yes"
+    invoke_command "Compare database with itself" "$(get_zig_cli_command) compare --db $TEST_DB_DIR --dest $TEST_DB_DIR --yes"
     test_passed
 }
 
@@ -733,7 +733,7 @@ test_compare_with_changes() {
 
     # Test comparison between original and replica (should show differences after adding new asset)
     local compare_output
-    invoke_command "Compare original database with replica after changes" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
+    invoke_command "Compare original database with replica after changes" "$(get_zig_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
 
     # Check that comparison detects the specific number of differences (new asset creates 8 differences)
     expect_output_string "$compare_output" "Databases have 3 differences" "Databases have 3 differences after adding new asset"
@@ -760,7 +760,7 @@ test_replicate_after_changes() {
 
     # Run compare command to verify databases are now identical again
     local compare_output
-    invoke_command "Compare databases after replication" "$(get_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
+    invoke_command "Compare databases after replication" "$(get_zig_cli_command) compare --db $TEST_DB_DIR --dest $replica_dir --yes" 0 "compare_output"
 
     # Check that comparison shows no differences after replication
     expect_output_string "$compare_output" "No differences detected" "No differences detected after replicating changes"
@@ -847,7 +847,7 @@ test_remove_asset() {
 
     # Remove the asset
     local remove_output
-    invoke_command "Remove asset from database" "$(get_cli_command) remove --db $TEST_DB_DIR $test_asset_id --verbose --yes" 0 "remove_output"
+    invoke_command "Remove asset from database" "$(get_zig_cli_command) remove --db $TEST_DB_DIR $test_asset_id --verbose --yes" 0 "remove_output"
 
     # Check that removal was successful
     expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"

@@ -181,7 +181,7 @@ test "commands that are not ported are unknown commands, and empty command lines
     try std.testing.expectEqualStrings("commander.helpDisplayed", help.outcome.failure.code);
     try std.testing.expect(std.mem.startsWith(u8, help.stdout, "Usage: psi "));
 
-    try expectCommanderError(allocator, &.{"compare"}, "commander.unknownCommand", "error: unknown command 'compare'\n");
+    try expectCommanderError(allocator, &.{"news"}, "commander.unknownCommand", "error: unknown command 'news'\n");
     try expectCommanderError(allocator, &.{ "check", "--db", "x" }, "commander.unknownCommand", "error: unknown command 'check'\n");
     try expectCommanderError(allocator, &.{ "--db", "x", "replicate" }, "commander.unknownOption", "error: unknown option '--db'\n");
     try expectCommanderError(allocator, &.{ "help", "replicate" }, "commander.unknownCommand", "error: unknown command 'help'\n(Did you mean one of exp, rep?)\n");
@@ -213,6 +213,7 @@ test "the command definitions match index.ts" {
     const replicateDefinition = program.findCommand("rep").?;
     try std.testing.expectEqualStrings("replicate", replicateDefinition.getName());
     try std.testing.expectEqual(@as(usize, 13), replicateDefinition.options.items.len);
+    try std.testing.expectEqual(@as(usize, 9), program.findCommand("cmp").?.options.items.len);
     for ([_][]const u8{ "origin", "set-origin", "root-hash", "database-id" }) |name| {
         try std.testing.expectEqual(@as(usize, 5), program.findCommand(name).?.options.items.len);
     }
@@ -468,4 +469,38 @@ test "export command lines parse like commander" {
     try std.testing.expectEqualStrings("original", defaulted.outcome.@"export".options.type.?);
 
     try expectCommanderError(allocator, &.{ "export", "id-1" }, "commander.missingArgument", "error: missing required argument 'output-path'\n");
+}
+
+test "compare command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "cmp", "--db", "a", "--dest", "b", "--key", "k", "--dk", "dk", "--full", "--max", "20", "--yes" });
+    try std.testing.expect(parsed.outcome == .compare);
+    const options = parsed.outcome.compare;
+    try std.testing.expectEqualStrings("a", options.base.db.?);
+    try std.testing.expectEqualStrings("b", options.dest.?);
+    try std.testing.expectEqualStrings("k", options.base.key.?);
+    try std.testing.expectEqualStrings("dk", options.destKey.?);
+    try std.testing.expectEqual(@as(?bool, true), options.full);
+    try std.testing.expectEqualStrings("20", options.max.?);
+
+    const longKey = try parse(allocator, &.{ "compare", "--dest-key", "x" });
+    try std.testing.expectEqualStrings("x", longKey.outcome.compare.destKey.?);
+    try std.testing.expectEqual(@as(?bool, false), longKey.outcome.compare.full);
+    try std.testing.expect(longKey.outcome.compare.max == null);
+}
+
+test "remove command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "rm", "id-1", "--db", "d", "--key", "k", "--yes" });
+    try std.testing.expect(parsed.outcome == .remove);
+    try std.testing.expectEqualStrings("id-1", parsed.outcome.remove.assetId);
+    try std.testing.expectEqualStrings("d", parsed.outcome.remove.options.base.db.?);
+    try std.testing.expectEqualStrings("k", parsed.outcome.remove.options.base.key.?);
+    try expectCommanderError(allocator, &.{"remove"}, "commander.missingArgument", "error: missing required argument 'asset-id'\n");
 }

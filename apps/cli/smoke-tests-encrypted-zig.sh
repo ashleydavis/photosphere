@@ -1061,7 +1061,7 @@ test_delete_encrypted_file() {
         return
     }
 
-    invoke_command "Remove asset from encrypted database" "$cli remove --db \"$db_dir\" --key \"$key_name\" \"$asset_id\" --yes" || {
+    invoke_command "Remove asset from encrypted database" "$(get_zig_cli_command) remove --db \"$db_dir\" --key \"$key_name\" \"$asset_id\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1466,7 +1466,7 @@ test_key_not_found_noninteractive() {
     }
 
     local output
-    output=$(eval "$cli compare --key nonexistent-key-xyz --db \"$db_dir\" --dest \"$db_dir\" --yes" 2>&1)
+    output=$(eval "$(get_zig_cli_command) compare --key nonexistent-key-xyz --db \"$db_dir\" --dest \"$db_dir\" --yes" 2>&1)
     if [ $? -eq 0 ]; then
         log_error "Expected non-zero exit when key not found in non-interactive mode"
         echo "$output"

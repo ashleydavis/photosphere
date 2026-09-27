@@ -186,7 +186,7 @@ test_s3_sync() {
     # --- 4. An asset deleted locally syncs its deletion up to S3. ---
 
     invoke_command "Remove an asset from the local database" \
-        "$(get_cli_command) remove --db $local_db $V6_RECORD_ID --yes" 0
+        "$(get_zig_cli_command) remove --db $local_db $V6_RECORD_ID --yes" 0
     expect_hashes_diverged "$local_db" "$s3_db" "The local deletion moved the local root hash away from S3's"
 
     local sync_delete_up_output
@@ -201,7 +201,7 @@ test_s3_sync() {
     # --- 5. An asset deleted on S3 syncs its deletion back down. ---
 
     invoke_command "Remove an asset from the S3 database" \
-        "$(get_cli_command) remove --db \"$s3_db\" $s3_added_asset_id --yes" 0
+        "$(get_zig_cli_command) remove --db \"$s3_db\" $s3_added_asset_id --yes" 0
     expect_hashes_diverged "$local_db" "$s3_db" "The S3 deletion moved the S3 root hash away from the local one"
 
     local sync_delete_down_output

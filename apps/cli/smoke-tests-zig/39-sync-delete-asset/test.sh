@@ -61,7 +61,7 @@ test_sync_delete_asset() {
     # Delete the asset from the original database
     log_info "Deleting asset '$test_asset_id' from original database"
     local remove_output
-    invoke_command "Remove asset from original database" "$(get_cli_command) remove --db $original_dir $test_asset_id --verbose --yes" 0 "remove_output"
+    invoke_command "Remove asset from original database" "$(get_zig_cli_command) remove --db $original_dir $test_asset_id --verbose --yes" 0 "remove_output"
     
     # Check that removal was successful
     expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"

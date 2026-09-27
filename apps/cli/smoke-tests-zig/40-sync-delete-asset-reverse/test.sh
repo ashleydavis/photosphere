@@ -61,7 +61,7 @@ test_sync_delete_asset_reverse() {
     # Delete the asset from the copy database (reverse of test 36)
     log_info "Deleting asset '$test_asset_id' from copy database"
     local remove_output
-    invoke_command "Remove asset from copy database" "$(get_cli_command) remove --db $copy_dir $test_asset_id --verbose --yes" 0 "remove_output"
+    invoke_command "Remove asset from copy database" "$(get_zig_cli_command) remove --db $copy_dir $test_asset_id --verbose --yes" 0 "remove_output"
     
     # Check that removal was successful
     expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"

@@ -121,7 +121,7 @@ test_sync_edit_field() {
     # Compare databases to detect the difference
     log_info "Comparing databases to detect differences"
     local compare_output
-    invoke_command "Compare databases before sync" "$(get_cli_command) compare --db $original_dir --dest $copy_dir --yes" 0 "compare_output"
+    invoke_command "Compare databases before sync" "$(get_zig_cli_command) compare --db $original_dir --dest $copy_dir --yes" 0 "compare_output"
     
     # Check that comparison detects differences (should show at least 1 difference)
     expect_output_string "$compare_output" "differences" "Comparison detects differences between databases"
@@ -175,7 +175,7 @@ test_sync_edit_field() {
     # Compare databases again to verify no differences
     log_info "Comparing databases again to verify no differences"
     local compare_output_final
-    invoke_command "Compare databases after sync" "$(get_cli_command) compare --db $original_dir --dest $copy_dir --yes" 0 "compare_output_final"
+    invoke_command "Compare databases after sync" "$(get_zig_cli_command) compare --db $original_dir --dest $copy_dir --yes" 0 "compare_output_final"
     
     # Check that comparison shows no differences
     expect_output_string "$compare_output_final" "No differences detected" "No differences detected after sync"

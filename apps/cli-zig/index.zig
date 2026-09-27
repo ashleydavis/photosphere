@@ -1,9 +1,10 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `add` (alias `a`), `database-id`, `export` (alias `exp`), `info` (alias `inf`), `init` (alias `i`),
-// `list` (aliases `ls` and `l`), `origin`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias
-// `sum`), `verify` (alias `ver`) and `version` commands and the `--version` option are ported; the other commands are not registered yet,
-// so commander reports them as unknown commands.
+// Only the `add` (alias `a`), `compare` (alias `cmp`), `database-id`, `export` (alias `exp`), `info` (alias
+// `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `replicate` (alias
+// `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `verify` (alias `ver`) and `version` commands and
+// the `--version` option are ported; the other commands are not registered yet, so commander reports them as
+// unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -38,6 +39,8 @@ pub const worker_log_bun = @import("src/lib/worker-log-bun.zig");
 pub const add = @import("src/cmd/add.zig");
 pub const replicate = @import("src/cmd/replicate.zig");
 pub const init_command = @import("src/cmd/init.zig");
+pub const compare = @import("src/cmd/compare.zig");
+pub const remove = @import("src/cmd/remove.zig");
 pub const export_command = @import("src/cmd/export.zig");
 pub const info = @import("src/cmd/info.zig");
 pub const list = @import("src/cmd/list.zig");
@@ -68,6 +71,10 @@ const initContext = init_cmd.initContext;
 const replicateCommand = replicate.replicateCommand;
 const initCommand = init_command.initCommand;
 const IInitCommandOptions = init_command.IInitCommandOptions;
+const IRemoveCommandOptions = remove.IRemoveCommandOptions;
+const removeCommand = remove.removeCommand;
+const ICompareCommandOptions = compare.ICompareCommandOptions;
+const compareCommand = compare.compareCommand;
 const IExportCommandOptions = export_command.IExportCommandOptions;
 const exportCommand = export_command.exportCommand;
 const IInfoCommandOptions = info.IInfoCommandOptions;
@@ -166,7 +173,16 @@ pub const dryRunOption: IOptionSpec = .{
     .description = "Run without making any database changes (merkle tree and metadata updates are skipped)",
     .defaultValue = .{ .boolean = false },
 };
-// Not ported: sourceDbOption, recordsOption, allOption, fullOption, maxOption (not used by the ported commands).
+pub const fullOption: IOptionSpec = .{
+    .flags = "--full",
+    .description = "Show all differences without truncation.",
+    .defaultValue = .{ .boolean = false },
+};
+pub const maxOption: IOptionSpec = .{
+    .flags = "--max <number>",
+    .description = "Maximum number of items to show in each category (default: 10)",
+};
+// Not ported: sourceDbOption, recordsOption, allOption (not used by the ported commands).
 
 //
 // Adds an option tuple to a command (`.option(...tuple)`).
@@ -196,6 +212,18 @@ pub const ISetOriginParsed = struct {
 
     // The options of the command.
     options: ISetOriginCommandOptions,
+};
+
+//
+// What the remove command runs with: its asset ID and options (TypeScript: the arguments commander passes the
+// action).
+//
+pub const IRemoveParsed = struct {
+    // The ID of the asset to remove.
+    assetId: []const u8,
+
+    // The options of the command.
+    options: IRemoveCommandOptions,
 };
 
 //
@@ -234,6 +262,12 @@ pub const ParseOutcome = union(enum) {
 
     // Run the add command with these paths and options.
     add: IAddParsed,
+
+    // Run the remove command with this asset and options.
+    remove: IRemoveParsed,
+
+    // Run the compare command with these options.
+    compare: ICompareCommandOptions,
 
     // Run the export command with this asset, output path and options.
     @"export": IExportParsed,
@@ -411,6 +445,38 @@ fn replicateAction(state: *IProgramState, args: []const ArgumentValue, options: 
             .force = flagValue(options, "force"),
             .partial = flagValue(options, "partial"),
             .full = flagValue(options, "full"),
+        },
+    };
+}
+
+//
+// The action of the compare command (`initContext(compareCommand)`): `run` calls initContext and the command.
+//
+fn compareAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .compare = .{
+            .base = baseOptions(options),
+            .dest = textValue(options, "dest"),
+            .destKey = textValue(options, "destKey"),
+            .full = flagValue(options, "full"),
+            .max = textValue(options, "max"),
+        },
+    };
+}
+
+//
+// The action of the remove command (`initContext(removeCommand)`): `run` calls initContext and the command.
+//
+fn removeAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+    state.outcome = .{
+        .remove = .{
+            .assetId = args[0].string,
+            .options = .{
+                .base = baseOptions(options),
+            },
         },
     };
 }
@@ -595,7 +661,26 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "add"))
         .action(state, addAction);
 
-    // Not ported: bug, check, compare and examples.
+    // Not ported: bug and check.
+
+    const compareDefinition = program
+        .command("compare", .{})
+        .alias("cmp")
+        .description("Compares two databases to find the differences between them.");
+    _ = optionFrom(compareDefinition, dbOption);
+    _ = optionFrom(compareDefinition, destDbOption);
+    _ = optionFrom(compareDefinition, keyOption);
+    _ = optionFrom(compareDefinition, destKeyOption);
+    _ = optionFrom(compareDefinition, verboseOption);
+    _ = optionFrom(compareDefinition, yesOption);
+    _ = optionFrom(compareDefinition, cwdOption);
+    _ = optionFrom(compareDefinition, fullOption);
+    _ = optionFrom(compareDefinition, maxOption);
+    _ = compareDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "compare"))
+        .action(state, compareAction);
+
+    // Not ported: examples.
 
     const exportDefinition = program
         .command("export", .{})
@@ -684,7 +769,23 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "list"))
         .action(state, listAction);
 
-    // Not ported: mcp, news, remove, remove-orphans and repair.
+    // Not ported: mcp and news.
+
+    const removeDefinition = program
+        .command("remove", .{})
+        .alias("rm")
+        .description("Removes an asset from the database by ID, deleting the files for the asset.")
+        .argument("<asset-id>", "The ID of the asset to remove.");
+    _ = optionFrom(removeDefinition, dbOption);
+    _ = optionFrom(removeDefinition, keyOption);
+    _ = optionFrom(removeDefinition, verboseOption);
+    _ = optionFrom(removeDefinition, yesOption);
+    _ = optionFrom(removeDefinition, cwdOption);
+    _ = removeDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "remove"))
+        .action(state, removeAction);
+
+    // Not ported: remove-orphans and repair.
 
     const rootHashDefinition = program
         .command("root-hash", .{})
@@ -840,6 +941,22 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try addCommand(allocator, io, context, parsed.paths, &options);
+        },
+        .remove => |parsed| {
+            var options = parsed.options;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try removeCommand(allocator, io, context, parsed.assetId, &options);
+        },
+        .compare => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try compareCommand(allocator, io, context, &options);
         },
         .@"export" => |parsed| {
             var options = parsed.options;

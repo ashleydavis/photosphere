@@ -572,8 +572,128 @@ pub fn getDatabaseSummary(allocator: std.mem.Allocator, io: std.Io, assetStorage
     };
 }
 
-// Not ported: streamAsset, writeAsset, writeAssetStream, writeAssetStreamVerified, removeAsset,
-// isDatabasePartial, createLazyDatabaseStorage (not reached by the ported commands).
+// Not ported: streamAsset, writeAsset, writeAssetStream, writeAssetStreamVerified (not reached by the ported
+// commands).
+
+//
+// Removes an asset: its files from the files tree and storage, and its record from the metadata collection.
+// When recordDeleted is true the asset ID is added to the database metadata's deletedAssetIds.
+//
+pub fn removeAsset(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    assetStorage: IStorage,
+    rawStorage: IStorage,
+    sessionId: []const u8,
+    bsonDatabase: *BsonDatabase,
+    metadataCollection: *IBsonCollection,
+    assetId: []const u8,
+    recordDeleted: bool,
+) !void {
+    //
+    // Flush the cache so we reload data after acquiring the write lock.
+    //
+    try bsonDatabase.flush();
+
+    if (!try api.write_lock.acquireWriteLock(allocator, io, rawStorage, sessionId, 3)) {
+        return errors.throwError("Failed to acquire write lock.", .{});
+    }
+    const result = removeAssetUnderLock(allocator, io, assetStorage, rawStorage, bsonDatabase, metadataCollection, assetId, recordDeleted);
+    try api.write_lock.releaseWriteLock(allocator, io, rawStorage);
+    return result;
+}
+
+//
+// The body of removeAsset's try block, run holding the write lock.
+// (No TypeScript counterpart: the try block is written inline; Zig needs it as a function to release the lock
+// in the finally block whether it failed or not.)
+//
+fn removeAssetUnderLock(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    assetStorage: IStorage,
+    rawStorage: IStorage,
+    bsonDatabase: *BsonDatabase,
+    metadataCollection: *IBsonCollection,
+    assetId: []const u8,
+    recordDeleted: bool,
+) !void {
+    var loadOperation: retry_operations.LoadMerkleTreeOperation("() => loadMerkleTree(assetStorage)") = .{
+        .allocator = allocator,
+        .storage = assetStorage,
+    };
+    var merkleTree: IMerkleTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
+        return errors.throwError("Failed to load media file database.", .{});
+    };
+
+    //
+    // Delete the files from the merkle tree.
+    // We do this first because if there's a failure after this point
+    // the files and database records become orphans and can easily be fixed.
+    //
+    const assetPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", assetId });
+    const displayPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "display", assetId });
+    const thumbPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "thumb", assetId });
+    try merkle_tree.deleteItem(allocator, &merkleTree, assetPath);
+    try merkle_tree.deleteItem(allocator, &merkleTree, displayPath);
+    try merkle_tree.deleteItem(allocator, &merkleTree, thumbPath);
+
+    const removed = try metadataCollection.deleteOne(io, assetId);
+    if (removed) {
+        var databaseMetadata = merkleTree.databaseMetadata orelse try emptyDatabaseMetadata(allocator);
+        const filesImported = databaseMetadata.get("filesImported") orelse BsonValue.undefined;
+        const filesImportedNumber = bdb.js_value.toNumber(allocator, filesImported) catch std.math.nan(f64);
+        if (filesImported != .undefined and filesImportedNumber > 0) {
+            try databaseMetadata.put(allocator, "filesImported", .{ .number = filesImportedNumber - 1 });
+        }
+
+        // Record deleted asset ID if requested
+        if (recordDeleted) {
+            var deletedAssetIds: std.ArrayList(BsonValue) = .empty;
+            if (databaseMetadata.get("deletedAssetIds")) |existing| {
+                if (existing == .array) {
+                    try deletedAssetIds.appendSlice(allocator, existing.array);
+                }
+            }
+            var alreadyRecorded = false;
+            for (deletedAssetIds.items) |deletedAssetId| {
+                if (deletedAssetId == .string and std.mem.eql(u8, deletedAssetId.string, assetId)) {
+                    alreadyRecorded = true;
+                }
+            }
+            if (!alreadyRecorded) {
+                try deletedAssetIds.append(allocator, .{ .string = assetId });
+            }
+            try databaseMetadata.put(allocator, "deletedAssetIds", .{ .array = deletedAssetIds.items });
+        }
+        merkleTree.databaseMetadata = databaseMetadata;
+    }
+
+    // Commit accumulated changes to bsondb.
+    try bsonDatabase.commit(io);
+
+    // Merkle tree has to be saved after all modifications to it are made.
+    var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(merkleTree, assetStorage)") = .{
+        .allocator = allocator,
+        .merkleTree = &merkleTree,
+        .storage = assetStorage,
+    };
+    try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
+
+    //
+    // Delete the files from storage.
+    //
+    try assetStorage.deleteFile(allocator, io, assetPath);
+    try assetStorage.deleteFile(allocator, io, displayPath);
+    try assetStorage.deleteFile(allocator, io, thumbPath);
+
+    //
+    // Record the modification in the state file.
+    //
+    try tree.stampDatabaseModified(allocator, io, assetStorage, rawStorage);
+}
+
+// Not ported: isDatabasePartial, createLazyDatabaseStorage (not reached by the ported commands).
 
 //
 // Wraps an already-open local storage so that files a partial database does not hold are fetched
