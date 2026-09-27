@@ -1,7 +1,6 @@
 //
-// Tests for arrayToBinaryTree (port of the arrayToBinaryTree and round-trip tests of src/test/binaryTreeConversion.test.ts).
-// binaryTreeToArray is not ported (no caller in psi replicate or psi verify), so the flat arrays are made by the
-// test helper below, which does what binaryTreeToArray does; its own describe block is not ported.
+// Tests for binaryTreeToArray and arrayToBinaryTree (port of src/test/binaryTreeConversion.test.ts).
+// (Zig: FlatSortNode has no left or right fields, so the `not.toHaveProperty('left')` checks hold by its type.)
 //
 
 const std = @import("std");
@@ -9,35 +8,14 @@ const merkle_tree_zig = @import("merkle-tree-zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const IMerkleTree = merkle_tree.IMerkleTree;
 const SortNode = merkle_tree.SortNode;
-const FlatSortNode = merkle_tree.FlatSortNode;
 const HashedItem = merkle_tree.HashedItem;
-
-//
-// Converts a binary tree to a flat pre-order array (the TypeScript binaryTreeToArray, test only).
-//
-fn binaryTreeToArray(allocator: std.mem.Allocator, flatNodes: *std.ArrayList(FlatSortNode), root: ?*const SortNode) !void {
-    const currentNode = root orelse {
-        return;
-    };
-    try flatNodes.append(allocator, .{
-        .contentHash = currentNode.contentHash,
-        .name = currentNode.name,
-        .nodeCount = currentNode.nodeCount,
-        .leafCount = currentNode.leafCount,
-        .size = currentNode.size,
-        .lastModified = currentNode.lastModified,
-    });
-    try binaryTreeToArray(allocator, flatNodes, currentNode.left);
-    try binaryTreeToArray(allocator, flatNodes, currentNode.right);
-}
 
 //
 // Converts a tree to a flat array and back.
 //
-fn roundTrip(allocator: std.mem.Allocator, root: ?*const SortNode) !?*SortNode {
-    var flatNodes: std.ArrayList(FlatSortNode) = .empty;
-    try binaryTreeToArray(allocator, &flatNodes, root);
-    return merkle_tree.arrayToBinaryTree(allocator, flatNodes.items);
+fn roundTrip(allocator: std.mem.Allocator, root: ?*SortNode) !?*SortNode {
+    const flatArray = try merkle_tree.binaryTreeToArray(allocator, root);
+    return merkle_tree.arrayToBinaryTree(allocator, flatArray);
 }
 
 //
@@ -64,6 +42,66 @@ fn buildFileTree(allocator: std.mem.Allocator, count: usize) !IMerkleTree {
         index += 1;
     }
     return tree;
+}
+
+test "should handle empty tree" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const result = try merkle_tree.binaryTreeToArray(arena.allocator(), null);
+    try std.testing.expectEqual(@as(usize, 0), result.len);
+}
+
+test "should convert single node tree correctly" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const tree = merkle_tree.createTree("test-tree");
+    const updatedTree = try merkle_tree.addItem(allocator, &tree, createHashedItem("test1.txt", 8));
+
+    const flatArray = try merkle_tree.binaryTreeToArray(allocator, updatedTree.sort);
+
+    try std.testing.expectEqual(@as(usize, 1), flatArray.len);
+    try std.testing.expectEqualStrings("test1.txt", flatArray[0].name.?);
+    try std.testing.expectEqual(@as(u32, 1), flatArray[0].nodeCount);
+    try std.testing.expectEqual(@as(u32, 1), flatArray[0].leafCount);
+}
+
+test "should convert small tree with multiple nodes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Add 3 files to create a small tree
+    const tree = try buildFileTree(allocator, 3);
+
+    const flatArray = try merkle_tree.binaryTreeToArray(allocator, tree.sort);
+
+    // Should have 5 nodes (3 leaves + 2 internal nodes)
+    try std.testing.expectEqual(@as(usize, 5), flatArray.len);
+
+    // Root node should be first and have nodeCount of 5
+    try std.testing.expectEqual(@as(u32, 5), flatArray[0].nodeCount);
+    try std.testing.expectEqual(@as(u32, 3), flatArray[0].leafCount);
+}
+
+test "should preserve all node properties except left/right" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tree = merkle_tree.createTree("test-tree");
+    tree = try merkle_tree.addItem(allocator, &tree, createHashedItem("test.txt", 8));
+
+    const flatArray = try merkle_tree.binaryTreeToArray(allocator, tree.sort);
+    const node = flatArray[0];
+
+    try std.testing.expect(node.contentHash != null);
+    try std.testing.expectEqualStrings("test.txt", node.name.?);
+    try std.testing.expectEqual(@as(u32, 1), node.nodeCount);
+    try std.testing.expectEqual(@as(u32, 1), node.leafCount);
+    try std.testing.expectEqual(@as(u64, 8), node.size);
+    try std.testing.expect(node.lastModified != null);
 }
 
 test "should handle empty array" {

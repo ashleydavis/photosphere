@@ -24,7 +24,7 @@ test_v5_database_upgrade() {
     cp -r "$v5_db_dir" "$temp_v5_dir"
     
     local upgrade_output
-    invoke_command "Upgrade v5 database to v6" "$(get_cli_command) upgrade --db $temp_v5_dir --yes" 0 "upgrade_output"
+    invoke_command "Upgrade v5 database to v6" "$(get_zig_cli_command) upgrade --db $temp_v5_dir --yes" 0 "upgrade_output"
     
     expect_output_string "$upgrade_output" "Database upgraded successfully to version 6" "Upgrade completed successfully"
     

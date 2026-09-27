@@ -542,6 +542,21 @@ test "remove-orphans command lines parse like commander" {
     try expectCommanderError(allocator, &.{ "remove-orphans", "extra" }, "commander.excessArguments", "error: too many arguments for 'remove-orphans'. Expected 0 arguments but got 1.\n");
 }
 
+test "upgrade command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "upgrade", "--db", "a", "--key", "k", "--yes", "--cwd", "c" });
+    try std.testing.expect(parsed.outcome == .upgrade);
+    const options = parsed.outcome.upgrade;
+    try std.testing.expectEqualStrings("a", options.base.db.?);
+    try std.testing.expectEqualStrings("k", options.base.key.?);
+    try std.testing.expectEqualStrings("c", options.base.cwd.?);
+    try std.testing.expectEqual(@as(?bool, true), options.base.yes);
+    try expectCommanderError(allocator, &.{ "upgrade", "extra" }, "commander.excessArguments", "error: too many arguments for 'upgrade'. Expected 0 arguments but got 1.\n");
+}
+
 test "remove command lines parse like commander" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

@@ -359,7 +359,9 @@ pub const SortIndex = struct {
     // Callback fired on first dirty transition per commit cycle
     onDirtyCallback: ?DirtyCallback,
 
-    // Not ported: onDropCallback (drop is not used by psi replicate or psi verify).
+    // Callback fired when the index is dropped
+    // (Zig: the same context and function shape as the onDirty callback.)
+    onDropCallback: ?DirtyCallback,
 
     //
     // Creates a sort index. All writes are deferred until commit().
@@ -368,6 +370,7 @@ pub const SortIndex = struct {
     // If not set, type will be inferred from the values.
     // onDirty: called when the sort index first transitions from clean to dirty (has uncommitted changes).
     // Used by BsonCollection to propagate the dirty flag upward.
+    // onDrop: called when the sort index is dropped. Used by BsonCollection to evict the cache entry.
     //
     pub fn init(
         allocator: std.mem.Allocator,
@@ -379,6 +382,7 @@ pub const SortIndex = struct {
         uuidGenerator: IUuidGenerator,
         sortDataType: ?SortDataType,
         onDirty: ?DirtyCallback,
+        onDrop: ?DirtyCallback,
     ) !SortIndex {
         const indexDirectory = try std.fmt.allocPrint(allocator, "{s}/indexes/{s}/{s}_{s}", .{ baseDirectory, collectionName, fieldName, @tagName(direction) });
         return .{
@@ -392,6 +396,7 @@ pub const SortIndex = struct {
             .checkpointFilePath = try std.fmt.allocPrint(allocator, "{s}/build.checkpoint", .{indexDirectory}),
             .uuidGenerator = uuidGenerator,
             .onDirtyCallback = onDirty,
+            .onDropCallback = onDrop,
         };
     }
 
@@ -1475,7 +1480,25 @@ pub const SortIndex = struct {
         };
     }
 
-    // Not ported: drop (not used by the ported commands).
+    //
+    // Delete the entire index
+    //
+    pub fn drop(self: *SortIndex, io: std.Io) !bool {
+        const existed = try self.storage.dirExists(self.allocator, io, self.indexDirectory);
+        if (existed) {
+            try self.storage.deleteDir(self.allocator, io, self.indexDirectory);
+        }
+
+        self.totalEntries = 0;
+        self.totalPages = 0;
+        self.loaded = false;
+        self._loadAttempted = false;
+        self.treeNodes.clearRetainingCapacity();
+        if (self.onDropCallback) |callback| {
+            callback.function(callback.context);
+        }
+        return existed;
+    }
 
     //
     // Updates a record in the index without rebuilding the entire index

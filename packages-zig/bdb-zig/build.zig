@@ -27,6 +27,7 @@ pub fn build(b: *std.Build) !void {
         module.addImport(dependency_name, dependency.module(dependency_name));
     }
 
+    const test_file = b.option([]const u8, "test-file", "Only run the tests of this file (e.g. merkle-tree.test.zig)");
     const test_step = b.step("test", "Run unit tests");
     // Every test file is compiled into one test program, whose root imports each of them. Compiled one program
     // per file, each linked the package and everything it depends on again, which was most of the time the unit
@@ -43,6 +44,11 @@ pub fn build(b: *std.Build) !void {
     while (try walker.next(b.graph.io)) |entry| {
         if (entry.kind != .file or !std.mem.endsWith(u8, entry.path, ".test.zig")) {
             continue;
+        }
+        if (test_file) |only_file| {
+            if (!std.mem.eql(u8, entry.path, only_file)) {
+                continue;
+            }
         }
         try test_root_source.appendSlice(b.allocator, b.fmt("    _ = @import(\"{s}\");\n", .{entry.path}));
     }

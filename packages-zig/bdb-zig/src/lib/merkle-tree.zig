@@ -10,6 +10,7 @@ const merkle_tree_zig = @import("merkle-tree-zig");
 const json_stable_stringify = @import("json-stable-stringify.zig");
 const js_value = @import("js-value.zig");
 const shard_zig = @import("shard.zig");
+const collection_zig = @import("collection.zig");
 const bson = serialization_zig.bson;
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const IMerkleTree = merkle_tree.IMerkleTree;
@@ -18,6 +19,8 @@ const IStorage = storage_zig.storage.IStorage;
 const pathJoin = storage_zig.storage_factory.pathJoin;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const IInternalRecord = shard_zig.IInternalRecord;
+const BsonCollection = collection_zig.BsonCollection;
+const TimestampProvider = utils.timestamp_provider.TimestampProvider;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 //
@@ -85,7 +88,112 @@ pub fn loadShardMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage: IS
     return merkle_tree.loadTree(allocator, io, treeFilePath, storage, "COLT");
 }
 
-// Not ported: listShards, buildCollectionMerkleTree (only used to rebuild trees, not by psi replicate or psi verify).
+//
+// Sort predicate for shard ids: `shardIds.sort(compareNames)`.
+//
+fn compareNamesLessThan(context: void, leftName: []const u8, rightName: []const u8) bool {
+    _ = context;
+    return merkle_tree.compareNames(leftName, rightName) < 0;
+}
+
+//
+// Lists existing shard IDs in a collection.
+//
+pub fn listShards(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, bsonDbPath: []const u8, collectionName: []const u8) ![]const []const u8 {
+    const shardsDir = try pathJoin(allocator, &.{ bsonDbPath, "collections", collectionName, "shards" });
+    var shardIds: std.ArrayList([]const u8) = .empty;
+    var next: ?[]const u8 = null;
+
+    while (true) {
+        const storageResult = try storage.listFiles(allocator, io, shardsDir, 1000, next);
+        for (storageResult.names) |fileName| {
+            if (std.mem.indexOfScalar(u8, fileName, '.') != null) {
+                continue;
+            }
+            try shardIds.append(allocator, fileName);
+        }
+        next = storageResult.next;
+        if (next == null) {
+            break;
+        }
+    }
+
+    std.mem.sort([]const u8, shardIds.items, {}, compareNamesLessThan);
+    return shardIds.items;
+}
+
+//
+// The onDirty callback given to the collection that buildCollectionMerkleTree reads shards through
+// (TypeScript: `() => {}`). The collection is never written to, so there is nothing to propagate.
+//
+fn ignoreDirty(context: *anyopaque) void {
+    _ = context;
+}
+
+//
+// Builds a merkle tree for a collection with shard root hashes as leaves.
+//
+pub fn buildCollectionMerkleTree(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    storage: IStorage,
+    bsonDbPath: []const u8,
+    collectionName: []const u8,
+    uuidGenerator: IUuidGenerator,
+    rebuild: bool,
+) !IMerkleTree {
+
+    const shardIds = try listShards(allocator, io, storage, bsonDbPath, collectionName);
+    var collectionTree = merkle_tree.createTree(try uuidGenerator.generate(allocator, io));
+
+    for (shardIds) |shardId| {
+        const timestampProvider = try allocator.create(TimestampProvider);
+        timestampProvider.* = .{};
+        const collection = try allocator.create(BsonCollection);
+        collection.* = BsonCollection.init(
+            allocator,
+            collectionName,
+            bsonDbPath,
+            storage,
+            bsonDbPath,
+            uuidGenerator,
+            timestampProvider.timestampProvider(),
+            .{ .context = collection, .function = ignoreDirty },
+        );
+        const records = try (try collection.shard(shardId)).records(io);
+        var shardTree: ?IMerkleTree = null;
+
+        if (records.count() == 0) {
+            // If the shard is empty, delete the tree file instead of saving it
+            try deleteShardMerkleTree(allocator, io, storage, bsonDbPath, collectionName, shardId);
+        }
+        else if (rebuild) {
+            shardTree = try buildShardMerkleTree(allocator, io, records.values(), uuidGenerator);
+            try saveShardMerkleTree(allocator, io, storage, bsonDbPath, collectionName, shardId, &shardTree.?);
+        }
+        else {
+            shardTree = try loadShardMerkleTree(allocator, io, storage, bsonDbPath, collectionName, shardId);
+            if (shardTree == null) {
+                // Shard tree doesn't exist, build it.
+                shardTree = try buildShardMerkleTree(allocator, io, records.values(), uuidGenerator);
+                try saveShardMerkleTree(allocator, io, storage, bsonDbPath, collectionName, shardId, &shardTree.?);
+            }
+        }
+
+        if (shardTree != null and shardTree.?.merkle != null) {
+            const shardKey = shardId;
+            const hashedItem: HashedItem = .{
+                .name = shardKey,
+                .hash = shardTree.?.merkle.?.hash,
+                .length = shardTree.?.merkle.?.nodeCount,
+                .lastModified = std.Io.Clock.real.now(io).toMilliseconds(),
+            };
+            collectionTree = try merkle_tree.addItem(allocator, &collectionTree, hashedItem);
+        }
+    }
+
+    return collectionTree;
+}
 
 //
 // Saves a collection merkle tree in the collection directory.
@@ -117,7 +225,92 @@ pub fn deleteCollectionMerkleTree(allocator: std.mem.Allocator, io: std.Io, stor
     try storage.deleteFile(allocator, io, treeFilePath);
 }
 
-// Not ported: listCollections, buildDatabaseMerkleTree (only used to rebuild trees, not by psi replicate or psi verify).
+//
+// Lists all collections in the database (v6: databaseDir = "collections").
+//
+fn listCollections(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, bsonDbPath: []const u8) ![]const []const u8 {
+    var uniqueSet: std.StringArrayHashMapUnmanaged(void) = .empty;
+    var next: ?[]const u8 = null;
+    while (true) {
+        const storageResult = try storage.listDirs(allocator, io, try pathJoin(allocator, &.{ bsonDbPath, "collections" }), 1000, next);
+        for (storageResult.names) |name| {
+            try uniqueSet.put(allocator, name, {});
+        }
+        next = storageResult.next;
+        if (next == null) {
+            break;
+        }
+    }
+
+    return uniqueSet.keys();
+}
+
+//
+// Builds a merkle tree for a database with collection root hashes as leaves.
+//
+pub fn buildDatabaseMerkleTree(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    storage: IStorage,
+    bsonDbPath: []const u8,
+    uuidGenerator: IUuidGenerator,
+    preloadedCollectionName: ?[]const u8,
+    preloadedCollectionTree: ?IMerkleTree,
+    rebuild: bool,
+) !IMerkleTree {
+
+    const collections = try listCollections(allocator, io, storage, bsonDbPath);
+
+    var databaseTree = merkle_tree.createTree(try uuidGenerator.generate(allocator, io));
+
+    for (collections) |collectionName| {
+        var collectionTree: ?IMerkleTree = null;
+        if (preloadedCollectionName != null and std.mem.eql(u8, preloadedCollectionName.?, collectionName)) {
+            // Use the pre-loaded collection tree.
+            collectionTree = preloadedCollectionTree;
+        }
+        else if (rebuild) {
+            // Rebuild the collection tree.
+            collectionTree = try buildCollectionMerkleTree(allocator, io, storage, bsonDbPath, collectionName, uuidGenerator, rebuild);
+            if (collectionTree.?.sort == null) {
+                // Collection tree is empty, delete it.
+                collectionTree = null;
+                try deleteCollectionMerkleTree(allocator, io, storage, bsonDbPath, collectionName);
+            }
+            else {
+                try saveCollectionMerkleTree(allocator, io, storage, bsonDbPath, collectionName, &collectionTree.?);
+            }
+        }
+        else {
+            // Load the collection tree.
+            collectionTree = try loadCollectionMerkleTree(allocator, io, storage, bsonDbPath, collectionName);
+            if (collectionTree == null) {
+                // Collection tree doesn't exist, build it.
+                collectionTree = try buildCollectionMerkleTree(allocator, io, storage, bsonDbPath, collectionName, uuidGenerator, rebuild);
+                if (collectionTree.?.sort == null) {
+                    // Collection tree is empty, delete it.
+                    collectionTree = null;
+                    try deleteCollectionMerkleTree(allocator, io, storage, bsonDbPath, collectionName);
+                }
+                else {
+                    try saveCollectionMerkleTree(allocator, io, storage, bsonDbPath, collectionName, &collectionTree.?);
+                }
+            }
+        }
+
+        if (collectionTree != null and collectionTree.?.merkle != null) {
+            const hashedItem: HashedItem = .{
+                .name = collectionName,
+                .hash = collectionTree.?.merkle.?.hash,
+                .length = collectionTree.?.merkle.?.nodeCount,
+                .lastModified = std.Io.Clock.real.now(io).toMilliseconds(),
+            };
+            databaseTree = try merkle_tree.addItem(allocator, &databaseTree, hashedItem);
+        }
+    }
+
+    return databaseTree;
+}
 
 //
 // Saves a database merkle tree.

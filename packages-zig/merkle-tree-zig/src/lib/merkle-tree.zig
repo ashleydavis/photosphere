@@ -17,7 +17,7 @@ const BufferSet = buffer_set.BufferSet;
 const BufferMap = buffer_map.BufferMap;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
-// Not ported: traverseTreeSync import (only used by binaryTreeToArray and rebuildTree, which are not ported).
+const traverseTreeSync = traverse.traverseTreeSync;
 
 //
 // Current database version
@@ -526,7 +526,46 @@ pub fn createParentNode(allocator: std.mem.Allocator, left: *SortNode, right: *S
     return node;
 }
 
-// Not ported: binaryTreeToArray (only used by tests and tools, not by psi replicate or psi verify).
+//
+// Convert binary tree to flat array (for serialization)
+//
+pub fn binaryTreeToArray(allocator: std.mem.Allocator, root: ?*SortNode) ![]FlatSortNode {
+    if (root == null) {
+        return &.{};
+    }
+
+    var result: std.ArrayList(FlatSortNode) = .empty;
+
+    const Flattener = struct {
+        // Allocates the result array.
+        flattenerAllocator: std.mem.Allocator,
+
+        // The flat nodes collected so far.
+        flatNodes: *std.ArrayList(FlatSortNode),
+
+        // Appends a node to the result (TypeScript: the traverseTreeSync callback).
+        fn visit(self: *const @This(), node: *SortNode) anyerror!bool {
+            const flatNode: FlatSortNode = .{
+                .contentHash = node.contentHash,
+                .name = node.name,
+                .nodeCount = node.nodeCount,
+                .leafCount = node.leafCount,
+                .size = node.size,
+                .lastModified = node.lastModified,
+            };
+            try self.flatNodes.append(self.flattenerAllocator, flatNode);
+            return true;
+        }
+    };
+
+    const flattener: Flattener = .{
+        .flattenerAllocator = allocator,
+        .flatNodes = &result,
+    };
+    try traverseTreeSync(SortNode, root, &flattener, Flattener.visit);
+
+    return result.items;
+}
 
 //
 // A sort node as stored in the flat node arrays of version 2 and 3 files (TypeScript: `Omit<SortNode, 'minName'>`).
@@ -1451,7 +1490,98 @@ fn serializeMerkleTree(allocator: std.mem.Allocator, tree: *const IMerkleTree, s
     try merkleTreeSerializer.finish();
 }
 
-// Not ported: rebuildTree (only used by psi upgrade).
+//
+// Rebuild a merkle tree in sorted order and removes a path.
+//
+pub fn rebuildTree(
+    allocator: std.mem.Allocator,
+    tree: *const IMerkleTree,
+    pathsToRemove: []const []const u8,
+) !IMerkleTree {
+
+    var items: std.ArrayList(HashedItem) = .empty;
+
+    const Collector = struct {
+        // Allocates the items array.
+        collectorAllocator: std.mem.Allocator,
+
+        // The items to add to the new tree.
+        collectedItems: *std.ArrayList(HashedItem),
+
+        // Items whose names start with any of these paths are left out of the new tree.
+        collectorPathsToRemove: []const []const u8,
+
+        // Collects the item of a leaf node (TypeScript: the traverseTreeSync callback).
+        fn visit(self: *const @This(), node: *SortNode) anyerror!bool {
+            if (node.nodeCount == 1) {
+                // (Zig: TypeScript's `!node.name` is also true for an empty name.)
+                if (node.name == null or node.name.?.len == 0) {
+                    return errors.throwError("Leaf node has no name. This could be a bug.", .{});
+                }
+
+                if (node.contentHash == null) {
+                    return errors.throwError("Leaf node has no content hash. This could be a bug.", .{});
+                }
+
+                // (Zig: TypeScript's `!node.lastModified` is also true for the date 0.)
+                if (node.lastModified == null or node.lastModified.? == 0) {
+                    return errors.throwError("Leaf node has no last modified date. This could be a bug.", .{});
+                }
+
+                for (self.collectorPathsToRemove) |pathToRemove| {
+                    if (std.mem.startsWith(u8, node.name.?, pathToRemove)) {
+                        // Don't add this item to the new tree.
+                        return true;
+                    }
+                }
+
+                try self.collectedItems.append(self.collectorAllocator, .{
+                    .name = node.name.?,
+                    .hash = node.contentHash.?,
+                    .length = node.size,
+                    .lastModified = node.lastModified.?,
+                });
+            }
+            return true;
+        }
+
+        // Orders items by name (TypeScript: the items.sort comparator).
+        fn lessThan(context: void, left: HashedItem, right: HashedItem) bool {
+            _ = context;
+            return compareNames(left.name, right.name) < 0;
+        }
+    };
+
+    const collector: Collector = .{
+        .collectorAllocator = allocator,
+        .collectedItems = &items,
+        .collectorPathsToRemove = pathsToRemove,
+    };
+    try traverseTreeSync(SortNode, tree.sort, &collector, Collector.visit);
+
+    //
+    // Sort by name.
+    //
+    // TODO: In theory this sorting step shouldn't be required because addItem should
+    // put the item in sorted order in the tree. But something isn't quite right when
+    // trying to replicate a rebuilt tree.
+    //
+    std.mem.sort(HashedItem, items.items, {}, Collector.lessThan);
+
+    //
+    // Add all items in sorted order to a new tree.
+    //
+    var rebuiltTree = createTree(tree.id);
+    rebuiltTree.databaseMetadata = tree.databaseMetadata;
+    for (items.items) |item| {
+        rebuiltTree = try addItem(allocator, &rebuiltTree, item);
+    }
+
+    rebuiltTree.dirty = false;
+    rebuiltTree.merkle = try buildMerkleTree(allocator, rebuiltTree.sort);
+
+    return rebuiltTree;
+}
 
 //
 // Recursively deserializes a single merkle tree node and its children (version 5 with string and hash tables).

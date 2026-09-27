@@ -828,6 +828,81 @@ test "remove-orphans deletes the orphans and prints the report of the TypeScript
 }
 
 //
+// The report of `psi upgrade --yes` (apps/cli/src/cmd/upgrade.ts) upgrading the v5 test database at <db>, with the
+// line the logger adds for the warnings.
+//
+const upgrade_v5_report =
+    \\
+    \\Upgrading media file database...
+    \\✓ Found database version 5
+    \\
+    \\✓ Non-interactive mode: proceeding with database upgrade
+    \\Upgrading database from version 5 to version 6...
+    \\Migrating BSON from metadata/ to .db/bson/.
+    \\✓ BSON migrated to .db/bson/
+    \\Rebuilding BSON database merkle tree.
+    \\✓ BSON database merkle tree built successfully
+    \\Rebuilding sort indexes.
+    \\✓ Sort indexes rebuilt successfully
+    \\✓ Removed metadata/ directory
+    \\✓ Created .db/config.json
+    \\✓ Database upgraded successfully to version 6
+    \\
+    \\Next steps:
+    \\    # View database summary and tree hash
+    \\    psi summary --db <db>
+    \\
+    \\    # Verify the integrity of the upgraded database
+    \\    psi verify --db <db>
+    \\
+    \\
+;
+
+//
+// What `psi upgrade` (apps/cli/src/cmd/upgrade.ts) writes to stderr upgrading <db>.
+//
+const upgrade_warnings =
+    \\⚠️  IMPORTANT: Database upgrade will modify your database files.
+    \\    It is strongly recommended to backup your database before proceeding.
+    \\    You can backup your database by copying the entire directory:
+    \\    cp -r "<db>" "<db>-backup"
+    \\
+;
+
+//
+// Removes the line naming the error log (its name has the time in it).
+//
+fn withoutErrorLogLine(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
+    const marker = "Errors, warnings, and exceptions were logged to: ";
+    const start = std.mem.indexOf(u8, text, marker) orelse return text;
+    const end = (std.mem.indexOfScalarPos(u8, text, start, '\n') orelse text.len - 1) + 1;
+    return std.mem.concat(allocator, u8, &.{ text[0..start], text[end..] });
+}
+
+test "upgrade upgrades the v5 database like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-upgrade");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    try helpers.copyDirectory(allocator, "../../test/dbs/v5", db);
+
+    var result = try normalize(allocator, try runZig(allocator, environment, &.{ "upgrade", "--db", db, "--yes" }), db, "<db>");
+    result.stdout = try withoutErrorLogLine(allocator, result.stdout);
+    try expectResult(result, upgrade_v5_report, upgrade_warnings, 0);
+
+    // The root hash TypeScript's upgrade of the same database gives.
+    const rootHash = try runZig(allocator, environment, &.{ "root-hash", "--db", db, "--yes" });
+    try std.testing.expectEqualStrings("c18854777b06e1b0d499230db43f74b32bf937cd892c974b673621b979f40590\n", rootHash.stdout);
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/metadata", .{db}), .{}));
+
+    const again = try normalize(allocator, try runZig(allocator, environment, &.{ "upgrade", "--db", db, "--yes" }), db, "<db>");
+    try expectResult(again, "\nUpgrading media file database...\n✓ Found database version 6\n✓ Database is already at the latest version (6)\n", "", 0);
+}
+
+//
 // The report of `psi replicate` (apps/cli/src/cmd/replicate.ts) from <db> to <dest>, with the two lines the
 // replication task logs (packages/node-api/src/lib/replicate-database.worker.ts) through the worker log, for the
 // counts of copied files and records.
