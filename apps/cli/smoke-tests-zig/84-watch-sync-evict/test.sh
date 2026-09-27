@@ -21,7 +21,7 @@ mkdir -p "$WATCH_DIR"
 
 CLI_COMMAND=$(get_cli_command)
 
-invoke_command "Initialize the local database" "$CLI_COMMAND init --db $TEST_DB_DIR --yes"
+invoke_command "Initialize the local database" "$(get_zig_cli_command) init --db $TEST_DB_DIR --yes"
 
 # The origin is made by replicating the local database rather than by initializing a second one.
 # Two databases created independently have different ids and sync refuses them, which is the

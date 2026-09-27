@@ -6,7 +6,7 @@
 // in the Zig port in the test), each with command lines and what parsing them did: stdout, stderr, the error or
 // exit, and the hooks, actions and option parsers that ran with what they were given.
 //
-// psi.json: command lines of the replicate, verify and version commands run through the real CLI (apps/cli/index.ts),
+// psi.json: command lines of the init, replicate, verify and version commands run through the real CLI (apps/cli/index.ts),
 // with their stdout, stderr and exit code.
 //
 // Run from the repo root: bun run apps/cli-zig/src/test/fixtures/commander/generate.ts
@@ -882,7 +882,7 @@ const programResults = programs.map(definition => {
 writeFileSync(join(fixturesDir, "programs.json"), JSON.stringify(programResults, null, 4) + "\n");
 
 //
-// Command lines of replicate, verify and version, run through the real CLI.
+// Command lines of init, replicate, verify and version, run through the real CLI.
 //
 const psiCommandLines: string[][] = [
     ["replicate", "--help"],
@@ -894,6 +894,10 @@ const psiCommandLines: string[][] = [
     ["ver", "extra"],
     ["rep", "-x"],
     ["-q", "rep", "--dst", "x"],
+    ["init", "--help"],
+    ["i", "-h"],
+    ["init", "extra"],
+    ["init", "--dbb", "x"],
     ["version", "--help"],
     ["version", "-h"],
     ["version", "extra"],

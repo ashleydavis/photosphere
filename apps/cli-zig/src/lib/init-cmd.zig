@@ -16,6 +16,7 @@ const ensure_tools = @import("ensure-tools.zig");
 const prompts = @import("clack/prompts.zig");
 const log_module = @import("log.zig");
 const worker_pool = @import("worker-pool.zig");
+const process_argv = @import("process-argv.zig");
 const IS3Credentials = storage_zig.cloud_storage.IS3Credentials;
 const IStorage = storage_zig.storage.IStorage;
 const createStorage = storage_zig.storage_factory.createStorage;
@@ -25,6 +26,7 @@ const IDatabaseEntry = node_api.databases_config.IDatabaseEntry;
 const getDatabases = node_api.databases_config.getDatabases;
 const createMediaFileDatabase = node_api.media_file_database.createMediaFileDatabase;
 const loadSortIndexes = node_api.media_file_database.loadSortIndexes;
+const createMediaDatabase = node_api.media_file_database.createDatabase;
 const CURRENT_DATABASE_VERSION = merkle_tree_zig.merkle_tree.CURRENT_DATABASE_VERSION;
 const loadTreeVersion = merkle_tree_zig.merkle_tree.loadTreeVersion;
 const BsonDatabase = bdb.database.BsonDatabase;
@@ -91,7 +93,51 @@ fn parseS3Credentials(allocator: std.mem.Allocator, json: []const u8) !IS3Creden
     };
 }
 
-// Not ported: normaliseDatabaseId (psi init --database-id, not psi replicate or psi verify).
+//
+// True when the text is a UUID
+// (TypeScript: `/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(text)`).
+//
+fn isUuid(value: []const u8) bool {
+    if (value.len != 36) {
+        return false;
+    }
+    for (value, 0..) |character, index| {
+        if (index == 8 or index == 13 or index == 18 or index == 23) {
+            if (character != '-') {
+                return false;
+            }
+        }
+        else if (!std.ascii.isHex(character)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//
+// The identity to create a database with, from whatever the user typed.
+//
+// Whitespace goes first, because an id is read off one screen and pasted into another and usually
+// brings some with it. The format is then checked here rather than left to surface later: an id with
+// a character wrong creates a database that looks perfectly fine and refuses to sync, and the refusal
+// arrives minutes afterwards in a background log saying the two databases are unrelated, a long way
+// from the command that caused it.
+//
+pub fn normaliseDatabaseId(databaseId: ?[]const u8) !?[]const u8 {
+    const value = databaseId orelse return null;
+
+    // JavaScript's trim() removes the whitespace and line terminators.
+    const trimmed = std.mem.trim(u8, value, " \t\n\r\x0b\x0c");
+    if (trimmed.len == 0) {
+        return utils.errors.throwError("--database-id was given with no value. Leave it off to create a database with a new identity of its own.", .{});
+    }
+
+    if (!isUuid(trimmed)) {
+        return utils.errors.throwError("\"{s}\" is not a database id. It should be a UUID, as printed by \"psi database-id --db <database>\".", .{trimmed});
+    }
+
+    return trimmed;
+}
 
 //
 // Reads the S3 credentials to use for a path the database list says nothing about: the `AWS_*`
@@ -796,7 +842,30 @@ pub const IBaseCommandOptions = struct {
     timeout: ?[]const u8 = null,
 };
 
-// Not ported: ICreateCommandOptions (only used by commands that create databases).
+//
+// Options for creating a new database
+// (TypeScript: ICreateCommandOptions extends IBaseCommandOptions; the base options are in `base`).
+//
+pub const ICreateCommandOptions = struct {
+    // The options shared by every command.
+    base: IBaseCommandOptions = .{},
+
+    //
+    // Generates the encryption key if it doesn't exist and saves it to the key file.
+    // But only if the key file doesn't exist.
+    //
+    generateKey: ?bool = null,
+
+    //
+    // The identity to give the new database, instead of a fresh one.
+    //
+    // Two databases can only sync when they share this identity, so passing the identity of an
+    // existing database creates an empty one that is already related to it. That is how a device
+    // with a full library gets a remote to sync into without copying anything up front: the empty
+    // remote is made here, named as the device's origin, and the ordinary sync fills it.
+    //
+    databaseId: ?[]const u8 = null,
+};
 
 //
 // Common dependencies injected into CLI commands.
@@ -1163,4 +1232,166 @@ pub fn loadDatabase(
         .s3Config = s3Config,
     };
 }
-// Not ported: createDatabase (only used by commands that create databases).
+
+//
+// Creates a new database for the init command.
+//
+pub fn createDatabase(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    dbDirOption: ?[]const u8,
+    options: *ICreateCommandOptions,
+    uuidGenerator: IUuidGenerator,
+    timestampProvider: ITimestampProvider,
+    sessionId: []const u8,
+) !IInitResult { //todo: Move into api.
+
+    const nonInteractive = options.base.yes orelse false;
+
+    // Log the command being executed
+    const command = try std.mem.join(allocator, " ", process_argv.userArgs());
+    log.verbose(try std.fmt.allocPrint(allocator, "Executing command: {s}", .{command}));
+
+    // Ensure media processing tools are available
+    try ensureMediaProcessingTools(allocator, io, nonInteractive);
+
+    var dbDir: []const u8 = undefined;
+    if (dbDirOption) |value| {
+        dbDir = value;
+    }
+    else {
+        // Get the directory for the database (validates it's empty/non-existent for init)
+        const cwd = if (options.base.cwd != null and options.base.cwd.?.len > 0) options.base.cwd.? else try std.process.currentPathAlloc(io, allocator);
+        dbDir = try getDirectoryForCommand(allocator, io, .init, nonInteractive, cwd);
+    }
+
+    // Ask about encryption if not already specified
+    const hasKey = options.base.key != null and options.base.key.?.len > 0;
+    if (!hasKey and !nonInteractive) {
+        if (options.generateKey orelse false) {
+            // User requested key generation via --generate-key without a key name.
+            // Run the generate branch of the interactive prompt.
+            const encryptionResult = try promptForEncryption(allocator, io, "Would you like to encrypt your database? (You can say no now and create an encrypted copy later using the replicate command)");
+            if (encryptionResult.keyName != null and encryptionResult.keyName.?.len > 0) {
+                options.base.key = encryptionResult.keyName;
+                options.generateKey = encryptionResult.generateKey orelse false;
+            }
+        }
+        else {
+            const encryptionResult = try promptForEncryption(allocator, io, "Would you like to encrypt your database? (You can say no now and create an encrypted copy later using the replicate command)");
+            if (encryptionResult.keyName != null and encryptionResult.keyName.?.len > 0) {
+                options.base.key = encryptionResult.keyName;
+                options.generateKey = encryptionResult.generateKey orelse false;
+            }
+        }
+    }
+
+    const metaPath = try pathJoin(allocator, &.{ dbDir, ".db" });
+
+    // S3 credentials registered against this database in the database list, when it is already
+    // registered there. Resolved once here and reused when the storage is created below.
+    var resolvedSecrets: ?IResolvedDatabaseSecrets = null;
+
+    // True when the database lives in a bucket rather than on the filesystem.
+    const isCloudStorage = std.mem.startsWith(u8, dbDir, "s3:");
+    if (isCloudStorage) {
+        // A registered database carries its own S3 credential, so look that up before falling back
+        // to configureS3IfNeeded, which only knows about the AWS_* environment variables and the
+        // shared 'default:s3' keychain entry.
+        const matchedEntry = try resolveDatabaseEntry(allocator, io, dbDir);
+        if (matchedEntry) |entry| {
+            resolvedSecrets = try resolveSecretsFromEntry(allocator, io, entry);
+        }
+        const hasS3Config = if (resolvedSecrets) |secrets| secrets.s3Config != null else false;
+        if (!hasS3Config) {
+            _ = try configureS3IfNeeded(allocator, io, nonInteractive);
+        }
+    }
+
+    // Load encryption key pair from vault
+    var keyPems: []const IEncryptionKeyPem = &.{};
+    var publicKeyPemForMarker: ?[]const u8 = null;
+
+    if (options.base.key != null and options.base.key.?.len > 0) {
+        const keyName = options.base.key.?;
+        var pair = try loadKeyPairFromVault(allocator, io, keyName);
+        if (pair == null) {
+            if (options.generateKey orelse false) {
+                const keyPair = try generateKeyPair(allocator, io);
+                const privateKeyPem = try exportPrivateKey(allocator, keyPair.privateKey, .pem);
+                const vault = try getVault(getDefaultVaultType());
+                try vault.set(allocator, io, .{
+                    .name = keyName,
+                    .type = "encryption-key",
+                    .value = privateKeyPem,
+                });
+                const publicKeyPem = try exportPublicKeyToPem(allocator, keyPair.publicKey);
+                pair = .{ .privateKeyPem = privateKeyPem, .publicKeyPem = publicKeyPem };
+            }
+            else {
+                const newPair = try promptToGenerateOrAddKey(allocator, io, keyName, nonInteractive);
+                if (newPair == null) {
+                    try outro(io, try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Encryption key \"{s}\" not found in vault.", .{keyName})), .{});
+                    exit(io, 1);
+                }
+                else {
+                    pair = newPair;
+                }
+            }
+        }
+        if (pair) |keyPair| {
+            keyPems = try allocator.dupe(IEncryptionKeyPem, &.{keyPair});
+            publicKeyPemForMarker = keyPair.publicKeyPem;
+        }
+    }
+
+    const loaded = try loadEncryptionKeysFromPem(allocator, keyPems);
+    const storageOptions = loaded.options;
+    const isEncrypted = loaded.isEncrypted;
+
+    // The database's own registered credential wins over the shared 'default:s3' keychain entry. When
+    // neither exists this stays undefined and CloudStorage falls back to the AWS SDK's own
+    // environment-variable provider, which is the plain "point the CLI at a bucket" path.
+    var s3Config: ?IS3Credentials = null;
+    if (resolvedSecrets != null and resolvedSecrets.?.s3Config != null) {
+        s3Config = resolvedSecrets.?.s3Config;
+    }
+    else if (isCloudStorage) {
+        s3Config = try getDefaultS3Config(allocator, io);
+    }
+
+    const created = try createStorage(allocator, io, dbDir, s3Config, storageOptions);
+    const assetStorage = created.storage;
+    const rawAssetStorage = created.rawStorage;
+
+    // Check the requested directory is empty or non-existent using the storage interface.
+    if (!try assetStorage.isEmpty(allocator, io, "/")) {
+        try outro(io, try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} The directory {s} is not empty or already contains a database.\n  Please choose an empty directory or a non-existent one.", .{try pc.cyan(allocator, dbDir)})), .{});
+        exit(io, 1);
+    }
+
+    if (!try assetStorage.isEmpty(allocator, io, ".db")) {
+        try outro(io, try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} The metadata directory {s} is not empty or already contains a database.\n  Please choose an empty directory or a non-existent one.", .{try pc.cyan(allocator, metaPath)})), .{});
+        exit(io, 1);
+    }
+
+    // Create database instance (v6 layout: BSON under .db/bson)
+    const database = try createMediaFileDatabase(allocator, assetStorage, uuidGenerator, timestampProvider);
+
+    // Create the database (instead of loading)
+    try createMediaDatabase(allocator, io, assetStorage, rawAssetStorage, uuidGenerator, database.metadataCollection, try normaliseDatabaseId(options.databaseId));
+
+    // If database is encrypted, write the public key PEM to .db/encryption.pub as a marker
+    if (isEncrypted and publicKeyPemForMarker != null) {
+        try rawAssetStorage.write(allocator, io, ".db/encryption.pub", null, publicKeyPemForMarker.?);
+    }
+
+    return .{
+        .databaseDir = dbDir,
+        .assetStorage = assetStorage,
+        .rawAssetStorage = rawAssetStorage,
+        .bsonDatabase = database.bsonDatabase,
+        .sessionId = sessionId,
+        .metadataCollection = database.metadataCollection,
+    };
+}

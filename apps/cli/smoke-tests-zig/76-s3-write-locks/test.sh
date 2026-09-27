@@ -57,7 +57,7 @@ test_s3_write_locks() {
     local s3_db="s3:$S3_EMULATOR_BUCKET/write-locks"
     log_info "Database path: $s3_db"
 
-    invoke_command "Initialize the S3 database" "$(get_cli_command) init --db \"$s3_db\" --yes" 0
+    invoke_command "Initialize the S3 database" "$(get_zig_cli_command) init --db \"$s3_db\" --yes" 0
 
     # --- Start every writer at once. ---
 

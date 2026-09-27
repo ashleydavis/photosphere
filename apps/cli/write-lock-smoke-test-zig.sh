@@ -304,7 +304,7 @@ setup_test_environment() {
     
     # Initialize database
     log_info "Initializing test database..."
-    $(get_cli_command) init --db "$TEST_DB_DIR" --yes --session-id "setup-process"
+    $(get_zig_cli_command) init --db "$TEST_DB_DIR" --yes --session-id "setup-process"
     
     if [ $? -ne 0 ]; then
         log_error "Failed to initialize database"

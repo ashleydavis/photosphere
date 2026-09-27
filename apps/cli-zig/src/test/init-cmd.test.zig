@@ -5,6 +5,7 @@ const node_utils = @import("node-utils-zig");
 const tools = @import("tools-zig");
 const vault_zig = @import("vault-zig");
 const task_queue = @import("task-queue-zig");
+const merkle_tree_zig = @import("merkle-tree-zig");
 const helpers = @import("test-helpers.zig");
 const init_cmd = cli.init_cmd;
 const prompts = cli.prompts;
@@ -651,4 +652,101 @@ test "loadDatabase loads a database by path or registered name" {
 
     const byName = try init_cmd.loadDatabase(allocator, std.testing.io, "myphotos", &options, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", false);
     try std.testing.expectEqualStrings(dbDir, byName.databaseDir);
+}
+
+//
+// Expects normaliseDatabaseId to throw an error whose message contains the text.
+//
+fn expectNormaliseThrows(databaseId: []const u8, expectedText: []const u8) !void {
+    if (init_cmd.normaliseDatabaseId(databaseId)) |_| {
+        return error.TestExpectedError;
+    }
+    else |err| {
+        try std.testing.expect(std.mem.indexOf(u8, utils.errors.errorMessage(err), expectedText) != null);
+    }
+}
+
+test "no id given means the database gets an identity of its own" {
+    try std.testing.expect((try init_cmd.normaliseDatabaseId(null)) == null);
+}
+
+test "a uuid is accepted" {
+    try std.testing.expectEqualStrings("3f2504e0-4f89-11d3-9a0c-0305e82c3301", (try init_cmd.normaliseDatabaseId("3f2504e0-4f89-11d3-9a0c-0305e82c3301")).?);
+}
+
+test "an uppercase uuid is accepted" {
+    try std.testing.expectEqualStrings("3F2504E0-4F89-11D3-9A0C-0305E82C3301", (try init_cmd.normaliseDatabaseId("3F2504E0-4F89-11D3-9A0C-0305E82C3301")).?);
+}
+
+test "surrounding whitespace is dropped, because an id gets pasted" {
+    try std.testing.expectEqualStrings("3f2504e0-4f89-11d3-9a0c-0305e82c3301", (try init_cmd.normaliseDatabaseId("  3f2504e0-4f89-11d3-9a0c-0305e82c3301\n")).?);
+}
+
+test "an empty value is refused rather than quietly creating a fresh identity" {
+    try expectNormaliseThrows("", "--database-id was given with no value");
+    try expectNormaliseThrows("   ", "--database-id was given with no value");
+}
+
+test "something that is not a uuid is refused" {
+    // A database created with a mistyped id looks fine and then refuses to sync, minutes later,
+    // in a background log. Failing here puts the complaint next to the command that caused it.
+    try expectNormaliseThrows("not-a-uuid", "is not a database id");
+    try expectNormaliseThrows("3f2504e0-4f89-11d3-9a0c-0305e82c330", "is not a database id");
+    try expectNormaliseThrows("3f2504e0-4f89-11d3-9a0c-0305e82c3301-extra", "is not a database id");
+}
+
+test "createDatabase creates an empty database with the given identity" {
+    var environment: TestEnvironment = undefined;
+    try environment.init();
+    defer environment.deinit();
+    const allocator = environment.arena.allocator();
+
+    // createDatabase exits the process when ImageMagick or ffmpeg is missing, so it needs the tools installed.
+    if (!(try tools.verifyTools(allocator, std.testing.io)).allAvailable) {
+        return error.SkipZigTest;
+    }
+    const root = try helpers.makeTempDir(allocator, "create-database");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const dbDir = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+
+    var uuidGenerator = utils.random_uuid_generator.RandomUuidGenerator{};
+    var timestampProvider = utils.timestamp_provider.TimestampProvider{};
+    var options: init_cmd.ICreateCommandOptions = .{ .base = .{ .yes = true }, .databaseId = " 3f2504e0-4f89-11d3-9a0c-0305e82c3301 " };
+    const created = try init_cmd.createDatabase(allocator, std.testing.io, dbDir, &options, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session");
+    try std.testing.expectEqualStrings(dbDir, created.databaseDir);
+    try std.testing.expectEqualStrings("session", created.sessionId);
+    try std.testing.expect(try created.assetStorage.fileExists(allocator, std.testing.io, ".db/files.dat"));
+    try std.testing.expect(try created.assetStorage.fileExists(allocator, std.testing.io, "README.md"));
+    try std.testing.expect(!try created.assetStorage.fileExists(allocator, std.testing.io, ".db/encryption.pub"));
+
+    var loadOptions: init_cmd.IBaseCommandOptions = .{ .yes = true };
+    const loaded = try init_cmd.loadDatabase(allocator, std.testing.io, dbDir, &loadOptions, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", false);
+    const tree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, std.testing.io, ".db/files.dat", loaded.assetStorage, "FTRE")).?;
+    try std.testing.expectEqualStrings("3f2504e0-4f89-11d3-9a0c-0305e82c3301", tree.id);
+}
+
+test "createDatabase writes the public key marker of an encrypted database" {
+    var environment: TestEnvironment = undefined;
+    try environment.init();
+    defer environment.deinit();
+    const allocator = environment.arena.allocator();
+
+    if (!(try tools.verifyTools(allocator, std.testing.io)).allAvailable) {
+        return error.SkipZigTest;
+    }
+    const privateKeyPem = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, private_key_path, allocator, .unlimited);
+    const publicKeyPem = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, public_key_path, allocator, .unlimited);
+    const vault = try vault_zig.get_vault.getVault(vault_zig.get_vault.getDefaultVaultType());
+    try vault.set(allocator, std.testing.io, .{ .name = "create-key", .type = "encryption-key", .value = privateKeyPem });
+    const root = try helpers.makeTempDir(allocator, "create-database-encrypted");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const dbDir = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+
+    var uuidGenerator = utils.random_uuid_generator.RandomUuidGenerator{};
+    var timestampProvider = utils.timestamp_provider.TimestampProvider{};
+    var options: init_cmd.ICreateCommandOptions = .{ .base = .{ .yes = true, .key = "create-key" } };
+    const created = try init_cmd.createDatabase(allocator, std.testing.io, dbDir, &options, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session");
+    const marker = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/.db/encryption.pub", .{dbDir}), allocator, .unlimited);
+    try std.testing.expectEqualStrings(publicKeyPem, marker);
+    try std.testing.expect(try created.assetStorage.fileExists(allocator, std.testing.io, ".db/files.dat"));
 }

@@ -23,7 +23,7 @@ cp "$TEST_FILES_DIR/test.jpg" "$DEVICE_B_PHOTOS/from-b.jpg"
 
 # --- Device A imports its photos and creates the remote. ---
 
-invoke_command "Initialize device A" "$CLI_COMMAND init --db $DEVICE_A_DB --yes"
+invoke_command "Initialize device A" "$(get_zig_cli_command) init --db $DEVICE_A_DB --yes"
 invoke_command "Device A imports its folder" "$CLI_COMMAND add --db $DEVICE_A_DB $DEVICE_A_PHOTOS --yes"
 invoke_command "Device A consolidates into the remote" "$CLI_COMMAND consolidate --db $DEVICE_A_DB $REMOTE_DB --yes"
 
@@ -32,7 +32,7 @@ expect_value "$REMOTE_ASSETS" 1 "The remote holds device A's photo"
 
 # --- Device B imports its own photos and consolidates into the same remote. ---
 
-invoke_command "Initialize device B" "$CLI_COMMAND init --db $DEVICE_B_DB --yes"
+invoke_command "Initialize device B" "$(get_zig_cli_command) init --db $DEVICE_B_DB --yes"
 invoke_command "Device B imports its folder" "$CLI_COMMAND add --db $DEVICE_B_DB $DEVICE_B_PHOTOS --yes"
 
 CONNECT_OUTPUT=""

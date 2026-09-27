@@ -5,6 +5,7 @@ const errors = utils.errors;
 const toml = @import("toml.zig");
 const yaml = @import("yaml.zig");
 const process_env = @import("process-env.zig");
+const path = @import("path.zig");
 
 //
 // Sleeps for the given number of milliseconds. Kept local rather than imported from the `utils`
@@ -633,7 +634,7 @@ pub fn getConfigDir(allocator: std.mem.Allocator) ![]const u8 {
     }
     const homeDir = osHomedir();
     if (homeDir.len > 0) {
-        return std.fs.path.join(allocator, &.{ homeDir, ".config", "photosphere" });
+        return path.join(allocator, &.{ homeDir, ".config", "photosphere" });
     }
     return ".";
 }
@@ -668,25 +669,25 @@ pub fn getCacheDir(allocator: std.mem.Allocator) ![]const u8 {
     }
 
     if (builtin.os.tag == .macos) {
-        return std.fs.path.join(allocator, &.{ homeDir, "Library", "Caches", "photosphere" });
+        return path.join(allocator, &.{ homeDir, "Library", "Caches", "photosphere" });
     }
 
     if (builtin.os.tag == .windows) {
         var localAppData: []const u8 = process_env.getEnv("LOCALAPPDATA") orelse "";
         if (localAppData.len == 0) {
-            localAppData = try std.fs.path.join(allocator, &.{ homeDir, "AppData", "Local" });
+            localAppData = try path.join(allocator, &.{ homeDir, "AppData", "Local" });
         }
-        return std.fs.path.join(allocator, &.{ localAppData, "photosphere", "cache" });
+        return path.join(allocator, &.{ localAppData, "photosphere", "cache" });
     }
 
     // Linux, and every other Unix that is not macOS. XDG_CACHE_HOME says where caches go; ~/.cache is
     // what to use when it does not say, which is the usual case.
     if (process_env.getEnv("XDG_CACHE_HOME")) |xdgCacheHome| {
         if (xdgCacheHome.len > 0) {
-            return std.fs.path.join(allocator, &.{ xdgCacheHome, "photosphere" });
+            return path.join(allocator, &.{ xdgCacheHome, "photosphere" });
         }
     }
-    return std.fs.path.join(allocator, &.{ homeDir, ".cache", "photosphere" });
+    return path.join(allocator, &.{ homeDir, ".cache", "photosphere" });
 }
 
 // Not ported: readFileHead (not used by the ported commands).

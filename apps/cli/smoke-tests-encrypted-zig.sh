@@ -142,15 +142,28 @@ trap cleanup_and_show_summary EXIT
 #     Two assets in encrypted DB: one encrypted, one plain (--store-plain); list shows both states; export both with key; verify match originals.
 #
 ENCRYPTED_TESTS=(
+    "init-encrypted"
+    "init-generate-key-file"
+    "init-generate-key-file"
     "replicate-to-encrypted"
     "replicate-from-encrypted"
     "encrypt-plain"
+    "encrypt-generate-key-file"
+    "encrypt-generate-key-file"
     "encrypt-reencrypt"
     "encrypt-old-to-new-format"
     "decrypt-encrypted"
+    "add-encrypted-file"
+    "export-encrypted-file"
     "verify-encrypted-db"
     "delete-encrypted-file"
+    "list-encrypted-files"
     "replicate-decrypted-from-encrypted"
+    "export-with-multiple-keys"
+    "multi-key-encrypt"
+    "partial-encrypt"
+    "key-not-found-noninteractive"
+    "key-not-found-message"
 )
 
 # -----------------------------------------------------------------------------
@@ -458,7 +471,7 @@ test_init_encrypted() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -468,6 +481,11 @@ test_init_encrypted() {
         test_failed "$name"
         return
     fi
+
+    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
 
     test_passed "$name"
 }
@@ -485,7 +503,7 @@ test_init_generate_key_file() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database with generated vault key" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database with generated vault key" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -495,6 +513,11 @@ test_init_generate_key_file() {
         test_failed "$name"
         return
     fi
+
+    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
 
     test_passed "$name"
 }
@@ -513,7 +536,7 @@ test_replicate_to_encrypted() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init plain source database" "$cli init --db \"$src_dir\" --yes" || {
+    invoke_command "Init plain source database" "$(get_zig_cli_command) init --db \"$src_dir\" --yes" || {
         test_failed "$name"
         return
     }
@@ -566,7 +589,7 @@ test_replicate_from_encrypted() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted source database" "$cli init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted source database" "$(get_zig_cli_command) init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -623,7 +646,7 @@ test_encrypt_plain() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init plain source database" "$cli init --db \"$plain_dir\" --yes" || {
+    invoke_command "Init plain source database" "$(get_zig_cli_command) init --db \"$plain_dir\" --yes" || {
         test_failed "$name"
         return
     }
@@ -675,7 +698,7 @@ test_encrypt_generate_key_file() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init plain source database" "$cli init --db \"$plain_dir\" --yes" || {
+    invoke_command "Init plain source database" "$(get_zig_cli_command) init --db \"$plain_dir\" --yes" || {
         test_failed "$name"
         return
     }
@@ -696,6 +719,11 @@ test_encrypt_generate_key_file() {
         return
     fi
 
+    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$plain_dir\" --key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
     test_passed "$name"
 }
 
@@ -713,7 +741,7 @@ test_encrypt_reencrypt() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database with key1" "$cli init --db \"$enc1_dir\" --key \"$key1_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database with key1" "$(get_zig_cli_command) init --db \"$enc1_dir\" --key \"$key1_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -777,7 +805,7 @@ test_encrypt_old_to_new_format() {
     # Encrypt with same key as source: CLI exits early (no rewrite). Database
     # remains encrypted and verifies with that key.
 
-    invoke_command "Init encrypted database (simulated old-format source)" "$cli init --db \"$old_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database (simulated old-format source)" "$(get_zig_cli_command) init --db \"$old_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -823,7 +851,7 @@ test_decrypt_encrypted() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -880,7 +908,7 @@ test_add_encrypted_file() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -891,6 +919,11 @@ test_add_encrypted_file() {
     }
 
     assert_database_assets_encrypted "$db_dir" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
         test_failed "$name"
         return
     }
@@ -913,7 +946,7 @@ test_export_encrypted_file() {
     prepare_test_dir "$test_dir"
     mkdir -p "$export_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -950,6 +983,11 @@ test_export_encrypted_file() {
         return
     fi
 
+    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
     test_passed "$name"
 }
 
@@ -966,7 +1004,7 @@ test_verify_encrypted_db() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -1007,7 +1045,7 @@ test_delete_encrypted_file() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -1054,7 +1092,7 @@ test_list_encrypted_files() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -1096,6 +1134,11 @@ test_list_encrypted_files() {
         return
     fi
 
+    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
     test_passed "$name"
 }
 
@@ -1113,7 +1156,7 @@ test_replicate_decrypted_from_encrypted() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$cli init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -1174,13 +1217,13 @@ test_export_with_multiple_keys() {
     mkdir -p "$export_dir"
 
     # Create encrypted database with key1 (official key).
-    invoke_command "Init encrypted database with key1" "$cli init --db \"$db_dir\" --key \"$key1_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database with key1" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key1_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
     # Ensure key2 exists (generate via throwaway database).
-    invoke_command "Generate key2" "$cli init --db \"$test_dir/tmp-key2-db\" --key \"$key2_name\" --generate-key --yes" || {
+    invoke_command "Generate key2" "$(get_zig_cli_command) init --db \"$test_dir/tmp-key2-db\" --key \"$key2_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -1242,6 +1285,11 @@ test_export_with_multiple_keys() {
         return
     fi
 
+    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key1_name,$key2_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
     test_passed "$name"
 }
 
@@ -1263,12 +1311,12 @@ test_multi_key_encrypt() {
     mkdir -p "$export_dir"
 
     # Create two encrypted DBs with different keys, add two assets to each.
-    invoke_command "Init encrypted database 1 with key1" "$cli init --db \"$db1_dir\" --key \"$key1_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database 1 with key1" "$(get_zig_cli_command) init --db \"$db1_dir\" --key \"$key1_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Init encrypted database 2 with key2" "$cli init --db \"$db2_dir\" --key \"$key2_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database 2 with key2" "$(get_zig_cli_command) init --db \"$db2_dir\" --key \"$key2_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -1319,6 +1367,11 @@ test_multi_key_encrypt() {
         return
     fi
 
+    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db1_dir\" --key \"$key1_name,$key2_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
     test_passed "$name"
 }
 
@@ -1338,7 +1391,7 @@ test_partial_encrypt() {
     mkdir -p "$export_dir"
 
     # Create encrypted DB and add two assets (both encrypted).
-    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -1387,6 +1440,11 @@ test_partial_encrypt() {
         return
     fi
 
+    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
     test_passed "$name"
 }
 
@@ -1402,7 +1460,7 @@ test_key_not_found_noninteractive() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init plain database" "$cli init --db \"$db_dir\" --yes" || {
+    invoke_command "Init plain database" "$(get_zig_cli_command) init --db \"$db_dir\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1422,6 +1480,11 @@ test_key_not_found_noninteractive() {
         return
     fi
 
+    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
     test_passed "$name"
 }
 
@@ -1437,7 +1500,7 @@ test_key_not_found_message() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init plain database" "$cli init --db \"$db_dir\" --yes" || {
+    invoke_command "Init plain database" "$(get_zig_cli_command) init --db \"$db_dir\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1455,6 +1518,11 @@ test_key_not_found_message() {
             return
         fi
     done
+
+    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes" || {
+        test_failed "$name"
+        return
+    }
 
     test_passed "$name"
 }

@@ -945,7 +945,7 @@ create_db_with_5_files() {
         return 0
     fi
 
-    invoke_command "Initialize database" "$(get_cli_command) init --db $db_dir --yes"
+    invoke_command "Initialize database" "$(get_zig_cli_command) init --db $db_dir --yes"
     populate_db_with_5_files "$db_dir"
 }
 

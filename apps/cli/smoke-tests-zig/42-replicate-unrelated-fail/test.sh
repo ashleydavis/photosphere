@@ -25,11 +25,11 @@ test_replicate_unrelated_databases_fail() {
     
     # Create first independent database
     log_info "Creating first independent database"
-    invoke_command "Initialize first database" "$(get_cli_command) init --db $first_db_dir --yes"
+    invoke_command "Initialize first database" "$(get_zig_cli_command) init --db $first_db_dir --yes"
     
     # Create second independent database
     log_info "Creating second independent database"
-    invoke_command "Initialize second database" "$(get_cli_command) init --db $second_db_dir --yes"
+    invoke_command "Initialize second database" "$(get_zig_cli_command) init --db $second_db_dir --yes"
     
     # Verify both databases exist
     check_exists "$first_db_dir" "First database directory"

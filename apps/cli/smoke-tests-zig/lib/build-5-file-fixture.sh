@@ -16,5 +16,5 @@ source "$SCRIPT_DIR/common.sh"
 
 FIXTURE_DB_DIR="$TEST_TMP_DIR/db"
 
-invoke_command "Initialize the shared five-file database" "$(get_cli_command) init --db $FIXTURE_DB_DIR --yes"
+invoke_command "Initialize the shared five-file database" "$(get_zig_cli_command) init --db $FIXTURE_DB_DIR --yes"
 populate_db_with_5_files "$FIXTURE_DB_DIR"

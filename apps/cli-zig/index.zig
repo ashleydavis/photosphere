@@ -1,8 +1,8 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `replicate` (alias `rep`), `verify` (alias `ver`) and `version` commands and the `--version` option are
-// implemented in Zig; every other command line (including no arguments and program help) is handed to the
-// TypeScript CLI (src/main.zig).
+// Only the `init` (alias `i`), `replicate` (alias `rep`), `verify` (alias `ver`) and `version` commands and the
+// `--version` option are implemented in Zig; every other command line (including no arguments and program help)
+// is handed to the TypeScript CLI (src/main.zig).
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -35,6 +35,7 @@ pub const init_cmd = @import("src/lib/init-cmd.zig");
 pub const worker_pool = @import("src/lib/worker-pool.zig");
 pub const worker_log_bun = @import("src/lib/worker-log-bun.zig");
 pub const replicate = @import("src/cmd/replicate.zig");
+pub const init_command = @import("src/cmd/init.zig");
 pub const verify = @import("src/cmd/verify.zig");
 pub const version_cmd = @import("src/cmd/version.zig");
 pub const delegate = @import("src/main.zig");
@@ -53,6 +54,8 @@ const IVerifyCommandOptions = verify.IVerifyCommandOptions;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
 const initContext = init_cmd.initContext;
 const replicateCommand = replicate.replicateCommand;
+const initCommand = init_command.initCommand;
+const IInitCommandOptions = init_command.IInitCommandOptions;
 const verifyCommand = verify.verifyCommand;
 const versionCommand = version_cmd.versionCommand;
 const getCommandExamplesHelp = examples.getCommandExamplesHelp;
@@ -74,7 +77,7 @@ pub const IOptionSpec = struct {
     defaultValue: ?OptionValue = null,
 };
 
-// The option tuples of index.ts (only those used by replicate and verify).
+// The option tuples of index.ts (only those used by the ported commands).
 pub const dbOption: IOptionSpec = .{
     .flags = "--db <path>",
     .description = "The directory that contains the media file database",
@@ -123,8 +126,16 @@ pub const timeoutOption: IOptionSpec = .{
     .flags = "--timeout <ms>",
     .description = "Task timeout in milliseconds (default: 600000 = 10 minutes)",
 };
-// Not ported: sourceDbOption, sessionIdOption, databaseIdOption, recordsOption, allOption, fullOption, maxOption,
-// dryRunOption (not used by replicate or verify).
+pub const sessionIdOption: IOptionSpec = .{
+    .flags = "--session-id <id>",
+    .description = "Set session identifier for write lock tracking. Defaults to a random UUID.",
+};
+pub const databaseIdOption: IOptionSpec = .{
+    .flags = "--database-id <id>",
+    .description = "Create the database with this identity instead of a new one, so it is related to the database that already has that identity and the two can sync. Get it from `psi database-id`.",
+};
+// Not ported: sourceDbOption, recordsOption, allOption, fullOption, maxOption, dryRunOption (not used by the
+// ported commands).
 
 //
 // Adds an option tuple to a command (`.option(...tuple)`).
@@ -148,6 +159,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the verify command with these options.
     verify: IVerifyCommandOptions,
+
+    // Run the init command with these options.
+    init: IInitCommandOptions,
 
     // Run the version command.
     version,
@@ -241,6 +255,21 @@ fn baseOptions(values: *const OptionValues) IBaseCommandOptions {
 }
 
 //
+// The action of the init command (`initContext(initCommand)`): `run` calls initContext and the command.
+//
+fn initAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .init = .{
+            .base = baseOptions(options),
+            .generateKey = flagValue(options, "generateKey"),
+            .databaseId = textValue(options, "databaseId"),
+        },
+    };
+}
+
+//
 // The action of the replicate command (`initContext(replicateCommand)`): `run` calls initContext and the command.
 //
 fn replicateAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
@@ -302,7 +331,26 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
 
     _ = program.hook(.preAction, state, preActionHook);
 
-    // Not ported: the commands before replicate (the TypeScript CLI runs them).
+    // Not ported: the commands before init (the TypeScript CLI runs them).
+
+    const initDefinition = program
+        .command("init", .{})
+        .alias("i")
+        .description("Initializes a new media file database.");
+    _ = optionFrom(initDefinition, dbOption);
+    _ = optionFrom(initDefinition, keyOption);
+    _ = optionFrom(initDefinition, generateKeyOption);
+    _ = optionFrom(initDefinition, verboseOption);
+    _ = optionFrom(initDefinition, toolsOption);
+    _ = optionFrom(initDefinition, yesOption);
+    _ = optionFrom(initDefinition, cwdOption);
+    _ = optionFrom(initDefinition, sessionIdOption);
+    _ = optionFrom(initDefinition, databaseIdOption);
+    _ = initDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "init"))
+        .action(state, initAction);
+
+    // Not ported: the commands between init and replicate (the TypeScript CLI runs them).
 
     const replicateDefinition = program
         .command("replicate", .{})
@@ -445,6 +493,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try verifyCommand(allocator, io, context, &options);
+        },
+        .init => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try initCommand(allocator, io, context, &options);
         },
         .version => {
             if (state.notificationsQuiet) |quiet| {

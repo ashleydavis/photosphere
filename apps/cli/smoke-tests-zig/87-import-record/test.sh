@@ -102,7 +102,7 @@ find_record_naming() {
     return 1
 }
 
-invoke_command "Initialize the local database" "$CLI_COMMAND init --db $LOCAL_DB --yes"
+invoke_command "Initialize the local database" "$(get_zig_cli_command) init --db $LOCAL_DB --yes"
 
 # --- 1. A manual import is recorded, and badged as manual. ---
 
@@ -235,7 +235,7 @@ expect_output_value "$REPLICA_SUMMARY" "Files imported:" 2 "Both photos reached 
 
 # This is what the per-database record buys. A single record for the machine would show photos put
 # into one database as having gone into the other, which is a lie about where they are.
-invoke_command "Initialize a second database" "$CLI_COMMAND init --db $OTHER_DB --yes"
+invoke_command "Initialize a second database" "$(get_zig_cli_command) init --db $OTHER_DB --yes"
 
 cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/into-the-other.png"
 invoke_command "Import a photo into the second database" "$CLI_COMMAND add --db $OTHER_DB $WATCH_DIR/into-the-other.png --yes"

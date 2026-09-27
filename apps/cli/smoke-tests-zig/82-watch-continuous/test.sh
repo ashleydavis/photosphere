@@ -146,7 +146,7 @@ cancel_watch_command() {
     return 1
 }
 
-invoke_command "Initialize database" "$CLI_COMMAND init --db $TEST_DB_DIR --yes"
+invoke_command "Initialize database" "$(get_zig_cli_command) init --db $TEST_DB_DIR --yes"
 
 # A file that was there before the watch started, so the backfill has something to do as well.
 cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/before.png"
