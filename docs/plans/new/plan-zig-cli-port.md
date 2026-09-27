@@ -41,6 +41,10 @@ suite has a Zig counterpart that passes.
   files. If something is undocumented, the TypeScript behaviour decides.
 - Follow CLAUDE.md: code style, no em dashes, no `rm -r`, no python or other languages in the repository, no
   embedded languages in shell scripts, `bun run` scripts rather than invoking shell scripts directly.
+- The Zig smoke tests follow the general structure of the TypeScript smoke tests exactly: the same suites, the
+  same test files and numbering, the same shared helper libraries, the same functions and the same steps in the
+  same order. The only differences are that the ported commands run in the Zig CLI and that each test ends with
+  the TypeScript `psi verify` check. No new helper libraries, overrides or restructuring. Diverging is banned.
 - Zig packages live in `packages-zig/`, the Zig CLI in `apps/cli-zig/`, the Zig smoke tests in
   `apps/cli/smoke-tests-zig/`. Original files (TypeScript, existing smoke tests, hooks) are not touched.
 - CI must stay green on Linux, Windows and macOS, and the Release workflow should finish in about 30 minutes.
@@ -57,6 +61,8 @@ Done:
 To do, in order (each one uses what the earlier ones ported):
 
 - [x] version
+- [x] restructure `apps/cli/smoke-tests-zig/` to mirror the TypeScript smoke suites (no interop.sh, zig-functions.sh or
+  encrypted-functions.sh overrides)
 - [ ] init
 - [ ] add (including `--watch`)
 - [ ] summary
