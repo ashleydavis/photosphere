@@ -29,7 +29,7 @@ test_v5_database_upgrade() {
     expect_output_string "$upgrade_output" "Database upgraded successfully to version 6" "Upgrade completed successfully"
     
     local summary_output
-    invoke_command "Check database version after upgrade" "$(get_cli_command) summary --db $temp_v5_dir --yes" 0 "summary_output"
+    invoke_command "Check database version after upgrade" "$(get_zig_cli_command) summary --db $temp_v5_dir --yes" 0 "summary_output"
     
     expect_output_string "$summary_output" "Database version: 6" "Upgraded database is now version 6"
     

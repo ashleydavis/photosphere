@@ -18,7 +18,7 @@ test_v2_database_readonly_commands() {
     
     # Test that summary command rejects v2 database (only upgrade can load old DBs)
     local summary_output
-    invoke_command "Run summary on v2 database (should fail)" "$(get_cli_command) summary --db $v2_db_dir --yes" 1 "summary_output"
+    invoke_command "Run summary on v2 database (should fail)" "$(get_zig_cli_command) summary --db $v2_db_dir --yes" 1 "summary_output"
     expect_output_string "$summary_output" "upgrade" "Summary on v2 suggests running psi upgrade"
     log_success "Summary correctly rejected v2 database"
     

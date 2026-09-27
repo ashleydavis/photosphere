@@ -62,8 +62,8 @@ test_replicate_partial() {
     # BSON records (asset metadata) should have been replicated
     local source_summary
     local replica_summary
-    invoke_command "Get source database summary" "$(get_cli_command) summary --db $source_db_dir --yes" 0 "source_summary"
-    invoke_command "Get partial replica summary" "$(get_cli_command) summary --db $replica_dir --yes" 0 "replica_summary"
+    invoke_command "Get source database summary" "$(get_zig_cli_command) summary --db $source_db_dir --yes" 0 "source_summary"
+    invoke_command "Get partial replica summary" "$(get_zig_cli_command) summary --db $replica_dir --yes" 0 "replica_summary"
 
     local source_files_imported=$(parse_numeric "$source_summary" "Files imported:")
     local replica_files_imported=$(parse_numeric "$replica_summary" "Files imported:")

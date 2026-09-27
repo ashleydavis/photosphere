@@ -85,7 +85,7 @@ To do, in order (each one uses what the earlier ones ported):
   encrypted-functions.sh overrides)
 - [x] init
 - [x] add (including `--watch`)
-- [ ] summary
+- [x] summary
 - [ ] list
 - [ ] info
 - [ ] root-hash

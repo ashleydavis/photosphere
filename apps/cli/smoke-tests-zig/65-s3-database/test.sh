@@ -49,7 +49,7 @@ test_s3_database() {
     # Read the database back off S3. A summary that reports the imported file proves the write landed
     # in the bucket and was read back out of it, not out of any local cache.
     local summary_output
-    invoke_command "Summarise the S3 database" "$(get_cli_command) summary --db $s3_db --yes" 0 "summary_output"
+    invoke_command "Summarise the S3 database" "$(get_zig_cli_command) summary --db $s3_db --yes" 0 "summary_output"
     expect_output_string "$summary_output" "Files imported:" "Summary contains files imported count"
     expect_output_string "$summary_output" "Total files:" "Summary contains total files count"
 

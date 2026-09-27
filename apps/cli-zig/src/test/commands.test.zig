@@ -186,6 +186,63 @@ test "verify prints the report of the TypeScript CLI" {
 }
 
 //
+// The report of summaryCommand (apps/cli/src/cmd/summary.ts) for test/dbs/v6 at <db>: its files tree holds 4 files
+// (2.74 MiB) from 1 import and is a version 6 tree. {files}, {database} and {full} stand for the root hashes.
+//
+const summary_v6_report =
+    \\
+    \\📊 Database Summary
+    \\
+    \\Mode:             full
+    \\Files imported:   1
+    \\Total files:      4
+    \\Total size:       2.74 MiB
+    \\Database version: 6
+    \\Files hash:       {files}
+    \\Database hash:    {database}
+    \\Full root hash:   {full}
+    \\
+    \\Next steps:
+    \\    # Verify the integrity of all files in the database
+    \\    psi verify
+    \\
+    \\    # Add more files to your database
+    \\    psi add <paths>
+    \\
+    \\    # Create a backup copy of your database
+    \\    psi replicate --db <db> --dest <path>
+    \\
+    \\    # Synchronize changes between two databases that have been independently changed
+    \\    psi sync --db <db> --dest <path>
+    \\
+;
+
+test "summary prints the report of the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-summary");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+
+    // The root hashes the TypeScript implementation stored in the database's trees, and their combination.
+    const storage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, db, null, null);
+    const filesTree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, std.testing.io, ".db/files.dat", storage.storage, "FTRE")).?;
+    const databaseHash = (try @import("bdb-zig").merkle_tree.getDatabaseRootHash(allocator, std.testing.io, storage.storage, ".db/bson")).?;
+    const fullHash = merkle_tree_zig.merkle_tree.combineHashes(filesTree.merkle.?.hash, databaseHash);
+    var expected = try std.mem.replaceOwned(u8, allocator, summary_v6_report, "{files}", try std.fmt.allocPrint(allocator, "{x}", .{filesTree.merkle.?.hash}));
+    expected = try std.mem.replaceOwned(u8, allocator, expected, "{database}", try std.fmt.allocPrint(allocator, "{x}", .{databaseHash}));
+    expected = try std.mem.replaceOwned(u8, allocator, expected, "{full}", try std.fmt.allocPrint(allocator, "{x}", .{&fullHash}));
+
+    const result = try normalize(allocator, try runZig(allocator, environment, &.{ "summary", "--db", db, "--yes" }), db, "<db>");
+    try expectResult(result, expected, "", 0);
+
+    const aliasResult = try normalize(allocator, try runZig(allocator, environment, &.{ "sum", "--db", db, "--yes" }), db, "<db>");
+    try expectResult(aliasResult, expected, "", 0);
+}
+
+//
 // The report of `psi verify --full` for test/dbs/v6 with its thumb file overwritten. The totals come from the
 // files tree, so only the modified count changes; a verification that found problems prints the repair step and
 // exits with 1, which retains the session's temporary files.

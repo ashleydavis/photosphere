@@ -81,7 +81,7 @@ test_s3_vault_credentials() {
         "$(get_zig_cli_command) add $TEST_FILES_DIR/test.jpg --db $DB_NAME --yes" 0
 
     local summary_output
-    invoke_command "Summarise the database by name" "$(get_cli_command) summary --db $DB_NAME --yes" 0 "summary_output"
+    invoke_command "Summarise the database by name" "$(get_zig_cli_command) summary --db $DB_NAME --yes" 0 "summary_output"
     expect_output_string "$summary_output" "Total files:" "Summary contains total files count"
 
     # The imported asset must appear by name. This is what fails if the credentials never resolved and

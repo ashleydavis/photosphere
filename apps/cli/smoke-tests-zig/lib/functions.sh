@@ -188,7 +188,7 @@ test_add_duplicate_images() {
     invoke_command "Add duplicate images directory" "$(get_zig_cli_command) add --db $db_dir $DUPLICATE_IMAGES_DIR/ --yes" 0 "add_output"
 
     local summary_output
-    invoke_command "Get database summary" "$(get_cli_command) summary --db $db_dir --yes" 0 "summary_output"
+    invoke_command "Get database summary" "$(get_zig_cli_command) summary --db $db_dir --yes" 0 "summary_output"
 
     local files_imported=$(parse_numeric "$summary_output" "Files imported:" "0")
     expect_value "$files_imported" "1" "Database should have exactly 1 asset after importing two identical files"
@@ -207,7 +207,7 @@ test_database_summary() {
 
     # Run summary command and capture output for verification
     local summary_output
-    invoke_command "Display database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "summary_output"
+    invoke_command "Display database summary" "$(get_zig_cli_command) summary --db $TEST_DB_DIR --yes" 0 "summary_output"
 
     # Check that summary contains expected fields
     expect_output_string "$summary_output" "Mode:" "Summary contains database mode"
@@ -591,10 +591,10 @@ test_database_replicate() {
 
     # Get source and replica summaries to compare files imported count
     local source_summary
-    invoke_command "Get source database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "source_summary"
+    invoke_command "Get source database summary" "$(get_zig_cli_command) summary --db $TEST_DB_DIR --yes" 0 "source_summary"
 
     local replica_summary
-    invoke_command "Get replica database summary" "$(get_cli_command) summary --db $replica_dir --yes" 0 "replica_summary"
+    invoke_command "Get replica database summary" "$(get_zig_cli_command) summary --db $replica_dir --yes" 0 "replica_summary"
 
     # Extract and compare files imported count
     local source_files_imported=$(parse_numeric "$source_summary" "Files imported:")
@@ -630,10 +630,10 @@ test_verify_replica() {
 
     # Get source and replica summaries to compare file counts
     local source_summary
-    invoke_command "Get source database summary" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "source_summary"
+    invoke_command "Get source database summary" "$(get_zig_cli_command) summary --db $TEST_DB_DIR --yes" 0 "source_summary"
 
     local replica_summary
-    invoke_command "Get replica database summary" "$(get_cli_command) summary --db $replica_dir --yes" 0 "replica_summary"
+    invoke_command "Get replica database summary" "$(get_zig_cli_command) summary --db $replica_dir --yes" 0 "replica_summary"
 
     # Extract and compare file counts
     local source_files=$(parse_numeric "$source_summary" "Total files:")
@@ -842,7 +842,7 @@ test_remove_asset() {
 
     # Get initial database summary before removal
     local before_summary
-    invoke_command "Get database summary before removal" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "before_summary"
+    invoke_command "Get database summary before removal" "$(get_zig_cli_command) summary --db $TEST_DB_DIR --yes" 0 "before_summary"
     local files_before=$(parse_numeric "$before_summary" "Files imported:")
 
     # Remove the asset
@@ -854,7 +854,7 @@ test_remove_asset() {
 
     # Get database summary after removal
     local after_summary
-    invoke_command "Get database summary after removal" "$(get_cli_command) summary --db $TEST_DB_DIR --yes" 0 "after_summary"
+    invoke_command "Get database summary after removal" "$(get_zig_cli_command) summary --db $TEST_DB_DIR --yes" 0 "after_summary"
     local files_after=$(parse_numeric "$after_summary" "Files imported:")
 
     # Verify one less asset in the database

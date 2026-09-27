@@ -181,7 +181,7 @@ test "commands that are not ported are unknown commands, and empty command lines
     try std.testing.expectEqualStrings("commander.helpDisplayed", help.outcome.failure.code);
     try std.testing.expect(std.mem.startsWith(u8, help.stdout, "Usage: psi "));
 
-    try expectCommanderError(allocator, &.{"summary"}, "commander.unknownCommand", "error: unknown command 'summary'\n");
+    try expectCommanderError(allocator, &.{"list"}, "commander.unknownCommand", "error: unknown command 'list'\n");
     try expectCommanderError(allocator, &.{ "check", "--db", "x" }, "commander.unknownCommand", "error: unknown command 'check'\n");
     try expectCommanderError(allocator, &.{ "--db", "x", "replicate" }, "commander.unknownOption", "error: unknown option '--db'\n");
     try expectCommanderError(allocator, &.{ "help", "replicate" }, "commander.unknownCommand", "error: unknown command 'help'\n(Did you mean rep?)\n");
@@ -213,6 +213,9 @@ test "the command definitions match index.ts" {
     const replicateDefinition = program.findCommand("rep").?;
     try std.testing.expectEqualStrings("replicate", replicateDefinition.getName());
     try std.testing.expectEqual(@as(usize, 13), replicateDefinition.options.items.len);
+    const summaryDefinition = program.findCommand("sum").?;
+    try std.testing.expectEqualStrings("summary", summaryDefinition.getName());
+    try std.testing.expectEqual(@as(usize, 5), summaryDefinition.options.items.len);
     const verifyDefinition = program.findCommand("ver").?;
     try std.testing.expectEqualStrings("verify", verifyDefinition.getName());
     try std.testing.expectEqual(@as(usize, 10), verifyDefinition.options.items.len);
@@ -326,4 +329,23 @@ test "--version is handled in Zig wherever it is given" {
     try std.testing.expect((try parse(allocator, &.{"--version"})).outcome == .versionOption);
     try std.testing.expect((try parse(allocator, &.{ "rep", "--version" })).outcome == .versionOption);
     try std.testing.expect((try parse(allocator, &.{ "version", "--version" })).outcome == .versionOption);
+}
+
+test "summary command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "sum", "--db", "a", "--key", "k", "--verbose", "--yes", "--cwd", "c" });
+    try std.testing.expect(parsed.outcome == .summary);
+    const options = parsed.outcome.summary.base;
+    try std.testing.expectEqualStrings("a", options.db.?);
+    try std.testing.expectEqualStrings("k", options.key.?);
+    try std.testing.expectEqual(@as(?bool, true), options.verbose);
+    try std.testing.expectEqual(@as(?bool, true), options.yes);
+    try std.testing.expectEqualStrings("c", options.cwd.?);
+
+    const unknown = try parse(allocator, &.{ "summary", "--full" });
+    try std.testing.expect(unknown.outcome == .failure);
+    try std.testing.expectEqualStrings("commander.unknownOption", unknown.outcome.failure.code);
 }

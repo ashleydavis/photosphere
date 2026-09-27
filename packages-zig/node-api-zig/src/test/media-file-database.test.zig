@@ -182,3 +182,101 @@ test "getFilesImported, isPartialDatabase, emptyDatabaseMetadata and copyDatabas
     const bytes = try bson.serialize(allocator, copy);
     try std.testing.expect(bytes.len > 0);
 }
+
+//
+// Builds a one-file database in a storage, with the database metadata under test written into its files merkle
+// tree, and returns the storage ready for getDatabaseSummary to read.
+//
+fn buildSummaryDatabase(allocator: std.mem.Allocator, io: std.Io, directory: []const u8, databaseMetadata: ?bson.BsonDocument) !storage_zig.storage.IStorage {
+    const storage = try helpers.directoryStorage(allocator, io, directory);
+    var tree = merkle_tree_zig.merkle_tree.createTree("12345678-1234-5678-9abc-123456789abc");
+    const hash = [_]u8{1} ** 32;
+    tree = try merkle_tree_zig.merkle_tree.addItem(allocator, &tree, .{
+        .name = "thumb/photo.jpg",
+        .hash = &hash,
+        .length = 100,
+        .lastModified = 0,
+    });
+    tree.merkle = try merkle_tree_zig.merkle_tree.buildMerkleTree(allocator, tree.sort);
+    tree.dirty = false;
+    tree.databaseMetadata = databaseMetadata;
+    try node_api.tree.saveMerkleTree(allocator, io, &tree, storage);
+    return storage;
+}
+
+//
+// Returns database metadata with filesImported 1 and the given isPartial.
+//
+fn summaryMetadata(allocator: std.mem.Allocator, isPartial: bool) !bson.BsonDocument {
+    var metadata = try media_file_database.emptyDatabaseMetadata(allocator);
+    try metadata.put(allocator, "filesImported", .{ .number = 1 });
+    try metadata.put(allocator, "isPartial", .{ .boolean = isPartial });
+    return metadata;
+}
+
+test "getDatabaseSummary reports partial mode when the tree says the database is partial" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dir = try helpers.makeTempDir(allocator, io, "summary-partial");
+    defer helpers.removeTempDir(io, dir);
+    const storage = try buildSummaryDatabase(allocator, io, dir, try summaryMetadata(allocator, true));
+
+    const summary = try media_file_database.getDatabaseSummary(allocator, io, storage);
+
+    try std.testing.expectEqual(media_file_database.DatabaseMode.partial, summary.mode);
+}
+
+test "getDatabaseSummary reports full mode when the tree says the database is not partial" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dir = try helpers.makeTempDir(allocator, io, "summary-full");
+    defer helpers.removeTempDir(io, dir);
+    const storage = try buildSummaryDatabase(allocator, io, dir, try summaryMetadata(allocator, false));
+
+    const summary = try media_file_database.getDatabaseSummary(allocator, io, storage);
+
+    try std.testing.expectEqual(media_file_database.DatabaseMode.full, summary.mode);
+}
+
+test "getDatabaseSummary reports full mode when the tree has no database metadata" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dir = try helpers.makeTempDir(allocator, io, "summary-no-metadata");
+    defer helpers.removeTempDir(io, dir);
+    const storage = try buildSummaryDatabase(allocator, io, dir, null);
+
+    const summary = try media_file_database.getDatabaseSummary(allocator, io, storage);
+
+    try std.testing.expectEqual(media_file_database.DatabaseMode.full, summary.mode);
+}
+
+test "getDatabaseSummary reads the counts and hashes of test/dbs/v6" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const storage = try helpers.directoryStorage(allocator, io, "../../test/dbs/v6");
+
+    const summary = try media_file_database.getDatabaseSummary(allocator, io, storage);
+
+    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
+    try std.testing.expectEqual(media_file_database.DatabaseMode.full, summary.mode);
+    // README.md and the asset, display and thumb files of its one asset: 913 + 2,049,800 + 696,014 + 130,591
+    // bytes in a tree of 7 nodes (the numbers psi verify reports for it).
+    try std.testing.expectEqual(@as(u64, 1), summary.totalImports);
+    try std.testing.expectEqual(@as(u64, 7), summary.totalNodes);
+    try std.testing.expectEqual(@as(u64, 4), summary.totalFiles);
+    try std.testing.expectEqual(@as(u64, 2_877_318), summary.totalSize);
+    try std.testing.expectEqual(@as(u32, 6), summary.databaseVersion);
+    const filesHash = try std.fmt.allocPrint(allocator, "{x}", .{filesTree.merkle.?.hash});
+    try std.testing.expectEqualStrings(filesHash, summary.filesHash.?);
+    const databaseHash = (try @import("bdb-zig").merkle_tree.getDatabaseRootHash(allocator, io, storage, ".db/bson")).?;
+    const combined = merkle_tree_zig.merkle_tree.combineHashes(filesTree.merkle.?.hash, databaseHash);
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{x}", .{&combined}), summary.fullHash);
+}

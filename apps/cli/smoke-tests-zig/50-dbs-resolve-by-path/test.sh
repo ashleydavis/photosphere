@@ -33,7 +33,7 @@ test_dbs_resolve_by_path() {
 
     # Summary using the path — should auto-resolve linked encryption key.
     local summary_output
-    invoke_command "Summary by path (auto-resolve)" "$(get_cli_command) summary --db \"$db_dir\" --yes" 0 "summary_output"
+    invoke_command "Summary by path (auto-resolve)" "$(get_zig_cli_command) summary --db \"$db_dir\" --yes" 0 "summary_output"
 
     # Asserted on the imported-file count, not on an unanchored grep for "1". That grep matched any
     # "1" anywhere in the output, and the summary of a database with no assets at all contains four

@@ -1,8 +1,8 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `add` (alias `a`), `init` (alias `i`), `replicate` (alias `rep`), `verify` (alias `ver`) and `version`
-// commands and the `--version` option are ported; the other commands are not registered yet, so commander reports
-// them as unknown commands.
+// Only the `add` (alias `a`), `init` (alias `i`), `replicate` (alias `rep`), `summary` (alias `sum`), `verify`
+// (alias `ver`) and `version` commands and the `--version` option are ported; the other commands are not
+// registered yet, so commander reports them as unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -37,6 +37,7 @@ pub const worker_log_bun = @import("src/lib/worker-log-bun.zig");
 pub const add = @import("src/cmd/add.zig");
 pub const replicate = @import("src/cmd/replicate.zig");
 pub const init_command = @import("src/cmd/init.zig");
+pub const summary = @import("src/cmd/summary.zig");
 pub const verify = @import("src/cmd/verify.zig");
 pub const version_cmd = @import("src/cmd/version.zig");
 pub const print_notifications = @import("src/lib/print-notifications.zig");
@@ -52,12 +53,14 @@ const CommanderError = commander.CommanderError;
 const IAddCommandOptions = add.IAddCommandOptions;
 const addCommand = add.addCommand;
 const IReplicateCommandOptions = replicate.IReplicateCommandOptions;
+const ISummaryCommandOptions = summary.ISummaryCommandOptions;
 const IVerifyCommandOptions = verify.IVerifyCommandOptions;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
 const initContext = init_cmd.initContext;
 const replicateCommand = replicate.replicateCommand;
 const initCommand = init_command.initCommand;
 const IInitCommandOptions = init_command.IInitCommandOptions;
+const summaryCommand = summary.summaryCommand;
 const verifyCommand = verify.verifyCommand;
 const versionCommand = version_cmd.versionCommand;
 const getCommandExamplesHelp = examples.getCommandExamplesHelp;
@@ -174,6 +177,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the replicate command with these options.
     replicate: IReplicateCommandOptions,
+
+    // Run the summary command with these options.
+    summary: ISummaryCommandOptions,
 
     // Run the verify command with these options.
     verify: IVerifyCommandOptions,
@@ -329,6 +335,19 @@ fn replicateAction(state: *IProgramState, args: []const ArgumentValue, options: 
 }
 
 //
+// The action of the summary command (`initContext(summaryCommand)`): `run` calls initContext and the command.
+//
+fn summaryAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .summary = .{
+            .base = baseOptions(options),
+        },
+    };
+}
+
+//
 // The action of the verify command (`initContext(verifyCommand)`): `run` calls initContext and the command.
 //
 fn verifyAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
@@ -433,7 +452,20 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "replicate"))
         .action(state, replicateAction);
 
-    // Not ported: summary and sync.
+    const summaryDefinition = program
+        .command("summary", .{})
+        .alias("sum")
+        .description("Displays a summary of the media file database including total files, size, and tree hash.");
+    _ = optionFrom(summaryDefinition, dbOption);
+    _ = optionFrom(summaryDefinition, keyOption);
+    _ = optionFrom(summaryDefinition, verboseOption);
+    _ = optionFrom(summaryDefinition, yesOption);
+    _ = optionFrom(summaryDefinition, cwdOption);
+    _ = summaryDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "summary"))
+        .action(state, summaryAction);
+
+    // Not ported: sync.
 
     const verifyDefinition = program
         .command("verify", .{})
@@ -540,6 +572,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try replicateCommand(allocator, io, context, &options);
+        },
+        .summary => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try summaryCommand(allocator, io, context, &options);
         },
         .verify => |parsed| {
             var options = parsed;

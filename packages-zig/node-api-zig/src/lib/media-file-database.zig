@@ -83,7 +83,50 @@ pub const DISPLAY_MIN_SIZE: f64 = 1000;
 //
 pub const DISPLAY_QUALITY: f64 = 95;
 
-// Not ported: DatabaseMode, IDatabaseSummary (psi summary).
+//
+// Whether the database holds every asset or only a partial set.
+// "partial" means only the thumb directory's assets are present locally and the rest are fetched
+// lazily from the database's origin.
+//
+pub const DatabaseMode = enum {
+    // Every asset is present.
+    full,
+
+    // Only the thumb directory's assets are present.
+    partial,
+};
+
+//
+// A summary of the database.
+//
+pub const IDatabaseSummary = struct {
+    // Whether this database is a full copy or a partial replica.
+    mode: DatabaseMode,
+
+    // Total number of files imported into the database.
+    totalImports: u64,
+
+    // Total number of files in the database (including thumbnails, display images, BSON files, etc.).
+    totalFiles: u64,
+
+    // Total size of all files in bytes.
+    totalSize: u64,
+
+    // Total number of nodes in the merkle tree.
+    totalNodes: u64,
+
+    // Full hash of the tree root.
+    fullHash: []const u8,
+
+    // Root hash of the files merkle tree.
+    filesHash: ?[]const u8,
+
+    // Root hash of the BSON database merkle tree.
+    databaseHash: ?[]const u8,
+
+    // Database version from merkle tree.
+    databaseVersion: u32,
+};
 
 //
 // Database metadata that gets embedded in the merkle tree
@@ -453,7 +496,79 @@ pub fn ensureSortIndex(io: std.Io, metadataCollection: *IBsonCollection) !void {
     try retry(io, &photoDateOperation, 3, 1_000, 2, 30_000, null);
 }
 
-// Not ported: getDatabaseSummary, streamAsset, writeAsset, writeAssetStream, writeAssetStreamVerified, removeAsset,
+//
+// `() => getDatabaseRootHash(assetStorage, ".db/bson")`.
+//
+const GetDatabaseRootHashOperation = struct {
+    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    pub const source = "() => getDatabaseRootHash(assetStorage, \".db/bson\")";
+
+    // Allocates the loaded tree.
+    allocator: std.mem.Allocator,
+
+    // The database storage.
+    assetStorage: IStorage,
+
+    //
+    // Gets the root hash of the BSON database tree.
+    //
+    pub fn run(self: *@This(), io: std.Io) !?[]const u8 {
+        return bdb.merkle_tree.getDatabaseRootHash(self.allocator, io, self.assetStorage, ".db/bson");
+    }
+};
+
+//
+// Gets a summary of the entire media file database.
+//
+pub fn getDatabaseSummary(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage) !IDatabaseSummary {
+    var loadOperation: retry_operations.LoadMerkleTreeOperation("() => loadMerkleTree(assetStorage)") = .{
+        .allocator = allocator,
+        .storage = assetStorage,
+    };
+    const merkleTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
+        return errors.throwError("Failed to load merkle tree.", .{});
+    };
+
+    const filesImported = getFilesImported(merkleTree.databaseMetadata);
+
+    // Get root hashes from both merkle trees (compute inline to avoid loading merkle tree again)
+    const filesRootHash: ?[]const u8 = if (merkleTree.merkle) |merkle| merkle.hash else null;
+    var rootHashOperation: GetDatabaseRootHashOperation = .{
+        .allocator = allocator,
+        .assetStorage = assetStorage,
+    };
+    const databaseRootHash = try retry(io, &rootHashOperation, 3, 1_000, 2, 30_000, null);
+
+    // Compute aggregate root hash
+    var fullHash: []const u8 = undefined;
+    if (filesRootHash != null and databaseRootHash != null) {
+        const aggregateHash = merkle_tree.combineHashes(filesRootHash.?, databaseRootHash.?);
+        fullHash = try std.fmt.allocPrint(allocator, "{x}", .{&aggregateHash});
+    }
+    else if (filesRootHash) |hash| {
+        fullHash = try std.fmt.allocPrint(allocator, "{x}", .{hash});
+    }
+    else if (databaseRootHash) |hash| {
+        fullHash = try std.fmt.allocPrint(allocator, "{x}", .{hash});
+    }
+    else {
+        fullHash = "empty";
+    }
+
+    return .{
+        .mode = if (isPartialDatabase(merkleTree.databaseMetadata)) .partial else .full,
+        .totalImports = filesImported,
+        .totalFiles = if (merkleTree.sort) |sort| sort.leafCount else 0,
+        .totalSize = if (merkleTree.sort) |sort| sort.size else 0,
+        .totalNodes = if (merkleTree.sort) |sort| sort.nodeCount else 0,
+        .fullHash = fullHash,
+        .filesHash = if (filesRootHash) |hash| try std.fmt.allocPrint(allocator, "{x}", .{hash}) else null,
+        .databaseHash = if (databaseRootHash) |hash| try std.fmt.allocPrint(allocator, "{x}", .{hash}) else null,
+        .databaseVersion = merkleTree.version,
+    };
+}
+
+// Not ported: streamAsset, writeAsset, writeAssetStream, writeAssetStreamVerified, removeAsset,
 // isDatabasePartial, createLazyDatabaseStorage, openLazyOriginStorage, checkDatabaseExists (not reached by psi replicate or psi verify).
 
 //
