@@ -101,7 +101,7 @@ To do, in order (each one uses what the earlier ones ported):
 - [x] repair
 - [x] find-orphans
 - [x] remove-orphans
-- [ ] upgrade
+- [x] upgrade
 - [ ] sync
 - [ ] consolidate
 - [ ] encrypt

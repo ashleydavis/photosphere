@@ -2,7 +2,7 @@
 // Port of apps/cli/index.ts: the `psi` entry point.
 // Only the `add` (alias `a`), `compare` (alias `cmp`), `database-id`, `export` (alias `exp`), `find-orphans`, `info` (alias
 // `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `remove-orphans`, `repair`,
-// `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `verify` (alias `ver`) and
+// `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `upgrade`, `verify` (alias `ver`) and
 // `version` commands and the `--version` option are ported; the other commands are not registered yet, so commander
 // reports them as unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
@@ -45,6 +45,7 @@ pub const repair = @import("src/cmd/repair.zig");
 pub const find_orphans_command = @import("src/cmd/find-orphans.zig");
 pub const find_orphans = @import("src/lib/find-orphans.zig");
 pub const remove_orphans = @import("src/cmd/remove-orphans.zig");
+pub const upgrade = @import("src/cmd/upgrade.zig");
 pub const export_command = @import("src/cmd/export.zig");
 pub const info = @import("src/cmd/info.zig");
 pub const list = @import("src/cmd/list.zig");
@@ -81,6 +82,8 @@ const IFindOrphansCommandOptions = find_orphans_command.IFindOrphansCommandOptio
 const findOrphansCommand = find_orphans_command.findOrphansCommand;
 const IRemoveOrphansCommandOptions = remove_orphans.IRemoveOrphansCommandOptions;
 const removeOrphansCommand = remove_orphans.removeOrphansCommand;
+const IUpgradeCommandOptions = upgrade.IUpgradeCommandOptions;
+const upgradeCommand = upgrade.upgradeCommand;
 const IRemoveCommandOptions = remove.IRemoveCommandOptions;
 const removeCommand = remove.removeCommand;
 const ICompareCommandOptions = compare.ICompareCommandOptions;
@@ -288,6 +291,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the remove-orphans command with these options.
     removeOrphans: IRemoveOrphansCommandOptions,
+
+    // Run the upgrade command with these options.
+    upgrade: IUpgradeCommandOptions,
 
     // Run the compare command with these options.
     compare: ICompareCommandOptions,
@@ -528,6 +534,19 @@ fn removeOrphansAction(state: *IProgramState, args: []const ArgumentValue, optio
     _ = command;
     state.outcome = .{
         .removeOrphans = .{
+            .base = baseOptions(options),
+        },
+    };
+}
+
+//
+// The action of the upgrade command (`initContext(upgradeCommand)`): `run` calls initContext and the command.
+//
+fn upgradeAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .upgrade = .{
             .base = baseOptions(options),
         },
     };
@@ -948,6 +967,18 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
 
     // Not ported: sync.
 
+    const upgradeDefinition = program
+        .command("upgrade", .{})
+        .description("Upgrades a media file database to the latest version.");
+    _ = optionFrom(upgradeDefinition, dbOption);
+    _ = optionFrom(upgradeDefinition, keyOption);
+    _ = optionFrom(upgradeDefinition, verboseOption);
+    _ = optionFrom(upgradeDefinition, yesOption);
+    _ = optionFrom(upgradeDefinition, cwdOption);
+    _ = upgradeDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "upgrade"))
+        .action(state, upgradeAction);
+
     const verifyDefinition = program
         .command("verify", .{})
         .alias("ver")
@@ -1061,6 +1092,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try findOrphansCommand(allocator, io, context, &options);
+        },
+        .upgrade => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try upgradeCommand(allocator, io, context, &options);
         },
         .removeOrphans => |parsed| {
             var options = parsed;

@@ -257,6 +257,18 @@ pub const ShardIterator = struct {
 };
 
 //
+// What the onDrop callback given to a sort index needs to evict it from the cache
+// (TypeScript: the closure `() => this.sortIndexCache.delete(cacheKey)` captures these).
+//
+const ISortIndexDropContext = struct {
+    // The collection whose sort index cache holds the sort index.
+    collection: *BsonCollection,
+
+    // The key of the sort index in the cache.
+    cacheKey: []const u8,
+};
+
+//
 // Sharded BSON document store: records partitioned into shard files, sort indexes, and merkle trees.
 // Writes are buffered until commit(); flush() drops caches after a successful commit.
 // (Zig: the collection must stay at the same address, because its shards, sort indexes and merkle ref point back
@@ -376,6 +388,14 @@ pub const BsonCollection = struct {
     }
 
     //
+    // The onDrop callback given to sort indexes (TypeScript: `() => this.sortIndexCache.delete(cacheKey)`).
+    //
+    fn evictSortIndexCallback(context: *anyopaque) void {
+        const dropContext: *ISortIndexDropContext = @ptrCast(@alignCast(context));
+        _ = dropContext.collection.sortIndexCache.orderedRemove(dropContext.cacheKey);
+    }
+
+    //
     // Clears the dirty flag after a successful commit or drop.
     //
     fn clearDirty(self: *BsonCollection) void {
@@ -391,6 +411,11 @@ pub const BsonCollection = struct {
         if (self.sortIndexCache.get(cacheKey)) |cached| {
             return cached;
         }
+        const dropContext = try self.allocator.create(ISortIndexDropContext);
+        dropContext.* = .{
+            .collection = self,
+            .cacheKey = cacheKey,
+        };
         const newSortIndex = try self.allocator.create(SortIndex);
         newSortIndex.* = try SortIndex.init(
             self.allocator,
@@ -402,8 +427,8 @@ pub const BsonCollection = struct {
             self.uuidGenerator,
             null, //todo: Might be good if the data type was passed into sortIndex as well!
             .{ .context = self, .function = markDirtyCallback },
+            .{ .context = dropContext, .function = evictSortIndexCallback },
         );
-        // Not ported: the onDrop callback (drop is not used by psi replicate or psi verify).
 
         try self.sortIndexCache.put(self.allocator, cacheKey, newSortIndex);
         return newSortIndex;

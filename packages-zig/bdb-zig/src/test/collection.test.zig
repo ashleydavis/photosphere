@@ -134,7 +134,17 @@ test "should list and delete sort indexes" {
     try std.testing.expectEqualStrings("name", indexes[1].fieldName);
     try std.testing.expectEqual(bdb.sort_index.SortDirection.desc, indexes[1].direction);
     try std.testing.expectEqualStrings("role", indexes[2].fieldName);
-    // Not ported: dropping an index (drop is not used by psi replicate or psi verify).
+
+    // Delete an index
+    const deleteResult = try (try collection.sortIndex("age", .asc)).drop(io);
+    try std.testing.expect(deleteResult);
+
+    // Check that the index is deleted
+    const indexesAfterDelete = try collection.sortIndexes(io);
+    try std.testing.expectEqual(@as(usize, 2), indexesAfterDelete.len);
+    for (indexesAfterDelete) |indexInfo| {
+        try std.testing.expect(!(std.mem.eql(u8, indexInfo.fieldName, "age") and indexInfo.direction == .asc));
+    }
 }
 
 test "should update sort index when record is updated" {
@@ -237,6 +247,72 @@ test "setInternalRecord should upsert (update existing record)" {
     const retrieved = (try getRecord(collection, id)).?;
     try std.testing.expectEqualStrings("Updated", retrieved.fields.get("name").?.string);
     try std.testing.expectEqual(@as(f64, 21), retrieved.fields.get("age").?.number);
+}
+
+//
+// Returns true when the directory of a sort index exists (TypeScript: `sortIndex.exists()`, which is
+// `storage.dirExists(indexDirectory)`).
+//
+fn sortIndexExists(allocator: std.mem.Allocator, storage: *MemoryStorage, collection: *BsonCollection, fieldName: []const u8, direction: bdb.sort_index.SortDirection) !bool {
+    return storage.dirExists(allocator, io, (try collection.sortIndex(fieldName, direction)).indexDirectory);
+}
+
+test "deleteIndex should delete both asc and desc indexes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    try (try collection.sortIndex("age", .asc)).ensure(io, collection, .number);
+    try (try collection.sortIndex("age", .desc)).ensure(io, collection, .number);
+
+    try std.testing.expect(try sortIndexExists(allocator, &storage, collection, "age", .asc));
+    try std.testing.expect(try sortIndexExists(allocator, &storage, collection, "age", .desc));
+
+    const resultAsc = try (try collection.sortIndex("age", .asc)).drop(io);
+    const resultDesc = try (try collection.sortIndex("age", .desc)).drop(io);
+    const result = resultAsc or resultDesc;
+    try std.testing.expect(result);
+
+    try std.testing.expect(!try sortIndexExists(allocator, &storage, collection, "age", .asc));
+    try std.testing.expect(!try sortIndexExists(allocator, &storage, collection, "age", .desc));
+}
+
+test "deleteIndex should return false when neither index exists" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var storage = MemoryStorage.init(arena.allocator());
+    const collection = try newCollection(arena.allocator(), &storage);
+    const resultAsc = try (try collection.sortIndex("nonexistent", .asc)).drop(io);
+    const resultDesc = try (try collection.sortIndex("nonexistent", .desc)).drop(io);
+    try std.testing.expect(!resultAsc);
+    try std.testing.expect(!resultDesc);
+}
+
+test "drop should return false for non-existent index" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var storage = MemoryStorage.init(arena.allocator());
+    const collection = try newCollection(arena.allocator(), &storage);
+    const result = try (try collection.sortIndex("nonexistent", .asc)).drop(io);
+    try std.testing.expect(!result);
+}
+
+test "drop evicts the sort index from the collection's cache" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    const ageIndex = try collection.sortIndex("age", .asc);
+    const nameIndex = try collection.sortIndex("name", .asc);
+    try ageIndex.ensure(io, collection, .number);
+
+    _ = try ageIndex.drop(io);
+
+    // The dropped index is replaced by a new instance, the other one stays cached.
+    try std.testing.expect(try collection.sortIndex("age", .asc) != ageIndex);
+    try std.testing.expectEqual(nameIndex, try collection.sortIndex("name", .asc));
 }
 
 test "getSorted should return empty when sort index does not exist" {

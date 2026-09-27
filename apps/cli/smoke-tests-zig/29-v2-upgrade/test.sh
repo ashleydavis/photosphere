@@ -27,7 +27,7 @@ test_v2_database_upgrade() {
     
     # Test upgrade command on v2 database
     local upgrade_output
-    invoke_command "Upgrade v2 database to v6" "$(get_cli_command) upgrade --db $temp_v2_dir --yes" 0 "upgrade_output"
+    invoke_command "Upgrade v2 database to v6" "$(get_zig_cli_command) upgrade --db $temp_v2_dir --yes" 0 "upgrade_output"
     
     # Check that upgrade was successful
     expect_output_string "$upgrade_output" "Database upgraded successfully to version 6" "Upgrade completed successfully"

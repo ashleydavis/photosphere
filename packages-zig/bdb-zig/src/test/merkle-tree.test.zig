@@ -141,3 +141,325 @@ test "getDatabaseRootHash returns the root hash of the database merkle tree, or 
     const rootHash = (try merkle_tree.getDatabaseRootHash(allocator, io, storage.asStorage(), ".db/bson")).?;
     try std.testing.expectEqualSlices(u8, databaseTree.merkle.?.hash, rootHash);
 }
+
+//
+// The state of a merkle tree update test (TypeScript: the describe block variables set in beforeEach of
+// merkle-tree-update.test.ts).
+//
+const UpdateFixture = struct {
+    // The storage the database writes to.
+    storage: *MemoryStorage,
+
+    // The database under test.
+    database: *bdb.database.BsonDatabase,
+
+    // The "test" collection of the database.
+    collection: *bdb.collection.BsonCollection,
+};
+
+//
+// Creates the database and collection of a merkle tree update test (TypeScript: the beforeEach block).
+//
+fn newUpdateFixture(allocator: std.mem.Allocator) !UpdateFixture {
+    const storage = try allocator.create(MemoryStorage);
+    storage.* = MemoryStorage.init(allocator);
+    const database = try bdb.database.BsonDatabase.init(allocator, storage.asStorage(), "", test_uuid_generator.uuidGenerator(), helpers.timestamp_provider.timestampProvider());
+    return .{
+        .storage = storage,
+        .database = database,
+        .collection = try database.collection("test"),
+    };
+}
+
+//
+// Builds the `{ _id, name, age }` record the merkle tree update tests insert.
+//
+fn makePerson(allocator: std.mem.Allocator, recordId: []const u8, name: []const u8, age: f64) !bson.BsonDocument {
+    var record: bson.BsonDocument = .empty;
+    try record.put(allocator, "_id", .{ .string = recordId });
+    try record.put(allocator, "name", .{ .string = name });
+    try record.put(allocator, "age", .{ .number = age });
+    return record;
+}
+
+test "insertOne should update shard, collection, and database merkle trees" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const fixture = try newUpdateFixture(allocator);
+    const recordId = try test_uuid_generator.uuidGenerator().generate(allocator, io);
+    var record = try makePerson(allocator, recordId, "John", 30);
+    try fixture.collection.insertOne(io, &record, null);
+    try fixture.database.commit(io);
+
+    // Determine which shard the record went to (v6: collection dir = collections/test)
+    const shardIds = try merkle_tree.listShards(allocator, io, fixture.storage.asStorage(), "", "test");
+    try std.testing.expect(shardIds.len > 0);
+    const shardId = shardIds[0];
+
+    // Check shard merkle tree exists
+    const shardTree = try merkle_tree.loadShardMerkleTree(allocator, io, fixture.storage.asStorage(), "", "test", shardId);
+    try std.testing.expect(shardTree != null);
+    try std.testing.expect(shardTree.?.merkle != null);
+    try std.testing.expect(shardTree.?.sort != null);
+
+    // Check collection merkle tree exists
+    const collectionTree = try merkle_tree.loadCollectionMerkleTree(allocator, io, fixture.storage.asStorage(), "", "test");
+    try std.testing.expect(collectionTree != null);
+    try std.testing.expect(collectionTree.?.merkle != null);
+
+    // Check database merkle tree exists
+    const databaseTree = try merkle_tree.loadDatabaseMerkleTree(allocator, io, fixture.storage.asStorage(), "");
+    try std.testing.expect(databaseTree != null);
+}
+
+test "updateOne should update shard, collection, and database merkle trees" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const fixture = try newUpdateFixture(allocator);
+    const recordId = try test_uuid_generator.uuidGenerator().generate(allocator, io);
+
+    // Insert initial record
+    var record = try makePerson(allocator, recordId, "John", 30);
+    try fixture.collection.insertOne(io, &record, null);
+    try fixture.database.commit(io);
+
+    // Determine which shard the record went to
+    const shardIds = try merkle_tree.listShards(allocator, io, fixture.storage.asStorage(), "", "test");
+    try std.testing.expect(shardIds.len > 0);
+    const shardId = shardIds[0];
+
+    // Get initial shard tree hash
+    const initialShardTree = try merkle_tree.loadShardMerkleTree(allocator, io, fixture.storage.asStorage(), "", "test", shardId);
+    try std.testing.expect(initialShardTree != null);
+    try std.testing.expect(initialShardTree.?.merkle != null);
+    const initialShardHash = initialShardTree.?.merkle.?.hash;
+
+    // Update the record
+    var updates: bson.BsonDocument = .empty;
+    try updates.put(allocator, "name", .{ .string = "Jane" });
+    try updates.put(allocator, "age", .{ .number = 31 });
+    _ = try fixture.collection.updateOne(io, recordId, updates, .{});
+    try fixture.database.commit(io);
+
+    // Get updated shard tree hash
+    const updatedShardTree = try merkle_tree.loadShardMerkleTree(allocator, io, fixture.storage.asStorage(), "", "test", shardId);
+    try std.testing.expect(updatedShardTree != null);
+    try std.testing.expect(updatedShardTree.?.merkle != null);
+    const updatedShardHash = updatedShardTree.?.merkle.?.hash;
+
+    // The shard tree hash should have changed
+    try std.testing.expect(!std.mem.eql(u8, initialShardHash, updatedShardHash));
+
+    // Collection tree should also be updated
+    const collectionTree = try merkle_tree.loadCollectionMerkleTree(allocator, io, fixture.storage.asStorage(), "", "test");
+    try std.testing.expect(collectionTree != null);
+    try std.testing.expect(collectionTree.?.merkle != null);
+}
+
+test "deleteOne should update shard, collection, and database merkle trees" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const fixture = try newUpdateFixture(allocator);
+    const recordId = try test_uuid_generator.uuidGenerator().generate(allocator, io);
+
+    // Insert initial record
+    var record = try makePerson(allocator, recordId, "John", 30);
+    try fixture.collection.insertOne(io, &record, null);
+    try fixture.database.commit(io);
+
+    // Determine which shard the record went to
+    const shardIds = try merkle_tree.listShards(allocator, io, fixture.storage.asStorage(), "", "test");
+    try std.testing.expect(shardIds.len > 0);
+    const shardId = shardIds[0];
+
+    // Get initial shard tree
+    const initialShardTree = try merkle_tree.loadShardMerkleTree(allocator, io, fixture.storage.asStorage(), "", "test", shardId);
+    try std.testing.expect(initialShardTree != null);
+    try std.testing.expect(initialShardTree.?.sort != null);
+
+    // Delete the record
+    const deleted = try fixture.collection.deleteOne(io, recordId);
+    try std.testing.expect(deleted);
+    try fixture.database.commit(io);
+
+    // Get updated shard tree
+    const updatedShardTree = try merkle_tree.loadShardMerkleTree(allocator, io, fixture.storage.asStorage(), "", "test", shardId);
+
+    // After deleting the last record, the shard tree file is deleted (empty shards don't have tree files)
+    try std.testing.expect(updatedShardTree == null);
+
+    // Collection tree is also deleted when the collection becomes empty (no shards with records)
+    const collectionTree = try merkle_tree.loadCollectionMerkleTree(allocator, io, fixture.storage.asStorage(), "", "test");
+    try std.testing.expect(collectionTree == null);
+}
+
+test "getDatabaseMerkleTree matches persisted database merkle after commit" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const fixture = try newUpdateFixture(allocator);
+    const recordId = try test_uuid_generator.uuidGenerator().generate(allocator, io);
+    var record = try makePerson(allocator, recordId, "John", 30);
+    try fixture.collection.insertOne(io, &record, null);
+    try fixture.database.commit(io);
+    const memoryTree = try (try fixture.database.merkleTree()).get(io);
+    const diskTree = try merkle_tree.loadDatabaseMerkleTree(allocator, io, fixture.storage.asStorage(), "");
+    try std.testing.expect(memoryTree != null and memoryTree.?.merkle != null);
+    try std.testing.expect(diskTree != null and diskTree.?.merkle != null);
+    try std.testing.expectEqualSlices(u8, memoryTree.?.merkle.?.hash, diskTree.?.merkle.?.hash);
+}
+
+//
+// Writes a shard file that holds no records (the version 2 shard format is a record count followed by the records).
+//
+fn writeEmptyShard(allocator: std.mem.Allocator, recordCount: u32, serializer: serialization_zig.serialization.ISerializer) anyerror!void {
+    _ = allocator;
+    try serializer.writeUInt32(recordCount);
+}
+
+//
+// Returns the root hash of a tree, building the merkle tree first when the tree is dirty.
+//
+fn treeRootHash(allocator: std.mem.Allocator, tree: *const merkle_tree_zig.merkle_tree.IMerkleTree) ![]const u8 {
+    if (tree.dirty) {
+        return (try merkle_tree_zig.merkle_tree.buildMerkleTree(allocator, tree.sort)).?.hash;
+    }
+    return tree.merkle.?.hash;
+}
+
+test "listShards lists the shards of a collection in name order, skipping the merkle tree files" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    try storage.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
+
+    const shardIds = try merkle_tree.listShards(allocator, io, storage.asStorage(), ".db/bson", "metadata");
+    try std.testing.expectEqual(@as(usize, 40), shardIds.len);
+    var previousShardNumber: ?u32 = null;
+    for (shardIds) |shardId| {
+        // Numeric collation, so "2" comes before "13", and no ".dat" file is listed.
+        const shardNumber = try std.fmt.parseInt(u32, shardId, 10);
+        if (previousShardNumber) |previous| {
+            try std.testing.expect(previous < shardNumber);
+        }
+        previousShardNumber = shardNumber;
+    }
+
+    try std.testing.expectEqual(@as(usize, 0), (try merkle_tree.listShards(allocator, io, storage.asStorage(), ".db/bson", "nonexistent")).len);
+}
+
+test "buildDatabaseMerkleTree with rebuild reproduces the merkle trees TypeScript wrote" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    try storage.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
+    const originalDatabaseHash = (try merkle_tree.getDatabaseRootHash(allocator, io, storage.asStorage(), ".db/bson")).?;
+    const originalCollectionTree = (try merkle_tree.loadCollectionMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata")).?;
+    const shardIds = try merkle_tree.listShards(allocator, io, storage.asStorage(), ".db/bson", "metadata");
+    const originalShardTree = (try merkle_tree.loadShardMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata", shardIds[0])).?;
+
+    // A rebuild writes every tree again, so the stale shard tree written here must be replaced.
+    try merkle_tree.saveShardMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata", shardIds[0], @constCast(&(try merkle_tree.loadShardMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata", shardIds[1])).?));
+
+    const databaseTree = try merkle_tree.buildDatabaseMerkleTree(allocator, io, storage.asStorage(), ".db/bson", test_uuid_generator.uuidGenerator(), null, null, true);
+    try std.testing.expectEqual(@as(u32, 1), databaseTree.sort.?.leafCount);
+    try std.testing.expectEqualSlices(u8, originalDatabaseHash, try treeRootHash(allocator, &databaseTree));
+
+    const rebuiltCollectionTree = (try merkle_tree.loadCollectionMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata")).?;
+    try std.testing.expectEqual(@as(u32, 40), rebuiltCollectionTree.sort.?.leafCount);
+    try std.testing.expectEqualSlices(u8, originalCollectionTree.merkle.?.hash, rebuiltCollectionTree.merkle.?.hash);
+    const rebuiltShardTree = (try merkle_tree.loadShardMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata", shardIds[0])).?;
+    try std.testing.expectEqualSlices(u8, originalShardTree.merkle.?.hash, rebuiltShardTree.merkle.?.hash);
+}
+
+test "buildDatabaseMerkleTree without rebuild loads the saved trees and builds the missing ones" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    try storage.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
+    const originalDatabaseHash = (try merkle_tree.getDatabaseRootHash(allocator, io, storage.asStorage(), ".db/bson")).?;
+    const originalCollectionTree = (try merkle_tree.loadCollectionMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata")).?;
+    const shardIds = try merkle_tree.listShards(allocator, io, storage.asStorage(), ".db/bson", "metadata");
+    const originalShardTree = (try merkle_tree.loadShardMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata", shardIds[0])).?;
+
+    // The collection tree and one shard tree are missing, so both are built and saved.
+    try merkle_tree.deleteCollectionMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata");
+    try merkle_tree.deleteShardMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata", shardIds[0]);
+
+    const databaseTree = try merkle_tree.buildDatabaseMerkleTree(allocator, io, storage.asStorage(), ".db/bson", test_uuid_generator.uuidGenerator(), null, null, false);
+    try std.testing.expectEqualSlices(u8, originalDatabaseHash, try treeRootHash(allocator, &databaseTree));
+    const builtCollectionTree = (try merkle_tree.loadCollectionMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata")).?;
+    try std.testing.expectEqualSlices(u8, originalCollectionTree.merkle.?.hash, builtCollectionTree.merkle.?.hash);
+    const builtShardTree = (try merkle_tree.loadShardMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata", shardIds[0])).?;
+    try std.testing.expectEqualSlices(u8, originalShardTree.merkle.?.hash, builtShardTree.merkle.?.hash);
+
+    // A saved collection tree is used as it is, without reading the shards: a stale one gives a different root.
+    try merkle_tree.saveCollectionMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata", @constCast(&builtShardTree));
+    const staleDatabaseTree = try merkle_tree.buildDatabaseMerkleTree(allocator, io, storage.asStorage(), ".db/bson", test_uuid_generator.uuidGenerator(), null, null, false);
+    try std.testing.expectEqualSlices(u8, builtShardTree.merkle.?.hash, staleDatabaseTree.sort.?.contentHash.?);
+}
+
+test "buildDatabaseMerkleTree uses the preloaded collection tree in place of the saved one" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    try storage.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
+    const shardIds = try merkle_tree.listShards(allocator, io, storage.asStorage(), ".db/bson", "metadata");
+    const preloadedTree = (try merkle_tree.loadShardMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata", shardIds[0])).?;
+    const collectionFile = storage.getFile(".db/bson/collections/metadata/collection.dat").?;
+
+    const databaseTree = try merkle_tree.buildDatabaseMerkleTree(allocator, io, storage.asStorage(), ".db/bson", test_uuid_generator.uuidGenerator(), "metadata", preloadedTree, true);
+    try std.testing.expectEqual(@as(u32, 1), databaseTree.sort.?.leafCount);
+    try std.testing.expectEqualSlices(u8, preloadedTree.merkle.?.hash, databaseTree.sort.?.contentHash.?);
+    // The preloaded collection is not rebuilt, so its saved tree is untouched.
+    try std.testing.expectEqualSlices(u8, collectionFile, storage.getFile(".db/bson/collections/metadata/collection.dat").?);
+
+    // A preloaded tree without a merkle tree adds nothing.
+    const emptyTree = merkle_tree_zig.merkle_tree.createTree("empty");
+    const emptyDatabaseTree = try merkle_tree.buildDatabaseMerkleTree(allocator, io, storage.asStorage(), ".db/bson", test_uuid_generator.uuidGenerator(), "metadata", emptyTree, false);
+    try std.testing.expect(emptyDatabaseTree.sort == null);
+}
+
+test "buildCollectionMerkleTree deletes the merkle tree of an empty shard and leaves the shard out" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    try storage.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/v6/.db/bson", ".db/bson");
+    const originalCollectionTree = (try merkle_tree.loadCollectionMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata")).?;
+    try serialization_zig.serialization.save(allocator, io, storage.asStorage(), ".db/bson/collections/metadata/shards/5", @as(u32, 0), 2, "SHAR", writeEmptyShard);
+    try storage.putFile(".db/bson/collections/metadata/shards/5.dat", storage.getFile(".db/bson/collections/metadata/shards/96.dat").?);
+
+    for ([_]bool{ true, false }) |rebuild| {
+        const collectionTree = try merkle_tree.buildCollectionMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata", test_uuid_generator.uuidGenerator(), rebuild);
+        try std.testing.expect(storage.getFile(".db/bson/collections/metadata/shards/5.dat") == null);
+        try std.testing.expectEqual(@as(u32, 1), collectionTree.sort.?.leafCount);
+        try std.testing.expectEqualSlices(u8, originalCollectionTree.merkle.?.hash, try treeRootHash(allocator, &collectionTree));
+    }
+}
+
+test "buildDatabaseMerkleTree deletes the tree of a collection that has no records" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    for ([_]bool{ true, false }) |rebuild| {
+        var storage = MemoryStorage.init(allocator);
+        try serialization_zig.serialization.save(allocator, io, storage.asStorage(), ".db/bson/collections/metadata/shards/5", @as(u32, 0), 2, "SHAR", writeEmptyShard);
+        if (rebuild) {
+            // A rebuild replaces a saved collection tree, so a stale one is deleted.
+            var staleTree = merkle_tree_zig.merkle_tree.createTree(try test_uuid_generator.uuidGenerator().generate(allocator, io));
+            try merkle_tree.saveCollectionMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata", &staleTree);
+        }
+
+        const databaseTree = try merkle_tree.buildDatabaseMerkleTree(allocator, io, storage.asStorage(), ".db/bson", test_uuid_generator.uuidGenerator(), null, null, rebuild);
+        try std.testing.expect(databaseTree.sort == null);
+        try std.testing.expect(storage.getFile(".db/bson/collections/metadata/collection.dat") == null);
+    }
+}

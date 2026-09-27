@@ -61,7 +61,7 @@ const Fixture = struct {
     //
     fn sortIndex(self: *Fixture, collectionName: []const u8, fieldName: []const u8, direction: SortDirection, sortDataType: ?SortDataType, onDirty: ?DirtyCallback) !*SortIndex {
         const index = try self.allocator.create(SortIndex);
-        index.* = try SortIndex.init(self.allocator, self.storage.asStorage(), "db", collectionName, fieldName, direction, self.uuidGenerator.uuidGenerator(), sortDataType, onDirty);
+        index.* = try SortIndex.init(self.allocator, self.storage.asStorage(), "db", collectionName, fieldName, direction, self.uuidGenerator.uuidGenerator(), sortDataType, onDirty, null);
         return index;
     }
 };
@@ -348,6 +348,25 @@ test "should add a new record to the index" {
     try std.testing.expectEqualSlices(f64, &.{ 65, 72, 80, 85, 85, 90 }, try scores(allocator, index, "score"));
 }
 
+test "should delete the entire index" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+
+    // Initialize the index
+    try index.build(io, collection);
+
+    // Delete the index
+    _ = try index.drop(io);
+
+    // Check that the index directory no longer exists
+    const exists = try fixture.storage.dirExists(allocator, io, "db/indexes/test_collection/score_asc");
+    try std.testing.expect(!exists);
+}
+
 test "should return empty result when calling getPage on non-existent index" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -471,6 +490,41 @@ test "should return false when loading non-existent index" {
     try std.testing.expect(!try index.load(io));
 }
 
+test "should clear treeNodes when building after load" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+
+    // Build the index first
+    try index.build(io, collection);
+
+    // Verify it has data
+    const firstResult = try index.getPage(io, null);
+    try std.testing.expectEqual(@as(u32, 5), firstResult.totalRecords);
+
+    // Create a new collection with different data
+    // (Zig: the ids are valid record ids, because the collection stores the records in its shards.)
+    const newCollection = try fixture.collection("test_collection", &.{
+        try makeTestRecord(allocator, 6, "New 1", 10, "A"),
+        try makeTestRecord(allocator, 7, "New 2", 20, "B"),
+    });
+
+    // Delete the index first to allow rebuild
+    _ = try index.drop(io);
+
+    // Build again with new data - this should clear treeNodes
+    try index.build(io, newCollection);
+
+    // Verify we have the new data, not the old
+    const secondResult = try index.getPage(io, null);
+    try std.testing.expectEqual(@as(u32, 2), secondResult.totalRecords);
+    try std.testing.expectEqual(@as(f64, 10), secondResult.records[0].get("score").?.number);
+    try std.testing.expectEqual(@as(f64, 20), secondResult.records[1].get("score").?.number);
+}
+
 test "should not rebuild if already loaded" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -483,6 +537,36 @@ test "should not rebuild if already loaded" {
     try index.build(io, collection);
     try std.testing.expectEqualStrings(rootPageId, index.rootPageId.?);
     try std.testing.expectEqual(@as(u32, 5), index.totalEntries);
+}
+
+test "should reset state properly when building" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+
+    // Build with initial data
+    try index.build(io, collection);
+
+    const firstResult = try index.getPage(io, null);
+    const firstRootPageId = firstResult.currentPageId;
+
+    // Delete and rebuild with different data
+    _ = try index.drop(io);
+
+    // (Zig: the id is a valid record id, because the collection stores the record in its shards.)
+    const newCollection = try fixture.collection("test_collection", &.{
+        try makeTestRecord(allocator, 6, "New 1", 10, "A"),
+    });
+    try index.build(io, newCollection);
+
+    // Verify state was reset
+    const secondResult = try index.getPage(io, null);
+    try std.testing.expectEqual(@as(u32, 1), secondResult.totalRecords); // New count
+    try std.testing.expectEqual(@as(u32, 1), secondResult.totalPages); // New page count
+    try std.testing.expect(!std.mem.eql(u8, firstRootPageId, secondResult.currentPageId)); // New root
 }
 
 test "addRecord then commit persists the record" {
