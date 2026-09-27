@@ -213,6 +213,9 @@ test "the command definitions match index.ts" {
     const replicateDefinition = program.findCommand("rep").?;
     try std.testing.expectEqualStrings("replicate", replicateDefinition.getName());
     try std.testing.expectEqual(@as(usize, 13), replicateDefinition.options.items.len);
+    const infoDefinition = program.findCommand("inf").?;
+    try std.testing.expectEqualStrings("info", infoDefinition.getName());
+    try std.testing.expectEqual(@as(usize, 5), infoDefinition.options.items.len);
     const listDefinition = program.findCommand("ls").?;
     try std.testing.expectEqualStrings("list", listDefinition.getName());
     try std.testing.expect(program.findCommand("l").? == listDefinition);
@@ -377,4 +380,40 @@ test "list command lines parse like commander" {
     const unknown = try parse(allocator, &.{ "list", "--full" });
     try std.testing.expect(unknown.outcome == .failure);
     try std.testing.expectEqualStrings("commander.unknownOption", unknown.outcome.failure.code);
+}
+
+test "info command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "inf", "a.jpg", "b.jpg", "--db", "d", "--verbose", "--tools", "--yes", "--cwd", "c" });
+    try std.testing.expect(parsed.outcome == .info);
+    const info = parsed.outcome.info;
+    try std.testing.expectEqual(@as(usize, 2), info.inputs.len);
+    try std.testing.expectEqualStrings("a.jpg", info.inputs[0]);
+    try std.testing.expectEqualStrings("b.jpg", info.inputs[1]);
+    try std.testing.expectEqualStrings("d", info.options.base.db.?);
+    try std.testing.expectEqual(@as(?bool, true), info.options.base.verbose);
+    try std.testing.expectEqual(@as(?bool, true), info.options.base.tools);
+    try std.testing.expectEqual(@as(?bool, true), info.options.base.yes);
+    try std.testing.expectEqualStrings("c", info.options.base.cwd.?);
+
+    // <files...> is required.
+    try expectCommanderError(allocator, &.{"info"}, "commander.missingArgument", "error: missing required argument 'files'\n");
+
+    const unknown = try parse(allocator, &.{ "info", "a.jpg", "--key", "k" });
+    try std.testing.expect(unknown.outcome == .failure);
+    try std.testing.expectEqualStrings("commander.unknownOption", unknown.outcome.failure.code);
+}
+
+test "info classifies inputs as paths, asset IDs or hashes" {
+    try std.testing.expectEqual(cli.info.classifyInput("89171cd9-a652-4047-b869-1154bf2c95a1"), .assetId);
+    try std.testing.expectEqual(cli.info.classifyInput("89171CD9-A652-4047-B869-1154BF2C95A1"), .assetId);
+    try std.testing.expectEqual(cli.info.classifyInput("426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c"), .hash);
+    try std.testing.expectEqual(cli.info.classifyInput("426FAB8DBDD88EAD05220E0A73644B1D77C4591689701090926129AF8BA45E7C"), .hash);
+    try std.testing.expectEqual(cli.info.classifyInput("89171cd9a652-4047-b869-1154bf2c95a1-"), .path);
+    try std.testing.expectEqual(cli.info.classifyInput("426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7"), .path);
+    try std.testing.expectEqual(cli.info.classifyInput("photo.jpg"), .path);
+    try std.testing.expectEqual(cli.info.classifyInput("89171cd9-a652-4047-b869-1154bf2c95ag"), .path);
 }
