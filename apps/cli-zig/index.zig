@@ -1,8 +1,9 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `replicate` (alias `rep`) and `verify` (alias `ver`) commands are implemented in Zig; every other
-// command line (including no arguments, program help and --version) is handed to the TypeScript CLI (src/main.zig).
-// The help of replicate and verify is rendered here by the commander port (src/lib/commander.zig).
+// Only the `replicate` (alias `rep`), `verify` (alias `ver`) and `version` commands and the `--version` option are
+// implemented in Zig; every other command line (including no arguments and program help) is handed to the
+// TypeScript CLI (src/main.zig).
+// The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
 const std = @import("std");
@@ -35,6 +36,7 @@ pub const worker_pool = @import("src/lib/worker-pool.zig");
 pub const worker_log_bun = @import("src/lib/worker-log-bun.zig");
 pub const replicate = @import("src/cmd/replicate.zig");
 pub const verify = @import("src/cmd/verify.zig");
+pub const version_cmd = @import("src/cmd/version.zig");
 pub const delegate = @import("src/main.zig");
 pub const print_notifications = @import("src/lib/print-notifications.zig");
 pub const check_for_updates = @import("src/lib/check-for-updates.zig");
@@ -52,6 +54,7 @@ const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
 const initContext = init_cmd.initContext;
 const replicateCommand = replicate.replicateCommand;
 const verifyCommand = verify.verifyCommand;
+const versionCommand = version_cmd.versionCommand;
 const getCommandExamplesHelp = examples.getCommandExamplesHelp;
 const exit = node_utils.termination.exit;
 const FatalError = utils.fatal_error.FatalError;
@@ -145,6 +148,12 @@ pub const ParseOutcome = union(enum) {
 
     // Run the verify command with these options.
     verify: IVerifyCommandOptions,
+
+    // Run the version command.
+    version,
+
+    // The --version option was given: print the version and exit.
+    versionOption,
 };
 
 //
@@ -164,14 +173,14 @@ pub const IProgramState = struct {
 };
 
 //
-// The `--version` option callback: index.ts prints the version and exits. That is left to the TypeScript CLI,
-// so the command line is handed to it.
+// The `--version` option callback: index.ts prints the version and exits there and then. The parse is stopped
+// here and `run` prints the version and exits.
 //
 fn versionOption(state: *IProgramState, value: ?[]const u8, previous: ?OptionValue) !?OptionValue {
-    _ = state;
     _ = value;
     _ = previous;
-    return error.DelegateToTypeScript;
+    state.outcome = .versionOption;
+    return error.VersionOption;
 }
 
 //
@@ -267,6 +276,16 @@ fn verifyAction(state: *IProgramState, args: []const ArgumentValue, options: *co
 }
 
 //
+// The action of the version command (`versionCommand`): `run` calls the command.
+//
+fn versionAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = options;
+    _ = command;
+    state.outcome = .version;
+}
+
+//
 // Defines the psi program like main() in index.ts, with the commands implemented in Zig.
 //
 pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Command {
@@ -328,20 +347,26 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "verify"))
         .action(state, verifyAction);
 
-    // Not ported: the commands after verify, the secrets and dbs command groups (the TypeScript CLI runs them).
+    _ = program
+        .command("version", .{})
+        .description("Displays version information for psi and its dependencies.")
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "version"))
+        .action(state, versionAction);
+
+    // Not ported: the commands after version, the secrets and dbs command groups (the TypeScript CLI runs them).
     return program;
 }
 
 //
 // Parses the command line like `program.parseAsync(process.argv)`. The program parses its own options first
 // (as commander's `_parseCommand` does), which tells which command the command line names: when that is not a
-// command implemented in Zig (other commands, no command, help, --version), the command line is handed to the
+// command implemented in Zig (other commands, no command, help), the command line is handed to the
 // TypeScript CLI.
 //
 pub fn parseCommandLine(program: *Command, state: *IProgramState, userArgs: []const []const u8) !ParseOutcome {
     const programParse = program.parseOptions(userArgs) catch |err| {
-        if (err == error.DelegateToTypeScript) {
-            return .delegate;
+        if (err == error.VersionOption) {
+            return .versionOption;
         }
         return err;
     };
@@ -350,6 +375,9 @@ pub fn parseCommandLine(program: *Command, state: *IProgramState, userArgs: []co
     }
 
     program.parse(userArgs) catch |err| {
+        if (err == error.VersionOption) {
+            return .versionOption;
+        }
         if (err == error.CommanderError) {
             return .{ .failure = program.getCommanderError().? };
         }
@@ -417,6 +445,16 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try verifyCommand(allocator, io, context, &options);
+        },
+        .version => {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try versionCommand(allocator, io);
+        },
+        .versionOption => {
+            console.log(config.version);
+            exit(io, 0);
         },
     }
     return 0;

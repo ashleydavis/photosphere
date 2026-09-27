@@ -950,3 +950,149 @@ test "updateYaml throws after the configured retries when the file keeps changin
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "kept changing") != null);
     try std.Io.Dir.cwd().deleteFile(io, filePath);
 }
+
+//
+// Sets up an environment for the getCacheDir tests: a home directory and nothing else.
+//
+fn cacheDirEnvironment(environ_map: *std.process.Environ.Map) !void {
+    node_utils.process_env.setEnvironMap(environ_map);
+    const home_variable = if (builtin.os.tag == .windows) "USERPROFILE" else "HOME";
+    try environ_map.put(home_variable, "/some-home");
+}
+
+test "getCacheDir is ~/.cache/photosphere on Linux" {
+    if (builtin.os.tag == .macos or builtin.os.tag == .windows) {
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    try std.testing.expectEqualStrings("/some-home/.cache/photosphere", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir follows XDG_CACHE_HOME on Linux, which is what says where caches go there" {
+    if (builtin.os.tag == .macos or builtin.os.tag == .windows) {
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    try environ_map.put("XDG_CACHE_HOME", "/xdg-cache");
+
+    try std.testing.expectEqualStrings("/xdg-cache/photosphere", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir ignores an XDG_CACHE_HOME that is set but empty, which means the same as unset" {
+    if (builtin.os.tag == .macos or builtin.os.tag == .windows) {
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    try environ_map.put("XDG_CACHE_HOME", "");
+
+    try std.testing.expectEqualStrings("/some-home/.cache/photosphere", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir is ~/Library/Caches/photosphere on macOS" {
+    if (builtin.os.tag != .macos) {
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    try std.testing.expectEqualStrings("/some-home/Library/Caches/photosphere", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir ignores XDG_CACHE_HOME on macOS, which has a location of its own" {
+    if (builtin.os.tag != .macos) {
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    try environ_map.put("XDG_CACHE_HOME", "/xdg-cache");
+
+    try std.testing.expectEqualStrings("/some-home/Library/Caches/photosphere", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir is under LOCALAPPDATA on Windows" {
+    if (builtin.os.tag != .windows) {
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    try environ_map.put("LOCALAPPDATA", "C:\\AppDataLocal");
+
+    try std.testing.expectEqualStrings("C:\\AppDataLocal\\photosphere\\cache", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir falls back to AppData/Local on Windows when LOCALAPPDATA is not set" {
+    if (builtin.os.tag != .windows) {
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    try std.testing.expectEqualStrings("/some-home\\AppData\\Local\\photosphere\\cache", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir is the storage sandbox root when there is no home directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    try std.testing.expectEqualStrings(".", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir uses PHOTOSPHERE_CACHE_DIR when it is set, on every platform" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    try environ_map.put("PHOTOSPHERE_CACHE_DIR", "/chosen-cache");
+
+    try std.testing.expectEqualStrings("/chosen-cache", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir is not the config directory, because nothing in it is a setting" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    try environ_map.put("PHOTOSPHERE_CONFIG_DIR", "/chosen-config");
+
+    try std.testing.expect(!std.mem.eql(u8, try fs.getCacheDir(allocator), try fs.getConfigDir(allocator)));
+}

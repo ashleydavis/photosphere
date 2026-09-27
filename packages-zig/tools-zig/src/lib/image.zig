@@ -155,7 +155,12 @@ pub const Image = struct {
         }
     }
 
-    // Not ported: getImageMagickType (not used by replicate or verify).
+    //
+    // Get the type of ImageMagick installation
+    //
+    pub fn getImageMagickType() ImageMagickType {
+        return imageMagickType;
+    }
 
     //
     // Forgets the detected installation so the next verifyImageMagick detects it again

@@ -84,5 +84,49 @@
         "stdout": "",
         "stderr": "error: unknown option '--dst'\n(Did you mean --dest?)\n",
         "exitCode": 1
+    },
+    {
+        "args": [
+            "version",
+            "--help"
+        ],
+        "stdout": "Usage: psi version [options]\n\nDisplays version information for psi and its dependencies.\n\nOptions:\n  -h, --help  display help for command\n\nExamples:\n  psi version                      Shows version information for psi and its dependencies.\n",
+        "stderr": "",
+        "exitCode": 0
+    },
+    {
+        "args": [
+            "version",
+            "-h"
+        ],
+        "stdout": "Usage: psi version [options]\n\nDisplays version information for psi and its dependencies.\n\nOptions:\n  -h, --help  display help for command\n\nExamples:\n  psi version                      Shows version information for psi and its dependencies.\n",
+        "stderr": "",
+        "exitCode": 0
+    },
+    {
+        "args": [
+            "version",
+            "extra"
+        ],
+        "stdout": "",
+        "stderr": "error: too many arguments for 'version'. Expected 0 arguments but got 1.\n",
+        "exitCode": 1
+    },
+    {
+        "args": [
+            "version",
+            "--bogus"
+        ],
+        "stdout": "",
+        "stderr": "error: unknown option '--bogus'\n",
+        "exitCode": 1
+    },
+    {
+        "args": [
+            "--version"
+        ],
+        "stdout": "dev\n",
+        "stderr": "",
+        "exitCode": 0
     }
 ]

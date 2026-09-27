@@ -213,6 +213,11 @@ function parseWithCommander(args: string[]): any {
         .exitOverride()
         .configureOutput({ writeErr: (message: string) => { errorOutput += message; }, writeOut: () => {} })
         .action((options: any) => { outcome = { kind: "verify", options, quiet: program.opts().quiet === true }; });
+    program
+        .command("version")
+        .exitOverride()
+        .configureOutput({ writeErr: (message: string) => { errorOutput += message; }, writeOut: () => {} })
+        .action(() => { outcome = { kind: "versionCommand", quiet: program.opts().quiet === true }; });
     program.command("summary").action(() => { outcome = { kind: "other" }; });
     try {
         program.parse(["bun", "index.ts", ...args]);
@@ -289,6 +294,12 @@ const commandLines: string[][] = [
     ["-qv", "ver"],
     ["rep", "--quite"],
     ["rep", "--quiet=1"],
+    ["version"],
+    ["-q", "version"],
+    ["version", "extra"],
+    ["version", "--bogus"],
+    ["version", "--help"],
+    ["version", "--version"],
 ];
 const commandCases: any[] = [];
 for (const args of commandLines) {
