@@ -175,8 +175,31 @@ fn strictEqualsValue(left: BsonValue, leftIdentity: ?*const BsonValue, right: Bs
 //
 pub const ISortIndexRecord = BsonDocument;
 
-// Not ported: ISortIndexResult, INodeKeyDistribution, ILeafStats, IInternalStats, ITreeAnalysis (only used by
-// getPage and analyzeTreeStructure, which psi replicate and psi verify do not use).
+//
+// Result of a paginated sort index query.
+//
+pub const ISortIndexResult = struct {
+    // Records for the requested page
+    records: []ISortIndexRecord,
+
+    // Total number of records in the collection
+    totalRecords: u32,
+
+    // Current page ID
+    currentPageId: []const u8,
+
+    // Total number of leaf pages (navigable data pages)
+    totalPages: u32,
+
+    // Next page ID or undefined if this is the last page
+    nextPageId: ?[]const u8 = null,
+
+    // Previous page ID or undefined if this is the first page
+    previousPageId: ?[]const u8 = null,
+};
+
+// Not ported: INodeKeyDistribution, ILeafStats, IInternalStats, ITreeAnalysis (only used by analyzeTreeStructure,
+// a debugging helper).
 
 //
 // The records of one leaf page (TypeScript: an array, shared by reference between the caches).
@@ -1378,7 +1401,81 @@ pub const SortIndex = struct {
         return self.treeNodes.get(pageId);
     }
 
-    // Not ported: getPage, drop (not used by psi replicate or psi verify).
+    //
+    // Get a page of records from the collection using the sort index.
+    //
+    pub fn getPage(self: *SortIndex, io: std.Io, pageIdOption: ?[]const u8) !ISortIndexResult {
+        try self.tryLoad(io);
+        if (!self.loaded) {
+            return .{ .records = &.{}, .totalRecords = 0, .currentPageId = "", .totalPages = 0 };
+        }
+
+        // If pageId is not provided or invalid, find the leftmost leaf (first page)
+        var pageId: []const u8 = undefined;
+        if (!isSet(pageIdOption)) {
+            pageId = self.findLeftmostLeaf() orelse {
+                return .{
+                    .records = &.{},
+                    .totalRecords = self.totalEntries,
+                    .currentPageId = "",
+                    .totalPages = self.totalPages,
+                    .nextPageId = null,
+                    .previousPageId = null,
+                };
+            };
+        }
+        else {
+            pageId = pageIdOption.?;
+        }
+
+        // Get the current page node
+        const maybeNode = self.getNode(pageId);
+        if (maybeNode == null or maybeNode.?.children.items.len > 0) { // Not a leaf if it has children
+            return .{
+                .records = &.{},
+                .totalRecords = self.totalEntries,
+                .currentPageId = pageId,
+                .totalPages = self.totalPages,
+                .nextPageId = null,
+                .previousPageId = null,
+            };
+        }
+        const node = maybeNode.?;
+
+        // Get the records from the leaf records file
+        const leafRecords = try self.loadLeafRecords(io, pageId) orelse {
+            return .{
+                .records = &.{},
+                .totalRecords = self.totalEntries,
+                .currentPageId = pageId,
+                .totalPages = self.totalPages,
+                .nextPageId = null,
+                .previousPageId = null,
+            };
+        };
+
+        // Get next page ID from the node's nextLeaf property
+        const nextPageId = node.nextLeaf;
+
+        // Get previous page ID directly from the node's previousLeaf property
+        const previousPageId = node.previousLeaf;
+
+        // Return the result with pagination info
+        const records = try self.allocator.alloc(ISortIndexRecord, leafRecords.items.len);
+        for (leafRecords.items, 0..) |entry, entryIndex| {
+            records[entryIndex] = try self.toSortIndexRecord(entry);
+        }
+        return .{
+            .records = records,
+            .totalRecords = self.totalEntries,
+            .currentPageId = pageId,
+            .totalPages = self.totalPages,
+            .nextPageId = nextPageId,
+            .previousPageId = previousPageId,
+        };
+    }
+
+    // Not ported: drop (not used by the ported commands).
 
     //
     // Updates a record in the index without rebuilding the entire index

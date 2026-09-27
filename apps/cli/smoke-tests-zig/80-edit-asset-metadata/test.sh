@@ -46,7 +46,7 @@ test_edit_asset_metadata() {
     # hardcoded the way test 37 hardcodes its v6 fixture's id.
     local list_output record_id
     invoke_command "List the database" \
-        "$(get_cli_command) list --db \"$db_dir\" --yes" 0 "list_output"
+        "$(get_zig_cli_command) list --db \"$db_dir\" --yes" 0 "list_output"
     record_id="$(echo "$list_output" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)"
     if [ -z "$record_id" ]; then
         log_error "Could not find the asset's id in the output of 'psi list'. It said:"

@@ -104,7 +104,7 @@ test_s3_write_locks() {
     # update: that writer's addition was overwritten by another writer's write-back.
     local list_output
     invoke_command "List the S3 database after concurrent writes" \
-        "$(get_cli_command) list --db \"$s3_db\" --yes" 0 "list_output"
+        "$(get_zig_cli_command) list --db \"$s3_db\" --yes" 0 "list_output"
 
     for writer_file in "${WRITER_FILES[@]}"; do
         expect_output_string "$list_output" "$(basename "$writer_file")" "$(basename "$writer_file") survived the concurrent writes"

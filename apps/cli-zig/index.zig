@@ -1,8 +1,8 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `add` (alias `a`), `init` (alias `i`), `replicate` (alias `rep`), `summary` (alias `sum`), `verify`
-// (alias `ver`) and `version` commands and the `--version` option are ported; the other commands are not
-// registered yet, so commander reports them as unknown commands.
+// Only the `add` (alias `a`), `init` (alias `i`), `list` (aliases `ls` and `l`), `replicate` (alias `rep`), `summary`
+// (alias `sum`), `verify` (alias `ver`) and `version` commands and the `--version` option are ported; the other
+// commands are not registered yet, so commander reports them as unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -37,6 +37,7 @@ pub const worker_log_bun = @import("src/lib/worker-log-bun.zig");
 pub const add = @import("src/cmd/add.zig");
 pub const replicate = @import("src/cmd/replicate.zig");
 pub const init_command = @import("src/cmd/init.zig");
+pub const list = @import("src/cmd/list.zig");
 pub const summary = @import("src/cmd/summary.zig");
 pub const verify = @import("src/cmd/verify.zig");
 pub const version_cmd = @import("src/cmd/version.zig");
@@ -60,6 +61,8 @@ const initContext = init_cmd.initContext;
 const replicateCommand = replicate.replicateCommand;
 const initCommand = init_command.initCommand;
 const IInitCommandOptions = init_command.IInitCommandOptions;
+const IListCommandOptions = list.IListCommandOptions;
+const listCommand = list.listCommand;
 const summaryCommand = summary.summaryCommand;
 const verifyCommand = verify.verifyCommand;
 const versionCommand = version_cmd.versionCommand;
@@ -174,6 +177,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the add command with these paths and options.
     add: IAddParsed,
+
+    // Run the list command with these options.
+    list: IListCommandOptions,
 
     // Run the replicate command with these options.
     replicate: IReplicateCommandOptions,
@@ -335,6 +341,20 @@ fn replicateAction(state: *IProgramState, args: []const ArgumentValue, options: 
 }
 
 //
+// The action of the list command (`initContext(listCommand)`): `run` calls initContext and the command.
+//
+fn listAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .list = .{
+            .base = baseOptions(options),
+            .pageSize = textValue(options, "pageSize"),
+        },
+    };
+}
+
+//
 // The action of the summary command (`initContext(summaryCommand)`): `run` calls initContext and the command.
 //
 fn summaryAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
@@ -428,7 +448,24 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "init"))
         .action(state, initAction);
 
-    // Not ported: the commands between init and replicate.
+    // Not ported: origin, set-origin and consolidate.
+
+    const listDefinition = program
+        .command("list", .{})
+        .alias("ls")
+        .alias("l")
+        .description("Lists all files in the database sorted by date (newest first) with pagination.");
+    _ = optionFrom(listDefinition, dbOption);
+    _ = optionFrom(listDefinition, keyOption);
+    _ = optionFrom(listDefinition, verboseOption);
+    _ = optionFrom(listDefinition, yesOption);
+    _ = optionFrom(listDefinition, cwdOption);
+    _ = listDefinition
+        .option("--page-size <size>", "Number of files to display per page (default: 20)", .{ .string = "20" })
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "list"))
+        .action(state, listAction);
+
+    // Not ported: the commands between list and replicate.
 
     const replicateDefinition = program
         .command("replicate", .{})
@@ -572,6 +609,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try replicateCommand(allocator, io, context, &options);
+        },
+        .list => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try listCommand(allocator, io, context, &options);
         },
         .summary => |parsed| {
             var options = parsed;

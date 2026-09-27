@@ -243,6 +243,65 @@ test "summary prints the report of the TypeScript CLI" {
 }
 
 //
+// The report of listCommand (apps/cli/src/cmd/list.ts) for test/dbs/v6: its photoDate sort index holds one asset.
+// {encryption} stands for the encryption status of the asset file.
+//
+const list_v6_report =
+    \\
+    \\📁 Database Files
+    \\
+    \\Files are sorted by date (newest first).
+    \\
+    \\--- Page 1 ---
+    \\89171cd9-a652-4047-b869-1154bf2c95a1 test.jpg
+    \\  Date: 5/27/2025 | Size: Unknown | Type: image/jpeg | 2560×1920
+    \\  Encryption: {encryption}
+    \\  Path: ../../test
+    \\
+    \\
+    \\End of results. Displayed 1 files total.
+    \\
+;
+
+test "list prints the report of the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-list");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+
+    const expected = try std.mem.replaceOwned(u8, allocator, list_v6_report, "{encryption}", "unencrypted");
+    try expectResult(try runZig(allocator, environment, &.{ "list", "--db", db, "--yes" }), expected, "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "ls", "--db", db, "--yes" }), expected, "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "l", "--db", db, "--page-size", "1", "--yes" }), expected, "", 0);
+
+    // A page size that is not a number shows an empty page (TypeScript: `records.slice(0, NaN)`).
+    const emptyPage =
+        \\
+        \\📁 Database Files
+        \\
+        \\Files are sorted by date (newest first).
+        \\
+        \\--- Page 1 ---
+        \\
+        \\End of results. Displayed 0 files total.
+        \\
+    ;
+    try expectResult(try runZig(allocator, environment, &.{ "list", "--db", db, "--page-size", "abc", "--yes" }), emptyPage, "", 0);
+
+    // An asset file that starts with a new format encryption header shows the hash of its public key.
+    var header: [44 + 4]u8 = undefined;
+    @memcpy(header[0..12], "PSEN\x01\x00\x00\x00A2CB");
+    @memset(header[12..44], 0xab);
+    @memcpy(header[44..48], "rest");
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/asset/89171cd9-a652-4047-b869-1154bf2c95a1", .{db}), .data = &header });
+    const encrypted = try std.mem.replaceOwned(u8, allocator, list_v6_report, "{encryption}", "encrypted (key: abababababababababababababababababababababababababababababababab)");
+    try expectResult(try runZig(allocator, environment, &.{ "list", "--db", db, "--yes" }), encrypted, "", 0);
+}
+
+//
 // The report of `psi verify --full` for test/dbs/v6 with its thumb file overwritten. The totals come from the
 // files tree, so only the modified count changes; a verification that found problems prints the repair step and
 // exits with 1, which retains the session's temporary files.

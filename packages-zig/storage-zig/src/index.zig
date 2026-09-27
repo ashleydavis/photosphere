@@ -7,7 +7,7 @@ pub const encrypted_storage = @import("lib/encrypted-storage.zig");
 pub const storage_prefix_wrapper = @import("lib/storage-prefix-wrapper.zig");
 // Not ported: tests/mock-storage (test helper; the Zig tests use FileStorage on a temporary directory).
 pub const storage_factory = @import("lib/storage-factory.zig");
-// Not ported: read-encryption-header (not reached by psi replicate or psi verify).
+pub const read_encryption_header = @import("lib/read-encryption-header.zig");
 pub const walk_directory = @import("lib/walk-directory.zig");
 // Not re-exported: `export * from "encryption"` (import encryption-zig directly).
 

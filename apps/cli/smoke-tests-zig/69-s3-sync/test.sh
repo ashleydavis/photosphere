@@ -157,7 +157,7 @@ test_s3_sync() {
     expect_hashes_converged "$local_db" "$s3_db" "The root hashes converged after syncing the local add up"
 
     local s3_list_after_up
-    invoke_command "List the S3 database after syncing up" "$(get_cli_command) list --db \"$s3_db\" --yes" 0 "s3_list_after_up"
+    invoke_command "List the S3 database after syncing up" "$(get_zig_cli_command) list --db \"$s3_db\" --yes" 0 "s3_list_after_up"
     expect_output_string "$s3_list_after_up" "test.webp" "The locally added file is present on S3"
 
     # --- 3. A file added on S3 syncs back down. ---
@@ -180,7 +180,7 @@ test_s3_sync() {
     expect_hashes_converged "$local_db" "$s3_db" "The root hashes converged after syncing the S3 add down"
 
     local local_list_after_down
-    invoke_command "List the local database after syncing down" "$(get_cli_command) list --db $local_db --yes" 0 "local_list_after_down"
+    invoke_command "List the local database after syncing down" "$(get_zig_cli_command) list --db $local_db --yes" 0 "local_list_after_down"
     expect_output_string "$local_list_after_down" "test-1.jpeg" "The file added on S3 is present locally"
 
     # --- 4. An asset deleted locally syncs its deletion up to S3. ---
@@ -195,7 +195,7 @@ test_s3_sync() {
     expect_hashes_converged "$local_db" "$s3_db" "The root hashes converged after syncing the local deletion up"
 
     local s3_list_after_delete
-    invoke_command "List the S3 database after the deletion synced up" "$(get_cli_command) list --db \"$s3_db\" --yes" 0 "s3_list_after_delete"
+    invoke_command "List the S3 database after the deletion synced up" "$(get_zig_cli_command) list --db \"$s3_db\" --yes" 0 "s3_list_after_delete"
     expect_output_string "$s3_list_after_delete" "$V6_RECORD_ID" "The locally deleted asset is gone from S3" "false"
 
     # --- 5. An asset deleted on S3 syncs its deletion back down. ---
@@ -210,7 +210,7 @@ test_s3_sync() {
     expect_hashes_converged "$local_db" "$s3_db" "The root hashes converged after syncing the S3 deletion down"
 
     local local_list_after_delete
-    invoke_command "List the local database after the deletion synced down" "$(get_cli_command) list --db $local_db --yes" 0 "local_list_after_delete"
+    invoke_command "List the local database after the deletion synced down" "$(get_zig_cli_command) list --db $local_db --yes" 0 "local_list_after_delete"
     expect_output_string "$local_list_after_delete" "$s3_added_asset_id" "The asset deleted on S3 is gone locally" "false"
 
     invoke_command "Verify the S3 database with the TypeScript CLI" "$(get_cli_command) verify --db \"$s3_db\" --yes"

@@ -29,7 +29,8 @@ pub const ICommandExamples = struct {
 
 //
 // Centralized examples for all CLI commands
-// (only the commands implemented in Zig are ported: init, add, summary, verify, replicate and version).
+// (only the commands implemented in Zig are ported: init, add, summary, verify, replicate, version and
+// list).
 //
 pub const COMMAND_EXAMPLES = [_]ICommandExamples{
     .{
@@ -111,6 +112,23 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             .{
                 .command = "psi version",
                 .description = "Shows version information for psi and its dependencies.",
+            },
+        },
+    },
+    .{
+        .commandName = "list",
+        .examples = &.{
+            .{
+                .command = "psi list --db .",
+                .description = "Lists all files in the current directory database.",
+            },
+            .{
+                .command = "psi list --db ./photos",
+                .description = "Lists all files in the ./photos database.",
+            },
+            .{
+                .command = "psi list --db ./photos --page-size 10",
+                .description = "Lists files with 10 files per page.",
             },
         },
     },

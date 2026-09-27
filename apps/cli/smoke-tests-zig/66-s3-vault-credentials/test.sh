@@ -87,7 +87,7 @@ test_s3_vault_credentials() {
     # The imported asset must appear by name. This is what fails if the credentials never resolved and
     # the database read back empty.
     local list_output
-    invoke_command "List the database's assets by name" "$(get_cli_command) list --db $DB_NAME --yes" 0 "list_output"
+    invoke_command "List the database's assets by name" "$(get_zig_cli_command) list --db $DB_NAME --yes" 0 "list_output"
     expect_output_string "$list_output" "test.jpg" "The imported asset is listed from S3 via the vault credential"
 
     # --- 2. A broken credential must fail loudly, not read back an empty database. ---
@@ -96,7 +96,7 @@ test_s3_vault_credentials() {
         "$(get_cli_command) secrets edit --yes --name $SECRET_NAME --value '{\"region\":\"us-east-1\",\"accessKeyId\":\"WRONGACCESSKEY\",\"secretAccessKey\":\"WRONGSECRETKEY\",\"endpoint\":\"$S3_ENDPOINT\"}'" 0
 
     local broken_list_output
-    invoke_command "List with a broken credential fails" "$(get_cli_command) list --db $DB_NAME --yes" 1 "broken_list_output"
+    invoke_command "List with a broken credential fails" "$(get_zig_cli_command) list --db $DB_NAME --yes" 1 "broken_list_output"
     expect_output_string "$broken_list_output" "test.jpg" "A broken credential lists no assets" "false"
 
     # --- 3. Creating an S3 database from a vault credential alone. ---

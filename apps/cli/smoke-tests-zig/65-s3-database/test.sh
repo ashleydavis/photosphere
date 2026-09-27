@@ -56,7 +56,7 @@ test_s3_database() {
     # The imported asset must appear by name, which is the assertion that fails if the database read
     # back empty (the failure mode a wrong-addressing S3 client produces).
     local list_output
-    invoke_command "List the S3 database's assets" "$(get_cli_command) list --db $s3_db --yes" 0 "list_output"
+    invoke_command "List the S3 database's assets" "$(get_zig_cli_command) list --db $s3_db --yes" 0 "list_output"
     expect_output_string "$list_output" "test.jpg" "The imported asset is listed from S3"
 
     invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db $s3_db --yes"

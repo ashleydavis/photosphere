@@ -91,7 +91,7 @@ test_s3_encrypted() {
         "$(get_zig_cli_command) add $TEST_FILES_DIR/multiple-files/test.mp4 --db \"$s3_db\" --key $KEY_NAME --yes" 0
 
     local list_output
-    invoke_command "List the encrypted S3 database" "$(get_cli_command) list --db \"$s3_db\" --key $KEY_NAME --yes" 0 "list_output"
+    invoke_command "List the encrypted S3 database" "$(get_zig_cli_command) list --db \"$s3_db\" --key $KEY_NAME --yes" 0 "list_output"
     expect_output_string "$list_output" "test.jpg" "The JPG is listed from the encrypted S3 database"
     expect_output_string "$list_output" "test.mp4" "The MP4 is listed from the encrypted S3 database"
 
@@ -109,7 +109,7 @@ test_s3_encrypted() {
         "$(get_cli_command) secrets remove --yes --name $KEY_NAME" 0
 
     local no_key_output
-    invoke_command "Listing without the key fails" "$(get_cli_command) list --db \"$s3_db\" --key $KEY_NAME --yes" 1 "no_key_output"
+    invoke_command "Listing without the key fails" "$(get_zig_cli_command) list --db \"$s3_db\" --key $KEY_NAME --yes" 1 "no_key_output"
     expect_output_string "$no_key_output" "test.jpg" "No assets are listed without the key" "false"
 
     test_passed

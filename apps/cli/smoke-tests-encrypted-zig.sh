@@ -417,7 +417,7 @@ get_asset_id_for_filename() {
     local filename="$3"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local cmd="$cli list --db \"$db_dir\" --yes"
     if [ -n "$key" ]; then
@@ -1084,7 +1084,7 @@ test_list_encrypted_files() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/encrypted-db"

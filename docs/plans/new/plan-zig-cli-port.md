@@ -86,7 +86,7 @@ To do, in order (each one uses what the earlier ones ported):
 - [x] init
 - [x] add (including `--watch`)
 - [x] summary
-- [ ] list
+- [x] list
 - [ ] info
 - [ ] root-hash
 - [ ] database-id
@@ -132,6 +132,8 @@ Each TypeScript suite gets a Zig counterpart covering every test, ticked off as 
 - Work does not stop, ask questions or wait for approval until every command and every smoke suite above
   is 100% complete and CI is green. Stopping means failure.
 - Every decision is made from the TypeScript reference and library documentation, then work continues.
+- A `send_later` check-in every 30 minutes, always re-armed before a turn ends, keeps work going until every
+  item is 100% complete.
 - An hourly `send_later` check-in keeps work going if the session dies. Each check-in resumes the next
   unticked item immediately.
 - The Zig smoke-test job is capped at 30 minutes in the Release workflow, with step timeouts, so an overrun

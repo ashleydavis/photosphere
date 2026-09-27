@@ -181,7 +181,7 @@ test "commands that are not ported are unknown commands, and empty command lines
     try std.testing.expectEqualStrings("commander.helpDisplayed", help.outcome.failure.code);
     try std.testing.expect(std.mem.startsWith(u8, help.stdout, "Usage: psi "));
 
-    try expectCommanderError(allocator, &.{"list"}, "commander.unknownCommand", "error: unknown command 'list'\n");
+    try expectCommanderError(allocator, &.{"export"}, "commander.unknownCommand", "error: unknown command 'export'\n");
     try expectCommanderError(allocator, &.{ "check", "--db", "x" }, "commander.unknownCommand", "error: unknown command 'check'\n");
     try expectCommanderError(allocator, &.{ "--db", "x", "replicate" }, "commander.unknownOption", "error: unknown option '--db'\n");
     try expectCommanderError(allocator, &.{ "help", "replicate" }, "commander.unknownCommand", "error: unknown command 'help'\n(Did you mean rep?)\n");
@@ -213,6 +213,10 @@ test "the command definitions match index.ts" {
     const replicateDefinition = program.findCommand("rep").?;
     try std.testing.expectEqualStrings("replicate", replicateDefinition.getName());
     try std.testing.expectEqual(@as(usize, 13), replicateDefinition.options.items.len);
+    const listDefinition = program.findCommand("ls").?;
+    try std.testing.expectEqualStrings("list", listDefinition.getName());
+    try std.testing.expect(program.findCommand("l").? == listDefinition);
+    try std.testing.expectEqual(@as(usize, 6), listDefinition.options.items.len);
     const summaryDefinition = program.findCommand("sum").?;
     try std.testing.expectEqualStrings("summary", summaryDefinition.getName());
     try std.testing.expectEqual(@as(usize, 5), summaryDefinition.options.items.len);
@@ -346,6 +350,31 @@ test "summary command lines parse like commander" {
     try std.testing.expectEqualStrings("c", options.cwd.?);
 
     const unknown = try parse(allocator, &.{ "summary", "--full" });
+    try std.testing.expect(unknown.outcome == .failure);
+    try std.testing.expectEqualStrings("commander.unknownOption", unknown.outcome.failure.code);
+}
+
+test "list command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "ls", "--db", "a", "--key", "k", "--verbose", "--yes", "--cwd", "c", "--page-size", "10" });
+    try std.testing.expect(parsed.outcome == .list);
+    const options = parsed.outcome.list;
+    try std.testing.expectEqualStrings("a", options.base.db.?);
+    try std.testing.expectEqualStrings("k", options.base.key.?);
+    try std.testing.expectEqual(@as(?bool, true), options.base.verbose);
+    try std.testing.expectEqual(@as(?bool, true), options.base.yes);
+    try std.testing.expectEqualStrings("c", options.base.cwd.?);
+    try std.testing.expectEqualStrings("10", options.pageSize.?);
+
+    // The page size defaults to "20".
+    const defaulted = try parse(allocator, &.{"l"});
+    try std.testing.expect(defaulted.outcome == .list);
+    try std.testing.expectEqualStrings("20", defaulted.outcome.list.pageSize.?);
+
+    const unknown = try parse(allocator, &.{ "list", "--full" });
     try std.testing.expect(unknown.outcome == .failure);
     try std.testing.expectEqualStrings("commander.unknownOption", unknown.outcome.failure.code);
 }

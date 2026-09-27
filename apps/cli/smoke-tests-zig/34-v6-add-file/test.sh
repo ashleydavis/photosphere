@@ -67,7 +67,7 @@ test_v6_database_add_file() {
     expect_output_string "$final_summary_output" "Database version: 6" "Database is still version 6"
     
     local list_output
-    invoke_command "List assets to verify new file" "$(get_cli_command) list --db $temp_v6_dir --yes" 0 "list_output"
+    invoke_command "List assets to verify new file" "$(get_zig_cli_command) list --db $temp_v6_dir --yes" 0 "list_output"
     
     expect_output_string "$list_output" "test.jpg" "Test file appears in asset listing"
     
