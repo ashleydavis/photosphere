@@ -170,7 +170,15 @@ pub const FileStorage = struct {
         return stats.kind == .directory;
     }
 
-    // Not ported: readableLength, writeStreamHashed, storedHash (not reached by psi replicate or psi verify).
+    //
+    // What a file hands out is what it holds, so the length in the info is the answer.
+    //
+    pub fn readableLength(self: *FileStorage, fileInfo: IFileInfo) ?u64 {
+        _ = self;
+        return fileInfo.length;
+    }
+
+    // Not ported: writeStreamHashed, storedHash (not reached by psi add, psi replicate or psi verify).
 
     //
     // Gets info about a file.

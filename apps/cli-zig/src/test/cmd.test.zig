@@ -1,5 +1,7 @@
 const std = @import("std");
 const cli = @import("cli-zig");
+const node_utils = @import("node-utils-zig");
+const node_api = @import("node-api-zig");
 
 test "the replicate and verify options default to undefined" {
     const replicateOptions: cli.replicate.IReplicateCommandOptions = .{};
@@ -89,4 +91,68 @@ test "a corrupt database file is a problem" {
     var databaseFiles = cleanDatabaseFiles();
     databaseFiles.invalidFiles = &.{".db/files.dat"};
     try std.testing.expect(cli.verify.verifyFoundProblems(cleanResult(), databaseFiles));
+}
+
+test "the add options default to undefined" {
+    const addOptions: cli.add.IAddCommandOptions = .{};
+    try std.testing.expect(addOptions.dryRun == null);
+    try std.testing.expect(addOptions.watch == null);
+    try std.testing.expect(addOptions.cleanup == null);
+    try std.testing.expect(addOptions.base.db == null);
+}
+
+test "watchSettings watches the named folders, recursing into them" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const settings = try cli.add.watchSettings(allocator, std.testing.io, &.{ "/photos", "/more" });
+    try std.testing.expect(settings.enabled);
+    try std.testing.expectEqual(@as(usize, 2), settings.sources.len);
+    try std.testing.expectEqualStrings("/photos", settings.sources[0].folder.path);
+    try std.testing.expect(settings.sources[0].folder.recurse);
+    try std.testing.expectEqualStrings("/more", settings.sources[1].folder.path);
+    try std.testing.expect(settings.sources[1].folder.recurse);
+}
+
+test "watchSettings watches this operating system's photo folders when no folder is named" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const expected = try node_utils.photo_folders.getDefaultPhotoFolders(allocator, std.testing.io);
+    const settings = try cli.add.watchSettings(allocator, std.testing.io, &.{});
+    try std.testing.expect(settings.enabled);
+    try std.testing.expectEqual(expected.len, settings.sources.len);
+    for (expected, settings.sources) |folderPath, source| {
+        try std.testing.expectEqualStrings(folderPath, source.folder.path);
+        try std.testing.expect(source.folder.recurse);
+    }
+}
+
+test "the add progress line pads the counts and shows only the counts that are not zero" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    cli.picocolors.setColorSupportOverride(false);
+    defer cli.picocolors.setColorSupportOverride(null);
+    var options: cli.add.IAddCommandOptions = .{};
+    var progress: cli.add.ProgressState = .{
+        .options = &options,
+    };
+    const added: node_api.media_file_database.IAddSummary = .{
+        .filesAdded = 3,
+    };
+    try std.testing.expectEqualStrings("Added:    3 | Abort with Ctrl-C. It is safe to abort and resume later.", try progress.buildProgressMessage(allocator, null, &added));
+    try std.testing.expectEqualStrings("Added:    3 | Abort with Ctrl-C. It is safe to abort and resume later.", try progress.buildProgressMessage(allocator, "", &added));
+    const everything: node_api.media_file_database.IAddSummary = .{
+        .filesAdded = 12345,
+        .filesAlreadyAdded = 2,
+        .filesIgnored = 3,
+        .filesFailed = 4,
+    };
+    try std.testing.expectEqualStrings(
+        "Added: 12345 | Existing:    2 | Ignored:    3 | Failed:    4 | Scanning /photos | Abort with Ctrl-C. It is safe to abort and resume later.",
+        try progress.buildProgressMessage(allocator, "/photos", &everything),
+    );
+    options.dryRun = true;
+    try std.testing.expectEqualStrings("Would add:    3 | DRY RUN | Abort with Ctrl-C. It is safe to abort and resume later.", try progress.buildProgressMessage(allocator, null, &added));
 }

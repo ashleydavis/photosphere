@@ -44,7 +44,7 @@ create_and_read_back() {
         "$(get_zig_cli_command) init --db \"$s3_path\" --yes" 0
 
     invoke_command "Add $expected_name to $s3_path" \
-        "$(get_cli_command) add \"$source_file\" --db \"$s3_path\" --yes" 0
+        "$(get_zig_cli_command) add \"$source_file\" --db \"$s3_path\" --yes" 0
 
     local list_output
     invoke_command "List $s3_path" "$(get_cli_command) list --db \"$s3_path\" --yes" 0 "list_output"
@@ -92,9 +92,9 @@ test_s3_paths() {
     invoke_command "Initialize the awkward-names database" \
         "$(get_zig_cli_command) init --db \"$awkward_db\" --yes" 0
     invoke_command "Add a file whose name contains a space" \
-        "$(get_cli_command) add \"$awkward_space_file\" --db \"$awkward_db\" --yes" 0
+        "$(get_zig_cli_command) add \"$awkward_space_file\" --db \"$awkward_db\" --yes" 0
     invoke_command "Add a file whose name contains non-ASCII characters" \
-        "$(get_cli_command) add \"$awkward_unicode_file\" --db \"$awkward_db\" --yes" 0
+        "$(get_zig_cli_command) add \"$awkward_unicode_file\" --db \"$awkward_db\" --yes" 0
 
     local awkward_list
     invoke_command "List the awkward-names database" "$(get_cli_command) list --db \"$awkward_db\" --yes" 0 "awkward_list"

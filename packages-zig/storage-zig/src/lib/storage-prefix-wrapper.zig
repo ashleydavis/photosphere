@@ -96,7 +96,14 @@ pub const StoragePrefixWrapper = struct {
         return self.wrappedStorage.dirExists(allocator, io, try self.makeFullPath(allocator, dirPath));
     }
 
-    // Not ported: readableLength, writeStreamHashed, storedHash (not reached by psi replicate or psi verify).
+    //
+    // How many bytes a read hands out, which only the storage underneath can say.
+    //
+    pub fn readableLength(self: *StoragePrefixWrapper, fileInfo: IFileInfo) ?u64 {
+        return self.wrappedStorage.readableLength(fileInfo);
+    }
+
+    // Not ported: writeStreamHashed, storedHash (not reached by psi add, psi replicate or psi verify).
 
     //
     // Gets info about a file.

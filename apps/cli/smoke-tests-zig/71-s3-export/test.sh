@@ -85,7 +85,7 @@ test_s3_export() {
 
     local add_jpg_output
     invoke_command "Add a JPG to the S3 database" \
-        "$(get_cli_command) add $TEST_FILES_DIR/test.jpg --db \"$s3_db\" --verbose --yes" 0 "add_jpg_output"
+        "$(get_zig_cli_command) add $TEST_FILES_DIR/test.jpg --db \"$s3_db\" --verbose --yes" 0 "add_jpg_output"
     local jpg_asset_id
     jpg_asset_id="$(asset_id_from_add_output "$add_jpg_output")"
     if [ -z "$jpg_asset_id" ]; then
@@ -95,7 +95,7 @@ test_s3_export() {
 
     local add_mp4_output
     invoke_command "Add an MP4 to the S3 database" \
-        "$(get_cli_command) add $TEST_FILES_DIR/multiple-files/test.mp4 --db \"$s3_db\" --verbose --yes" 0 "add_mp4_output"
+        "$(get_zig_cli_command) add $TEST_FILES_DIR/multiple-files/test.mp4 --db \"$s3_db\" --verbose --yes" 0 "add_mp4_output"
     local mp4_asset_id
     mp4_asset_id="$(asset_id_from_add_output "$add_mp4_output")"
     if [ -z "$mp4_asset_id" ]; then

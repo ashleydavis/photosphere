@@ -67,7 +67,7 @@ start_watch_command() {
     : > "$WATCH_LOG"
 
     set -m
-    env NODE_ENV=testing $CLI_COMMAND add --db "$TEST_DB_DIR" "$WATCH_DIR" --watch --yes > "$WATCH_LOG" 2>&1 &
+    env NODE_ENV=testing $(get_zig_cli_command) add --db "$TEST_DB_DIR" "$WATCH_DIR" --watch --yes > "$WATCH_LOG" 2>&1 &
     local command_pid=$!
     set +m
 

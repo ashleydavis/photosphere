@@ -23,6 +23,7 @@ const MerkleRef = merkle_tree_ref.MerkleRef;
 const BsonShard = shard_zig.BsonShard;
 const IInternalRecord = shard_zig.IInternalRecord;
 const Md5 = std.crypto.hash.Md5;
+const bson = @import("serialization-zig").bson;
 
 //
 // A callback that tells the owner of an object that the object became dirty
@@ -46,8 +47,66 @@ pub const DirtyCallback = struct {
 //
 const MAX_CACHED_SHARDS = 8;
 
-// Not ported: ISortIndexCreationOptions, IRecord, Metadata, toInternal, toExternal, IGetAllResult (only used by
-// insertOne, getOne, getAll, updateOne and replaceOne, which psi replicate and psi verify do not use).
+// Not ported: ISortIndexCreationOptions, Metadata (not used by psi add, psi replicate or psi verify).
+
+//
+// A record: a document with an `_id`.
+// (Zig: a record is the BSON document it is stored as; `_id` is its string field.)
+//
+pub const IRecord = bson.BsonDocument;
+
+//
+// Convert external IRecord to internal IInternalRecord format
+// (Zig: the timestamp is milliseconds since the epoch, or null when there is none.)
+//
+pub fn toInternal(allocator: std.mem.Allocator, record: IRecord, timestamp: ?i64) !IInternalRecord {
+    var fields: bson.BsonDocument = .empty;
+    var recordId: []const u8 = "";
+    for (record.fields.items) |field| {
+        if (std.mem.eql(u8, field.key, "_id")) {
+            recordId = field.value.string;
+            continue;
+        }
+        try fields.put(allocator, field.key, field.value);
+    }
+
+    // Initialize metadata as ObjectMetadata (records have no timestamp)
+    var metadata: bson.BsonDocument = .empty;
+    try metadata.put(allocator, "timestamp", if (timestamp) |milliseconds| .{ .number = @floatFromInt(milliseconds) } else .undefined);
+
+    return .{
+        ._id = recordId,
+        .fields = fields,
+        .metadata = metadata,
+    };
+}
+
+//
+// Convert internal IInternalRecord to external IRecord format
+//
+pub fn toExternal(allocator: std.mem.Allocator, internal: IInternalRecord) !IRecord {
+    var record: bson.BsonDocument = .empty;
+    try record.put(allocator, "_id", .{ .string = internal._id });
+    for (internal.fields.fields.items) |field| {
+        try record.put(allocator, field.key, field.value);
+    }
+    return record;
+}
+
+//
+// One page of records from getAll plus an optional continuation token for the next shard slice.
+//
+pub const IGetAllResult = struct {
+    //
+    // Records returned for this request.
+    //
+    records: []const IRecord,
+
+    //
+    // Opaque token to pass to getAll() to fetch the next page, if any.
+    //
+    next: ?[]const u8,
+};
 
 //
 // Number of shard buckets for record distribution (record id hash mod NUM_SHARDS).
@@ -330,7 +389,16 @@ pub const BsonCollection = struct {
         return newSortIndex;
     }
 
-    // Not ported: addRecordToSortIndexes (only used by insertOne).
+    //
+    // Adds a record to all existing sort indexes.
+    //
+    fn addRecordToSortIndexes(self: *BsonCollection, io: std.Io, record: IInternalRecord) !void {
+        const indexes = try self.sortIndexes(io);
+        for (indexes) |indexInfo| {
+            const index = try self.sortIndex(indexInfo.fieldName, indexInfo.direction);
+            try index.addRecord(io, record);
+        }
+    }
 
     //
     // Updates a record in all sort indexes.
@@ -463,7 +531,34 @@ pub const BsonCollection = struct {
         return std.fmt.allocPrint(self.allocator, "{d}", .{decimal % NUM_SHARDS});
     }
 
-    // Not ported: insertOne, getOne (not used by psi replicate or psi verify).
+    //
+    // Insert a new record into the collection.
+    // Throws an error if a document with the same ID already exists.
+    // (Zig: options.timestamp is the `timestamp` parameter, null when not given; a record without an `_id` gets one
+    // written into it, as TypeScript assigns record._id.)
+    //
+    pub fn insertOne(self: *BsonCollection, io: std.Io, record: *IRecord, timestamp: ?i64) !void {
+        const existingId = record.get("_id");
+        if (existingId == null or existingId.? != .string or existingId.?.string.len == 0) {
+            try record.put(self.allocator, "_id", .{ .string = try self.uuidGenerator.generate(self.allocator, io) });
+        }
+        const recordId = record.get("_id").?.string;
+
+        const shardId = try self.getShardId(recordId);
+        const recordShard = try self.shard(shardId);
+        if (try recordShard.record(io, recordId) != null) {
+            return errors.throwError("Document with ID {s} already exists in shard {s}", .{ recordId, shardId });
+        }
+
+        const versionTimestamp = timestamp orelse self.timestampProvider.now(io);
+        const internalRecord = try toInternal(self.allocator, record.*, versionTimestamp);
+        try recordShard.setRecord(io, recordId, internalRecord);
+        try self.addRecordToSortIndexes(io, internalRecord);
+
+        self.markDirty();
+    }
+
+    // Not ported: getOne (not used by psi add, psi replicate or psi verify).
 
     //
     // Iterate all records in the collection without loading all into memory.
@@ -480,7 +575,36 @@ pub const BsonCollection = struct {
         return .{ .collection = self };
     }
 
-    // Not ported: getAll, updateOne, replaceOne (not used by psi replicate or psi verify).
+    //
+    // Gets one shard's worth of records, starting at the shard the continuation token names (the first shard
+    // when there is none), and the token of the shard after it.
+    //
+    pub fn getAll(self: *BsonCollection, io: std.Io, next: ?[]const u8) !IGetAllResult {
+        var shardId: u32 = if (next != null and next.?.len > 0) parseIntPrefix(next.?) else 0;
+        while (shardId < NUM_SHARDS) {
+            const recordShard = try self.shard(try std.fmt.allocPrint(self.allocator, "{d}", .{shardId}));
+            const records = try recordShard.records(io);
+            if (records.count() > 0) {
+                var externalRecords: std.ArrayList(IRecord) = .empty;
+                for (records.values()) |internal| {
+                    try externalRecords.append(self.allocator, try toExternal(self.allocator, internal));
+                }
+                return .{
+                    .records = externalRecords.items,
+                    .next = try std.fmt.allocPrint(self.allocator, "{d}", .{shardId + 1}),
+                };
+            }
+
+            shardId += 1;
+        }
+
+        return .{
+            .records = &.{},
+            .next = null,
+        }; // No more records
+    }
+
+    // Not ported: updateOne, replaceOne (not used by psi add, psi replicate or psi verify).
 
     //
     // Sets an internal record directly, preserving all timestamps and metadata.
@@ -605,5 +729,45 @@ pub const BsonCollection = struct {
         self.clearDirty();
     }
 
-    // Not ported: flush (psi replicate and psi verify never flush a database).
+    //
+    // Drops the cached shards, sort indexes and merkle tree so the next access reloads them from storage.
+    // Throws when the collection has uncommitted changes.
+    //
+    pub fn flush(self: *BsonCollection) !void {
+        if (self._dirty) {
+            return errors.throwError("Collection {s} is dirty, can't flush the cache.", .{self.name});
+        }
+
+        for (self.shardCache.values()) |cachedShard| {
+            try cachedShard.flush();
+        }
+
+        for (self.sortIndexCache.values()) |cachedSortIndex| {
+            try cachedSortIndex.flush();
+        }
+
+        self.sortIndexCache.clearRetainingCapacity();
+        self.shardCache.clearRetainingCapacity();
+        if (self._merkleRef) |merkleRef| {
+            try merkleRef.flush();
+        }
+        self._merkleRef = null;
+    }
 };
+
+//
+// JavaScript's `parseInt(text)` for the continuation tokens getAll hands out: the leading decimal digits, or 0 when
+// there are none (where parseInt gives NaN, which fails the `shardId < NUM_SHARDS` test and ends the listing, so
+// NUM_SHARDS is returned). (No TypeScript counterpart: TypeScript calls parseInt.)
+//
+fn parseIntPrefix(text: []const u8) u32 {
+    const trimmed = std.mem.trimStart(u8, text, " \t\n\r");
+    var digitCount: usize = 0;
+    while (digitCount < trimmed.len and std.ascii.isDigit(trimmed[digitCount])) {
+        digitCount += 1;
+    }
+    if (digitCount == 0) {
+        return NUM_SHARDS;
+    }
+    return std.fmt.parseInt(u32, trimmed[0..digitCount], 10) catch NUM_SHARDS;
+}

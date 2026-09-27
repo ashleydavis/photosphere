@@ -261,3 +261,106 @@ test "does nothing when the lock is held by another owner" {
 
     try std.testing.expect(try api.database_state.loadDatabaseState(allocator, io, database.rawStorage) == null);
 }
+
+test "writes the given fields plus the current content hash without acquiring the lock" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const database = try createPopulatedDatabase(allocator, io);
+    defer helpers.removeTempDir(io, std.fs.path.dirname(database.dir).?);
+
+    try tree.stampDatabaseState(allocator, io, database.assetStorage, database.rawStorage, .{ .lastSyncedAt = "2026-01-02T03:04:05.000Z" });
+
+    const state = (try api.database_state.loadDatabaseState(allocator, io, database.rawStorage)).?;
+    try std.testing.expectEqualStrings("2026-01-02T03:04:05.000Z", state.lastSyncedAt.?);
+    const expectedHash = (try tree.getDatabaseContentHash(allocator, io, database.assetStorage)).?;
+    try std.testing.expectEqualSlices(u8, expectedHash, state.contentHash.?);
+
+    // The write lock was never taken, so it is still free.
+    try std.testing.expect(try database.rawStorage.acquireWriteLock(allocator, io, ".db/write.lock", "other"));
+}
+
+test "omits the content hash when the database is empty and preserves other fields" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    _ = try helpers.setupEnvironment(io);
+    const dir = try helpers.makeTempDir(allocator, io, "stamp-state-empty");
+    defer helpers.removeTempDir(io, dir);
+    const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null);
+    try api.database_state.saveDatabaseState(allocator, io, opened.rawStorage, .{ .lastModifiedAt = "2026-01-02T03:04:05.000Z" });
+
+    try tree.stampDatabaseState(allocator, io, opened.storage, opened.rawStorage, .{ .lastSyncedAt = "2026-01-02T03:04:06.000Z" });
+
+    const state = (try api.database_state.loadDatabaseState(allocator, io, opened.rawStorage)).?;
+    try std.testing.expectEqualStrings("2026-01-02T03:04:05.000Z", state.lastModifiedAt.?);
+    try std.testing.expectEqualStrings("2026-01-02T03:04:06.000Z", state.lastSyncedAt.?);
+    try std.testing.expect(state.contentHash == null);
+}
+
+//
+// `new Date().toISOString()`. (No TypeScript counterpart.)
+//
+fn nowIsoString(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
+    const now: utils.timestamp_provider.Date = .{
+        .epochMilliseconds = std.Io.Clock.real.now(io).toMilliseconds(),
+    };
+    return now.toISOString(allocator);
+}
+
+test "writes lastModifiedAt and the current content hash" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const database = try createPopulatedDatabase(allocator, io);
+    defer helpers.removeTempDir(io, std.fs.path.dirname(database.dir).?);
+
+    const before = try nowIsoString(allocator, io);
+    try tree.stampDatabaseModified(allocator, io, database.assetStorage, database.rawStorage);
+    const after = try nowIsoString(allocator, io);
+
+    const state = (try api.database_state.loadDatabaseState(allocator, io, database.rawStorage)).?;
+    const lastModifiedAt = state.lastModifiedAt.?;
+    try std.testing.expect(std.mem.order(u8, before, lastModifiedAt) != .gt);
+    try std.testing.expect(std.mem.order(u8, lastModifiedAt, after) != .gt);
+
+    const expectedHash = (try tree.getDatabaseContentHash(allocator, io, database.assetStorage)).?;
+    try std.testing.expectEqualSlices(u8, expectedHash, state.contentHash.?);
+}
+
+test "writes lastModifiedAt but no content hash when the database is empty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    _ = try helpers.setupEnvironment(io);
+    const dir = try helpers.makeTempDir(allocator, io, "stamp-modified-empty");
+    defer helpers.removeTempDir(io, dir);
+    const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null);
+
+    try tree.stampDatabaseModified(allocator, io, opened.storage, opened.rawStorage);
+
+    const state = (try api.database_state.loadDatabaseState(allocator, io, opened.rawStorage)).?;
+    try std.testing.expect(state.lastModifiedAt != null);
+    try std.testing.expect(state.contentHash == null);
+}
+
+test "preserves other state fields when stamping" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const database = try createPopulatedDatabase(allocator, io);
+    defer helpers.removeTempDir(io, std.fs.path.dirname(database.dir).?);
+    try api.database_state.saveDatabaseState(allocator, io, database.rawStorage, .{ .lastSyncedAt = "2026-01-02T03:04:05.000Z" });
+
+    try tree.stampDatabaseModified(allocator, io, database.assetStorage, database.rawStorage);
+
+    const state = (try api.database_state.loadDatabaseState(allocator, io, database.rawStorage)).?;
+    try std.testing.expectEqualStrings("2026-01-02T03:04:05.000Z", state.lastSyncedAt.?);
+    try std.testing.expect(state.lastModifiedAt != null);
+    try std.testing.expect(state.contentHash != null);
+}

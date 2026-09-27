@@ -175,3 +175,100 @@ test "a database committed by Zig has the root hash TypeScript computes for the 
     const destinationTree = (try bdb.merkle_tree.loadDatabaseMerkleTree(allocator, io, destination.asStorage(), ".db/bson")).?;
     try std.testing.expectEqualSlices(u8, sourceTree.merkle.?.hash, destinationTree.merkle.?.hash);
 }
+
+//
+// Builds an external record with one string field (TypeScript: the `{ _id, name }` literal).
+//
+fn makeExternalRecord(allocator: std.mem.Allocator, id: []const u8, key: []const u8, value: []const u8) !BsonDocument {
+    var record: BsonDocument = .empty;
+    try record.put(allocator, "_id", .{ .string = id });
+    try record.put(allocator, key, .{ .string = value });
+    return record;
+}
+
+test "commit should allow flush after completing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const database = try newDatabase(allocator, &storage);
+    const users = try database.collection("users");
+    var alice = try makeExternalRecord(allocator, ID1, "name", "Alice");
+    try users.insertOne(io, &alice, null);
+
+    try database.commit(io);
+
+    // After commit, flush should succeed (dirty flag cleared)
+    try database.flush();
+}
+
+test "flush should throw when database is dirty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const database = try newDatabase(allocator, &storage);
+    const users = try database.collection("users");
+    var alice = try makeExternalRecord(allocator, ID1, "name", "Alice");
+    try users.insertOne(io, &alice, null);
+
+    try std.testing.expectError(error.Thrown, database.flush());
+}
+
+test "flush should succeed when database is not dirty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var storage = MemoryStorage.init(arena.allocator());
+    const database = try newDatabase(arena.allocator(), &storage);
+
+    // Never modified: flush should not throw
+    try database.flush();
+}
+
+test "flush should succeed after commit" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const database = try newDatabase(allocator, &storage);
+    const users = try database.collection("users");
+    var alice = try makeExternalRecord(allocator, ID1, "name", "Alice");
+    try users.insertOne(io, &alice, null);
+
+    try database.commit(io);
+    try database.flush();
+}
+
+test "flush evicts collection internal state but keeps the collection object cached" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const database = try newDatabase(allocator, &storage);
+    const users = try database.collection("users");
+    var alice = try makeExternalRecord(allocator, ID1, "name", "Alice");
+    try users.insertOne(io, &alice, null);
+    try database.commit(io);
+
+    try database.flush();
+
+    // The collection's shards were dropped.
+    try std.testing.expectEqual(@as(usize, 0), users.shardCache.count());
+
+    // The same collection instance is returned (collection objects stay cached)
+    const users2 = try database.collection("users");
+    try std.testing.expectEqual(users, users2);
+}
+
+test "merkleTree should return a new instance after flush" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var storage = MemoryStorage.init(arena.allocator());
+    const database = try newDatabase(arena.allocator(), &storage);
+    const ref1 = try database.merkleTree();
+
+    // Must commit before flushing (even though nothing is dirty)
+    try database.flush();
+    const ref2 = try database.merkleTree();
+    try std.testing.expect(ref2 != ref1);
+}

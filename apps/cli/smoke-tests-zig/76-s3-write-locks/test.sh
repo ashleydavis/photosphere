@@ -66,7 +66,7 @@ test_s3_write_locks() {
     local writer_file
     for writer_file in "${WRITER_FILES[@]}"; do
         log_info "Starting writer $writer_index for $writer_file"
-        NODE_ENV=testing $(get_cli_command) add "$TEST_FILES_DIR/$writer_file" --db "$s3_db" --yes \
+        NODE_ENV=testing $(get_zig_cli_command) add "$TEST_FILES_DIR/$writer_file" --db "$s3_db" --yes \
             > "$output_dir/writer-$writer_index.log" 2>&1 &
         writer_pids+=($!)
         writer_index=$((writer_index + 1))

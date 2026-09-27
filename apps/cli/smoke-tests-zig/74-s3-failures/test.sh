@@ -46,7 +46,7 @@ test_s3_failures() {
 
     invoke_command "Initialize the S3 database" "$(get_zig_cli_command) init --db \"$s3_db\" --yes" 0
     invoke_command "Add an image to the S3 database" \
-        "$(get_cli_command) add $TEST_FILES_DIR/test.jpg --db \"$s3_db\" --yes" 0
+        "$(get_zig_cli_command) add $TEST_FILES_DIR/test.jpg --db \"$s3_db\" --yes" 0
 
     # Prove the database really does read back while the server is up, so the failures below are the
     # server going away and not a database that never worked.
@@ -109,7 +109,7 @@ test_s3_failures() {
     local import_log="$TEST_DIR/mid-import.log"
     log_info "Starting an import and stopping the server underneath it"
 
-    NODE_ENV=testing $(get_cli_command) add "$big_fixture" --db "$mid_import_db" --yes > "$import_log" 2>&1 &
+    NODE_ENV=testing $(get_zig_cli_command) add "$big_fixture" --db "$mid_import_db" --yes > "$import_log" 2>&1 &
     local import_pid=$!
 
     # Wait for the upload to be in flight rather than sleeping a fixed two seconds. The sleep raced

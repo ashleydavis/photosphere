@@ -263,8 +263,12 @@ pub const IStorage = struct {
         // Releases a write lock for the specified file.
         releaseWriteLock: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!void,
 
-        // Not ported: readableLength, writeStreamHashed, storedHash, refreshWriteLock
-        // (not reached by psi replicate or psi verify).
+        // How many bytes reading the file described by fileInfo hands out, or null when this storage
+        // cannot say.
+        readableLength: *const fn (ptr: *anyopaque, fileInfo: IFileInfo) ?u64,
+
+        // Not ported: writeStreamHashed, storedHash, refreshWriteLock (not reached by psi add, psi replicate or
+        // psi verify).
     };
 
     //
@@ -300,6 +304,29 @@ pub const IStorage = struct {
     //
     pub fn dirExists(self: IStorage, allocator: std.mem.Allocator, io: std.Io, dirPath: []const u8) anyerror!bool {
         return self.vtable.dirExists(self.ptr, allocator, io, dirPath);
+    }
+
+    //
+    // How many bytes a read of the file described by fileInfo hands out, or undefined when this storage
+    // cannot say.
+    //
+    // For most stores this is the length in the info, because what they hand out is what they hold.
+    // Encrypted storage is the exception: it holds ciphertext and reads out plaintext, and the
+    // plaintext's length cannot be worked back out of the ciphertext's, because the format pads the
+    // last block and how much of that block is padding is only known once it has been decrypted.
+    //
+    // It exists because a copy has to say how long it is before it sends a byte. Taking the length
+    // from an encrypted store's `info` and declaring it made every upload declare a Content-Length
+    // it then fell short of: measured on a Pixel 6 pushing to MinIO on the same LAN, S3 waited
+    // thirty seconds for a remainder that was never coming and refused every file with "A timeout
+    // occurred while trying to lock a resource, please reduce your request rate", three attempts
+    // each, and the sync copied nothing at all for as long as it was left running. A store that
+    // cannot say says so, and whatever receives the copy counts the bytes itself.
+    //
+    // Nothing is read here. The answer comes from the info the caller already has.
+    //
+    pub fn readableLength(self: IStorage, fileInfo: IFileInfo) ?u64 {
+        return self.vtable.readableLength(self.ptr, fileInfo);
     }
 
     //
@@ -513,6 +540,13 @@ pub fn implement(comptime Implementation: type) *const IStorage.VTable {
         }
 
         //
+        // Forwards readableLength.
+        //
+        fn readableLength(ptr: *anyopaque, fileInfo: IFileInfo) ?u64 {
+            return cast(ptr).readableLength(fileInfo);
+        }
+
+        //
         // The vtable that forwards to the implementation.
         //
         const vtable: IStorage.VTable = .{
@@ -532,6 +566,7 @@ pub fn implement(comptime Implementation: type) *const IStorage.VTable {
             .checkWriteLock = checkWriteLock,
             .acquireWriteLock = acquireWriteLock,
             .releaseWriteLock = releaseWriteLock,
+            .readableLength = readableLength,
         };
     };
     return &Adapter.vtable;

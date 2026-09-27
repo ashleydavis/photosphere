@@ -49,10 +49,36 @@ test "should add and check existence of buffers" {
     const hash2 = sha256("test2");
     _ = try bufferSet.add(&hash1);
     _ = try bufferSet.add(&hash2);
+    try std.testing.expect(try bufferSet.has(&hash1));
+    try std.testing.expect(try bufferSet.has(&hash2));
     const values = try collectValues(arena.allocator(), &bufferSet);
     try std.testing.expect(containsBuffer(values, &hash1));
     try std.testing.expect(containsBuffer(values, &hash2));
     try std.testing.expectEqual(@as(usize, 2), values.len);
+}
+
+test "should delete buffers" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var bufferSet = BufferSet.init(arena.allocator());
+    const hash = sha256("test");
+
+    _ = try bufferSet.add(&hash);
+    try std.testing.expect(try bufferSet.has(&hash));
+
+    const deleted = try bufferSet.delete(&hash);
+    try std.testing.expect(deleted);
+    try std.testing.expect(!try bufferSet.has(&hash));
+    try std.testing.expectEqual(@as(usize, 0), (try collectValues(arena.allocator(), &bufferSet)).len);
+}
+
+test "should return false when deleting non-existent buffer" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var bufferSet = BufferSet.init(arena.allocator());
+    const hash = sha256("test");
+    const deleted = try bufferSet.delete(&hash);
+    try std.testing.expect(!deleted);
 }
 
 test "should not add duplicate buffers" {
@@ -73,6 +99,7 @@ test "should handle buffer content equality (not reference)" {
     const hash2 = sha256("test");
     _ = try bufferSet.add(&hash1);
     _ = try bufferSet.add(&hash2); // Different reference, same content
+    try std.testing.expect(try bufferSet.has(&hash2));
     try std.testing.expectEqual(@as(usize, 1), (try collectValues(arena.allocator(), &bufferSet)).len);
 }
 

@@ -258,3 +258,15 @@ test "copyTo copies a file and creates the destination directory" {
     try fixture.fileStorage.copyTo(allocator, io, try fixture.path("source.bin"), try fixture.path("dest/copy.bin"));
     try std.testing.expectEqualStrings("copied", (try fixture.fileStorage.read(allocator, io, try fixture.path("dest/copy.bin"))).?);
 }
+
+//
+// readableLength has no test of its own in TypeScript; what it says of a file on disk is pinned here.
+//
+test "readableLength is the length in the info, because a file hands out what it holds" {
+    var fileStorage = FileStorage.init("fs:");
+    try std.testing.expectEqual(@as(?u64, 1234), fileStorage.storage().readableLength(.{
+        .contentType = null,
+        .length = 1234,
+        .lastModified = 0,
+    }));
+}

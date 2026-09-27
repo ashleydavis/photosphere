@@ -94,6 +94,14 @@ pub const RecordingStorage = struct {
     }
 
     //
+    // Hands out what it holds, so the length in the info.
+    //
+    pub fn readableLength(self: *RecordingStorage, fileInfo: IFileInfo) ?u64 {
+        _ = self;
+        return fileInfo.length;
+    }
+
+    //
     // Records info.
     //
     pub fn info(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?IFileInfo {

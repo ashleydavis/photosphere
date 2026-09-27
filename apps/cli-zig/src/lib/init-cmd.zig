@@ -169,7 +169,26 @@ pub fn getDefaultS3Config(allocator: std.mem.Allocator, io: std.Io) !?IS3Credent
     return try parseS3Credentials(allocator, secret.value);
 }
 
-// Not ported: resolveGeocodingApiKey (not used by replicate or verify).
+//
+// Resolves the Google geocoding API key from the vault when a vault key name is provided,
+// or falls back to the GOOGLE_API_KEY environment variable.
+// Only touches the vault when geocodingKeyName is set: call this lazily at the point
+// where geocoding is actually needed.
+//
+pub fn resolveGeocodingApiKey(allocator: std.mem.Allocator, io: std.Io, geocodingKeyName: ?[]const u8) !?[]const u8 {
+    if (geocodingKeyName != null and geocodingKeyName.?.len > 0) {
+        const vault = try getVault(getDefaultVaultType());
+        const geocodingSecret = try vault.get(allocator, io, geocodingKeyName.?);
+        if (geocodingSecret) |secret| {
+            return secret.value;
+        }
+        return null;
+    }
+    const googleApiKey = process_env.getEnv("GOOGLE_API_KEY") orelse {
+        return null;
+    };
+    return std.mem.trim(u8, googleApiKey, " \t\n\r\x0b\x0c");
+}
 
 //
 // Validates the S3 endpoint.

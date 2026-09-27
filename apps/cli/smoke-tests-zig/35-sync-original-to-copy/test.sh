@@ -59,7 +59,7 @@ test_sync_original_to_copy() {
     # Add a new file to the original database
     log_info "Adding new file to original database"
     local add_output
-    invoke_command "Add test file to original database" "$(get_cli_command) add --db $original_dir $test_file --yes" 0 "add_output"
+    invoke_command "Add test file to original database" "$(get_zig_cli_command) add --db $original_dir $test_file --yes" 0 "add_output"
     
     # Verify file was added
     expect_output_string "$add_output" "Added" "File was added successfully to original"

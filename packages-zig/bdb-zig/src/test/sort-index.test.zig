@@ -887,3 +887,53 @@ test "ensure builds a missing index once and loads an existing one" {
     try std.testing.expectEqual(SortDataType.number, loaded.type.?);
     try std.testing.expectEqualStrings(index.rootPageId.?, loaded.rootPageId.?);
 }
+
+// Not ported: "commit() keeps leafCache populated" (it reads the index back with getPage, which is not ported).
+
+test "flush() clears leafCache" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const records = try testRecords(allocator);
+    const collection = try fixture.collection("test_collection", records[0..3]);
+    const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try index.build(io, collection);
+    try index.flush();
+    try std.testing.expectEqual(@as(usize, 0), index.leafCache.count());
+
+    // After flush, should still be able to read the records (loads from disk).
+    // (Zig: findByValue stands in for getPage, which is not ported.)
+    _ = try index.load(io);
+    try std.testing.expect((try index.findByValue(io, .{ .number = 85 }, null)).len > 0);
+}
+
+test "flush() throws when dirtyLeaves is not empty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const records = try testRecords(allocator);
+    const collection = try fixture.collection("test_collection", records[0..3]);
+    const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try index.build(io, collection);
+    try index.addRecord(io, try makeTestRecord(allocator, 99, "New", 55, "Z"));
+
+    try std.testing.expectError(error.Thrown, index.flush());
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "can't flush") != null);
+}
+
+test "flush() throws when deletedLeaves is not empty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const records = try testRecords(allocator);
+    const collection = try fixture.collection("test_collection", records[0..3]);
+    const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try index.build(io, collection);
+    try index.deleteRecord(io, records[0]._id, records[0]);
+
+    try std.testing.expectError(error.Thrown, index.flush());
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "can't flush") != null);
+}

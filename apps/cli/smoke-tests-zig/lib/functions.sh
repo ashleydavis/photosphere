@@ -65,7 +65,7 @@ test_add_file_parameterized() {
 
     # Add the file and capture output with verbose logging
     local add_output
-    invoke_command "$test_description" "$(get_cli_command) add --db $TEST_DB_DIR $file_path --verbose --yes" 0 "add_output"
+    invoke_command "$test_description" "$(get_zig_cli_command) add --db $TEST_DB_DIR $file_path --verbose --yes" 0 "add_output"
 
     # Verify exactly one file was added (or was already there)
     if [ "$already_in_db" -eq "1" ]; then
@@ -125,7 +125,7 @@ test_add_same_file() {
     log_info "Database path: $TEST_DB_DIR"
 
     # Try to re-add the PNG file (should not add it again)
-    invoke_command "Re-add same file" "$(get_cli_command) add --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    invoke_command "Re-add same file" "$(get_zig_cli_command) add --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
 
     invoke_command "Check file still in database" "$(get_cli_command) check --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
     test_passed
@@ -144,7 +144,7 @@ test_add_multiple_files() {
     check_exists "$MULTIPLE_IMAGES_DIR" "Multiple images fixture directory"
 
     local add_output
-    invoke_command "Add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "add_output"
+    invoke_command "Add multiple files" "$(get_zig_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "add_output"
 
     # Check that 5 files were imported (2 images + 1 video + 2 images from the zip archive)
     expect_output_value "$add_output" "Files added:" "5" "Five files imported from multiple files directory"
@@ -162,7 +162,7 @@ test_add_same_multiple_files() {
     # A missing fixture directory is a failure, not a silent pass. See test_add_multiple_files.
     check_exists "$MULTIPLE_IMAGES_DIR" "Multiple images fixture directory"
 
-    invoke_command "Re-add multiple files" "$(get_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+    invoke_command "Re-add multiple files" "$(get_zig_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
 
     invoke_command "Check multiple files still in database" "$(get_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     test_passed
@@ -185,7 +185,7 @@ test_add_duplicate_images() {
     invoke_command "Initialize new database" "$(get_zig_cli_command) init --db $db_dir --yes"
 
     local add_output
-    invoke_command "Add duplicate images directory" "$(get_cli_command) add --db $db_dir $DUPLICATE_IMAGES_DIR/ --yes" 0 "add_output"
+    invoke_command "Add duplicate images directory" "$(get_zig_cli_command) add --db $db_dir $DUPLICATE_IMAGES_DIR/ --yes" 0 "add_output"
 
     local summary_output
     invoke_command "Get database summary" "$(get_cli_command) summary --db $db_dir --yes" 0 "summary_output"
@@ -726,7 +726,7 @@ test_compare_with_changes() {
     # Add a new asset to the original database to create a difference
     local new_test_file="$TEST_FILES_DIR/test.webp"
     local webp_add_output
-    invoke_command "Add new asset to original database" "$(get_cli_command) add --db $TEST_DB_DIR $new_test_file --verbose --yes" 0 "webp_add_output"
+    invoke_command "Add new asset to original database" "$(get_zig_cli_command) add --db $TEST_DB_DIR $new_test_file --verbose --yes" 0 "webp_add_output"
 
     # Validate the WEBP asset in the database
     validate_database_assets "$TEST_DB_DIR" "$new_test_file" "image/webp" "image" "$webp_add_output"

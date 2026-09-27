@@ -20,7 +20,7 @@ test_dbs_resolve_by_name() {
     invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" 0
 
     # Add a test file.
-    invoke_command "Add PNG to database" "$(get_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" 0
+    invoke_command "Add PNG to database" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" 0
 
     # Extract the private key PEM from the CLI vault and store it as a shared secret.
     local cli_vault_file="${PHOTOSPHERE_VAULT_DIR}/vault.json"

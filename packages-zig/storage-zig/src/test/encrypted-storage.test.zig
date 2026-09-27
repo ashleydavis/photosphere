@@ -238,3 +238,20 @@ test "EncryptedStorage writes files with the header and length TypeScript writes
         }
     }
 }
+
+//
+// readableLength has no test of its own in TypeScript; what it says of an encrypted store is pinned here.
+//
+test "readableLength is undefined, because the plaintext length cannot be worked out from the stored length" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var recording = RecordingStorage.init(allocator);
+    const encryptedStorage = try makeEncryptedStorage(allocator, recording.storage());
+
+    try std.testing.expectEqual(@as(?u64, null), encryptedStorage.storage().readableLength(.{
+        .contentType = null,
+        .length = 1234,
+        .lastModified = 0,
+    }));
+}

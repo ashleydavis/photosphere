@@ -103,7 +103,7 @@ test_config_timestamps() {
     fi
     log_success "Fresh database has no lastModifiedAt"
 
-    invoke_command "Add PNG file" "$(get_cli_command) add --db $db_dir $TEST_FILES_DIR/test.png --yes"
+    invoke_command "Add PNG file" "$(get_zig_cli_command) add --db $db_dir $TEST_FILES_DIR/test.png --yes"
 
     local after_add_modified=$(read_state_field "$db_dir" "lastModifiedAt")
     expect_valid_iso_date "$after_add_modified" "lastModifiedAt set after add"
@@ -114,12 +114,12 @@ test_config_timestamps() {
     rm -rf "$source_dir" "$replica_dir"
 
     invoke_command "Initialize sync source database" "$(get_zig_cli_command) init --db $source_dir --yes"
-    invoke_command "Add file to sync source" "$(get_cli_command) add --db $source_dir $TEST_FILES_DIR/test.jpg --yes"
+    invoke_command "Add file to sync source" "$(get_zig_cli_command) add --db $source_dir $TEST_FILES_DIR/test.jpg --yes"
     invoke_command "Replicate to create sync target" "$(get_zig_cli_command) replicate --db $source_dir --dest $replica_dir --yes --force"
 
     # After replication the two databases are identical. Add another file to the source so the
     # databases differ and the following sync actually has work to do (and stamps lastSyncedAt).
-    invoke_command "Add another file to sync source" "$(get_cli_command) add --db $source_dir $TEST_FILES_DIR/test.png --yes"
+    invoke_command "Add another file to sync source" "$(get_zig_cli_command) add --db $source_dir $TEST_FILES_DIR/test.png --yes"
 
     invoke_command "Sync source and replica" "$(get_cli_command) sync --db $source_dir --dest $replica_dir --yes"
 
@@ -143,7 +143,7 @@ test_config_timestamps() {
     rm -rf "$repair_db_dir" "$repair_source_dir"
 
     invoke_command "Initialize repair source database" "$(get_zig_cli_command) init --db $repair_source_dir --yes"
-    invoke_command "Add file to repair source" "$(get_cli_command) add --db $repair_source_dir $TEST_FILES_DIR/test.png --yes"
+    invoke_command "Add file to repair source" "$(get_zig_cli_command) add --db $repair_source_dir $TEST_FILES_DIR/test.png --yes"
 
     # The repair target is a plain copy of the source rather than a replica of it. Replication does
     # not carry lastModifiedAt across, so the target came out with none, and the only assertion that

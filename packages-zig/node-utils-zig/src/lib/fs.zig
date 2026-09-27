@@ -383,7 +383,7 @@ fn tryTakeUpdateLock(io: std.Io, lockPath: []const u8) !bool {
 //
 // Equivalent of `Math.random()`: a random number in [0, 1).
 //
-fn mathRandom(io: std.Io) f64 {
+pub fn mathRandom(io: std.Io) f64 {
     var random_bytes: [8]u8 = undefined;
     io.random(&random_bytes);
     const random_bits = std.mem.readInt(u64, &random_bytes, .little) >> 11;
@@ -608,7 +608,7 @@ pub fn getProcessTmpDir(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 //
 // Equivalent of Node's `os.homedir()`: $HOME (%USERPROFILE% on Windows), or an empty string when it is not set.
 //
-fn osHomedir() []const u8 {
+pub fn osHomedir() []const u8 {
     const home_variable = if (builtin.os.tag == .windows) "USERPROFILE" else "HOME";
     return process_env.getEnv(home_variable) orelse "";
 }

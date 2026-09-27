@@ -221,6 +221,14 @@ pub const MemoryStorage = struct {
     }
 
     //
+    // Hands out what it holds, so the length in the info.
+    //
+    pub fn readableLength(self: *MemoryStorage, fileInfo: IFileInfo) ?u64 {
+        _ = self;
+        return fileInfo.length;
+    }
+
+    //
     // Gets the length of a file (null when it does not exist).
     //
     pub fn info(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?IFileInfo {

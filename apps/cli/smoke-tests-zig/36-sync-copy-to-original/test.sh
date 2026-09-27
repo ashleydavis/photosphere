@@ -62,7 +62,7 @@ test_sync_copy_to_original() {
     # Add a new file to the COPY database (reverse direction)
     log_info "Adding new file to copy database (reverse sync test)"
     local add_output
-    invoke_command "Add test file to copy database" "$(get_cli_command) add --db $copy_dir $test_file --yes" 0 "add_output"
+    invoke_command "Add test file to copy database" "$(get_zig_cli_command) add --db $copy_dir $test_file --yes" 0 "add_output"
     
     # Verify file was added
     expect_output_string "$add_output" "Added" "File was added successfully to copy"

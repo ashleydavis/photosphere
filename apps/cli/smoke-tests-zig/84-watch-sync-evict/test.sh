@@ -33,7 +33,7 @@ invoke_command "Point the local database at the origin" "$CLI_COMMAND set-origin
 cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/holiday.png"
 
 WATCH_OUTPUT=""
-invoke_command "Import the folder" "$CLI_COMMAND add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
+invoke_command "Import the folder" "$(get_zig_cli_command) add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
 
 expect_output_value "$WATCH_OUTPUT" "Files added:" 1 "The file was imported"
 

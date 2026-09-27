@@ -9,6 +9,7 @@ const errors = utils.errors;
 const IMerkleTree = merkle_tree.IMerkleTree;
 const IStorage = storage_zig.storage.IStorage;
 const IDatabaseState = api.database_state.IDatabaseState;
+const js_date = @import("serialization-zig").js_date;
 
 //
 // Path for the files Merkle tree (v6). Legacy path was .db/tree.dat.
@@ -98,8 +99,28 @@ fn buildStampPartial(allocator: std.mem.Allocator, io: std.Io, assetStorage: ISt
     return partial;
 }
 
-// Not ported: stampDatabaseState, stampDatabaseModified (psi add, psi sync and the other commands that
-// modify a database, not psi replicate or psi verify).
+//
+// Refreshes the content hash in the state file together with the given fields (e.g. lastModifiedAt or
+// lastSyncedAt). Lock-free: the caller must already hold the database write lock and should call this as
+// the last step of the locked mutation, after the merkle tree and bson database are persisted. A crash
+// between persisting the trees and this call leaves the previous content hash, which only causes an extra
+// full sync (which self-heals the state file), never data loss.
+//
+pub fn stampDatabaseState(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, rawStorage: IStorage, extra: IDatabaseState) !void {
+    try api.database_state.mergeDatabaseState(allocator, io, rawStorage, try buildStampPartial(allocator, io, assetStorage, extra));
+}
+
+//
+// Records that the database was modified locally: stamps lastModifiedAt and refreshes the content hash.
+// Lock-free: the caller must already hold the database write lock.
+//
+pub fn stampDatabaseModified(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, rawStorage: IStorage) !void {
+    var lastModifiedAt: std.Io.Writer.Allocating = .init(allocator);
+    try js_date.writeIsoString(&lastModifiedAt.writer, std.Io.Clock.real.now(io).toMilliseconds());
+    try stampDatabaseState(allocator, io, assetStorage, rawStorage, .{
+        .lastModifiedAt = lastModifiedAt.written(),
+    });
+}
 
 //
 // Refreshes the content hash in the state file together with the given fields (e.g. lastSyncedAt or

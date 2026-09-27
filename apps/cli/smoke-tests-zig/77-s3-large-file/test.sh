@@ -97,7 +97,7 @@ test_s3_large_file() {
 
     local add_output
     invoke_command "Add the large video to the S3 database" \
-        "$(get_cli_command) add \"$fixture\" --db \"$s3_db\" --verbose --yes" 0 "add_output"
+        "$(get_zig_cli_command) add \"$fixture\" --db \"$s3_db\" --verbose --yes" 0 "add_output"
 
     local asset_id
     asset_id="$(asset_id_from_add_output "$add_output")"

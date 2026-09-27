@@ -33,7 +33,7 @@ test_v6_database_add_file() {
     log_info "Initial asset count: $initial_count"
     
     local add_output
-    invoke_command "Add test file to v6 database" "$(get_cli_command) add --db $temp_v6_dir $test_file --yes" 0 "add_output"
+    invoke_command "Add test file to v6 database" "$(get_zig_cli_command) add --db $temp_v6_dir $test_file --yes" 0 "add_output"
     
     expect_output_string "$add_output" "Added" "File was added successfully"
     

@@ -86,7 +86,21 @@ pub const EncryptedStorage = struct {
         return self.wrappedStorage.dirExists(allocator, io, dirPath);
     }
 
-    // Not ported: readableLength, writeStreamHashed, storedHash (not reached by psi replicate or psi verify).
+    //
+    // Always undefined, because this storage cannot say how long the file it reads out will be.
+    //
+    // What it holds is ciphertext and what it hands out is plaintext, and the one length cannot be
+    // turned into the other: the format pads the last block out to sixteen bytes, and how much of
+    // that block is padding is only known once it has been decrypted. The stored length is 573 to 588
+    // bytes longer than the plaintext, and which of those it is depends on the file.
+    //
+    pub fn readableLength(self: *EncryptedStorage, fileInfo: IFileInfo) ?u64 {
+        _ = self;
+        _ = fileInfo;
+        return null;
+    }
+
+    // Not ported: writeStreamHashed, storedHash (not reached by psi add, psi replicate or psi verify).
 
     //
     // Gets info about a file, as the store underneath describes it.
