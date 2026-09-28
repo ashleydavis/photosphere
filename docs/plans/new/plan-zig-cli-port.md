@@ -113,8 +113,8 @@ To do, in order (each one uses what the earlier ones ported):
 - [ ] debug (merkle-tree, find-collisions, find-duplicates, remove-duplicates, build-sort-index, build-files-tree)
 - [x] check
 - [x] tools
-- [ ] examples
-- [ ] help
+- [x] examples
+- [x] help
 - [ ] news
 - [ ] bug
 - [ ] dbs (all subcommands, including LAN share send and receive)

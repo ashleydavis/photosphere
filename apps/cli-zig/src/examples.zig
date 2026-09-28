@@ -29,8 +29,6 @@ pub const ICommandExamples = struct {
 
 //
 // Centralized examples for all CLI commands
-// (only the commands implemented in Zig are ported: init, add, consolidate, check, info, tools, summary, verify, repair, replicate,
-// compare, version, export, list, upgrade, hash, encrypt, decrypt, sync, remove, find-orphans and remove-orphans).
 //
 pub const COMMAND_EXAMPLES = [_]ICommandExamples{
     .{
@@ -60,6 +58,39 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             .{
                 .command = "psi add --db ./photos ~/Downloads/photos",
                 .description = "Adds a directory recursively.",
+            },
+        },
+    },
+    .{
+        .commandName = "watch",
+        .examples = &.{
+            .{
+                .command = "psi watch --db ./photos",
+                .description = "Watches this operating system's photo folders and imports new media as it appears.",
+            },
+            .{
+                .command = "psi watch --db ./photos ~/Pictures ~/Camera",
+                .description = "Watches specific folders instead of the default ones.",
+            },
+            .{
+                .command = "psi watch --db ./photos --once",
+                .description = "Imports everything in the watched folders once, then exits.",
+            },
+            .{
+                .command = "psi watch --db ./photos --cleanup",
+                .description = "Deletes each source file once the asset is confirmed in the local database.",
+            },
+            .{
+                .command = "psi watch --db ./photos --evict",
+                .description = "Drops local originals the origin already holds, after each successful sync.",
+            },
+            .{
+                .command = "psi watch --db ./photos --evict --evict-budget 500000000",
+                .description = "Keeps local originals under 500 MB instead of the built-in retention policy.",
+            },
+            .{
+                .command = "psi watch --db ./photos --no-sync",
+                .description = "Imports without syncing to the origin.",
             },
         },
     },
@@ -209,11 +240,42 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
         },
     },
     .{
+        .commandName = "bug",
+        .examples = &.{
+            .{
+                .command = "psi bug",
+                .description = "Generates a bug report and opens it in the browser.",
+            },
+            .{
+                .command = "psi bug --no-browser",
+                .description = "Generates a bug report without opening a browser.",
+            },
+        },
+    },
+    .{
+        .commandName = "examples",
+        .examples = &.{
+            .{
+                .command = "psi examples",
+                .description = "Shows all usage examples categorized by command.",
+            },
+        },
+    },
+    .{
         .commandName = "version",
         .examples = &.{
             .{
                 .command = "psi version",
                 .description = "Shows version information for psi and its dependencies.",
+            },
+        },
+    },
+    .{
+        .commandName = "news",
+        .examples = &.{
+            .{
+                .command = "psi news",
+                .description = "Shows the latest update notification and all news items, including ones you have already seen.",
             },
         },
     },
@@ -367,9 +429,111 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             },
         },
     },
+    .{
+        .commandName = "secrets",
+        .examples = &.{
+            .{
+                .command = "psi secrets list",
+                .description = "List all secrets (values are masked).",
+            },
+            .{
+                .command = "psi secrets add",
+                .description = "Interactively add a new secret.",
+            },
+            .{
+                .command = "psi secrets view my-key",
+                .description = "View the full value of a secret.",
+            },
+            .{
+                .command = "psi secrets edit my-key",
+                .description = "Edit an existing secret.",
+            },
+            .{
+                .command = "psi secrets delete my-key",
+                .description = "Delete a secret.",
+            },
+            .{
+                .command = "psi secrets import",
+                .description = "Import a .key / .key.pub PEM key pair file.",
+            },
+            .{
+                .command = "psi secrets send my-key",
+                .description = "Send a secret to another device over the local network.",
+            },
+            .{
+                .command = "psi secrets receive",
+                .description = "Receive a secret from another device over the local network.",
+            },
+        },
+    },
+    .{
+        .commandName = "dbs",
+        .examples = &.{
+            .{
+                .command = "psi dbs list",
+                .description = "List all configured databases.",
+            },
+            .{
+                .command = "psi dbs add",
+                .description = "Add a new database to the list.",
+            },
+            .{
+                .command = "psi dbs view my-photos",
+                .description = "View details of a database entry.",
+            },
+            .{
+                .command = "psi dbs edit my-photos",
+                .description = "Edit a database entry.",
+            },
+            .{
+                .command = "psi dbs remove my-photos",
+                .description = "Remove a database entry.",
+            },
+            .{
+                .command = "psi dbs send my-photos",
+                .description = "Send a database config to another device over the local network.",
+            },
+            .{
+                .command = "psi dbs receive",
+                .description = "Receive a database config from another device over the local network.",
+            },
+        },
+    },
 };
 
-// Not ported: MAIN_EXAMPLES (the program help is shown by the TypeScript CLI).
+//
+// Main program examples (shown in the main help)
+//
+pub const MAIN_EXAMPLES = [_]ICommandExample{
+    .{
+        .command = "psi init --db ./photos",
+        .description = "Creates a new database in the ./photos directory.",
+    },
+    .{
+        .command = "psi add --db ./photos ~/Pictures",
+        .description = "Adds all media files from ~/Pictures to the database.",
+    },
+    .{
+        .command = "psi summary --db ./photos",
+        .description = "Shows the database summary (file count, size, etc.).",
+    },
+    .{
+        .command = "psi verify --db ./photos",
+        .description = "Verifies the database integrity.",
+    },
+    .{
+        .command = "psi replicate --db ./photos --dest ./backup",
+        .description = "Replicates one database to a backup location.",
+    },
+    .{
+        .command = "psi sync --db ./photos --dest ./backup",
+        .description = "Synchronizes changes between two databases.",
+    },
+    .{
+        .command = "psi compare --db ./photos --dest ./backup",
+        .description = "Compares two databases for differences.",
+    },
+};
 
 //
 // Helper function to format examples for help text

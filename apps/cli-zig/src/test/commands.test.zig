@@ -2465,3 +2465,253 @@ test "check reports a missing database like the TypeScript CLI" {
     result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
     try expectResult(result, verify_missing_report, "", 1);
 }
+
+//
+// The help of the program: `psi help` and `psi --help` of apps/cli/index.ts, with the main examples and the resources.
+//
+const program_help =
+    \\Usage: psi [options] [command]
+    \\
+    \\The Photosphere CLI tool for managing your media file database.
+    \\
+    \\Options:
+    \\  --version                                      output the version number
+    \\  --debug                                        Enable debug REST API server
+    \\  -q, --quiet                                    Suppress optional output (update and news notifications). Give it before the command name.
+    \\  -h, --help                                     display help for command
+    \\
+    \\Commands:
+    \\  add|a [options] [files...]                     Adds files and directories to the media file database, once or by watching for more.
+    \\  bug [options]                                  Generates a bug report for GitHub with system information and logs.
+    \\  check|chk [options] <files...>                 Checks files and directories to see what has already been added to the media file database.
+    \\  compare|cmp [options]                          Compares two databases to find the differences between them.
+    \\  examples [options]                             Shows usage examples for all CLI commands.
+    \\  export|exp [options] <asset-id> <output-path>  Exports an asset by ID to a specified path.
+    \\  find-orphans [options]                         Find and list files that are no longer in the merkle tree.
+    \\  hash [options] <file-path>                     Compute the hash of a file using the same algorithm as the database.
+    \\  debug                                          Debug commands for inspecting database internals.
+    \\  help [command]                                 Display help for command
+    \\  info|inf [options] <files...>                  Displays detailed information about media files including EXIF data, metadata, and technical specifications.
+    \\  init|i [options]                               Initializes a new media file database.
+    \\  origin [options]                               Shows the origin database path (from .db/config.json).
+    \\  set-origin [options] <path>                    Sets the origin database path in .db/config.json (used as default --dest or --source for sync, replicate, repair, compare).
+    \\  consolidate [options] <remote>                 Joins this database to a remote one so the two can sync, creating the remote when it does not exist and recording it as the origin.
+    \\  list|ls [options]                              Lists all files in the database sorted by date (newest first) with pagination.
+    \\  mcp [options]                                  Start an MCP server (stdio transport). The MCP client chooses which database to open at runtime via list_databases / open_database.
+    \\  news                                           Displays the latest update notification and all news items from the Photosphere feed.
+    \\  remove|rm [options] <asset-id>                 Removes an asset from the database by ID, deleting the files for the asset.
+    \\  remove-orphans [options]                       Find and remove files that are no longer in the merkle tree.
+    \\  repair [options]                               Repairs the integrity of the media file database by restoring files from a source database.
+    \\  root-hash [options]                            Displays the aggregate root hash of the database.
+    \\  database-id [options]                          Displays the database ID (UUID) of the database.
+    \\  replicate|rep [options]                        Replicates an asset database from source to destination location.
+    \\  summary|sum [options]                          Displays a summary of the media file database including total files, size, and tree hash.
+    \\  sync [options]                                 Synchronize changes between two databases, once or by watching for more.
+    \\  tools [options]                                Checks for required media processing tools (ImageMagick, ffmpeg, ffprobe).
+    \\  upgrade [options]                              Upgrades a media file database to the latest version.
+    \\  verify|ver [options]                           Verifies the integrity of the media file database by checking file hashes.
+    \\  version                                        Displays version information for psi and its dependencies.
+    \\  encrypt [options]                              Encrypts the database in place (plain → encrypted, re-encrypt with new key, or old-format → new format).
+    \\  decrypt [options]                              Decrypts the encrypted database in place (removes encryption; deletes .db/encryption.pub).
+    \\  secrets|sec                                    Manage secrets stored in the Photosphere secrets store.
+    \\  dbs|d                                          Manage the list of configured databases.
+    \\
+    \\
+    \\Getting help:
+    \\  psi <command> --help    Shows help for a particular command.
+    \\  psi --help              Shows help for all commands.
+    \\
+    \\Examples:
+    \\  psi init --db ./photos                         Creates a new database in the ./photos directory.
+    \\  psi add --db ./photos ~/Pictures               Adds all media files from ~/Pictures to the database.
+    \\  psi summary --db ./photos                      Shows the database summary (file count, size, etc.).
+    \\  psi verify --db ./photos                       Verifies the database integrity.
+    \\  psi replicate --db ./photos --dest ./backup    Replicates one database to a backup location.
+    \\  psi sync --db ./photos --dest ./backup         Synchronizes changes between two databases.
+    \\  psi compare --db ./photos --dest ./backup      Compares two databases for differences.
+    \\
+    \\Resources:
+    \\  🚀 Getting Started: https://github.com/ashleydavis/photosphere/wiki/Getting-Started
+    \\  📖 Command Reference: https://github.com/ashleydavis/photosphere/wiki/Command-Reference
+    \\  📚 Wiki: https://github.com/ashleydavis/photosphere/wiki
+    \\  🐛 View Issues: https://github.com/ashleydavis/photosphere/issues
+    \\  ➕ New Issue: https://github.com/ashleydavis/photosphere/issues/new
+    \\
+;
+
+//
+// The listing of `psi examples` (apps/cli/src/cmd/examples.ts).
+//
+const examples_listing =
+    \\📖 Photosphere CLI Examples
+    \\
+    \\Below are usage examples for all available commands:
+    \\
+    \\Database Management:
+    \\
+    \\  init:
+    \\    psi init --db .                  Creates a database in current directory.
+    \\    psi init --db ./photos           Creates a database in ./photos directory.
+    \\
+    \\  add:
+    \\    psi add --db ./photos ~/Pictures Adds all files from ~/Pictures to the database.
+    \\    psi add --db ./photos image.jpg video.mp4 Adds specific files to the database.
+    \\    psi add --db ./photos ~/Downloads/photos Adds a directory recursively.
+    \\
+    \\  check:
+    \\    psi check --db ./photos ~/Pictures Checks which files from ~/Pictures are already in database.
+    \\    psi check --db ./photos image.jpg Checks if the specific file is already in database.
+    \\    psi check --db ./photos ~/Downloads Checks the directory to see what's already been added.
+    \\
+    \\  summary:
+    \\    psi summary --db .               Shows a summary for the database in current directory.
+    \\    psi summary --db ./photos        Shows summary for the database in the ./photos directory.
+    \\
+    \\  verify:
+    \\    psi verify --db .                Verifies a database in the current directory.
+    \\    psi verify --db ./photos         Verifies a database in the ./photos directory.
+    \\    psi verify --db ./photos --full  Forces full verification of all files.
+    \\
+    \\  find-orphans:
+    \\    psi find-orphans --db .          Finds orphaned files in the current directory database.
+    \\    psi find-orphans --db ./photos   Finds orphaned files in the ./photos database.
+    \\
+    \\  remove-orphans:
+    \\    psi remove-orphans --db .        Removes orphaned files from the current directory database.
+    \\    psi remove-orphans --db ./photos Removes orphaned files from the ./photos database.
+    \\    psi remove-orphans --db ./photos --yes Removes orphaned files without confirmation prompt.
+    \\
+    \\Backup and syncrhonization:
+    \\
+    \\  replicate:
+    \\    psi replicate --db ./photos --dest ./backup Replicates a database to a backup location.
+    \\    psi replicate --db . --dest s3:bucket/photos Replicates the current database to S3.
+    \\
+    \\  compare:
+    \\    psi compare --db ./photos --dest ./backup Compares an original database with a backup.
+    \\    psi compare --db . --dest s3:bucket/photos Compares a local database with an S3 replica.
+    \\    psi compare --db ./photos --dest ./backup --full Shows all differences without truncation.
+    \\    psi compare --db ./photos --dest ./backup --max 20 Shows up to 20 items in each category.
+    \\
+    \\Configuration:
+    \\
+    \\  tools:
+    \\    psi tools                        Checks the status of all required media processing tools.
+    \\
+    \\File Analysis:
+    \\
+    \\  info:
+    \\    psi info photo.jpg               Shows detailed information about a photo.
+    \\    psi info photo1.jpg photo2.jpg   Analyzes multiple specific files.
+    \\    psi info ~/Pictures              Analyzes all media files in a directory.
+    \\    psi info --db ./photos <asset-id> Shows database metadata for an asset by ID.
+    \\    psi info --db ./photos <hash>    Shows database metadata for asset(s) with the given hash.
+    \\
+    \\Help and Support:
+    \\
+    \\  examples:
+    \\    psi examples                     Shows all usage examples categorized by command.
+    \\
+    \\  bug:
+    \\    psi bug                          Generates a bug report and opens it in the browser.
+    \\    psi bug --no-browser             Generates a bug report without opening a browser.
+    \\
+    \\💡 Tip: Use "psi <command> --help" to see detailed help for any specific command.
+    \\
+    \\
+;
+
+test "examples prints the listing of the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-examples");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    try expectResult(try runZig(allocator, environment, &.{"examples"}), examples_listing, "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "-q", "examples", "--yes" }), examples_listing, "", 0);
+}
+
+test "help prints the help of the program like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-help");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    try expectResult(try runZig(allocator, environment, &.{"help"}), program_help, "", 0);
+    try expectResult(try runZig(allocator, environment, &.{"--help"}), program_help, "", 0);
+
+    // A name that is no command reports it, then shows the help of the program.
+    try expectResult(try runZig(allocator, environment, &.{ "-q", "help", "bogus" }), program_help, "Unknown command: bogus\n", 0);
+}
+
+test "help prints the help of a command like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-help-command");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    const examplesHelp =
+        \\Usage: psi examples [options]
+        \\
+        \\Shows usage examples for all CLI commands.
+        \\
+        \\Options:
+        \\  -y, --yes   Non-interactive mode. Use command line arguments and defaults.
+        \\              (default: false)
+        \\  -h, --help  display help for command
+        \\
+        \\Examples:
+        \\  psi examples                     Shows all usage examples categorized by command.
+        \\
+    ;
+    try expectResult(try runZig(allocator, environment, &.{ "help", "examples" }), examplesHelp, "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "examples", "--help" }), examplesHelp, "", 0);
+
+    // The secrets group is not created with .exitOverride(), so its help exits through process.exit, with 0.
+    const secretsHelp =
+        \\Usage: psi secrets|sec [options] [command]
+        \\
+        \\Manage secrets stored in the Photosphere secrets store.
+        \\
+        \\Options:
+        \\  -h, --help         display help for command
+        \\
+        \\Commands:
+        \\  add [options]      Interactively add a new secret.
+        \\  list|l             List all secrets (values are masked).
+        \\  view|v [options]   Show the full value of a named secret.
+        \\  edit|e [options]   Edit an existing secret, field by field.
+        \\  remove [options]   Remove a named secret.
+        \\  clear [options]    Remove all secrets.
+        \\  import [options]   Import a PEM private key file as an encryption key.
+        \\  send [options]     Send a secret to another device over the local network.
+        \\  receive [options]  Receive a secret from another device over the local
+        \\                     network.
+        \\  help [command]     display help for command
+        \\
+    ;
+    try expectResult(try runZig(allocator, environment, &.{ "help", "secrets" }), secretsHelp, "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "help", "sec" }), secretsHelp, "", 0);
+
+    // Run without a subcommand, the group shows its help on stderr and exits with 1.
+    try expectResult(try runZig(allocator, environment, &.{"secrets"}), "", secretsHelp, 1);
+}
+
+test "commands that are not ported yet fail with an error that names them" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-not-ported");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    const bugHint = "\nIf you believe this behaviour is a bug, please report it with the following command:\n   psi bug\n";
+    try expectResult(try runZig(allocator, environment, &.{ "-q", "hash-cache", "show" }), bugHint, "An unknown error occurred\nError: The hash-cache show command is not ported to the Zig CLI yet.\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "-q", "news" }), bugHint, "An unknown error occurred\nError: The news command is not ported to the Zig CLI yet.\n", 1);
+}
