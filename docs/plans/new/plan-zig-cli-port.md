@@ -115,8 +115,8 @@ To do, in order (each one uses what the earlier ones ported):
 - [x] tools
 - [x] examples
 - [x] help
-- [ ] news
-- [ ] bug
+- [x] news
+- [x] bug
 - [x] dbs (all subcommands, including LAN share send and receive)
 - [x] secrets (all subcommands, including LAN share send and receive)
 - [ ] mcp

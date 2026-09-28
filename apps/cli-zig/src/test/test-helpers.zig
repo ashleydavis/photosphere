@@ -307,28 +307,21 @@ pub const IPromptKeys = struct {
 const prompt_wait_limit_seconds = 60;
 
 //
-// Prints what the driver wrote so far, for a failure.
+// Prints what the program (the test driver or psi) wrote so far, for a failure.
 //
-fn printDriverOutput(scenarioArguments: []const []const u8, problem: []const u8, stdout: []const u8, stderr: []const u8) void {
-    std.debug.print("test driver {f}: {s}\nstdout:\n{s}\nstderr:\n{s}\n", .{ std.json.fmt(scenarioArguments, .{}), problem, stdout, stderr });
+fn printDriverOutput(programArguments: []const []const u8, problem: []const u8, stdout: []const u8, stderr: []const u8) void {
+    std.debug.print("running {f}: {s}\nstdout:\n{s}\nstderr:\n{s}\n", .{ std.json.fmt(programArguments, .{}), problem, stdout, stderr });
 }
 
 //
-// Runs a scenario of the test driver with the environment, typing the keys of each prompt on its stdin (a pipe,
-// so the prompts see an input that is not a TTY, as they do when psi is fed from a pipe). Fails when the driver
-// fails, or when a prompt does not appear.
+// Runs a program with the environment, typing the keys of each prompt on its stdin (a pipe, so the prompts see an
+// input that is not a TTY, as they do when psi is fed from a pipe) once the prompt has appeared on its stdout, and
+// then closing its stdin. Fails when a prompt does not appear.
 //
-pub fn runTestDriver(allocator: std.mem.Allocator, scenarioArguments: []const []const u8, prompts: []const IPromptKeys, environment: *const std.process.Environ.Map) !IDriverResult {
+pub fn runWithPrompts(allocator: std.mem.Allocator, argv: []const []const u8, prompts: []const IPromptKeys, environment: *const std.process.Environ.Map) !CliResult {
     const io = std.testing.io;
-    const resultDir = try makeTempDir(allocator, "driver-result");
-    defer std.Io.Dir.cwd().deleteTree(io, resultDir) catch {};
-    const resultPath = try std.fs.path.join(allocator, &.{ resultDir, "result.json" });
-    var argv: std.ArrayList([]const u8) = .empty;
-    try argv.appendSlice(allocator, &.{ test_driver_path, resultPath });
-    try argv.appendSlice(allocator, scenarioArguments);
-
     var child = try std.process.spawn(io, .{
-        .argv = argv.items,
+        .argv = argv,
         .environ_map = environment,
         .stdin = .pipe,
         .stdout = .pipe,
@@ -351,7 +344,7 @@ pub fn runTestDriver(allocator: std.mem.Allocator, scenarioArguments: []const []
             }
             multi_reader.fill(64, .{ .duration = .{ .raw = .fromSeconds(prompt_wait_limit_seconds), .clock = .awake } }) catch |err| {
                 const problem = try std.fmt.allocPrint(allocator, "the prompt \"{s}\" did not appear ({t})", .{ prompt.waitFor, err });
-                printDriverOutput(scenarioArguments, problem, multi_reader.reader(0).buffered(), multi_reader.reader(1).buffered());
+                printDriverOutput(argv, problem, multi_reader.reader(0).buffered(), multi_reader.reader(1).buffered());
                 return error.PromptDidNotAppear;
             };
         }
@@ -376,15 +369,32 @@ pub fn runTestDriver(allocator: std.mem.Allocator, scenarioArguments: []const []
         .exited => |code| code,
         else => 255,
     };
-    if (exitCode != 0) {
-        printDriverOutput(scenarioArguments, try std.fmt.allocPrint(allocator, "exited with code {d}", .{exitCode}), stdout, stderr);
+    return .{ .exitCode = exitCode, .stdout = stdout, .stderr = stderr };
+}
+
+//
+// Runs a scenario of the test driver with the environment, typing the keys of each prompt on its stdin (see
+// runWithPrompts). Fails when the driver fails, or when a prompt does not appear.
+//
+pub fn runTestDriver(allocator: std.mem.Allocator, scenarioArguments: []const []const u8, prompts: []const IPromptKeys, environment: *const std.process.Environ.Map) !IDriverResult {
+    const io = std.testing.io;
+    const resultDir = try makeTempDir(allocator, "driver-result");
+    defer std.Io.Dir.cwd().deleteTree(io, resultDir) catch {};
+    const resultPath = try std.fs.path.join(allocator, &.{ resultDir, "result.json" });
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.appendSlice(allocator, &.{ test_driver_path, resultPath });
+    try argv.appendSlice(allocator, scenarioArguments);
+
+    const result = try runWithPrompts(allocator, argv.items, prompts, environment);
+    if (result.exitCode != 0) {
+        printDriverOutput(scenarioArguments, try std.fmt.allocPrint(allocator, "exited with code {d}", .{result.exitCode}), result.stdout, result.stderr);
         return error.TestDriverFailed;
     }
     const resultJson = std.Io.Dir.cwd().readFileAlloc(io, resultPath, allocator, .unlimited) catch |err| {
-        printDriverOutput(scenarioArguments, "returned no result (it ran out of input)", stdout, stderr);
+        printDriverOutput(scenarioArguments, "returned no result (it ran out of input)", result.stdout, result.stderr);
         return err;
     };
-    return .{ .exitCode = exitCode, .stdout = stdout, .stderr = stderr, .resultJson = resultJson };
+    return .{ .exitCode = result.exitCode, .stdout = result.stdout, .stderr = result.stderr, .resultJson = resultJson };
 }
 
 //
