@@ -238,3 +238,54 @@ test "fileURLToPath parses the URL first, as Bun's fileURLToPath does" {
     try std.testing.expectError(error.Thrown, fileURLToPath(allocator, "file:///a/%2Fb"));
     try std.testing.expectEqualStrings("File URL path must not include encoded / characters", utils.errors.lastErrorMessage());
 }
+
+test "writes the label and url of a link as a template string would" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dir = try helpers.makeTempDir(allocator, io, "news-fetcher-links");
+    defer helpers.removeTempDir(io, dir);
+    const filePath = try std.fmt.allocPrint(allocator, "{s}/news.yaml", .{dir});
+    try helpers.writeFile(io, filePath,
+        \\items:
+        \\  - id: array-and-float
+        \\    message: m
+        \\    link:
+        \\      label: [a, null, 2]
+        \\      url: 1.5e-7
+        \\  - id: bool-and-null
+        \\    message: m
+        \\    link:
+        \\      label: true
+        \\      url: null
+        \\  - id: object-and-missing
+        \\    message: m
+        \\    link:
+        \\      label: { x: 1 }
+        \\  - id: not-an-object
+        \\    message: m
+        \\    link: somewhere
+        \\  - id: falsy
+        \\    message: m
+        \\    link: 0
+        \\    action: 0.0
+        \\
+    );
+
+    const forwardSlashPath = try allocator.dupe(u8, filePath);
+    std.mem.replaceScalar(u8, forwardSlashPath, '\\', '/');
+    const slashBeforeDrive = if (std.mem.startsWith(u8, forwardSlashPath, "/")) "" else "/";
+    const items = try fetchNews(allocator, io, try std.fmt.allocPrint(allocator, "file://{s}{s}", .{ slashBeforeDrive, forwardSlashPath }));
+
+    try std.testing.expectEqual(@as(usize, 5), items.len);
+    try std.testing.expectEqualStrings("a,,2", items[0].link.?.label);
+    try std.testing.expectEqualStrings("1.5e-7", items[0].link.?.url);
+    try std.testing.expectEqualStrings("true", items[1].link.?.label);
+    try std.testing.expectEqualStrings("null", items[1].link.?.url);
+    try std.testing.expectEqualStrings("[object Object]", items[2].link.?.label);
+    try std.testing.expectEqualStrings("undefined", items[2].link.?.url);
+    try std.testing.expectEqualStrings("undefined", items[3].link.?.label);
+    try std.testing.expect(items[4].link == null);
+    try std.testing.expect(items[4].action == null);
+}
