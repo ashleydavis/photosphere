@@ -309,3 +309,41 @@ test "stops copying when the task is cancelled" {
     // loop would stop with the replica half filled in.
     try expectResult(result, 0, 1);
 }
+
+test "returns without copying when the config of the partial database is not an object or has no origin" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const testContext = try makeContext(allocator, io, false);
+    const dirs = try makePartialReplica(allocator, io, testContext, false);
+    defer helpers.removeTempDir(io, dirs.root);
+    try deleteFileIn(allocator, io, dirs.local, THUMB_PATH);
+
+    const configs = [_][]const u8{ "[\"origin\"]", "{\"other\":1}" };
+    for (configs) |config| {
+        try helpers.writeFile(io, try pathIn(allocator, dirs.local, ".db/config.json"), config);
+
+        const result = try prefetchDatabaseHandler(allocator, io, try makeData(allocator, dirs.local), testContext.context.taskContext());
+
+        try expectResult(result, 0, 0);
+        try std.testing.expect(!helpers.fileExists(io, try pathIn(allocator, dirs.local, THUMB_PATH)));
+    }
+}
+
+test "fails with the error of a file it could not fetch" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const testContext = try makeContext(allocator, io, false);
+    const dirs = try makePartialReplica(allocator, io, testContext, true);
+    defer helpers.removeTempDir(io, dirs.root);
+
+    // A directory where the thumbnail should be: the replica does not hold the file, and cannot write it.
+    try deleteFileIn(allocator, io, dirs.local, THUMB_PATH);
+    try std.Io.Dir.cwd().createDirPath(io, try pathIn(allocator, dirs.local, THUMB_PATH ++ "/in-the-way"));
+
+    try std.testing.expectError(error.Thrown, prefetchDatabaseHandler(allocator, io, try makeData(allocator, dirs.local), testContext.context.taskContext()));
+    try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "Failed to prefetch " ++ THUMB_PATH));
+}
