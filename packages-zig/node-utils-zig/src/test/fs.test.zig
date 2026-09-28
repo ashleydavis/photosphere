@@ -1240,3 +1240,54 @@ test "mathRandom returns numbers in [0, 1) that vary like Math.random()" {
     try std.testing.expect(smallest < 0.1);
     try std.testing.expect(largest > 0.9);
 }
+
+//
+// Creates the update lock of a file, as another process holding it would, last modified `ageMs` ago.
+//
+fn holdUpdateLock(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, ageMs: i64) ![]const u8 {
+    const lockPath = try std.fmt.allocPrint(allocator, "{s}.lock", .{filePath});
+    const lockFile = try std.Io.Dir.cwd().createFile(io, lockPath, .{});
+    defer lockFile.close(io);
+    const modified = std.Io.Timestamp.fromNanoseconds(@as(i96, std.Io.Timestamp.now(io, .real).toMilliseconds() - ageMs) * std.time.ns_per_ms);
+    try lockFile.setTimestamps(io, .{ .modify_timestamp = .{ .new = modified } });
+    return lockPath;
+}
+
+test "updateFileRawOptimistic breaks an update lock older than the stale limit" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-raw-stale-lock.bin");
+
+    // A lock left behind a minute ago by a process that died holding it.
+    const lockPath = try holdUpdateLock(allocator, io, filePath, 60_000);
+    var mutator: RawMutator = .{
+        .result = "published",
+        .suffix = "",
+        .external = .{ .suffix = "", .externalWriteFile = null, .injectOnce = true, .io = io },
+    };
+    try fs.updateFileRawOptimistic(allocator, io, filePath, &mutator, 3);
+    try std.testing.expectEqualStrings("published", try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited));
+    try std.testing.expect(!fs.pathExists(io, lockPath));
+}
+
+test "updateFileRawOptimistic gives up on an update lock another process holds" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-raw-held-lock.bin");
+
+    // A lock taken just now, which is held for as long as the update waits.
+    const lockPath = try holdUpdateLock(allocator, io, filePath, 0);
+    var mutator: RawMutator = .{
+        .result = "never",
+        .suffix = "",
+        .external = .{ .suffix = "", .externalWriteFile = null, .injectOnce = true, .io = io },
+    };
+    try std.testing.expectError(error.Thrown, fs.updateFileRawOptimistic(allocator, io, filePath, &mutator, 3));
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Failed to update {s}: could not take the update lock after 50 attempts.", .{filePath}), utils.errors.lastErrorMessage());
+    try std.testing.expect(!mutator.called);
+    try std.testing.expect(fs.pathExists(io, lockPath));
+}

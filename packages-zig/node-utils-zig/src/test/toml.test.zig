@@ -170,3 +170,104 @@ test "stringify rejects values that are not tables" {
     try std.testing.expectError(error.Thrown, toml.stringify(arena.allocator(), .{ .integer = 1 }));
     try std.testing.expectEqualStrings("stringify can only be called with an object", errors.lastErrorMessage());
 }
+
+test "parse reads every escape, and the newline forms of multi-line strings, like smol-toml" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const escapes = try toml.parse(allocator, "a = \"\\b\\t\\n\\f\\r\\\"\\\\\\u00e9\\U0001F600\"\n");
+    try std.testing.expectEqualStrings("\x08\t\n\x0c\r\"\\\u{00E9}\u{1F600}", escapes.object.get("a").?.string);
+
+    // The CRLF right after the opening delimiter is dropped, and a line ending backslash drops the newline and the
+    // whitespace after it.
+    try std.testing.expectEqualStrings("line", (try toml.parse(allocator, "a = \"\"\"\r\nline\"\"\"\n")).object.get("a").?.string);
+    try std.testing.expectEqualStrings("one two", (try toml.parse(allocator, "a = \"\"\"one \\\n    two\"\"\"\n")).object.get("a").?.string);
+
+    // An escape smol-toml does not know, and one cut off by the end of the document.
+    for ([_][]const u8{ "a = \"\\q\"\n", "a = \"\\" }) |document| {
+        try std.testing.expectError(error.Thrown, toml.parse(allocator, document));
+        try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "Invalid TOML document: "));
+    }
+}
+
+//
+// A value and the TOML text smol-toml stringifies `{ a: value }` to.
+//
+const ValueStringifyCase = struct {
+    // The value of a.
+    value: std.json.Value,
+
+    // The TOML text.
+    toml: []const u8,
+};
+
+test "stringify writes the numbers JSON cannot hold like smol-toml" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const cases = [_]ValueStringifyCase{
+        .{ .value = .{ .float = std.math.nan(f64) }, .toml = "a = nan\n" },
+        .{ .value = .{ .float = std.math.inf(f64) }, .toml = "a = inf\n" },
+        .{ .value = .{ .float = -std.math.inf(f64) }, .toml = "a = -inf\n" },
+        .{ .value = .{ .float = 1e21 }, .toml = "a = 1e+21\n" },
+        .{ .value = .{ .float = -0.0 }, .toml = "a = 0\n" },
+        .{ .value = .{ .float = 1e-7 }, .toml = "a = 1e-7\n" },
+        .{ .value = .{ .number_string = "12345678901234567890" }, .toml = "a = 12345678901234567890\n" },
+    };
+    for (cases) |case| {
+        var object: std.json.ObjectMap = .empty;
+        try object.put(allocator, "a", case.value);
+        try std.testing.expectEqualStrings(case.toml, try toml.stringify(allocator, .{ .object = object }));
+    }
+}
+
+test "stringify writes an empty table as one newline and refuses null in an array" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expectEqualStrings("\n", try toml.stringify(allocator, .{ .object = .empty }));
+
+    // smol-toml throws reading Object.keys of the null.
+    var array = std.json.Array.init(allocator);
+    try array.append(.null);
+    var object: std.json.ObjectMap = .empty;
+    try object.put(allocator, "a", .{ .array = array });
+    try std.testing.expectError(error.Thrown, toml.stringify(allocator, .{ .object = object }));
+}
+
+test "stringify refuses tables and arrays nested deeper than smol-toml's maximum depth" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // 1100 nested tables, and 1100 nested arrays under one key.
+    var table: std.json.Value = .{ .object = .empty };
+    var nestedArray: std.json.Value = .{ .array = std.json.Array.init(allocator) };
+    for (0..1100) |_| {
+        var outerTable: std.json.ObjectMap = .empty;
+        try outerTable.put(allocator, "x", table);
+        table = .{ .object = outerTable };
+        var outerArray = std.json.Array.init(allocator);
+        try outerArray.append(nestedArray);
+        nestedArray = .{ .array = outerArray };
+    }
+    try std.testing.expectError(error.Thrown, toml.stringify(allocator, table));
+    try std.testing.expectEqualStrings("Could not stringify the object: maximum object depth exceeded", errors.lastErrorMessage());
+
+    var arrayHolder: std.json.ObjectMap = .empty;
+    try arrayHolder.put(allocator, "a", nestedArray);
+    try std.testing.expectError(error.Thrown, toml.stringify(allocator, .{ .object = arrayHolder }));
+    try std.testing.expectEqualStrings("Could not stringify the object: maximum object depth exceeded", errors.lastErrorMessage());
+
+    // An array of tables nested that deep.
+    var tables: std.json.Value = .{ .object = .empty };
+    for (0..1100) |_| {
+        var items = std.json.Array.init(allocator);
+        try items.append(tables);
+        var holder: std.json.ObjectMap = .empty;
+        try holder.put(allocator, "t", .{ .array = items });
+        tables = .{ .object = holder };
+    }
+    try std.testing.expectError(error.Thrown, toml.stringify(allocator, tables));
+    try std.testing.expectEqualStrings("Could not stringify the object: maximum object depth exceeded", errors.lastErrorMessage());
+}

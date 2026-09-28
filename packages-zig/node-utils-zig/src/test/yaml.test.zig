@@ -303,3 +303,175 @@ test "dump writes nested sections, sequences of mappings and every scalar style 
     };
     try expectDumps(allocator, &expectedDumps);
 }
+
+//
+// A YAML text and the JSON text of the value js-yaml 4.1.0 `yaml.load` returns for it.
+//
+const ExpectedInlineLoad = struct {
+    // The YAML text.
+    source: []const u8,
+
+    // The JSON text of the value js-yaml loads.
+    json: []const u8,
+};
+
+test "load reads every block and flow form it supports like js-yaml" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const cases = [_]ExpectedInlineLoad{
+        .{ .source = "---\na: 1\n", .json = "{\"a\":1}" },
+        .{ .source = "a:\n", .json = "{\"a\":null}" },
+        .{ .source = "a:\nb: 1\n", .json = "{\"a\":null,\"b\":1}" },
+        .{ .source = "a:\n  value\n", .json = "{\"a\":\"value\"}" },
+        .{ .source = "-\n  x\n", .json = "[\"x\"]" },
+        .{ .source = "- - a\n  - b\n- c\n", .json = "[[\"a\",\"b\"],\"c\"]" },
+        .{ .source = "a:\n  b: 1\nc: 2\n", .json = "{\"a\":{\"b\":1},\"c\":2}" },
+        .{ .source = "'it''s: x': 1\n", .json = "{\"it's: x\":1}" },
+        .{ .source = "a: \"x\\ny\\tz\\r\\0\\\"\\\\\\/\\ \"\n", .json = "{\"a\":\"x\\ny\\tz\\r\\u0000\\\"\\\\/ \"}" },
+        .{ .source = "a: \"\\x41\\u00e9\\U0001F600\"\n", .json = "{\"a\":\"Aé😀\"}" },
+        .{ .source = "a: false\n", .json = "{\"a\":false}" },
+        .{ .source = "a: 1.5e3\n", .json = "{\"a\":1500}" },
+        .{ .source = "a: .5\n", .json = "{\"a\":0.5}" },
+        .{ .source = "a: 1e\n", .json = "{\"a\":\"1e\"}" },
+        .{ .source = "a: +\n", .json = "{\"a\":\"+\"}" },
+        .{ .source = "a: [1, [2, 3], {b: 4}]\n", .json = "{\"a\":[1,[2,3],{\"b\":4}]}" },
+        .{ .source = "a: {b, c: }\n", .json = "{\"a\":{\"b\":null,\"c\":null}}" },
+        .{ .source = "a:\n- 1\n- 2\n", .json = "{\"a\":[1,2]}" },
+        .{ .source = "a: 99999999999999999999\n", .json = "{\"a\":100000000000000000000}" },
+        .{ .source = "a: 'x, y'\n", .json = "{\"a\":\"x, y\"}" },
+        .{ .source = "a: [\"x, y\", 'z]']\n", .json = "{\"a\":[\"x, y\",\"z]\"]}" },
+        .{ .source = "a:b\n", .json = "\"a:b\"" },
+        .{ .source = "\"k\": v\n", .json = "{\"k\":\"v\"}" },
+        .{ .source = "a: x # comment\n", .json = "{\"a\":\"x\"}" },
+        .{ .source = "a: 'x # y'\n", .json = "{\"a\":\"x # y\"}" },
+    };
+    for (cases) |case| {
+        errdefer std.debug.print("case: {s}\n", .{case.source});
+        const expected = try std.json.parseFromSliceLeaky(std.json.Value, allocator, case.json, .{});
+        try expectSameJson(allocator, expected, try yaml.load(allocator, case.source));
+    }
+}
+
+test "load throws a YAMLException for what js-yaml refuses, and for the constructs it does not port" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // js-yaml refuses each of these.
+    const refused = [_][]const u8{
+        "\ta: 1\n",
+        "a: 1\n b: 2\n",
+        "a: 1\na: 2\n",
+        "a: \"\\x4\"\n",
+        "a: \"\\q\"\n",
+        "a: \"unterminated\n",
+        "a: [1, 2\n",
+        "a: {b: 1\n",
+        "a: 'x' y\n",
+        "a: 1\n- b\n",
+        "- a\nb: 1\n",
+    };
+
+    // Not ported: block scalars, anchors and plain scalars that go on over several lines, which js-yaml reads
+    // (as "x\n", "x", [1, "2 - 3"] and "x y").
+    const notPorted = [_][]const u8{ "a: |\n  x\n", "a: &anchor x\n", "- 1\n- 2\n  - 3\n", "x\ny\n" };
+    for (refused ++ notPorted) |source| {
+        errdefer std.debug.print("case: {s}\n", .{source});
+        try std.testing.expectError(error.Thrown, yaml.load(allocator, source));
+        try std.testing.expectEqualStrings("YAMLException", utils.errors.lastErrorName());
+    }
+}
+
+test "dump quotes, escapes and folds strings, and orders keys, like js-yaml" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try expectDumps(allocator, &.{
+        .{ .json = "{\"a\":\" leading space\\nsecond\"}", .yaml = "a: |2-\n   leading space\n  second\n" },
+        .{ .json = "{\"a\":\"\\n\"}", .yaml = "a: |+\n\n" },
+        .{ .json = "{\"a\":\"trailing\\n\\n\"}", .yaml = "a: |+\n  trailing\n\n" },
+        .{ .json = "{\"a\":\"null\"}", .yaml = "a: 'null'\n" },
+        .{ .json = "{\"a\":\"~\"}", .yaml = "a: '~'\n" },
+        .{ .json = "{\"a\":\"True\"}", .yaml = "a: 'True'\n" },
+        .{ .json = "{\"a\":\"yes\"}", .yaml = "a: 'yes'\n" },
+        .{ .json = "{\"a\":\"0x1F\"}", .yaml = "a: '0x1F'\n" },
+        .{ .json = "{\"a\":\"0o17\"}", .yaml = "a: '0o17'\n" },
+        .{ .json = "{\"a\":\"0b101\"}", .yaml = "a: '0b101'\n" },
+        .{ .json = "{\"a\":\"1_000\"}", .yaml = "a: '1_000'\n" },
+        .{ .json = "{\"a\":\"-0x_1\"}", .yaml = "a: '-0x_1'\n" },
+        .{ .json = "{\"a\":\"0x\"}", .yaml = "a: 0x\n" },
+        .{ .json = "{\"a\":\"1:20\"}", .yaml = "a: '1:20'\n" },
+        .{ .json = "{\"a\":\"1.5e+3\"}", .yaml = "a: '1.5e+3'\n" },
+        .{ .json = "{\"a\":\".inf\"}", .yaml = "a: '.inf'\n" },
+        .{ .json = "{\"a\":\"-.Inf\"}", .yaml = "a: '-.Inf'\n" },
+        .{ .json = "{\"a\":\".NaN\"}", .yaml = "a: '.NaN'\n" },
+        .{ .json = "{\"a\":\"1e3\"}", .yaml = "a: '1e3'\n" },
+        .{ .json = "{\"a\":\"2001-12-14\"}", .yaml = "a: '2001-12-14'\n" },
+        .{ .json = "{\"a\":\"2001-12-14t21:59:43.10-05:00\"}", .yaml = "a: '2001-12-14t21:59:43.10-05:00'\n" },
+        .{ .json = "{\"a\":\"2001-12-14 21:59:43.10 Z\"}", .yaml = "a: '2001-12-14 21:59:43.10 Z'\n" },
+        .{ .json = "{\"a\":\"2001-1-4\"}", .yaml = "a: 2001-1-4\n" },
+        .{ .json = "{\"a\":\"190:20:30\"}", .yaml = "a: '190:20:30'\n" },
+        .{ .json = "{\"a\":\"abc\\u0001def\"}", .yaml = "a: \"abc\\x01def\"\n" },
+        .{ .json = "{\"a\":\"tab\\there\"}", .yaml = "a: \"tab\\there\"\n" },
+        .{ .json = "{\"a\":\"x\u{2028}y\"}", .yaml = "a: \"x\\Ly\"\n" },
+        .{ .json = "{\"a\":\"a very long line of text that goes on and on well past the eighty character limit of the dumper so it folds\"}", .yaml = "a: >-\n  a very long line of text that goes on and on well past the eighty character\n  limit of the dumper so it folds\n" },
+        .{ .json = "{\"a\":\"a very long line of text that goes on and on\\nwell past the eighty character limit of the dumper so it folds, with a second line that is also long enough\"}", .yaml = "a: >-\n  a very long line of text that goes on and on\n\n  well past the eighty character limit of the dumper so it folds, with a second\n  line that is also long enough\n" },
+        .{ .json = "{\"a\":\"averylongwordwithoutanyspacesthatcannotbefoldedatallbecauseithasnospacesanywhereinsideitatall and then\"}", .yaml = "a: >-\n  averylongwordwithoutanyspacesthatcannotbefoldedatallbecauseithasnospacesanywhereinsideitatall\n  and then\n" },
+        .{ .json = "{\"multi\\nline key\":1}", .yaml = "\"multi\\nline key\": 1\n" },
+        .{ .json = "{\"\":1}", .yaml = "'': 1\n" },
+        .{ .json = "{\"1\":\"e\",\"2\":\"b\",\"10\":\"c\",\"a\":\"d\"}", .yaml = "'1': e\n'2': b\n'10': c\na: d\n" },
+        .{ .json = "{\"a\":[]}", .yaml = "a: []\n" },
+        .{ .json = "{\"a\":{}}", .yaml = "a: {}\n" },
+        .{ .json = "[[1,2],[],{}]", .yaml = "- - 1\n  - 2\n- []\n- {}\n" },
+        .{ .json = "[{\"a\":[1,{\"b\":2}]}]", .yaml = "- a:\n    - 1\n    - b: 2\n" },
+        .{ .json = "{\"a\":\"it's\"}", .yaml = "a: it's\n" },
+        .{ .json = "{\"a\":\"#comment\"}", .yaml = "a: '#comment'\n" },
+        .{ .json = "{\"a\":\"- dash\"}", .yaml = "a: '- dash'\n" },
+        .{ .json = "{\"a\":\"key: value\"}", .yaml = "a: 'key: value'\n" },
+        .{ .json = "{\"a\":\"x \"}", .yaml = "a: 'x '\n" },
+        .{ .json = "{\"a\":\"@at\"}", .yaml = "a: '@at'\n" },
+        .{ .json = "{\"a\":\"\u{1F600}\"}", .yaml = "a: \u{1F600}\n" },
+        .{ .json = "{\"a\":\"\u{FEFF}bom\"}", .yaml = "a: \"\\uFEFFbom\"\n" },
+        .{ .json = "{\"a\":\"\u{0085}nel\"}", .yaml = "a: \"\\Nnel\"\n" },
+        .{ .json = "{\"a\":1.5}", .yaml = "a: 1.5\n" },
+        .{ .json = "{\"a\":-3}", .yaml = "a: -3\n" },
+        .{ .json = "{\"a\":\"   \"}", .yaml = "a: '   '\n" },
+        .{ .json = "{\"a\":\"? q\"}", .yaml = "a: '? q'\n" },
+        .{ .json = "{\"a\":\"a\\r\\nb\"}", .yaml = "a: \"a\\r\\nb\"\n" },
+    });
+}
+
+//
+// A number and the text js-yaml 4.1.0 `yaml.dump` writes for it.
+//
+const ExpectedNumberDump = struct {
+    // The number.
+    value: std.json.Value,
+
+    // The YAML text js-yaml writes.
+    yaml: []const u8,
+};
+
+test "dump writes the numbers JSON cannot hold like js-yaml" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const cases = [_]ExpectedNumberDump{
+        .{ .value = .{ .float = std.math.nan(f64) }, .yaml = ".nan\n" },
+        .{ .value = .{ .float = std.math.inf(f64) }, .yaml = ".inf\n" },
+        .{ .value = .{ .float = -std.math.inf(f64) }, .yaml = "-.inf\n" },
+        .{ .value = .{ .float = -0.0 }, .yaml = "-0.0\n" },
+        .{ .value = .{ .float = 1e21 }, .yaml = "1e+21\n" },
+        .{ .value = .{ .float = 123456789012 }, .yaml = "123456789012\n" },
+        .{ .value = .{ .float = 1e-7 }, .yaml = "1.e-7\n" },
+        .{ .value = .{ .float = 1.5e-7 }, .yaml = "1.5e-7\n" },
+        .{ .value = .{ .float = -2.5e-8 }, .yaml = "-2.5e-8\n" },
+        .{ .value = .{ .float = 1.5e300 }, .yaml = "1.5e+300\n" },
+        .{ .value = .{ .float = 0.1 }, .yaml = "0.1\n" },
+        .{ .value = .{ .number_string = "123456789012345678901234567890" }, .yaml = "123456789012345678901234567890\n" },
+    };
+    for (cases) |case| {
+        try std.testing.expectEqualStrings(case.yaml, try yaml.dump(allocator, case.value));
+    }
+}

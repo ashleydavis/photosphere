@@ -763,23 +763,7 @@ fn formatFloat(writer: *std.Io.Writer, value: f64) !void {
         try writer.writeAll(if (value > 0) "inf" else "-inf");
         return;
     }
-    const magnitude = @abs(value);
-    if (magnitude != 0 and (magnitude >= 1e21 or magnitude < 1e-6)) {
-        var buffer: [64]u8 = undefined;
-        const scientific = try std.fmt.bufPrint(&buffer, "{e}", .{value});
-        const exponent_index = std.mem.indexOfScalar(u8, scientific, 'e').?;
-        try writer.writeAll(scientific[0 .. exponent_index + 1]);
-        if (scientific[exponent_index + 1] != '-') {
-            try writer.writeByte('+');
-        }
-        try writer.writeAll(scientific[exponent_index + 1 ..]);
-        return;
-    }
-    if (value == @trunc(value)) {
-        try writer.print("{d}", .{@as(i64, @intFromFloat(value))});
-        return;
-    }
-    try writer.print("{d}", .{value});
+    try utils.js_number.writeNumber(writer, value);
 }
 
 //

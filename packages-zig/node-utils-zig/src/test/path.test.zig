@@ -232,3 +232,46 @@ test "path.isAbsolute uses the rules of the platform" {
     try std.testing.expect(path.isAbsolute("/a"));
     try std.testing.expectEqual(isWindows, path.isAbsolute("c:\\a"));
 }
+
+//
+// A path and what Bun's path.posix.normalize and path.win32.normalize return for it.
+//
+const NormalizeCase = struct {
+    // The path.
+    path: []const u8,
+
+    // What path.posix.normalize returns.
+    posix: []const u8,
+
+    // What path.win32.normalize returns.
+    win32: []const u8,
+};
+
+test "path.posix.normalize and path.win32.normalize match Node" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const cases = [_]NormalizeCase{
+        .{ .path = "", .posix = ".", .win32 = "." },
+        .{ .path = "abc/..", .posix = ".", .win32 = "." },
+        .{ .path = "abc/../..", .posix = "..", .win32 = ".." },
+        .{ .path = "../../a", .posix = "../../a", .win32 = "..\\..\\a" },
+        .{ .path = "a/../../b", .posix = "../b", .win32 = "..\\b" },
+        .{ .path = "../a/..", .posix = "..", .win32 = ".." },
+        .{ .path = "/a/../..", .posix = "/", .win32 = "\\" },
+        .{ .path = "a/b/../../..", .posix = "..", .win32 = ".." },
+        .{ .path = "./", .posix = "./", .win32 = ".\\" },
+        .{ .path = "a//b/./c/", .posix = "a/b/c/", .win32 = "a\\b\\c\\" },
+        .{ .path = "C:a\\..\\..\\b", .posix = "C:a\\..\\..\\b", .win32 = "C:..\\b" },
+        .{ .path = "\\\\server\\share\\..", .posix = "\\\\server\\share\\..", .win32 = "\\\\server\\share\\" },
+        .{ .path = "C:\\..\\x", .posix = "C:\\..\\x", .win32 = "C:\\x" },
+        .{ .path = "C:", .posix = "C:", .win32 = "C:." },
+        .{ .path = "\\", .posix = "\\", .win32 = "\\" },
+        .{ .path = "c:/x/../y", .posix = "c:/y", .win32 = "c:\\y" },
+    };
+    for (cases) |case| {
+        errdefer std.debug.print("case: {s}\n", .{case.path});
+        try std.testing.expectEqualStrings(case.posix, try path.posix.normalize(allocator, case.path));
+        try std.testing.expectEqualStrings(case.win32, try path.win32.normalize(allocator, case.path));
+    }
+}
