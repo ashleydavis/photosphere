@@ -538,7 +538,7 @@ fn isTruthy(value: f64) bool {
 // Turns the date of an EXIF date and time into dashes (TypeScript:
 // `.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3')`).
 //
-fn exifDateToDashes(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
+pub fn exifDateToDashes(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
     if (text.len >= 10 and std.ascii.isDigit(text[0]) and std.ascii.isDigit(text[1]) and std.ascii.isDigit(text[2]) and std.ascii.isDigit(text[3]) and text[4] == ':' and std.ascii.isDigit(text[5]) and std.ascii.isDigit(text[6]) and text[7] == ':' and std.ascii.isDigit(text[8]) and std.ascii.isDigit(text[9])) {
         const result = try allocator.dupe(u8, text);
         result[4] = '-';

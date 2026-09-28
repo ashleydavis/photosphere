@@ -159,3 +159,87 @@ test "getFileInfo reads images and videos like TypeScript and nothing else" {
     try std.testing.expectError(error.Thrown, tools.getFileInfo(allocator, std.testing.io, "../../test/missing.png", "image/png"));
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to get image info for ../../test/missing.png: Error: File not found: ../../test/missing.png"));
 }
+
+//
+// Creates a temporary directory for a test.
+//
+fn makeTempDir(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
+    var random_bytes: [8]u8 = undefined;
+    std.testing.io.random(&random_bytes);
+    const path = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/video-test-{s}-{x}", .{ name, std.mem.readInt(u64, &random_bytes, .little) });
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, path);
+    return path;
+}
+
+test "getInfo reads the creation time of a silent video like TypeScript" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try requireFfmpeg(allocator);
+    const dir = try makeTempDir(allocator, "creation-time");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
+
+    // A tenth of a second of 32x16 video at 10 frames a second, with no audio and a creation_time tag.
+    const videoPath = try std.fmt.allocPrint(allocator, "{s}/silent.mp4", .{dir});
+    _ = try runTool(allocator, &.{ "ffmpeg", "-v", "quiet", "-f", "lavfi", "-i", "color=c=red:s=32x16:r=10:d=0.1", "-metadata", "creation_time=2024-01-02T03:04:05.000000Z", "-pix_fmt", "yuv420p", "-y", videoPath });
+
+    var video = Video.init(allocator, std.testing.io, videoPath);
+    const info = try video.getInfo(allocator, std.testing.io);
+    try std.testing.expectEqual(@as(f64, 32), info.dimensions.width);
+    try std.testing.expectEqual(@as(f64, 16), info.dimensions.height);
+    try std.testing.expectEqual(@as(?f64, 10), info.fps);
+    try std.testing.expectEqual(@as(?bool, false), info.hasAudio);
+
+    // TypeScript: `new Date("2024-01-02T03:04:05.000000Z")`.
+    try std.testing.expectEqual(@as(?f64, 1704164645000), info.createdAt);
+
+    // No audio stream, so the audio codec is undefined.
+    try std.testing.expect(info.metadata.?.document.get("audioCodec").? == .undefined);
+}
+
+test "getInfo fails for a file with no video stream" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try requireFfmpeg(allocator);
+    const dir = try makeTempDir(allocator, "audio-only");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
+    const audioPath = try std.fmt.allocPrint(allocator, "{s}/audio.m4a", .{dir});
+    _ = try runTool(allocator, &.{ "ffmpeg", "-v", "quiet", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.1", "-y", audioPath });
+
+    var video = Video.init(allocator, std.testing.io, audioPath);
+    try std.testing.expectError(error.Thrown, video.getInfo(allocator, std.testing.io));
+    try std.testing.expectEqualStrings("Failed to get video info: Error: No video stream found in file", utils.errors.lastErrorMessage());
+}
+
+test "getInfo and extractScreenshot fail for a file that does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var video = Video.init(allocator, std.testing.io, "../../test/no-such-video.mp4");
+    try std.testing.expectError(error.Thrown, video.getInfo(allocator, std.testing.io));
+    try std.testing.expectEqualStrings("File not found: ../../test/no-such-video.mp4", utils.errors.lastErrorMessage());
+    try std.testing.expectError(error.Thrown, video.extractScreenshot(allocator, std.testing.io, "screenshot.jpg", 0));
+    try std.testing.expectEqualStrings("File not found: ../../test/no-such-video.mp4", utils.errors.lastErrorMessage());
+}
+
+test "extractScreenshot fails loudly when ffmpeg cannot write the screenshot" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try requireFfmpeg(allocator);
+    const dir = try makeTempDir(allocator, "screenshot-fails");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
+    const screenshotPath = try std.fmt.allocPrint(allocator, "{s}/missing/screenshot.jpg", .{dir});
+    var video = Video.init(allocator, std.testing.io, "../../test/multiple-files/test.mp4");
+    try std.testing.expectError(error.Thrown, video.extractScreenshot(allocator, std.testing.io, screenshotPath, 0));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to extract screenshot: Error: "));
+}
+
+test "getFileInfo fails loudly for a video it cannot read" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expectError(error.Thrown, tools.getFileInfo(allocator, std.testing.io, "../../test/missing.mp4", "video/mp4"));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to get video info for ../../test/missing.mp4: Error: File not found: ../../test/missing.mp4"));
+}
