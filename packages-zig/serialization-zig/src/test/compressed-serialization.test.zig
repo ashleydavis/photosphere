@@ -669,3 +669,43 @@ test "CompressedBinaryDeserializer throws zlib's messages for truncated and corr
     try std.testing.expectError(error.Thrown, CompressedBinaryDeserializer.init(allocator, corruptedDeserializer.asDeserializer()));
     try std.testing.expectEqualStrings("incorrect data check", utils.errors.lastErrorMessage());
 }
+
+test "should read every type through the IDeserializer interface" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var mainSerializer = try BinarySerializer.init(allocator, 1024);
+    var compressedSerializer = try CompressedBinarySerializer.init(allocator, mainSerializer.asSerializer(), 1024);
+    const serializer = compressedSerializer.asSerializer();
+    try serializer.writeUInt32(1);
+    try serializer.writeInt32(-2);
+    try serializer.writeUInt64(3);
+    try serializer.writeInt64(-4);
+    try serializer.writeFloat(5.5);
+    try serializer.writeDouble(6.25);
+    try serializer.writeBoolean(true);
+    try serializer.writeUInt8(7);
+    try serializer.writeString("eight");
+    try serializer.writeBuffer("nine");
+    try serializer.writeBytes("ten");
+    const document = try BsonDocument.fromFields(allocator, &.{.{ .key = "eleven", .value = .{ .number = 11 } }});
+    try serializer.writeBSON(document);
+    try compressedSerializer.finish();
+
+    var mainDeserializer = BinaryDeserializer.init(allocator, mainSerializer.getBuffer());
+    var compressedDeserializer = try CompressedBinaryDeserializer.init(allocator, mainDeserializer.asDeserializer());
+    const deserializer = compressedDeserializer.asDeserializer();
+    try std.testing.expectEqual(@as(u32, 1), try deserializer.readUInt32());
+    try std.testing.expectEqual(@as(i32, -2), try deserializer.readInt32());
+    try std.testing.expectEqual(@as(u64, 3), try deserializer.readUInt64());
+    try std.testing.expectEqual(@as(i64, -4), try deserializer.readInt64());
+    try std.testing.expectEqual(@as(f32, 5.5), try deserializer.readFloat());
+    try std.testing.expectEqual(@as(f64, 6.25), try deserializer.readDouble());
+    try std.testing.expectEqual(true, try deserializer.readBoolean());
+    try std.testing.expectEqual(@as(u8, 7), try deserializer.readUInt8());
+    try std.testing.expectEqualStrings("eight", try deserializer.readString());
+    try std.testing.expectEqualStrings("nine", try deserializer.readBuffer());
+    try std.testing.expectEqualStrings("ten", try deserializer.readBytes(3));
+    try std.testing.expect(document.eql(try deserializer.readBSON()));
+}

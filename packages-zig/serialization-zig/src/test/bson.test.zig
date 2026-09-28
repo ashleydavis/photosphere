@@ -352,3 +352,87 @@ test "deserialize rejects corrupted BSON like npm bson" {
     try std.testing.expectError(error.Thrown, bson.deserialize(allocator, &.{ 14, 0, 0, 0, 0x02, 's', 0, 2, 0, 0, 0, 0xFF, 0, 0 }));
     try std.testing.expectEqualStrings("Invalid UTF-8 string in BSON document", errors.lastErrorMessage());
 }
+
+test "BsonValue eql compares every kind of value" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    try std.testing.expect((BsonValue{ .int32 = 7 }).eql(.{ .int32 = 7 }));
+    try std.testing.expect(!(BsonValue{ .int32 = 7 }).eql(.{ .int32 = 8 }));
+    try std.testing.expect((BsonValue{ .int64 = 1 << 60 }).eql(.{ .int64 = 1 << 60 }));
+    try std.testing.expect(!(BsonValue{ .int64 = 1 << 60 }).eql(.{ .int64 = 1 }));
+    try std.testing.expect((BsonValue{ .double = 1.5 }).eql(.{ .double = 1.5 }));
+    try std.testing.expect(!(BsonValue{ .double = 1.5 }).eql(.{ .double = 2.5 }));
+    try std.testing.expect((BsonValue{ .null = {} }).eql(.null));
+    try std.testing.expect((BsonValue{ .undefined = {} }).eql(.undefined));
+    try std.testing.expect(!(BsonValue{ .undefined = {} }).eql(.null));
+    try std.testing.expect(!(try array(allocator, &.{.{ .number = 1 }})).eql(try array(allocator, &.{})));
+
+    // Documents with the same values under different keys differ.
+    const first = try document(allocator, &.{.{ .key = "a", .value = .null }});
+    const renamed = try document(allocator, &.{.{ .key = "b", .value = .null }});
+    const longer = try document(allocator, &.{ .{ .key = "a", .value = .null }, .{ .key = "b", .value = .null } });
+    try std.testing.expect(!first.eql(renamed));
+    try std.testing.expect(!first.eql(longer));
+}
+
+test "parseArrayIndex reads only canonical indexes below 2^32 - 1" {
+    try std.testing.expectEqual(@as(?u32, 0), bson.parseArrayIndex("0"));
+    try std.testing.expectEqual(@as(?u32, 4294967294), bson.parseArrayIndex("4294967294"));
+    try std.testing.expectEqual(@as(?u32, null), bson.parseArrayIndex("4294967295"));
+    try std.testing.expectEqual(@as(?u32, null), bson.parseArrayIndex("9999999999"));
+    try std.testing.expectEqual(@as(?u32, null), bson.parseArrayIndex("01"));
+    try std.testing.expectEqual(@as(?u32, null), bson.parseArrayIndex(""));
+    try std.testing.expectEqual(@as(?u32, null), bson.parseArrayIndex("12345678901"));
+    try std.testing.expectEqual(@as(?u32, null), bson.parseArrayIndex("1a"));
+}
+
+//
+// A corrupt BSON buffer and the message npm bson throws for it.
+//
+const ICorruptBson = struct {
+    // The buffer.
+    bytes: []const u8,
+
+    // The message thrown.
+    message: []const u8,
+};
+
+test "deserialize rejects corrupt sizes, strings and binaries like npm bson" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const cases = [_]ICorruptBson{
+        // Shorter than a size.
+        .{ .bytes = &.{ 1, 2 }, .message = "bson size must be >= 5, is 2" },
+        // { b: false } with its terminator missing: the next element type is past the end.
+        .{ .bytes = &.{ 8, 0, 0, 0, 0x08, 'b', 0, 0 }, .message = "corrupt bson message" },
+        // { o: <ObjectId of 3 bytes> }.
+        .{ .bytes = &.{ 11, 0, 0, 0, 0x07, 'o', 0, 1, 2, 3, 0 }, .message = "corrupt bson message" },
+        // { d: {} } whose embedded document says it is 6 bytes long but ends after 5.
+        .{ .bytes = &.{ 13, 0, 0, 0, 0x03, 'd', 0, 6, 0, 0, 0, 0, 0 }, .message = "corrupt object bson" },
+        // { l: [] } likewise.
+        .{ .bytes = &.{ 13, 0, 0, 0, 0x04, 'l', 0, 6, 0, 0, 0, 0, 0 }, .message = "corrupt array bson" },
+        // { d: <embedded document of size 4> }.
+        .{ .bytes = &.{ 13, 0, 0, 0, 0x03, 'd', 0, 4, 0, 0, 0, 0, 0 }, .message = "corrupt bson message" },
+        // { s: <string of size 0> }.
+        .{ .bytes = &.{ 12, 0, 0, 0, 0x02, 's', 0, 0, 0, 0, 0, 0 }, .message = "bad string length in bson" },
+        // { b: <binary of size -1> }.
+        .{ .bytes = &.{ 13, 0, 0, 0, 0x05, 'b', 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0 }, .message = "Negative binary type element size found" },
+        // { b: <binary of size 100> }.
+        .{ .bytes = &.{ 13, 0, 0, 0, 0x05, 'b', 0, 100, 0, 0, 0, 0, 0 }, .message = "Binary type size larger than document size" },
+        // { b: <binary subtype 2 of size 4 holding size -1> }.
+        .{ .bytes = &.{ 17, 0, 0, 0, 0x05, 'b', 0, 4, 0, 0, 0, 2, 0xFF, 0xFF, 0xFF, 0xFF, 0 }, .message = "Negative binary type element size found for subtype 0x02" },
+        // { b: <binary subtype 2 of size 4 holding size 1> }.
+        .{ .bytes = &.{ 17, 0, 0, 0, 0x05, 'b', 0, 4, 0, 0, 0, 2, 1, 0, 0, 0, 0 }, .message = "Binary type with subtype 0x02 contains too long binary size" },
+        // { b: <binary subtype 2 of size 6 holding size 1> }.
+        .{ .bytes = &.{ 19, 0, 0, 0, 0x05, 'b', 0, 6, 0, 0, 0, 2, 1, 0, 0, 0, 9, 9, 0 }, .message = "Binary type with subtype 0x02 contains too short binary size" },
+    };
+    for (cases) |case| {
+        errdefer std.debug.print("case: {s}\n", .{case.message});
+        try std.testing.expectError(error.Thrown, bson.deserialize(allocator, case.bytes));
+        try std.testing.expectEqualStrings(case.message, errors.lastErrorMessage());
+    }
+}
