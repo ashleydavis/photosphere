@@ -4,7 +4,8 @@ DESCRIPTION="psi bug builds the GitHub issue URL from the system, the tools and 
 # No browser is started: every run finds a stand-in for the platform's opener that records what it was
 # given. On Linux and macOS that is a script in opener-stub/, first on the PATH. On Windows the opener is
 # PowerShell under SYSTEMROOT, so the test builds opener-stub/powershell.zig as that PowerShell under a
-# SYSTEMROOT of its own and decodes the URL from the arguments it records.
+# SYSTEMROOT of its own, linked to the rest of the real one, and decodes the URL from the arguments it
+# records.
 #
 # That includes the runs with --no-browser, because the TypeScript CLI registers the option as
 # `--no-browser`, which commander stores as `browser`, while the command reads `noBrowser`: the option
@@ -51,13 +52,60 @@ wait_for_opened_url() {
 }
 
 #
+# Builds a SYSTEMROOT at the given directory that holds everything the real one holds except Windows
+# PowerShell: each entry of the real SYSTEMROOT but System32 is linked in, and so is each entry of its
+# System32 but WindowsPowerShell. The TypeScript CLI is a Bun executable, and Windows does not start it
+# under a SYSTEMROOT without the rest of Windows in it (Git Bash reports exit code 127 with no output),
+# so a SYSTEMROOT holding nothing but PowerShell only works for the Zig CLI. Prints the SYSTEMROOT as a
+# Windows path.
+#
+build_system_root() {
+    local system_root="$1"
+    local real_system_root
+    real_system_root="$(cygpath -u "$SYSTEMROOT")"
+
+    local windows_entries=()
+    local system32_entries=()
+    local entry
+    for entry in "$real_system_root"/*; do
+        local entry_name
+        entry_name="${entry##*/}"
+        if [ "${entry_name,,}" = "system32" ]; then
+            local system32_entry
+            for system32_entry in "$entry"/*; do
+                local system32_entry_name
+                system32_entry_name="${system32_entry##*/}"
+                if [ "${system32_entry_name,,}" != "windowspowershell" ]; then
+                    system32_entries+=("$system32_entry")
+                fi
+            done
+        else
+            windows_entries+=("$entry")
+        fi
+    done
+
+    # Native Windows symbolic links, which Windows follows, not the copies Git Bash makes by default.
+    mkdir -p "$system_root/System32"
+    if ! MSYS=winsymlinks:nativestrict ln -s "${windows_entries[@]}" "$system_root/" >&2; then
+        log_error "Could not link the entries of $real_system_root into $system_root" >&2
+        exit 1
+    fi
+    if ! MSYS=winsymlinks:nativestrict ln -s "${system32_entries[@]}" "$system_root/System32/" >&2; then
+        log_error "Could not link the entries of $real_system_root/System32 into $system_root/System32" >&2
+        exit 1
+    fi
+    cygpath -w "$system_root"
+}
+
+#
 # Builds the PowerShell stand-in (opener-stub/powershell.zig) as powershell.exe under a SYSTEMROOT in
-# the test directory, where psi bug and the `open` package look for PowerShell, and prints that
-# SYSTEMROOT as a Windows path.
+# the test directory (see build_system_root), where psi bug and the `open` package look for PowerShell,
+# and prints that SYSTEMROOT as a Windows path.
 #
 build_powershell_stand_in() {
     local test_dir="$1"
     local system_root="$test_dir/windows"
+    build_system_root "$system_root" > /dev/null
     local powershell_dir="$system_root/System32/WindowsPowerShell/v1.0"
     mkdir -p "$powershell_dir"
     zig build-exe "$OPENER_STUB_DIR/powershell.zig" --cache-dir "$test_dir/zig-cache" -femit-bin="$powershell_dir/powershell.exe" >&2
@@ -132,7 +180,7 @@ test_bug() {
     # the PowerShell stand-in (PowerShell is found through SYSTEMROOT, not the PATH), elsewhere the PATH.
     if [ "$(detect_platform)" = "win" ]; then
         local system_root
-        system_root="$(build_powershell_stand_in "$test_dir")"
+        system_root="$(build_powershell_stand_in "$test_dir")" || exit 1
         OPENER_ENVIRONMENT="SYSTEMROOT=\"$system_root\""
     else
         OPENER_ENVIRONMENT="PATH=\"$OPENER_STUB_DIR:$PATH\""
@@ -199,11 +247,13 @@ test_bug() {
     local empty_path_dir="$test_dir/empty-path"
     mkdir -p "$empty_path_dir"
 
-    # On Windows the opener is not looked for on the PATH but under SYSTEMROOT, so SYSTEMROOT is the
-    # empty directory too, which has no PowerShell in it.
+    # On Windows the opener is not looked for on the PATH but under SYSTEMROOT, so SYSTEMROOT is one
+    # with no PowerShell in it.
     local no_opener_environment=""
     if [ "$(detect_platform)" = "win" ]; then
-        no_opener_environment="SYSTEMROOT=\"$(cygpath -w "$empty_path_dir")\""
+        local no_opener_system_root
+        no_opener_system_root="$(build_system_root "$test_dir/windows-without-powershell")" || exit 1
+        no_opener_environment="SYSTEMROOT=\"$no_opener_system_root\""
     fi
 
     # Run from the sources, the TypeScript CLI is started through `bun run`, which finds bun and a

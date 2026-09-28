@@ -21,8 +21,9 @@ const io = std.testing.io;
 const v6_asset_id = "89171cd9-a652-4047-b869-1154bf2c95a1";
 
 //
-// The environment of a test: a copy of test/dbs/v6, a config and vault of its own, the command context of
-// `psi mcp` (with its worker pool) and the server with every tool registered.
+// The environment of a test: a copy of test/dbs/v6, a config of its own, the emptied shared vault (see
+// emptySharedVaultDir), the command context of `psi mcp` (with its worker pool) and the server with every
+// tool registered.
 //
 const IToolsTestEnvironment = struct {
     // Owns the test's memory.
@@ -73,7 +74,7 @@ const IToolsTestEnvironment = struct {
         try self.environ_map.put("PHOTOSPHERE_CONFIG_DIR", configDir);
         try self.environ_map.put("PHOTOSPHERE_CACHE_DIR", try std.fmt.allocPrint(allocator, "{s}/cache", .{self.root}));
         try self.environ_map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
-        try self.environ_map.put("PHOTOSPHERE_VAULT_DIR", try std.fmt.allocPrint(allocator, "{s}/vault", .{self.root}));
+        try self.environ_map.put("PHOTOSPHERE_VAULT_DIR", try helpers.emptySharedVaultDir(allocator));
         // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows.
         try self.environ_map.put("TMPDIR", tmpDir);
         try self.environ_map.put("TEMP", tmpDir);
