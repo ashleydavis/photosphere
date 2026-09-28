@@ -6,6 +6,7 @@
 
 const std = @import("std");
 const utils = @import("utils.zig");
+const errors = @import("utils-zig").errors;
 const ZipEntries = @import("zipEntries.zig").ZipEntries;
 const object = @import("object.zig");
 const Files = object.Files;
@@ -30,5 +31,13 @@ pub fn load(allocator: std.mem.Allocator, files: *Files, data: []const u8) !void
             .unixPermissions = input.unixPermissions,
             .dosPermissions = input.dosPermissions,
         });
+
+        // JSZip: `if (!input.dir) { zip.file(safeName).unsafeOriginalName = unsafeName; }`. zip.file(name) gives null
+        // for a folder, so this throws when the entry's unix permissions made fileAdd store it as a folder.
+        if (!input.dir) {
+            if (files.get(safeName) == null) {
+                return errors.throwError("TypeError: Cannot set properties of null (setting 'unsafeOriginalName')", .{});
+            }
+        }
     }
 }
