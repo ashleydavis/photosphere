@@ -389,3 +389,107 @@ test "createSign signs with RSA PKCS#1 v1.5 and SHA-256 like openssl dgst -sha25
     try signer.update("sphere");
     try std.testing.expectEqualSlices(u8, &expected, try signer.sign(allocator, privateKeyPem));
 }
+
+//
+// A P-256 private key (PKCS#8 PEM, `openssl ecparam -name prime256v1 -genkey | openssl pkcs8 -topk8 -nocrypt`).
+//
+const ec_private_key_pem =
+    \\-----BEGIN PRIVATE KEY-----
+    \\MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgnJ6anRlLcE4DiWDj
+    \\++fvm50AJIy8DwQAxeh5rNwAKE+hRANCAARoL0/2xCrSD/x9w7j8sJA9nL1zaS4R
+    \\i7jXZybRj2u9PIgWJxdTw3oEth9cw3qMOK5QEMXVz/FSh/j9KywWLfuX
+    \\-----END PRIVATE KEY-----
+    \\
+;
+
+//
+// A P-256 public key (SPKI PEM, `openssl ec -pubout`).
+//
+const ec_public_key_pem =
+    \\-----BEGIN PUBLIC KEY-----
+    \\MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEAiRKUnW1bmIeZtD+Nb4siTA8UDVa
+    \\fEoGV1ZfOEE5HtzeOIDY/akxXWy84h57dP6s1uJEhtl9MTZgjfmUD43Xgg==
+    \\-----END PUBLIC KEY-----
+    \\
+;
+
+//
+// A P-256 private key encrypted with the passphrase "secret" (`openssl pkcs8 -topk8 -v2 aes-256-cbc`).
+//
+const encrypted_private_key_pem =
+    \\-----BEGIN ENCRYPTED PRIVATE KEY-----
+    \\MIHsMFcGCSqGSIb3DQEFDTBKMCkGCSqGSIb3DQEFDDAcBAg5c3o3nWN7ngICCAAw
+    \\DAYIKoZIhvcNAgkFADAdBglghkgBZQMEASoEEPQEVgjBNukuDD4QgYQf2xwEgZAV
+    \\sjDmINtJUhxznf7cKWtbYYlj1aQFPjMg8qYX5zua3QPjbuSO+FMi2cdBGYKWj9ix
+    \\0FRbHPNFBGqs7p3CEgKSg4eD207TCyTbmjvU61jDgKs+6xqI7G0lL8vkhixdbLqX
+    \\eopJwLEhIsWHIqBJyJEm6piEGNoWsaMKpZTNLkxoZPKCXHAeNCBKtGCFcEfoR18=
+    \\-----END ENCRYPTED PRIVATE KEY-----
+    \\
+;
+
+test "createPrivateKey and createPublicKey refuse keys that are not RSA" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expectError(error.Thrown, crypto.createPrivateKey(allocator, ec_private_key_pem));
+    try std.testing.expectEqualStrings("error:1E08010C:DECODER routines::unsupported", utils.errors.lastErrorMessage());
+    try std.testing.expectError(error.Thrown, crypto.createPublicKey(allocator, ec_public_key_pem));
+    try std.testing.expectEqualStrings("error:1E08010C:DECODER routines::unsupported", utils.errors.lastErrorMessage());
+}
+
+test "createPrivateKey fails for an encrypted key instead of asking for a passphrase" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expectError(error.Thrown, crypto.createPrivateKey(allocator, encrypted_private_key_pem));
+    try std.testing.expectEqualStrings("error:1E08010C:DECODER routines::unsupported", utils.errors.lastErrorMessage());
+}
+
+test "exportPrivateKey and exportPublicKey give the DER the keys hold" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const privateKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts-private.pem"));
+    const privateDer = try crypto.exportPrivateKey(allocator, privateKey, .der);
+    try std.testing.expectEqualSlices(u8, privateKey.pkcs8, privateDer);
+
+    // The DER is the base64 body of the PEM.
+    const privatePem = try crypto.exportPrivateKey(allocator, privateKey, .pem);
+    var body: std.ArrayList(u8) = .empty;
+    var lines = std.mem.tokenizeScalar(u8, privatePem, '\n');
+    while (lines.next()) |line| {
+        if (!std.mem.startsWith(u8, line, "-----")) {
+            try body.appendSlice(allocator, line);
+        }
+    }
+    const decoded = try allocator.alloc(u8, try std.base64.standard.Decoder.calcSizeForSlice(body.items));
+    try std.base64.standard.Decoder.decode(decoded, body.items);
+    try std.testing.expectEqualSlices(u8, privateDer, decoded);
+    try std.testing.expectEqualSlices(u8, privateKey.public_key.spki, try crypto.exportPublicKey(allocator, crypto.createPublicKeyFromPrivateKey(privateKey), .der));
+}
+
+test "generateKeyPairSync reports the libcrypto error for a modulus that is too small or too large" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expectError(error.Thrown, crypto.generateKeyPairSync(allocator, std.testing.io, 1));
+    try std.testing.expect(utils.errors.lastErrorMessage().len > 0);
+    try std.testing.expectError(error.Thrown, crypto.generateKeyPairSync(allocator, std.testing.io, @as(usize, std.math.maxInt(c_int)) + 1));
+    try std.testing.expectEqualStrings("modulusLength 2147483648 is too large", utils.errors.lastErrorMessage());
+}
+
+test "createSign supports only SHA256, like the TypeScript callers" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expectError(error.Thrown, crypto.createSign(arena.allocator(), "SHA1x"));
+    try std.testing.expectEqualStrings("Invalid digest: SHA1x", utils.errors.lastErrorMessage());
+}
+
+test "sign fails for a key that is not a private key" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var signer = try crypto.createSign(allocator, "SHA256");
+    try signer.update("photosphere");
+    try std.testing.expectError(error.Thrown, signer.sign(allocator, "garbage"));
+}

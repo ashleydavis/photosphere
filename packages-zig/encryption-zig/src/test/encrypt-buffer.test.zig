@@ -280,3 +280,36 @@ test "includesString finds a string in an array like Array.includes" {
     try std.testing.expect(encrypt_buffer.includesString(&.{ "A2CB", "XYZW" }, "A2CB"));
     try std.testing.expect(!encrypt_buffer.includesString(&.{"A2CB"}, "A2C"));
 }
+
+//
+// Decrypts the data with every allocation in turn failing, expecting each failure to come back as OutOfMemory
+// until the decryption succeeds with the expected plaintext.
+//
+fn expectOutOfMemoryAtEveryAllocation(data: []const u8, keyMap: *const IPrivateKeyMap, expected: []const u8) !void {
+    var failIndex: usize = 0;
+    while (true) : (failIndex += 1) {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        var failing = std.testing.FailingAllocator.init(arena.allocator(), .{ .fail_index = failIndex });
+        if (encrypt_buffer.decryptBuffer(failing.allocator(), data, keyMap)) |decrypted| {
+            try std.testing.expectEqualStrings(expected, decrypted);
+            try std.testing.expect(failIndex > 0);
+            return;
+        }
+        else |err| {
+            try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+    }
+}
+
+test "decryptBuffer passes an allocation failure on for new-format and legacy data" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const keys = try loadTestKeys(allocator);
+    const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, "allocation failures");
+    try expectOutOfMemoryAtEveryAllocation(encrypted, &keys.keyMap, "allocation failures");
+
+    // The legacy format is the new format without its 44 byte header.
+    try expectOutOfMemoryAtEveryAllocation(encrypted[44..], &keys.keyMap, "allocation failures");
+}
