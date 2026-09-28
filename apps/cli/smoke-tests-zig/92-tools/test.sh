@@ -22,7 +22,13 @@ test_tools() {
     invoke_command "Check the tools with the Zig CLI" "$(get_zig_cli_command) -q tools --yes" 0 "tools_output"
 
     expect_output_string "$tools_output" "Media Processing Tools Status" "The report has its heading"
-    expect_output_string "$tools_output" "ImageMagick (convert/identify): Available" "ImageMagick is found"
+    # The CLIs name ImageMagick by the commands they use: `magick` when ImageMagick 7 puts it on the
+    # PATH (as Homebrew and Chocolatey do), otherwise the `convert` and `identify` of ImageMagick 6.
+    local imagemagick_name="ImageMagick (convert/identify)"
+    if command -v magick > /dev/null 2>&1; then
+        imagemagick_name="ImageMagick (magick)"
+    fi
+    expect_output_string "$tools_output" "$imagemagick_name: Available" "ImageMagick is found"
     expect_output_string "$tools_output" "ffmpeg: Available" "ffmpeg is found"
     expect_output_string "$tools_output" "ffprobe: Available" "ffprobe is found"
     expect_output_string "$tools_output" "All tools are available and ready to use!" "The report says every tool is available"

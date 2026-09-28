@@ -21,6 +21,25 @@ copy_database() {
 }
 
 #
+# Prints a debug subcommand's output with a database's path replaced by <db>. The path is replaced as
+# given, and as the CLIs print it once resolved: with runs of slashes collapsed (macOS's TMPDIR ends in
+# a slash, so the test paths hold "T//photosphere-tests") and, on Windows, with backslashes.
+#
+replace_db_path() {
+    local debug_output="$1"
+    local db_path="$2"
+
+    local resolved_db_path
+    resolved_db_path="$(echo "$db_path" | tr -s '/')"
+    local backslash_db_path="${resolved_db_path//\//\\}"
+
+    debug_output="${debug_output//"$db_path"/<db>}"
+    debug_output="${debug_output//"$resolved_db_path"/<db>}"
+    debug_output="${debug_output//"$backslash_db_path"/<db>}"
+    printf '%s' "$debug_output"
+}
+
+#
 # Runs a debug subcommand with the Zig CLI on one database and with the TypeScript CLI on a copy of
 # it, and expects the two to print the same once each database's path is replaced. The Zig CLI's
 # output goes into the named variable.
@@ -37,7 +56,7 @@ expect_same_debug_output() {
     local ts_debug_output
     invoke_command "$description with the TypeScript CLI" "$(get_cli_command) -q debug $subcommand --db \"$ts_db_dir\" --yes" 0 "ts_debug_output"
 
-    expect_value "${zig_debug_output//"$zig_db_dir"/<db>}" "${ts_debug_output//"$ts_db_dir"/<db>}" "$description: the Zig CLI prints what the TypeScript CLI prints"
+    expect_value "$(replace_db_path "$zig_debug_output" "$zig_db_dir")" "$(replace_db_path "$ts_debug_output" "$ts_db_dir")" "$description: the Zig CLI prints what the TypeScript CLI prints"
 
     eval "$output_var_name=\"\$zig_debug_output\""
 }
