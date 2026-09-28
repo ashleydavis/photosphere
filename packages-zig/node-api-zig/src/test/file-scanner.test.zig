@@ -1129,3 +1129,47 @@ test "should handle Windows-style paths" {
     const result = try constructLogicalPath(arena.allocator(), &.{ "C:\\path\\to\\root.zip", "nested.zip" }, "image.png");
     try std.testing.expectEqualStrings("C:\\path\\to\\root.zip/nested.zip/image.png", result);
 }
+
+test "counts empty files and empty nested zips in a zip as failed" {
+    var context: ScannerTest = undefined;
+    try context.init();
+    defer context.deinit();
+    const allocator = context.arena.allocator();
+    // (A file after the zip, so the progress reported for it includes the zip's counts.)
+    _ = try context.write("z.png", &MINIMAL_PNG);
+    _ = try context.write("with-empty.zip", try buildZip(allocator, &.{
+        .{
+            .name = "empty.png",
+            .data = "",
+        },
+        .{
+            .name = "inner.zip",
+            .data = "",
+        },
+        .{
+            .name = "image.png",
+            .data = &MINIMAL_PNG,
+        },
+    }));
+    var progress = context.progress();
+
+    var scanned = try context.scan(context.testDir, defaultScannerOptions, &progress);
+
+    try std.testing.expectEqual(@as(usize, 2), scanned.files.items.len);
+    try std.testing.expect(scanned.anyContains("image.png", true));
+    try std.testing.expectEqual(@as(u64, 2), progress.numFilesFailed);
+}
+
+test "should ignore FastBid sheet files" {
+    var context: ScannerTest = undefined;
+    try context.init();
+    defer context.deinit();
+    _ = try context.write("sheet.fbs", "not an image");
+    _ = try context.write("z.png", &MINIMAL_PNG);
+    var progress = context.progress();
+
+    const scanned = try context.scan(context.testDir, defaultScannerOptions, &progress);
+
+    try std.testing.expectEqual(@as(usize, 1), scanned.files.items.len);
+    try std.testing.expectEqual(@as(u64, 1), progress.numFilesIgnored);
+}
