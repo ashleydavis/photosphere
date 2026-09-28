@@ -15,7 +15,7 @@ DEVICE_A_PHOTOS="$TEST_DIR/device-a-photos"
 DEVICE_B_PHOTOS="$TEST_DIR/device-b-photos"
 mkdir -p "$DEVICE_A_PHOTOS" "$DEVICE_B_PHOTOS"
 
-CLI_COMMAND=$(get_cli_command)
+CLI_COMMAND=$(get_zig_cli_command)
 
 # Each device watches its own folder, holding a photo the other one has never seen.
 cp "$TEST_FILES_DIR/test.png" "$DEVICE_A_PHOTOS/from-a.png"

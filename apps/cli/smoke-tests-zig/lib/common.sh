@@ -71,7 +71,9 @@ get_cli_command() {
                 ;;
         esac
     else
-        echo "bun run start --"
+        # --silent keeps bun from echoing the script line into the output, so what the TypeScript CLI
+        # prints can be compared with what the Zig CLI prints when the tests run from the sources.
+        echo "bun run --silent start --"
     fi
 }
 

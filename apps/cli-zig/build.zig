@@ -125,4 +125,10 @@ pub fn build(b: *std.Build) !void {
         const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = .Debug });
         test_all_step.dependOn(&dependency.builder.top_level_steps.get("test").?.step);
     }
+
+    // The storage package's integration tests against a real S3 server, built as test-all builds that package, so
+    // they reuse what test-all compiled (the AWS SDK for C above all) instead of compiling it again.
+    const storage_integration_step = b.step("test-storage-integration", "Run the storage package's integration tests against the S3 server the environment names");
+    const storage = b.dependency("storage-zig", .{ .target = target, .optimize = .Debug });
+    storage_integration_step.dependOn(&storage.builder.top_level_steps.get("test-integration").?.step);
 }

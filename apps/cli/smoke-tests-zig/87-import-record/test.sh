@@ -80,7 +80,7 @@ REPLICA_DB="$TEST_DIR/replica-db"
 WATCH_DIR="$TEST_DIR/photos"
 mkdir -p "$WATCH_DIR"
 
-CLI_COMMAND=$(get_cli_command)
+CLI_COMMAND=$(get_zig_cli_command)
 
 # The record's path carries a hash of the database path, so this script does not build it: a copy of
 # that derivation here would go stale silently the moment the real one changed, and the test would

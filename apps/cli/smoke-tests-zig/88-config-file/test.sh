@@ -1,0 +1,128 @@
+#!/bin/bash
+DESCRIPTION="What the app remembered goes in state.yaml, the database list stays in its own databases.toml, and none of the files they replaced comes back"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/common.sh"
+trap cleanup_and_show_summary EXIT
+
+# The settings live in two files now, split by who decided them: config.yaml holds what the user
+# chose and state.yaml holds what the app remembered. Before either there were four files, in two
+# formats, and which one a setting landed in depended on which platform had written it.
+#
+# This test is about the files themselves: that the news state the CLI records goes to state.yaml
+# rather than a news.yaml of its own, that the CLI writes no config.yaml at all because it reads none
+# of the settings, and that databases.toml stays the separate file it was always meant to be.
+#
+# It runs with PHOTOSPHERE_CONFIG_DIR pointed at a directory of its own, so it reads and writes the
+# settings of nothing but itself. Without that it would be looking at the settings of whoever is
+# running it, and every assertion below would depend on what they happen to have configured.
+
+#
+# Fails the test unless the named file is in the config directory.
+#
+expect_config_file() {
+    local file_name="$1"
+    local description="$2"
+
+    if [ -f "$PHOTOSPHERE_CONFIG_DIR/$file_name" ]; then
+        log_success "$description"
+        return 0
+    fi
+
+    log_error "$description ($file_name is not in $PHOTOSPHERE_CONFIG_DIR)"
+    ls -la "$PHOTOSPHERE_CONFIG_DIR" 2>/dev/null || true
+    exit 1
+}
+
+#
+# Fails the test when the named file is in the config directory.
+#
+expect_no_config_file() {
+    local file_name="$1"
+    local description="$2"
+
+    if [ ! -f "$PHOTOSPHERE_CONFIG_DIR/$file_name" ]; then
+        log_success "$description"
+        return 0
+    fi
+
+    log_error "$description ($file_name is in $PHOTOSPHERE_CONFIG_DIR and should not be)"
+    cat "$PHOTOSPHERE_CONFIG_DIR/$file_name"
+    exit 1
+}
+
+test_config_file() {
+    local test_number="$1"
+    print_test_header "$test_number" "CONFIG FILE"
+
+    local saved_vault="$PHOTOSPHERE_VAULT_DIR"
+    local saved_config="$PHOTOSPHERE_CONFIG_DIR"
+    local test_dir="$TEST_TMP_DIR/config-file"
+    export PHOTOSPHERE_VAULT_DIR="$test_dir/vault"
+    export PHOTOSPHERE_CONFIG_DIR="$test_dir/config"
+    mkdir -p "$PHOTOSPHERE_VAULT_DIR" "$PHOTOSPHERE_CONFIG_DIR"
+
+    local db_path="$test_dir/db"
+
+    # --- 1. The database list is a file of its own. ---
+
+    invoke_command "Add a database" "$(get_zig_cli_command) dbs add --yes --name config-file-db --path $db_path" 0
+
+    expect_config_file "databases.toml" "The database list is written to its own databases.toml"
+
+    # --- 2. The news state goes to state.yaml, and the files it replaced are not written. ---
+
+    # `news` is what makes the CLI write anything but the database list: it records the items it has
+    # shown so the next run, and the desktop app on the same machine, do not show them again. That
+    # used to be a news.yaml of its own, then a section of config.yaml; it is in state.yaml now,
+    # because nobody chose it and it is not worth carrying anywhere.
+    #
+    # It reads the checked-in test/demo-news.yaml through a file:// URL (PHOTOSPHERE_NEWS_URL), so
+    # there are items to record without a network: the published feed may be out of reach, and a feed
+    # that cannot be read records nothing.
+    local news_dir
+    news_dir="$(cd "$TEST_FILES_DIR" && (pwd -W 2> /dev/null || pwd))"
+    local news_url="file://$news_dir/demo-news.yaml"
+    if [[ "$news_dir" != /* ]]; then
+        news_url="file:///$news_dir/demo-news.yaml"
+    fi
+    local news_output
+    invoke_command "Run the news command" "PHOTOSPHERE_NEWS_URL=\"$news_url\" $(get_zig_cli_command) news" 0 "news_output"
+
+    expect_config_file "state.yaml" "What the app remembered is written to state.yaml"
+
+    # The CLI takes its instructions from the command line and reads none of the settings, so it must
+    # never bring the settings file into being. A file there would tell a desktop app on the same
+    # machine that settings had been chosen when nobody had chosen any.
+    expect_no_config_file "config.yaml" "No config.yaml is written, because the CLI has no settings to write"
+
+    expect_no_config_file "desktop.toml" "No desktop.toml is written"
+    expect_no_config_file "auto-import.toml" "No auto-import.toml is written"
+    expect_no_config_file "sync.toml" "No sync.toml is written"
+    expect_no_config_file "news.yaml" "No news.yaml is written"
+
+    # --- 3. The two files hold different things and neither holds the other's. ---
+
+    local state_contents
+    state_contents="$(cat "$PHOTOSPHERE_CONFIG_DIR/state.yaml")"
+    expect_output_string "$state_contents" "news:" "state.yaml has a news section"
+
+    local databases_contents
+    databases_contents="$(cat "$PHOTOSPHERE_CONFIG_DIR/databases.toml")"
+    expect_output_string "$databases_contents" "config-file-db" "databases.toml holds the database that was added"
+    expect_output_string "$state_contents" "config-file-db" "state.yaml does not hold the database list" false
+    expect_output_string "$databases_contents" "news" "databases.toml does not hold the news state" false
+
+    local zig_dbs_list
+    local ts_dbs_list
+    invoke_command "List the databases with the Zig CLI" "$(get_zig_cli_command) -q dbs list" 0 "zig_dbs_list"
+    invoke_command "List the databases with the TypeScript CLI" "$(get_cli_command) -q dbs list" 0 "ts_dbs_list"
+    expect_value "$ts_dbs_list" "$zig_dbs_list" "The TypeScript CLI reads the database list the Zig CLI wrote"
+
+    export PHOTOSPHERE_VAULT_DIR="$saved_vault"
+    export PHOTOSPHERE_CONFIG_DIR="$saved_config"
+
+    test_passed
+}
+
+test_config_file "${1:-88}"

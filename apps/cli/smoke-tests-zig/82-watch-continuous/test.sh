@@ -29,7 +29,7 @@ WATCH_DIR="$TEST_DIR/photos"
 WATCH_LOG="$TEST_DIR/watch.log"
 mkdir -p "$WATCH_DIR"
 
-CLI_COMMAND=$(get_cli_command)
+CLI_COMMAND=$(get_zig_cli_command)
 
 # Process group of the watch command, signalled when the test is done with it.
 WATCH_PGID=""

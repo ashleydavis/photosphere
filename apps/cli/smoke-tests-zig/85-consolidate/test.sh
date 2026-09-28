@@ -8,7 +8,7 @@ TEST_NUMBER="${1:-85}"
 print_test_header "$TEST_NUMBER" "CONNECT"
 
 TEST_DIR="$(get_test_dir "$TEST_NUMBER")"
-CLI_COMMAND=$(get_cli_command)
+CLI_COMMAND=$(get_zig_cli_command)
 
 # --- 1. Connecting to a path with nothing at it creates the remote. ---
 

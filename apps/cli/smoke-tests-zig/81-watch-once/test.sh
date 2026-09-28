@@ -12,7 +12,7 @@ TEST_DB_DIR="$TEST_DIR/test-db"
 WATCH_DIR="$TEST_DIR/photos"
 mkdir -p "$WATCH_DIR"
 
-CLI_COMMAND=$(get_cli_command)
+CLI_COMMAND=$(get_zig_cli_command)
 
 invoke_command "Initialize database" "$(get_zig_cli_command) init --db $TEST_DB_DIR --yes"
 
