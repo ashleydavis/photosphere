@@ -138,11 +138,3 @@ test "getVideoTransformation reads the rotation of the first stream that has one
     try std.testing.expectEqual(@as(?bool, true), transformation.changeOrientation);
 }
 
-test "parseFloat reads the number at the start of the text like JavaScript" {
-    try std.testing.expectEqual(@as(f64, 12.5), image.parseFloat("  12.5abc"));
-    try std.testing.expectEqual(@as(f64, -3), image.parseFloat("-3"));
-    try std.testing.expectEqual(@as(f64, 1e3), image.parseFloat("1e3x"));
-    try std.testing.expectEqual(@as(f64, 1), image.parseFloat("1e"));
-    try std.testing.expect(std.math.isNan(image.parseFloat("abc")));
-    try std.testing.expect(std.math.isNan(image.parseFloat(".")));
-}

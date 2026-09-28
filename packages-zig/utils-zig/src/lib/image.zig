@@ -1,5 +1,6 @@
 const std = @import("std");
 const errors = @import("errors.zig");
+const js_number = @import("js-number.zig");
 
 //
 // Options for transforming an image.
@@ -220,50 +221,9 @@ pub fn getVideoTransformation(allocator: std.mem.Allocator, metadata: anytype) !
     }
 
     const imageTransformation: IImageTransformation = .{
-        .rotate = parseFloat(rotationText),
+        .rotate = js_number.parseFloat(rotationText),
         .changeOrientation = std.mem.eql(u8, rotationText, "-90") or std.mem.eql(u8, rotationText, "90") or std.mem.eql(u8, rotationText, "270") or std.mem.eql(u8, rotationText, "-270"),
     };
     return imageTransformation;
 }
 
-//
-// JavaScript's `parseFloat`: the longest decimal number at the start of the text (after white space), or NaN.
-//
-pub fn parseFloat(text: []const u8) f64 {
-    const trimmed = std.mem.trimStart(u8, text, " \t\n\r\x0b\x0c");
-    var end: usize = 0;
-    if (end < trimmed.len and (trimmed[end] == '+' or trimmed[end] == '-')) {
-        end += 1;
-    }
-    if (std.mem.startsWith(u8, trimmed[end..], "Infinity")) {
-        return if (trimmed[0] == '-') -std.math.inf(f64) else std.math.inf(f64);
-    }
-    const digitsStart = end;
-    while (end < trimmed.len and std.ascii.isDigit(trimmed[end])) {
-        end += 1;
-    }
-    if (end < trimmed.len and trimmed[end] == '.') {
-        end += 1;
-        while (end < trimmed.len and std.ascii.isDigit(trimmed[end])) {
-            end += 1;
-        }
-    }
-    if (end == digitsStart or (end == digitsStart + 1 and trimmed[digitsStart] == '.')) {
-        return std.math.nan(f64);
-    }
-    // An exponent counts only when it has digits.
-    if (end < trimmed.len and (trimmed[end] == 'e' or trimmed[end] == 'E')) {
-        var exponentEnd = end + 1;
-        if (exponentEnd < trimmed.len and (trimmed[exponentEnd] == '+' or trimmed[exponentEnd] == '-')) {
-            exponentEnd += 1;
-        }
-        const exponentDigits = exponentEnd;
-        while (exponentEnd < trimmed.len and std.ascii.isDigit(trimmed[exponentEnd])) {
-            exponentEnd += 1;
-        }
-        if (exponentEnd > exponentDigits) {
-            end = exponentEnd;
-        }
-    }
-    return std.fmt.parseFloat(f64, trimmed[0..end]) catch std.math.nan(f64);
-}

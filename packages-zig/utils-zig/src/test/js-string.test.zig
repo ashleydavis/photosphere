@@ -34,3 +34,10 @@ test "trimStart and trimEnd each remove one end" {
 test "trim leaves invalid UTF-8 in place" {
     try std.testing.expectEqualStrings("\xffx\xe3", js_string.trim(" \xffx\xe3 "));
 }
+
+test "isTruthy is false for undefined and the empty string, true for any other string" {
+    try std.testing.expect(!js_string.isTruthy(null));
+    try std.testing.expect(!js_string.isTruthy(""));
+    try std.testing.expect(js_string.isTruthy("0"));
+    try std.testing.expect(js_string.isTruthy(" "));
+}

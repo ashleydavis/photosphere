@@ -8,6 +8,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const path = @import("path.zig");
 const fs = @import("fs.zig");
+const js_string = @import("utils-zig").js_string;
 
 //
 // Where the XDG user directories file lives, relative to the user's home directory. Linux desktops
@@ -24,7 +25,7 @@ const XDG_USER_DIRS_PATH = ".config/user-dirs.dirs";
 pub fn parseXdgPicturesDir(allocator: std.mem.Allocator, fileContents: []const u8, homeDir: []const u8) !?[]const u8 {
     var rawLines = std.mem.splitScalar(u8, fileContents, '\n');
     while (rawLines.next()) |rawLine| {
-        const line = std.mem.trim(u8, rawLine, " \t\r\x0b\x0c");
+        const line = js_string.trim(rawLine);
         if (line.len == 0 or std.mem.startsWith(u8, line, "#")) {
             continue;
         }
@@ -52,23 +53,23 @@ pub fn parseXdgPicturesDir(allocator: std.mem.Allocator, fileContents: []const u
 }
 
 //
-// Matches a line against /^XDG_PICTURES_DIR\s*=\s*"(.*)"\s*$/ and returns the captured value, or null when
-// it does not match. (No TypeScript counterpart: TypeScript runs the regular expression inline.)
+// Matches a line against /^XDG_PICTURES_DIR\s*=\s*"(.*)"\s*$/ (where \s is JavaScript whitespace) and returns the
+// captured value, or null when it does not match. (No TypeScript counterpart: TypeScript runs the regular expression inline.)
 //
 fn matchXdgPicturesDir(line: []const u8) ?[]const u8 {
     const key = "XDG_PICTURES_DIR";
     if (!std.mem.startsWith(u8, line, key)) {
         return null;
     }
-    var rest = std.mem.trimStart(u8, line[key.len..], " \t\r\n\x0b\x0c");
+    var rest = js_string.trimStart(line[key.len..]);
     if (rest.len == 0 or rest[0] != '=') {
         return null;
     }
-    rest = std.mem.trimStart(u8, rest[1..], " \t\r\n\x0b\x0c");
+    rest = js_string.trimStart(rest[1..]);
     if (rest.len == 0 or rest[0] != '"') {
         return null;
     }
-    rest = std.mem.trimEnd(u8, rest[1..], " \t\r\n\x0b\x0c");
+    rest = js_string.trimEnd(rest[1..]);
 
     // `(.*)"` is greedy, so the value runs to the last quote, which has to end the line.
     if (rest.len == 0 or rest[rest.len - 1] != '"') {

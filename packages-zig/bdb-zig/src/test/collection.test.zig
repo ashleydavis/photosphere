@@ -192,14 +192,14 @@ test "should update sort index when record is deleted" {
 
     const ageIndex = try collection.sortIndex("age", .asc);
     try ageIndex.ensure(io, collection, .number);
-    try std.testing.expectEqual(@as(u32, 2), ageIndex.totalEntries);
+    try std.testing.expectEqual(@as(i64, 2), ageIndex.totalEntries);
 
     // Delete Alice
     _ = try collection.deleteOne(io, alice._id);
 
     const values = try helpers.sortIndexValues(allocator, io, ageIndex);
     try std.testing.expectEqual(@as(usize, 1), values.len);
-    try std.testing.expectEqual(@as(u32, 1), ageIndex.totalEntries);
+    try std.testing.expectEqual(@as(i64, 1), ageIndex.totalEntries);
     try std.testing.expectEqual(@as(f64, 30), values[0].number); // Only John remains
 }
 
@@ -322,7 +322,7 @@ test "getSorted should return empty when sort index does not exist" {
     const collection = try newCollection(arena.allocator(), &storage);
     const result = try (try collection.sortIndex("age", .asc)).getPage(io, null);
     try std.testing.expectEqual(@as(usize, 0), result.records.len);
-    try std.testing.expectEqual(@as(u32, 0), result.totalRecords);
+    try std.testing.expectEqual(@as(i64, 0), result.totalRecords);
 }
 
 test "findByIndex should return empty when no index exists on either direction" {
@@ -476,8 +476,8 @@ test "deleteOne removes the record from every sort index and the merkle trees" {
     try collection.commit(io);
     try std.testing.expect(try collection.deleteOne(io, id));
     try collection.commit(io);
-    try std.testing.expectEqual(@as(u32, 0), (try collection.sortIndex("age", .asc)).totalEntries);
-    try std.testing.expectEqual(@as(u32, 0), (try collection.sortIndex("name", .desc)).totalEntries);
+    try std.testing.expectEqual(@as(i64, 0), (try collection.sortIndex("age", .asc)).totalEntries);
+    try std.testing.expectEqual(@as(i64, 0), (try collection.sortIndex("name", .desc)).totalEntries);
     try std.testing.expect(storage.getFile("collections/users/collection.dat") == null);
 }
 
@@ -867,7 +867,7 @@ test "should support pagination with sort indexes" {
     // Get first page
     var result = try (try collection.sortIndex("age", .asc)).getPage(io, null);
     try std.testing.expect(result.records.len > 0);
-    try std.testing.expectEqual(@as(u32, 3), result.totalRecords);
+    try std.testing.expectEqual(@as(i64, 3), result.totalRecords);
     try std.testing.expect(result.totalPages > 0);
 
     // Collect all records across pages
@@ -961,4 +961,32 @@ test "insertOne stores the fields apart from the id and stamps the write time" {
     try std.testing.expect(stored.fields.get("_id") == null);
     try std.testing.expectEqualStrings("name", stored.fields.fields.items[0].key);
     try std.testing.expectEqual(@as(f64, 1234), stored.metadata.get("timestamp").?.number);
+}
+
+//
+// getAll reads its continuation token with `parseInt(next)`: "-2" starts two shards before the first (shards that
+// hold nothing), so the listing still reaches the records in the first shard, and " 0x0" is shard 0 as well.
+//
+test "getAll reads its continuation token like parseInt" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    var user = try makeExternalUser(allocator, "", "Jane Doe", 25, "admin");
+    try collection.insertOne(io, &user, null);
+
+    const fromStart = try collection.getAll(io, null);
+    try std.testing.expectEqual(@as(usize, 1), fromStart.records.len);
+
+    const fromNegative = try collection.getAll(io, "-2");
+    try std.testing.expectEqual(@as(usize, 1), fromNegative.records.len);
+    try std.testing.expectEqualStrings(fromStart.next.?, fromNegative.next.?);
+
+    const fromHex = try collection.getAll(io, " 0x0");
+    try std.testing.expectEqual(@as(usize, 1), fromHex.records.len);
+
+    const fromNothing = try collection.getAll(io, "abc");
+    try std.testing.expectEqual(@as(usize, 0), fromNothing.records.len);
+    try std.testing.expect(fromNothing.next == null);
 }

@@ -257,9 +257,9 @@ test "should retrieve a page of sorted records" {
 
     // Check page contents
     try std.testing.expectEqual(@as(usize, 5), result.records.len);
-    try std.testing.expectEqual(@as(u32, 5), result.totalRecords);
+    try std.testing.expectEqual(@as(i64, 5), result.totalRecords);
     try std.testing.expect(result.currentPageId.len > 0);
-    try std.testing.expectEqual(@as(u32, 1), result.totalPages);
+    try std.testing.expectEqual(@as(i64, 1), result.totalPages);
     try std.testing.expect(result.nextPageId == null);
     try std.testing.expect(result.previousPageId == null);
 
@@ -374,7 +374,7 @@ test "should return empty result when calling getPage on non-existent index" {
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     const result = try index.getPage(io, null);
     try std.testing.expectEqual(@as(usize, 0), result.records.len);
-    try std.testing.expectEqual(@as(u32, 0), result.totalRecords);
+    try std.testing.expectEqual(@as(i64, 0), result.totalRecords);
 }
 
 test "should return empty array when calling findByValue on non-existent index" {
@@ -413,8 +413,8 @@ test "should handle empty collection" {
     const collection = try fixture.collection("test_collection", &.{});
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     try index.build(io, collection);
-    try std.testing.expectEqual(@as(u32, 0), index.totalEntries);
-    try std.testing.expectEqual(@as(u32, 1), index.totalPages); // Should have one empty leaf page
+    try std.testing.expectEqual(@as(i64, 0), index.totalEntries);
+    try std.testing.expectEqual(@as(i64, 1), index.totalPages); // Should have one empty leaf page
     // The empty root leaf is not written (it is deleted on commit), only the tree file.
     try std.testing.expectEqual(@as(usize, 1), fixture.storage.files.count());
 }
@@ -427,8 +427,8 @@ test "should handle single record collection" {
     const collection = try fixture.collection("test_collection", &.{try makeTestRecord(allocator, 1, "Record 1", 85, "A")});
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     try index.build(io, collection);
-    try std.testing.expectEqual(@as(u32, 1), index.totalEntries);
-    try std.testing.expectEqual(@as(u32, 1), index.totalPages);
+    try std.testing.expectEqual(@as(i64, 1), index.totalEntries);
+    try std.testing.expectEqual(@as(i64, 1), index.totalPages);
     try std.testing.expectEqualSlices(f64, &.{85}, try scores(allocator, index, "score"));
 }
 
@@ -461,7 +461,7 @@ test "should handle records with undefined indexed field" {
     });
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     try index.build(io, collection);
-    try std.testing.expectEqual(@as(u32, 2), index.totalEntries);
+    try std.testing.expectEqual(@as(i64, 2), index.totalEntries);
     try std.testing.expectEqualSlices(f64, &.{ 85, 90 }, try scores(allocator, index, "score"));
 }
 
@@ -476,7 +476,7 @@ test "should load index from disk" {
 
     const loadedIndex = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     try std.testing.expect(try loadedIndex.load(io));
-    try std.testing.expectEqual(@as(u32, 5), loadedIndex.totalEntries);
+    try std.testing.expectEqual(@as(i64, 5), loadedIndex.totalEntries);
     // build() was called without a type, so the tree file stores no type.
     try std.testing.expect(loadedIndex.type == null);
     try std.testing.expectEqualSlices(f64, &.{ 65, 72, 85, 85, 90 }, try scores(allocator, loadedIndex, "score"));
@@ -503,7 +503,7 @@ test "should clear treeNodes when building after load" {
 
     // Verify it has data
     const firstResult = try index.getPage(io, null);
-    try std.testing.expectEqual(@as(u32, 5), firstResult.totalRecords);
+    try std.testing.expectEqual(@as(i64, 5), firstResult.totalRecords);
 
     // Create a new collection with different data
     // (Zig: the ids are valid record ids, because the collection stores the records in its shards.)
@@ -520,7 +520,7 @@ test "should clear treeNodes when building after load" {
 
     // Verify we have the new data, not the old
     const secondResult = try index.getPage(io, null);
-    try std.testing.expectEqual(@as(u32, 2), secondResult.totalRecords);
+    try std.testing.expectEqual(@as(i64, 2), secondResult.totalRecords);
     try std.testing.expectEqual(@as(f64, 10), secondResult.records[0].get("score").?.number);
     try std.testing.expectEqual(@as(f64, 20), secondResult.records[1].get("score").?.number);
 }
@@ -536,7 +536,7 @@ test "should not rebuild if already loaded" {
     const rootPageId = index.rootPageId.?;
     try index.build(io, collection);
     try std.testing.expectEqualStrings(rootPageId, index.rootPageId.?);
-    try std.testing.expectEqual(@as(u32, 5), index.totalEntries);
+    try std.testing.expectEqual(@as(i64, 5), index.totalEntries);
 }
 
 test "should reset state properly when building" {
@@ -564,8 +564,8 @@ test "should reset state properly when building" {
 
     // Verify state was reset
     const secondResult = try index.getPage(io, null);
-    try std.testing.expectEqual(@as(u32, 1), secondResult.totalRecords); // New count
-    try std.testing.expectEqual(@as(u32, 1), secondResult.totalPages); // New page count
+    try std.testing.expectEqual(@as(i64, 1), secondResult.totalRecords); // New count
+    try std.testing.expectEqual(@as(i64, 1), secondResult.totalPages); // New page count
     try std.testing.expect(!std.mem.eql(u8, firstRootPageId, secondResult.currentPageId)); // New root
 }
 
@@ -871,7 +871,7 @@ test "should handle collection with records missing the indexed field" {
 
     // Should only index records with the score field
     const result = try index.getPage(io, null);
-    try std.testing.expectEqual(@as(u32, 2), result.totalRecords); // Only 2 records have scores
+    try std.testing.expectEqual(@as(i64, 2), result.totalRecords); // Only 2 records have scores
     try std.testing.expectEqual(@as(usize, 2), result.records.len);
     try std.testing.expectEqual(@as(f64, 10), result.records[0].get("score").?.number);
     try std.testing.expectEqual(@as(f64, 30), result.records[1].get("score").?.number);
@@ -892,8 +892,8 @@ test "should handle large dataset with multiple pages" {
     try index.build(io, collection);
 
     // More than 1500 records in one leaf split it into two pages under a new root.
-    try std.testing.expectEqual(@as(u32, 2), index.totalPages);
-    try std.testing.expectEqual(@as(u32, 1700), index.totalEntries);
+    try std.testing.expectEqual(@as(i64, 2), index.totalPages);
+    try std.testing.expectEqual(@as(i64, 1700), index.totalEntries);
     const values = try scores(allocator, index, "score");
     try std.testing.expectEqual(@as(usize, 1700), values.len);
     for (values, 0..) |value, valueIndex| {
@@ -950,7 +950,7 @@ test "should handle string type sorting" {
     try index.build(io, collection);
 
     const result = try index.getPage(io, null);
-    try std.testing.expectEqual(@as(u32, 3), result.totalRecords);
+    try std.testing.expectEqual(@as(i64, 3), result.totalRecords);
     try std.testing.expectEqualStrings("Apple", result.records[0].get("name").?.string);
     try std.testing.expectEqualStrings("Banana", result.records[1].get("name").?.string);
     try std.testing.expectEqualStrings("Zebra", result.records[2].get("name").?.string);
@@ -1079,7 +1079,7 @@ test "build resumes from a checkpoint and skips completed shards" {
     // Build once so the index exists, then leave a checkpoint that marks the first non-empty shard as done.
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     try index.build(io, collection);
-    try std.testing.expectEqual(@as(u32, 5), index.totalEntries);
+    try std.testing.expectEqual(@as(i64, 5), index.totalEntries);
     try fixture.storage.putFile("db/indexes/test_collection/score_asc/build.checkpoint", "{\"completedShards\":[0],\"currentShard\":null,\"currentShardRecordIndex\":0,\"totalRecordsProcessed\":0,\"lastUpdated\":0}");
 
     // A new index loads the existing tree and adds the records of the shards that are not completed.
@@ -1087,7 +1087,7 @@ test "build resumes from a checkpoint and skips completed shards" {
     try resumed.build(io, collection);
     var shards = collection.iterateShards();
     const firstShard = (try shards.next(io)).?;
-    try std.testing.expectEqual(@as(u32, @intCast(10 - firstShard.len)), resumed.totalEntries);
+    try std.testing.expectEqual(@as(i64, @intCast(10 - firstShard.len)), resumed.totalEntries);
     try std.testing.expect(fixture.storage.getFile("db/indexes/test_collection/score_asc/build.checkpoint") == null);
 }
 
@@ -1100,7 +1100,7 @@ test "build deletes a stale checkpoint when the index does not exist" {
     try fixture.storage.putFile("db/indexes/test_collection/score_asc/build.checkpoint", "{\"completedShards\":[0,1,2,3,4,5],\"currentShard\":null,\"currentShardRecordIndex\":0,\"totalRecordsProcessed\":0,\"lastUpdated\":0}");
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     try index.build(io, collection);
-    try std.testing.expectEqual(@as(u32, 5), index.totalEntries);
+    try std.testing.expectEqual(@as(i64, 5), index.totalEntries);
     try std.testing.expect(fixture.storage.getFile("db/indexes/test_collection/score_asc/build.checkpoint") == null);
 }
 
@@ -1113,7 +1113,7 @@ test "ensure builds a missing index once and loads an existing one" {
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     try index.ensure(io, collection, .number);
     try std.testing.expectEqual(SortDataType.number, index.type.?);
-    try std.testing.expectEqual(@as(u32, 5), index.totalEntries);
+    try std.testing.expectEqual(@as(i64, 5), index.totalEntries);
 
     const loaded = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     try loaded.ensure(io, collection, .string);
@@ -1868,7 +1868,7 @@ test "should verify logical sort order is maintained after page split" {
     var currentPage = try index.getPage(io, "");
 
     // Check total record count and page count
-    try std.testing.expectEqual(@as(u32, 7), currentPage.totalRecords);
+    try std.testing.expectEqual(@as(i64, 7), currentPage.totalRecords);
     try std.testing.expect(currentPage.totalPages >= 1);
 
     // Add records from first page
@@ -1957,4 +1957,25 @@ test "should maintain correct page ordering when multiple pages are split" {
     try std.testing.expect(foundScore);
 
     // Not ported: the range query across the split pages (findByRange is not used by the ported commands).
+}
+
+//
+// The counts are JavaScript numbers in TypeScript, so a count that goes below zero (an index file whose count is
+// short) stays negative until commit, where `writeUInt32` refuses it with the runtime's RangeError.
+//
+test "a count that goes below zero is refused at commit like writeUInt32 refuses it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const record = try makeTestRecord(allocator, 1, "Record 1", 85, "A");
+    const collection = try fixture.collection("test_collection", &.{record});
+    const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try index.build(io, collection);
+    index.totalEntries = 0;
+
+    try index.deleteRecord(io, record._id, record);
+    try std.testing.expectEqual(@as(i64, -1), index.totalEntries);
+    try std.testing.expectError(error.Thrown, index.commit(io));
+    try std.testing.expectEqualStrings("The value of \"value\" is out of range. It must be >= 0 and <= 4294967295. Received -1", errors.lastErrorMessage());
 }

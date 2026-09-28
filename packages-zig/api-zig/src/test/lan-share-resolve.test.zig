@@ -71,9 +71,9 @@ test "resolves database payload with all secrets" {
     try std.testing.expectEqualStrings("https://example.com", payload.origin.?);
 
     try std.testing.expectEqualStrings("abc12345", payload.s3Credentials.?.name);
-    try std.testing.expectEqualStrings("us-east-1", payload.s3Credentials.?.region);
-    try std.testing.expectEqualStrings("AKID", payload.s3Credentials.?.accessKeyId);
-    try std.testing.expectEqualStrings("SECRET", payload.s3Credentials.?.secretAccessKey);
+    try std.testing.expectEqualStrings("us-east-1", payload.s3Credentials.?.region.?);
+    try std.testing.expectEqualStrings("AKID", payload.s3Credentials.?.accessKeyId.?);
+    try std.testing.expectEqualStrings("SECRET", payload.s3Credentials.?.secretAccessKey.?);
     try std.testing.expectEqualStrings("https://s3.example.com", payload.s3Credentials.?.endpoint.?);
 
     try std.testing.expectEqualStrings("def67890", payload.encryptionKey.?.name);
@@ -154,7 +154,11 @@ test "derives publicKeyPem from raw-PEM encryption-key value" {
     try std.testing.expectEqualStrings(try publicKeyPemOf(allocator, privateKeyPem), payload.encryptionKey.?.publicKeyPem.?);
 }
 
-test "S3 credentials without a region are an error naming the secret and the field" {
+//
+// TypeScript reads `parsed.region` and sends whatever it is, so credentials stored without a region are shared
+// without one (JSON.stringify leaves the undefined field out of the payload).
+//
+test "S3 credentials without a region are shared without one" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -175,8 +179,11 @@ test "S3 credentials without a region are an error naming the secret and the fie
         .s3Key = "no-region",
     };
 
-    try std.testing.expectError(error.Thrown, resolveDatabaseSharePayload(allocator, io, entry));
-    try std.testing.expectEqualStrings("The S3 credentials \"no-region\" have no \"region\" text field.", errors.lastErrorMessage());
+    const payload = try resolveDatabaseSharePayload(allocator, io, entry);
+    try std.testing.expect(payload.s3Credentials.?.region == null);
+    try std.testing.expectEqualStrings("AKID", payload.s3Credentials.?.accessKeyId.?);
+    try std.testing.expectEqualStrings("SECRET", payload.s3Credentials.?.secretAccessKey.?);
+    try std.testing.expect(payload.s3Credentials.?.endpoint == null);
 }
 
 test "resolves secret share payload" {

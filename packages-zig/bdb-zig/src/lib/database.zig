@@ -123,7 +123,8 @@ pub const BsonDatabase = struct {
                     try uniqueSet.put(self.allocator, name, {});
                 }
                 next = storageResult.next;
-                if (next == null) {
+                // `while (next)`: an empty token ends the listing like a missing one.
+                if (!utils.js_string.isTruthy(next)) {
                     break;
                 }
             }

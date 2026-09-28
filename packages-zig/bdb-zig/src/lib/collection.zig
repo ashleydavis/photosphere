@@ -26,6 +26,7 @@ const BsonShard = shard_zig.BsonShard;
 const IInternalRecord = shard_zig.IInternalRecord;
 const Md5 = std.crypto.hash.Md5;
 const bson = @import("serialization-zig").bson;
+const serialization_js_number = @import("serialization-zig").js_number;
 
 //
 // A callback that tells the owner of an object that the object became dirty
@@ -225,7 +226,8 @@ pub const ShardIterator = struct {
                     try shardIdsToRead.put(allocator, name, {});
                 }
                 nextToken = listed.next;
-                if (nextToken == null) {
+                // `while (next)`: an empty token ends the listing like a missing one.
+                if (!utils.js_string.isTruthy(nextToken)) {
                     break;
                 }
             }
@@ -637,9 +639,11 @@ pub const BsonCollection = struct {
     // when there is none), and the token of the shard after it.
     //
     pub fn getAll(self: *BsonCollection, io: std.Io, next: ?[]const u8) !IGetAllResult {
-        var shardId: u32 = if (next != null and next.?.len > 0) parseIntPrefix(next.?) else 0;
+        // (Zig: shardId is a JS number, as parseInt gives it: NaN ends the listing at once, and a negative start
+        // walks up through shards that hold nothing.)
+        var shardId: f64 = if (utils.js_string.isTruthy(next)) utils.js_number.parseInt(next.?, null) else 0;
         while (shardId < NUM_SHARDS) {
-            const recordShard = try self.shard(try std.fmt.allocPrint(self.allocator, "{d}", .{shardId}));
+            const recordShard = try self.shard(try jsNumberToString(self.allocator, shardId));
             const records = try recordShard.records(io);
             if (records.count() > 0) {
                 var externalRecords: std.ArrayList(IRecord) = .empty;
@@ -648,7 +652,7 @@ pub const BsonCollection = struct {
                 }
                 return .{
                     .records = externalRecords.items,
-                    .next = try std.fmt.allocPrint(self.allocator, "{d}", .{shardId + 1}),
+                    .next = try jsNumberToString(self.allocator, shardId + 1),
                 };
             }
 
@@ -859,18 +863,11 @@ pub const BsonCollection = struct {
 };
 
 //
-// JavaScript's `parseInt(text)` for the continuation tokens getAll hands out: the leading decimal digits, or 0 when
-// there are none (where parseInt gives NaN, which fails the `shardId < NUM_SHARDS` test and ends the listing, so
-// NUM_SHARDS is returned). (No TypeScript counterpart: TypeScript calls parseInt.)
+// Formats a number like `String(number)` (TypeScript: `shardId.toString()` and the template string of the token).
+// (No TypeScript counterpart.)
 //
-fn parseIntPrefix(text: []const u8) u32 {
-    const trimmed = std.mem.trimStart(u8, text, " \t\n\r");
-    var digitCount: usize = 0;
-    while (digitCount < trimmed.len and std.ascii.isDigit(trimmed[digitCount])) {
-        digitCount += 1;
-    }
-    if (digitCount == 0) {
-        return NUM_SHARDS;
-    }
-    return std.fmt.parseInt(u32, trimmed[0..digitCount], 10) catch NUM_SHARDS;
+fn jsNumberToString(allocator: std.mem.Allocator, number: f64) ![]const u8 {
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    try serialization_js_number.writeNumber(&output.writer, number);
+    return output.written();
 }

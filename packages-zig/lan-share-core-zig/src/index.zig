@@ -30,13 +30,15 @@ pub const IShareS3Credentials = struct {
     name: []const u8,
 
     // AWS region (e.g. "us-east-1").
-    region: []const u8,
+    // (Zig: optional, because TypeScript sends whatever the stored credentials hold, and undefined when they
+    // have no region; the same holds for the two keys.)
+    region: ?[]const u8 = null,
 
     // Access key ID for authentication.
-    accessKeyId: []const u8,
+    accessKeyId: ?[]const u8 = null,
 
     // Secret access key for authentication.
-    secretAccessKey: []const u8,
+    secretAccessKey: ?[]const u8 = null,
 
     // Optional custom endpoint URL (for non-AWS S3-compatible services).
     endpoint: ?[]const u8 = null,
@@ -220,14 +222,14 @@ fn resolveConflict(allocator: std.mem.Allocator, store: IShareSecretStore, name:
 // its order; an absent endpoint is left out).
 //
 const IStoredS3Credentials = struct {
-    // AWS region.
-    region: []const u8,
+    // AWS region (left out when undefined, like JSON.stringify leaves it out).
+    region: ?[]const u8,
 
-    // Access key ID.
-    accessKeyId: []const u8,
+    // Access key ID (left out when undefined).
+    accessKeyId: ?[]const u8,
 
-    // Secret access key.
-    secretAccessKey: []const u8,
+    // Secret access key (left out when undefined).
+    secretAccessKey: ?[]const u8,
 
     // Optional custom endpoint URL.
     endpoint: ?[]const u8,
