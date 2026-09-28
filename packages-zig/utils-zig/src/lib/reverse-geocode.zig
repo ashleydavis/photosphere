@@ -239,7 +239,12 @@ pub fn parseReverseGeocodeResult(allocator: std.mem.Allocator, result: std.json.
     // The value found for each field, by the index of the field in `fields` (TypeScript: `values[key]`).
     var values: [fields.len]?[]const u8 = [_]?[]const u8{null} ** fields.len;
 
-    const components = switch (result.object.get("address_components") orelse return error.TypeError) {
+    // `result.address_components` of a value that is not an object is undefined, which cannot be iterated.
+    const resultObject = switch (result) {
+        .object => |object| object,
+        else => return error.TypeError,
+    };
+    const components = switch (resultObject.get("address_components") orelse return error.TypeError) {
         .array => |array| array.items,
         else => return error.TypeError,
     };
@@ -341,11 +346,23 @@ fn getJson(allocator: std.mem.Allocator, io: std.Io, url: []const u8) !std.json.
 }
 
 //
+// The Google geocoding API reverseGeocode asks.
+//
+pub const GEOCODE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json";
+
+//
 // Reverse geocode the requested location (needs lat and lng fields).
 //
 // You must set an approriately configured Google API key in the environment variable GOOGLE_API_KEY for this to work.
 //
 pub fn reverseGeocode(allocator: std.mem.Allocator, io: std.Io, location: ILocation, googleApiKey: ?[]const u8) !?IReverseGeocodeResult {
+    return reverseGeocodeAt(allocator, io, location, googleApiKey, GEOCODE_API_URL);
+}
+
+//
+// reverseGeocode against the geocoding API at the URL (the tests serve one locally).
+//
+pub fn reverseGeocodeAt(allocator: std.mem.Allocator, io: std.Io, location: ILocation, googleApiKey: ?[]const u8, apiUrl: []const u8) !?IReverseGeocodeResult {
 
     try checkCoordinateOk(allocator, location.lat, "lat", LAT_MIN, LAT_MAX);
     try checkCoordinateOk(allocator, location.lng, "lng", LNG_MIN, LNG_MAX);
@@ -361,17 +378,25 @@ pub fn reverseGeocode(allocator: std.mem.Allocator, io: std.Io, location: ILocat
     //
     // throw new Error("Reverse geocoding - fake error.");
 
-    const url = try std.fmt.allocPrint(allocator, "https://maps.googleapis.com/maps/api/geocode/json?latlng={s},{s}&key={s}", .{ try formatCoordinate(allocator, location.lat), try formatCoordinate(allocator, location.lng), apiKey });
+    const url = try std.fmt.allocPrint(allocator, "{s}?latlng={s},{s}&key={s}", .{ apiUrl, try formatCoordinate(allocator, location.lat), try formatCoordinate(allocator, location.lng), apiKey });
     const data = try getJson(allocator, io, url);
 
-    const status = data.object.get("status");
+    const dataObject = switch (data) {
+        .object => |object| object,
+        // `response.data.status` of null throws.
+        .null => return errors.throwError("TypeError: Cannot read properties of null (reading 'status')", .{}),
+        // Any other value has no status and no results.
+        else => return null,
+    };
+
+    const status = dataObject.get("status");
     if (status != null and status.? == .string and std.mem.eql(u8, status.?.string, "REQUEST_DENIED")) {
-        const errorMessage = data.object.get("error_message");
+        const errorMessage = dataObject.get("error_message");
         const message = if (errorMessage != null and errorMessage.? == .string) errorMessage.?.string else "undefined";
         return errors.throwError("Reverse geocoding failed: {s}", .{message});
     }
 
-    if (data.object.get("results")) |results| {
+    if (dataObject.get("results")) |results| {
         if (results == .array and results.array.items.len > 0) {
             return try chooseBestResult(allocator, results);
         }

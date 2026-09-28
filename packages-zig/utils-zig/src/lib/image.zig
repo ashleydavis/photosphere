@@ -38,7 +38,7 @@ const IOrientation = union(enum) {
 // Reads a JavaScript value (serialization-zig's BsonValue, taken by duck typing because utils cannot depend on
 // serialization) as an orientation.
 //
-fn toOrientation(allocator: std.mem.Allocator, value: anytype) !IOrientation {
+fn toOrientation(allocator: std.mem.Allocator, value: anytype) std.mem.Allocator.Error!IOrientation {
     return switch (value) {
         .number => |number| .{ .number = number },
         .int32 => |number| .{ .number = @floatFromInt(number) },
@@ -47,8 +47,31 @@ fn toOrientation(allocator: std.mem.Allocator, value: anytype) !IOrientation {
         .undefined => .{ .other = "undefined" },
         .null => .{ .other = "null" },
         .boolean => |boolean| .{ .other = if (boolean) "true" else "false" },
+        .array => |items| .{ .other = try arrayToString(allocator, items) },
+        .document => .{ .other = "[object Object]" },
         else => .{ .other = try std.fmt.allocPrint(allocator, "{s}", .{@tagName(value)}) },
     };
+}
+
+//
+// Renders an array like JavaScript's `String(array)`: its items rendered and joined with commas, with undefined and
+// null items empty.
+//
+fn arrayToString(allocator: std.mem.Allocator, items: anytype) std.mem.Allocator.Error![]const u8 {
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    for (items, 0..) |item, index| {
+        if (index > 0) {
+            output.writer.writeByte(',') catch return error.OutOfMemory;
+        }
+        switch (item) {
+            .undefined, .null => {},
+            else => switch (try toOrientation(allocator, item)) {
+                .number => |number| writeJsNumber(&output.writer, number) catch return error.OutOfMemory,
+                .other => |text| output.writer.writeAll(text) catch return error.OutOfMemory,
+            },
+        }
+    }
+    return output.written();
 }
 
 //

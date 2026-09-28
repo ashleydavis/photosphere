@@ -194,3 +194,15 @@ test "setLog replaces the global log" {
     const details = try log_module.log.getLogDetails(std.testing.allocator, std.testing.io);
     try std.testing.expectEqualStrings("/tmp/test.log", details.logFilePath.?);
 }
+
+test "ilog of a console log gives a log that writes to the console" {
+    var stdout_capture = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdout_capture.deinit();
+    console.setCapture(&stdout_capture.writer, null);
+    defer console.setCapture(null, null);
+    var consoleLog: log_module.ConsoleLog = .{ .verbose_enabled = false };
+    const log = consoleLog.ilog();
+    log.info("from ilog");
+    try std.testing.expectEqualStrings("from ilog\n", stdout_capture.written());
+    try std.testing.expect(!log.verboseEnabled());
+}
