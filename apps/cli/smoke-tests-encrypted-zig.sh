@@ -842,9 +842,6 @@ test_decrypt_encrypted() {
     local name="decrypt-encrypted"
     print_test_header "$name"
 
-    local cli
-    cli="$(get_cli_command)"
-
     local test_dir="$TEST_TMP_DIR/$name"
     local enc_dir="$test_dir/encrypted-db"
     local key_name="decrypt-key"
@@ -866,7 +863,7 @@ test_decrypt_encrypted() {
         return
     }
 
-    invoke_command "Decrypt encrypted database in place" "$cli decrypt --db \"$enc_dir\" --key \"$key_name\" --yes" || {
+    invoke_command "Decrypt encrypted database in place" "$(get_zig_cli_command) decrypt --db \"$enc_dir\" --key \"$key_name\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1492,9 +1489,6 @@ test_key_not_found_message() {
     local name="key-not-found-message"
     print_test_header "$name"
 
-    local cli
-    cli="$(get_cli_command)"
-
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/db"
 
@@ -1509,7 +1503,7 @@ test_key_not_found_message() {
                       "decrypt --db \"$db_dir\" --key nonexistent-key-xyz --yes" \
                       "upgrade --db \"$db_dir\" --key nonexistent-key-xyz --yes"; do
         local output
-        output=$(eval "$cli $subcommand" 2>&1)
+        output=$(eval "$(get_zig_cli_command) $subcommand" 2>&1)
         local exit_code=$?
         if [ $exit_code -eq 0 ]; then
             log_error "Expected non-zero exit for: psi $subcommand"

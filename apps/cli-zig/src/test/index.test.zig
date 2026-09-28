@@ -639,6 +639,34 @@ test "encrypt command lines parse like commander" {
     try expectCommanderError(allocator, &.{ "encrypt", "--session-id", "s1" }, "commander.unknownOption", "error: unknown option '--session-id'\n");
 }
 
+test "decrypt command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "decrypt", "--db", "a", "--key", "k", "--yes", "--cwd", "c", "--verbose" });
+    try std.testing.expect(parsed.outcome == .decrypt);
+    const options = parsed.outcome.decrypt;
+    try std.testing.expectEqualStrings("a", options.base.db.?);
+    try std.testing.expectEqualStrings("k", options.base.key.?);
+    try std.testing.expectEqual(@as(?bool, true), options.base.yes);
+    try std.testing.expectEqualStrings("c", options.base.cwd.?);
+    try std.testing.expectEqual(@as(?bool, true), options.base.verbose);
+
+    const short = try parse(allocator, &.{ "decrypt", "-k", "new,old", "-y", "-v" });
+    try std.testing.expectEqualStrings("new,old", short.outcome.decrypt.base.key.?);
+    try std.testing.expectEqual(@as(?bool, true), short.outcome.decrypt.base.yes);
+    try std.testing.expectEqual(@as(?bool, true), short.outcome.decrypt.base.verbose);
+
+    const defaults = try parse(allocator, &.{"decrypt"});
+    try std.testing.expect(defaults.outcome.decrypt.base.db == null);
+    try std.testing.expect(defaults.outcome.decrypt.base.key == null);
+    try std.testing.expectEqual(@as(?bool, false), defaults.outcome.decrypt.base.yes);
+    try expectCommanderError(allocator, &.{ "decrypt", "extra" }, "commander.excessArguments", "error: too many arguments for 'decrypt'. Expected 0 arguments but got 1.\n");
+    try expectCommanderError(allocator, &.{ "decrypt", "--key" }, "commander.optionMissingArgument", "error: option '-k, --key <keyfile>' argument missing\n");
+    try expectCommanderError(allocator, &.{ "decrypt", "--generate-key" }, "commander.unknownOption", "error: unknown option '--generate-key'\n");
+}
+
 test "remove command lines parse like commander" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

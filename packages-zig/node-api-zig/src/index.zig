@@ -16,7 +16,7 @@ pub const consolidate = @import("lib/consolidate.zig");
 pub const consolidate_database_worker = @import("lib/consolidate-database.worker.zig");
 pub const prefetch_database_worker = @import("lib/prefetch-database.worker.zig");
 pub const encrypt = @import("lib/encrypt.zig");
-// Not ported: decrypt.
+pub const decrypt = @import("lib/decrypt.zig");
 pub const hash = @import("lib/hash.zig");
 pub const exif_parser = @import("lib/third-party/exif-parser/parser.zig");
 pub const exif_parser_exif = @import("lib/third-party/exif-parser/exif.zig");

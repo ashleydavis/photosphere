@@ -490,16 +490,27 @@ fn pipeline(allocator: std.mem.Allocator, io: std.Io, inputStream: *std.Io.Reade
 
 //
 // A readable stream over a file (TypeScript: `fs.createReadStream(filePath)`).
+// Like Node's stream (autoClose), it closes the file as soon as it reads the end, so the file can be replaced
+// (a copy onto its own path renames over it) before the stream is destroyed. Windows refuses to replace an open file.
 //
 pub const FileReadStream = struct {
     // The allocator that allocated this stream.
     allocator: std.mem.Allocator,
 
-    // The open file.
+    // The open file (closed once the end is read).
     file: std.Io.File,
 
-    // The reader over the file.
+    // The io the file is closed with when the end is read.
+    io: std.Io,
+
+    // True once the file is closed.
+    closed: bool,
+
+    // The unbuffered reader over the file.
     fileReader: std.Io.File.Reader,
+
+    // The reader handed out, buffered with `buffer`, which reads from fileReader.
+    interface: std.Io.Reader,
 
     // The read buffer.
     buffer: []u8,
@@ -508,14 +519,41 @@ pub const FileReadStream = struct {
     // Gets the reader that yields the file's bytes.
     //
     pub fn reader(self: *FileReadStream) *std.Io.Reader {
-        return &self.fileReader.interface;
+        return &self.interface;
     }
 
     //
-    // Closes the file and frees the stream.
+    // Streams bytes from the file, closing it when the end is reached.
+    //
+    fn stream(ioReader: *std.Io.Reader, writer: *std.Io.Writer, limit: std.Io.Limit) std.Io.Reader.StreamError!usize {
+        const self: *FileReadStream = @alignCast(@fieldParentPtr("interface", ioReader));
+        if (self.closed) {
+            return error.EndOfStream;
+        }
+        return self.fileReader.interface.stream(writer, limit) catch |err| {
+            if (err == error.EndOfStream) {
+                self.close();
+            }
+            return err;
+        };
+    }
+
+    //
+    // Closes the file, once.
+    //
+    fn close(self: *FileReadStream) void {
+        if (!self.closed) {
+            self.file.close(self.io);
+            self.closed = true;
+        }
+    }
+
+    //
+    // Closes the file if the end was not read, and frees the stream.
     //
     pub fn destroy(self: *FileReadStream, io: std.Io) void {
-        self.file.close(io);
+        self.io = io;
+        self.close();
         const allocator = self.allocator;
         allocator.free(self.buffer);
         allocator.destroy(self);
@@ -546,7 +584,17 @@ fn createReadStream(allocator: std.mem.Allocator, io: std.Io, filePath: []const 
     self.* = .{
         .allocator = allocator,
         .file = file,
-        .fileReader = file.reader(io, buffer),
+        .io = io,
+        .closed = false,
+        .fileReader = file.reader(io, &.{}),
+        .interface = .{
+            .vtable = &.{
+                .stream = FileReadStream.stream,
+            },
+            .buffer = buffer,
+            .seek = 0,
+            .end = 0,
+        },
         .buffer = buffer,
     };
     return self.readStream();
