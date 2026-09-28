@@ -45,6 +45,9 @@ pub fn build(b: *std.Build) !void {
     const test_options = b.addOptions();
     test_options.addOptionPath("termination_child_path", termination_child.getEmittedBin());
 
+    // The directory to write a kcov line-coverage report of the unit tests to (see docs/zig-test-coverage.md).
+    // The tests are then compiled with the LLVM backend, whose debug info kcov reads, and run under kcov.
+    const coverage_dir = b.option([]const u8, "coverage", "Write a kcov line-coverage report of the unit tests to this directory");
     const test_file = b.option([]const u8, "test-file", "Only run the tests of this file (e.g. path.test.zig)");
     const test_step = b.step("test", "Run unit tests");
     // Every test file but termination.test.zig is compiled into one test program, whose root imports each of them.
@@ -80,8 +83,9 @@ pub fn build(b: *std.Build) !void {
                 .optimize = optimize,
             });
             addTestImports(b, termination_module, module, test_options, target, optimize);
-            const termination_test = b.addTest(.{ .root_module = termination_module });
-            test_step.dependOn(&b.addRunArtifact(termination_test).step);
+            const termination_test = b.addTest(.{ .name = "termination-test", .root_module = termination_module, .use_llvm = if (coverage_dir != null) true else null });
+            const run_termination_test = if (coverage_dir) |directory| addCoverageRun(b, termination_test, directory) else b.addRunArtifact(termination_test);
+            test_step.dependOn(&run_termination_test.step);
             continue;
         }
         try test_root_source.appendSlice(b.allocator, b.fmt("    _ = @import(\"{s}\");\n", .{entry.path}));
@@ -93,9 +97,6 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
     addTestImports(b, test_module, module, test_options, target, optimize);
-    // The directory to write a kcov line-coverage report of the unit tests to (see docs/zig-test-coverage.md).
-    // The tests are then compiled with the LLVM backend, whose debug info kcov reads, and run under kcov.
-    const coverage_dir = b.option([]const u8, "coverage", "Write a kcov line-coverage report of the unit tests to this directory");
     const unit_test = b.addTest(.{ .root_module = test_module, .use_llvm = if (coverage_dir != null) true else null });
     const run_test = if (coverage_dir) |directory| addCoverageRun(b, unit_test, directory) else b.addRunArtifact(unit_test);
     run_test.setCwd(b.path("."));

@@ -93,3 +93,47 @@ test "the counter directory defaults to ./test/tmp" {
     try std.testing.expectEqualStrings("./test/tmp" ++ std.fs.path.sep_str ++ "photosphere-test-uuid-counter", generator.counterFilePath);
     try std.testing.expectEqualStrings("./test/tmp" ++ std.fs.path.sep_str ++ "photosphere-test-uuid-counter.lock", generator.lockFilePath);
 }
+
+test "generate() reads a signed counter like parseInt and matches TypeScript" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tmpDir = try uniqueTmpDir(allocator, io);
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try environ_map.put("TEST_TMP_DIR", tmpDir);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    var generator = try TestUuidGenerator.init(allocator);
+    try std.Io.Dir.cwd().createDirPath(io, tmpDir);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = generator.counterFilePath, .data = "-5" });
+
+    // The TypeScript TestUuidGenerator gives this for the counter -4, which it then stores.
+    try std.testing.expectEqualStrings("453d39f8-f079-498a-a32e-b7d6fcb7c981", try generator.generate(allocator, io));
+    try std.testing.expectEqualStrings("-4", try std.Io.Dir.cwd().readFileAlloc(io, generator.counterFilePath, allocator, .unlimited));
+
+    generator.reset(io);
+    try std.Io.Dir.cwd().deleteDir(io, tmpDir);
+}
+
+test "generate() takes over a lock that has been held for more than five seconds" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tmpDir = try uniqueTmpDir(allocator, io);
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try environ_map.put("TEST_TMP_DIR", tmpDir);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    var generator = try TestUuidGenerator.init(allocator);
+
+    // A lock left behind by a process that died holding it.
+    try std.Io.Dir.cwd().createDirPath(io, tmpDir);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = generator.lockFilePath, .data = "" });
+    try std.testing.expectEqualStrings("93694f6e-3acb-4a1c-afd2-5fb8397575a5", try generator.generate(allocator, io));
+    try std.testing.expect(!node_utils.fs.pathExists(io, generator.lockFilePath));
+
+    generator.reset(io);
+    try std.Io.Dir.cwd().deleteDir(io, tmpDir);
+}

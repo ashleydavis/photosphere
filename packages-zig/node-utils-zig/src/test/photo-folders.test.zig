@@ -201,3 +201,40 @@ test "treats Unicode spaces around the key and the value as whitespace" {
     const result = try parseXdgPicturesDir(arena.allocator(), contents, "/home/user");
     try std.testing.expectEqualStrings(try path.join(arena.allocator(), &.{ "/home/user", "Pics" }), result.?);
 }
+
+test "a line that is not a quoted XDG_PICTURES_DIR assignment names nothing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // No "=", a value that is not quoted, and a value whose quote is not closed at the end of the line.
+    for ([_][]const u8{ "XDG_PICTURES_DIR\n", "XDG_PICTURES_DIR \"$HOME/Pics\"\n", "XDG_PICTURES_DIR=$HOME/Pics\n", "XDG_PICTURES_DIR=\"$HOME/Pics\n", "XDG_PICTURES_DIR=\n" }) |contents| {
+        errdefer std.debug.print("case: {s}\n", .{contents});
+        try std.testing.expect((try parseXdgPicturesDir(allocator, contents, "/home/someone")) == null);
+    }
+}
+
+test "readXdgPicturesDir reports running out of memory instead of reading it as not configured" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmpDir = std.testing.tmpDir(.{});
+    defer tmpDir.cleanup();
+    const homeDir = try tempDirPath(allocator, tmpDir);
+    try tmpDir.dir.createDirPath(io, ".config");
+    try tmpDir.dir.writeFile(io, .{ .sub_path = ".config/user-dirs.dirs", .data = "XDG_PICTURES_DIR=\"$HOME/Bilder\"\n" });
+
+    // Every allocation fails in turn, the read of the file among them, until one run gets through.
+    var failIndex: usize = 0;
+    while (true) : (failIndex += 1) {
+        var failing = std.testing.FailingAllocator.init(allocator, .{ .fail_index = failIndex });
+        if (readXdgPicturesDir(failing.allocator(), io, homeDir)) |picturesDir| {
+            try std.testing.expectEqualStrings(try path.join(allocator, &.{ homeDir, "Bilder" }), picturesDir.?);
+            break;
+        }
+        else |err| {
+            try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+    }
+    try std.testing.expect(failIndex > 1);
+}

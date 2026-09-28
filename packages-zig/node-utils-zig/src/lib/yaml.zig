@@ -1458,9 +1458,9 @@ fn writeBlockMapping(allocator: std.mem.Allocator, level: usize, object: std.jso
 }
 
 //
-// Represents a number the way js-yaml's int and float types do.
-// (Zig: a finite number is written in Zig's shortest decimal form, which is JavaScript's Number#toString for every
-// number from 1e-6 up to 1e21, the range the state files hold.)
+// Represents a number the way js-yaml's int and float types do: an integer with the int type's
+// `object.toString(10)`, anything else with the float type's `object.toString(10)`, where an exponent without a
+// dot gets one (`1e-7` is written `1.e-7`).
 //
 fn representNumber(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
     switch (value) {
@@ -1475,11 +1475,23 @@ fn representNumber(allocator: std.mem.Allocator, value: std.json.Value) ![]const
             if (float == 0 and std.math.signbit(float)) {
                 return "-0.0";
             }
-            if (@floor(float) == float and @abs(float) < 1e21) {
+            var output: std.Io.Writer.Allocating = .init(allocator);
+            try utils.js_number.writeNumber(&output.writer, float);
+            const text = output.written();
+            if (@floor(float) == float) {
                 // Number.isInteger: the int type's representer.
-                return std.fmt.allocPrint(allocator, "{d}", .{@as(i128, @intFromFloat(float))});
+                return text;
             }
-            return std.fmt.allocPrint(allocator, "{d}", .{float});
+            // SCIENTIFIC_WITHOUT_DOT: /^[-+]?[0-9]+e/.
+            var index: usize = if (text[0] == '-' or text[0] == '+') 1 else 0;
+            const digitsStart = index;
+            while (index < text.len and std.ascii.isDigit(text[index])) {
+                index += 1;
+            }
+            if (index > digitsStart and index < text.len and text[index] == 'e') {
+                return std.mem.concat(allocator, u8, &.{ text[0..index], ".", text[index..] });
+            }
+            return text;
         },
         .number_string => |text| return text,
         else => unreachable,
