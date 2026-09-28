@@ -196,3 +196,13 @@ test "localeCompareNumeric gives the sign TypeScript localeCompare gives for sto
     }
     try std.testing.expectEqual(@as(usize, 0), mismatches);
 }
+
+test "localeCompareNumeric sorts non-ASCII characters after ASCII by code point, reading invalid UTF-8 as U+FFFD" {
+    try std.testing.expectEqual(@as(i32, 1), locale_compare.localeCompareNumeric("\u{00E9}", "z"));
+    try std.testing.expectEqual(@as(i32, -1), locale_compare.localeCompareNumeric("\u{00E9}", "\u{00F6}"));
+
+    // A byte that cannot start a sequence, a truncated sequence and an overlong encoding each read as U+FFFD.
+    try std.testing.expectEqual(@as(i32, 0), locale_compare.localeCompareNumeric("\xff", "\u{FFFD}"));
+    try std.testing.expectEqual(@as(i32, 0), locale_compare.localeCompareNumeric("\xe2\x82", "\u{FFFD}\u{FFFD}"));
+    try std.testing.expectEqual(@as(i32, 0), locale_compare.localeCompareNumeric("\xc0\x80", "\u{FFFD}\u{FFFD}"));
+}
