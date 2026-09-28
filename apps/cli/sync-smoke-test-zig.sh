@@ -294,7 +294,7 @@ setup_test_environment() {
     # Add the test asset to the database
     log_info "Adding test asset to database..."
     local add_output
-    add_output=$($(get_cli_command) add --db "$TEST_DB_DIR" "$test_file" --verbose --yes --session-id "setup-process" 2>&1)
+    add_output=$($(get_zig_cli_command) add --db "$TEST_DB_DIR" "$test_file" --verbose --yes --session-id "setup-process" 2>&1)
     
     if [ $? -ne 0 ]; then
         log_error "Failed to add test asset to database"
@@ -365,7 +365,7 @@ worker_process() {
         
         # Get root hash before edit
         local hash_before
-        hash_before=$($(get_cli_command) root-hash --db "$db_path" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+        hash_before=$($(get_zig_cli_command) root-hash --db "$db_path" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
         
         if [ -z "$hash_before" ]; then
             log_error "Process $process_id, iteration $i: Failed to get root hash before edit"
@@ -402,7 +402,7 @@ worker_process() {
         
         # Get root hash after edit
         local hash_after
-        hash_after=$($(get_cli_command) root-hash --db "$db_path" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+        hash_after=$($(get_zig_cli_command) root-hash --db "$db_path" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
         
         if [ -z "$hash_after" ]; then
             log_error "Process $process_id, iteration $i: Failed to get root hash after edit"
@@ -542,7 +542,7 @@ verify_root_hashes() {
     log_info "Verifying all databases have the same root hash..."
     
     local original_hash
-    original_hash=$($(get_cli_command) root-hash --db "${DB_PATHS[0]}" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    original_hash=$($(get_zig_cli_command) root-hash --db "${DB_PATHS[0]}" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
     
     if [ -z "$original_hash" ]; then
         log_error "Failed to get root hash from original database"
@@ -554,7 +554,7 @@ verify_root_hashes() {
     # Check each replica
     for ((i=1; i<NUM_REPLICAS; i++)); do
         local replica_hash
-        replica_hash=$($(get_cli_command) root-hash --db "${DB_PATHS[$i]}" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+        replica_hash=$($(get_zig_cli_command) root-hash --db "${DB_PATHS[$i]}" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
         
         if [ -z "$replica_hash" ]; then
             log_error "Failed to get root hash from replica $i"
@@ -583,6 +583,7 @@ main() {
     echo "  Iterations per process: $NUM_ITERATIONS"
     echo "  Use binary: $USE_BINARY"
     echo "  CLI command: $(get_cli_command)"
+    echo "  Zig CLI command: $(get_zig_cli_command)"
     echo "  BDB command: $(get_bdb_command)"
     echo "============================================================================"
     
