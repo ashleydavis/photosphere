@@ -5,6 +5,7 @@
 const std = @import("std");
 const storage_zig = @import("storage-zig");
 const node_utils = @import("node-utils-zig");
+const utils = @import("utils-zig");
 const helpers = @import("test-helpers.zig");
 
 const FileStorage = storage_zig.file_storage.FileStorage;
@@ -530,4 +531,39 @@ test "a lock file surrounded by Unicode whitespace is read and held, not broken"
 
     const lockInfo = try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath);
     try std.testing.expectEqualStrings("first-owner", lockInfo.?.owner);
+}
+
+test "every step of taking a lock is written to the verbose log, and a lock that cannot be written is an error" {
+    var fixture: Fixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const allocator = fixture.arena.allocator();
+    const io = std.testing.io;
+
+    // A log that asks for the [LOCK] lines and writes nothing.
+    var verboseLog: utils.log.ConsoleLog = .{ .verbose_enabled = true };
+    const previousLog = utils.log.log;
+    utils.log.setLog(verboseLog.ilog());
+    defer utils.log.setLog(previousLog);
+
+    // Taken, then refused while held.
+    const lockFilePath = try fixture.path("verbose.lock");
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, lockFilePath, "first"));
+    try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, io, lockFilePath, "second"));
+
+    // A stale lock and a corrupt one are broken; an empty one being written is left alone.
+    const staleTimestamp = std.Io.Clock.real.now(io).toMilliseconds() - 60_000;
+    const stalePath = try fixture.path("verbose-stale.lock");
+    try helpers.writeFile(io, stalePath, try std.fmt.allocPrint(allocator, "{{\"owner\":\"old\",\"acquiredAt\":\"2020-01-01T00:00:00.000Z\",\"timestamp\":{d}}}", .{staleTimestamp}));
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, stalePath, "new"));
+    const corruptPath = try fixture.path("verbose-corrupt.lock");
+    try helpers.writeFile(io, corruptPath, "invalid json");
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, corruptPath, "new"));
+    const emptyPath = try fixture.path("verbose-empty.lock");
+    try helpers.writeFile(io, emptyPath, "");
+    try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, io, emptyPath, "new"));
+
+    // A lock under a file cannot be created, and the error is passed on.
+    try helpers.writeFile(io, try fixture.path("a-file"), "not a directory");
+    try std.testing.expect(std.meta.isError(fixture.storage.acquireWriteLock(allocator, io, try fixture.path("a-file/under.lock"), "new")));
 }

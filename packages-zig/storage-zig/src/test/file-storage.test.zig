@@ -316,3 +316,13 @@ test "storedHash is undefined, because a filesystem keeps no hash" {
     try helpers.writeFile(io, try fixture.path("a.bin"), "x");
     try std.testing.expect((try fixture.fileStorage.storedHash(allocator, io, try fixture.path("a.bin"))) == null);
 }
+
+test "readStream passes on an error other than a missing file" {
+    var fixture: Fixture = undefined;
+    try fixture.init("file-storage-read-stream-not-dir");
+    defer fixture.deinit();
+
+    // A path under a file, which is not a directory.
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try fixture.path("a-file"), .data = "not a directory" });
+    try std.testing.expectError(error.NotDir, fixture.fileStorage.readStream(fixture.arena.allocator(), std.testing.io, try fixture.path("a-file/under.bin")));
+}
