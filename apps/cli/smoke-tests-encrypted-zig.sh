@@ -28,6 +28,12 @@ source "$_ENCRYPTED_SCRIPT_DIR/../../scripts/lib/test-lib.sh"
 # The per-test timeout every suite in this repository shares, and the reporting that goes with it.
 source "$_ENCRYPTED_SCRIPT_DIR/../../scripts/lib/test-timeout.sh"
 
+# Timing for the TypeScript verify calls ts_verify makes on every database the Zig CLI writes.
+source "$_ENCRYPTED_SCRIPT_DIR/smoke-tests-zig/lib/ts-verify-timing.sh"
+
+# Where ts_verify records how long each TypeScript verify took, in a directory of this run's own.
+TS_VERIFY_TIMING_LOG="$(photosphere_test_temp_dir encrypted-zig-ts-verify)/ts-verify-milliseconds.log"
+
 # Test configuration
 #
 # The suite root, holding the shared vault and config. It is NOT where a test runs: run_single_test
@@ -70,6 +76,7 @@ FAILED_TESTS=()
 cleanup_and_show_summary() {
     local exit_code=$?
     echo ""
+    echo "TypeScript verify: $(count_ts_verify_calls "$TS_VERIFY_TIMING_LOG") calls, $(format_milliseconds_as_seconds "$(sum_ts_verify_milliseconds "$TS_VERIFY_TIMING_LOG")")"
 
     # Show final status message - this should be the last thing printed
     echo ""
@@ -292,6 +299,30 @@ invoke_command() {
     return 0
 }
 
+# Runs the TypeScript CLI's psi verify on a database the Zig CLI has just created or modified, so the
+# reference implementation checks the integrity of every database the Zig CLI writes. Any further
+# arguments (a --key) go to verify. Returns what invoke_command returns, so the caller fails the test
+# the same way it does for any other step. The time it takes is appended to TS_VERIFY_TIMING_LOG.
+# Usage: ts_verify <database> [verify arguments...]
+ts_verify() {
+    local database_dir="$1"
+    shift
+    local verify_arguments=""
+    if [ $# -gt 0 ]; then
+        verify_arguments="$(printf ' %q' "$@")"
+    fi
+    local verify_start
+    verify_start="$(current_milliseconds)"
+    local verify_status=0
+    # The TypeScript CLI takes its deterministic test UUIDs from a counter of its own, so checking a
+    # database does not move the ids the Zig CLI hands out next, which the tests assert on.
+    local verify_counter_dir="$TEST_TMP_DIR/ts-verify-uuid-counter"
+    mkdir -p "$verify_counter_dir"
+    invoke_command "Verify $database_dir with the TypeScript CLI" "TEST_TMP_DIR=\"$verify_counter_dir\" $(get_cli_command) verify --db \"$database_dir\"$verify_arguments --yes" || verify_status=$?
+    record_ts_verify_milliseconds "$TS_VERIFY_TIMING_LOG" "$verify_start"
+    return $verify_status
+}
+
 reset_environment() {
     log_info "Resetting encrypted smoke test environment (TEST_TMP_DIR=$TEST_TMP_DIR)"
     if [ -d "$TEST_TMP_DIR" ]; then
@@ -471,7 +502,12 @@ test_init_encrypted() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -482,7 +518,7 @@ test_init_encrypted() {
         return
     fi
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -503,7 +539,12 @@ test_init_generate_key_file() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database with generated vault key" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database with generated vault key" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -514,7 +555,7 @@ test_init_generate_key_file() {
         return
     fi
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -536,17 +577,32 @@ test_replicate_to_encrypted() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init plain source database" "$(get_zig_cli_command) init --db \"$src_dir\" --yes" || {
+    invoke_command "Init plain source database" "$cli init --db \"$src_dir\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to plain database" "$(get_zig_cli_command) add --db \"$src_dir\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    ts_verify "$src_dir" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Replicate to encrypted destination" "$(get_zig_cli_command) replicate --db \"$src_dir\" --dest \"$dest_dir\" --dest-key \"$dest_key_name\" --generate-key --yes" || {
+    invoke_command "Add PNG file to plain database" "$cli add --db \"$src_dir\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$src_dir" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Replicate to encrypted destination" "$cli replicate --db \"$src_dir\" --dest \"$dest_dir\" --dest-key \"$dest_key_name\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$dest_dir" --key "$dest_key_name" || {
         test_failed "$name"
         return
     }
@@ -562,12 +618,12 @@ test_replicate_to_encrypted() {
         return
     }
 
-    invoke_command "Verify encrypted destination database" "$(get_zig_cli_command) verify --db \"$dest_dir\" --key \"$dest_key_name\" --yes" || {
+    invoke_command "Verify encrypted destination database" "$cli verify --db \"$dest_dir\" --key \"$dest_key_name\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$dest_dir\" --key \"$dest_key_name\" --yes" || {
+    ts_verify "$dest_dir" --key "$dest_key_name" || {
         test_failed "$name"
         return
     }
@@ -589,12 +645,22 @@ test_replicate_from_encrypted() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted source database" "$(get_zig_cli_command) init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted source database" "$cli init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    ts_verify "$enc_dir" --key "$key_name" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$enc_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -604,7 +670,12 @@ test_replicate_from_encrypted() {
         return
     }
 
-    invoke_command "Replicate from encrypted to plain destination" "$(get_zig_cli_command) replicate --db \"$enc_dir\" --dest \"$plain_dir\" --key \"$key_name\" --yes" || {
+    invoke_command "Replicate from encrypted to plain destination" "$cli replicate --db \"$enc_dir\" --dest \"$plain_dir\" --key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$plain_dir" || {
         test_failed "$name"
         return
     }
@@ -620,12 +691,12 @@ test_replicate_from_encrypted() {
         return
     }
 
-    invoke_command "Verify plain destination database" "$(get_zig_cli_command) verify --db \"$plain_dir\" --yes" || {
+    invoke_command "Verify plain destination database" "$cli verify --db \"$plain_dir\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$plain_dir\" --yes" || {
+    ts_verify "$plain_dir" || {
         test_failed "$name"
         return
     }
@@ -646,17 +717,32 @@ test_encrypt_plain() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init plain source database" "$(get_zig_cli_command) init --db \"$plain_dir\" --yes" || {
+    invoke_command "Init plain source database" "$cli init --db \"$plain_dir\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to plain database" "$(get_zig_cli_command) add --db \"$plain_dir\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    ts_verify "$plain_dir" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Encrypt plain database in place using psi encrypt" "$(get_zig_cli_command) encrypt --db \"$plain_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Add PNG file to plain database" "$cli add --db \"$plain_dir\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$plain_dir" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Encrypt plain database in place using psi encrypt" "$cli encrypt --db \"$plain_dir\" --key \"$key_name\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$plain_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -672,12 +758,12 @@ test_encrypt_plain() {
         return
     }
 
-    invoke_command "Verify encrypted database" "$(get_zig_cli_command) verify --db \"$plain_dir\" --key \"$key_name\" --yes" || {
+    invoke_command "Verify encrypted database" "$cli verify --db \"$plain_dir\" --key \"$key_name\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$plain_dir\" --key \"$key_name\" --yes" || {
+    ts_verify "$plain_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -698,17 +784,32 @@ test_encrypt_generate_key_file() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init plain source database" "$(get_zig_cli_command) init --db \"$plain_dir\" --yes" || {
+    invoke_command "Init plain source database" "$cli init --db \"$plain_dir\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to plain database" "$(get_zig_cli_command) add --db \"$plain_dir\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    ts_verify "$plain_dir" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Encrypt plain database with generated vault key" "$(get_zig_cli_command) encrypt --db \"$plain_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Add PNG file to plain database" "$cli add --db \"$plain_dir\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$plain_dir" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Encrypt plain database with generated vault key" "$cli encrypt --db \"$plain_dir\" --key \"$key_name\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$plain_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -719,7 +820,7 @@ test_encrypt_generate_key_file() {
         return
     fi
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$plain_dir\" --key \"$key_name\" --yes" || {
+    ts_verify "$plain_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -741,12 +842,22 @@ test_encrypt_reencrypt() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database with key1" "$(get_zig_cli_command) init --db \"$enc1_dir\" --key \"$key1_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database with key1" "$cli init --db \"$enc1_dir\" --key \"$key1_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file with key1" "$(get_zig_cli_command) add --db \"$enc1_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    ts_verify "$enc1_dir" --key "$key1_name" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG file with key1" "$cli add --db \"$enc1_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$enc1_dir" --key "$key1_name" || {
         test_failed "$name"
         return
     }
@@ -756,7 +867,12 @@ test_encrypt_reencrypt() {
         return
     }
 
-    invoke_command "Re-encrypt database in place with key2" "$(get_zig_cli_command) encrypt --db \"$enc1_dir\" --key \"$key2_name,$key1_name\" --generate-key --yes" || {
+    invoke_command "Re-encrypt database in place with key2" "$cli encrypt --db \"$enc1_dir\" --key \"$key2_name,$key1_name\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$enc1_dir" --key "$key2_name,$key1_name" || {
         test_failed "$name"
         return
     }
@@ -766,14 +882,14 @@ test_encrypt_reencrypt() {
         return
     }
 
-    invoke_command "Verify re-encrypted database with key2" "$(get_zig_cli_command) verify --db \"$enc1_dir\" --key \"$key2_name\" --yes" || {
+    invoke_command "Verify re-encrypted database with key2" "$cli verify --db \"$enc1_dir\" --key \"$key2_name\" --yes" || {
         test_failed "$name"
         return
     }
 
     # Sanity check: trying to verify with key1 should fail.
     local output
-    output=$(eval "$(get_zig_cli_command) verify --db \"$enc1_dir\" --key \"$key1_name\" --yes" 2>&1)
+    output=$(eval "$cli verify --db \"$enc1_dir\" --key \"$key1_name\" --yes" 2>&1)
     if [ $? -eq 0 ]; then
         log_error "Verification of re-encrypted database unexpectedly succeeded with old key"
         echo "$output"
@@ -781,7 +897,7 @@ test_encrypt_reencrypt() {
         return
     fi
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$enc1_dir\" --key \"$key2_name\" --yes" || {
+    ts_verify "$enc1_dir" --key "$key2_name" || {
         test_failed "$name"
         return
     }
@@ -805,17 +921,32 @@ test_encrypt_old_to_new_format() {
     # Encrypt with same key as source: CLI exits early (no rewrite). Database
     # remains encrypted and verifies with that key.
 
-    invoke_command "Init encrypted database (simulated old-format source)" "$(get_zig_cli_command) init --db \"$old_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database (simulated old-format source)" "$cli init --db \"$old_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to simulated old-format database" "$(get_zig_cli_command) add --db \"$old_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    ts_verify "$old_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Run psi encrypt in place to convert to new format" "$(get_zig_cli_command) encrypt --db \"$old_dir\" --key \"$key_name\" --yes" || {
+    invoke_command "Add PNG file to simulated old-format database" "$cli add --db \"$old_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$old_dir" --key "$key_name" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Run psi encrypt in place to convert to new format" "$cli encrypt --db \"$old_dir\" --key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$old_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -825,12 +956,12 @@ test_encrypt_old_to_new_format() {
         return
     }
 
-    invoke_command "Verify converted encrypted database" "$(get_zig_cli_command) verify --db \"$old_dir\" --key \"$key_name\" --yes" || {
+    invoke_command "Verify converted encrypted database" "$cli verify --db \"$old_dir\" --key \"$key_name\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$old_dir\" --key \"$key_name\" --yes" || {
+    ts_verify "$old_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -842,18 +973,31 @@ test_decrypt_encrypted() {
     local name="decrypt-encrypted"
     print_test_header "$name"
 
+    local cli
+    cli="$(get_zig_cli_command)"
+
     local test_dir="$TEST_TMP_DIR/$name"
     local enc_dir="$test_dir/encrypted-db"
     local key_name="decrypt-key"
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    ts_verify "$enc_dir" --key "$key_name" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$enc_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -863,7 +1007,12 @@ test_decrypt_encrypted() {
         return
     }
 
-    invoke_command "Decrypt encrypted database in place" "$(get_zig_cli_command) decrypt --db \"$enc_dir\" --key \"$key_name\" --yes" || {
+    invoke_command "Decrypt encrypted database in place" "$cli decrypt --db \"$enc_dir\" --key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$enc_dir" || {
         test_failed "$name"
         return
     }
@@ -879,12 +1028,12 @@ test_decrypt_encrypted() {
         return
     }
 
-    invoke_command "Verify decrypted plain database" "$(get_zig_cli_command) verify --db \"$enc_dir\" --yes" || {
+    invoke_command "Verify decrypted plain database" "$cli verify --db \"$enc_dir\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$enc_dir\" --yes" || {
+    ts_verify "$enc_dir" || {
         test_failed "$name"
         return
     }
@@ -905,12 +1054,22 @@ test_add_encrypted_file() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    ts_verify "$db_dir" --key "$key_name" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -920,7 +1079,7 @@ test_add_encrypted_file() {
         return
     }
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -943,12 +1102,22 @@ test_export_encrypted_file() {
     prepare_test_dir "$test_dir"
     mkdir -p "$export_dir"
 
-    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    ts_verify "$db_dir" --key "$key_name" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -960,7 +1129,7 @@ test_export_encrypted_file() {
     }
 
     local export_path="$export_dir/exported.png"
-    invoke_command "Export encrypted asset" "$(get_zig_cli_command) export --db \"$db_dir\" --key \"$key_name\" \"$asset_id\" \"$export_path\" --yes" || {
+    invoke_command "Export encrypted asset" "$cli export --db \"$db_dir\" --key \"$key_name\" \"$asset_id\" \"$export_path\" --yes" || {
         test_failed "$name"
         return
     }
@@ -980,7 +1149,7 @@ test_export_encrypted_file() {
         return
     fi
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -1001,12 +1170,22 @@ test_verify_encrypted_db() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    ts_verify "$db_dir" --key "$key_name" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -1016,12 +1195,12 @@ test_verify_encrypted_db() {
         return
     }
 
-    invoke_command "Verify encrypted database" "$(get_zig_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+    invoke_command "Verify encrypted database" "$cli verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -1042,12 +1221,22 @@ test_delete_encrypted_file() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    ts_verify "$db_dir" --key "$key_name" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -1058,17 +1247,22 @@ test_delete_encrypted_file() {
         return
     }
 
-    invoke_command "Remove asset from encrypted database" "$(get_zig_cli_command) remove --db \"$db_dir\" --key \"$key_name\" \"$asset_id\" --yes" || {
+    invoke_command "Remove asset from encrypted database" "$cli remove --db \"$db_dir\" --key \"$key_name\" \"$asset_id\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Verify encrypted database after delete" "$(get_zig_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+    invoke_command "Verify encrypted database after delete" "$cli verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -1089,12 +1283,22 @@ test_list_encrypted_files() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    ts_verify "$db_dir" --key "$key_name" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -1131,7 +1335,7 @@ test_list_encrypted_files() {
         return
     fi
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -1153,12 +1357,22 @@ test_replicate_decrypted_from_encrypted() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG file to encrypted database" "$(get_zig_cli_command) add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    ts_verify "$enc_dir" --key "$key_name" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG file to encrypted database" "$cli add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$enc_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -1168,7 +1382,12 @@ test_replicate_decrypted_from_encrypted() {
         return
     }
 
-    invoke_command "Replicate from encrypted to plain destination" "$(get_zig_cli_command) replicate --db \"$enc_dir\" --dest \"$plain_dir\" --key \"$key_name\" --yes" || {
+    invoke_command "Replicate from encrypted to plain destination" "$cli replicate --db \"$enc_dir\" --dest \"$plain_dir\" --key \"$key_name\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$plain_dir" || {
         test_failed "$name"
         return
     }
@@ -1184,12 +1403,12 @@ test_replicate_decrypted_from_encrypted() {
         return
     }
 
-    invoke_command "Verify plain replica" "$(get_zig_cli_command) verify --db \"$plain_dir\" --yes" || {
+    invoke_command "Verify plain replica" "$cli verify --db \"$plain_dir\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$plain_dir\" --yes" || {
+    ts_verify "$plain_dir" || {
         test_failed "$name"
         return
     }
@@ -1214,25 +1433,45 @@ test_export_with_multiple_keys() {
     mkdir -p "$export_dir"
 
     # Create encrypted database with key1 (official key).
-    invoke_command "Init encrypted database with key1" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key1_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database with key1" "$cli init --db \"$db_dir\" --key \"$key1_name\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" --key "$key1_name" || {
         test_failed "$name"
         return
     }
 
     # Ensure key2 exists (generate via throwaway database).
-    invoke_command "Generate key2" "$(get_zig_cli_command) init --db \"$test_dir/tmp-key2-db\" --key \"$key2_name\" --generate-key --yes" || {
+    invoke_command "Generate key2" "$cli init --db \"$test_dir/tmp-key2-db\" --key \"$key2_name\" --generate-key --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$test_dir/tmp-key2-db" --key "$key2_name" || {
         test_failed "$name"
         return
     }
 
     # Add first file with key1 (encrypted with key1).
-    invoke_command "Add first PNG with key1" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    invoke_command "Add first PNG with key1" "$cli add --db \"$db_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" --key "$key1_name" || {
         test_failed "$name"
         return
     }
 
     # Add second file with key2,key1 so key2 is write key (encrypted with key2).
-    invoke_command "Add second JPG with key2" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key2_name,$key1_name\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+    invoke_command "Add second JPG with key2" "$cli add --db \"$db_dir\" --key \"$key2_name,$key1_name\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" --key "$key2_name,$key1_name" || {
         test_failed "$name"
         return
     }
@@ -1254,12 +1493,12 @@ test_export_with_multiple_keys() {
     local export1="$export_dir/export1.png"
     local export2="$export_dir/export2.jpg"
 
-    invoke_command "Export first asset with both keys" "$(get_zig_cli_command) export --db \"$db_dir\" --key \"$multi_keys\" \"$asset_id1\" \"$export1\" --yes" || {
+    invoke_command "Export first asset with both keys" "$cli export --db \"$db_dir\" --key \"$multi_keys\" \"$asset_id1\" \"$export1\" --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Export second asset with both keys" "$(get_zig_cli_command) export --db \"$db_dir\" --key \"$multi_keys\" \"$asset_id2\" \"$export2\" --yes" || {
+    invoke_command "Export second asset with both keys" "$cli export --db \"$db_dir\" --key \"$multi_keys\" \"$asset_id2\" \"$export2\" --yes" || {
         test_failed "$name"
         return
     }
@@ -1282,7 +1521,7 @@ test_export_with_multiple_keys() {
         return
     fi
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key1_name,$key2_name\" --yes" || {
+    ts_verify "$db_dir" --key "$key1_name,$key2_name" || {
         test_failed "$name"
         return
     }
@@ -1308,22 +1547,42 @@ test_multi_key_encrypt() {
     mkdir -p "$export_dir"
 
     # Create two encrypted DBs with different keys, add two assets to each.
-    invoke_command "Init encrypted database 1 with key1" "$(get_zig_cli_command) init --db \"$db1_dir\" --key \"$key1_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database 1 with key1" "$cli init --db \"$db1_dir\" --key \"$key1_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Init encrypted database 2 with key2" "$(get_zig_cli_command) init --db \"$db2_dir\" --key \"$key2_name\" --generate-key --yes" || {
+    ts_verify "$db1_dir" --key "$key1_name" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG and JPG to DB1 (key1)" "$(get_zig_cli_command) add --db \"$db1_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+    invoke_command "Init encrypted database 2 with key2" "$cli init --db \"$db2_dir\" --key \"$key2_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG and JPG to DB2 (key2)" "$(get_zig_cli_command) add --db \"$db2_dir\" --key \"$key2_name\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+    ts_verify "$db2_dir" --key "$key2_name" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG and JPG to DB1 (key1)" "$cli add --db \"$db1_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db1_dir" --key "$key1_name" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add PNG and JPG to DB2 (key2)" "$cli add --db \"$db2_dir\" --key \"$key2_name\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db2_dir" --key "$key2_name" || {
         test_failed "$name"
         return
     }
@@ -1350,8 +1609,8 @@ test_multi_key_encrypt() {
     local multi_keys="$key1_name,$key2_name"
     local export1="$export_dir/out1.png"
     local export2="$export_dir/out2.jpg"
-    invoke_command "Export PNG (key1)" "$(get_zig_cli_command) export --db \"$db1_dir\" --key \"$multi_keys\" \"$asset_id_png\" \"$export1\" --yes" || { test_failed "$name"; return; }
-    invoke_command "Export JPG (key2)" "$(get_zig_cli_command) export --db \"$db1_dir\" --key \"$multi_keys\" \"$asset_id_jpg_db1\" \"$export2\" --yes" || { test_failed "$name"; return; }
+    invoke_command "Export PNG (key1)" "$cli export --db \"$db1_dir\" --key \"$multi_keys\" \"$asset_id_png\" \"$export1\" --yes" || { test_failed "$name"; return; }
+    invoke_command "Export JPG (key2)" "$cli export --db \"$db1_dir\" --key \"$multi_keys\" \"$asset_id_jpg_db1\" \"$export2\" --yes" || { test_failed "$name"; return; }
 
     if ! cmp -s "$TEST_FILES_DIR/test.png" "$export1"; then
         log_error "Exported PNG does not match original"
@@ -1364,7 +1623,7 @@ test_multi_key_encrypt() {
         return
     fi
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db1_dir\" --key \"$key1_name,$key2_name\" --yes" || {
+    ts_verify "$db1_dir" --key "$key1_name,$key2_name" || {
         test_failed "$name"
         return
     }
@@ -1388,17 +1647,32 @@ test_partial_encrypt() {
     mkdir -p "$export_dir"
 
     # Create encrypted DB and add two assets (both encrypted).
-    invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add PNG (encrypted)" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
 
-    invoke_command "Add JPG (encrypted)" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+    invoke_command "Add PNG (encrypted)" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" --key "$key_name" || {
+        test_failed "$name"
+        return
+    }
+
+    invoke_command "Add JPG (encrypted)" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.jpg\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -1423,8 +1697,8 @@ test_partial_encrypt() {
 
     local export1="$export_dir/out.png"
     local export2="$export_dir/out.jpg"
-    invoke_command "Export PNG (encrypted)" "$(get_zig_cli_command) export --db \"$db_dir\" --key \"$key_name\" \"$asset_id1\" \"$export1\" --yes" || { test_failed "$name"; return; }
-    invoke_command "Export JPG (plain)" "$(get_zig_cli_command) export --db \"$db_dir\" --key \"$key_name\" \"$asset_id2\" \"$export2\" --yes" || { test_failed "$name"; return; }
+    invoke_command "Export PNG (encrypted)" "$cli export --db \"$db_dir\" --key \"$key_name\" \"$asset_id1\" \"$export1\" --yes" || { test_failed "$name"; return; }
+    invoke_command "Export JPG (plain)" "$cli export --db \"$db_dir\" --key \"$key_name\" \"$asset_id2\" \"$export2\" --yes" || { test_failed "$name"; return; }
 
     if ! cmp -s "$TEST_FILES_DIR/test.png" "$export1"; then
         log_error "Exported PNG does not match original"
@@ -1437,7 +1711,7 @@ test_partial_encrypt() {
         return
     fi
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
+    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -1457,13 +1731,18 @@ test_key_not_found_noninteractive() {
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init plain database" "$(get_zig_cli_command) init --db \"$db_dir\" --yes" || {
+    invoke_command "Init plain database" "$cli init --db \"$db_dir\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" || {
         test_failed "$name"
         return
     }
 
     local output
-    output=$(eval "$(get_zig_cli_command) compare --key nonexistent-key-xyz --db \"$db_dir\" --dest \"$db_dir\" --yes" 2>&1)
+    output=$(eval "$cli compare --key nonexistent-key-xyz --db \"$db_dir\" --dest \"$db_dir\" --yes" 2>&1)
     if [ $? -eq 0 ]; then
         log_error "Expected non-zero exit when key not found in non-interactive mode"
         echo "$output"
@@ -1477,7 +1756,7 @@ test_key_not_found_noninteractive() {
         return
     fi
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes" || {
+    ts_verify "$db_dir" || {
         test_failed "$name"
         return
     }
@@ -1489,12 +1768,20 @@ test_key_not_found_message() {
     local name="key-not-found-message"
     print_test_header "$name"
 
+    local cli
+    cli="$(get_zig_cli_command)"
+
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/db"
 
     prepare_test_dir "$test_dir"
 
-    invoke_command "Init plain database" "$(get_zig_cli_command) init --db \"$db_dir\" --yes" || {
+    invoke_command "Init plain database" "$cli init --db \"$db_dir\" --yes" || {
+        test_failed "$name"
+        return
+    }
+
+    ts_verify "$db_dir" || {
         test_failed "$name"
         return
     }
@@ -1503,7 +1790,7 @@ test_key_not_found_message() {
                       "decrypt --db \"$db_dir\" --key nonexistent-key-xyz --yes" \
                       "upgrade --db \"$db_dir\" --key nonexistent-key-xyz --yes"; do
         local output
-        output=$(eval "$(get_zig_cli_command) $subcommand" 2>&1)
+        output=$(eval "$cli $subcommand" 2>&1)
         local exit_code=$?
         if [ $exit_code -eq 0 ]; then
             log_error "Expected non-zero exit for: psi $subcommand"
@@ -1513,7 +1800,7 @@ test_key_not_found_message() {
         fi
     done
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes" || {
+    ts_verify "$db_dir" || {
         test_failed "$name"
         return
     }
