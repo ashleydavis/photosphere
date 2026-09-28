@@ -11,7 +11,9 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
+const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
+const log = &utils.log.log;
 const getEnv = node_utils.process_env.getEnv;
 
 //
@@ -78,7 +80,7 @@ pub fn openCommand(allocator: std.mem.Allocator, target: []const u8) !IOpenComma
 //
 // Opens the target (a URL here) with the platform's opener and returns without waiting for it. The opener runs
 // detached in a process group of its own with its output ignored, so it does not hold the CLI's terminal (the
-// package's `stdio: 'ignore', detached: true`). Fails when the opener cannot be started.
+// package's `stdio: 'ignore', detached: true`). Fails only when the command cannot be built.
 //
 pub fn open(allocator: std.mem.Allocator, io: std.Io, target: []const u8) !void {
     const openerCommand = try openCommand(allocator, target);
@@ -95,7 +97,13 @@ pub fn open(allocator: std.mem.Allocator, io: std.Io, target: []const u8) !void 
     if (builtin.os.tag != .windows) {
         spawnOptions.pgid = 0;
     }
-    _ = try std.process.spawn(io, spawnOptions);
+    // An opener that cannot be started (not installed, not executable) is not a failure of `open`: the package's
+    // `childProcess.spawn` reports it later, as an 'error' event on the child that nothing listens for, so its
+    // promise has already resolved. The compiled TypeScript CLI says "Bug report opened in browser!" on a machine
+    // without xdg-open, and so does this. The error is still logged, with --verbose, rather than lost.
+    _ = std.process.spawn(io, spawnOptions) catch |err| {
+        log.verbose(try std.fmt.allocPrint(allocator, "Failed to start {s}: {s}", .{ openerCommand.command, @errorName(err) }));
+    };
 
     // `subprocess.unref()`: the opener is not waited for.
 }

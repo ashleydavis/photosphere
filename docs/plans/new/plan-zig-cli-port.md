@@ -75,6 +75,7 @@ One command at a time, never in parallel. The time goes on builds, so build less
 - RULE: IMPLEMENT EVERYTHING IN A SUBAGENT. All porting, testing, fixing, committing and pushing is done by subagents, one command at a time. The main channel is kept for exactly two kinds of message: "<command> committed and pushed", and "Release workflow passing" once the run for that push is green. Nothing else is said to the user.
 - RULE: WATCH EVERY SUBAGENT. While a subagent works, keep a background watchdog running that wakes the main session when a new commit lands on zig-2, or when 20 minutes pass with no file changes in the worktree and no zig build or smoke test running. A stalled or crashed subagent is relaunched at once. The 30-minute check-in stays armed on top of the watchdog as a backstop.
 - Every CLI command is ticked off in this plan as it is committed.
+- RULE: every command port includes Zig smoke tests that run the command end to end; a port is not done without them.
 
 ## Commands
 
@@ -125,8 +126,8 @@ To do, in order (each one uses what the earlier ones ported):
 
 Each TypeScript suite gets a Zig counterpart covering every test, ticked off as its commands are ported:
 
-- [ ] `apps/cli/smoke-tests.sh` (tests 01 to 89)
-- [ ] `apps/cli/smoke-tests-encrypted.sh`
+- [x] `apps/cli/smoke-tests.sh` (tests 01 to 89)
+- [x] `apps/cli/smoke-tests-encrypted.sh`
 - [ ] `apps/cli/smoke-tests-lan-share.sh`
 - [x] `apps/cli/sync-smoke-test.sh`
 - [x] `apps/cli/write-lock-smoke-test.sh`

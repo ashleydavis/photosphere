@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Stands in for the Linux URL opener while the bug test runs, so no browser starts. It writes the URL
+# it was asked to open to BUG_OPENER_CAPTURE_FILE, through a temporary file renamed into place so the
+# test never reads a half written URL.
+
+if [ -z "$BUG_OPENER_CAPTURE_FILE" ]; then
+    echo "BUG_OPENER_CAPTURE_FILE is not set, so there is nowhere to record the URL" >&2
+    exit 1
+fi
+
+printf '%s' "$1" > "$BUG_OPENER_CAPTURE_FILE.partial"
+mv "$BUG_OPENER_CAPTURE_FILE.partial" "$BUG_OPENER_CAPTURE_FILE"
