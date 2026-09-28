@@ -185,3 +185,64 @@ test "verifyDatabaseFiles reports a corrupted shard" {
     try std.testing.expectEqualStrings(".db/bson/collections/metadata/shards/96", result.invalidFiles[0]);
     try std.testing.expect(std.mem.startsWith(u8, result.errors[0].@"error", "Checksum mismatch: expected "));
 }
+
+test "verifyDatabaseFiles reports every kind of database file that is corrupted, and skips build checkpoints" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
+    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+
+    // The database tree, a shard's tree and a sort index's tree have a byte flipped; the collection tree is too short
+    // to be one.
+    const flipped = [_][]const u8{ ".db/files.dat", ".db/bson/collections/metadata/shards/96.dat", ".db/bson/indexes/metadata/hash_asc/tree.dat" };
+    for (flipped) |relativePath| {
+        const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ databaseDir, relativePath });
+        const contents = try helpers.readFile(allocator, io, filePath);
+        contents[contents.len / 2] ^= 0xff;
+        try helpers.writeFile(io, filePath, contents);
+    }
+    try helpers.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/collection.dat", .{databaseDir}), "short");
+    try helpers.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/indexes/metadata/hash_asc/build.checkpoint", .{databaseDir}), "not a serialized file");
+    const storage = try helpers.directoryStorage(allocator, io, databaseDir);
+
+    const result = try verify_module.verifyDatabaseFiles(allocator, io, storage, null);
+
+    try std.testing.expectEqual(@as(u64, 4), result.validFiles);
+    try std.testing.expectEqual(@as(usize, 4), result.invalidFiles.len);
+    for (result.invalidFiles) |invalidFile| {
+        try std.testing.expect(!std.mem.endsWith(u8, invalidFile, "build.checkpoint"));
+    }
+    var sawTooSmall = false;
+    for (result.errors) |fileError| {
+        if (std.mem.eql(u8, fileError.file, ".db/bson/collections/metadata/collection.dat")) {
+            try std.testing.expect(std.mem.startsWith(u8, fileError.@"error", "File too small for v6 format (5 bytes"));
+            sawTooSmall = true;
+        }
+    }
+    try std.testing.expect(sawTooSmall);
+}
+
+test "verify reports a database record whose hash is wrong as a record mismatch" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
+    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    _ = try helpers.setupEnvironment(io);
+    var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
+    var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
+    const opened = try node_api.open_storage.openStorage(allocator, io, databaseDir, null, null);
+    const database = try node_api.media_file_database.createMediaFileDatabase(allocator, opened.storage, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider());
+    var updates: @import("serialization-zig").bson.BsonDocument = .empty;
+    try updates.put(allocator, "hash", .{ .string = "0000" });
+    try std.testing.expect(try database.metadataCollection.updateOne(io, ASSET_ID, updates, .{}));
+    try database.bsonDatabase.commit(io);
+
+    const result = try runVerify(allocator, io, databaseDir, null, null);
+
+    try std.testing.expectEqual(@as(usize, 1), result.recordMismatches.?.len);
+    try std.testing.expectEqualStrings("asset/" ++ ASSET_ID, result.recordMismatches.?[0]);
+}
