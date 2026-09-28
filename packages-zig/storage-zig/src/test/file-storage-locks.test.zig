@@ -455,6 +455,48 @@ test "a corrupted lock file is broken and the lock taken" {
     try std.testing.expectEqualStrings("new-owner", lockInfo.?.owner);
 }
 
+//
+// An empty lock file is what another owner's exclusive create leaves before it writes the lock.
+// Breaking it as corrupt put two owners in the critical section at once.
+//
+test "an empty lock file that was just created is held, not broken" {
+    var fixture: Fixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const allocator = fixture.arena.allocator();
+    const lockFilePath = try fixture.path("being-written.lock");
+    try helpers.writeFile(std.testing.io, lockFilePath, "");
+
+    try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "new-owner"));
+
+    const lockContent = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, lockFilePath, allocator, .unlimited);
+    try std.testing.expectEqualStrings("", lockContent);
+}
+
+//
+// An empty lock file older than the lock timeout was left by an owner that died before writing
+// it, so it is broken like any other corrupt lock.
+//
+test "an empty lock file older than the lock timeout is broken and the lock taken" {
+    var fixture: Fixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const allocator = fixture.arena.allocator();
+    const lockFilePath = try fixture.path("abandoned.lock");
+    try helpers.writeFile(std.testing.io, lockFilePath, "");
+    const lockFile = try std.Io.Dir.cwd().openFile(std.testing.io, lockFilePath, .{ .mode = .read_write });
+    defer lockFile.close(std.testing.io);
+    const staleTime = std.Io.Clock.real.now(std.testing.io).toMilliseconds() - 60_000;
+    try lockFile.setTimestamps(std.testing.io, .{
+        .modify_timestamp = .{ .new = std.Io.Timestamp.fromNanoseconds(@as(i96, staleTime) * std.time.ns_per_ms) },
+    });
+
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "new-owner"));
+
+    const lockInfo = try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath);
+    try std.testing.expectEqualStrings("new-owner", lockInfo.?.owner);
+}
+
 test "parseISOString reads what toISOString writes and rejects anything else" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
