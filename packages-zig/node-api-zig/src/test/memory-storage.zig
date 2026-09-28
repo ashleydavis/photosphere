@@ -29,6 +29,10 @@ pub const MemoryStorage = struct {
     // own (a filesystem) answers undefined, which is what an empty map does.
     storedHashes: std.StringArrayHashMapUnmanaged([]const u8) = .empty,
 
+    // Held while the maps are read or changed, because the files of a batch can be stored on separate threads
+    // (where TypeScript interleaves them on one).
+    mutex: std.Io.Mutex = .init,
+
     //
     // Creates an empty storage.
     //
@@ -211,7 +215,8 @@ pub const MemoryStorage = struct {
     //
     pub fn fileExists(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !bool {
         _ = allocator;
-        _ = io;
+        self.mutex.lockUncancelable(io);
+        defer self.mutex.unlock(io);
         return self.files.contains(filePath);
     }
 
@@ -256,6 +261,8 @@ pub const MemoryStorage = struct {
     //
     pub fn info(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?IFileInfo {
         _ = allocator;
+        self.mutex.lockUncancelable(io);
+        defer self.mutex.unlock(io);
         const data = self.files.get(filePath) orelse {
             return null;
         };
@@ -266,7 +273,8 @@ pub const MemoryStorage = struct {
     // Reads a whole file (null when it does not exist).
     //
     pub fn read(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]u8 {
-        _ = io;
+        self.mutex.lockUncancelable(io);
+        defer self.mutex.unlock(io);
         const data = self.files.get(filePath) orelse {
             return null;
         };
@@ -278,8 +286,9 @@ pub const MemoryStorage = struct {
     //
     pub fn write(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, data: []const u8) !void {
         _ = allocator;
-        _ = io;
         _ = contentType;
+        self.mutex.lockUncancelable(io);
+        defer self.mutex.unlock(io);
         try self.putFile(filePath, data);
     }
 
@@ -287,7 +296,8 @@ pub const MemoryStorage = struct {
     // Opens a stream that reads a file.
     //
     pub fn readStream(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
-        _ = io;
+        self.mutex.lockUncancelable(io);
+        defer self.mutex.unlock(io);
         const data = self.files.get(filePath) orelse {
             return error.FileNotFound;
         };

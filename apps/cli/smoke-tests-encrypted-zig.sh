@@ -656,7 +656,7 @@ test_encrypt_plain() {
         return
     }
 
-    invoke_command "Encrypt plain database in place using psi encrypt" "$cli encrypt --db \"$plain_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Encrypt plain database in place using psi encrypt" "$(get_zig_cli_command) encrypt --db \"$plain_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -708,7 +708,7 @@ test_encrypt_generate_key_file() {
         return
     }
 
-    invoke_command "Encrypt plain database with generated vault key" "$cli encrypt --db \"$plain_dir\" --key \"$key_name\" --generate-key --yes" || {
+    invoke_command "Encrypt plain database with generated vault key" "$(get_zig_cli_command) encrypt --db \"$plain_dir\" --key \"$key_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -756,7 +756,7 @@ test_encrypt_reencrypt() {
         return
     }
 
-    invoke_command "Re-encrypt database in place with key2" "$cli encrypt --db \"$enc1_dir\" --key \"$key2_name,$key1_name\" --generate-key --yes" || {
+    invoke_command "Re-encrypt database in place with key2" "$(get_zig_cli_command) encrypt --db \"$enc1_dir\" --key \"$key2_name,$key1_name\" --generate-key --yes" || {
         test_failed "$name"
         return
     }
@@ -815,7 +815,7 @@ test_encrypt_old_to_new_format() {
         return
     }
 
-    invoke_command "Run psi encrypt in place to convert to new format" "$cli encrypt --db \"$old_dir\" --key \"$key_name\" --yes" || {
+    invoke_command "Run psi encrypt in place to convert to new format" "$(get_zig_cli_command) encrypt --db \"$old_dir\" --key \"$key_name\" --yes" || {
         test_failed "$name"
         return
     }

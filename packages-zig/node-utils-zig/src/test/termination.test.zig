@@ -74,6 +74,27 @@ test "exit terminates the process (compiled, not run: it would end the test proc
     try std.testing.expect(@intFromPtr(exit_pointer) != 0);
 }
 
+test "exit runs the termination callbacks, then logs the exit code like the 'exit' handler and exits with it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var child = try std.process.spawn(io, .{
+        .argv = &.{ test_options.termination_child_path, "exit-verbose" },
+        .stdin = .ignore,
+        .stdout = .pipe,
+        .stderr = .ignore,
+    });
+    defer child.kill(io);
+    var buffer: [256]u8 = undefined;
+    var reader = child.stdout.?.readerStreaming(io, &buffer);
+    const output = try reader.interface.allocRemaining(allocator, .unlimited);
+    const term = try child.wait(io);
+
+    try std.testing.expectEqualStrings("callback 7\nProcess exiting with code: 7\n", output);
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 7 }, term);
+}
+
 //
 // What a terminated child process wrote and how it exited.
 //

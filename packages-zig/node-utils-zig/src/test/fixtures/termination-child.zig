@@ -7,8 +7,32 @@ const termination = node_utils.termination;
 // A process for the termination tests: it registers a termination callback, says "ready" and waits for the
 // signal the test sends it. The callback writes "callback <exit code>" to stdout. The first argument says
 // how the callback behaves: "succeed" always succeeds, "fail-once" throws on its first call only and
-// "fail-always" always throws.
+// "fail-always" always throws. "exit-verbose" writes verbose log messages to stdout and calls exit with 7
+// straight away instead of waiting for a signal.
 //
+
+//
+// The Io the verbose log writes to stdout with.
+//
+var stdoutIo: std.Io = undefined;
+
+//
+// The functions of the log, with verbose replaced by writeVerbose ("exit-verbose" only).
+//
+var verboseVtable: utils.log.ILog.VTable = undefined;
+
+//
+// Writes a verbose log message to stdout on a line of its own.
+//
+fn writeVerbose(ptr: *anyopaque, message: []const u8) void {
+    _ = ptr;
+    std.Io.File.stdout().writeStreamingAll(stdoutIo, message) catch |err| {
+        std.debug.panic("Writing the verbose message failed: {s}", .{@errorName(err)});
+    };
+    std.Io.File.stdout().writeStreamingAll(stdoutIo, "\n") catch |err| {
+        std.debug.panic("Writing the verbose message failed: {s}", .{@errorName(err)});
+    };
+}
 
 //
 // How the termination callback behaves (the first argument of the process).
@@ -45,6 +69,16 @@ pub fn main(init: std.process.Init) !void {
     }
     callbackMode = arguments[1];
     try termination.registerTerminationCallback(io, .{ .context = null, .function = reportExitCode });
+    if (std.mem.eql(u8, callbackMode, "exit-verbose")) {
+        stdoutIo = io;
+        verboseVtable = utils.log.log.vtable.*;
+        verboseVtable.verbose = writeVerbose;
+        utils.log.log = .{
+            .ptr = utils.log.log.ptr,
+            .vtable = &verboseVtable,
+        };
+        termination.exit(io, 7);
+    }
     try std.Io.File.stdout().writeStreamingAll(io, "ready\n");
     while (true) {
         try io.sleep(.fromSeconds(3600), .awake);

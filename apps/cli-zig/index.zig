@@ -1,10 +1,10 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `add` (alias `a`), `compare` (alias `cmp`), `consolidate`, `database-id`, `export` (alias `exp`), `find-orphans`,
-// `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `remove-orphans`,
-// `repair`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`, `upgrade`, `verify` (alias
-// `ver`) and `version` commands and the `--version` option are ported; the other commands are not registered yet, so
-// commander reports them as unknown commands.
+// Only the `add` (alias `a`), `compare` (alias `cmp`), `consolidate`, `database-id`, `encrypt`, `export` (alias `exp`),
+// `find-orphans`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`),
+// `remove-orphans`, `repair`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`, `upgrade`,
+// `verify` (alias `ver`) and `version` commands and the `--version` option are ported; the other commands are not registered
+// yet, so commander reports them as unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -47,6 +47,7 @@ pub const find_orphans = @import("src/lib/find-orphans.zig");
 pub const sync_watch = @import("src/lib/sync-watch.zig");
 pub const sync = @import("src/cmd/sync.zig");
 pub const consolidate = @import("src/cmd/consolidate.zig");
+pub const encrypt = @import("src/cmd/encrypt.zig");
 pub const remove_orphans = @import("src/cmd/remove-orphans.zig");
 pub const upgrade = @import("src/cmd/upgrade.zig");
 pub const export_command = @import("src/cmd/export.zig");
@@ -91,6 +92,8 @@ const ISyncCommandOptions = sync.ISyncCommandOptions;
 const syncCommand = sync.syncCommand;
 const IConsolidateCommandOptions = consolidate.IConsolidateCommandOptions;
 const consolidateCommand = consolidate.consolidateCommand;
+const IEncryptCommandOptions = encrypt.IEncryptCommandOptions;
+const encryptCommand = encrypt.encryptCommand;
 const IRemoveCommandOptions = remove.IRemoveCommandOptions;
 const removeCommand = remove.removeCommand;
 const ICompareCommandOptions = compare.ICompareCommandOptions;
@@ -319,6 +322,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the consolidate command with this remote and these options.
     consolidate: IConsolidateParsed,
+
+    // Run the encrypt command with these options.
+    encrypt: IEncryptCommandOptions,
 
     // Run the compare command with these options.
     compare: ICompareCommandOptions,
@@ -595,6 +601,20 @@ fn consolidateAction(state: *IProgramState, args: []const ArgumentValue, options
                 .base = baseOptions(options),
                 .destKey = textValue(options, "destKey"),
             },
+        },
+    };
+}
+
+//
+// The action of the encrypt command (`initContext(encryptCommand)`): `run` calls initContext and the command.
+//
+fn encryptAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .encrypt = .{
+            .base = baseOptions(options),
+            .generateKey = flagValue(options, "generateKey"),
         },
     };
 }
@@ -1092,7 +1112,20 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "version"))
         .action(state, versionAction);
 
-    // Not ported: the commands after version, the secrets and dbs command groups.
+    const encryptDefinition = program
+        .command("encrypt", .{})
+        .description("Encrypts the database in place (plain \u{2192} encrypted, re-encrypt with new key, or old-format \u{2192} new format).");
+    _ = optionFrom(encryptDefinition, dbOption);
+    _ = optionFrom(encryptDefinition, keyOption);
+    _ = optionFrom(encryptDefinition, generateKeyOption);
+    _ = optionFrom(encryptDefinition, yesOption);
+    _ = optionFrom(encryptDefinition, cwdOption);
+    _ = optionFrom(encryptDefinition, verboseOption);
+    _ = encryptDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "encrypt"))
+        .action(state, encryptAction);
+
+    // Not ported: the commands after encrypt (decrypt), the secrets and dbs command groups.
     return program;
 }
 
@@ -1196,6 +1229,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try consolidateCommand(allocator, io, context, parsed.remote, &options);
+        },
+        .encrypt => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try encryptCommand(allocator, io, context, &options);
         },
         .upgrade => |parsed| {
             var options = parsed;

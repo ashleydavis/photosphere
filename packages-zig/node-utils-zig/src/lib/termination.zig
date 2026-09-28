@@ -44,16 +44,32 @@ pub fn invokeTerminationCallbacks(io: std.Io, exitCode: u8) !void {
 }
 
 //
+// Ends the process with the exit code like `process.exit(code)`, which emits the 'exit' event: once the termination
+// handlers are initialized, the 'exit' handler logs the exit code.
+// (No TypeScript counterpart: process.exit and the 'exit' handler of initializeTerminationHandlers.)
+//
+fn exitProcess(code: u8) noreturn {
+    if (terminationCallbacksInitialized) {
+        var buffer: [64]u8 = undefined;
+        const message = std.fmt.bufPrint(&buffer, "Process exiting with code: {d}", .{code}) catch |err| {
+            std.debug.panic("Formatting the exit message failed: {s}", .{@errorName(err)});
+        };
+        utils.log.log.verbose(message);
+    }
+    std.process.exit(code);
+}
+
+//
 // Trigger program termination with a specific exit code.
 // Invokes the termination callbacks registered with `registerTerminationCallback`.
 //
 pub fn exit(io: std.Io, code: u8) noreturn {
     invokeTerminationCallbacks(io, code) catch |err| {
         utils.log.log.exception("Error during exit termination callbacks.", err);
-        std.process.exit(EXIT_TERMINATION_CALLBACKS_THREW);
+        exitProcess(EXIT_TERMINATION_CALLBACKS_THREW);
     };
 
-    std.process.exit(code);
+    exitProcess(code);
 }
 
 //
@@ -143,9 +159,9 @@ fn shutdownOnSignal(io: std.Io, signalName: []const u8, cleanupFailedCode: u8) n
         invokeTerminationCallbacks(io, EXIT_FAILURE) catch |cleanupErr| {
             shutdownOnUnhandledRejection(io, cleanupErr);
         };
-        std.process.exit(cleanupFailedCode);
+        exitProcess(cleanupFailedCode);
     };
-    std.process.exit(EXIT_SUCCESS);
+    exitProcess(EXIT_SUCCESS);
 }
 
 //
@@ -160,7 +176,7 @@ fn shutdownOnUnhandledRejection(io: std.Io, err: anyerror) noreturn {
         utils.log.log.exception("Error during unhandled rejection shutdown.", cleanupErr);
         exitCode = EXIT_UNHANDLED_REJECTION_CLEANUP_FAILED;
     };
-    std.process.exit(exitCode);
+    exitProcess(exitCode);
 }
 
 //
@@ -205,8 +221,9 @@ fn watchSignals() void {
 
 //
 // Initializes the termination handlers for the process.
-// Not ported: the 'uncaughtException', 'unhandledRejection', 'beforeExit' and 'exit' handlers
-// (Zig has no uncaught exceptions or rejections; errors are returned to `main`, which handles them).
+// Not ported: the 'uncaughtException', 'unhandledRejection' and 'beforeExit' handlers
+// (Zig has no uncaught exceptions or rejections; errors are returned to `main`, which handles them, and the
+// commands always end in exit). The 'exit' handler's log line is written by exitProcess.
 //
 fn initializeTerminationHandlers(io: std.Io) !void {
     if (terminationCallbacksInitialized) {

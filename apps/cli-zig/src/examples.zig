@@ -30,7 +30,7 @@ pub const ICommandExamples = struct {
 //
 // Centralized examples for all CLI commands
 // (only the commands implemented in Zig are ported: init, add, consolidate, info, summary, verify, repair, replicate,
-// compare, version, export, list, upgrade, sync, remove, find-orphans and remove-orphans).
+// compare, version, export, list, upgrade, encrypt, sync, remove, find-orphans and remove-orphans).
 //
 pub const COMMAND_EXAMPLES = [_]ICommandExamples{
     .{
@@ -269,6 +269,19 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             .{
                 .command = "psi upgrade --db ./photos",
                 .description = "Upgrades the database in ./photos directory.",
+            },
+        },
+    },
+    .{
+        .commandName = "encrypt",
+        .examples = &.{
+            .{
+                .command = "psi encrypt --db ./photos --key my-photos.key --yes",
+                .description = "Encrypts a plain database in place using the specified key.",
+            },
+            .{
+                .command = "psi encrypt --db ./photos --key new.key,old.key --yes",
+                .description = "Re-encrypts in place using the first key for new writes and the full list for reads.",
             },
         },
     },
