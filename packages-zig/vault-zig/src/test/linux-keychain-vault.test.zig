@@ -397,3 +397,133 @@ fn failingStoreSpawn(allocator: std.mem.Allocator, io: std.Io, args: []const []c
     }
     return fakeSpawn(allocator, io, args, stdinData);
 }
+
+//
+// A fake spawn on a machine without secret-tool: `which secret-tool` fails.
+//
+fn missingToolSpawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, stdinData: ?[]const u8) anyerror!keychain_types.ISpawnResult {
+    if (std.mem.eql(u8, args[0], "which")) {
+        return .{ .code = 1, .stdout = "", .stderr = "" };
+    }
+    return fakeSpawn(allocator, io, args, stdinData);
+}
+
+//
+// The exit code failingSearchSpawn gives `secret-tool search` (null for a process killed by a signal).
+//
+var failing_search_code: ?u8 = null;
+
+//
+// A fake spawn whose `secret-tool search` fails with failing_search_code.
+//
+fn failingSearchSpawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, stdinData: ?[]const u8) anyerror!keychain_types.ISpawnResult {
+    if (args.len > 1 and std.mem.eql(u8, args[1], "search")) {
+        return .{ .code = failing_search_code, .stdout = "", .stderr = "search failed" };
+    }
+    return fakeSpawn(allocator, io, args, stdinData);
+}
+
+//
+// A fake spawn whose `secret-tool lookup` of psi-empty prints nothing and of psi-broken fails.
+//
+fn unreadableLookupSpawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, stdinData: ?[]const u8) anyerror!keychain_types.ISpawnResult {
+    if (args.len > 5 and std.mem.eql(u8, args[1], "lookup")) {
+        if (std.mem.eql(u8, args[5], "psi-empty")) {
+            return .{ .code = 0, .stdout = "\n", .stderr = "" };
+        }
+        if (std.mem.eql(u8, args[5], "psi-broken")) {
+            return .{ .code = 5, .stdout = "", .stderr = "cannot read" };
+        }
+    }
+    return fakeSpawn(allocator, io, args, stdinData);
+}
+
+test "checkPrereqs and every operation report a missing secret-tool" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    resetStore();
+    defer restoreSpawn();
+    keychain_types.setSpawnFunction(missingToolSpawn);
+    var linuxVault = LinuxKeychainVault.init();
+    const vault = linuxVault.vault();
+
+    const prereqs = try vault.checkPrereqs(allocator, std.testing.io);
+    try std.testing.expect(!prereqs.ok);
+    try std.testing.expectEqualStrings("secret-tool is not installed. Install it with: sudo apt install libsecret-tools", prereqs.message.?);
+
+    try std.testing.expectError(error.Thrown, vault.get(allocator, std.testing.io, "k"));
+    try std.testing.expectEqualStrings("secret-tool is not installed. Install it with: sudo apt install libsecret-tools", errors.lastErrorMessage());
+
+    // checkPrereqs checks again each time.
+    keychain_types.setSpawnFunction(fakeSpawn);
+    try std.testing.expect((try vault.checkPrereqs(allocator, std.testing.io)).ok);
+}
+
+test "the IVault interface reaches every operation" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    resetStore();
+    defer restoreSpawn();
+    var linuxVault = LinuxKeychainVault.init();
+    const vault = linuxVault.vault();
+
+    try vault.set(allocator, std.testing.io, .{ .name = "k", .type = "api-key", .value = "v" });
+    try expectSecretEqual(.{ .name = "k", .type = "api-key", .value = "v" }, try vault.get(allocator, std.testing.io, "k"));
+    try std.testing.expectEqual(@as(usize, 1), (try vault.list(allocator, std.testing.io)).len);
+    try vault.delete(allocator, std.testing.io, "k");
+    try std.testing.expect((try vault.get(allocator, std.testing.io, "k")) == null);
+}
+
+test "get throws when secret-tool search fails, with its exit code" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    resetStore();
+    defer restoreSpawn();
+    var vault = LinuxKeychainVault.init();
+    try vault.set(allocator, std.testing.io, .{ .name = "k", .type = "t", .value = "v" });
+    keychain_types.setSpawnFunction(failingSearchSpawn);
+
+    failing_search_code = 3;
+    try std.testing.expectError(error.Thrown, vault.get(allocator, std.testing.io, "k"));
+    try std.testing.expectEqualStrings("secret-tool search exited with code 3", errors.lastErrorMessage());
+    failing_search_code = null;
+    try std.testing.expectError(error.Thrown, vault.get(allocator, std.testing.io, "k"));
+    try std.testing.expectEqualStrings("secret-tool search exited with code null", errors.lastErrorMessage());
+}
+
+test "list: returns nothing when secret-tool search fails" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    resetStore();
+    defer restoreSpawn();
+    var vault = LinuxKeychainVault.init();
+    try vault.set(allocator, std.testing.io, .{ .name = "k", .type = "t", .value = "v" });
+    keychain_types.setSpawnFunction(failingSearchSpawn);
+    failing_search_code = 3;
+    try std.testing.expectEqual(@as(usize, 0), (try vault.list(allocator, std.testing.io)).len);
+    failing_search_code = null;
+    try std.testing.expectEqual(@as(usize, 0), (try vault.list(allocator, std.testing.io)).len);
+}
+
+test "get and list skip secrets whose value is empty or cannot be read" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    resetStore();
+    defer restoreSpawn();
+    var vault = LinuxKeychainVault.init();
+    try vault.set(allocator, std.testing.io, .{ .name = "empty", .type = "t", .value = "x" });
+    try vault.set(allocator, std.testing.io, .{ .name = "broken", .type = "t", .value = "x" });
+    try vault.set(allocator, std.testing.io, .{ .name = "good", .type = "t", .value = "x" });
+    keychain_types.setSpawnFunction(unreadableLookupSpawn);
+
+    try std.testing.expect((try vault.get(allocator, std.testing.io, "empty")) == null);
+    try std.testing.expect((try vault.get(allocator, std.testing.io, "broken")) == null);
+    const secrets = try vault.list(allocator, std.testing.io);
+    try std.testing.expectEqual(@as(usize, 1), secrets.len);
+    try std.testing.expectEqualStrings("good", secrets[0].name);
+}

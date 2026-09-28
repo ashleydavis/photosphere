@@ -313,3 +313,48 @@ fn recordingSpawn(allocator: std.mem.Allocator, io: std.Io, args: []const []cons
     }
     return fakeSpawn(allocator, io, args, stdinData);
 }
+
+//
+// A fake spawn on a machine without PowerShell: every command fails.
+//
+fn missingToolSpawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, stdinData: ?[]const u8) anyerror!keychain_types.ISpawnResult {
+    _ = allocator;
+    _ = io;
+    _ = args;
+    _ = stdinData;
+    return .{ .code = 1, .stdout = "", .stderr = "not found" };
+}
+
+test "checkPrereqs and every operation report a missing PowerShell" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    resetStore();
+    defer restoreSpawn();
+    keychain_types.setSpawnFunction(missingToolSpawn);
+    var windowsVault = WindowsKeychainVault.init();
+    const vault = windowsVault.vault();
+
+    const result = try vault.checkPrereqs(allocator, std.testing.io);
+    try std.testing.expect(!result.ok);
+    try std.testing.expectEqualStrings("PowerShell is not available. PowerShell is required to use the Windows Credential Vault. Install PowerShell from https://aka.ms/powershell", result.message.?);
+    try std.testing.expectError(error.Thrown, vault.get(allocator, std.testing.io, "any"));
+    try std.testing.expectEqualStrings(result.message.?, errors.lastErrorMessage());
+}
+
+test "the IVault interface reaches every operation" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    resetStore();
+    defer restoreSpawn();
+    var windowsVault = WindowsKeychainVault.init();
+    const vault = windowsVault.vault();
+
+    try std.testing.expect((try vault.checkPrereqs(allocator, std.testing.io)).ok);
+    try vault.set(allocator, std.testing.io, .{ .name = "k", .type = "api-key", .value = "v" });
+    try expectSecretEqual(.{ .name = "k", .type = "api-key", .value = "v" }, try vault.get(allocator, std.testing.io, "k"));
+    try std.testing.expectEqual(@as(usize, 1), (try vault.list(allocator, std.testing.io)).len);
+    try vault.delete(allocator, std.testing.io, "k");
+    try std.testing.expect((try vault.get(allocator, std.testing.io, "k")) == null);
+}
