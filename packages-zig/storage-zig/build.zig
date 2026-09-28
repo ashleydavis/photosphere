@@ -96,8 +96,8 @@ pub fn build(b: *std.Build) !void {
         const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = optimize });
         integration_test_module.addImport(dependency_name, dependency.module(dependency_name));
     }
-    const integration_test = b.addTest(.{ .root_module = integration_test_module });
-    const run_integration_test = b.addRunArtifact(integration_test);
+    const integration_test = b.addTest(.{ .name = "integration-test", .root_module = integration_test_module, .use_llvm = if (coverage_dir != null) true else null });
+    const run_integration_test = if (coverage_dir) |directory| addCoverageRun(b, integration_test, directory) else b.addRunArtifact(integration_test);
     run_integration_test.has_side_effects = true;
     integration_test_step.dependOn(&run_integration_test.step);
 }
