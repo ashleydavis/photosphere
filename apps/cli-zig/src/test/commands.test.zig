@@ -3919,10 +3919,11 @@ test "news prints the whole feed, newest first, marking the new items, like the 
 
 //
 // Sets up the environment of the bug tests: no tools on the PATH (so every tool version is "Not available"), and
-// either no program to open a URL with, or a copy of psi as that program (it fails, but it starts, which is all
-// open waits for). The opener is xdg-open on the PATH (open on macOS), or on Windows the PowerShell under
-// SystemRoot. Windows always has PowerShell (Wine too, which sets SystemRoot itself whatever the environment
-// says), so on Windows the copy of psi is always put there, so that no real browser is opened.
+// either no program to open a URL with, or a copy of the test driver as that program, which records the arguments
+// it is started with to <root>/opened.txt (see expectOpened). The opener is xdg-open on the PATH (open on macOS),
+// or on Windows the PowerShell under SystemRoot. Windows always has PowerShell (Wine too, which sets SystemRoot
+// itself whatever the environment says), so on Windows the copy is always put there, so that no real browser is
+// opened; without an opener it records nothing.
 //
 fn bugEnvironment(allocator: std.mem.Allocator, root: []const u8, withOpener: bool) !*std.process.Environ.Map {
     const environment = try helpers.cliEnvironment(allocator, root);
@@ -3931,15 +3932,43 @@ fn bugEnvironment(allocator: std.mem.Allocator, root: []const u8, withOpener: bo
     if (builtin.os.tag == .windows) {
         try environment.put("SystemRoot", systemRoot);
     }
+    if (withOpener) {
+        try environment.put("PHOTOSPHERE_TEST_OPENER_RECORD", try std.fs.path.join(allocator, &.{ root, "opened.txt" }));
+    }
     if (withOpener or builtin.os.tag == .windows) {
         const openerPath = if (builtin.os.tag == .windows)
             try std.fs.path.join(allocator, &.{ systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe" })
         else
             try std.fs.path.join(allocator, &.{ binDir, if (builtin.os.tag == .macos) "open" else "xdg-open" });
         try std.Io.Dir.cwd().createDirPath(std.testing.io, std.fs.path.dirname(openerPath).?);
-        try std.Io.Dir.cwd().copyFile(helpers.psi_path, std.Io.Dir.cwd(), openerPath, std.testing.io, .{});
+        try std.Io.Dir.cwd().copyFile(helpers.test_driver_path, std.Io.Dir.cwd(), openerPath, std.testing.io, .{});
     }
     return environment;
+}
+
+//
+// Waits for the opener of bugEnvironment to record the arguments it was started with (it runs detached, so it can
+// finish after psi has exited), and expects them to be what the `open` package gives the platform's opener for the
+// URL. The record is then deleted, so that the next run's is waited for rather than this one read again.
+//
+fn expectOpened(allocator: std.mem.Allocator, root: []const u8, url: []const u8) !void {
+    const io = std.testing.io;
+    const recordPath = try std.fs.path.join(allocator, &.{ root, "opened.txt" });
+    var attempts: usize = 0;
+    const recorded = while (true) : (attempts += 1) {
+        if (std.Io.Dir.cwd().readFileAlloc(io, recordPath, allocator, .unlimited)) |data| {
+            break data;
+        }
+        else |err| {
+            if (err != error.FileNotFound or attempts == 1000) {
+                return err;
+            }
+        }
+        try io.sleep(.fromMilliseconds(10), .awake);
+    };
+    const expectedCommand = try cli.open.openCommand(allocator, url);
+    try std.testing.expectEqualStrings(try std.mem.join(allocator, "\n", expectedCommand.cliArguments), recorded);
+    try std.Io.Dir.cwd().deleteFile(io, recordPath);
 }
 
 //
@@ -3977,14 +4006,12 @@ fn bugUrl(allocator: std.mem.Allocator, title: []const u8, details: []const u8, 
 
 //
 // The outro bugReportCommand prints for the report (its summary, and the log file information when there is a log
-// file) in the environment of bugEnvironment without an opener: the URL, as no browser can be opened, or on
-// Windows, where bugEnvironment always puts an opener, that the report was opened.
+// file) in the environment of bugEnvironment: that the report was opened, even without an opener, because the
+// `open` package never waits to hear that its opener failed to start (the compiled TypeScript CLI says the same on
+// a machine without xdg-open).
 //
-fn bugOutro(allocator: std.mem.Allocator, report: []const u8, url: []const u8) ![]const u8 {
-    if (builtin.os.tag == .windows) {
-        return std.fmt.allocPrint(allocator, "✓ Bug report opened in browser!\n\n{s}\n", .{report});
-    }
-    return std.fmt.allocPrint(allocator, "✓ Bug report generated successfully!\n\n{s}\n\nFailed to open browser. Here's the URL:\n{s}\n\nPlease copy the URL above to submit the bug report.\n", .{ report, url });
+fn bugOutro(allocator: std.mem.Allocator, report: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(allocator, "✓ Bug report opened in browser!\n\n{s}\n", .{report});
 }
 
 //
@@ -4004,17 +4031,16 @@ test "bug --yes reports the bug like the TypeScript CLI" {
     const allocator = arena.allocator();
     const root = try helpers.makeTempDir(allocator, "cmd-bug");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    const environment = try bugEnvironment(allocator, root, false);
+    const environment = try bugEnvironment(allocator, root, true);
 
     // Commander stores --no-browser as the browser option, so it changes nothing, as in the TypeScript CLI.
-    const outro = try bugOutro(
-        allocator,
-        try bugSummary(allocator, "Bug Report", "None available"),
-        try bugUrl(allocator, "Bug Report", bug_template_details, "No log file available", "No log file available"),
-    );
+    const outro = try bugOutro(allocator, try bugSummary(allocator, "Bug Report", "None available"));
+    const url = try bugUrl(allocator, "Bug Report", bug_template_details, "No log file available", "No log file available");
     const expected = try std.mem.concat(allocator, u8, &.{ bug_header, outro });
     try expectResult(try runZig(allocator, environment, &.{ "bug", "--yes" }), expected, "", 0);
+    try expectOpened(allocator, root, url);
     try expectResult(try runZig(allocator, environment, &.{ "bug", "-y", "--no-browser" }), expected, "", 0);
+    try expectOpened(allocator, root, url);
 }
 
 test "bug --yes includes the header of the newest log file, like the TypeScript CLI" {
@@ -4023,7 +4049,7 @@ test "bug --yes includes the header of the newest log file, like the TypeScript 
     const allocator = arena.allocator();
     const root = try helpers.makeTempDir(allocator, "cmd-bug-log");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    const environment = try bugEnvironment(allocator, root, false);
+    const environment = try bugEnvironment(allocator, root, true);
     const logsDir = try std.fs.path.join(allocator, &.{ root, "tmp", "photosphere", "logs" });
     try std.Io.Dir.cwd().createDirPath(std.testing.io, logsDir);
     const logFile = try std.fs.path.join(allocator, &.{ logsDir, "psi-1.log" });
@@ -4032,17 +4058,18 @@ test "bug --yes includes the header of the newest log file, like the TypeScript 
     const report = try std.fmt.allocPrint(allocator, "{s}\n\n📎 Log File Information:\nThe log file path is included in the bug report template.\nYou can attach it to the GitHub issue by dragging and dropping the file.", .{
         try bugSummary(allocator, "Bug Report", logFile),
     });
-    const expected = try std.mem.concat(allocator, u8, &.{ bug_header, try bugOutro(allocator, report, try bugUrl(allocator, "Bug Report", bug_template_details, "Header line\n--- Log Start ---", logFile)) });
+    const expected = try std.mem.concat(allocator, u8, &.{ bug_header, try bugOutro(allocator, report) });
     try expectResult(try runZig(allocator, environment, &.{ "bug", "--yes" }), expected, "", 0);
+    try expectOpened(allocator, root, try bugUrl(allocator, "Bug Report", bug_template_details, "Header line\n--- Log Start ---", logFile));
 }
 
-test "bug --yes opens the report in the browser like the TypeScript CLI" {
+test "bug --yes says the report was opened even when no opener can be started, like the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const root = try helpers.makeTempDir(allocator, "cmd-bug-open");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    const environment = try bugEnvironment(allocator, root, true);
+    const environment = try bugEnvironment(allocator, root, false);
 
     const expected = try std.fmt.allocPrint(allocator, bug_header ++ "✓ Bug report opened in browser!\n\n{s}\n", .{
         try bugSummary(allocator, "Bug Report", "None available"),
@@ -4069,7 +4096,7 @@ test "bug asks for the details of the bug like the TypeScript CLI" {
     const allocator = arena.allocator();
     const root = try helpers.makeTempDir(allocator, "cmd-bug-prompts");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    const environment = try bugEnvironment(allocator, root, false);
+    const environment = try bugEnvironment(allocator, root, true);
 
     // Each prompt is first answered with nothing, which the required ones reject, and the steps end with an empty
     // step. src/test/fixtures/bug-prompts.txt is what the TypeScript CLI (apps/cli/index.ts bug) writes for these
@@ -4085,13 +4112,10 @@ test "bug asks for the details of the bug like the TypeScript CLI" {
     });
     const prompts = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "src/test/fixtures/bug-prompts.txt", allocator, .unlimited);
     const details = "## Bug Description\nIt crashed\n\n## Steps to Reproduce\n1. Run psi add\n2. See error\n\n## Expected Behavior\nWorks\n\n## Actual Behavior\nCrashes";
-    const outro = try bugOutro(
-        allocator,
-        try bugSummary(allocator, "Crash on add", "None available"),
-        try bugUrl(allocator, "Crash on add", details, "No log file available", "No log file available"),
-    );
+    const outro = try bugOutro(allocator, try bugSummary(allocator, "Crash on add", "None available"));
     const expected = try std.mem.concat(allocator, u8, &.{ prompts, "\n", outro });
     try expectResult(result, expected, "", 0);
+    try expectOpened(allocator, root, try bugUrl(allocator, "Crash on add", details, "No log file available", "No log file available"));
 }
 
 test "bug is cancelled like the TypeScript CLI" {

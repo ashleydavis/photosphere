@@ -48,6 +48,19 @@ pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
     node_utils.process_env.setEnvironMap(init.environ_map);
     const arguments = try init.minimal.args.toSlice(allocator);
+
+    // Copied in as the program `psi bug` opens its URL with (xdg-open, open, or PowerShell on Windows), the driver
+    // records the arguments it was started with, one per line, to the file this variable names. It is written
+    // under another name and renamed into place, so a test waiting for it never reads half of it.
+    if (node_utils.process_env.getEnv("PHOTOSPHERE_TEST_OPENER_RECORD")) |recordPath| {
+        const recorded = try std.mem.join(allocator, "\n", arguments[1..]);
+        const partialPath = try std.fmt.allocPrint(allocator, "{s}.partial", .{recordPath});
+        const cwd = std.Io.Dir.cwd();
+        try cwd.writeFile(io, .{ .sub_path = partialPath, .data = recorded });
+        try cwd.rename(partialPath, cwd, recordPath, io);
+        return;
+    }
+
     if (arguments.len < 3) {
         return error.ExpectedResultFileAndScenario;
     }
