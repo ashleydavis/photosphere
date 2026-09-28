@@ -45,6 +45,7 @@ pub fn build(b: *std.Build) !void {
     const test_options = b.addOptions();
     test_options.addOptionPath("termination_child_path", termination_child.getEmittedBin());
 
+    const test_file = b.option([]const u8, "test-file", "Only run the tests of this file (e.g. path.test.zig)");
     const test_step = b.step("test", "Run unit tests");
     // Every test file but termination.test.zig is compiled into one test program, whose root imports each of them.
     // Compiled one program per file, each linked the package and everything it depends on again, which was most of
@@ -61,6 +62,11 @@ pub fn build(b: *std.Build) !void {
     while (try walker.next(b.graph.io)) |entry| {
         if (entry.kind != .file or !std.mem.endsWith(u8, entry.path, ".test.zig")) {
             continue;
+        }
+        if (test_file) |only_file| {
+            if (!std.mem.eql(u8, entry.path, only_file)) {
+                continue;
+            }
         }
 
         // The termination tests read no fixtures, and the termination child path in the test options is relative

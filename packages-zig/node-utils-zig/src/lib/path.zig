@@ -3,7 +3,7 @@
 // "path". Node joins the segments and then normalizes the result: it resolves `.` and `..` segments, collapses
 // repeated separators and, on Windows, turns every `/` into `\`. `std.fs.path.join` does none of that, so the
 // TypeScript output cannot be matched with it. Only join and the normalize it calls, dirname, basename (without a
-// suffix) and extname are ported.
+// suffix), extname and isAbsolute are ported.
 //
 
 const std = @import("std");
@@ -121,18 +121,18 @@ pub const posix = struct {
             return ".";
         }
 
-        const isAbsolute = path[0] == '/';
+        const isAbsolutePath = path[0] == '/';
         const trailingSeparator = path[path.len - 1] == '/';
 
-        const normalized = try normalizeString(allocator, path, !isAbsolute, '/', isPosixPathSeparator);
+        const normalized = try normalizeString(allocator, path, !isAbsolutePath, '/', isPosixPathSeparator);
 
         if (normalized.len == 0) {
-            if (isAbsolute) {
+            if (isAbsolutePath) {
                 return "/";
             }
             return if (trailingSeparator) "./" else ".";
         }
-        return std.mem.concat(allocator, u8, &.{ if (isAbsolute) "/" else "", normalized, if (trailingSeparator) "/" else "" });
+        return std.mem.concat(allocator, u8, &.{ if (isAbsolutePath) "/" else "", normalized, if (trailingSeparator) "/" else "" });
     }
 
     //
@@ -229,6 +229,13 @@ pub const posix = struct {
     pub fn extname(path: []const u8) []const u8 {
         return extnameFrom(path, 0, isPosixPathSeparator);
     }
+
+    //
+    // Tests for an absolute POSIX path (`path.posix.isAbsolute`).
+    //
+    pub fn isAbsolute(path: []const u8) bool {
+        return path.len > 0 and path[0] == '/';
+    }
 };
 
 //
@@ -245,7 +252,7 @@ pub const win32 = struct {
         }
         var rootEnd: usize = 0;
         var device: ?[]const u8 = null;
-        var isAbsolute = false;
+        var isAbsolutePath = false;
         const code = path[0];
 
         // Try to match a root
@@ -259,7 +266,7 @@ pub const win32 = struct {
 
             // If we started with a separator, we know we at least have an absolute
             // path of some kind (UNC or otherwise)
-            isAbsolute = true;
+            isAbsolutePath = true;
 
             if (isPathSeparator(path[1])) {
                 // Matched double path separator at beginning
@@ -309,22 +316,22 @@ pub const win32 = struct {
             if (len > 2 and isPathSeparator(path[2])) {
                 // Treat separator following drive name as an absolute path
                 // indicator
-                isAbsolute = true;
+                isAbsolutePath = true;
                 rootEnd = 3;
             }
         }
 
-        var tail: []const u8 = if (rootEnd < len) try normalizeString(allocator, path[rootEnd..], !isAbsolute, '\\', isPathSeparator) else "";
-        if (tail.len == 0 and !isAbsolute) {
+        var tail: []const u8 = if (rootEnd < len) try normalizeString(allocator, path[rootEnd..], !isAbsolutePath, '\\', isPathSeparator) else "";
+        if (tail.len == 0 and !isAbsolutePath) {
             tail = ".";
         }
         if (tail.len > 0 and isPathSeparator(path[len - 1])) {
             tail = try std.mem.concat(allocator, u8, &.{ tail, "\\" });
         }
         if (device) |deviceRoot| {
-            return std.mem.concat(allocator, u8, &.{ deviceRoot, if (isAbsolute) "\\" else "", tail });
+            return std.mem.concat(allocator, u8, &.{ deviceRoot, if (isAbsolutePath) "\\" else "", tail });
         }
-        return std.mem.concat(allocator, u8, &.{ if (isAbsolute) "\\" else "", tail });
+        return std.mem.concat(allocator, u8, &.{ if (isAbsolutePath) "\\" else "", tail });
     }
 
     //
@@ -534,6 +541,21 @@ pub const win32 = struct {
         }
         return extnameFrom(path, start, isPathSeparator);
     }
+
+    //
+    // Tests for an absolute Windows path (`path.win32.isAbsolute`).
+    //
+    pub fn isAbsolute(path: []const u8) bool {
+        const len = path.len;
+        if (len == 0) {
+            return false;
+        }
+
+        const code = path[0];
+        return isPathSeparator(code) or
+            // Possible device root
+            (len > 2 and isWindowsDeviceRoot(code) and path[1] == ':' and isPathSeparator(path[2]));
+    }
 };
 
 //
@@ -639,4 +661,14 @@ pub fn extname(path: []const u8) []const u8 {
         return win32.extname(path);
     }
     return posix.extname(path);
+}
+
+//
+// Tests for an absolute path, with the rules of the platform the program runs on (`path.isAbsolute`).
+//
+pub fn isAbsolute(path: []const u8) bool {
+    if (builtin.os.tag == .windows) {
+        return win32.isAbsolute(path);
+    }
+    return posix.isAbsolute(path);
 }

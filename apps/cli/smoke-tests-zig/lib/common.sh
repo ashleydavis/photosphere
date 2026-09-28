@@ -273,10 +273,10 @@ verify_root_hashes_match() {
         
         # Show merkle trees for debugging
         log_info "Showing merkle trees for original database:"
-        $(get_cli_command) debug merkle-tree --db "$original_dir" --yes --records
-        
+        $(get_zig_cli_command) debug merkle-tree --db "$original_dir" --yes --records
+
         log_info "Showing merkle trees for replica database:"
-        $(get_cli_command) debug merkle-tree --db "$replica_dir" --yes --records
+        $(get_zig_cli_command) debug merkle-tree --db "$replica_dir" --yes --records
         
         exit 1
     fi

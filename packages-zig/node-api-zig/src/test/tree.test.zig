@@ -3,6 +3,7 @@ const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const node_api = @import("node-api-zig");
 const helpers = @import("test-helpers.zig");
+const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
 const bdb = @import("bdb-zig");
@@ -377,4 +378,236 @@ test "isDatabaseEncrypted is true only when the database has the encryption mark
 
     try storage.write(allocator, io, ".db/encryption.pub", null, "a public key");
     try std.testing.expect(try tree.isDatabaseEncrypted(allocator, io, storage));
+}
+
+//
+// Path of the files tree in storage (the TypeScript FILES_TREE_PATH of tree.test.ts).
+//
+const FILES_TREE_PATH = ".db/files.dat";
+
+//
+// The ID of the trees the buildFilesTree tests build (the TypeScript TREE_ID of tree.test.ts).
+//
+const TREE_ID = "12345678-1234-5678-9abc-123456789abc";
+
+//
+// Returns the SHA-256 hash of a seed (TypeScript: makeHash).
+//
+fn makeHash(allocator: std.mem.Allocator, seed: []const u8) ![]const u8 {
+    const digest = try allocator.create([32]u8);
+    std.crypto.hash.sha2.Sha256.hash(seed, digest, .{});
+    return digest;
+}
+
+//
+// Builds a files tree holding the named leaves, with `{ filesImported: 0 }` metadata (TypeScript: buildMinimalTree).
+//
+fn buildMinimalTree(allocator: std.mem.Allocator, leafNames: []const []const u8) !merkle_tree.IMerkleTree {
+    var minimalTree = merkle_tree.createTree(TREE_ID);
+    for (leafNames) |name| {
+        minimalTree = try merkle_tree.addItem(allocator, &minimalTree, .{
+            .name = name,
+            .hash = try makeHash(allocator, name),
+            .length = 0,
+            .lastModified = std.Io.Clock.real.now(std.testing.io).toMilliseconds(),
+        });
+    }
+    minimalTree.merkle = try merkle_tree.buildMerkleTree(allocator, minimalTree.sort);
+    minimalTree.dirty = false;
+    minimalTree.databaseMetadata = try node_api.media_file_database.emptyDatabaseMetadata(allocator);
+    return minimalTree;
+}
+
+//
+// Gets the names of the leaves of a tree's sort tree
+// (TypeScript: `[...iterateLeaves<SortNode>(tree.sort)].map(n => n.name).filter(Boolean)`).
+//
+fn leafNamesOf(allocator: std.mem.Allocator, builtTree: *const merkle_tree.IMerkleTree) ![]const []const u8 {
+    var names: std.ArrayList([]const u8) = .empty;
+    var leaves = merkle_tree.iterateLeaves(merkle_tree.SortNode, allocator, builtTree.sort);
+    while (try leaves.next()) |leaf| {
+        if (leaf.name) |name| {
+            if (name.len > 0) {
+                try names.append(allocator, name);
+            }
+        }
+    }
+    return names.items;
+}
+
+//
+// Returns true when the list holds the name (TypeScript: `expect(list).toContain(name)`).
+//
+fn containsName(names: []const []const u8, wanted: []const u8) bool {
+    for (names) |name| {
+        if (std.mem.eql(u8, name, wanted)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//
+// Records each file count buildFilesTree reports (TypeScript: `(count) => progressCalls.push(count)`).
+//
+const ProgressRecorder = struct {
+    // Allocates the list.
+    allocator: std.mem.Allocator,
+
+    // The counts reported so far.
+    progressCalls: std.ArrayList(u64) = .empty,
+
+    //
+    // Records a count.
+    //
+    fn record(context: ?*anyopaque, fileCount: u64) void {
+        const self: *ProgressRecorder = @ptrCast(@alignCast(context.?));
+        self.progressCalls.append(self.allocator, fileCount) catch @panic("out of memory recording progress");
+    }
+
+    //
+    // Gets the progress callback that records into this recorder.
+    //
+    fn callback(self: *ProgressRecorder) node_api.tree.IBuildFilesTreeProgress {
+        return .{
+            .context = self,
+            .function = record,
+        };
+    }
+};
+
+//
+// Ignores the file counts (TypeScript: `() => {}`).
+//
+fn ignoreProgress(context: ?*anyopaque, fileCount: u64) void {
+    _ = context;
+    _ = fileCount;
+}
+
+//
+// A progress callback that does nothing (TypeScript: `() => {}`).
+//
+const noProgress: node_api.tree.IBuildFilesTreeProgress = .{
+    .context = null,
+    .function = ignoreProgress,
+};
+
+test "builds tree from storage when no existing tree" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var memoryStorage = MemoryStorage.init(allocator);
+    const storage = memoryStorage.asStorage();
+    try storage.write(allocator, io, "asset/f1", "application/octet-stream", "a");
+    try storage.write(allocator, io, "display/d1", "application/octet-stream", "b");
+    try storage.write(allocator, io, "thumb/t1", "application/octet-stream", "c");
+
+    var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
+    var recorder: ProgressRecorder = .{ .allocator = allocator };
+    const result = try tree.buildFilesTree(allocator, io, storage, recorder.callback(), uuidGenerator.uuidGenerator());
+
+    try std.testing.expect(result.fileCount >= 3);
+    const leafNames = try leafNamesOf(allocator, &result.merkleTree);
+    try std.testing.expect(containsName(leafNames, "asset/f1"));
+    try std.testing.expect(containsName(leafNames, "display/d1"));
+    try std.testing.expect(containsName(leafNames, "thumb/t1"));
+    try std.testing.expect(node_api.media_file_database.getFilesImported(result.merkleTree.databaseMetadata) >= 1);
+    try std.testing.expect(try storage.fileExists(allocator, io, FILES_TREE_PATH));
+    for (recorder.progressCalls.items, 0..) |count, index| {
+        try std.testing.expectEqual(@as(u64, index + 1), count);
+    }
+}
+
+test "preserves existing tree id when rebuilding" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var memoryStorage = MemoryStorage.init(allocator);
+    const storage = memoryStorage.asStorage();
+    const existingTree = try buildMinimalTree(allocator, &.{"asset/old"});
+    try merkle_tree.saveTree(allocator, io, FILES_TREE_PATH, &existingTree, storage, "FTRE");
+    try storage.write(allocator, io, "asset/old", "application/octet-stream", "old");
+    try storage.write(allocator, io, "asset/new", "application/octet-stream", "new");
+
+    var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
+    const result = try tree.buildFilesTree(allocator, io, storage, noProgress, uuidGenerator.uuidGenerator());
+
+    try std.testing.expectEqualStrings(TREE_ID, result.merkleTree.id);
+    const leafNames = try leafNamesOf(allocator, &result.merkleTree);
+    try std.testing.expect(containsName(leafNames, "asset/old"));
+    try std.testing.expect(containsName(leafNames, "asset/new"));
+}
+
+test "ignores paths under .db/" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var memoryStorage = MemoryStorage.init(allocator);
+    const storage = memoryStorage.asStorage();
+    try storage.write(allocator, io, "asset/f1", "application/octet-stream", "a");
+    try storage.write(allocator, io, ".db/config.json", "application/json", "{}");
+
+    var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
+    const result = try tree.buildFilesTree(allocator, io, storage, noProgress, uuidGenerator.uuidGenerator());
+
+    const leafNames = try leafNamesOf(allocator, &result.merkleTree);
+    try std.testing.expect(containsName(leafNames, "asset/f1"));
+    try std.testing.expect(!containsName(leafNames, ".db/config.json"));
+}
+
+test "returns fileCount 0 and filesImported 0 when storage has no content files" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var memoryStorage = MemoryStorage.init(allocator);
+    const storage = memoryStorage.asStorage();
+
+    var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
+    const result = try tree.buildFilesTree(allocator, io, storage, noProgress, uuidGenerator.uuidGenerator());
+
+    try std.testing.expectEqual(@as(u64, 0), result.fileCount);
+    try std.testing.expectEqual(@as(u64, 0), node_api.media_file_database.getFilesImported(result.merkleTree.databaseMetadata));
+    try std.testing.expect(try storage.fileExists(allocator, io, FILES_TREE_PATH));
+}
+
+test "invokes progressCallback with incrementing count for each file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var memoryStorage = MemoryStorage.init(allocator);
+    const storage = memoryStorage.asStorage();
+    try storage.write(allocator, io, "asset/a", "application/octet-stream", "a");
+    try storage.write(allocator, io, "asset/b", "application/octet-stream", "b");
+
+    var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
+    var recorder: ProgressRecorder = .{ .allocator = allocator };
+    _ = try tree.buildFilesTree(allocator, io, storage, recorder.callback(), uuidGenerator.uuidGenerator());
+
+    const progressCalls = recorder.progressCalls.items;
+    try std.testing.expect(progressCalls.len >= 2);
+    try std.testing.expectEqual(@as(u64, 1), progressCalls[0]);
+    try std.testing.expectEqual(@as(u64, progressCalls.len), progressCalls[progressCalls.len - 1]);
+}
+
+test "saved tree can be loaded and has correct databaseMetadata" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var memoryStorage = MemoryStorage.init(allocator);
+    const storage = memoryStorage.asStorage();
+    try storage.write(allocator, io, "asset/only", "application/octet-stream", "x");
+
+    var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
+    _ = try tree.buildFilesTree(allocator, io, storage, noProgress, uuidGenerator.uuidGenerator());
+
+    const loaded = try tree.loadMerkleTree(allocator, io, storage);
+    try std.testing.expect(loaded != null);
+    try std.testing.expect(loaded.?.databaseMetadata != null);
+    try std.testing.expect(node_api.media_file_database.getFilesImported(loaded.?.databaseMetadata) >= 1);
 }

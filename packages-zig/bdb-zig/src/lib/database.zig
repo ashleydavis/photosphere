@@ -10,6 +10,7 @@ const collection_zig = @import("collection.zig");
 const merkle_tree = @import("merkle-tree.zig");
 const merkle_tree_ref = @import("merkle-tree-ref.zig");
 const IStorage = storage_zig.storage.IStorage;
+const pathJoin = storage_zig.storage_factory.pathJoin;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const ITimestampProvider = utils.timestamp_provider.ITimestampProvider;
 const IMerkleTree = merkle_tree_zig.merkle_tree.IMerkleTree;
@@ -106,7 +107,34 @@ pub const BsonDatabase = struct {
         self.dirty = false;
     }
 
-    // Not ported: collections (not used by psi replicate or psi verify).
+    //
+    // Gets the names of all collections in the database.
+    //
+    pub fn collections(self: *BsonDatabase, io: std.Io) ![]const []const u8 {
+
+        var uniqueSet: std.StringArrayHashMapUnmanaged(void) = .empty;
+
+        const collectionsPath = try pathJoin(self.allocator, &.{ self.bsonDbPath, "collections" });
+        if (try self.storage.dirExists(self.allocator, io, collectionsPath)) {
+            var next: ?[]const u8 = null;
+            while (true) {
+                const storageResult = try self.storage.listDirs(self.allocator, io, collectionsPath, 1000, next);
+                for (storageResult.names) |name| {
+                    try uniqueSet.put(self.allocator, name, {});
+                }
+                next = storageResult.next;
+                if (next == null) {
+                    break;
+                }
+            }
+        }
+
+        for (self._collections.keys()) |name| {
+            try uniqueSet.put(self.allocator, name, {});
+        }
+
+        return uniqueSet.keys();
+    }
 
     //
     // Gets a named collection (v6 layout: directory = collections/<name>).

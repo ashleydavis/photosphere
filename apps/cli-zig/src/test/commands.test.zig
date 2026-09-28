@@ -2938,3 +2938,331 @@ fn runReceiver(environment: *const std.process.Environ.Map, code: []const u8, ou
         std.debug.panic("Writing the receiver's output failed: {s}", .{@errorName(err)});
     };
 }
+
+//
+// What `psi debug merkle-tree --records` (apps/cli/src/cmd/debug.ts) prints for test/dbs/v6: the aggregate root hash, the
+// files tree, the BSON database tree, the tree of its metadata collection and of its one shard, and the one record of
+// that shard with its fields cut to 5 by truncateLongStrings.
+//
+const debug_merkle_tree_v6_records =
+    \\
+    \\🌳 Merkle Trees Visualization
+    \\
+    \\Aggregate Root Hash:
+    \\============================================================
+    \\c18854777b06e1b0d499230db43f74b32bf937cd892c974b673621b979f40590
+    \\
+    \\Files Merkle Tree (.db/files.dat):
+    \\============================================================
+    \\Tree Metadata:
+    \\  UUID: 85fe592c-9b92-4fa1-9ec5-f87f01cf8e72
+    \\  Total Nodes: 7
+    \\  Total Items: 4
+    \\  Total Size: 2877318 bytes
+    \\
+    \\Database Metadata:
+    \\  filesImported: 1
+    \\
+    \\Version: 6
+    \\
+    \\==================================================
+    \\Sort Tree:
+    \\==================================================
+    \\
+    \\└── asset/89171cd9-a652-4047-b869-1154bf2c95a1 (7)
+    \\    ├── asset/89171cd9-a652-4047-b869-1154bf2c95a1 (3)
+    \\    │   ├── asset/89171cd9-a652-4047-b869-1154bf2c95a1 (427c)
+    \\    │   └── display/89171cd9-a652-4047-b869-1154bf2c95a1 (8ad9)
+    \\    └── README.md (3)
+    \\        ├── README.md (94b7)
+    \\        └── thumb/89171cd9-a652-4047-b869-1154bf2c95a1 (9ee6)
+    \\
+    \\==================================================
+    \\Merkle Tree:
+    \\==================================================
+    \\
+    \\└──  a9bc
+    \\    ├──  dd8f
+    \\    │   ├──  427c asset/89171cd9-a652-4047-b869-1154bf2c95a1
+    \\    │   └──  8ad9 display/89171cd9-a652-4047-b869-1154bf2c95a1
+    \\    └──  e061
+    \\        ├──  94b7 README.md
+    \\        └──  9ee6 thumb/89171cd9-a652-4047-b869-1154bf2c95a1
+    \\
+    \\==================================================
+    \\Root Hash: a9b73642fdb4367f37ad07a11351aabbc5ef7e9dfe334f0c554171fe84feb9bc
+    \\==================================================
+    \\
+    \\==================================================
+    \\Leaf Nodes:
+    \\==================================================
+    \\asset/89171cd9-a652-4047-b869-1154bf2c95a1 (426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c)
+    \\display/89171cd9-a652-4047-b869-1154bf2c95a1 (8a2205c424a91b8b643a11bc4c12529d56517198fa977243bbf26cfcd1a165d9)
+    \\README.md (94f27ca43db9c872cfa4a377f3731cb42811e82ec48f2426a541643145a777b7)
+    \\thumb/89171cd9-a652-4047-b869-1154bf2c95a1 (9ecd6efc5383fbda3c1125ea06a1311aa6fa9906fb4c8c85362797b8240c36e6)
+    \\==================================================
+    \\
+    \\
+    \\BSON Database Merkle Tree (.db/bson/db.dat):
+    \\============================================================
+    \\Tree Metadata:
+    \\  UUID: d9ce4a52-ec73-457b-9fed-6af95e2aaa03
+    \\  Total Nodes: 1
+    \\  Total Items: 1
+    \\  Total Size: 1 bytes
+    \\
+    \\Database Metadata:
+    \\
+    \\Version: 6
+    \\
+    \\==================================================
+    \\Sort Tree:
+    \\==================================================
+    \\
+    \\└── metadata (2924)
+    \\
+    \\==================================================
+    \\Merkle Tree:
+    \\==================================================
+    \\
+    \\└──  2924 metadata
+    \\
+    \\==================================================
+    \\Root Hash: 291f9fdb6581bae7e0414c85bc280de52de1a0d0bc2dbc2e72f8f31df293e224
+    \\==================================================
+    \\
+    \\==================================================
+    \\Leaf Nodes:
+    \\==================================================
+    \\metadata (291f9fdb6581bae7e0414c85bc280de52de1a0d0bc2dbc2e72f8f31df293e224)
+    \\==================================================
+    \\
+    \\
+    \\Collection Merkle Trees:
+    \\============================================================
+    \\
+    \\Collection: metadata
+    \\------------------------------------------------------------
+    \\Tree Metadata:
+    \\  UUID: 3ce192e5-28b1-4694-b5df-dc46b3628ee3
+    \\  Total Nodes: 1
+    \\  Total Items: 1
+    \\  Total Size: 1 bytes
+    \\
+    \\Database Metadata:
+    \\
+    \\Version: 6
+    \\
+    \\==================================================
+    \\Sort Tree:
+    \\==================================================
+    \\
+    \\└── 96 (2924)
+    \\
+    \\==================================================
+    \\Merkle Tree:
+    \\==================================================
+    \\
+    \\└──  2924 96
+    \\
+    \\==================================================
+    \\Root Hash: 291f9fdb6581bae7e0414c85bc280de52de1a0d0bc2dbc2e72f8f31df293e224
+    \\==================================================
+    \\
+    \\==================================================
+    \\Leaf Nodes:
+    \\==================================================
+    \\96 (291f9fdb6581bae7e0414c85bc280de52de1a0d0bc2dbc2e72f8f31df293e224)
+    \\==================================================
+    \\
+    \\
+    \\  Shard: 96
+    \\  ----------------------------------------------------------
+    \\  Tree Metadata:
+    \\    UUID: 210118f1-5567-4e8c-a031-b74167da701b
+    \\    Total Nodes: 1
+    \\    Total Items: 1
+    \\    Total Size: 119935 bytes
+    \\  
+    \\  Database Metadata:
+    \\  
+    \\  Version: 6
+    \\  
+    \\  ==================================================
+    \\  Sort Tree:
+    \\  ==================================================
+    \\  
+    \\  └── 89171cd9-a652-4047-b869-1154bf2c95a1 (2924)
+    \\  
+    \\  ==================================================
+    \\  Merkle Tree:
+    \\  ==================================================
+    \\  
+    \\  └──  2924 89171cd9-a652-4047-b869-1154bf2c95a1
+    \\  
+    \\  ==================================================
+    \\  Root Hash: 291f9fdb6581bae7e0414c85bc280de52de1a0d0bc2dbc2e72f8f31df293e224
+    \\  ==================================================
+    \\  
+    \\  ==================================================
+    \\  Leaf Nodes:
+    \\  ==================================================
+    \\  89171cd9-a652-4047-b869-1154bf2c95a1 (291f9fdb6581bae7e0414c85bc280de52de1a0d0bc2dbc2e72f8f31df293e224)
+    \\  ==================================================
+    \\  
+    \\
+    \\    Records in shard 96:
+    \\      89171cd9a6524047b8691154bf2c95a1:
+    \\        Hash: 291f9fdb6581bae7e0414c85bc280de52de1a0d0bc2dbc2e72f8f31df293e224
+    \\        {
+    \\          "_id": "89171cd9-a652-4047-b869-1154bf2c95a1",
+    \\          "fields": {
+    \\            "width": 2560,
+    \\            "height": 1920,
+    \\            "origFileName": "test.jpg",
+    \\            "origPath": "../../test",
+    \\            "contentType": "image/jpeg",
+    \\            "...": "10 more fields"
+    \\          },
+    \\          "metadata": {}
+    \\        }
+    \\
+    \\
+;
+
+test "debug merkle-tree prints the trees and records like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-debug-merkle-tree");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+
+    const result = try runZig(allocator, environment, &.{ "debug", "merkle-tree", "--db", db, "--yes", "--records" });
+    try expectResult(result, debug_merkle_tree_v6_records, "", 0);
+
+    // Without --records the output stops before the records of the shard.
+    const recordsStart = std.mem.indexOf(u8, debug_merkle_tree_v6_records, "\n    Records in shard 96:").?;
+    const withoutRecords = try runZig(allocator, environment, &.{ "debug", "merkle-tree", "--db", db, "--yes" });
+    try expectResult(withoutRecords, debug_merkle_tree_v6_records[0 .. recordsStart + 1], "", 0);
+
+    // With --all the record is shown whole: its 16 fields, the long micro thumbnail included.
+    const all = try runZig(allocator, environment, &.{ "debug", "merkle-tree", "--db", db, "--yes", "--records", "--all" });
+    try std.testing.expectEqual(@as(u8, 0), all.exitCode);
+    try std.testing.expect(std.mem.indexOf(u8, all.stdout, "\"...\"") == null);
+    try std.testing.expect(std.mem.indexOf(u8, all.stdout, "            \"photoDate\": \"2025-05-27T09:54:16.000Z\",\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, all.stdout, "            \"color\": [\n              112,\n              110,\n              105\n            ]\n") != null);
+}
+
+//
+// The name of the asset of test/dbs/v6 and of the copy of it the duplicate tests add.
+//
+const debug_original_asset = "89171cd9-a652-4047-b869-1154bf2c95a1";
+const debug_duplicate_asset = "00000000-0000-0000-0000-000000000001";
+
+test "debug finds and removes a duplicate asset, then rebuilds the sort indexes, like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const root = try setup(allocator, "cmd-debug-duplicates");
+    defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+
+    // A second asset file with the same content as the first, both given the same modified time.
+    const originalPath = try std.fs.path.join(allocator, &.{ db, "asset", debug_original_asset });
+    const duplicatePath = try std.fs.path.join(allocator, &.{ db, "asset", debug_duplicate_asset });
+    try std.Io.Dir.cwd().copyFile(originalPath, std.Io.Dir.cwd(), duplicatePath, io, .{});
+    try setHashTestModifiedTime(originalPath);
+    try setHashTestModifiedTime(duplicatePath);
+
+    const rebuilt = try runZig(allocator, environment, &.{ "debug", "build-files-tree", "--db", db, "--yes" });
+    try expectResult(rebuilt, try std.fmt.allocPrint(allocator, "\nRebuilding files merkle tree from storage\n  Database: {s}\n\nRebuilt files merkle tree: 5 files.\n\n", .{db}), "", 0);
+
+    const collisionsPath = try node_path.join(allocator, &.{ db, "collisions.json" });
+    const collisions = try runZig(allocator, environment, &.{ "debug", "find-collisions", "--db", db, "--yes" });
+    try expectResult(collisions, try std.fmt.allocPrint(allocator, "\nFinding hash collisions in database:\n  Database: {s}\n\n\n📊 Summary\nTotal collisions: 1\nTotal asset IDs in collisions: 2\nOutput file: {s}\n\n", .{ db, collisionsPath }), "", 0);
+    try std.testing.expectEqualStrings(
+        "{\n  \"426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c\": [\n    {\n      \"assetId\": \"00000000-0000-0000-0000-000000000001\",\n      \"size\": 2049800,\n      \"time\": \"2024-01-02T03:04:05.678Z\"\n    },\n    {\n      \"assetId\": \"89171cd9-a652-4047-b869-1154bf2c95a1\",\n      \"size\": 2049800,\n      \"time\": \"2024-01-02T03:04:05.678Z\"\n    }\n  ]\n}",
+        try std.Io.Dir.cwd().readFileAlloc(io, collisionsPath, allocator, .unlimited),
+    );
+
+    const duplicatesPath = try node_path.join(allocator, &.{ db, "duplicates.json" });
+    const duplicates = try runZig(allocator, environment, &.{ "debug", "find-duplicates", "--db", db, "--yes" });
+    try expectResult(duplicates, try std.fmt.allocPrint(allocator, "\nFinding duplicate assets by comparing file sizes:\n  Input file: {s}\n  Database: {s}\n\n\n📊 Summary\nTotal collisions: 1\nTrue duplicates (same content): 1\nHash collisions (different content): 0\nOutput file: {s}\n\n", .{ collisionsPath, db, duplicatesPath }), "", 0);
+    try std.testing.expectEqualStrings(
+        "{\n  \"426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c\": [\n    {\n      \"assetIds\": [\n        \"00000000-0000-0000-0000-000000000001\",\n        \"89171cd9-a652-4047-b869-1154bf2c95a1\"\n      ]\n    }\n  ]\n}",
+        try std.Io.Dir.cwd().readFileAlloc(io, duplicatesPath, allocator, .unlimited),
+    );
+
+    // The first asset of each group is kept and the rest are removed: here that is the asset of test/dbs/v6.
+    const removed = try runZig(allocator, environment, &.{ "debug", "remove-duplicates", "--db", db, "--yes" });
+    try expectResult(removed, try std.fmt.allocPrint(allocator, "\nRemoving duplicate assets:\n  Input file: {s}\n  Database: {s}\n\nFound 1 duplicate asset to remove\n\n\n📊 Summary\nAssets removed: 1\n\n", .{ duplicatesPath, db }), "", 0);
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(io, originalPath, .{}));
+    _ = try std.Io.Dir.cwd().statFile(io, duplicatePath, .{});
+
+    // Nothing is left to remove once the duplicates file lists no group with more than one asset.
+    const emptyPath = try node_path.join(allocator, &.{ db, "empty.json" });
+    try std.Io.Dir.cwd().writeFile(io, .{
+        .sub_path = emptyPath,
+        .data = "{}\n",
+    });
+    const nothing = try runZig(allocator, environment, &.{ "debug", "remove-duplicates", "--db", db, "--yes", "-i", "empty.json" });
+    try expectResult(nothing, try std.fmt.allocPrint(allocator, "\nRemoving duplicate assets:\n  Input file: {s}\n  Database: {s}\n\nNo duplicate assets to remove.\n\n", .{ emptyPath, db }), "", 0);
+
+    const sortIndexes = try runZig(allocator, environment, &.{ "debug", "build-sort-index", "--db", db, "--yes" });
+    try expectResult(sortIndexes, try std.fmt.allocPrint(allocator, "\n🔨 Rebuilding Sort Indexes\n  Database: {s}\n\nFound 2 existing sort indexes:\n  - hash (asc)\n  - photoDate (desc)\n\nDeleted 2 sort indexes.\n\nRebuilding sort indexes...\n\n✅ Sort indexes rebuilt successfully.\n\nRebuilt indexes:\n  - hash (asc, string)\n  - photoDate (desc, date)\n\n", .{db}), "", 0);
+}
+
+test "debug find-collisions writes an absolute --output path like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const root = try setup(allocator, "cmd-debug-collisions-output");
+    defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const outputPath = try std.Io.Dir.cwd().realPathFileAlloc(io, root, allocator);
+    const absoluteOutput = try node_path.join(allocator, &.{ outputPath, "out.json" });
+
+    const result = try runZig(allocator, environment, &.{ "debug", "find-collisions", "--db", db, "--yes", "--output", absoluteOutput });
+    try expectResult(result, try std.fmt.allocPrint(allocator, "\nFinding hash collisions in database:\n  Database: {s}\n\n\n📊 Summary\nTotal collisions: 0\nTotal asset IDs in collisions: 0\nOutput file: {s}\n\n", .{ db, absoluteOutput }), "", 0);
+    try std.testing.expectEqualStrings("{}", try std.Io.Dir.cwd().readFileAlloc(io, absoluteOutput, allocator, .unlimited));
+}
+
+test "debug find-duplicates reports an input file it cannot read like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const root = try setup(allocator, "cmd-debug-duplicates-missing");
+    defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const inputPath = try node_path.join(allocator, &.{ db, "collisions.json" });
+
+    const missing = try runZig(allocator, environment, &.{ "debug", "find-duplicates", "--db", db, "--yes" });
+    try std.testing.expectEqual(@as(u8, 1), missing.exitCode);
+    try std.testing.expectEqualStrings("", missing.stderr);
+    try std.testing.expectEqualStrings(
+        try std.fmt.allocPrint(allocator, "Error: Failed to read input file {s}: ENOENT: no such file or directory, open '{s}'\nTemporary files retained for inspection: <session dir>\n", .{ inputPath, inputPath }),
+        try maskRetainedSessionDir(allocator, missing.stdout),
+    );
+
+    // Bun's JSON.parse names what it found ("Unexpected identifier"); the Zig CLI names the error of the JSON parser,
+    // as the other ported JSON.parse calls do.
+    const badPath = try node_path.join(allocator, &.{ db, "bad.json" });
+    try std.Io.Dir.cwd().writeFile(io, .{
+        .sub_path = badPath,
+        .data = "not json\n",
+    });
+    const malformed = try runZig(allocator, environment, &.{ "debug", "remove-duplicates", "--db", db, "--yes", "-i", "bad.json" });
+    try std.testing.expectEqual(@as(u8, 1), malformed.exitCode);
+    try std.testing.expectEqualStrings(
+        try std.fmt.allocPrint(allocator, "Error: Failed to read input file {s}: JSON Parse error: SyntaxError\nTemporary files retained for inspection: <session dir>\n", .{badPath}),
+        try maskRetainedSessionDir(allocator, malformed.stdout),
+    );
+}
