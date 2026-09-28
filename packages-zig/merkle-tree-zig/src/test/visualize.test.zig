@@ -6,6 +6,7 @@
 const std = @import("std");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const serialization_zig = @import("serialization-zig");
+const utils = @import("utils-zig");
 const merkle_verify = @import("merkle-verify.zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const visualize = merkle_tree_zig.visualize;
@@ -86,4 +87,36 @@ test "visualizeSortTree throws for a leaf without a content hash" {
     };
     var output: std.Io.Writer.Allocating = .init(allocator);
     try std.testing.expectError(error.Thrown, visualize.visualizeSortTree(allocator, &output.writer, &leaf, "", true));
+}
+
+test "visualizeTree writes boolean, null and undefined database metadata like String()" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var tree = merkle_tree.createTree(merkle_verify.TEST_TREE_ID);
+    tree = try merkle_tree.addItem(allocator, &tree, try merkle_verify.createSha256HashedItem(allocator, "A", "A", 1));
+    tree.databaseMetadata = try BsonDocument.fromFields(allocator, &.{
+        .{ .key = "yes", .value = .{ .boolean = true } },
+        .{ .key = "no", .value = .{ .boolean = false } },
+        .{ .key = "nothing", .value = .null },
+        .{ .key = "missing", .value = .undefined },
+    });
+    const text = try visualize.visualizeTree(allocator, &tree);
+    try std.testing.expect(std.mem.indexOf(u8, text, "Database Metadata:\n  yes: true\n  no: false\n  nothing: null\n  missing: undefined\n\n") != null);
+
+    // Other values are not ported, and say so.
+    tree.databaseMetadata = try BsonDocument.fromFields(allocator, &.{.{ .key = "when", .value = .{ .date = 0 } }});
+    try std.testing.expectError(error.Thrown, visualize.visualizeTree(allocator, &tree));
+    try std.testing.expectEqualStrings("String() of a date database metadata value is not ported", utils.errors.lastErrorMessage());
+}
+
+test "visualizeMerkleTree writes nothing for an empty hash" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var leaf: merkle_tree.MerkleNode = .{ .hash = "", .nodeCount = 1, .name = "A" };
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    try visualize.visualizeMerkleTree(allocator, &output.writer, &leaf, "", true);
+    try std.testing.expectEqualStrings("└──   A\n", output.written());
 }

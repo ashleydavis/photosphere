@@ -603,3 +603,20 @@ test "saves the replayed scenario trees byte-identical to the trees TypeScript s
         };
     }
 }
+
+test "compareNames reads invalid UTF-8 as the replacement character" {
+    // An invalid start byte, a truncated sequence and an overlong encoding read as U+FFFD, one for each byte
+    // (decodeCodePoint does not group the bytes of a broken sequence the way a JavaScript decoder does).
+    try std.testing.expectEqual(@as(i32, 0), merkle_tree.compareNames("a\xff", "a\u{FFFD}"));
+    try std.testing.expectEqual(@as(i32, 0), merkle_tree.compareNames("a\xe2\x82", "a\u{FFFD}\u{FFFD}"));
+    try std.testing.expectEqual(@as(i32, 0), merkle_tree.compareNames("\xc0\x80", "\u{FFFD}\u{FFFD}"));
+}
+
+test "lessThanUtf16 orders strings by UTF-16 code units like Array.prototype.sort" {
+    // U+1F600 is the surrogate pair D83D DE00, which sorts before U+FFFF in UTF-16 (though after it in UTF-8).
+    try std.testing.expect(merkle_tree.lessThanUtf16({}, "a\u{1F600}", "a\u{FFFF}"));
+    try std.testing.expect(!merkle_tree.lessThanUtf16({}, "a\u{FFFF}", "a\u{1F600}"));
+    try std.testing.expect(merkle_tree.lessThanUtf16({}, "a\u{1F600}", "a\u{1F601}"));
+    try std.testing.expect(merkle_tree.lessThanUtf16({}, "a", "ab"));
+    try std.testing.expect(!merkle_tree.lessThanUtf16({}, "ab", "ab"));
+}

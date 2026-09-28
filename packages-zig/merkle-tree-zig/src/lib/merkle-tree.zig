@@ -473,7 +473,7 @@ const Utf16Iterator = struct {
 // The ordering of JavaScript's default `Array.prototype.sort()` for strings (UTF-16 code unit order).
 // (No TypeScript counterpart.)
 //
-fn lessThanUtf16(context: void, left: []const u8, right: []const u8) bool {
+pub fn lessThanUtf16(context: void, left: []const u8, right: []const u8) bool {
     _ = context;
     var leftUnits: Utf16Iterator = .{ .text = left, .index = 0, .pendingLowSurrogate = null };
     var rightUnits: Utf16Iterator = .{ .text = right, .index = 0, .pendingLowSurrogate = null };
@@ -591,6 +591,17 @@ pub const FlatSortNode = struct {
 };
 
 //
+// A child that an internal node must have, throwing like JavaScript's `node.left!.leafCount` does when it is missing
+// (a flat array or file that ends early, or holds an empty subtree under an internal node). (No TypeScript
+// counterpart: TypeScript reads the property of undefined.)
+//
+fn requireChild(child: ?*SortNode) !*SortNode {
+    return child orelse {
+        return errors.throwError("TypeError: Cannot read properties of undefined (reading 'leafCount')", .{});
+    };
+}
+
+//
 // Convert flat array to binary tree (for loading)
 //
 pub fn arrayToBinaryTree(allocator: std.mem.Allocator, nodes: []const FlatSortNode) !?*SortNode {
@@ -635,10 +646,10 @@ pub fn arrayToBinaryTree(allocator: std.mem.Allocator, nodes: []const FlatSortNo
                 .contentHash = flatNode.contentHash,
                 .name = flatNode.name,
                 .nodeCount = flatNode.nodeCount,
-                .leafCount = left.?.leafCount + right.?.leafCount,
+                .leafCount = (try requireChild(left)).leafCount + (try requireChild(right)).leafCount,
                 .size = flatNode.size,
                 .lastModified = flatNode.lastModified,
-                .minName = left.?.minName,
+                .minName = (try requireChild(left)).minName,
                 .left = left,
                 .right = right,
             };
@@ -1174,10 +1185,8 @@ fn serializeMerkleNodeV5(node: *const MerkleNode, serializer: ISerializer, strin
     // Write nodeCount
     try serializer.writeUInt32(node.nodeCount);
 
-    // Write the hash index (instead of the hash bytes)
-    if (node.hash.len != 32) {
-        return errors.throwError("Invalid hash length: {d}, expected 32 bytes", .{node.hash.len});
-    }
+    // Write the hash index (instead of the hash bytes). (TypeScript first checks the hash is 32 bytes, which it always
+    // is here: collectHashes put it through a BufferSet, which refuses any other length.)
     const hashIndex = (try hashTable.get(node.hash)) orelse {
         return errors.throwError("Hash not found in hash table. This could be a bug.", .{});
     };
@@ -1472,10 +1481,9 @@ fn serializeMerkleTree(allocator: std.mem.Allocator, tree: *const IMerkleTree, s
 
     // Write hash table (uncompressed)
     try serializer.writeUInt32(@intCast(uniqueHashes.len));
+    // (collectHashes put every hash through a BufferSet, which refuses a hash that is not 32 bytes, so TypeScript's
+    // length check here cannot fail and is left out.)
     for (uniqueHashes) |hash| {
-        if (hash.len != 32) {
-            return errors.throwError("Invalid hash length: {d}, expected 32 bytes", .{hash.len});
-        }
         try serializer.writeBytes(hash);
     }
 
@@ -1796,9 +1804,9 @@ fn deserializeSortNodeV5(allocator: std.mem.Allocator, deserializer: IDeserializ
 
         node.* = .{
             .nodeCount = nodeCount,
-            .leafCount = left.?.leafCount + right.?.leafCount,
+            .leafCount = (try requireChild(left)).leafCount + (try requireChild(right)).leafCount,
             .size = size,
-            .minName = left.?.minName,
+            .minName = (try requireChild(left)).minName,
             .left = left,
             .right = right,
         };
@@ -1853,9 +1861,9 @@ fn deserializeSortNode(allocator: std.mem.Allocator, deserializer: IDeserializer
         const right = try deserializeSortNode(allocator, deserializer);
         node.* = .{
             .nodeCount = nodeCount,
-            .leafCount = left.?.leafCount + right.?.leafCount,
+            .leafCount = (try requireChild(left)).leafCount + (try requireChild(right)).leafCount,
             .size = size,
-            .minName = left.?.minName,
+            .minName = (try requireChild(left)).minName,
             .left = left,
             .right = right,
         };
