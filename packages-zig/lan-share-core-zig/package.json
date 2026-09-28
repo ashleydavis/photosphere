@@ -1,7 +1,7 @@
 {
   "name": "lan-share-core-zig",
   "version": "1.0.0",
-  "description": "Zig port of the lan-share-core package (only what psi secrets send and receive need).",
+  "description": "Zig port of the lan-share-core package (what psi secrets and psi dbs send and receive need).",
   "private": true,
   "scripts": {
     "compile": "zig build",

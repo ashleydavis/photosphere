@@ -4,6 +4,7 @@ const helpers = @import("test-helpers.zig");
 const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const node_path = @import("node-utils-zig").path;
+const encryption = @import("encryption-zig");
 
 //
 // The expected output of these tests is written out here, ported from the TypeScript CLI: the report text from
@@ -2714,7 +2715,7 @@ test "commands that are not ported yet fail with an error that names them" {
     const environment = try helpers.cliEnvironment(allocator, root);
 
     const bugHint = "\nIf you believe this behaviour is a bug, please report it with the following command:\n   psi bug\n";
-    try expectResult(try runZig(allocator, environment, &.{ "-q", "dbs", "view", "--name", "x" }), bugHint, "An unknown error occurred\nError: The dbs view command is not ported to the Zig CLI yet.\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "-q", "bug", "--no-browser" }), bugHint, "An unknown error occurred\nError: The bug command is not ported to the Zig CLI yet.\n", 1);
     try expectResult(try runZig(allocator, environment, &.{ "-q", "news" }), bugHint, "An unknown error occurred\nError: The news command is not ported to the Zig CLI yet.\n", 1);
 }
 
@@ -2881,7 +2882,7 @@ test "secrets send and receive transfer a secret over the local network like the
     const code = try std.fmt.allocPrint(allocator, "{d}", .{1000 + std.mem.readInt(u32, &randomBytes, .little) % 9000});
 
     const receiverOutput = try std.fmt.allocPrint(allocator, "{s}/receiver.txt", .{receiverRoot});
-    const receiverThread = try std.Thread.spawn(.{}, runReceiver, .{ receiverEnvironment, code, receiverOutput });
+    const receiverThread = try std.Thread.spawn(.{}, runReceiver, .{ receiverEnvironment, "secrets", code, receiverOutput });
     const sendResult = try runZig(allocator, senderEnvironment, &.{ "secrets", "send", "--yes", "--name", "s3a", "--code", code });
     receiverThread.join();
 
@@ -2934,13 +2935,13 @@ test "secrets send and receive transfer a secret over the local network like the
 }
 
 //
-// Runs `psi secrets receive --yes --code <code>` (the receiving device of the send and receive test) and writes its
-// stdout, followed by "exit <code>", to a file.
+// Runs `psi <group> receive --yes --code <code>` (the receiving device of the send and receive tests of the secrets
+// and dbs groups) and writes its stdout, followed by "exit <code>", to a file.
 //
-fn runReceiver(environment: *const std.process.Environ.Map, code: []const u8, outputPath: []const u8) void {
+fn runReceiver(environment: *const std.process.Environ.Map, group: []const u8, code: []const u8, outputPath: []const u8) void {
     // The test's arena is not thread-safe, so the receiver thread allocates from the process allocator.
     const allocator = std.heap.smp_allocator;
-    const result = runZig(allocator, environment, &.{ "secrets", "receive", "--yes", "--code", code }) catch |err| {
+    const result = runZig(allocator, environment, &.{ group, "receive", "--yes", "--code", code }) catch |err| {
         std.debug.panic("Running the receiver failed: {s}", .{@errorName(err)});
     };
     const text = std.fmt.allocPrint(allocator, "{s}{s}exit {d}", .{ result.stdout, result.stderr, result.exitCode }) catch |err| {
@@ -3455,4 +3456,383 @@ test "hash-cache commands without --db fail like the TypeScript CLI" {
     const expectedStderr = message ++ "\nAn unknown error occurred\nCommanderError: " ++ message ++ "\n";
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "list" }), bug_report_hint, expectedStderr, 1);
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "set", "a", "b" }), bug_report_hint, expectedStderr, 1);
+}
+
+//
+// The databases.toml the dbs tests start with (as TypeScript writes it): one entry with every field, one on S3 with
+// none of the optional ones.
+//
+const dbs_seed_config =
+    \\recent_database_names = [ "photos" ]
+    \\
+    \\[[databases]]
+    \\name = "photos"
+    \\description = "My photos"
+    \\path = "/data/photos"
+    \\origin = "s3:bucket:/x"
+    \\s3_key = "s3a"
+    \\encryption_key = "my-key"
+    \\geocoding_key = "geo"
+    \\
+    \\[[databases]]
+    \\name = "my-db"
+    \\description = ""
+    \\path = "s3:bucket/db"
+    \\
+;
+
+//
+// Creates a test root whose config holds dbs_seed_config and whose plaintext vault holds the secrets given as the
+// JSON of vault.json, and returns its environment.
+//
+fn setupDbs(allocator: std.mem.Allocator, root: []const u8, vaultJson: []const u8) !*std.process.Environ.Map {
+    const environment = try helpers.cliEnvironment(allocator, root);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = try std.fmt.allocPrint(allocator, "{s}/config/databases.toml", .{root}),
+        .data = dbs_seed_config,
+    });
+    const vaultDir = try std.fmt.allocPrint(allocator, "{s}/vault", .{root});
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{vaultDir}),
+        .data = vaultJson,
+    });
+    return environment;
+}
+
+//
+// The vault of the dbs tests that do not share an encryption key: the secrets dbs_seed_config names, with a key
+// that is not a real PEM.
+//
+const dbs_seed_vault =
+    \\{"s3a":{"name":"s3a","type":"s3-credentials","value":"{\"region\":\"us-east-1\",\"accessKeyId\":\"AK\",\"secretAccessKey\":\"SK\"}"},"my-key":{"name":"my-key","type":"encryption-key","value":"PEM"},"geo":{"name":"geo","type":"api-key","value":"geo-value"}}
+;
+
+//
+// Reads databases.toml from a test root.
+//
+fn readDatabasesToml(allocator: std.mem.Allocator, root: []const u8) ![]const u8 {
+    return std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/config/databases.toml", .{root}), allocator, .unlimited);
+}
+
+//
+// The rule under the header of `psi dbs list` (70 box-drawing characters).
+//
+const dbs_list_rule = "\u{2500}" ** 70;
+
+//
+// The rule under the heading of `psi dbs view` (50 box-drawing characters).
+//
+const dbs_view_rule = "\u{2500}" ** 50;
+
+test "dbs list, view, remove and clear print the reports of the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-dbs");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try setupDbs(allocator, root, dbs_seed_vault);
+
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "list" }), "\nName                      Path\n" ++ dbs_list_rule ++ "\nphotos                    /data/photos\nmy-db                     s3:bucket/db\n\n", "", 0);
+
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "view", "--yes", "--name", "PHOTOS" }), "\nDatabase Entry\n" ++ dbs_view_rule ++
+        \\
+        \\Name:        photos
+        \\Description: My photos
+        \\Path:        /data/photos
+        \\S3 Creds:    s3a
+        \\Encryption:  my-key
+        \\Geocoding:   geo
+        \\Origin:      s3:bucket:/x
+        \\
+        \\
+    , "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "d", "v", "--yes", "--path", "s3:bucket/db" }), "\nDatabase Entry\n" ++ dbs_view_rule ++
+        \\
+        \\Name:        my-db
+        \\Description: (none)
+        \\Path:        s3:bucket/db
+        \\S3 Creds:    (none)
+        \\Encryption:  (none)
+        \\Geocoding:   (none)
+        \\
+        \\
+    , "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "view", "--yes", "--path", "/nope" }), "", "\u{2717} No database matching the given name or path was found.\n", 1);
+
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "remove", "--yes", "--name", "photos" }), "\n\u{2713} Database \"photos\" removed from list.\n", "", 0);
+    try std.testing.expectEqualStrings("recent_database_names = []\n\n[[databases]]\nname = \"my-db\"\ndescription = \"\"\npath = \"s3:bucket/db\"\n", try readDatabasesToml(allocator, root));
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "remove", "--yes", "--path", "s3:bucket/db" }), "\n\u{2713} Database \"my-db\" removed from list.\n", "", 0);
+
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "ls" }), "No databases configured.\nUse \"psi dbs add\" to add a database.\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "clear", "--yes" }), "No databases configured.\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "view", "--yes", "--name", "x" }), "", "\u{2717} No database matching the given name or path was found.\n", 1);
+}
+
+test "dbs clear removes every database like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-dbs-clear");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try setupDbs(allocator, root, dbs_seed_vault);
+
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "clear", "--yes" }), "\n\u{2713} Removed 2 database(s) from the list.\n", "", 0);
+    try std.testing.expectEqualStrings("databases = []\nrecent_database_names = []\n", try readDatabasesToml(allocator, root));
+}
+
+// Ported from apps/cli/src/test/cmd/dbs.test.ts: the "logs Did you mean hint when name lookup fails and suggestions
+// exist" tests of dbsView, dbsEdit, dbsRemove and dbsSend, "does not call findSimilarDatabaseNames when no name is
+// given" and "shows no hint when no similar names exist".
+test "dbs view, edit, remove and send suggest similar names for a missing database like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-dbs-similar");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try setupDbs(allocator, root, dbs_seed_vault);
+    const hint = "Did you mean:\n  \u{2022} my-db\n";
+    const notMatched = "\u{2717} No database matching the given name or path was found.\n";
+
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "view", "--yes", "--name", "my-ddb" }), hint, notMatched, 1);
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "edit", "--yes", "--name", "my-ddb" }), hint, "\u{2717} No database named \"my-ddb\" found.\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "remove", "--yes", "--name", "my-ddb" }), hint, notMatched, 1);
+    const sendResult = try runZig(allocator, environment, &.{ "dbs", "send", "--yes", "--name", "my-ddb" });
+    try std.testing.expect(std.mem.endsWith(u8, sendResult.stdout, "   This does not work over the internet.                              \n" ++ (" " ** 70) ++ "\n" ++ hint));
+    try std.testing.expectEqualStrings(notMatched, sendResult.stderr);
+    try std.testing.expectEqual(@as(u8, 1), sendResult.exitCode);
+
+    // No name given: no hint.
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "view", "--yes" }), "", "\u{2717} --name or --path is required with --yes\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "edit", "--yes" }), "", "\u{2717} --name is required with --yes\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "remove", "--yes" }), "", "\u{2717} --name or --path is required with --yes\n", 1);
+
+    // No similar names: no hint.
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "edit", "--yes", "--name", "zzzzzzzzzzzzzz" }), "", "\u{2717} No database named \"zzzzzzzzzzzzzz\" found.\n", 1);
+}
+
+// Ported from apps/cli/src/test/cmd/dbs.test.ts: "calls findSimilarKeyNames and logs hint when encryption key is not
+// in vault" (dbsAdd and dbsEdit) and "calls findSimilarSecretNames and logs hint when s3 credential is not in vault".
+test "dbs add and edit reject secrets missing from the vault with a hint like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-dbs-missing-secret");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try setupDbs(allocator, root, dbs_seed_vault);
+
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "add", "--yes", "--name", "newdb", "--path", "/some/path", "--encryption-key", "my-kye" }), "Did you mean:\n  \u{2022} my-key\n", "\u{2717} Encryption key \"my-kye\" not found in vault.\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "add", "--yes", "--name", "newdb", "--path", "/some/path", "--s3-cred", "s3b" }), "Did you mean:\n  \u{2022} s3a\n", "\u{2717} S3 credential \"s3b\" not found in vault.\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "add", "--yes", "--name", "newdb", "--path", "/some/path", "--geocoding-key", "gel" }), "Did you mean:\n  \u{2022} geo\n", "\u{2717} Geocoding API key \"gel\" not found in vault.\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "edit", "--yes", "--name", "my-db", "--encryption-key", "my-kye" }), "Did you mean:\n  \u{2022} my-key\n", "\u{2717} Encryption key \"my-kye\" not found in vault.\n", 1);
+
+    // Nothing was written.
+    try std.testing.expectEqualStrings(dbs_seed_config, try readDatabasesToml(allocator, root));
+}
+
+test "dbs add and edit store databases like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-dbs-add");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const vaultDir = try std.fmt.allocPrint(allocator, "{s}/vault", .{root});
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{vaultDir}),
+        .data = dbs_seed_vault,
+    });
+
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "add", "--yes", "--name", " photos ", "--path", " /data/photos ", "--description", "My photos", "--s3-cred", " s3a ", "--encryption-key", "my-key", "--geocoding-key", "geo" }), "\u{2713} Database \"photos\" added.\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "add", "--yes", "--name", "my-db", "--path", "s3:bucket/db" }), "\u{2713} Database \"my-db\" added.\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "add", "--yes", "--name", "MY-DB", "--path", "/x" }), "", "\u{2717} A database named \"MY-DB\" already exists (s3:bucket/db). Use a different name or remove the existing entry first.\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "add", "--yes", "--name", "x" }), "", "\u{2717} --name and --path are required with --yes\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "edit", "--yes", "--name", "my-db", "--new-name", " renamed ", "--description", "Changed", "--geocoding-key", "geo" }), "\u{2713} Database \"renamed\" updated.\n", "", 0);
+
+    // What the TypeScript CLI writes for the same commands.
+    try std.testing.expectEqualStrings(
+        \\recent_database_names = []
+        \\
+        \\[[databases]]
+        \\name = "photos"
+        \\description = "My photos"
+        \\path = "/data/photos"
+        \\s3_key = "s3a"
+        \\encryption_key = "my-key"
+        \\geocoding_key = "geo"
+        \\
+        \\[[databases]]
+        \\name = "renamed"
+        \\description = "Changed"
+        \\path = "s3:bucket/db"
+        \\geocoding_key = "geo"
+        \\
+    , try readDatabasesToml(allocator, root));
+
+    // A rename onto another entry's name is refused by the storage layer, which throws.
+    // (TypeScript also prints the stack of the error, which has no Zig counterpart.)
+    try expectResult(try runZig(allocator, environment, &.{ "-q", "dbs", "edit", "--yes", "--name", "photos", "--new-name", "RENAMED" }), "\nIf you believe this behaviour is a bug, please report it with the following command:\n   psi bug\n", "An unknown error occurred\nError: A database named \"RENAMED\" already exists.\n", 1);
+}
+
+test "dbs remove asks before removing and dbs view picks from a list like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-dbs-interactive");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try setupDbs(allocator, root, dbs_seed_vault);
+
+    const viewResult = try runZigWithInput(allocator, environment, &.{ "-q", "dbs", "view" }, "\r");
+    try std.testing.expectEqualStrings("\x1b[?25l \n\u{25c6}  Select a database to view:\n   \u{25cf} photos (/data/photos)\n   \u{25cb} my-db (s3:bucket/db)\n \n\x1b[999D\x1b[5A\x1b[1B\x1b[J\u{25c7}  Select a database to view:\n   photos (/data/photos)\n\x1b[?25h\nDatabase Entry\n" ++ dbs_view_rule ++ "\nName:        photos\nDescription: My photos\nPath:        /data/photos\nS3 Creds:    s3a\nEncryption:  my-key\nGeocoding:   geo\nOrigin:      s3:bucket:/x\n\n", viewResult.stdout);
+    try std.testing.expectEqual(@as(u8, 0), viewResult.exitCode);
+
+    const removeResult = try runZigWithInput(allocator, environment, &.{ "-q", "dbs", "remove", "--name", "photos" }, "y");
+    try std.testing.expectEqualStrings("\x1b[?25l \n\u{25c6}  Remove database \"photos\" (/data/photos)? This does not delete the database files.\n   \u{25cb} Yes / \u{25cf} No\n \n\x1b[1A\n\x1b[?25h\x1b[999D\x1b[4A\x1b[1B\x1b[J\u{25c7}  Remove database \"photos\" (/data/photos)? This does not delete the database files.\n   Yes\n\n\u{2713} Database \"photos\" removed from list.\n", removeResult.stdout);
+    try std.testing.expectEqual(@as(u8, 0), removeResult.exitCode);
+    try std.testing.expectEqualStrings("recent_database_names = []\n\n[[databases]]\nname = \"my-db\"\ndescription = \"\"\npath = \"s3:bucket/db\"\n", try readDatabasesToml(allocator, root));
+}
+
+test "dbs send and receive transfer a database and its secrets over the local network like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const senderRoot = try helpers.makeTempDir(allocator, "cmd-dbs-sender");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, senderRoot) catch {};
+    const receiverRoot = try helpers.makeTempDir(allocator, "cmd-dbs-receiver");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, receiverRoot) catch {};
+
+    // The encryption key is shared with its public key, which the sender derives from it, so it must be a real one.
+    const privateKeyPem = (try encryption.node_crypto.generateKeyPairSync(allocator, std.testing.io, 2048)).privateKey;
+    var senderVault: std.json.ObjectMap = .empty;
+    try senderVault.put(allocator, "s3a", try vaultEntry(allocator, "s3a", "s3-credentials", "{\"region\":\"us-east-1\",\"accessKeyId\":\"AK\",\"secretAccessKey\":\"SK\"}"));
+    try senderVault.put(allocator, "my-key", try vaultEntry(allocator, "my-key", "encryption-key", privateKeyPem));
+    try senderVault.put(allocator, "geo", try vaultEntry(allocator, "geo", "api-key", "geo-value"));
+    const senderEnvironment = try setupDbs(allocator, senderRoot, try std.json.Stringify.valueAlloc(allocator, std.json.Value{ .object = senderVault }, .{}));
+
+    // The receiver already holds a secret named geo, which is reused rather than overwritten.
+    const receiverEnvironment = try helpers.cliEnvironment(allocator, receiverRoot);
+    const receiverVaultDir = try std.fmt.allocPrint(allocator, "{s}/vault", .{receiverRoot});
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, receiverVaultDir);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{receiverVaultDir}),
+        .data = "{\"geo\":{\"name\":\"geo\",\"type\":\"api-key\",\"value\":\"receiver-geo\"}}",
+    });
+
+    // Discovery is machine-wide, so the pairing code is drawn per run: a fixed one could pair with the receiver of
+    // another run of this test.
+    var randomBytes: [4]u8 = undefined;
+    std.testing.io.random(&randomBytes);
+    const code = try std.fmt.allocPrint(allocator, "{d}", .{1000 + std.mem.readInt(u32, &randomBytes, .little) % 9000});
+
+    const receiverOutput = try std.fmt.allocPrint(allocator, "{s}/receiver.txt", .{receiverRoot});
+    const receiverThread = try std.Thread.spawn(.{}, runReceiver, .{ receiverEnvironment, "dbs", code, receiverOutput });
+    const sendResult = try runZig(allocator, senderEnvironment, &.{ "dbs", "send", "--yes", "--name", "photos", "--code", code });
+    receiverThread.join();
+
+    const sendExpected = try std.fmt.allocPrint(allocator,
+        \\
+        \\Send Database
+        \\   ℹ Network Requirement
+        \\                                                                      
+        \\   Both devices must be on the same local network (wired or Wi-Fi).   
+        \\   This does not work over the internet.                              
+        \\                                                                      
+        \\
+        \\Database to send:
+        \\  Name:        photos
+        \\  Description: My photos
+        \\  Path:        /data/photos
+        \\  S3 Creds:    s3a
+        \\  Encryption:  my-key
+        \\  Geocoding:   geo
+        \\
+        \\   ⚠ Local Path
+        \\                                                                                               
+        \\   The database path is a local filesystem path.                                               
+        \\   This works if the other device has access to the same path (e.g. a shared network drive),   
+        \\   but will need updating if the path is specific to this machine.                             
+        \\                                                                                               
+        \\
+        \\  Pairing code: {s}
+        \\  Enter this code on the other device, then wait.
+        \\
+        \\Waiting for other device on local network... (Ctrl+C to cancel)
+        \\Device found!
+        \\
+        \\✓ Database sent successfully!
+        \\
+    , .{code});
+    try expectResult(sendResult, sendExpected, "", 0);
+
+    const receiveExpected =
+        \\
+        \\Receive Database
+        \\   ℹ Network Requirement
+        \\                                                                      
+        \\   Both devices must be on the same local network (wired or Wi-Fi).   
+        \\   This does not work over the internet.                              
+        \\                                                                      
+        \\Hint: Run `psi dbs send` on another device to send a database.
+        \\Waiting for sender on the local network... (Ctrl+C to cancel)
+        \\Payload received!
+        \\
+        \\Received database:
+        \\  Name:        photos
+        \\  Description: My photos
+        \\  Path:        /data/photos
+        \\  S3 Creds:    s3a
+        \\  Encryption:  my-key
+        \\  Geocoding:   geo
+        \\
+        \\   ⚠ Local Path
+        \\                                                                                   
+        \\   The database path is a local filesystem path from the other device.             
+        \\   This works if you have access to the same path (e.g. a shared network drive),   
+        \\   but you may need to update it if the path is specific to their machine.         
+        \\                                                                                   
+        \\
+    ++ "  \u{26a0} Secret \"geo\" already exists \u{2014} reusing existing.\n" ++
+        \\
+        \\✓ Database "photos" imported successfully!
+        \\exit 0
+    ;
+    try std.testing.expectEqualStrings(receiveExpected, try std.Io.Dir.cwd().readFileAlloc(std.testing.io, receiverOutput, allocator, .unlimited));
+
+    try std.testing.expectEqualStrings(
+        \\recent_database_names = []
+        \\
+        \\[[databases]]
+        \\name = "photos"
+        \\description = "My photos"
+        \\path = "/data/photos"
+        \\origin = "s3:bucket:/x"
+        \\s3_key = "s3a"
+        \\encryption_key = "my-key"
+        \\geocoding_key = "geo"
+        \\
+    , try readDatabasesToml(allocator, receiverRoot));
+    try expectResult(try runZig(allocator, receiverEnvironment, &.{ "secrets", "view", "--yes", "--name", "s3a", "--raw" }), "{\"region\":\"us-east-1\",\"accessKeyId\":\"AK\",\"secretAccessKey\":\"SK\"}", "", 0);
+    try expectResult(try runZig(allocator, receiverEnvironment, &.{ "secrets", "view", "--yes", "--name", "my-key", "--raw" }), privateKeyPem, "", 0);
+    try expectResult(try runZig(allocator, receiverEnvironment, &.{ "secrets", "view", "--yes", "--name", "geo", "--raw" }), "receiver-geo", "", 0);
+
+    // A second share of the same database meets the entry the first one made, which --yes refuses to overwrite.
+    const secondCode = try std.fmt.allocPrint(allocator, "{d}", .{1000 + (std.mem.readInt(u32, &randomBytes, .little) + 1) % 9000});
+    const secondOutput = try std.fmt.allocPrint(allocator, "{s}/receiver-2.txt", .{receiverRoot});
+    const secondThread = try std.Thread.spawn(.{}, runReceiver, .{ receiverEnvironment, "dbs", secondCode, secondOutput });
+    _ = try runZig(allocator, senderEnvironment, &.{ "dbs", "send", "--yes", "--name", "photos", "--code", secondCode });
+    secondThread.join();
+    const secondReceive = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, secondOutput, allocator, .unlimited);
+    try std.testing.expect(std.mem.endsWith(u8, secondReceive, "\u{2717} A database named \"photos\" already exists (/data/photos). Use a different name or remove the existing entry first.\nexit 1"));
+}
+
+//
+// A secret as the plaintext vault's vault.json holds it.
+//
+fn vaultEntry(allocator: std.mem.Allocator, name: []const u8, secretType: []const u8, value: []const u8) !std.json.Value {
+    var entry: std.json.ObjectMap = .empty;
+    try entry.put(allocator, "name", .{ .string = name });
+    try entry.put(allocator, "type", .{ .string = secretType });
+    try entry.put(allocator, "value", .{ .string = value });
+    return .{ .object = entry };
 }

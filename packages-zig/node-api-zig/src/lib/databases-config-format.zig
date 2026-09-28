@@ -84,5 +84,25 @@ pub fn tomlEntryToDatabaseEntry(tomlEntry: std.json.Value) IDatabaseEntry {
     return entry;
 }
 
-// Not ported: databaseEntryToToml (only used when databases.toml is written, which psi replicate and
-// psi verify do not do).
+//
+// Converts a TypeScript IDatabaseEntry to the TOML on-disk shape.
+//
+pub fn databaseEntryToToml(allocator: std.mem.Allocator, entry: IDatabaseEntry) !std.json.Value {
+    var tomlEntry: std.json.ObjectMap = .empty;
+    try tomlEntry.put(allocator, "name", .{ .string = entry.name });
+    try tomlEntry.put(allocator, "description", .{ .string = entry.description });
+    try tomlEntry.put(allocator, "path", .{ .string = entry.path });
+    if (entry.origin) |origin| {
+        try tomlEntry.put(allocator, "origin", .{ .string = origin });
+    }
+    if (entry.s3Key) |s3Key| {
+        try tomlEntry.put(allocator, "s3_key", .{ .string = s3Key });
+    }
+    if (entry.encryptionKey) |encryptionKey| {
+        try tomlEntry.put(allocator, "encryption_key", .{ .string = encryptionKey });
+    }
+    if (entry.geocodingKey) |geocodingKey| {
+        try tomlEntry.put(allocator, "geocoding_key", .{ .string = geocodingKey });
+    }
+    return .{ .object = tomlEntry };
+}

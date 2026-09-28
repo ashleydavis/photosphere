@@ -11,7 +11,7 @@ const module_name = "lan-share-core-zig";
 const dependency_names = [_][]const u8{};
 
 //
-// Builds the module and registers a test step that compiles it.
+// Builds the module and registers a test step that runs every file in src/test.
 //
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
@@ -28,9 +28,30 @@ pub fn build(b: *std.Build) !void {
     }
 
     const test_step = b.step("test", "Run unit tests");
-    // The package has no tests of its own (the TypeScript tests of lan-share-core cover importShareSecrets, which is
-    // not ported), so the test step compiles the module and runs the tests it declares, which is none.
-    const unit_test = b.addTest(.{ .root_module = module });
+    // Every test file is compiled into one test program, whose root imports each of them.
+    const test_files = b.addWriteFiles();
+    _ = test_files.addCopyDirectory(b.path("src"), "src", .{});
+    var test_root_source: std.ArrayList(u8) = .empty;
+    try test_root_source.appendSlice(b.allocator, "test {\n");
+    var test_dir = try b.build_root.handle.openDir(b.graph.io, "src/test", .{ .iterate = true });
+    defer test_dir.close(b.graph.io);
+    var walker = try test_dir.walk(b.allocator);
+    defer walker.deinit();
+    while (try walker.next(b.graph.io)) |entry| {
+        if (entry.kind != .file or !std.mem.endsWith(u8, entry.path, ".test.zig")) {
+            continue;
+        }
+        try test_root_source.appendSlice(b.allocator, b.fmt("    _ = @import(\"{s}\");\n", .{entry.path}));
+    }
+    try test_root_source.appendSlice(b.allocator, "}\n");
+    const test_module = b.createModule(.{
+        .root_source_file = test_files.add("src/test/all-tests.zig", test_root_source.items),
+        .target = target,
+        .optimize = optimize,
+    });
+    test_module.addImport(module_name, module);
+    const unit_test = b.addTest(.{ .root_module = test_module });
     const run_test = b.addRunArtifact(unit_test);
+    run_test.setCwd(b.path("."));
     test_step.dependOn(&run_test.step);
 }
