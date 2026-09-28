@@ -370,6 +370,14 @@ pub const FileStorage = struct {
                     return false;
                 }
             }
+            else if (lockFileBeingWritten(io, filePath, timestamp) catch |err| return failAcquire(allocator, timestamp, processId, owner, filePath, err)) {
+                // The lock file is empty because its owner has created it and not yet written it.
+                // Breaking it here as corrupt let two owners hold the lock at once.
+                if (log.verboseEnabled()) {
+                    log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},ACQUIRE_FAILED_BEING_WRITTEN,{d},{s},{s}", .{ timestamp, processId, owner, filePath }));
+                }
+                return false;
+            }
             else {
                 // Corrupted lock file, remove it
                 if (log.verboseEnabled()) {
@@ -427,6 +435,22 @@ pub const FileStorage = struct {
 
     // Not ported: refreshWriteLock (not reached by psi replicate or psi verify).
 };
+
+//
+// Whether a lock file that does not parse is one its owner has created (exclusively, so it
+// starts out empty) and not yet written. That holds for an empty lock file younger than the
+// lock timeout; an older empty one was left by an owner that died before writing it, and is
+// corrupt. A lock file that has gone by the time it is looked at is not being written.
+//
+fn lockFileBeingWritten(io: std.Io, filePath: []const u8, timestamp: i64) !bool {
+    const stat = std.Io.Dir.cwd().statFile(io, filePath, .{}) catch |err| {
+        if (err == error.FileNotFound) {
+            return false;
+        }
+        return err;
+    };
+    return stat.size == 0 and timestamp - stat.mtime.toMilliseconds() <= WRITE_LOCK_TIMEOUT_MS;
+}
 
 //
 // The catch block of FileStorage.acquireWriteLock for errors other than EEXIST: logs the error and rethrows it.
