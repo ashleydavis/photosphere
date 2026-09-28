@@ -166,7 +166,7 @@ fn expectCommanderError(allocator: std.mem.Allocator, args: []const []const u8, 
     try std.testing.expectEqualStrings(stderr, parsed.stderr);
 }
 
-test "commands that are not ported are unknown commands, and empty command lines show the help" {
+test "commands that are not ported fail by name, unknown commands are unknown, and empty command lines show the help" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -181,11 +181,84 @@ test "commands that are not ported are unknown commands, and empty command lines
     try std.testing.expectEqualStrings("commander.helpDisplayed", help.outcome.failure.code);
     try std.testing.expect(std.mem.startsWith(u8, help.stdout, "Usage: psi "));
 
-    try expectCommanderError(allocator, &.{"news"}, "commander.unknownCommand", "error: unknown command 'news'\n");
-    try expectCommanderError(allocator, &.{ "secrets", "--db", "x" }, "commander.unknownCommand", "error: unknown command 'secrets'\n");
+    try std.testing.expectEqualStrings("news", (try parse(allocator, &.{"news"})).outcome.notPorted);
+    try std.testing.expectEqualStrings("bug", (try parse(allocator, &.{ "bug", "--no-browser" })).outcome.notPorted);
+    try std.testing.expectEqualStrings("hash-cache show", (try parse(allocator, &.{ "hash-cache", "show" })).outcome.notPorted);
+    try std.testing.expectEqualStrings("debug merkle-tree", (try parse(allocator, &.{ "debug", "merkle-tree", "--records" })).outcome.notPorted);
+    try std.testing.expectEqualStrings("secrets list", (try parse(allocator, &.{ "sec", "ls" })).outcome.notPorted);
+    try std.testing.expectEqualStrings("dbs view", (try parse(allocator, &.{ "d", "v", "--name", "x" })).outcome.notPorted);
+
+    // The secrets and dbs groups are not created with .exitOverride(), so they call process.exit themselves. They
+    // are added with addCommand, so they write to the process streams rather than the configured output (the
+    // golden tests in commands.test.zig check what they write).
+    const secretsOption = try parse(allocator, &.{ "secrets", "--db", "x" });
+    try std.testing.expectEqual(@as(u8, 1), secretsOption.outcome.processExit);
+    const secretsAlone = try parse(allocator, &.{"secrets"});
+    try std.testing.expectEqual(@as(u8, 1), secretsAlone.outcome.processExit);
+
     try expectCommanderError(allocator, &.{ "--db", "x", "replicate" }, "commander.unknownOption", "error: unknown option '--db'\n");
-    try expectCommanderError(allocator, &.{ "help", "replicate" }, "commander.unknownCommand", "error: unknown command 'help'\n(Did you mean one of exp, rep?)\n");
     try expectCommanderError(allocator, &.{"replicate2"}, "commander.unknownCommand", "error: unknown command 'replicate2'\n(Did you mean replicate?)\n");
+    try expectCommanderError(allocator, &.{ "hash-cache", "bogus" }, "commander.unknownCommand", "error: unknown command 'bogus'\n");
+}
+
+test "examples and help command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const examples = try parse(allocator, &.{"examples"});
+    try std.testing.expect(examples.outcome == .examples);
+    try std.testing.expectEqual(@as(?bool, false), examples.state.notificationsQuiet);
+    try std.testing.expect((try parse(allocator, &.{ "-q", "examples", "--yes" })).outcome == .examples);
+    try std.testing.expect((try parse(allocator, &.{ "examples", "-y" })).outcome == .examples);
+    try expectCommanderError(allocator, &.{ "examples", "extra" }, "commander.excessArguments", "error: too many arguments for 'examples'. Expected 0 arguments but got 1.\n");
+    try expectCommanderError(allocator, &.{ "examples", "--db", "d" }, "commander.unknownOption", "error: unknown option '--db'\n");
+
+    const helpAlone = try parse(allocator, &.{"help"});
+    try std.testing.expect(helpAlone.outcome == .help);
+    try std.testing.expect(helpAlone.outcome.help == null);
+    try std.testing.expectEqualStrings("replicate", (try parse(allocator, &.{ "help", "replicate" })).outcome.help.?);
+    try std.testing.expectEqualStrings("bogus", (try parse(allocator, &.{ "-q", "help", "bogus" })).outcome.help.?);
+    try expectCommanderError(allocator, &.{ "help", "replicate", "extra" }, "commander.excessArguments", "error: too many arguments for 'help'. Expected 1 argument but got 2.\n");
+    try expectCommanderError(allocator, &.{ "help", "--bogus" }, "commander.unknownOption", "error: unknown option '--bogus'\n");
+}
+
+test "helpCommand shows the help of the named command, or of the program" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var state: cli.IProgramState = .{
+        .allocator = allocator,
+    };
+
+    var stdout = std.Io.Writer.Allocating.init(allocator);
+    var stderr = std.Io.Writer.Allocating.init(allocator);
+    const program = try createProgram(allocator, &state);
+    _ = program.configureOutput(.{
+        .writeOut = &stdout.writer,
+        .writeErr = &stderr.writer,
+    });
+
+    // By alias: the help of the command, which exits with 0 through commander.
+    try std.testing.expectEqual(error.CommanderError, cli.helpCommand(program, "rep"));
+    try std.testing.expectEqualStrings("commander.help", program.getCommanderError().?.code);
+    try std.testing.expectEqual(@as(u8, 0), program.getCommanderError().?.exitCode);
+    try std.testing.expect(std.mem.startsWith(u8, stdout.written(), "Usage: psi replicate|rep [options]\n"));
+    try std.testing.expectEqualStrings("", stderr.written());
+}
+
+test "the help of the program ends with the main examples and the resources" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    // picocolors turns colour on for every process on Windows; the expected text has none.
+    cli.picocolors.setColorSupportOverride(false);
+    defer cli.picocolors.setColorSupportOverride(null);
+    const text = try cli.mainHelpText(allocator);
+    try std.testing.expect(std.mem.startsWith(u8, text, "\n\nGetting help:\n  psi <command> --help    Shows help for a particular command.\n"));
+    try std.testing.expect(std.mem.indexOf(u8, text, "\nExamples:\n  psi init --db ./photos                         Creates a new database in the ./photos directory.\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "  psi compare --db ./photos --dest ./backup      Compares two databases for differences.\n\nResources:\n") != null);
+    try std.testing.expect(std.mem.endsWith(u8, text, "  ➕ New Issue: https://github.com/ashleydavis/photosphere/issues/new"));
 }
 
 test "the preAction hook asks for the notifications with the program's quiet flag" {

@@ -1,10 +1,11 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `add` (alias `a`), `check` (alias `chk`), `compare` (alias `cmp`), `consolidate`, `database-id`, `decrypt`, `encrypt`, `export`
-// (alias `exp`), `find-orphans`, `hash`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`,
-// `remove` (alias `rm`), `remove-orphans`, `repair`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias
-// `sum`), `sync`, `tools`, `upgrade`, `verify` (alias `ver`) and `version` commands and the `--version` option are ported;
-// the other commands are not registered yet, so commander reports them as unknown commands.
+// Only the `add` (alias `a`), `check` (alias `chk`), `compare` (alias `cmp`), `consolidate`, `database-id`, `decrypt`,
+// `encrypt`, `examples`, `export` (alias `exp`), `find-orphans`, `hash`, `help`, `info` (alias `inf`), `init` (alias `i`),
+// `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `remove-orphans`, `repair`, `replicate` (alias `rep`),
+// `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`, `tools`, `upgrade`, `verify` (alias `ver`) and `version`
+// commands and the `--version` option are ported. The other commands are defined like in index.ts, so that their help is
+// the help of the TypeScript CLI, but running one fails with an error saying that it is not ported yet.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -64,6 +65,7 @@ pub const database_id = @import("src/cmd/database-id.zig");
 pub const summary = @import("src/cmd/summary.zig");
 pub const verify = @import("src/cmd/verify.zig");
 pub const version_cmd = @import("src/cmd/version.zig");
+pub const examples_cmd = @import("src/cmd/examples.zig");
 pub const print_notifications = @import("src/lib/print-notifications.zig");
 pub const check_for_updates = @import("src/lib/check-for-updates.zig");
 pub const check_for_news = @import("src/lib/check-for-news.zig");
@@ -128,6 +130,8 @@ const summaryCommand = summary.summaryCommand;
 const verifyCommand = verify.verifyCommand;
 const versionCommand = version_cmd.versionCommand;
 const getCommandExamplesHelp = examples.getCommandExamplesHelp;
+const MAIN_EXAMPLES = examples.MAIN_EXAMPLES;
+const examplesCommand = examples_cmd.examplesCommand;
 const exit = node_utils.termination.exit;
 const FatalError = utils.fatal_error.FatalError;
 const console = utils.console;
@@ -221,7 +225,16 @@ pub const sourceDbOption: IOptionSpec = .{
     .flags = "--source <path>",
     .description = "The source directory that contains the database to repair from",
 };
-// Not ported: recordsOption, allOption (not used by the ported commands).
+pub const recordsOption: IOptionSpec = .{
+    .flags = "--records",
+    .description = "Show JSON for each internal record in each shard.",
+    .defaultValue = .{ .boolean = false },
+};
+pub const allOption: IOptionSpec = .{
+    .flags = "--all",
+    .description = "Show all fields and full values (don't truncate) when displaying records.",
+    .defaultValue = .{ .boolean = false },
+};
 
 //
 // Adds an option tuple to a command (`.option(...tuple)`).
@@ -412,6 +425,19 @@ pub const ParseOutcome = union(enum) {
 
     // Run the version command.
     version,
+
+    // Run the examples command.
+    examples,
+
+    // Run the help command: show the help of the named command, or of the program when null.
+    help: ?[]const u8,
+
+    // The command is defined like in index.ts but not ported yet: its full name, e.g. "hash-cache show".
+    notPorted: []const u8,
+
+    // A command that does not exit through `.exitOverride()` (the secrets and dbs groups) called
+    // `process.exit` with this exit code, after writing its help or its error.
+    processExit: u8,
 
     // The --version option was given: print the version and exit.
     versionOption,
@@ -900,6 +926,119 @@ fn versionAction(state: *IProgramState, args: []const ArgumentValue, options: *c
 }
 
 //
+// The action of the examples command (`examplesCommand`): `run` calls the command.
+//
+fn examplesAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = options;
+    _ = command;
+    state.outcome = .examples;
+}
+
+//
+// The action of the help command: `run` shows the help of the named command, or of the program.
+//
+fn helpAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = options;
+    _ = command;
+    state.outcome = .{
+        .help = switch (args[0]) {
+            .string => |commandName| commandName,
+            .none, .list => null,
+        },
+    };
+}
+
+//
+// The action of the commands that are not ported yet: `run` fails with an error that names the command.
+//
+fn notPortedAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = options;
+    state.outcome = .{
+        .notPorted = try fullCommandName(state.allocator, command),
+    };
+}
+
+//
+// The name of a command with the names of the groups it is in, e.g. "hash-cache show" (the program's name is left out).
+//
+pub fn fullCommandName(allocator: std.mem.Allocator, command: *Command) ![]const u8 {
+    var names: std.ArrayList([]const u8) = .empty;
+    var current: ?*Command = command;
+    while (current) |currentCommand| {
+        if (currentCommand.parent == null) {
+            break;
+        }
+        try names.insert(allocator, 0, currentCommand.getName());
+        current = currentCommand.parent;
+    }
+    return std.mem.join(allocator, " ", names.items);
+}
+
+//
+// The help command of index.ts: shows the help of the command with this name or alias, or the help of the program
+// when there is no name or no such command. Returns the error commander stops with once the help is written.
+//
+pub fn helpCommand(program: *Command, commandName: ?[]const u8) anyerror {
+    if (commandName) |name| {
+        if (program.findCommand(name)) |found| {
+            return found.help(false);
+        }
+        else {
+            const message = std.fmt.allocPrint(program.allocator, "Unknown command: {s}", .{name}) catch |err| {
+                return err;
+            };
+            console.@"error"(message);
+            return program.help(false);
+        }
+    }
+    else {
+        return program.help(false);
+    }
+}
+
+//
+// The text index.ts adds after the help of the program: how to get help, the main examples and the resources.
+//
+pub fn mainHelpText(allocator: std.mem.Allocator) ![]const u8 {
+    var exampleLines: std.ArrayList([]const u8) = .empty;
+    for (MAIN_EXAMPLES) |example| {
+        var line: std.ArrayList(u8) = .empty;
+        try line.appendSlice(allocator, "  ");
+        try line.appendSlice(allocator, example.command);
+        const length = commander.jsLength(example.command);
+        if (length < 46) {
+            try line.appendNTimes(allocator, ' ', 46 - length);
+        }
+        try line.append(allocator, ' ');
+        try line.appendSlice(allocator, example.description);
+        try exampleLines.append(allocator, line.items);
+    }
+    return std.fmt.allocPrint(allocator,
+        \\
+        \\
+        \\Getting help:
+        \\  {s}    Shows help for a particular command.
+        \\  {s}              Shows help for all commands.
+        \\
+        \\Examples:
+        \\{s}
+        \\
+        \\Resources:
+        \\  🚀 Getting Started: https://github.com/ashleydavis/photosphere/wiki/Getting-Started
+        \\  📖 Command Reference: https://github.com/ashleydavis/photosphere/wiki/Command-Reference
+        \\  📚 Wiki: https://github.com/ashleydavis/photosphere/wiki
+        \\  🐛 View Issues: https://github.com/ashleydavis/photosphere/issues
+        \\  ➕ New Issue: https://github.com/ashleydavis/photosphere/issues/new
+    , .{
+        try pc.bold(allocator, "psi <command> --help"),
+        try pc.bold(allocator, "psi --help"),
+        try std.mem.join(allocator, "\n", exampleLines.items),
+    });
+}
+
+//
 // Defines the psi program like main() in index.ts, with the commands implemented in Zig.
 //
 pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Command {
@@ -910,7 +1049,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .optionWithArgParser("--version", "output the version number", state, versionOption)
         .option("--debug", "Enable debug REST API server", null)
         .option("-q, --quiet", "Suppress optional output (update and news notifications). Give it before the command name.", null)
-        // Not ported yet: .addHelpText('after', ...).
+        .addHelpText(.after, try mainHelpText(allocator))
         .exitOverride() // Prevent commander from calling process.exit
         .addHelpCommand(false); // Disable default help command so we can add it in alphabetical order
 
@@ -936,7 +1075,15 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "add"))
         .action(state, addAction);
 
-    // Not ported: bug.
+    const bugDefinition = program
+        .command("bug", .{})
+        .description("Generates a bug report for GitHub with system information and logs.");
+    _ = optionFrom(bugDefinition, verboseOption);
+    _ = optionFrom(bugDefinition, yesOption);
+    _ = bugDefinition
+        .option("--no-browser", "Don't open the browser automatically", .{ .boolean = false })
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "bug"))
+        .action(state, notPortedAction);
 
     const checkDefinition = program
         .command("check", .{})
@@ -972,7 +1119,13 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "compare"))
         .action(state, compareAction);
 
-    // Not ported: examples.
+    const examplesDefinition = program
+        .command("examples", .{})
+        .description("Shows usage examples for all CLI commands.");
+    _ = optionFrom(examplesDefinition, yesOption);
+    _ = examplesDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "examples"))
+        .action(state, examplesAction);
 
     const exportDefinition = program
         .command("export", .{})
@@ -1014,7 +1167,148 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "hash"))
         .action(state, hashAction);
 
-    // Not ported: hash-cache, debug and help.
+    //
+    // Commands for inspecting and driving the local hash cache. The whole group is hidden: it is
+    // for development and for the concurrency smoke test, not for end users, and it is documented
+    // in the wiki rather than in the program help.
+    //
+    const hashCacheCmd = program
+        .command("hash-cache", .{ .hidden = true })
+        .description("Inspect and manage a database's hash cache.");
+
+    //
+    // Every one of these names a database, because there is one hash cache per database: an entry
+    // records the id its file has in that database, and one entry cannot hold the ids of several.
+    // The two user-facing commands resolve --db the way every other command does; the development
+    // tools below take the path as given, because they act on the cache alone and a test script
+    // points them at a path rather than at a database that exists.
+    //
+    const hashCacheToolDbOption: IOptionSpec = .{
+        .flags = "--db <path>",
+        .description = "The directory that contains the media file database",
+    };
+
+    const hashCacheShow = hashCacheCmd
+        .command("show", .{})
+        .description("Display information about a database's hash cache.");
+    _ = optionFrom(hashCacheShow, dbOption);
+    _ = optionFrom(hashCacheShow, keyOption);
+    _ = optionFrom(hashCacheShow, verboseOption);
+    _ = optionFrom(hashCacheShow, yesOption);
+    _ = optionFrom(hashCacheShow, cwdOption);
+    _ = hashCacheShow.action(state, notPortedAction);
+
+    const hashCacheClear = hashCacheCmd
+        .command("clear", .{})
+        .description("Clear a database's hash cache to force re-hashing of files.");
+    _ = optionFrom(hashCacheClear, dbOption);
+    _ = optionFrom(hashCacheClear, keyOption);
+    _ = optionFrom(hashCacheClear, verboseOption);
+    _ = optionFrom(hashCacheClear, yesOption);
+    _ = optionFrom(hashCacheClear, cwdOption);
+    _ = hashCacheClear.action(state, notPortedAction);
+
+    _ = hashCacheCmd
+        .command("hash-file <file>", .{})
+        .description("Compute the SHA-256 hash of a file without touching the cache.")
+        .action(state, notPortedAction);
+
+    const hashCacheTools = [_][2][]const u8{
+        .{ "add <file>", "Hash a file and record it in the hash cache." },
+        .{ "set <path> <hash> <length>", "Record a hash in the hash cache against an arbitrary path." },
+        .{ "set-source <source-id> <hash> <length>", "Record a hash in the hash cache against a photo library source id." },
+        .{ "get <path>", "Print the cached hash for a key. Exits 1 when it is not cached." },
+        .{ "get-asset-id <path>", "Print the asset id recorded against a key. Exits 1 when there is none." },
+        .{ "remove <path>", "Remove a key from the hash cache. Exits 1 when it was not cached." },
+        .{ "list", "Print the key of every entry in the hash cache, one per line." },
+        .{ "count", "Print how many entries the hash cache holds." },
+        .{ "dir", "Print the directory holding a database's hash cache." },
+    };
+    for (hashCacheTools) |hashCacheTool| {
+        _ = hashCacheCmd
+            .command(hashCacheTool[0], .{})
+            .description(hashCacheTool[1])
+            .requiredOption(hashCacheToolDbOption.flags, hashCacheToolDbOption.description, null)
+            .action(state, notPortedAction);
+    }
+
+    const debugCommand = program
+        .command("debug", .{})
+        .description("Debug commands for inspecting database internals.");
+
+    const debugMerkleTree = debugCommand
+        .command("merkle-tree", .{})
+        .description("Visualize all merkle trees in a media file database.");
+    _ = optionFrom(debugMerkleTree, dbOption);
+    _ = optionFrom(debugMerkleTree, keyOption);
+    _ = optionFrom(debugMerkleTree, verboseOption);
+    _ = optionFrom(debugMerkleTree, yesOption);
+    _ = optionFrom(debugMerkleTree, cwdOption);
+    _ = optionFrom(debugMerkleTree, recordsOption);
+    _ = optionFrom(debugMerkleTree, allOption);
+    _ = debugMerkleTree.action(state, notPortedAction);
+
+    const debugFindCollisions = debugCommand
+        .command("find-collisions", .{})
+        .description("Finds hash collisions (same hash, different asset IDs) and writes results to JSON file.");
+    _ = optionFrom(debugFindCollisions, dbOption);
+    _ = optionFrom(debugFindCollisions, keyOption);
+    _ = optionFrom(debugFindCollisions, verboseOption);
+    _ = optionFrom(debugFindCollisions, yesOption);
+    _ = optionFrom(debugFindCollisions, cwdOption);
+    _ = debugFindCollisions
+        .option("-o, --output <path>", "Output JSON file path (default: collisions.json)", .{ .string = "collisions.json" })
+        .action(state, notPortedAction);
+
+    const debugFindDuplicates = debugCommand
+        .command("find-duplicates", .{})
+        .description("Finds duplicate assets by comparing file content. Reads collisions JSON from find-collisions.");
+    _ = optionFrom(debugFindDuplicates, dbOption);
+    _ = optionFrom(debugFindDuplicates, keyOption);
+    _ = optionFrom(debugFindDuplicates, verboseOption);
+    _ = optionFrom(debugFindDuplicates, yesOption);
+    _ = optionFrom(debugFindDuplicates, cwdOption);
+    _ = debugFindDuplicates
+        .option("-i, --input <path>", "Input JSON file path from find-collisions command (default: collisions.json)", .{ .string = "collisions.json" })
+        .option("-o, --output <path>", "Output JSON file path (default: duplicates.json)", .{ .string = "duplicates.json" })
+        .action(state, notPortedAction);
+
+    const debugRemoveDuplicates = debugCommand
+        .command("remove-duplicates", .{})
+        .description("Removes duplicate assets based on content comparison results from find-duplicates.");
+    _ = optionFrom(debugRemoveDuplicates, dbOption);
+    _ = optionFrom(debugRemoveDuplicates, keyOption);
+    _ = optionFrom(debugRemoveDuplicates, verboseOption);
+    _ = optionFrom(debugRemoveDuplicates, yesOption);
+    _ = optionFrom(debugRemoveDuplicates, cwdOption);
+    _ = debugRemoveDuplicates
+        .option("-i, --input <path>", "Input JSON file path from find-duplicates command (default: duplicates.json)", .{ .string = "duplicates.json" })
+        .action(state, notPortedAction);
+
+    const debugBuildSortIndex = debugCommand
+        .command("build-sort-index", .{})
+        .description("Deletes all sort index files and rebuilds them completely.");
+    _ = optionFrom(debugBuildSortIndex, dbOption);
+    _ = optionFrom(debugBuildSortIndex, keyOption);
+    _ = optionFrom(debugBuildSortIndex, verboseOption);
+    _ = optionFrom(debugBuildSortIndex, yesOption);
+    _ = optionFrom(debugBuildSortIndex, cwdOption);
+    _ = debugBuildSortIndex.action(state, notPortedAction);
+
+    const debugBuildFilesTree = debugCommand
+        .command("build-files-tree", .{})
+        .description("Rebuild the files merkle tree (.db/files.dat) from actual files on storage (logical content hash/length/lastModified per file).");
+    _ = optionFrom(debugBuildFilesTree, dbOption);
+    _ = optionFrom(debugBuildFilesTree, keyOption);
+    _ = optionFrom(debugBuildFilesTree, verboseOption);
+    _ = optionFrom(debugBuildFilesTree, yesOption);
+    _ = optionFrom(debugBuildFilesTree, cwdOption);
+    _ = debugBuildFilesTree.action(state, notPortedAction);
+
+    _ = program
+        .command("help [command]", .{})
+        .description("Display help for command")
+        .action(state, helpAction);
 
     const infoDefinition = program
         .command("info", .{})
@@ -1098,7 +1392,19 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "list"))
         .action(state, listAction);
 
-    // Not ported: mcp and news.
+    const mcpDefinition = program
+        .command("mcp", .{})
+        .description("Start an MCP server (stdio transport). The MCP client chooses which database to open at runtime via list_databases / open_database.");
+    _ = optionFrom(mcpDefinition, verboseOption);
+    _ = optionFrom(mcpDefinition, yesOption);
+    _ = optionFrom(mcpDefinition, cwdOption);
+    _ = mcpDefinition.action(state, notPortedAction);
+
+    _ = program
+        .command("news", .{})
+        .description("Displays the latest update notification and all news items from the Photosphere feed.")
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "news"))
+        .action(state, notPortedAction);
 
     const removeDefinition = program
         .command("remove", .{})
@@ -1283,8 +1589,223 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "decrypt"))
         .action(state, decryptAction);
 
-    // Not ported: the secrets and dbs command groups.
+    _ = program.addCommand(secretsCommand(allocator, state));
+    _ = program.addCommand(dbsCommand(allocator, state));
+
     return program;
+}
+
+//
+// A subcommand of the secrets and dbs groups: its name, aliases, description and options (flags and description).
+//
+const ISubcommandSpec = struct {
+    // The name of the subcommand.
+    name: []const u8,
+
+    // Its aliases.
+    aliases: []const []const u8 = &.{},
+
+    // Its description.
+    description: []const u8,
+
+    // Its options, as `[flags, description]` pairs.
+    options: []const [2][]const u8,
+};
+
+//
+// Defines a group of commands like `new Command(name)` with its subcommands (apps/cli/src/cmd/secrets.ts and
+// apps/cli/src/cmd/dbs.ts). The subcommands are not ported yet.
+//
+fn commandGroup(allocator: std.mem.Allocator, state: *IProgramState, name: []const u8, aliases: []const []const u8, groupDescription: []const u8, subcommands: []const ISubcommandSpec) *Command {
+    const cmd = Command.init(allocator, name);
+    for (aliases) |aliasName| {
+        _ = cmd.alias(aliasName);
+    }
+    _ = cmd.description(groupDescription);
+    for (subcommands) |spec| {
+        const subcommand = cmd.command(spec.name, .{});
+        for (spec.aliases) |aliasName| {
+            _ = subcommand.alias(aliasName);
+        }
+        _ = subcommand.description(spec.description);
+        for (spec.options) |optionSpec| {
+            _ = subcommand.option(optionSpec[0], optionSpec[1], null);
+        }
+        _ = subcommand.action(state, notPortedAction);
+    }
+    return cmd;
+}
+
+//
+// Creates the secrets command group (secretsCommand in apps/cli/src/cmd/secrets.ts).
+//
+fn secretsCommand(allocator: std.mem.Allocator, state: *IProgramState) *Command {
+    return commandGroup(allocator, state, "secrets", &.{ "sec", "s" }, "Manage secrets stored in the Photosphere secrets store.", &.{
+        .{
+            .name = "add",
+            .description = "Interactively add a new secret.",
+            .options = &.{
+                .{ "--yes", "Skip prompts" },
+                .{ "--name <name>", "Secret name" },
+                .{ "--type <type>", "Secret type" },
+                .{ "--value <value>", "Secret value" },
+            },
+        },
+        .{
+            .name = "list",
+            .aliases = &.{ "l", "ls" },
+            .description = "List all secrets (values are masked).",
+            .options = &.{},
+        },
+        .{
+            .name = "view",
+            .aliases = &.{"v"},
+            .description = "Show the full value of a named secret.",
+            .options = &.{
+                .{ "--yes", "Skip confirmation prompt" },
+                .{ "--name <name>", "Secret name" },
+                .{ "--raw", "Print only the raw value, with no labels or colouring, for capture by another program" },
+            },
+        },
+        .{
+            .name = "edit",
+            .aliases = &.{"e"},
+            .description = "Edit an existing secret, field by field.",
+            .options = &.{
+                .{ "--yes", "Skip prompts" },
+                .{ "--name <name>", "Secret name to edit" },
+                .{ "--new-name <name>", "New secret name" },
+                .{ "--value <value>", "New value" },
+                .{ "--value-file <path>", "Read new value from a file (for multiline values such as PEM keys)" },
+            },
+        },
+        .{
+            .name = "remove",
+            .description = "Remove a named secret.",
+            .options = &.{
+                .{ "--yes", "Skip confirmation prompt" },
+                .{ "--name <name>", "Secret name to remove" },
+            },
+        },
+        .{
+            .name = "clear",
+            .description = "Remove all secrets.",
+            .options = &.{
+                .{ "--yes", "Skip confirmation prompt" },
+            },
+        },
+        .{
+            .name = "import",
+            .description = "Import a PEM private key file as an encryption key.",
+            .options = &.{
+                .{ "--yes", "Skip prompts" },
+                .{ "--private-key <path>", "Path to private key file" },
+            },
+        },
+        .{
+            .name = "send",
+            .description = "Send a secret to another device over the local network.",
+            .options = &.{
+                .{ "--yes", "Skip confirmation prompts" },
+                .{ "--name <name>", "Secret name to send" },
+                .{ "--code <code>", "Use a specific pairing code instead of generating one (useful for scripted use)" },
+            },
+        },
+        .{
+            .name = "receive",
+            .description = "Receive a secret from another device over the local network.",
+            .options = &.{
+                .{ "--yes", "Skip confirmation prompts and field editing" },
+                .{ "--code <code>", "Pairing code shown on the sender (required with --yes)" },
+            },
+        },
+    });
+}
+
+//
+// Creates the dbs command group (dbsCommand in apps/cli/src/cmd/dbs.ts).
+//
+fn dbsCommand(allocator: std.mem.Allocator, state: *IProgramState) *Command {
+    return commandGroup(allocator, state, "dbs", &.{"d"}, "Manage the list of configured databases.", &.{
+        .{
+            .name = "list",
+            .aliases = &.{ "l", "ls" },
+            .description = "List all configured databases.",
+            .options = &.{},
+        },
+        .{
+            .name = "add",
+            .description = "Interactively add a new database to the list.",
+            .options = &.{
+                .{ "--yes", "Skip prompts" },
+                .{ "--name <name>", "Database name" },
+                .{ "--description <desc>", "Database description" },
+                .{ "--path <path>", "Database path" },
+                .{ "--s3-cred <name>", "S3 credential secret name" },
+                .{ "--encryption-key <name>", "Encryption key secret name" },
+                .{ "--geocoding-key <name>", "Geocoding API key secret name" },
+            },
+        },
+        .{
+            .name = "view",
+            .aliases = &.{"v"},
+            .description = "Show all fields of a database entry.",
+            .options = &.{
+                .{ "--yes", "Skip interactive selection (requires --name or --path)" },
+                .{ "--name <name>", "Database name" },
+                .{ "--path <path>", "Database path" },
+            },
+        },
+        .{
+            .name = "edit",
+            .aliases = &.{"e"},
+            .description = "Edit fields of a database entry.",
+            .options = &.{
+                .{ "--yes", "Skip prompts" },
+                .{ "--name <name>", "Database name to edit" },
+                .{ "--new-name <name>", "New database name" },
+                .{ "--description <desc>", "New description" },
+                .{ "--path <path>", "New database path" },
+                .{ "--s3-cred <name>", "S3 credential secret name" },
+                .{ "--encryption-key <name>", "Encryption key secret name" },
+                .{ "--geocoding-key <name>", "Geocoding API key secret name" },
+            },
+        },
+        .{
+            .name = "remove",
+            .description = "Remove a database entry from the list.",
+            .options = &.{
+                .{ "--yes", "Skip confirmation prompt" },
+                .{ "--name <name>", "Database name" },
+                .{ "--path <path>", "Database path" },
+            },
+        },
+        .{
+            .name = "clear",
+            .description = "Remove all database entries from the list.",
+            .options = &.{
+                .{ "--yes", "Skip confirmation prompt" },
+            },
+        },
+        .{
+            .name = "send",
+            .description = "Send a database config (with secrets) to another device over the local network.",
+            .options = &.{
+                .{ "--yes", "Skip confirmation prompts and field editing" },
+                .{ "--name <name>", "Database name" },
+                .{ "--path <path>", "Database path" },
+                .{ "--code <code>", "Use a specific pairing code instead of generating one (useful for scripted use)" },
+            },
+        },
+        .{
+            .name = "receive",
+            .description = "Receive a database config (with secrets) from another device over the local network.",
+            .options = &.{
+                .{ "--yes", "Skip confirmation prompts and field editing" },
+                .{ "--code <code>", "Pairing code shown on the other device (required with --yes)" },
+            },
+        },
+    });
 }
 
 //
@@ -1297,6 +1818,9 @@ pub fn parseCommandLine(program: *Command, state: *IProgramState, userArgs: []co
         }
         if (err == error.CommanderError) {
             return .{ .failure = program.getCommanderError().? };
+        }
+        if (err == error.Exit) {
+            return .{ .processExit = program.getCommanderError().?.exitCode };
         }
         return err;
     };
@@ -1553,6 +2077,30 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
         .versionOption => {
             console.log(config.version);
             exit(io, 0);
+        },
+        .examples => {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try examplesCommand(allocator);
+        },
+        .help => |commandName| {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            // The help ends the parse the way it does in index.ts: main() exits with 0 for the help of the program
+            // and the commands, and the secrets and dbs groups call process.exit themselves.
+            const helpError = helpCommand(program, commandName);
+            if (helpError != error.CommanderError and helpError != error.Exit) {
+                return helpError;
+            }
+            exit(io, program.getCommanderError().?.exitCode);
+        },
+        .notPorted => |commandName| {
+            return utils.errors.throwError("The {s} command is not ported to the Zig CLI yet.", .{commandName});
+        },
+        .processExit => |exitCode| {
+            exit(io, exitCode);
         },
     }
     return 0;
