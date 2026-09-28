@@ -186,9 +186,11 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []con
         // Flips orientation depending on exif data.
         imagePath = try transformImage(allocator, io, imagePath, tempDir, transformation, uuidGenerator);
         if (transformation.changeOrientation orelse false) {
+            // (Zig: a copy is swapped, as assigning a literal to resolution would overwrite its width before the height reads it.)
+            const unswapped = resolution;
             resolution = .{
-                .width = resolution.height,
-                .height = resolution.width,
+                .width = unswapped.height,
+                .height = unswapped.width,
             };
         }
     }
