@@ -1,10 +1,10 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
 // Only the `add` (alias `a`), `compare` (alias `cmp`), `consolidate`, `database-id`, `decrypt`, `encrypt`, `export`
-// (alias `exp`), `find-orphans`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove`
-// (alias `rm`), `remove-orphans`, `repair`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`,
-// `upgrade`, `verify` (alias `ver`) and `version` commands and the `--version` option are ported; the other commands are not
-// registered yet, so commander reports them as unknown commands.
+// (alias `exp`), `find-orphans`, `hash`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`,
+// `remove` (alias `rm`), `remove-orphans`, `repair`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias
+// `sum`), `sync`, `upgrade`, `verify` (alias `ver`) and `version` commands and the `--version` option are ported; the other
+// commands are not registered yet, so commander reports them as unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -49,6 +49,7 @@ pub const sync = @import("src/cmd/sync.zig");
 pub const consolidate = @import("src/cmd/consolidate.zig");
 pub const encrypt = @import("src/cmd/encrypt.zig");
 pub const decrypt = @import("src/cmd/decrypt.zig");
+pub const hash = @import("src/cmd/hash.zig");
 pub const remove_orphans = @import("src/cmd/remove-orphans.zig");
 pub const upgrade = @import("src/cmd/upgrade.zig");
 pub const export_command = @import("src/cmd/export.zig");
@@ -97,6 +98,8 @@ const IEncryptCommandOptions = encrypt.IEncryptCommandOptions;
 const encryptCommand = encrypt.encryptCommand;
 const IDecryptCommandOptions = decrypt.IDecryptCommandOptions;
 const decryptCommand = decrypt.decryptCommand;
+const IHashCommandOptions = hash.IHashCommandOptions;
+const hashCommand = hash.hashCommand;
 const IRemoveCommandOptions = remove.IRemoveCommandOptions;
 const removeCommand = remove.removeCommand;
 const ICompareCommandOptions = compare.ICompareCommandOptions;
@@ -295,6 +298,18 @@ pub const IInfoParsed = struct {
 };
 
 //
+// What the hash command runs with: its file path and its options (TypeScript: the arguments commander passes the
+// action).
+//
+pub const IHashParsed = struct {
+    // The file path to hash.
+    filePath: []const u8,
+
+    // The options of the command.
+    options: IHashCommandOptions,
+};
+
+//
 // The command a parsed command line runs.
 //
 pub const ParseOutcome = union(enum) {
@@ -331,6 +346,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the decrypt command with these options.
     decrypt: IDecryptCommandOptions,
+
+    // Run the hash command with this file path and these options.
+    hash: IHashParsed,
 
     // Run the compare command with these options.
     compare: ICompareCommandOptions,
@@ -639,6 +657,23 @@ fn decryptAction(state: *IProgramState, args: []const ArgumentValue, options: *c
 }
 
 //
+// The action of the hash command (`hashCommand`, without initContext): `run` calls the command.
+//
+fn hashAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+    state.outcome = .{
+        .hash = .{
+            .filePath = args[0].string,
+            .options = .{
+                .verbose = flagValue(options, "verbose"),
+                .yes = flagValue(options, "yes"),
+                .key = textValue(options, "key"),
+            },
+        },
+    };
+}
+
+//
 // The action of the upgrade command (`initContext(upgradeCommand)`): `run` calls initContext and the command.
 //
 fn upgradeAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
@@ -895,7 +930,19 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "find-orphans"))
         .action(state, findOrphansAction);
 
-    // Not ported: hash, hash-cache, debug and help.
+    const hashDefinition = program
+        .command("hash", .{})
+        .description("Compute the hash of a file using the same algorithm as the database.")
+        .argument("<file-path>", "The file path to hash (supports fs:, s3:, and encrypted storage)");
+    _ = optionFrom(hashDefinition, keyOption);
+    _ = optionFrom(hashDefinition, verboseOption);
+    _ = optionFrom(hashDefinition, yesOption);
+    _ = optionFrom(hashDefinition, cwdOption);
+    _ = hashDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "hash"))
+        .action(state, hashAction);
+
+    // Not ported: hash-cache, debug and help.
 
     const infoDefinition = program
         .command("info", .{})
@@ -1276,6 +1323,12 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try decryptCommand(allocator, io, context, &options);
+        },
+        .hash => |parsed| {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try hashCommand(allocator, io, parsed.filePath, &parsed.options);
         },
         .upgrade => |parsed| {
             var options = parsed;
