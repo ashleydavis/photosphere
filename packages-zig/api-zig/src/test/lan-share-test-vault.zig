@@ -1,5 +1,6 @@
 const std = @import("std");
 const node_utils = @import("node-utils-zig");
+const vault_zig = @import("vault-zig");
 
 //
 // The environment the LAN share tests run the plaintext vault with (the `jest.mock("vault", ...)` of the TypeScript
@@ -33,4 +34,15 @@ pub fn useTestVault() !void {
 //
 pub fn useRealEnvironment() void {
     node_utils.process_env.setEnvironMap(null);
+}
+
+//
+// Deletes every secret in the test program's vault, so a test starts from an empty vault (the TypeScript tests reset
+// their vault mocks before each test).
+//
+pub fn clearTestVault(allocator: std.mem.Allocator, io: std.Io) !void {
+    const vault = try vault_zig.get_vault.getVault("plaintext");
+    for (try vault.list(allocator, io)) |secret| {
+        try vault.delete(allocator, io, secret.name);
+    }
 }

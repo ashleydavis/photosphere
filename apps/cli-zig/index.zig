@@ -4,9 +4,9 @@
 // its subcommands), `decrypt`, `encrypt`, `examples`, `export` (alias `exp`), `find-orphans`, `hash`, `hash-cache` (all its
 // subcommands), `help`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias
 // `rm`), `remove-orphans`, `repair`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`,
-// `tools`, `upgrade`, `verify` (alias `ver`) and `version` commands, the `secrets` command group (aliases `sec` and `s`)
-// and the `--version` option are ported. The other commands are defined like in index.ts, so that their help is the help
-// of the TypeScript CLI, but running one fails with an error saying that it is not ported yet.
+// `tools`, `upgrade`, `verify` (alias `ver`) and `version` commands, the `secrets` command group (aliases `sec` and `s`), the
+// `dbs` command group (alias `d`) and the `--version` option are ported. The other commands are defined like in index.ts, so
+// that their help is the help of the TypeScript CLI, but running one fails with an error saying that it is not ported yet.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -72,6 +72,7 @@ pub const verify = @import("src/cmd/verify.zig");
 pub const version_cmd = @import("src/cmd/version.zig");
 pub const examples_cmd = @import("src/cmd/examples.zig");
 pub const secrets = @import("src/cmd/secrets.zig");
+pub const dbs = @import("src/cmd/dbs.zig");
 pub const spinner = @import("src/lib/spinner.zig");
 pub const process_signals = @import("src/lib/process-signals.zig");
 pub const print_notifications = @import("src/lib/print-notifications.zig");
@@ -580,6 +581,30 @@ pub const ParseOutcome = union(enum) {
 
     // Run `secrets receive` with these options.
     secretsReceive: secrets.ISecretsReceiveOptions,
+
+    // Run `dbs list`.
+    dbsList,
+
+    // Run `dbs add` with these options.
+    dbsAdd: dbs.IDbsAddOptions,
+
+    // Run `dbs view` with these options.
+    dbsView: dbs.IDbsViewOptions,
+
+    // Run `dbs edit` with these options.
+    dbsEdit: dbs.IDbsEditOptions,
+
+    // Run `dbs remove` with these options.
+    dbsRemove: dbs.IDbsRemoveOptions,
+
+    // Run `dbs clear` with these options.
+    dbsClear: dbs.IDbsClearOptions,
+
+    // Run `dbs send` with these options.
+    dbsSend: dbs.IDbsSendOptions,
+
+    // Run `dbs receive` with these options.
+    dbsReceive: dbs.IDbsReceiveOptions,
 
     // A command that does not exit through `.exitOverride()` (the secrets and dbs groups) called
     // `process.exit` with this exit code, after writing its help or its error.
@@ -2027,47 +2052,6 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
 }
 
 //
-// A subcommand of the dbs group: its name, aliases, description and options (flags and description).
-//
-const ISubcommandSpec = struct {
-    // The name of the subcommand.
-    name: []const u8,
-
-    // Its aliases.
-    aliases: []const []const u8 = &.{},
-
-    // Its description.
-    description: []const u8,
-
-    // Its options, as `[flags, description]` pairs.
-    options: []const [2][]const u8,
-};
-
-//
-// Defines a group of commands like `new Command(name)` with its subcommands (apps/cli/src/cmd/secrets.ts and
-// apps/cli/src/cmd/dbs.ts), for the dbs group, whose subcommands are not ported yet.
-//
-fn commandGroup(allocator: std.mem.Allocator, state: *IProgramState, name: []const u8, aliases: []const []const u8, groupDescription: []const u8, subcommands: []const ISubcommandSpec) *Command {
-    const cmd = Command.init(allocator, name);
-    for (aliases) |aliasName| {
-        _ = cmd.alias(aliasName);
-    }
-    _ = cmd.description(groupDescription);
-    for (subcommands) |spec| {
-        const subcommand = cmd.command(spec.name, .{});
-        for (spec.aliases) |aliasName| {
-            _ = subcommand.alias(aliasName);
-        }
-        _ = subcommand.description(spec.description);
-        for (spec.options) |optionSpec| {
-            _ = subcommand.option(optionSpec[0], optionSpec[1], null);
-        }
-        _ = subcommand.action(state, notPortedAction);
-    }
-    return cmd;
-}
-
-//
 // The action of `secrets add` (`.action(secretsAdd)`): `run` calls the command.
 //
 fn secretsAddAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
@@ -2279,89 +2263,208 @@ fn secretsCommand(allocator: std.mem.Allocator, state: *IProgramState) *Command 
 }
 
 //
-// Creates the dbs command group (dbsCommand in apps/cli/src/cmd/dbs.ts).
+// The action of `dbs list` (`.action(dbsList)`): `run` calls the command.
+//
+fn dbsListAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = options;
+    _ = command;
+    state.outcome = .dbsList;
+}
+
+//
+// The action of `dbs add` (`.action(dbsAdd)`): `run` calls the command.
+//
+fn dbsAddAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .dbsAdd = .{
+            .yes = flagValue(options, "yes"),
+            .name = textValue(options, "name"),
+            .description = textValue(options, "description"),
+            .path = textValue(options, "path"),
+            .s3Cred = textValue(options, "s3Cred"),
+            .encryptionKey = textValue(options, "encryptionKey"),
+            .geocodingKey = textValue(options, "geocodingKey"),
+        },
+    };
+}
+
+//
+// The action of `dbs view` (`.action(dbsView)`): `run` calls the command.
+//
+fn dbsViewAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .dbsView = .{
+            .yes = flagValue(options, "yes"),
+            .name = textValue(options, "name"),
+            .path = textValue(options, "path"),
+        },
+    };
+}
+
+//
+// The action of `dbs edit` (`.action(dbsEdit)`): `run` calls the command.
+//
+fn dbsEditAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .dbsEdit = .{
+            .yes = flagValue(options, "yes"),
+            .name = textValue(options, "name"),
+            .newName = textValue(options, "newName"),
+            .description = textValue(options, "description"),
+            .path = textValue(options, "path"),
+            .s3Cred = textValue(options, "s3Cred"),
+            .encryptionKey = textValue(options, "encryptionKey"),
+            .geocodingKey = textValue(options, "geocodingKey"),
+        },
+    };
+}
+
+//
+// The action of `dbs remove` (`.action(dbsRemove)`): `run` calls the command.
+//
+fn dbsRemoveAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .dbsRemove = .{
+            .yes = flagValue(options, "yes"),
+            .name = textValue(options, "name"),
+            .path = textValue(options, "path"),
+        },
+    };
+}
+
+//
+// The action of `dbs clear` (`.action(dbsClear)`): `run` calls the command.
+//
+fn dbsClearAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .dbsClear = .{
+            .yes = flagValue(options, "yes"),
+        },
+    };
+}
+
+//
+// The action of `dbs send` (`.action(dbsSend)`): `run` calls the command.
+//
+fn dbsSendAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .dbsSend = .{
+            .yes = flagValue(options, "yes"),
+            .name = textValue(options, "name"),
+            .path = textValue(options, "path"),
+            .code = textValue(options, "code"),
+        },
+    };
+}
+
+//
+// The action of `dbs receive` (`.action(dbsReceive)`): `run` calls the command.
+//
+fn dbsReceiveAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .dbsReceive = .{
+            .yes = flagValue(options, "yes"),
+            .code = textValue(options, "code"),
+        },
+    };
+}
+
+//
+// The `psi dbs` command group (dbsCommand in apps/cli/src/cmd/dbs.ts).
 //
 fn dbsCommand(allocator: std.mem.Allocator, state: *IProgramState) *Command {
-    return commandGroup(allocator, state, "dbs", &.{"d"}, "Manage the list of configured databases.", &.{
-        .{
-            .name = "list",
-            .aliases = &.{ "l", "ls" },
-            .description = "List all configured databases.",
-            .options = &.{},
-        },
-        .{
-            .name = "add",
-            .description = "Interactively add a new database to the list.",
-            .options = &.{
-                .{ "--yes", "Skip prompts" },
-                .{ "--name <name>", "Database name" },
-                .{ "--description <desc>", "Database description" },
-                .{ "--path <path>", "Database path" },
-                .{ "--s3-cred <name>", "S3 credential secret name" },
-                .{ "--encryption-key <name>", "Encryption key secret name" },
-                .{ "--geocoding-key <name>", "Geocoding API key secret name" },
-            },
-        },
-        .{
-            .name = "view",
-            .aliases = &.{"v"},
-            .description = "Show all fields of a database entry.",
-            .options = &.{
-                .{ "--yes", "Skip interactive selection (requires --name or --path)" },
-                .{ "--name <name>", "Database name" },
-                .{ "--path <path>", "Database path" },
-            },
-        },
-        .{
-            .name = "edit",
-            .aliases = &.{"e"},
-            .description = "Edit fields of a database entry.",
-            .options = &.{
-                .{ "--yes", "Skip prompts" },
-                .{ "--name <name>", "Database name to edit" },
-                .{ "--new-name <name>", "New database name" },
-                .{ "--description <desc>", "New description" },
-                .{ "--path <path>", "New database path" },
-                .{ "--s3-cred <name>", "S3 credential secret name" },
-                .{ "--encryption-key <name>", "Encryption key secret name" },
-                .{ "--geocoding-key <name>", "Geocoding API key secret name" },
-            },
-        },
-        .{
-            .name = "remove",
-            .description = "Remove a database entry from the list.",
-            .options = &.{
-                .{ "--yes", "Skip confirmation prompt" },
-                .{ "--name <name>", "Database name" },
-                .{ "--path <path>", "Database path" },
-            },
-        },
-        .{
-            .name = "clear",
-            .description = "Remove all database entries from the list.",
-            .options = &.{
-                .{ "--yes", "Skip confirmation prompt" },
-            },
-        },
-        .{
-            .name = "send",
-            .description = "Send a database config (with secrets) to another device over the local network.",
-            .options = &.{
-                .{ "--yes", "Skip confirmation prompts and field editing" },
-                .{ "--name <name>", "Database name" },
-                .{ "--path <path>", "Database path" },
-                .{ "--code <code>", "Use a specific pairing code instead of generating one (useful for scripted use)" },
-            },
-        },
-        .{
-            .name = "receive",
-            .description = "Receive a database config (with secrets) from another device over the local network.",
-            .options = &.{
-                .{ "--yes", "Skip confirmation prompts and field editing" },
-                .{ "--code <code>", "Pairing code shown on the other device (required with --yes)" },
-            },
-        },
-    });
+    const cmd = Command.init(allocator, "dbs")
+        .alias("d")
+        .description("Manage the list of configured databases.");
+
+    // psi dbs list
+    _ = cmd.command("list", .{})
+        .alias("l")
+        .alias("ls")
+        .description("List all configured databases.")
+        .action(state, dbsListAction);
+
+    // psi dbs add
+    _ = cmd.command("add", .{})
+        .description("Interactively add a new database to the list.")
+        .option("--yes", "Skip prompts", null)
+        .option("--name <name>", "Database name", null)
+        .option("--description <desc>", "Database description", null)
+        .option("--path <path>", "Database path", null)
+        .option("--s3-cred <name>", "S3 credential secret name", null)
+        .option("--encryption-key <name>", "Encryption key secret name", null)
+        .option("--geocoding-key <name>", "Geocoding API key secret name", null)
+        .action(state, dbsAddAction);
+
+    // psi dbs view
+    _ = cmd.command("view", .{})
+        .alias("v")
+        .description("Show all fields of a database entry.")
+        .option("--yes", "Skip interactive selection (requires --name or --path)", null)
+        .option("--name <name>", "Database name", null)
+        .option("--path <path>", "Database path", null)
+        .action(state, dbsViewAction);
+
+    // psi dbs edit
+    _ = cmd.command("edit", .{})
+        .alias("e")
+        .description("Edit fields of a database entry.")
+        .option("--yes", "Skip prompts", null)
+        .option("--name <name>", "Database name to edit", null)
+        .option("--new-name <name>", "New database name", null)
+        .option("--description <desc>", "New description", null)
+        .option("--path <path>", "New database path", null)
+        .option("--s3-cred <name>", "S3 credential secret name", null)
+        .option("--encryption-key <name>", "Encryption key secret name", null)
+        .option("--geocoding-key <name>", "Geocoding API key secret name", null)
+        .action(state, dbsEditAction);
+
+    // psi dbs remove
+    _ = cmd.command("remove", .{})
+        .description("Remove a database entry from the list.")
+        .option("--yes", "Skip confirmation prompt", null)
+        .option("--name <name>", "Database name", null)
+        .option("--path <path>", "Database path", null)
+        .action(state, dbsRemoveAction);
+
+    // psi dbs clear
+    _ = cmd.command("clear", .{})
+        .description("Remove all database entries from the list.")
+        .option("--yes", "Skip confirmation prompt", null)
+        .action(state, dbsClearAction);
+
+    // psi dbs send
+    _ = cmd.command("send", .{})
+        .description("Send a database config (with secrets) to another device over the local network.")
+        .option("--yes", "Skip confirmation prompts and field editing", null)
+        .option("--name <name>", "Database name", null)
+        .option("--path <path>", "Database path", null)
+        .option("--code <code>", "Use a specific pairing code instead of generating one (useful for scripted use)", null)
+        .action(state, dbsSendAction);
+
+    // psi dbs receive
+    _ = cmd.command("receive", .{})
+        .description("Receive a database config (with secrets) from another device over the local network.")
+        .option("--yes", "Skip confirmation prompts and field editing", null)
+        .option("--code <code>", "Pairing code shown on the other device (required with --yes)", null)
+        .action(state, dbsReceiveAction);
+
+    return cmd;
 }
 
 //
@@ -2839,6 +2942,61 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
             try secrets.secretsReceive(allocator, io, &options);
+        },
+        .dbsList => {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try dbs.dbsList(allocator, io);
+        },
+        .dbsAdd => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try dbs.dbsAdd(allocator, io, &options);
+        },
+        .dbsView => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try dbs.dbsView(allocator, io, &options);
+        },
+        .dbsEdit => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try dbs.dbsEdit(allocator, io, &options);
+        },
+        .dbsRemove => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try dbs.dbsRemove(allocator, io, &options);
+        },
+        .dbsClear => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try dbs.dbsClear(allocator, io, &options);
+        },
+        .dbsSend => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try dbs.dbsSend(allocator, io, &options);
+        },
+        .dbsReceive => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try dbs.dbsReceive(allocator, io, &options);
         },
         .notPorted => |commandName| {
             return utils.errors.throwError("The {s} command is not ported to the Zig CLI yet.", .{commandName});

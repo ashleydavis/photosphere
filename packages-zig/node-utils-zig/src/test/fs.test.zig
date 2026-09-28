@@ -952,6 +952,118 @@ test "updateYaml throws after the configured retries when the file keeps changin
 }
 
 //
+// A mutator for the updateToml tests: adds `amount` to the `count` of the current document, optionally
+// writing the file itself first (a concurrent writer) on the first call or on every call.
+//
+const TomlCountMutator = struct {
+    // What is added to the count.
+    amount: i64,
+
+    // The file a concurrent writer changes, or null for none.
+    externalWriteFile: ?[]const u8,
+
+    // True to change the file on the first call only, false to change it on every call.
+    injectOnce: bool,
+
+    // How many times the file has been changed from outside.
+    external: usize = 0,
+
+    // Used to write the file.
+    io: std.Io,
+
+    //
+    // Returns `{ count: current.count + amount }`.
+    //
+    pub fn run(self: *TomlCountMutator, allocator: std.mem.Allocator, current: std.json.Value) !std.json.Value {
+        if (self.externalWriteFile) |externalPath| {
+            if (!self.injectOnce or self.external == 0) {
+                self.external += 1;
+                var text: std.ArrayList(u8) = .empty;
+                try text.print(allocator, "count = {d}\n", .{if (self.injectOnce) 99 else self.external});
+                var padIndex: usize = 0;
+                while (!self.injectOnce and padIndex < self.external) {
+                    try text.appendSlice(allocator, "# pad\n");
+                    padIndex += 1;
+                }
+                try std.Io.Dir.cwd().writeFile(self.io, .{ .sub_path = externalPath, .data = text.items });
+            }
+        }
+        var object: std.json.ObjectMap = .empty;
+        try object.put(allocator, "count", .{ .integer = current.object.get("count").?.integer + self.amount });
+        return .{ .object = object };
+    }
+};
+
+//
+// Reads the count of a TOML file.
+//
+fn readTomlCount(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !i64 {
+    return (try fs.readToml(allocator, io, filePath)).object.get("count").?.integer;
+}
+
+test "updateToml uses the fallback and writes when the file does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-toml-new.toml");
+
+    var mutator: TomlCountMutator = .{ .amount = 5, .externalWriteFile = null, .injectOnce = true, .io = io };
+    try fs.updateToml(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    try std.testing.expectEqual(@as(i64, 5), try readTomlCount(allocator, io, filePath));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateToml reads existing contents and applies the mutator" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-toml-existing.toml");
+    try fs.writeToml(allocator, io, filePath, try countDocument(allocator, 10));
+
+    var mutator: TomlCountMutator = .{ .amount = 1, .externalWriteFile = null, .injectOnce = true, .io = io };
+    try fs.updateToml(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    try std.testing.expectEqual(@as(i64, 11), try readTomlCount(allocator, io, filePath));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateToml reloads and re-applies the mutator when the file changed under it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-toml-retry.toml");
+    try fs.writeToml(allocator, io, filePath, try countDocument(allocator, 0));
+
+    // Simulate a concurrent writer changing the file after our read but before the pre-move check.
+    var mutator: TomlCountMutator = .{ .amount = 1, .externalWriteFile = filePath, .injectOnce = true, .io = io };
+    try fs.updateToml(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    // The mutator ran twice: once on the stale read (discarded), once on the reloaded value 99 -> 100.
+    try std.testing.expectEqual(@as(i64, 100), try readTomlCount(allocator, io, filePath));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateToml throws after the configured retries when the file keeps changing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-toml-exhaust.toml");
+    try fs.writeToml(allocator, io, filePath, try countDocument(allocator, 0));
+
+    // Change the file under every attempt (growing its size) so the pre-move check always
+    // sees a conflict regardless of mtime resolution.
+    var mutator: TomlCountMutator = .{ .amount = 1, .externalWriteFile = filePath, .injectOnce = false, .io = io };
+    try std.testing.expectError(error.Thrown, fs.updateToml(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 2));
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "kept changing") != null);
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+//
 // Sets up an environment for the getCacheDir tests: a home directory and nothing else.
 //
 fn cacheDirEnvironment(environ_map: *std.process.Environ.Map) !void {

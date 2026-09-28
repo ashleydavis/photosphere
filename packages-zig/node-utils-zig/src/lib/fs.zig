@@ -530,7 +530,48 @@ pub fn updateFileOptimistic(comptime ContentType: type, allocator: std.mem.Alloc
     try updateFileRawOptimistic(allocator, io, filePath, &raw_mutator, retries);
 }
 
-// Not ported: updateToml, updateJson, emptyDir, copy (not used by replicate or verify).
+//
+// The parse and serialize functions updateToml hands to updateFileOptimistic (the arrow functions in
+// TypeScript).
+//
+const TomlParse = struct {
+    //
+    // Parses the text (`tomlParse(raw)`).
+    //
+    pub fn run(self: *const TomlParse, allocator: std.mem.Allocator, raw: []const u8) !toml.TomlValue {
+        _ = self;
+        return toml.parse(allocator, raw);
+    }
+};
+
+//
+// Serializes the value (`tomlStringify(value)`).
+//
+const TomlSerialize = struct {
+    //
+    // Stringifies the value.
+    //
+    pub fn run(self: *const TomlSerialize, allocator: std.mem.Allocator, value: toml.TomlValue) ![]const u8 {
+        _ = self;
+        return toml.stringify(allocator, value);
+    }
+};
+
+//
+// Updates a TOML file as an optimistic read-modify-write: reads the current parsed contents
+// (or `fallback` when the file does not exist yet), passes them to `mutator`, and writes the
+// returned value back atomically. If another writer changed the file first, it reloads and
+// re-applies the mutator, up to `retries` times (default 3) before throwing.
+//
+// In Zig the mutator is a value with a method `run(self, allocator, current: toml.TomlValue) !toml.TomlValue`.
+//
+pub fn updateToml(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, fallback: toml.TomlValue, mutator: anytype, retries: u32) !void {
+    const parse: TomlParse = .{};
+    const serialize: TomlSerialize = .{};
+    try updateFileOptimistic(toml.TomlValue, allocator, io, filePath, fallback, mutator, &parse, &serialize, retries);
+}
+
+// Not ported: updateJson, emptyDir, copy (not used by the ported commands).
 
 //
 // Synchronous version: Ensures that the directory exists.

@@ -67,7 +67,7 @@ test_s3_vault_credentials() {
     seed_databases_config "[]"
 
     invoke_command "Register the S3 database with its vault credential" \
-        "$(get_cli_command) dbs add --yes --name $DB_NAME --path \"$s3_db\" --s3-cred $SECRET_NAME" 0
+        "$(get_zig_cli_command) dbs add --yes --name $DB_NAME --path \"$s3_db\" --s3-cred $SECRET_NAME" 0
 
     # --- 1. Read and write the database through the vault credential alone. ---
 
@@ -108,7 +108,7 @@ test_s3_vault_credentials() {
 
     local second_db="s3:$S3_EMULATOR_BUCKET/vault-cred-test-2"
     invoke_command "Register a second S3 database with the same vault credential" \
-        "$(get_cli_command) dbs add --yes --name ${DB_NAME}-2 --path \"$second_db\" --s3-cred $SECRET_NAME" 0
+        "$(get_zig_cli_command) dbs add --yes --name ${DB_NAME}-2 --path \"$second_db\" --s3-cred $SECRET_NAME" 0
 
     invoke_command "Initialize an S3 database whose credential is only in the vault" \
         "$(get_zig_cli_command) init --db \"$second_db\" --yes" 0

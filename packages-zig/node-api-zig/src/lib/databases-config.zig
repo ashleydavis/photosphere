@@ -3,6 +3,8 @@ const node_utils = @import("node-utils-zig");
 const databases_config_format = @import("databases-config-format.zig");
 const fs = node_utils.fs;
 const tomlEntryToDatabaseEntry = databases_config_format.tomlEntryToDatabaseEntry;
+const databaseEntryToToml = databases_config_format.databaseEntryToToml;
+const errors = @import("utils-zig").errors;
 
 // Re-exported: this module has always been where the codebase imports the entry type from. The
 // definition now lives with the file format, which mobile shares.
@@ -46,7 +48,7 @@ fn DATABASES_FILE(allocator: std.mem.Allocator) ![]const u8 {
     return std.fs.path.join(allocator, &.{ try fs.getConfigDir(allocator), "databases.toml" });
 }
 
-// Not ported: getDatabasesConfigPath, MAX_RECENT_DATABASES (psi dbs, not psi replicate or psi verify).
+// Not ported: getDatabasesConfigPath, MAX_RECENT_DATABASES (not used by the ported commands).
 
 //
 // Gets an array property of a TOML object (null when it is absent or not an array, like Array.isArray).
@@ -97,8 +99,38 @@ pub fn tomlToDatabasesConfig(allocator: std.mem.Allocator, toml: std.json.Object
     return config;
 }
 
-// Not ported: databasesConfigToToml, namesMatch (only used when databases.toml is written, which psi replicate
-// and psi verify do not do).
+//
+// Converts the TypeScript IDatabasesConfig to the TOML on-disk shape.
+//
+pub fn databasesConfigToToml(allocator: std.mem.Allocator, config: IDatabasesConfig) !std.json.Value {
+    var tomlDatabases: std.json.Array = .init(allocator);
+    for (config.databases) |entry| {
+        try tomlDatabases.append(try databaseEntryToToml(allocator, entry));
+    }
+    var recentDatabaseNames: std.json.Array = .init(allocator);
+    for (config.recentDatabaseNames) |recentName| {
+        try recentDatabaseNames.append(.{ .string = recentName });
+    }
+    var toml: std.json.ObjectMap = .empty;
+    try toml.put(allocator, "databases", .{ .array = tomlDatabases });
+    try toml.put(allocator, "recent_database_names", .{ .array = recentDatabaseNames });
+
+    // Only written when there is one. An absent key is what "no database is open" looks like on
+    // disk, so writing an empty string instead would reopen a database whose path is nothing.
+    if (config.lastDatabase) |lastDatabase| {
+        try toml.put(allocator, "last_database", .{ .string = lastDatabase });
+    }
+    return .{ .object = toml };
+}
+
+//
+// Returns true if the two names match case-insensitively.
+// (Zig: ASCII letters only; JavaScript's toLowerCase also lowers non-ASCII letters, which is not ported, as in
+// fuzzy-match-zig.)
+//
+pub fn namesMatch(left: []const u8, right: []const u8) bool {
+    return std.ascii.eqlIgnoreCase(left, right);
+}
 
 //
 // Loads the databases configuration from disk.
@@ -118,7 +150,59 @@ pub fn loadDatabasesConfig(allocator: std.mem.Allocator, io: std.Io) !IDatabases
     return tomlToDatabasesConfig(allocator, toml);
 }
 
-// Not ported: updateDatabasesConfig (psi dbs, not psi replicate or psi verify).
+//
+// Changes the databases configuration on disk. Every edit in this module goes through here.
+//
+// The mutator is handed the file's CURRENT contents and returns the new ones. updateToml runs it
+// under the update lock beside the file, checks the file has not moved before renaming, and re-runs
+// the mutator against the new contents if it has. So two edits arriving together both survive: the
+// second is applied on top of the first rather than overwriting it.
+//
+// This replaced a saveDatabasesConfig that took a whole config and wrote it. Every caller was
+// load-then-save, so two overlapping edits meant the later write silently discarded the earlier
+// one's change, with nothing to show for it. Several processes write this one file: the Electron
+// main process, the REST API and MCP utility processes, and the worker pool.
+//
+// Windows is where that stopped being silent. It refuses to rename over a file another handle still
+// holds, so the overlapping renames surfaced as "EPERM: operation not permitted, rename ...
+// databases.toml", failing one to six of the thirty three desktop smoke tests per run. Taking turns
+// fixes the visible failure on Windows and the invisible one everywhere else.
+//
+// A mutator that throws is left to throw. The lock is released on the way out, and the caller gets
+// its error rather than a half-applied change.
+//
+// In Zig the mutator is a value with a method `run(self, allocator, config: IDatabasesConfig) !IDatabasesConfig`.
+//
+pub fn updateDatabasesConfig(allocator: std.mem.Allocator, io: std.Io, mutate: anytype) !void {
+    var emptyConfig: std.json.ObjectMap = .empty;
+    try emptyConfig.put(allocator, "databases", .{ .array = .init(allocator) });
+    try emptyConfig.put(allocator, "recent_database_names", .{ .array = .init(allocator) });
+    const tomlMutator: DatabasesConfigTomlMutator(@TypeOf(mutate)) = .{ .mutate = mutate };
+    try fs.updateToml(allocator, io, try DATABASES_FILE(allocator), .{ .object = emptyConfig }, &tomlMutator, 3);
+}
+
+//
+// The mutator updateDatabasesConfig hands to updateToml: converts the TOML to a config, applies the caller's
+// mutator and converts the result back (the arrow function in TypeScript).
+//
+fn DatabasesConfigTomlMutator(comptime MutateType: type) type {
+    return struct {
+        // The caller's mutator.
+        mutate: MutateType,
+
+        //
+        // Converts, mutates and converts back.
+        //
+        pub fn run(self: *const @This(), allocator: std.mem.Allocator, currentToml: std.json.Value) !std.json.Value {
+            const tomlObject = switch (currentToml) {
+                .object => |object| object,
+                else => std.json.ObjectMap.empty,
+            };
+            const updated = try self.mutate.run(allocator, try tomlToDatabasesConfig(allocator, tomlObject));
+            return databasesConfigToToml(allocator, updated);
+        }
+    };
+}
 
 //
 // Returns all configured database entries.
@@ -128,6 +212,163 @@ pub fn getDatabases(allocator: std.mem.Allocator, io: std.Io) ![]const IDatabase
     return config.databases;
 }
 
-// Not ported: findDatabase, addDatabaseEntry, updateDatabaseEntry, removeDatabaseEntry, getRecentDatabases,
-// removeRecentDatabaseName, markDatabaseOpened, getLastDatabase, setLastDatabase (psi dbs, not psi replicate or
-// psi verify).
+//
+// Finds a database entry by name using case-insensitive matching.
+// Returns the first match if any. Returns undefined if no entry matches.
+//
+pub fn findDatabase(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !?IDatabaseEntry {
+    const config = try loadDatabasesConfig(allocator, io);
+    for (config.databases) |dbEntry| {
+        if (namesMatch(dbEntry.name, name)) {
+            return dbEntry;
+        }
+    }
+    return null;
+}
+
+//
+// The mutator of addDatabaseEntry (the arrow function in TypeScript).
+//
+const AddDatabaseEntryMutator = struct {
+    // The entry to add.
+    entry: IDatabaseEntry,
+
+    //
+    // Appends the entry, throwing when its name is taken.
+    //
+    pub fn run(self: *const AddDatabaseEntryMutator, allocator: std.mem.Allocator, config: IDatabasesConfig) !IDatabasesConfig {
+        for (config.databases) |dbEntry| {
+            if (namesMatch(dbEntry.name, self.entry.name)) {
+                return errors.throwError("A database named \"{s}\" already exists.", .{self.entry.name});
+            }
+        }
+        var databases: std.ArrayList(IDatabaseEntry) = .empty;
+        try databases.appendSlice(allocator, config.databases);
+        try databases.append(allocator, self.entry);
+        var updated = config;
+        updated.databases = databases.items;
+        return updated;
+    }
+};
+
+//
+// Adds a new database entry to the list.
+// Throws if an entry with the same name (case-insensitive) already exists; this acts as
+// a storage-layer invariant in addition to any UX checks.
+//
+pub fn addDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, entry: IDatabaseEntry) !void {
+    const mutator: AddDatabaseEntryMutator = .{ .entry = entry };
+    try updateDatabasesConfig(allocator, io, &mutator);
+}
+
+//
+// The mutator of updateDatabaseEntry (the arrow function in TypeScript).
+//
+const UpdateDatabaseEntryMutator = struct {
+    // The name of the entry to update.
+    originalName: []const u8,
+
+    // The new fields of the entry.
+    entry: IDatabaseEntry,
+
+    //
+    // Replaces the entry, rewriting the recents slot on a rename.
+    //
+    pub fn run(self: *const UpdateDatabaseEntryMutator, allocator: std.mem.Allocator, config: IDatabasesConfig) !IDatabasesConfig {
+        var matchIndex: ?usize = null;
+        for (config.databases, 0..) |dbEntry, dbIndex| {
+            if (namesMatch(dbEntry.name, self.originalName)) {
+                matchIndex = dbIndex;
+                break;
+            }
+        }
+        const foundIndex = matchIndex orelse {
+            return errors.throwError("No database named \"{s}\" found.", .{self.originalName});
+        };
+        const renamed = !namesMatch(self.entry.name, self.originalName);
+        if (renamed) {
+            for (config.databases, 0..) |dbEntry, dbIndex| {
+                if (dbIndex != foundIndex and namesMatch(dbEntry.name, self.entry.name)) {
+                    return errors.throwError("A database named \"{s}\" already exists.", .{self.entry.name});
+                }
+            }
+        }
+        const updatedDatabases = try allocator.dupe(IDatabaseEntry, config.databases);
+        updatedDatabases[foundIndex] = self.entry;
+        var updated = config;
+        updated.databases = updatedDatabases;
+        if (renamed) {
+            const recentDatabaseNames = try allocator.alloc([]const u8, config.recentDatabaseNames.len);
+            for (config.recentDatabaseNames, 0..) |recentName, recentIndex| {
+                recentDatabaseNames[recentIndex] = if (namesMatch(recentName, self.originalName)) self.entry.name else recentName;
+            }
+            updated.recentDatabaseNames = recentDatabaseNames;
+        }
+        return updated;
+    }
+};
+
+//
+// Updates the entry currently identified by `originalName` with the new fields in `entry`.
+// If the new entry's name differs from `originalName`, the matching slot in
+// `recentDatabaseNames` is rewritten to keep the recents list pointing at the same entry.
+// Throws if the rename would collide with another existing entry, or if no entry with
+// `originalName` is found.
+//
+pub fn updateDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, originalName: []const u8, entry: IDatabaseEntry) !void {
+    const mutator: UpdateDatabaseEntryMutator = .{ .originalName = originalName, .entry = entry };
+    try updateDatabasesConfig(allocator, io, &mutator);
+}
+
+//
+// The mutator of removeDatabaseEntry (the arrow function in TypeScript).
+//
+const RemoveDatabaseEntryMutator = struct {
+    // The name of the entry to remove.
+    name: []const u8,
+
+    //
+    // Removes the first matching entry and the name from the recents.
+    //
+    pub fn run(self: *const RemoveDatabaseEntryMutator, allocator: std.mem.Allocator, config: IDatabasesConfig) !IDatabasesConfig {
+        var matchIndex: ?usize = null;
+        for (config.databases, 0..) |dbEntry, dbIndex| {
+            if (namesMatch(dbEntry.name, self.name)) {
+                matchIndex = dbIndex;
+                break;
+            }
+        }
+        // Recents are cleaned whether or not the entry is there, in case of stale state naming an
+        // entry that has already gone.
+        var recentDatabaseNames: std.ArrayList([]const u8) = .empty;
+        for (config.recentDatabaseNames) |recentName| {
+            if (!namesMatch(recentName, self.name)) {
+                try recentDatabaseNames.append(allocator, recentName);
+            }
+        }
+        var updated = config;
+        updated.recentDatabaseNames = recentDatabaseNames.items;
+        const foundIndex = matchIndex orelse {
+            return updated;
+        };
+        var updatedDatabases: std.ArrayList(IDatabaseEntry) = .empty;
+        try updatedDatabases.appendSlice(allocator, config.databases);
+        _ = updatedDatabases.orderedRemove(foundIndex);
+        updated.databases = updatedDatabases.items;
+        return updated;
+    }
+};
+
+//
+// Removes a database entry by name (case-insensitive).
+// Removes only the first matching entry from `databases` (defensive against legacy state
+// where two entries share a name). Also removes the same name from `recentDatabaseNames`.
+// No-op if no entry matches.
+//
+pub fn removeDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
+    const mutator: RemoveDatabaseEntryMutator = .{ .name = name };
+    try updateDatabasesConfig(allocator, io, &mutator);
+}
+
+// Not ported: getRecentDatabases, removeRecentDatabaseName, markDatabaseOpened, getLastDatabase, setLastDatabase
+// (not used by the ported commands).

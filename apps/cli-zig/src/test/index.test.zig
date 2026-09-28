@@ -76,9 +76,13 @@ fn parse(allocator: std.mem.Allocator, args: []const []const u8) !IParsed {
         .writeOut = &stdout.writer,
         .writeErr = &stderr.writer,
     });
-    // The secrets group is added with addCommand, so it has an output of its own (commander does not share the
-    // program's with it), shared by its subcommands.
+    // The secrets and dbs groups are added with addCommand, so each has an output of its own (commander does not
+    // share the program's with them), shared by its subcommands.
     _ = program.findCommand("secrets").?.configureOutput(.{
+        .writeOut = &stdout.writer,
+        .writeErr = &stderr.writer,
+    });
+    _ = program.findCommand("dbs").?.configureOutput(.{
         .writeOut = &stdout.writer,
         .writeErr = &stderr.writer,
     });
@@ -189,11 +193,9 @@ test "commands that are not ported fail by name, unknown commands are unknown, a
 
     try std.testing.expectEqualStrings("news", (try parse(allocator, &.{"news"})).outcome.notPorted);
     try std.testing.expectEqualStrings("bug", (try parse(allocator, &.{ "bug", "--no-browser" })).outcome.notPorted);
-    try std.testing.expectEqualStrings("dbs view", (try parse(allocator, &.{ "d", "v", "--name", "x" })).outcome.notPorted);
 
     // The secrets and dbs groups are not created with .exitOverride(), so they call process.exit themselves. They
-    // are added with addCommand, so they have outputs of their own (parse points the secrets group's at the
-    // captures; the golden tests in commands.test.zig check what the dbs group writes).
+    // are added with addCommand, so they have outputs of their own (parse points them at the captures).
     const secretsOption = try parse(allocator, &.{ "secrets", "--db", "x" });
     try std.testing.expectEqual(@as(u8, 1), secretsOption.outcome.processExit);
     const secretsAlone = try parse(allocator, &.{"secrets"});
@@ -844,7 +846,7 @@ test "remove command lines parse like commander" {
 }
 
 //
-// Checks that parsing a command line of the secrets group ended the process like commander's process.exit (the
+// Checks that parsing a command line of the secrets or dbs group ended the process like commander's process.exit (the
 // group is added with addCommand, so it does not inherit the program's exitOverride), with this exit code and
 // stderr.
 //
@@ -1156,4 +1158,137 @@ test "the hash-cache command group shows its help like commander" {
     // The group is hidden from the program help.
     const programHelp = try parse(allocator, &.{"--help"});
     try std.testing.expect(std.mem.indexOf(u8, programHelp.stdout, "hash-cache") == null);
+}
+
+test "dbs command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    try std.testing.expect((try parse(allocator, &.{ "dbs", "list" })).outcome == .dbsList);
+    try std.testing.expect((try parse(allocator, &.{ "d", "l" })).outcome == .dbsList);
+    try std.testing.expect((try parse(allocator, &.{ "dbs", "ls" })).outcome == .dbsList);
+
+    const add = try parse(allocator, &.{ "dbs", "add", "--yes", "--name", "n", "--description", "d", "--path", "/p", "--s3-cred", "s3", "--encryption-key", "enc", "--geocoding-key", "geo" });
+    try std.testing.expect(add.outcome == .dbsAdd);
+    try std.testing.expectEqual(@as(?bool, true), add.outcome.dbsAdd.yes);
+    try std.testing.expectEqualStrings("n", add.outcome.dbsAdd.name.?);
+    try std.testing.expectEqualStrings("d", add.outcome.dbsAdd.description.?);
+    try std.testing.expectEqualStrings("/p", add.outcome.dbsAdd.path.?);
+    try std.testing.expectEqualStrings("s3", add.outcome.dbsAdd.s3Cred.?);
+    try std.testing.expectEqualStrings("enc", add.outcome.dbsAdd.encryptionKey.?);
+    try std.testing.expectEqualStrings("geo", add.outcome.dbsAdd.geocodingKey.?);
+    try std.testing.expectEqual(@as(?bool, false), add.state.notificationsQuiet);
+
+    // The options have no defaults: an option not given is undefined.
+    const addDefaults = try parse(allocator, &.{ "-q", "d", "add" });
+    try std.testing.expect(addDefaults.outcome.dbsAdd.yes == null);
+    try std.testing.expect(addDefaults.outcome.dbsAdd.name == null);
+    try std.testing.expect(addDefaults.outcome.dbsAdd.s3Cred == null);
+    try std.testing.expectEqual(@as(?bool, true), addDefaults.state.notificationsQuiet);
+
+    const view = try parse(allocator, &.{ "d", "v", "--name", "x", "--path", "/p", "--yes" });
+    try std.testing.expect(view.outcome == .dbsView);
+    try std.testing.expectEqualStrings("x", view.outcome.dbsView.name.?);
+    try std.testing.expectEqualStrings("/p", view.outcome.dbsView.path.?);
+    try std.testing.expectEqual(@as(?bool, true), view.outcome.dbsView.yes);
+
+    const edit = try parse(allocator, &.{ "dbs", "e", "--name", "a", "--new-name", "b", "--description", "d", "--path", "/p", "--s3-cred", "s3", "--encryption-key", "enc", "--geocoding-key", "geo", "--yes" });
+    try std.testing.expect(edit.outcome == .dbsEdit);
+    try std.testing.expectEqualStrings("a", edit.outcome.dbsEdit.name.?);
+    try std.testing.expectEqualStrings("b", edit.outcome.dbsEdit.newName.?);
+    try std.testing.expectEqualStrings("d", edit.outcome.dbsEdit.description.?);
+    try std.testing.expectEqualStrings("/p", edit.outcome.dbsEdit.path.?);
+    try std.testing.expectEqualStrings("s3", edit.outcome.dbsEdit.s3Cred.?);
+    try std.testing.expectEqualStrings("enc", edit.outcome.dbsEdit.encryptionKey.?);
+    try std.testing.expectEqualStrings("geo", edit.outcome.dbsEdit.geocodingKey.?);
+    try std.testing.expectEqual(@as(?bool, true), edit.outcome.dbsEdit.yes);
+
+    const remove = try parse(allocator, &.{ "dbs", "remove", "--path", "/p" });
+    try std.testing.expect(remove.outcome == .dbsRemove);
+    try std.testing.expectEqualStrings("/p", remove.outcome.dbsRemove.path.?);
+    try std.testing.expect(remove.outcome.dbsRemove.name == null);
+    try std.testing.expect(remove.outcome.dbsRemove.yes == null);
+
+    const clear = try parse(allocator, &.{ "dbs", "clear", "--yes" });
+    try std.testing.expect(clear.outcome == .dbsClear);
+    try std.testing.expectEqual(@as(?bool, true), clear.outcome.dbsClear.yes);
+
+    const send = try parse(allocator, &.{ "dbs", "send", "--name", "a", "--path", "/p", "--code", "1234", "--yes" });
+    try std.testing.expect(send.outcome == .dbsSend);
+    try std.testing.expectEqualStrings("a", send.outcome.dbsSend.name.?);
+    try std.testing.expectEqualStrings("/p", send.outcome.dbsSend.path.?);
+    try std.testing.expectEqualStrings("1234", send.outcome.dbsSend.code.?);
+    try std.testing.expectEqual(@as(?bool, true), send.outcome.dbsSend.yes);
+
+    const receive = try parse(allocator, &.{ "d", "receive", "--code", "1234", "--yes" });
+    try std.testing.expect(receive.outcome == .dbsReceive);
+    try std.testing.expectEqualStrings("1234", receive.outcome.dbsReceive.code.?);
+    try std.testing.expectEqual(@as(?bool, true), receive.outcome.dbsReceive.yes);
+
+    // Errors end the process with code 1, as commander does for a command without the program's exitOverride.
+    try expectSecretsExit(allocator, &.{ "dbs", "bogus" }, 1, "error: unknown command 'bogus'\n");
+    try expectSecretsExit(allocator, &.{ "dbs", "view", "--bogus" }, 1, "error: unknown option '--bogus'\n");
+    try expectSecretsExit(allocator, &.{ "dbs", "edit", "--name" }, 1, "error: option '--name <name>' argument missing\n");
+    try expectSecretsExit(allocator, &.{ "dbs", "list", "extra" }, 1, "error: too many arguments for 'list'. Expected 0 arguments but got 1.\n");
+    try expectSecretsExit(allocator, &.{ "dbs", "--db", "x" }, 1, "error: unknown option '--db'\n");
+}
+
+test "the dbs group shows its help like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const expectedHelp =
+        \\Usage: psi dbs|d [options] [command]
+        \\
+        \\Manage the list of configured databases.
+        \\
+        \\Options:
+        \\  -h, --help         display help for command
+        \\
+        \\Commands:
+        \\  list|l             List all configured databases.
+        \\  add [options]      Interactively add a new database to the list.
+        \\  view|v [options]   Show all fields of a database entry.
+        \\  edit|e [options]   Edit fields of a database entry.
+        \\  remove [options]   Remove a database entry from the list.
+        \\  clear [options]    Remove all database entries from the list.
+        \\  send [options]     Send a database config (with secrets) to another device
+        \\                     over the local network.
+        \\  receive [options]  Receive a database config (with secrets) from another
+        \\                     device over the local network.
+        \\  help [command]     display help for command
+        \\
+    ;
+
+    // --help writes the help to stdout and exits with 0.
+    const help = try parse(allocator, &.{ "dbs", "--help" });
+    try std.testing.expect(help.outcome == .processExit);
+    try std.testing.expectEqual(@as(u8, 0), help.outcome.processExit);
+    try std.testing.expectEqualStrings(expectedHelp, help.stdout);
+
+    // With no subcommand the help goes to stderr and the exit code is 1.
+    const bare = try parse(allocator, &.{"d"});
+    try std.testing.expect(bare.outcome == .processExit);
+    try std.testing.expectEqual(@as(u8, 1), bare.outcome.processExit);
+    try std.testing.expectEqualStrings(expectedHelp, bare.stderr);
+
+    const addHelp = try parse(allocator, &.{ "dbs", "add", "--help" });
+    try std.testing.expectEqual(@as(u8, 0), addHelp.outcome.processExit);
+    try std.testing.expectEqualStrings(
+        \\Usage: psi dbs add [options]
+        \\
+        \\Interactively add a new database to the list.
+        \\
+        \\Options:
+        \\  --yes                    Skip prompts
+        \\  --name <name>            Database name
+        \\  --description <desc>     Database description
+        \\  --path <path>            Database path
+        \\  --s3-cred <name>         S3 credential secret name
+        \\  --encryption-key <name>  Encryption key secret name
+        \\  --geocoding-key <name>   Geocoding API key secret name
+        \\  -h, --help               display help for command
+        \\
+    , addHelp.stdout);
 }

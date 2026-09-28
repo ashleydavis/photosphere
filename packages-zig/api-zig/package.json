@@ -1,7 +1,7 @@
 {
   "name": "api-zig",
   "version": "1.0.0",
-  "description": "Zig port of the api package (only the functions needed by psi replicate and verify).",
+  "description": "Zig port of the api package (only the functions the ported commands need).",
   "private": true,
   "scripts": {
     "compile": "zig build",
