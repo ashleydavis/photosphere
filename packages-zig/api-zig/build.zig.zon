@@ -12,6 +12,7 @@
         .@"lan-share-core-zig" = .{ .path = "../lan-share-core-zig" },
         .@"node-utils-zig" = .{ .path = "../node-utils-zig" },
         .@"encryption-zig" = .{ .path = "../encryption-zig" },
+        .@"bdb-zig" = .{ .path = "../bdb-zig" },
     },
     .paths = .{ "build.zig", "build.zig.zon", "src" },
 }

@@ -266,6 +266,67 @@ pub fn runCliToFile(allocator: std.mem.Allocator, argv: []const []const u8, envi
 }
 
 //
+// Writes the input to a program's stdin and closes it. A program that has already exited has closed the pipe, which is
+// then reported: the test reads what it wrote before it exited.
+//
+fn writeAndClose(stdinFile: std.Io.File, input: []const u8) void {
+    stdinFile.writeStreamingAll(std.testing.io, input) catch |err| {
+        std.debug.print("writing the input of the program failed: {t}\n", .{err});
+    };
+    stdinFile.close(std.testing.io);
+}
+
+//
+// Runs a CLI command line (argv[0] is the program) with the environment, from the apps/cli directory, writing the
+// input to its stdin (a pipe) and then closing it, as `printf '...' | psi ...` does.
+//
+pub fn runCliWithInput(allocator: std.mem.Allocator, argv: []const []const u8, input: []const u8, environment: *const std.process.Environ.Map) !CliResult {
+    const io = std.testing.io;
+    const cliDir = try std.Io.Dir.cwd().openDir(io, "../cli", .{});
+    defer cliDir.close(io);
+    var child = try std.process.spawn(io, .{
+        .argv = argv,
+        .cwd = .{ .dir = cliDir },
+        .environ_map = environment,
+        .stdin = .pipe,
+        .stdout = .pipe,
+        .stderr = .pipe,
+    });
+    defer child.kill(io);
+
+    var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+    var multi_reader: std.Io.File.MultiReader = undefined;
+    multi_reader.init(allocator, io, multi_reader_buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
+    defer multi_reader.deinit();
+
+    // The input is written from a thread of its own while this one reads the output: a program that answers as it
+    // reads can fill its output pipe before it has read all of its input, and would wait on this test forever if the
+    // test were still waiting to finish writing.
+    const stdinFile = child.stdin.?;
+    child.stdin = null;
+    const writer = try std.Thread.spawn(.{}, writeAndClose, .{ stdinFile, input });
+    defer writer.join();
+
+    while (true) {
+        multi_reader.fill(64, .none) catch |err| {
+            if (err == error.EndOfStream) {
+                break;
+            }
+            return err;
+        };
+    }
+    try multi_reader.checkAnyError();
+    const term = try child.wait(io);
+    const stdout = try multi_reader.toOwnedSlice(0);
+    const stderr = try multi_reader.toOwnedSlice(1);
+    const exitCode: u8 = switch (term) {
+        .exited => |code| code,
+        else => 255,
+    };
+    return .{ .exitCode = exitCode, .stdout = stdout, .stderr = stderr };
+}
+
+//
 // The path of the test driver (src/test/drivers/test-driver.zig), installed to zig-out/test-bin.
 //
 pub const test_driver_path = "zig-out/test-bin/test-driver" ++ builtin.os.tag.exeFileExt(builtin.cpu.arch);

@@ -1,12 +1,6 @@
 //
-// Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `add` (alias `a`), `bug`, `check` (alias `chk`), `compare` (alias `cmp`), `consolidate`, `database-id`, `debug` (all
-// its subcommands), `decrypt`, `encrypt`, `examples`, `export` (alias `exp`), `find-orphans`, `hash`, `hash-cache` (all its
-// subcommands), `help`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `news`, `origin`, `remove` (alias
-// `rm`), `remove-orphans`, `repair`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`,
-// `tools`, `upgrade`, `verify` (alias `ver`) and `version` commands, the `secrets` command group (aliases `sec` and `s`), the
-// `dbs` command group (alias `d`) and the `--version` option are ported. The other commands are defined like in index.ts, so
-// that their help is the help of the TypeScript CLI, but running one fails with an error saying that it is not ported yet.
+// Port of apps/cli/index.ts: the `psi` entry point. Every command of index.ts is ported, with its aliases, and so is
+// the `--version` option.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -76,6 +70,12 @@ pub const version_cmd = @import("src/cmd/version.zig");
 pub const examples_cmd = @import("src/cmd/examples.zig");
 pub const secrets = @import("src/cmd/secrets.zig");
 pub const dbs = @import("src/cmd/dbs.zig");
+pub const mcp = @import("src/cmd/mcp.zig");
+pub const mcp_protocol = @import("src/lib/mcp/protocol.zig");
+pub const mcp_input_schema = @import("src/lib/mcp/input-schema.zig");
+pub const mcp_result = @import("src/lib/mcp/result.zig");
+pub const mcp_types = @import("src/lib/mcp/types.zig");
+pub const mcp_tools = @import("src/lib/mcp/tools/index.zig");
 pub const spinner = @import("src/lib/spinner.zig");
 pub const process_signals = @import("src/lib/process-signals.zig");
 pub const print_notifications = @import("src/lib/print-notifications.zig");
@@ -157,6 +157,8 @@ const rootHashCommand = root_hash.rootHashCommand;
 const IDatabaseIdCommandOptions = database_id.IDatabaseIdCommandOptions;
 const databaseIdCommand = database_id.databaseIdCommand;
 const summaryCommand = summary.summaryCommand;
+const IMcpCommandOptions = mcp.IMcpCommandOptions;
+const mcpCommand = mcp.mcpCommand;
 const verifyCommand = verify.verifyCommand;
 const versionCommand = version_cmd.versionCommand;
 const getCommandExamplesHelp = examples.getCommandExamplesHelp;
@@ -564,8 +566,8 @@ pub const ParseOutcome = union(enum) {
     // Run the help command: show the help of the named command, or of the program when null.
     help: ?[]const u8,
 
-    // The command is defined like in index.ts but not ported yet: its full name, e.g. "hash-cache show".
-    notPorted: []const u8,
+    // Run the mcp command with these options.
+    mcp: IMcpCommandOptions,
 
     // Run `secrets add` with these options.
     secretsAdd: secrets.ISecretsAddOptions,
@@ -1410,30 +1412,16 @@ fn helpAction(state: *IProgramState, args: []const ArgumentValue, options: *cons
 }
 
 //
-// The action of the commands that are not ported yet: `run` fails with an error that names the command.
+// The action of the mcp command (`initContext(mcpCommand)`): `run` calls initContext and the command.
 //
-fn notPortedAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+fn mcpAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
     _ = args;
-    _ = options;
+    _ = command;
     state.outcome = .{
-        .notPorted = try fullCommandName(state.allocator, command),
+        .mcp = .{
+            .base = baseOptions(options),
+        },
     };
-}
-
-//
-// The name of a command with the names of the groups it is in, e.g. "hash-cache show" (the program's name is left out).
-//
-pub fn fullCommandName(allocator: std.mem.Allocator, command: *Command) ![]const u8 {
-    var names: std.ArrayList([]const u8) = .empty;
-    var current: ?*Command = command;
-    while (current) |currentCommand| {
-        if (currentCommand.parent == null) {
-            break;
-        }
-        try names.insert(allocator, 0, currentCommand.getName());
-        current = currentCommand.parent;
-    }
-    return std.mem.join(allocator, " ", names.items);
 }
 
 //
@@ -1893,7 +1881,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
     _ = optionFrom(mcpDefinition, verboseOption);
     _ = optionFrom(mcpDefinition, yesOption);
     _ = optionFrom(mcpDefinition, cwdOption);
-    _ = mcpDefinition.action(state, notPortedAction);
+    _ = mcpDefinition.action(state, mcpAction);
 
     _ = program
         .command("news", .{})
@@ -3046,8 +3034,13 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             try dbs.dbsReceive(allocator, io, &options);
         },
-        .notPorted => |commandName| {
-            return utils.errors.throwError("The {s} command is not ported to the Zig CLI yet.", .{commandName});
+        .mcp => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try mcpCommand(allocator, io, context, &options);
         },
         .processExit => |exitCode| {
             exit(io, exitCode);
