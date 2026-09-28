@@ -126,3 +126,171 @@ test "does not bump lastModifiedAt when no repairs were needed" {
     const after = try api.database_state.loadDatabaseState(allocator, io, testDatabase.rawStorage);
     try std.testing.expect(after == null or after.?.lastModifiedAt == null);
 }
+
+//
+// The id of the one asset in test/dbs/v6.
+//
+const V6_ASSET_ID = "89171cd9-a652-4047-b869-1154bf2c95a1";
+
+//
+// A copy of test/dbs/v6 opened for repair.
+//
+const IV6Copy = struct {
+    // The directory of the copy.
+    dir: []const u8,
+
+    // Its storage.
+    storage: @import("storage-zig").storage.IStorage,
+
+    // Its BSON database and metadata collection.
+    database: media_file_database.IMediaFileDatabase,
+};
+
+//
+// Copies test/dbs/v6 into a temporary directory and opens it.
+//
+fn copyV6(allocator: std.mem.Allocator, io: std.Io) !IV6Copy {
+    _ = try helpers.setupEnvironment(io);
+    const generators = try allocator.create(Generators);
+    generators.* = .{
+        .uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator),
+        .timestampProvider = .{},
+    };
+    const dir = try helpers.copyTestDatabase(allocator, io, "v6");
+    const storage = try helpers.directoryStorage(allocator, io, dir);
+    return .{
+        .dir = dir,
+        .storage = storage,
+        .database = try media_file_database.createMediaFileDatabase(allocator, storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider()),
+    };
+}
+
+//
+// Records the progress messages of a repair.
+//
+fn recordProgress(context: ?*anyopaque, message: ?[]const u8) void {
+    const recorder: *helpers.ProgressRecorder = @ptrCast(@alignCast(context.?));
+    recorder.record(message.?);
+}
+
+//
+// True when the list holds the name.
+//
+fn containsName(names: []const []const u8, name: []const u8) bool {
+    for (names) |candidate| {
+        if (std.mem.eql(u8, candidate, name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+test "restores a missing file and a corrupted one from the source database" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const target = try copyV6(allocator, io);
+    defer helpers.removeTempDir(io, std.fs.path.dirname(target.dir).?);
+    const source = try copyV6(allocator, io);
+    defer helpers.removeTempDir(io, std.fs.path.dirname(source.dir).?);
+
+    // The asset goes missing and the display file is overwritten with other bytes.
+    const assetPath = "asset/" ++ V6_ASSET_ID;
+    const displayPath = "display/" ++ V6_ASSET_ID;
+    try target.storage.deleteFile(allocator, io, assetPath);
+    try target.storage.write(allocator, io, displayPath, "image/jpeg", "corrupted bytes");
+
+    var recorder: helpers.ProgressRecorder = .{ .allocator = allocator };
+    const result = try repair(allocator, io, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
+        .source = source.dir,
+    }, .{ .context = &recorder, .function = recordProgress });
+
+    try std.testing.expect(containsName(result.repaired, assetPath));
+    try std.testing.expect(containsName(result.repaired, displayPath));
+    try std.testing.expectEqual(@as(usize, 0), result.unrepaired.len);
+    try std.testing.expectEqualSlices(u8, try helpers.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ source.dir, displayPath })), try helpers.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ target.dir, displayPath })));
+    try std.testing.expect(containsName(recorder.messages.items, "Repairing missing file: " ++ assetPath));
+    try std.testing.expect(containsName(recorder.messages.items, "Repairing corrupted file: " ++ displayPath));
+
+    // A repair was made, so the database is stamped as modified.
+    try std.testing.expect((try api.database_state.loadDatabaseState(allocator, io, target.storage)).?.lastModifiedAt != null);
+}
+
+test "reports what the source cannot restore: a file it does not have, or has with other bytes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const target = try copyV6(allocator, io);
+    defer helpers.removeTempDir(io, std.fs.path.dirname(target.dir).?);
+    const source = try copyV6(allocator, io);
+    defer helpers.removeTempDir(io, std.fs.path.dirname(source.dir).?);
+
+    // The asset is missing from both, and the thumb is corrupted in both.
+    const assetPath = "asset/" ++ V6_ASSET_ID;
+    const thumbPath = "thumb/" ++ V6_ASSET_ID;
+    try target.storage.deleteFile(allocator, io, assetPath);
+    try source.storage.deleteFile(allocator, io, assetPath);
+    try target.storage.write(allocator, io, thumbPath, "image/jpeg", "corrupted bytes");
+    try source.storage.write(allocator, io, thumbPath, "image/jpeg", "other corrupted bytes");
+
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(null, &stderr_capture.writer);
+    defer utils.console.setCapture(null, null);
+
+    const result = try repair(allocator, io, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
+        .source = source.dir,
+    }, null);
+
+    try std.testing.expect(containsName(result.removed, assetPath));
+    try std.testing.expect(containsName(result.modified, thumbPath));
+    try std.testing.expect(containsName(result.unrepaired, assetPath));
+    try std.testing.expect(containsName(result.unrepaired, thumbPath));
+    try std.testing.expectEqual(@as(usize, 0), result.repaired.len);
+    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Source file not found for repair: " ++ assetPath) != null);
+    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Source file hash mismatch for: " ++ thumbPath) != null);
+}
+
+test "a full repair hashes every file, and puts right the hash of a record" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const target = try copyV6(allocator, io);
+    defer helpers.removeTempDir(io, std.fs.path.dirname(target.dir).?);
+
+    // The record's hash is wrong.
+    var updates: @import("serialization-zig").bson.BsonDocument = .empty;
+    try updates.put(allocator, "hash", .{ .string = "0000" });
+    try std.testing.expect(try target.database.metadataCollection.updateOne(io, V6_ASSET_ID, updates, .{}));
+    try target.database.bsonDatabase.commit(io);
+
+    // The thumb's bytes change while its size and modification time stay as the tree has them, which only a
+    // full repair notices.
+    const thumbName = "thumb/" ++ V6_ASSET_ID;
+    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, target.storage)).?;
+    const thumbNode = merkle_tree_zig.merkle_tree.findItemInTree(filesTree.sort, thumbName).?;
+    const thumbPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ target.dir, thumbName });
+    const thumb = try helpers.readFile(allocator, io, thumbPath);
+    @memset(thumb[0..16], 0);
+    try helpers.writeFile(io, thumbPath, thumb);
+    const thumbFile = try std.Io.Dir.cwd().openFile(io, thumbPath, .{ .mode = .read_write });
+    try thumbFile.setTimestamps(io, .{ .modify_timestamp = .{ .new = std.Io.Timestamp.fromNanoseconds(@as(i96, thumbNode.lastModified.?) * std.time.ns_per_ms) } });
+    thumbFile.close(io);
+
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(null, &stderr_capture.writer);
+    defer utils.console.setCapture(null, null);
+
+    const result = try repair(allocator, io, target.storage, target.storage, target.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
+        .source = target.dir,
+        .full = true,
+    }, null);
+
+    try std.testing.expectEqual(result.filesProcessed - 1, result.numUnmodified);
+    try std.testing.expect(containsName(result.modified, thumbName));
+    try std.testing.expect(containsName(result.recordsRepaired, "asset/" ++ V6_ASSET_ID));
+    const record = (try target.database.metadataCollection.getOne(io, V6_ASSET_ID)).?;
+    try std.testing.expect(!std.mem.eql(u8, "0000", record.get("hash").?.string));
+}
