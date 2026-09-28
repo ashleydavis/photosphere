@@ -2405,7 +2405,9 @@ test "check reports a file it cannot hash like the TypeScript CLI" {
     const root = std.fs.path.dirname(environment.get("PHOTOSPHERE_CACHE_DIR").?).?;
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const broken = try std.fmt.allocPrint(allocator, "{s}/broken.png", .{root});
+    // The scanner resolves the path it is given (path.resolve in TypeScript), which gives it the separator of the
+    // platform, so the path is joined with that separator to be the one the CLI reports.
+    const broken = try std.fs.path.join(allocator, &.{ root, "broken.png" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
         .sub_path = broken,
         .data = "not an image",
