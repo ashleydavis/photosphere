@@ -76,6 +76,12 @@ fn parse(allocator: std.mem.Allocator, args: []const []const u8) !IParsed {
         .writeOut = &stdout.writer,
         .writeErr = &stderr.writer,
     });
+    // The secrets group is added with addCommand, so it has an output of its own (commander does not share the
+    // program's with it), shared by its subcommands.
+    _ = program.findCommand("secrets").?.configureOutput(.{
+        .writeOut = &stdout.writer,
+        .writeErr = &stderr.writer,
+    });
     const outcome = try parseCommandLine(program, state, args);
     return .{
         .outcome = outcome,
@@ -185,12 +191,11 @@ test "commands that are not ported fail by name, unknown commands are unknown, a
     try std.testing.expectEqualStrings("bug", (try parse(allocator, &.{ "bug", "--no-browser" })).outcome.notPorted);
     try std.testing.expectEqualStrings("hash-cache show", (try parse(allocator, &.{ "hash-cache", "show" })).outcome.notPorted);
     try std.testing.expectEqualStrings("debug merkle-tree", (try parse(allocator, &.{ "debug", "merkle-tree", "--records" })).outcome.notPorted);
-    try std.testing.expectEqualStrings("secrets list", (try parse(allocator, &.{ "sec", "ls" })).outcome.notPorted);
     try std.testing.expectEqualStrings("dbs view", (try parse(allocator, &.{ "d", "v", "--name", "x" })).outcome.notPorted);
 
     // The secrets and dbs groups are not created with .exitOverride(), so they call process.exit themselves. They
-    // are added with addCommand, so they write to the process streams rather than the configured output (the
-    // golden tests in commands.test.zig check what they write).
+    // are added with addCommand, so they have outputs of their own (parse points the secrets group's at the
+    // captures; the golden tests in commands.test.zig check what the dbs group writes).
     const secretsOption = try parse(allocator, &.{ "secrets", "--db", "x" });
     try std.testing.expectEqual(@as(u8, 1), secretsOption.outcome.processExit);
     const secretsAlone = try parse(allocator, &.{"secrets"});
@@ -838,4 +843,123 @@ test "remove command lines parse like commander" {
     try std.testing.expectEqualStrings("d", parsed.outcome.remove.options.base.db.?);
     try std.testing.expectEqualStrings("k", parsed.outcome.remove.options.base.key.?);
     try expectCommanderError(allocator, &.{"remove"}, "commander.missingArgument", "error: missing required argument 'asset-id'\n");
+}
+
+//
+// Checks that parsing a command line of the secrets group ended the process like commander's process.exit (the
+// group is added with addCommand, so it does not inherit the program's exitOverride), with this exit code and
+// stderr.
+//
+fn expectSecretsExit(allocator: std.mem.Allocator, args: []const []const u8, exitCode: u8, stderr: []const u8) !void {
+    const parsed = try parse(allocator, args);
+    try std.testing.expect(parsed.outcome == .processExit);
+    try std.testing.expectEqual(exitCode, parsed.outcome.processExit);
+    try std.testing.expectEqualStrings(stderr, parsed.stderr);
+}
+
+test "secrets command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const add = try parse(allocator, &.{ "secrets", "add", "--yes", "--name", "n", "--type", "plain", "--value", "v" });
+    try std.testing.expect(add.outcome == .secretsAdd);
+    try std.testing.expectEqual(@as(?bool, true), add.outcome.secretsAdd.yes);
+    try std.testing.expectEqualStrings("n", add.outcome.secretsAdd.name.?);
+    try std.testing.expectEqualStrings("plain", add.outcome.secretsAdd.type.?);
+    try std.testing.expectEqualStrings("v", add.outcome.secretsAdd.value.?);
+    try std.testing.expectEqual(@as(?bool, false), add.state.notificationsQuiet);
+
+    // The options have no defaults: an option not given is undefined.
+    const addDefaults = try parse(allocator, &.{ "-q", "sec", "add" });
+    try std.testing.expect(addDefaults.outcome.secretsAdd.yes == null);
+    try std.testing.expect(addDefaults.outcome.secretsAdd.name == null);
+    try std.testing.expectEqual(@as(?bool, true), addDefaults.state.notificationsQuiet);
+
+    try std.testing.expect((try parse(allocator, &.{ "secrets", "list" })).outcome == .secretsList);
+    try std.testing.expect((try parse(allocator, &.{ "s", "l" })).outcome == .secretsList);
+    try std.testing.expect((try parse(allocator, &.{ "sec", "ls" })).outcome == .secretsList);
+
+    const view = try parse(allocator, &.{ "secrets", "v", "--name", "k", "--yes", "--raw" });
+    try std.testing.expect(view.outcome == .secretsView);
+    try std.testing.expectEqualStrings("k", view.outcome.secretsView.name.?);
+    try std.testing.expectEqual(@as(?bool, true), view.outcome.secretsView.yes);
+    try std.testing.expectEqual(@as(?bool, true), view.outcome.secretsView.raw);
+
+    const edit = try parse(allocator, &.{ "secrets", "e", "--name", "k", "--new-name", "k2", "--value", "v", "--value-file", "f", "--yes" });
+    try std.testing.expect(edit.outcome == .secretsEdit);
+    try std.testing.expectEqualStrings("k", edit.outcome.secretsEdit.name.?);
+    try std.testing.expectEqualStrings("k2", edit.outcome.secretsEdit.newName.?);
+    try std.testing.expectEqualStrings("v", edit.outcome.secretsEdit.value.?);
+    try std.testing.expectEqualStrings("f", edit.outcome.secretsEdit.valueFile.?);
+    try std.testing.expectEqual(@as(?bool, true), edit.outcome.secretsEdit.yes);
+
+    const remove = try parse(allocator, &.{ "secrets", "remove", "--name", "k" });
+    try std.testing.expect(remove.outcome == .secretsRemove);
+    try std.testing.expectEqualStrings("k", remove.outcome.secretsRemove.name.?);
+    try std.testing.expect(remove.outcome.secretsRemove.yes == null);
+
+    const clear = try parse(allocator, &.{ "secrets", "clear", "--yes" });
+    try std.testing.expect(clear.outcome == .secretsClear);
+    try std.testing.expectEqual(@as(?bool, true), clear.outcome.secretsClear.yes);
+
+    const import = try parse(allocator, &.{ "secrets", "import", "--private-key", "a.key", "--yes" });
+    try std.testing.expect(import.outcome == .secretsImport);
+    try std.testing.expectEqualStrings("a.key", import.outcome.secretsImport.privateKey.?);
+
+    const send = try parse(allocator, &.{ "secrets", "send", "--name", "k", "--code", "1234", "--yes" });
+    try std.testing.expect(send.outcome == .secretsSend);
+    try std.testing.expectEqualStrings("k", send.outcome.secretsSend.name.?);
+    try std.testing.expectEqualStrings("1234", send.outcome.secretsSend.code.?);
+
+    const receive = try parse(allocator, &.{ "secrets", "receive", "--code", "1234", "--yes" });
+    try std.testing.expect(receive.outcome == .secretsReceive);
+    try std.testing.expectEqualStrings("1234", receive.outcome.secretsReceive.code.?);
+    try std.testing.expectEqual(@as(?bool, true), receive.outcome.secretsReceive.yes);
+
+    // Errors end the process with code 1, as commander does for a command without the program's exitOverride.
+    try expectSecretsExit(allocator, &.{ "secrets", "bogus" }, 1, "error: unknown command 'bogus'\n");
+    try expectSecretsExit(allocator, &.{ "secrets", "view", "--bogus" }, 1, "error: unknown option '--bogus'\n");
+    try expectSecretsExit(allocator, &.{ "secrets", "edit", "--name" }, 1, "error: option '--name <name>' argument missing\n");
+    try expectSecretsExit(allocator, &.{ "secrets", "list", "extra" }, 1, "error: too many arguments for 'list'. Expected 0 arguments but got 1.\n");
+}
+
+test "the secrets group shows its help like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const expectedHelp =
+        \\Usage: psi secrets|sec [options] [command]
+        \\
+        \\Manage secrets stored in the Photosphere secrets store.
+        \\
+        \\Options:
+        \\  -h, --help         display help for command
+        \\
+        \\Commands:
+        \\  add [options]      Interactively add a new secret.
+        \\  list|l             List all secrets (values are masked).
+        \\  view|v [options]   Show the full value of a named secret.
+        \\  edit|e [options]   Edit an existing secret, field by field.
+        \\  remove [options]   Remove a named secret.
+        \\  clear [options]    Remove all secrets.
+        \\  import [options]   Import a PEM private key file as an encryption key.
+        \\  send [options]     Send a secret to another device over the local network.
+        \\  receive [options]  Receive a secret from another device over the local
+        \\                     network.
+        \\  help [command]     display help for command
+        \\
+    ;
+
+    // --help writes the help to stdout and exits with 0.
+    const help = try parse(allocator, &.{ "secrets", "--help" });
+    try std.testing.expect(help.outcome == .processExit);
+    try std.testing.expectEqual(@as(u8, 0), help.outcome.processExit);
+    try std.testing.expectEqualStrings(expectedHelp, help.stdout);
+
+    // With no subcommand the help goes to stderr and the exit code is 1.
+    const bare = try parse(allocator, &.{"secrets"});
+    try std.testing.expect(bare.outcome == .processExit);
+    try std.testing.expectEqual(@as(u8, 1), bare.outcome.processExit);
+    try std.testing.expectEqualStrings(expectedHelp, bare.stderr);
 }

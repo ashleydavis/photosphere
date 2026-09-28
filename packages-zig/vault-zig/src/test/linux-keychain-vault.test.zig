@@ -64,7 +64,7 @@ fn argIndex(args: []const []const u8, name: []const u8) ?usize {
 
 //
 // A fake child_process.spawn backed by the in-memory store: handles `which`, `secret-tool lookup`,
-// `secret-tool store` (value from stdin) and `secret-tool search` (attribute lines on stderr).
+// `secret-tool store` (value from stdin), `secret-tool search` (attribute lines on stderr) and `secret-tool clear`.
 //
 fn fakeSpawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, stdinData: ?[]const u8) anyerror!keychain_types.ISpawnResult {
     _ = io;
@@ -122,6 +122,13 @@ fn fakeSpawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8,
             try stderr.print(allocator, "\n", .{});
         }
         return .{ .code = 0, .stdout = "", .stderr = stderr.items };
+    }
+
+    if (std.mem.eql(u8, subcommand, "clear")) {
+        // args: secret-tool clear service photosphere account <keychainName>
+        const keychainName = args[5];
+        _ = store.orderedRemove(keychainName);
+        return .{ .code = 0, .stdout = "", .stderr = "" };
     }
 
     return errors.throwError("Unexpected secret-tool subcommand: {s}", .{subcommand});
@@ -247,7 +254,30 @@ test "list: returns correct types for each secret" {
     try std.testing.expectEqualStrings("encryption-key", result[1].type);
 }
 
-// Not ported: "delete" tests (LinuxKeychainVault.delete is not ported: not used by psi replicate or psi verify).
+test "delete: removes the secret (subsequent get returns undefined)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    resetStore();
+    defer restoreSpawn();
+    var vault = LinuxKeychainVault.init();
+
+    try vault.set(allocator, io, .{ .name = "temp", .type = "plain", .value = "val" });
+    try vault.delete(allocator, io, "temp");
+    const result = try vault.get(allocator, io, "temp");
+    try std.testing.expect(result == null);
+}
+
+test "delete: does nothing when the secret does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    resetStore();
+    defer restoreSpawn();
+    var vault = LinuxKeychainVault.init();
+
+    try vault.delete(arena.allocator(), std.testing.io, "nonexistent");
+}
 
 test "psi- prefix: adds psi- prefix on write and strips it on read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

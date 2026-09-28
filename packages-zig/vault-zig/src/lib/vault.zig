@@ -50,7 +50,11 @@ pub const IVault = struct {
         // Returns all secrets stored in the vault.
         list: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror![]ISecret,
 
-        // Not ported: delete, checkPrereqs (not used by psi replicate or psi verify).
+        // Deletes a secret by name. Does nothing if the secret does not exist.
+        delete: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, name: []const u8) anyerror!void,
+
+        // Checks that all required external tools or dependencies are present.
+        checkPrereqs: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!IPrereqCheckResult,
     };
 
     //
@@ -73,6 +77,23 @@ pub const IVault = struct {
     //
     pub fn list(self: IVault, allocator: std.mem.Allocator, io: std.Io) anyerror![]ISecret {
         return self.vtable.list(self.ptr, allocator, io);
+    }
+
+    //
+    // Deletes a secret by name.
+    // Does nothing if the secret does not exist.
+    //
+    pub fn delete(self: IVault, allocator: std.mem.Allocator, io: std.Io, name: []const u8) anyerror!void {
+        return self.vtable.delete(self.ptr, allocator, io, name);
+    }
+
+    //
+    // Checks that all required external tools or dependencies are present.
+    // Returns ok=true when everything is available, or ok=false with a
+    // human-readable message describing what is missing and how to fix it.
+    //
+    pub fn checkPrereqs(self: IVault, allocator: std.mem.Allocator, io: std.Io) anyerror!IPrereqCheckResult {
+        return self.vtable.checkPrereqs(self.ptr, allocator, io);
     }
 };
 

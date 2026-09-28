@@ -241,7 +241,22 @@ test "list: returns all stored secrets" {
     try std.testing.expectEqualStrings("beta", secrets[1].name);
 }
 
-// Not ported: "does not include deleted secrets" (PlaintextVault.delete is not ported: not used by psi replicate or psi verify).
+test "list: does not include deleted secrets" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "keep", .type = "password", .value = "keep-value" });
+    try vault.set(allocator, io, .{ .name = "remove", .type = "password", .value = "remove-value" });
+    try vault.delete(allocator, io, "remove");
+    const secrets = try vault.list(allocator, io);
+    try std.testing.expectEqual(@as(usize, 1), secrets.len);
+    try std.testing.expectEqualStrings("keep", secrets[0].name);
+}
 
 test "list: ignores a stray file sitting alongside the vault file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -320,7 +335,32 @@ test "a malformed vault file: makes list throw" {
     try std.testing.expect(std.meta.isError(vault.list(allocator, io)));
 }
 
-// Not ported: "delete" tests (PlaintextVault.delete is not ported: not used by psi replicate or psi verify).
+test "delete: removes a secret so that get returns undefined afterwards" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "gone", .type = "password", .value = "byebye" });
+    try vault.delete(allocator, io, "gone");
+    const result = try vault.get(allocator, io, "gone");
+    try std.testing.expect(result == null);
+}
+
+test "delete: does nothing when the secret does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.delete(allocator, io, "no-such-secret");
+}
 
 test "secret names with special characters: handles names containing spaces" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

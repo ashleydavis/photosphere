@@ -4,7 +4,8 @@
 // `encrypt`, `examples`, `export` (alias `exp`), `find-orphans`, `hash`, `help`, `info` (alias `inf`), `init` (alias `i`),
 // `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `remove-orphans`, `repair`, `replicate` (alias `rep`),
 // `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`, `tools`, `upgrade`, `verify` (alias `ver`) and `version`
-// commands and the `--version` option are ported. The other commands are defined like in index.ts, so that their help is
+// commands, the `secrets` command group (aliases `sec` and `s`)
+// and the `--version` option are ported. The other commands are defined like in index.ts, so that their help is
 // the help of the TypeScript CLI, but running one fails with an error saying that it is not ported yet.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
@@ -66,6 +67,9 @@ pub const summary = @import("src/cmd/summary.zig");
 pub const verify = @import("src/cmd/verify.zig");
 pub const version_cmd = @import("src/cmd/version.zig");
 pub const examples_cmd = @import("src/cmd/examples.zig");
+pub const secrets = @import("src/cmd/secrets.zig");
+pub const spinner = @import("src/lib/spinner.zig");
+pub const process_signals = @import("src/lib/process-signals.zig");
 pub const print_notifications = @import("src/lib/print-notifications.zig");
 pub const check_for_updates = @import("src/lib/check-for-updates.zig");
 pub const check_for_news = @import("src/lib/check-for-news.zig");
@@ -434,6 +438,33 @@ pub const ParseOutcome = union(enum) {
 
     // The command is defined like in index.ts but not ported yet: its full name, e.g. "hash-cache show".
     notPorted: []const u8,
+
+    // Run `secrets add` with these options.
+    secretsAdd: secrets.ISecretsAddOptions,
+
+    // Run `secrets list`.
+    secretsList,
+
+    // Run `secrets view` with these options.
+    secretsView: secrets.ISecretsViewOptions,
+
+    // Run `secrets edit` with these options.
+    secretsEdit: secrets.ISecretsEditOptions,
+
+    // Run `secrets remove` with these options.
+    secretsRemove: secrets.ISecretsRemoveOptions,
+
+    // Run `secrets clear` with these options.
+    secretsClear: secrets.ISecretsClearOptions,
+
+    // Run `secrets import` with these options.
+    secretsImport: secrets.ISecretsImportOptions,
+
+    // Run `secrets send` with these options.
+    secretsSend: secrets.ISecretsSendOptions,
+
+    // Run `secrets receive` with these options.
+    secretsReceive: secrets.ISecretsReceiveOptions,
 
     // A command that does not exit through `.exitOverride()` (the secrets and dbs groups) called
     // `process.exit` with this exit code, after writing its help or its error.
@@ -1596,7 +1627,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
 }
 
 //
-// A subcommand of the secrets and dbs groups: its name, aliases, description and options (flags and description).
+// A subcommand of the dbs group: its name, aliases, description and options (flags and description).
 //
 const ISubcommandSpec = struct {
     // The name of the subcommand.
@@ -1614,7 +1645,7 @@ const ISubcommandSpec = struct {
 
 //
 // Defines a group of commands like `new Command(name)` with its subcommands (apps/cli/src/cmd/secrets.ts and
-// apps/cli/src/cmd/dbs.ts). The subcommands are not ported yet.
+// apps/cli/src/cmd/dbs.ts), for the dbs group, whose subcommands are not ported yet.
 //
 fn commandGroup(allocator: std.mem.Allocator, state: *IProgramState, name: []const u8, aliases: []const []const u8, groupDescription: []const u8, subcommands: []const ISubcommandSpec) *Command {
     const cmd = Command.init(allocator, name);
@@ -1637,89 +1668,214 @@ fn commandGroup(allocator: std.mem.Allocator, state: *IProgramState, name: []con
 }
 
 //
-// Creates the secrets command group (secretsCommand in apps/cli/src/cmd/secrets.ts).
+// The action of `secrets add` (`.action(secretsAdd)`): `run` calls the command.
+//
+fn secretsAddAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .secretsAdd = .{
+            .yes = flagValue(options, "yes"),
+            .name = textValue(options, "name"),
+            .type = textValue(options, "type"),
+            .value = textValue(options, "value"),
+        },
+    };
+}
+
+//
+// The action of `secrets list` (`.action(secretsList)`): `run` calls the command.
+//
+fn secretsListAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = options;
+    _ = command;
+    state.outcome = .secretsList;
+}
+
+//
+// The action of `secrets view` (`.action(secretsView)`): `run` calls the command.
+//
+fn secretsViewAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .secretsView = .{
+            .yes = flagValue(options, "yes"),
+            .name = textValue(options, "name"),
+            .raw = flagValue(options, "raw"),
+        },
+    };
+}
+
+//
+// The action of `secrets edit` (`.action(secretsEdit)`): `run` calls the command.
+//
+fn secretsEditAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .secretsEdit = .{
+            .yes = flagValue(options, "yes"),
+            .name = textValue(options, "name"),
+            .newName = textValue(options, "newName"),
+            .value = textValue(options, "value"),
+            .valueFile = textValue(options, "valueFile"),
+        },
+    };
+}
+
+//
+// The action of `secrets remove` (`.action(secretsRemove)`): `run` calls the command.
+//
+fn secretsRemoveAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .secretsRemove = .{
+            .yes = flagValue(options, "yes"),
+            .name = textValue(options, "name"),
+        },
+    };
+}
+
+//
+// The action of `secrets clear` (`.action(secretsClear)`): `run` calls the command.
+//
+fn secretsClearAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .secretsClear = .{
+            .yes = flagValue(options, "yes"),
+        },
+    };
+}
+
+//
+// The action of `secrets import` (`.action(secretsImport)`): `run` calls the command.
+//
+fn secretsImportAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .secretsImport = .{
+            .yes = flagValue(options, "yes"),
+            .privateKey = textValue(options, "privateKey"),
+        },
+    };
+}
+
+//
+// The action of `secrets send` (`.action(secretsSend)`): `run` calls the command.
+//
+fn secretsSendAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .secretsSend = .{
+            .yes = flagValue(options, "yes"),
+            .name = textValue(options, "name"),
+            .code = textValue(options, "code"),
+        },
+    };
+}
+
+//
+// The action of `secrets receive` (`.action(secretsReceive)`): `run` calls the command.
+//
+fn secretsReceiveAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .secretsReceive = .{
+            .yes = flagValue(options, "yes"),
+            .code = textValue(options, "code"),
+        },
+    };
+}
+
+//
+// The `psi secrets` command group (secretsCommand in apps/cli/src/cmd/secrets.ts).
 //
 fn secretsCommand(allocator: std.mem.Allocator, state: *IProgramState) *Command {
-    return commandGroup(allocator, state, "secrets", &.{ "sec", "s" }, "Manage secrets stored in the Photosphere secrets store.", &.{
-        .{
-            .name = "add",
-            .description = "Interactively add a new secret.",
-            .options = &.{
-                .{ "--yes", "Skip prompts" },
-                .{ "--name <name>", "Secret name" },
-                .{ "--type <type>", "Secret type" },
-                .{ "--value <value>", "Secret value" },
-            },
-        },
-        .{
-            .name = "list",
-            .aliases = &.{ "l", "ls" },
-            .description = "List all secrets (values are masked).",
-            .options = &.{},
-        },
-        .{
-            .name = "view",
-            .aliases = &.{"v"},
-            .description = "Show the full value of a named secret.",
-            .options = &.{
-                .{ "--yes", "Skip confirmation prompt" },
-                .{ "--name <name>", "Secret name" },
-                .{ "--raw", "Print only the raw value, with no labels or colouring, for capture by another program" },
-            },
-        },
-        .{
-            .name = "edit",
-            .aliases = &.{"e"},
-            .description = "Edit an existing secret, field by field.",
-            .options = &.{
-                .{ "--yes", "Skip prompts" },
-                .{ "--name <name>", "Secret name to edit" },
-                .{ "--new-name <name>", "New secret name" },
-                .{ "--value <value>", "New value" },
-                .{ "--value-file <path>", "Read new value from a file (for multiline values such as PEM keys)" },
-            },
-        },
-        .{
-            .name = "remove",
-            .description = "Remove a named secret.",
-            .options = &.{
-                .{ "--yes", "Skip confirmation prompt" },
-                .{ "--name <name>", "Secret name to remove" },
-            },
-        },
-        .{
-            .name = "clear",
-            .description = "Remove all secrets.",
-            .options = &.{
-                .{ "--yes", "Skip confirmation prompt" },
-            },
-        },
-        .{
-            .name = "import",
-            .description = "Import a PEM private key file as an encryption key.",
-            .options = &.{
-                .{ "--yes", "Skip prompts" },
-                .{ "--private-key <path>", "Path to private key file" },
-            },
-        },
-        .{
-            .name = "send",
-            .description = "Send a secret to another device over the local network.",
-            .options = &.{
-                .{ "--yes", "Skip confirmation prompts" },
-                .{ "--name <name>", "Secret name to send" },
-                .{ "--code <code>", "Use a specific pairing code instead of generating one (useful for scripted use)" },
-            },
-        },
-        .{
-            .name = "receive",
-            .description = "Receive a secret from another device over the local network.",
-            .options = &.{
-                .{ "--yes", "Skip confirmation prompts and field editing" },
-                .{ "--code <code>", "Pairing code shown on the sender (required with --yes)" },
-            },
-        },
-    });
+    const cmd = Command.init(allocator, "secrets")
+        .alias("sec")
+        .alias("s")
+        .description("Manage secrets stored in the Photosphere secrets store.");
+
+    // psi secrets add
+    _ = cmd.command("add", .{})
+        .description("Interactively add a new secret.")
+        .option("--yes", "Skip prompts", null)
+        .option("--name <name>", "Secret name", null)
+        .option("--type <type>", "Secret type", null)
+        .option("--value <value>", "Secret value", null)
+        .action(state, secretsAddAction);
+
+    // psi secrets list
+    _ = cmd.command("list", .{})
+        .alias("l")
+        .alias("ls")
+        .description("List all secrets (values are masked).")
+        .action(state, secretsListAction);
+
+    // psi secrets view
+    _ = cmd.command("view", .{})
+        .alias("v")
+        .description("Show the full value of a named secret.")
+        .option("--yes", "Skip confirmation prompt", null)
+        .option("--name <name>", "Secret name", null)
+        .option("--raw", "Print only the raw value, with no labels or colouring, for capture by another program", null)
+        .action(state, secretsViewAction);
+
+    // psi secrets edit
+    _ = cmd.command("edit", .{})
+        .alias("e")
+        .description("Edit an existing secret, field by field.")
+        .option("--yes", "Skip prompts", null)
+        .option("--name <name>", "Secret name to edit", null)
+        .option("--new-name <name>", "New secret name", null)
+        .option("--value <value>", "New value", null)
+        .option("--value-file <path>", "Read new value from a file (for multiline values such as PEM keys)", null)
+        .action(state, secretsEditAction);
+
+    // psi secrets remove
+    _ = cmd.command("remove", .{})
+        .description("Remove a named secret.")
+        .option("--yes", "Skip confirmation prompt", null)
+        .option("--name <name>", "Secret name to remove", null)
+        .action(state, secretsRemoveAction);
+
+    // psi secrets clear
+    _ = cmd.command("clear", .{})
+        .description("Remove all secrets.")
+        .option("--yes", "Skip confirmation prompt", null)
+        .action(state, secretsClearAction);
+
+    // psi secrets import
+    _ = cmd.command("import", .{})
+        .description("Import a PEM private key file as an encryption key.")
+        .option("--yes", "Skip prompts", null)
+        .option("--private-key <path>", "Path to private key file", null)
+        .action(state, secretsImportAction);
+
+    // psi secrets send
+    _ = cmd.command("send", .{})
+        .description("Send a secret to another device over the local network.")
+        .option("--yes", "Skip confirmation prompts", null)
+        .option("--name <name>", "Secret name to send", null)
+        .option("--code <code>", "Use a specific pairing code instead of generating one (useful for scripted use)", null)
+        .action(state, secretsSendAction);
+
+    // psi secrets receive
+    _ = cmd.command("receive", .{})
+        .description("Receive a secret from another device over the local network.")
+        .option("--yes", "Skip confirmation prompts and field editing", null)
+        .option("--code <code>", "Pairing code shown on the sender (required with --yes)", null)
+        .action(state, secretsReceiveAction);
+
+    return cmd;
 }
 
 //
@@ -2095,6 +2251,68 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
                 return helpError;
             }
             exit(io, program.getCommanderError().?.exitCode);
+        },
+        .secretsAdd => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try secrets.secretsAdd(allocator, io, &options);
+        },
+        .secretsList => {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try secrets.secretsList(allocator, io);
+        },
+        .secretsView => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try secrets.secretsView(allocator, io, &options);
+        },
+        .secretsEdit => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try secrets.secretsEdit(allocator, io, &options);
+        },
+        .secretsRemove => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try secrets.secretsRemove(allocator, io, &options);
+        },
+        .secretsClear => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try secrets.secretsClear(allocator, io, &options);
+        },
+        .secretsImport => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try secrets.secretsImport(allocator, io, &options);
+        },
+        .secretsSend => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try secrets.secretsSend(allocator, io, &options);
+        },
+        .secretsReceive => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try secrets.secretsReceive(allocator, io, &options);
         },
         .notPorted => |commandName| {
             return utils.errors.throwError("The {s} command is not ported to the Zig CLI yet.", .{commandName});

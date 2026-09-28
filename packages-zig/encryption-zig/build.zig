@@ -36,7 +36,8 @@ const openssl_header =
 
 //
 // Builds aws-lc's libcrypto and the module over it, and registers a test step that runs every file in src/test.
-// libcrypto is installed as the "crypto" artifact so that storage-zig links the same library into the AWS SDK for C.
+// libcrypto is installed as the "crypto" artifact so that storage-zig links the same library into the AWS SDK for C,
+// and libssl as the "ssl" artifact.
 //
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
@@ -54,6 +55,10 @@ pub fn build(b: *std.Build) !void {
     const crypto = try aws_lc.build(b, target, b.dependency("aws-lc", .{}));
     b.installArtifact(crypto);
     module.linkLibrary(crypto);
+    // libssl, over the same libcrypto, installed as the "ssl" artifact for lan-share-network-zig (its HTTPS server
+    // and client). This package does not use it.
+    const ssl = try aws_lc.buildSsl(b, target, b.dependency("aws-lc", .{}), crypto);
+    b.installArtifact(ssl);
     // Translated without optimization: in the optimized modes the MinGW headers define fortified inline wrappers of
     // memset and friends, which translate-c turns into Zig that does not compile. The declarations are the same.
     const translate_c = b.addTranslateC(.{

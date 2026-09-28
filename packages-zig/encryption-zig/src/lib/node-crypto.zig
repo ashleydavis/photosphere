@@ -731,3 +731,64 @@ pub fn createDecipheriv(algorithm: []const u8, key: []const u8, iv: []const u8) 
     try checkCipherArguments(algorithm, key, iv);
     return Decipher{ .context = try createCipherContext(key, iv, false) };
 }
+
+//
+// A signature being built (node:crypto Sign, from createSign): the data given to update is signed by sign.
+// Only "SHA256" is supported, with the RSA PKCS#1 v1.5 padding Node uses for an RSA key by default.
+//
+pub const Sign = struct {
+    // Allocates the data collected by update.
+    allocator: std.mem.Allocator,
+
+    // The data given to update so far.
+    data: std.ArrayList(u8),
+
+    //
+    // Adds data to sign (Sign.update).
+    //
+    pub fn update(self: *Sign, data: []const u8) !void {
+        try self.data.appendSlice(self.allocator, data);
+    }
+
+    //
+    // Signs the data with a private key given as PEM text and returns the signature (Sign.sign(privateKeyPem)).
+    //
+    pub fn sign(self: *Sign, allocator: std.mem.Allocator, privateKeyPem: []const u8) ![]u8 {
+        c.ERR_clear_error();
+        const bio = try openMemoryBio(privateKeyPem);
+        defer _ = c.BIO_free(bio);
+        const key = c.PEM_read_bio_PrivateKey(bio, null, &noPassphrase, null) orelse {
+            return throwUnsupportedKey();
+        };
+        defer c.EVP_PKEY_free(key);
+        const context = c.EVP_MD_CTX_new() orelse {
+            return throwLibraryError("EVP_MD_CTX_new");
+        };
+        defer c.EVP_MD_CTX_free(context);
+        if (c.EVP_DigestSignInit(context, null, c.EVP_sha256(), null, key) != 1) {
+            return throwLibraryError("EVP_DigestSignInit");
+        }
+        var signatureLength: usize = 0;
+        if (c.EVP_DigestSign(context, null, &signatureLength, self.data.items.ptr, self.data.items.len) != 1) {
+            return throwLibraryError("EVP_DigestSign");
+        }
+        const signature = try allocator.alloc(u8, signatureLength);
+        if (c.EVP_DigestSign(context, signature.ptr, &signatureLength, self.data.items.ptr, self.data.items.len) != 1) {
+            return throwLibraryError("EVP_DigestSign");
+        }
+        return signature[0..signatureLength];
+    }
+};
+
+//
+// Creates a Sign object for the digest algorithm (node:crypto createSign). Only "SHA256" is supported.
+//
+pub fn createSign(allocator: std.mem.Allocator, algorithm: []const u8) !Sign {
+    if (!std.mem.eql(u8, algorithm, "SHA256")) {
+        return errors.throwError("Invalid digest: {s}", .{algorithm});
+    }
+    return .{
+        .allocator = allocator,
+        .data = .empty,
+    };
+}

@@ -8,6 +8,9 @@
         .@"storage-zig" = .{ .path = "../storage-zig" },
         .@"serialization-zig" = .{ .path = "../serialization-zig" },
         .@"task-queue-zig" = .{ .path = "../task-queue-zig" },
+        .@"vault-zig" = .{ .path = "../vault-zig" },
+        .@"lan-share-core-zig" = .{ .path = "../lan-share-core-zig" },
+        .@"node-utils-zig" = .{ .path = "../node-utils-zig" },
     },
     .paths = .{ "build.zig", "build.zig.zon", "src" },
 }

@@ -44,7 +44,7 @@ pub const InternalClackSettings = struct {
     // The aliases for the default actions.
     aliases: []const Alias,
 
-    // Custom messages (only used by the spinner, which is not ported).
+    // Custom messages (only used by the spinner).
     messages: struct {
         // Message shown when a spinner is cancelled.
         cancel: []const u8,

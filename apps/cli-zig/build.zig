@@ -22,6 +22,8 @@ const dependency_names = [_][]const u8{
     "bdb-zig",
     "api-zig",
     "node-api-zig",
+    "lan-share-core-zig",
+    "lan-share-network-zig",
 };
 
 //

@@ -18,6 +18,13 @@ pub const messages = @import("prompts/messages.zig");
 pub const cancel = messages.cancel;
 pub const intro = messages.intro;
 pub const outro = messages.outro;
+pub const note_module = @import("prompts/note.zig");
+pub const note = note_module.note;
+pub const NoteOptions = note_module.NoteOptions;
+pub const spinner_module = @import("prompts/spinner.zig");
+pub const spinner = spinner_module.spinner;
+pub const Spinner = spinner_module.Spinner;
+pub const SpinnerOptions = spinner_module.SpinnerOptions;
 pub const multiline_module = @import("prompts/multiline.zig");
 pub const multiline = multiline_module.multiline;
 pub const MultilineOptions = multiline_module.MultilineOptions;
@@ -34,5 +41,5 @@ pub const TextOptions = text_module.TextOptions;
 pub const ValidateFn = @import("core/prompts/prompt.zig").ValidateFn;
 pub const MultilineValidateFn = @import("core/prompts/multiline.zig").MultilineValidateFn;
 pub const PromptInput = @import("third-party/readline.zig").PromptInput;
-// Not ported: autocomplete, group-multi-select, group, log, multi-select, note, path, progress-bar,
-// select-key, spinner, stream, task, task-log (not used by replicate or verify).
+// Not ported: autocomplete, group-multi-select, group, log, multi-select, path, progress-bar,
+// select-key, stream, task, task-log (not used by the ported commands).

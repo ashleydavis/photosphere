@@ -13,5 +13,8 @@ pub const utils = @import("utils/index.zig");
 pub const isCancel = utils.isCancel;
 pub const PromptResult = utils.PromptResult;
 pub const settings = utils.settings.settings;
-// Not ported: GroupMultiSelectPrompt, MultiSelectPrompt, SelectKeyPrompt, AutocompletePrompt, block,
+pub const block = utils.block;
+pub const BlockOptions = utils.BlockOptions;
+pub const IBlock = utils.IBlock;
+// Not ported: GroupMultiSelectPrompt, MultiSelectPrompt, SelectKeyPrompt, AutocompletePrompt,
 // updateSettings (not used by replicate or verify).

@@ -118,7 +118,7 @@ To do, in order (each one uses what the earlier ones ported):
 - [ ] news
 - [ ] bug
 - [ ] dbs (all subcommands, including LAN share send and receive)
-- [ ] secrets (all subcommands, including LAN share send and receive)
+- [x] secrets (all subcommands, including LAN share send and receive)
 - [ ] mcp
 
 ## Smoke suites to match

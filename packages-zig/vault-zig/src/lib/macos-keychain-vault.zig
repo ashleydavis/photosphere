@@ -117,6 +117,8 @@ pub const MacOSKeychainVault = struct {
         .get = getErased,
         .set = setErased,
         .list = listErased,
+        .delete = deleteErased,
+        .checkPrereqs = checkPrereqsErased,
     };
 
     //
@@ -203,7 +205,34 @@ pub const MacOSKeychainVault = struct {
         return secrets.toOwnedSlice(allocator);
     }
 
-    // Not ported: delete (not used by psi replicate or psi verify).
+    //
+    // Deletes a secret from the macOS Keychain.
+    // Does nothing if the secret does not exist.
+    //
+    pub fn delete(self: *MacOSKeychainVault, allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
+        try self.checkTool(allocator, io);
+        const keychainName = try toKeychainName(allocator, name);
+        _ = runCommand(allocator, io, &.{ SECURITY_TOOL, "delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", keychainName }) catch {
+            // Secret did not exist; ignore.
+            return;
+        };
+    }
+
+    //
+    // IVault.delete for this implementation.
+    //
+    fn deleteErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, name: []const u8) anyerror!void {
+        const self: *MacOSKeychainVault = @ptrCast(@alignCast(ptr));
+        return self.delete(allocator, io, name);
+    }
+
+    //
+    // IVault.checkPrereqs for this implementation.
+    //
+    fn checkPrereqsErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!IPrereqCheckResult {
+        const self: *MacOSKeychainVault = @ptrCast(@alignCast(ptr));
+        return self.checkPrereqs(allocator, io);
+    }
 
     //
     // IVault.get for this implementation.
