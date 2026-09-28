@@ -193,7 +193,7 @@ test "parse reads every escape, and the newline forms of multi-line strings, lik
 //
 // A value and the TOML text smol-toml stringifies `{ a: value }` to.
 //
-const ValueStringifyCase = struct {
+const IValueStringifyCase = struct {
     // The value of a.
     value: std.json.Value,
 
@@ -205,7 +205,7 @@ test "stringify writes the numbers JSON cannot hold like smol-toml" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const cases = [_]ValueStringifyCase{
+    const cases = [_]IValueStringifyCase{
         .{ .value = .{ .float = std.math.nan(f64) }, .toml = "a = nan\n" },
         .{ .value = .{ .float = std.math.inf(f64) }, .toml = "a = inf\n" },
         .{ .value = .{ .float = -std.math.inf(f64) }, .toml = "a = -inf\n" },

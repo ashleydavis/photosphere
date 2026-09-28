@@ -236,7 +236,7 @@ test "path.isAbsolute uses the rules of the platform" {
 //
 // A path and what Bun's path.posix.normalize and path.win32.normalize return for it.
 //
-const NormalizeCase = struct {
+const INormalizeCase = struct {
     // The path.
     path: []const u8,
 
@@ -251,7 +251,7 @@ test "path.posix.normalize and path.win32.normalize match Node" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const cases = [_]NormalizeCase{
+    const cases = [_]INormalizeCase{
         .{ .path = "", .posix = ".", .win32 = "." },
         .{ .path = "abc/..", .posix = ".", .win32 = "." },
         .{ .path = "abc/../..", .posix = "..", .win32 = ".." },

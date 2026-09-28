@@ -307,7 +307,7 @@ test "dump writes nested sections, sequences of mappings and every scalar style 
 //
 // A YAML text and the JSON text of the value js-yaml 4.1.0 `yaml.load` returns for it.
 //
-const ExpectedInlineLoad = struct {
+const IExpectedInlineLoad = struct {
     // The YAML text.
     source: []const u8,
 
@@ -319,7 +319,7 @@ test "load reads every block and flow form it supports like js-yaml" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const cases = [_]ExpectedInlineLoad{
+    const cases = [_]IExpectedInlineLoad{
         .{ .source = "---\na: 1\n", .json = "{\"a\":1}" },
         .{ .source = "a:\n", .json = "{\"a\":null}" },
         .{ .source = "a:\nb: 1\n", .json = "{\"a\":null,\"b\":1}" },
@@ -445,7 +445,7 @@ test "dump quotes, escapes and folds strings, and orders keys, like js-yaml" {
 //
 // A number and the text js-yaml 4.1.0 `yaml.dump` writes for it.
 //
-const ExpectedNumberDump = struct {
+const IExpectedNumberDump = struct {
     // The number.
     value: std.json.Value,
 
@@ -457,7 +457,7 @@ test "dump writes the numbers JSON cannot hold like js-yaml" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const cases = [_]ExpectedNumberDump{
+    const cases = [_]IExpectedNumberDump{
         .{ .value = .{ .float = std.math.nan(f64) }, .yaml = ".nan\n" },
         .{ .value = .{ .float = std.math.inf(f64) }, .yaml = ".inf\n" },
         .{ .value = .{ .float = -std.math.inf(f64) }, .yaml = "-.inf\n" },

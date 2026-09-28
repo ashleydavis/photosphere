@@ -346,23 +346,11 @@ fn getJson(allocator: std.mem.Allocator, io: std.Io, url: []const u8) !std.json.
 }
 
 //
-// The Google geocoding API reverseGeocode asks.
-//
-pub const GEOCODE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json";
-
-//
 // Reverse geocode the requested location (needs lat and lng fields).
 //
 // You must set an approriately configured Google API key in the environment variable GOOGLE_API_KEY for this to work.
 //
 pub fn reverseGeocode(allocator: std.mem.Allocator, io: std.Io, location: ILocation, googleApiKey: ?[]const u8) !?IReverseGeocodeResult {
-    return reverseGeocodeAt(allocator, io, location, googleApiKey, GEOCODE_API_URL);
-}
-
-//
-// reverseGeocode against the geocoding API at the URL (the tests serve one locally).
-//
-pub fn reverseGeocodeAt(allocator: std.mem.Allocator, io: std.Io, location: ILocation, googleApiKey: ?[]const u8, apiUrl: []const u8) !?IReverseGeocodeResult {
 
     try checkCoordinateOk(allocator, location.lat, "lat", LAT_MIN, LAT_MAX);
     try checkCoordinateOk(allocator, location.lng, "lng", LNG_MIN, LNG_MAX);
@@ -378,7 +366,7 @@ pub fn reverseGeocodeAt(allocator: std.mem.Allocator, io: std.Io, location: ILoc
     //
     // throw new Error("Reverse geocoding - fake error.");
 
-    const url = try std.fmt.allocPrint(allocator, "{s}?latlng={s},{s}&key={s}", .{ apiUrl, try formatCoordinate(allocator, location.lat), try formatCoordinate(allocator, location.lng), apiKey });
+    const url = try std.fmt.allocPrint(allocator, "https://maps.googleapis.com/maps/api/geocode/json?latlng={s},{s}&key={s}", .{ try formatCoordinate(allocator, location.lat), try formatCoordinate(allocator, location.lng), apiKey });
     const data = try getJson(allocator, io, url);
 
     const dataObject = switch (data) {
