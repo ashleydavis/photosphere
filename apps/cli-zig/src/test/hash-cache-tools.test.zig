@@ -30,6 +30,14 @@ test "cachedLength stores a length like writeUIntLE(parseInt(length, 10), offset
     try std.testing.expectError(error.Thrown, cachedLength(-5));
     try std.testing.expectEqualStrings("RangeError", utils.errors.lastErrorName());
     try std.testing.expectEqualStrings("The value of \"value\" is out of range. It must be >= 0 and < 2 ** 48. Received -5", utils.errors.lastErrorMessage());
+
+    // A length of 2 ** 48 or more is out of range, and the number is printed as JavaScript prints it.
+    try std.testing.expectError(error.Thrown, cachedLength(281474976710656));
+    try std.testing.expectEqualStrings("The value of \"value\" is out of range. It must be >= 0 and < 2 ** 48. Received 281474976710656", utils.errors.lastErrorMessage());
+    try std.testing.expectError(error.Thrown, cachedLength(utils.js_number.parseInt("123456789012345678901234567890", 10)));
+    try std.testing.expectEqualStrings("The value of \"value\" is out of range. It must be >= 0 and < 2 ** 48. Received 1.2345678901234568e+29", utils.errors.lastErrorMessage());
+    try std.testing.expectError(error.Thrown, cachedLength(18446744073709549568));
+    try std.testing.expectEqualStrings("The value of \"value\" is out of range. It must be >= 0 and < 2 ** 48. Received 18446744073709550000", utils.errors.lastErrorMessage());
 }
 
 test "formatModified formats a time like toISOString().replace('T', ' ').slice(0, 19)" {

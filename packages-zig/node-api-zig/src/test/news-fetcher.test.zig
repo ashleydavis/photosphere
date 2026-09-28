@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const node_api = @import("node-api-zig");
 const utils = @import("utils-zig");
 const helpers = @import("test-helpers.zig");
@@ -177,4 +178,63 @@ test "reads from disk for file:// URLs" {
     try std.testing.expectEqualStrings("https://example.com/open", items[0].link.?.url);
     try std.testing.expectEqualStrings("Go", items[0].action.?.label);
     try std.testing.expectEqualStrings("https://example.com/go", items[0].action.?.url);
+}
+
+test "a link label that is not a string is printed as a JavaScript template string prints it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dir = try helpers.makeTempDir(allocator, io, "news-fetcher-labels");
+    defer helpers.removeTempDir(io, dir);
+    const filePath = try std.fmt.allocPrint(allocator, "{s}/feed.yaml", .{dir});
+    try helpers.writeFile(io, filePath,
+        \\items:
+        \\  - id: a
+        \\    message: Labels
+        \\    link:
+        \\      label: 1e21
+        \\      url: [1, null, "b"]
+        \\
+    );
+    const forwardSlashPath = try allocator.dupe(u8, filePath);
+    std.mem.replaceScalar(u8, forwardSlashPath, '\\', '/');
+    const slashBeforeDrive = if (std.mem.startsWith(u8, forwardSlashPath, "/")) "" else "/";
+    const items = try fetchNews(allocator, io, try std.fmt.allocPrint(allocator, "file://{s}{s}", .{ slashBeforeDrive, forwardSlashPath }));
+
+    // `${1e21}` is "1e+21", and `${[1, null, "b"]}` is "1,,b".
+    try std.testing.expectEqualStrings("1e+21", items[0].link.?.label);
+    try std.testing.expectEqualStrings("1,,b", items[0].link.?.url);
+}
+
+test "fileURLToPath parses the URL first, as Bun's fileURLToPath does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const fileURLToPath = node_api.news_fetcher.fileURLToPath;
+
+    if (builtin.os.tag == .windows) {
+        try std.testing.expectEqualStrings("C:\\b\\c", try fileURLToPath(allocator, "file:///C:/a/../b/./c?x=1#y"));
+        try std.testing.expectEqualStrings("\\\\server\\share\\f", try fileURLToPath(allocator, "file://server/share/f"));
+        try std.testing.expectError(error.Thrown, fileURLToPath(allocator, "file:///C:/a%2Fb"));
+        try std.testing.expectEqualStrings("File URL path must not include encoded \\ or / characters", utils.errors.lastErrorMessage());
+        return;
+    }
+
+    // The query and fragment are not part of the path, and `.` and `..` segments are resolved.
+    try std.testing.expectEqualStrings("/b/c", try fileURLToPath(allocator, "file:///a/../b/./c?x=1#y"));
+    // "localhost" is no host at all, and a backslash is a slash.
+    try std.testing.expectEqualStrings("/a/b", try fileURLToPath(allocator, "file://localhost/a\\b"));
+    // Percent-encoded bytes are decoded, and a % that starts no escape is kept.
+    try std.testing.expectEqualStrings("/a b/%zz/\u{E9}", try fileURLToPath(allocator, "file:///a%20b/%zz/%C3%A9"));
+    // An empty path is the root.
+    try std.testing.expectEqualStrings("/", try fileURLToPath(allocator, "file://"));
+
+    try std.testing.expectError(error.Thrown, fileURLToPath(allocator, "file://host/a/b"));
+    try std.testing.expectEqualStrings("TypeError", utils.errors.lastErrorName());
+    const expectedHostMessage = if (builtin.os.tag == .macos) "File URL host must be \"localhost\" or empty on darwin" else "File URL host must be \"localhost\" or empty on linux";
+    try std.testing.expectEqualStrings(expectedHostMessage, utils.errors.lastErrorMessage());
+
+    try std.testing.expectError(error.Thrown, fileURLToPath(allocator, "file:///a/%2Fb"));
+    try std.testing.expectEqualStrings("File URL path must not include encoded / characters", utils.errors.lastErrorMessage());
 }

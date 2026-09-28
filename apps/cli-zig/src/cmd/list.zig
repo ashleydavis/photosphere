@@ -1,7 +1,6 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
-const tools = @import("tools-zig");
 const storage_zig = @import("storage-zig");
 const serialization = @import("serialization-zig");
 const bdb = @import("bdb-zig");
@@ -15,7 +14,7 @@ const loadDatabase = init_cmd.loadDatabase;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
 const ICommandContext = init_cmd.ICommandContext;
 const readEncryptionHeader = storage_zig.read_encryption_header.readEncryptionHeader;
-const parseInt = tools.image.parseInt;
+const parseInt = utils.js_number.parseInt;
 const js_value = bdb.js_value;
 const js_date = serialization.js_date;
 const BsonValue = serialization.bson.BsonValue;
@@ -51,7 +50,7 @@ pub fn listCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
     const bsonDatabase = loaded.bsonDatabase;
     const rawAssetStorage = loaded.rawAssetStorage;
     const pageSizeText = if (options.pageSize) |pageSize| (if (pageSize.len > 0) pageSize else "20") else "20";
-    const pageSize = parseInt(pageSizeText);
+    const pageSize = parseInt(pageSizeText, 10);
 
     const metadataDatabase = bsonDatabase;
     const metadataCollection = try metadataDatabase.collection("metadata");

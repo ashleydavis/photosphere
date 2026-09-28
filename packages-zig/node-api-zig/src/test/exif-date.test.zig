@@ -87,6 +87,17 @@ test "parseExifDate ignores surrounding whitespace" {
     try expectParsed("2025-03-27T20:22:57.000Z", "  2025:03:27 20:22:57\n");
 }
 
+test "parseExifDate ignores surrounding whitespace that is not ASCII, as String.prototype.trim does" {
+    try expectParsed("2024-01-02T03:04:05.000Z", "\u{00A0}2024:01:02 03:04:05\u{3000}");
+    try expectParsed("2024-01-02T03:04:05.000Z", "\u{FEFF}2024:01:02 03:04:05");
+}
+
+test "parseExifDate refuses the years 1 to 99, which Date.UTC reads as 1901 to 1999" {
+    try expectRefused("0050:01:01 00:00:00");
+    try expectRefused("0099:12:31 23:59:59");
+    try expectParsed("0100-01-01T00:00:00.000Z", "0100:01:01 00:00:00");
+}
+
 test "parseExifDate reads the first and last moment of a day" {
     try expectParsed("2024-01-01T00:00:00.000Z", "2024:01:01 00:00:00");
     try expectParsed("2024-12-31T23:59:59.000Z", "2024:12:31 23:59:59");

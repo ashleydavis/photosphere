@@ -323,3 +323,14 @@ test "getImageDetails produces the details and the files TypeScript produces" {
         try expectOptionalString(expected.photoDate, details.photoDate);
     }
 }
+
+test "locationJson prints numbers as JSON.stringify does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    // JSON.stringify({ lat: 91.5, lng: 1e-7 }) in Bun.
+    const text = try image.locationJson(arena.allocator(), .{
+        .lat = 91.5,
+        .lng = 1e-7,
+    });
+    try std.testing.expectEqualStrings("{\"lat\":91.5,\"lng\":1e-7}", text);
+}

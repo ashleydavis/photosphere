@@ -7,6 +7,7 @@ const execLogged = node_utils.exec.execLogged;
 const pathExists = node_utils.fs.pathExists;
 const join = node_utils.path.join;
 const errors = utils.errors;
+const parseInt = utils.js_number.parseInt;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const IImageTransformation = utils.image.IImageTransformation;
 const js_date = @import("serialization-zig").js_date;
@@ -206,8 +207,8 @@ pub const Image = struct {
         const result = try execLogged(allocator, io, "magick", command, null);
 
         var parts = std.mem.splitScalar(u8, std.mem.trim(u8, result.stdout, " \t\n\r\x0b\x0c"), ' ');
-        const width = parseInt(parts.next() orelse "");
-        const height = parseInt(parts.next() orelse "");
+        const width = parseInt(parts.next() orelse "undefined", null);
+        const height = parseInt(parts.next() orelse "undefined", null);
 
         // Get EXIF data for created date
         var createdAt: ?f64 = null;
@@ -435,7 +436,7 @@ pub const Image = struct {
         var rgbValues: std.ArrayList(f64) = .empty;
         var values = std.mem.splitScalar(u8, rgbString, ',');
         while (values.next()) |value| {
-            try rgbValues.append(allocator, parseInt(std.mem.trim(u8, value, " \t\n\r\x0b\x0c")));
+            try rgbValues.append(allocator, parseInt(utils.js_string.trim(value), null));
         }
 
         var valid = rgbValues.items.len == 3;
@@ -502,30 +503,6 @@ pub const Image = struct {
         imageMagickType = .none;
     }
 };
-
-//
-// JavaScript's `parseInt(text)` (base 10) for the numbers ImageMagick prints: the integer at the start of the text
-// after white space, or NaN.
-//
-pub fn parseInt(text: []const u8) f64 {
-    const trimmed = std.mem.trimStart(u8, text, " \t\n\r\x0b\x0c");
-    var index: usize = 0;
-    var negative = false;
-    if (index < trimmed.len and (trimmed[index] == '+' or trimmed[index] == '-')) {
-        negative = trimmed[index] == '-';
-        index += 1;
-    }
-    const digitsStart = index;
-    var value: f64 = 0;
-    while (index < trimmed.len and std.ascii.isDigit(trimmed[index])) {
-        value = value * 10 + @as(f64, @floatFromInt(trimmed[index] - '0'));
-        index += 1;
-    }
-    if (index == digitsStart) {
-        return std.math.nan(f64);
-    }
-    return if (negative) -value else value;
-}
 
 //
 // JavaScript truthiness of a number.

@@ -292,7 +292,7 @@ fn formatZipProgressPath(allocator: std.mem.Allocator, zipPathStack: []const []c
     }
 
     const rootZipName = path.basename(zipPathStack[0]);
-    const truncatedRoot = truncateUtf16(rootZipName, 50);
+    const truncatedRoot = try truncateUtf16(allocator, rootZipName, 50);
 
     if (zipPathStack.len == 1) {
         // Just the root zip
@@ -312,15 +312,19 @@ fn formatZipProgressPath(allocator: std.mem.Allocator, zipPathStack: []const []c
 
 //
 // JavaScript's `text.length > maximum ? text.substring(0, maximum) : text`, where the length counts UTF-16 code
-// units. A cut that would split a character in two keeps the part before it. (No TypeScript counterpart.)
+// units. A cut that splits a character outside the Basic Multilingual Plane keeps its high surrogate, which is
+// written out as U+FFFD, so that is what the cut part ends with. (No TypeScript counterpart.)
 //
-fn truncateUtf16(text: []const u8, maximum: usize) []const u8 {
+fn truncateUtf16(allocator: std.mem.Allocator, text: []const u8, maximum: usize) ![]const u8 {
     var units: usize = 0;
     var index: usize = 0;
     while (index < text.len) {
         const sequenceLength = std.unicode.utf8ByteSequenceLength(text[index]) catch 1;
         const characterUnits: usize = if (sequenceLength == 4) 2 else 1;
         if (units + characterUnits > maximum) {
+            if (units < maximum) {
+                return std.fmt.allocPrint(allocator, "{s}\u{FFFD}", .{text[0..index]});
+            }
             return text[0..index];
         }
         units += characterUnits;
@@ -343,11 +347,12 @@ fn statPath(io: std.Io, filePath: []const u8) !std.Io.File.Stat {
 }
 
 //
-// The modified time of a stat, as a JavaScript Date holds it (whole milliseconds).
+// The modified time of a stat, as a JavaScript Date holds it (whole milliseconds, truncated towards zero as the
+// Date constructor truncates mtimeMs, so a time before 1970 rounds up).
 // (No TypeScript counterpart: TypeScript reads `stats.mtime`.)
 //
 fn statModifiedTime(stat: std.Io.File.Stat) i64 {
-    return @intCast(@divFloor(stat.mtime.nanoseconds, std.time.ns_per_ms));
+    return stat.mtime.toMilliseconds();
 }
 
 //

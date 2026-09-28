@@ -249,12 +249,6 @@ test "getDominantColor gives the color the TypeScript command prints" {
     try std.testing.expect(cardColor[0] > 150 and cardColor[0] < 204);
 }
 
-test "parseInt reads the integer at the start of the text like JavaScript" {
-    try std.testing.expectEqual(@as(f64, 2560), tools.image.parseInt("2560"));
-    try std.testing.expectEqual(@as(f64, -12), tools.image.parseInt("  -12px"));
-    try std.testing.expect(std.math.isNan(tools.image.parseInt("px")));
-}
-
 test "every operation fails for a file that does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

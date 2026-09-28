@@ -3440,6 +3440,20 @@ test "hash-cache hash-file and add hash a file like the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "hash-file", missingPath }), bug_report_hint, expectedError, 1);
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "add", missingPath, "--db", db }), bug_report_hint, expectedError, 1);
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "count", "--db", db }), "1\n", "", 0);
+
+    // A file modified half a millisecond past -1001ms: Bun's mtime is a Date of -1000 (the Date constructor
+    // truncates mtimeMs -1000.5 towards zero), which writeUIntLE refuses.
+    const oldPath = try std.fs.path.join(allocator, &.{ root, "old.png" });
+    try std.Io.Dir.cwd().copyFile("../../test/test.png", std.Io.Dir.cwd(), oldPath, std.testing.io, .{});
+    const oldFile = try std.Io.Dir.cwd().openFile(std.testing.io, oldPath, .{ .mode = .write_only });
+    const oldTime: std.Io.Timestamp = .{ .nanoseconds = -1000500000 };
+    try oldFile.setTimestamps(std.testing.io, .{
+        .access_timestamp = .{ .new = oldTime },
+        .modify_timestamp = .{ .new = oldTime },
+    });
+    oldFile.close(std.testing.io);
+    const beforeEpoch = try runZig(allocator, environment, &.{ "hash-cache", "add", oldPath, "--db", db });
+    try expectResult(beforeEpoch, bug_report_hint, "An unknown error occurred\nRangeError: The value of \"value\" is out of range. It must be >= 0 and < 2 ** 48. Received -1000\n", 1);
 }
 
 test "hash-cache show and clear display and clear a database's hash cache like the TypeScript CLI" {

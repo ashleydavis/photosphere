@@ -384,6 +384,23 @@ test "resolves comma-separated encryptionKey param with whitespace trimming" {
     try std.testing.expectEqualStrings(secondPem, result.encryptionKeyPems[1].privateKeyPem);
 }
 
+test "comma-separated encryptionKey names are trimmed of the whitespace String.prototype.trim removes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const configDir = try setup(allocator, io, "");
+    defer helpers.removeTempDir(io, configDir);
+    const firstPem = try readKey(allocator, io, "ts-private.pem");
+    try setSecret(allocator, io, "key-a", "encryption-key", firstPem);
+
+    // A no-break space and an ideographic space are whitespace to trim().
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", "\u{00A0}key-a\u{3000},\u{3000}", null);
+
+    try std.testing.expectEqual(@as(usize, 1), result.encryptionKeyPems.len);
+    try std.testing.expectEqualStrings(firstPem, result.encryptionKeyPems[0].privateKeyPem);
+}
+
 test "geocoding vault entry stored as raw string" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

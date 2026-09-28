@@ -11,7 +11,7 @@ const js_date = serialization_zig.js_date;
 const pathExists = node_utils.fs.pathExists;
 const errors = utils.errors;
 const parseFloat = utils.js_number.parseFloat;
-const parseInt = @import("image.zig").parseInt;
+const parseInt = utils.js_number.parseInt;
 const types = @import("types.zig");
 const AssetInfo = types.AssetInfo;
 const Dimensions = types.Dimensions;
@@ -214,7 +214,7 @@ pub const Video = struct {
 
             .duration = parseFloat(textOf(property(format, "duration"))),
             .fps = fps,
-            .bitrate = parseInt(textOf(property(format, "bit_rate"))),
+            .bitrate = parseInt(textOf(property(format, "bit_rate")), null),
             .hasAudio = audioStream != null,
 
             .createdAt = createdAt,

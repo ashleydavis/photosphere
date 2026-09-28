@@ -422,7 +422,7 @@ fn getLatestLogFileUnsafe(allocator: std.mem.Allocator, io: std.Io) !?[]const u8
         if (std.mem.startsWith(u8, entry.name, "psi-") and std.mem.endsWith(u8, entry.name, ".log")) {
             const filePath = try node_utils.path.join(allocator, &.{ logsDir, entry.name });
             const stat = try std.Io.Dir.cwd().statFile(io, filePath, .{});
-            try logFiles.append(allocator, .{ .path = filePath, .mtime = @intCast(@divFloor(stat.mtime.nanoseconds, std.time.ns_per_ms)) });
+            try logFiles.append(allocator, .{ .path = filePath, .mtime = stat.mtime.toMilliseconds() });
         }
     }
     std.sort.block(ILogFileEntry, logFiles.items, {}, newerFirst);

@@ -2,7 +2,7 @@ const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
-const tools = @import("tools-zig");
+const serialization = @import("serialization-zig");
 const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const throwError = utils.errors.throwError;
@@ -12,7 +12,7 @@ const recordError = utils.errors.recordError;
 const HashCache = node_api.hash_cache.HashCache;
 const getHashCacheDir = node_api.hash_cache.getHashCacheDir;
 const computeFileHash = node_api.hash.computeFileHash;
-const parseInt = tools.image.parseInt;
+const parseInt = utils.js_number.parseInt;
 
 //
 // Internal tools for driving a database's hash cache directly.
@@ -84,14 +84,18 @@ pub fn bufferFromHex(allocator: std.mem.Allocator, text: []const u8) ![]const u8
 
 //
 // The length as Node's `buf.writeUIntLE(parseInt(length, 10), offset, 6)` stores it: NaN is written as 0, and a
-// negative number is out of range. (No TypeScript counterpart: the hash cache takes the JavaScript number.)
+// negative number or one of 2 ** 48 or more is out of range, with the number printed as JavaScript prints it.
+// (No TypeScript counterpart: the hash cache takes the JavaScript number.)
 //
 pub fn cachedLength(length: f64) !u64 {
     if (std.math.isNan(length)) {
         return 0;
     }
-    if (length < 0 or length >= 18446744073709551616.0) {
-        recordError("RangeError", "The value of \"value\" is out of range. It must be >= 0 and < 2 ** 48. Received {d}", .{length});
+    if (length < 0 or length >= 281474976710656.0) {
+        var numberBuffer: [64]u8 = undefined;
+        var numberWriter: std.Io.Writer = .fixed(&numberBuffer);
+        try serialization.js_number.writeNumber(&numberWriter, length);
+        recordError("RangeError", "The value of \"value\" is out of range. It must be >= 0 and < 2 ** 48. Received {s}", .{numberWriter.buffered()});
         return error.Thrown;
     }
     return @intFromFloat(length);
@@ -120,11 +124,11 @@ pub fn hashCacheAddCommand(allocator: std.mem.Allocator, io: std.Io, filePath: [
     };
 
     const hashCache = try openHashCache(allocator, io, options);
-    // (Zig: fileStat.mtime is a JavaScript Date, whole milliseconds.)
+    // (Zig: fileStat.mtime is a JavaScript Date, whole milliseconds truncated towards zero.)
     try hashCache.addHash(filePath, .{
         .hash = hash,
         .length = fileStat.size,
-        .lastModified = @intCast(@divFloor(fileStat.mtime.nanoseconds, std.time.ns_per_ms)),
+        .lastModified = fileStat.mtime.toMilliseconds(),
     });
     try hashCache.save(io);
 
@@ -140,7 +144,7 @@ pub fn hashCacheSetCommand(allocator: std.mem.Allocator, io: std.Io, entryKey: [
     const hashCache = try openHashCache(allocator, io, options);
     try hashCache.addHash(entryKey, .{
         .hash = try bufferFromHex(allocator, hashHex),
-        .length = try cachedLength(parseInt(length)),
+        .length = try cachedLength(parseInt(length, 10)),
         .lastModified = 0,
     });
     try hashCache.save(io);
@@ -156,7 +160,7 @@ pub fn hashCacheSetSourceCommand(allocator: std.mem.Allocator, io: std.Io, sourc
     const hashCache = try openHashCache(allocator, io, options);
     try hashCache.addSourceHash(sourceId, .{
         .hash = try bufferFromHex(allocator, hashHex),
-        .length = try cachedLength(parseInt(length)),
+        .length = try cachedLength(parseInt(length, 10)),
         .lastModified = 0,
     });
     try hashCache.save(io);

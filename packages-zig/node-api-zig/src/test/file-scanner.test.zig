@@ -379,6 +379,26 @@ test "should include file metadata" {
     try std.testing.expectEqualStrings("image/png", scanned.files.items[0].fileStat.contentType.?);
 }
 
+test "a modified time before 1970 is truncated to whole milliseconds like a JavaScript Date" {
+    var context: ScannerTest = undefined;
+    try context.init();
+    defer context.deinit();
+    const io = std.testing.io;
+    const filePath = try context.write("old.png", &MINIMAL_PNG);
+    // Half a millisecond past -1001ms. Bun reports mtimeMs -1000.5 and mtime.getTime() -1000.
+    const oldTime: std.Io.Timestamp = .{ .nanoseconds = -1000500000 };
+    const photoFile = try std.Io.Dir.cwd().openFile(io, filePath, .{ .mode = .write_only });
+    defer photoFile.close(io);
+    try photoFile.setTimestamps(io, .{
+        .access_timestamp = .{ .new = oldTime },
+        .modify_timestamp = .{ .new = oldTime },
+    });
+
+    const scanned = try context.scan(filePath, defaultScannerOptions, null);
+
+    try std.testing.expectEqual(@as(i64, -1000), scanned.files.items[0].fileStat.lastModified);
+}
+
 test "should scan directory with multiple image files" {
     var context: ScannerTest = undefined;
     try context.init();
@@ -834,6 +854,25 @@ test "should call progress callback when scanning zip file" {
         }
     }
     try std.testing.expect(found);
+}
+
+test "a zip name cut through a character outside the Basic Multilingual Plane is reported with U+FFFD" {
+    var context: ScannerTest = undefined;
+    try context.init();
+    defer context.deinit();
+    const allocator = context.arena.allocator();
+    // 49 letters and an emoji, which is two UTF-16 code units, so `substring(0, 50)` keeps only its high
+    // surrogate, and JavaScript writes a lone surrogate out as U+FFFD.
+    const rootName = "a" ** 49 ++ "\u{1F600}.zip";
+    const zipPath = try context.write(rootName, try buildZip(allocator, &.{.{
+        .name = "image.png",
+        .data = &MINIMAL_PNG,
+    }}));
+    var progress = context.progress();
+
+    _ = try context.scan(zipPath, defaultScannerOptions, &progress);
+
+    try std.testing.expectEqualStrings("a" ** 49 ++ "\u{FFFD}", progress.updates.items[0]);
 }
 
 test "should track ignored files count" {
