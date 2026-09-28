@@ -27,6 +27,9 @@ source "$_SYNC_SCRIPT_DIR/../../scripts/lib/test-lib.sh"
 # something above it gave up, which in CI is the job timeout, and a job killed that way has its log
 # discarded rather than written.
 source "$_SYNC_SCRIPT_DIR/../../scripts/lib/test-timeout.sh"
+
+# Timing for the TypeScript verify calls ts_verify makes on every database the Zig CLI writes.
+source "$_SYNC_SCRIPT_DIR/smoke-tests-zig/lib/ts-verify-timing.sh"
 start_suite_watchdog "sync-smoke-test"
 
 # Test configuration.
@@ -41,6 +44,9 @@ photosphere_export_test_temp "$SYNC_TEST_ROOT"
 TEST_DB_DIR="$SYNC_TEST_ROOT/sync-test-db"
 TEST_FILES_DIR="$SYNC_TEST_ROOT/sync-test-files"
 PROCESS_OUTPUT_DIR="$SYNC_TEST_ROOT/sync-test-outputs"
+
+# Where ts_verify records how long each TypeScript verify took.
+TS_VERIFY_TIMING_LOG="$SYNC_TEST_ROOT/ts-verify-milliseconds.log"
 
 # Default: run from code; use --binary for built executable
 USE_BINARY=false
@@ -143,6 +149,22 @@ get_zig_cli_command() {
     else
         echo "../cli-zig/zig-out/bin/psi"
     fi
+}
+
+# Runs the TypeScript CLI's psi verify on a database the Zig CLI has just created or modified, and
+# exits the suite unless it passes, so the reference implementation checks the integrity of every
+# database the Zig CLI writes. The time it takes is appended to TS_VERIFY_TIMING_LOG.
+# Usage: ts_verify <database>
+ts_verify() {
+    local database_dir="$1"
+    local verify_start
+    verify_start="$(current_milliseconds)"
+    log_info "Verifying $database_dir with the TypeScript CLI"
+    if ! $(get_cli_command) verify --db "$database_dir" --yes; then
+        log_error "The TypeScript CLI does not verify $database_dir"
+        exit 1
+    fi
+    record_ts_verify_milliseconds "$TS_VERIFY_TIMING_LOG" "$verify_start"
 }
 
 # Get bdb command: default from code; use --binary for built executable
@@ -282,7 +304,8 @@ setup_test_environment() {
         log_error "Failed to initialize database"
         exit 1
     fi
-    
+    ts_verify "$TEST_DB_DIR"
+
     # Generate a test PNG file
     local test_file="$TEST_FILES_DIR/test.png"
     log_info "Generating test asset..."
@@ -313,6 +336,7 @@ setup_test_environment() {
     fi
     
     log_info "Test asset added with ID: $ASSET_ID"
+    ts_verify "$TEST_DB_DIR"
     
     log_success "Test environment setup complete"
 }
@@ -339,6 +363,7 @@ create_replicas() {
             log_error "Failed to create replica $i"
             exit 1
         fi
+        ts_verify "$replica_dir"
     done
     
     log_success "Created $NUM_REPLICAS databases (1 original + $((NUM_REPLICAS-1)) replicas)"
@@ -604,7 +629,14 @@ main() {
     
     # Clear background_pids since all processes completed successfully
     background_pids=()
-    
+
+    # Verify every database the Zig CLI edited and synced with the TypeScript CLI, now the processes
+    # that were writing to them have finished
+    local worked_db
+    for worked_db in "${DB_PATHS[@]}"; do
+        ts_verify "$worked_db"
+    done
+
     # Final round of syncing
     if ! final_sync_round; then
         log_error "Final sync round failed"
@@ -617,12 +649,14 @@ main() {
         exit 1
     fi
 
-    # Verify a replica the Zig CLI created with the TypeScript CLI
-    if ! $(get_cli_command) verify --db "${DB_PATHS[1]}" --yes; then
-        log_error "The TypeScript CLI does not verify the replica"
-        exit 1
-    fi
-    
+    # Verify every database the Zig CLI synced with the TypeScript CLI
+    local synced_db
+    for synced_db in "${DB_PATHS[@]}"; do
+        ts_verify "$synced_db"
+    done
+
+    echo "TypeScript verify: $(count_ts_verify_calls "$TS_VERIFY_TIMING_LOG") calls, $(format_milliseconds_as_seconds "$(sum_ts_verify_milliseconds "$TS_VERIFY_TIMING_LOG")")"
+
     log_success "Sync smoke test PASSED"
     log_info "Test data preserved in: $TEST_DB_DIR, $TEST_FILES_DIR, $PROCESS_OUTPUT_DIR"
     log_info "Process logs: $PROCESS_OUTPUT_DIR/process_*.log"

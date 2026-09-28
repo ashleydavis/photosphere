@@ -27,6 +27,9 @@ source "$_WRITE_LOCK_SCRIPT_DIR/../../scripts/lib/test-lib.sh"
 # something above it gave up, which in CI is the job timeout, and a job killed that way has its log
 # discarded rather than written.
 source "$_WRITE_LOCK_SCRIPT_DIR/../../scripts/lib/test-timeout.sh"
+
+# Timing for the TypeScript verify calls ts_verify makes on every database the Zig CLI writes.
+source "$_WRITE_LOCK_SCRIPT_DIR/smoke-tests-zig/lib/ts-verify-timing.sh"
 start_suite_watchdog "write-lock-smoke-test"
 
 # Test configuration.
@@ -40,6 +43,9 @@ WRITE_LOCK_TEST_ROOT="$(photosphere_test_temp_dir "cli-write-lock-zig")"
 photosphere_export_test_temp "$WRITE_LOCK_TEST_ROOT"
 TEST_FILES_DIR="$WRITE_LOCK_TEST_ROOT/write-lock-files"
 PROCESS_OUTPUT_DIR="$WRITE_LOCK_TEST_ROOT/write-lock-outputs"
+
+# Where ts_verify records how long each TypeScript verify took.
+TS_VERIFY_TIMING_LOG="$WRITE_LOCK_TEST_ROOT/ts-verify-milliseconds.log"
 
 # Default: run from code; use --binary for built executable
 USE_BINARY=false
@@ -147,6 +153,22 @@ get_cli_command() {
     else
         echo "bun run start --"
     fi
+}
+
+# Runs the TypeScript CLI's psi verify on a database the Zig CLI has just created or modified, and
+# exits the suite unless it passes, so the reference implementation checks the integrity of every
+# database the Zig CLI writes. The time it takes is appended to TS_VERIFY_TIMING_LOG.
+# Usage: ts_verify <database>
+ts_verify() {
+    local database_dir="$1"
+    local verify_start
+    verify_start="$(current_milliseconds)"
+    log_info "Verifying $database_dir with the TypeScript CLI"
+    if ! $(get_cli_command) verify --db "$database_dir" --yes; then
+        log_error "The TypeScript CLI does not verify $database_dir"
+        exit 1
+    fi
+    record_ts_verify_milliseconds "$TS_VERIFY_TIMING_LOG" "$verify_start"
 }
 
 # Get the Zig CLI command: the Zig port of psi (apps/cli-zig), which runs the ported commands.
@@ -310,7 +332,8 @@ setup_test_environment() {
         log_error "Failed to initialize database"
         exit 1
     fi
-    
+    ts_verify "$TEST_DB_DIR"
+
     log_success "Test environment setup complete"
 }
 
@@ -718,12 +741,10 @@ main() {
         local exit_code=1
     fi
 
-    # Verify the database with the TypeScript CLI
-    if ! $(get_cli_command) verify --db "$TEST_DB_DIR" --yes; then
-        log_error "The TypeScript CLI does not verify the database"
-        exit_code=1
-    fi
-    
+    # Verify the database the concurrent Zig writers built with the TypeScript CLI
+    ts_verify "$TEST_DB_DIR"
+    echo "TypeScript verify: $(count_ts_verify_calls "$TS_VERIFY_TIMING_LOG") calls, $(format_milliseconds_as_seconds "$(sum_ts_verify_milliseconds "$TS_VERIFY_TIMING_LOG")")"
+
     
     if [ "$USE_CLOUD" = "true" ]; then
         log_info "Cloud database: $TEST_DB_DIR"
