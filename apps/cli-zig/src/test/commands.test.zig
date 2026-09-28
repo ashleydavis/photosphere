@@ -859,9 +859,26 @@ const upgrade_v5_report =
 ;
 
 //
-// What `psi upgrade` (apps/cli/src/cmd/upgrade.ts) writes to stderr upgrading <db>.
+// What `psi upgrade` (apps/cli/src/cmd/upgrade.ts) writes to stderr upgrading <db>. The backup command it suggests
+// is `xcopy` on Windows and `cp -r` everywhere else.
 //
-const upgrade_warnings =
+const upgrade_warnings = if (builtin.os.tag == .windows) upgrade_warnings_windows else upgrade_warnings_posix;
+
+//
+// The upgrade warnings on Windows, suggesting `xcopy` for the backup.
+//
+const upgrade_warnings_windows =
+    \\⚠️  IMPORTANT: Database upgrade will modify your database files.
+    \\    It is strongly recommended to backup your database before proceeding.
+    \\    You can backup your database by copying the entire directory:
+    \\    xcopy "<db>" "<db>-backup" /E /I
+    \\
+;
+
+//
+// The upgrade warnings on Linux and macOS, suggesting `cp -r` for the backup.
+//
+const upgrade_warnings_posix =
     \\⚠️  IMPORTANT: Database upgrade will modify your database files.
     \\    It is strongly recommended to backup your database before proceeding.
     \\    You can backup your database by copying the entire directory:
