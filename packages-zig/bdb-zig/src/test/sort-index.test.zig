@@ -1979,3 +1979,167 @@ test "a count that goes below zero is refused at commit like writeUInt32 refuses
     try std.testing.expectError(error.Thrown, index.commit(io));
     try std.testing.expectEqualStrings("The value of \"value\" is out of range. It must be >= 0 and <= 4294967295. Received -1", errors.lastErrorMessage());
 }
+
+
+//
+// The number of records the multi-page tests index: more than a leaf holds (PAGE_SIZE times the split threshold), so
+// the index splits into two pages.
+//
+const MULTI_PAGE_RECORD_COUNT = 1600;
+
+//
+// Builds MULTI_PAGE_RECORD_COUNT records with the scores 1 to MULTI_PAGE_RECORD_COUNT, or all with the score 5 when
+// sameScore is true.
+//
+fn multiPageRecords(allocator: std.mem.Allocator, sameScore: bool) ![]IInternalRecord {
+    const records = try allocator.alloc(IInternalRecord, MULTI_PAGE_RECORD_COUNT);
+    for (records, 0..) |*record, recordIndex| {
+        const number: u32 = @intCast(recordIndex + 1);
+        const score: f64 = if (sameScore) 5 else @floatFromInt(number);
+        record.* = try makeTestRecord(allocator, number, "Record", score, "A");
+    }
+    return records;
+}
+
+//
+// Builds a sort index on score over the records, which must come out as two pages.
+//
+fn multiPageIndex(fixture: *Fixture, records: []const IInternalRecord) !*SortIndex {
+    const collection = try fixture.collection("test_collection", records);
+    const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try index.build(io, collection);
+    try std.testing.expectEqual(@as(u32, 2), (try index.getPage(io, null)).totalPages);
+    return index;
+}
+
+//
+// The records of the first and the second page of a two page index.
+//
+const ITwoPages = struct {
+    // The records of the first page.
+    first: []const ISortIndexRecord,
+
+    // The records of the second page.
+    second: []const ISortIndexRecord,
+};
+
+//
+// Reads the two pages of a two page index.
+//
+fn twoPages(index: *SortIndex) !ITwoPages {
+    const first = try index.getPage(io, "");
+    const second = try index.getPage(io, first.nextPageId.?);
+    try std.testing.expect(second.nextPageId == null);
+    return .{ .first = first.records, .second = second.records };
+}
+
+//
+// Builds the internal record a sort index record was made from (the fields makeTestRecord gives, with its id).
+//
+fn internalRecordOf(allocator: std.mem.Allocator, record: ISortIndexRecord, score: f64) !IInternalRecord {
+    var internal = try makeTestRecord(allocator, 0, "Record", score, "A");
+    internal._id = record.get("_id").?.string;
+    return internal;
+}
+
+test "deleteRecord removes a page whose records are all deleted, from either end of the page chain" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const records = try multiPageRecords(allocator, false);
+
+    // The last page.
+    var fixture = try Fixture.init(allocator);
+    const index = try multiPageIndex(&fixture, records);
+    const pages = try twoPages(index);
+    for (pages.second) |record| {
+        try index.deleteRecord(io, record.get("_id").?.string, try internalRecordOf(allocator, record, record.get("score").?.number));
+    }
+    const firstPage = try index.getPage(io, null);
+    try std.testing.expectEqual(@as(u32, 1), firstPage.totalPages);
+    try std.testing.expectEqual(@as(u32, @intCast(pages.first.len)), firstPage.totalRecords);
+    try std.testing.expect(firstPage.nextPageId == null);
+    try std.testing.expectEqual(pages.first.len, (try getAllRecords(allocator, index)).len);
+
+    // The first page, of a second index over the same records. (Known issue, in the TypeScript too: the removed
+    // leaf stays a child of its parent, so the listing from the first page, which starts at that child, comes back
+    // empty. The page counts and the second page itself are right.)
+    var secondFixture = try Fixture.init(allocator);
+    const secondIndex = try multiPageIndex(&secondFixture, records);
+    const secondPages = try twoPages(secondIndex);
+    const secondPageId = (try secondIndex.getPage(io, "")).nextPageId.?;
+    for (secondPages.first) |record| {
+        try secondIndex.deleteRecord(io, record.get("_id").?.string, try internalRecordOf(allocator, record, record.get("score").?.number));
+    }
+    const secondPage = try secondIndex.getPage(io, secondPageId);
+    try std.testing.expectEqual(@as(u32, 1), secondPage.totalPages);
+    try std.testing.expectEqual(@as(u32, @intCast(secondPages.second.len)), secondPage.totalRecords);
+    try std.testing.expectEqual(secondPages.second.len, secondPage.records.len);
+    try std.testing.expect(secondPage.previousPageId == null or secondPage.previousPageId.?.len == 0);
+}
+
+test "updateRecord removes a page whose records all move to another value" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const index = try multiPageIndex(&fixture, try multiPageRecords(allocator, false));
+    const pages = try twoPages(index);
+
+    // Every record of the last page moves to the value 0, at the start of the first page.
+    for (pages.second) |record| {
+        try index.updateRecord(io, try internalRecordOf(allocator, record, 0), try internalRecordOf(allocator, record, record.get("score").?.number));
+    }
+    const all = try getAllRecords(allocator, index);
+    try std.testing.expectEqual(@as(usize, MULTI_PAGE_RECORD_COUNT), all.len);
+    try std.testing.expectEqual(@as(f64, 0), all[0].get("score").?.number);
+    try std.testing.expectEqual(pages.first[pages.first.len - 1].get("score").?.number, all[all.len - 1].get("score").?.number);
+    try std.testing.expectEqual(pages.second.len, (try index.findByValue(io, .{ .number = 0 }, null)).len);
+}
+
+test "deleteRecord finds the records of a value that spans pages outside the leaf the value leads to" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const index = try multiPageIndex(&fixture, try multiPageRecords(allocator, true));
+    const pages = try twoPages(index);
+
+    // Every record has the score 5, so the value leads to the first leaf and the records of the second leaf are
+    // found by walking the page chain. Deleting them all removes the second page.
+    for (pages.second) |record| {
+        try index.deleteRecord(io, record.get("_id").?.string, try internalRecordOf(allocator, record, 5));
+    }
+    const firstPage = try index.getPage(io, null);
+    try std.testing.expectEqual(@as(u32, 1), firstPage.totalPages);
+    try std.testing.expect(firstPage.nextPageId == null);
+    try std.testing.expectEqual(pages.first.len, (try getAllRecords(allocator, index)).len);
+}
+
+test "updateRecord finds the records of a value that spans pages outside the leaf the value leads to" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const index = try multiPageIndex(&fixture, try multiPageRecords(allocator, true));
+    const secondPageId = (try index.getPage(io, "")).nextPageId.?;
+    const pages = try twoPages(index);
+
+    // Every record of the second page but the last moves to the value 4, which leaves the page in place.
+    const last = pages.second[pages.second.len - 1];
+    for (pages.second[0 .. pages.second.len - 1]) |record| {
+        try index.updateRecord(io, try internalRecordOf(allocator, record, 4), try internalRecordOf(allocator, record, 5));
+    }
+    try std.testing.expectEqual(@as(u32, MULTI_PAGE_RECORD_COUNT), (try index.getPage(io, null)).totalRecords);
+
+    // Moving the last one too empties the second page, which is removed.
+    try index.updateRecord(io, try internalRecordOf(allocator, last, 4), try internalRecordOf(allocator, last, 5));
+    const all = try getAllRecords(allocator, index);
+    try std.testing.expectEqual(@as(usize, MULTI_PAGE_RECORD_COUNT), all.len);
+    try std.testing.expectEqual(@as(f64, 4), all[0].get("score").?.number);
+
+    // The emptied page is gone (the first page may have split under the records that moved into it).
+    try std.testing.expectEqual(@as(usize, 0), (try index.getPage(io, secondPageId)).records.len);
+    try std.testing.expectEqual(pages.second.len, (try index.findByValue(io, .{ .number = 4 }, null)).len);
+    try std.testing.expectEqual(pages.first.len, (try index.findByValue(io, .{ .number = 5 }, null)).len);
+}

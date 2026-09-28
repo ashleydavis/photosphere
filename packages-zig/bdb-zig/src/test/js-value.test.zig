@@ -242,3 +242,77 @@ test "stringToNumber trims the Unicode space separators like Number(string)" {
     try std.testing.expectEqual(@as(f64, 5), js_value.stringToNumber("\u{1680}5"));
     try std.testing.expect(std.math.isNan(js_value.stringToNumber("\u{200B}5")));
 }
+
+test "stringToNumber trims every JavaScript whitespace character" {
+    try std.testing.expectEqual(@as(f64, 12), js_value.stringToNumber(" \u{00A0} 12 \u{FEFF}"));
+    try std.testing.expectEqual(@as(f64, 7), js_value.stringToNumber("\u{2028} 7 \u{2029}"));
+    try std.testing.expectEqual(@as(f64, 0), js_value.stringToNumber("\u{FEFF}"));
+}
+
+test "toString formats every kind of value like String()" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expectEqualStrings("-7", try js_value.toString(allocator, .{ .int32 = -7 }));
+    try std.testing.expectEqualStrings("9007199254740993", try js_value.toString(allocator, .{ .int64 = 9007199254740993 }));
+    try std.testing.expectEqualStrings("Thu Jan 01 1970 00:00:00 GMT+0000 (Coordinated Universal Time)", try js_value.toString(allocator, .{ .date = 0 }));
+
+    // A UUID is its dashed hex string, any other Binary its bytes as UTF-8, and an ObjectId its hex string.
+    const uuidBytes = [_]u8{ 0x12, 0x3e, 0x45, 0x67, 0xe8, 0x9b, 0x12, 0xd3, 0xa4, 0x56, 0x42, 0x66, 0x14, 0x17, 0x40, 0x00 };
+    try std.testing.expectEqualStrings("123e4567-e89b-12d3-a456-426614174000", try js_value.toString(allocator, .{ .binary = .{ .subType = 4, .data = &uuidBytes } }));
+    try std.testing.expectEqualStrings("hi", try js_value.toString(allocator, .{ .binary = .{ .subType = 0, .data = "hi" } }));
+    const objectId = [_]u8{ 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67 };
+    try std.testing.expectEqualStrings("0123456789abcdef01234567", try js_value.toString(allocator, .{ .objectId = objectId }));
+}
+
+test "toNumber converts every kind of value like Number()" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expectEqual(@as(f64, 3), try js_value.toNumber(allocator, .{ .int32 = 3 }));
+    try std.testing.expectEqual(@as(f64, 42), try js_value.toNumber(allocator, .{ .string = " 42 " }));
+    try std.testing.expectEqual(@as(f64, 1), try js_value.toNumber(allocator, .{ .boolean = true }));
+    try std.testing.expectEqual(@as(f64, 0), try js_value.toNumber(allocator, .{ .boolean = false }));
+    try std.testing.expectEqual(@as(f64, 0), try js_value.toNumber(allocator, .null));
+    try std.testing.expect(std.math.isNan(try js_value.toNumber(allocator, .undefined)));
+    try std.testing.expectEqual(@as(f64, 5), try js_value.toNumber(allocator, .{ .date = 5 }));
+    try std.testing.expect(std.math.isNan(try js_value.toNumber(allocator, .{ .date = std.math.maxInt(i64) })));
+    try std.testing.expect(std.math.isNan(try js_value.toNumber(allocator, .{ .document = .empty })));
+    var elements = [_]BsonValue{.{ .number = 8 }};
+    try std.testing.expectEqual(@as(f64, 8), try js_value.toNumber(allocator, .{ .array = &elements }));
+}
+
+test "compareUtf16 reads invalid UTF-8 as replacement characters" {
+    // A byte that cannot start a sequence, a truncated sequence and an overlong encoding each read as U+FFFD.
+    try std.testing.expectEqual(@as(i32, 0), js_value.compareUtf16("\xff", "\u{FFFD}"));
+    try std.testing.expectEqual(@as(i32, 0), js_value.compareUtf16("\xe2\x82", "\u{FFFD}\u{FFFD}"));
+    try std.testing.expectEqual(@as(i32, 0), js_value.compareUtf16("\xc0\x80", "\u{FFFD}\u{FFFD}"));
+}
+
+test "jsonStringifyIndented writes every kind of value like JSON.stringify(value, null, 2)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const objectId = [_]u8{ 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67 };
+    const uuidBytes = [_]u8{ 0x12, 0x3e, 0x45, 0x67, 0xe8, 0x9b, 0x12, 0xd3, 0xa4, 0x56, 0x42, 0x66, 0x14, 0x17, 0x40, 0x00 };
+    var elements = [_]BsonValue{ .{ .number = std.math.inf(f64) }, .{ .boolean = false }, .null };
+    const inner = try BsonDocument.fromFields(allocator, &.{.{ .key = "x", .value = .undefined }});
+    const document = try BsonDocument.fromFields(allocator, &.{
+        .{ .key = "list", .value = .{ .array = &elements } },
+        .{ .key = "skipped", .value = .undefined },
+        .{ .key = "empty", .value = .{ .document = inner } },
+        .{ .key = "invalid", .value = .{ .date = std.math.maxInt(i64) } },
+        .{ .key = "binary", .value = .{ .binary = .{ .subType = 0, .data = "hi" } } },
+        .{ .key = "uuid", .value = .{ .binary = .{ .subType = 4, .data = &uuidBytes } } },
+        .{ .key = "id", .value = .{ .objectId = objectId } },
+        .{ .key = "long", .value = .{ .int64 = -2 } },
+        .{ .key = "int", .value = .{ .int32 = 3 } },
+        .{ .key = "double", .value = .{ .double = 2.5 } },
+    });
+    try std.testing.expectEqualStrings(
+        "{\n  \"list\": [\n    null,\n    false,\n    null\n  ],\n  \"empty\": {},\n  \"invalid\": null,\n  \"binary\": \"aGk=\",\n  \"uuid\": \"123e4567-e89b-12d3-a456-426614174000\",\n  \"id\": \"0123456789abcdef01234567\",\n  \"long\": {\n    \"low\": -2,\n    \"high\": -1,\n    \"unsigned\": false\n  },\n  \"int\": 3,\n  \"double\": 2.5\n}",
+        try js_value.jsonStringifyIndented(allocator, .{ .document = document }),
+    );
+    var emptyElements = [_]BsonValue{};
+    try std.testing.expectEqualStrings("[]", try js_value.jsonStringifyIndented(allocator, .{ .array = &emptyElements }));
+}

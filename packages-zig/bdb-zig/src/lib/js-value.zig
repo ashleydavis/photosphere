@@ -569,9 +569,8 @@ fn writeJsonIndented(allocator: std.mem.Allocator, writer: *std.Io.Writer, rawVa
             }
             try writer.writeAll("}");
         },
-        else => {
-            try writer.writeAll("null");
-        },
+        // applyToJson turned every other kind of value into one of those above.
+        else => unreachable,
     }
     return true;
 }

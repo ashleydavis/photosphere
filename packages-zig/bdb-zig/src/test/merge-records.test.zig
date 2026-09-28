@@ -554,3 +554,50 @@ test "an edit that beat the record keeps its stamp through the merge, so it surv
 
     try std.testing.expect(get(get(fieldsOf(result.metadata), "description"), "timestamp").eql(numberValue(HOST_RECORD_TIMESTAMP + 1)));
 }
+
+test "treats null metadata timestamps and fields as missing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const record1 = try record(allocator, "id", &.{property("name", stringValue("one"))}, &.{ property("timestamp", .null), property("fields", .null) });
+    const record2 = try record(allocator, "id", &.{property("name", stringValue("two"))}, &.{ property("timestamp", numberValue(5)), property("fields", .undefined) });
+    const merged = try mergeRecords(allocator, record1, record2);
+    try std.testing.expectEqualStrings("two", merged.fields.get("name").?.string);
+}
+
+//
+// Metadata mergeRecords cannot read, and the message it throws for it.
+//
+const IUnportedMetadata = struct {
+    // The metadata of the first record.
+    metadata: []const bson.BsonField,
+
+    // The message thrown.
+    message: []const u8,
+};
+
+test "throws for metadata values that are not ported" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const cases = [_]IUnportedMetadata{
+        .{ .metadata = &.{property("timestamp", stringValue("5"))}, .message = "A metadata timestamp that is a string value is not ported" },
+        .{ .metadata = &.{ property("timestamp", numberValue(5)), property("fields", numberValue(1)) }, .message = "Metadata that is a number value is not ported" },
+    };
+    for (cases) |case| {
+        errdefer std.debug.print("case: {s}\n", .{case.message});
+        const record1 = try record(allocator, "id", &.{property("name", stringValue("one"))}, case.metadata);
+        const record2 = try record(allocator, "id", &.{property("name", stringValue("two"))}, &.{property("timestamp", numberValue(1))});
+        try std.testing.expectError(error.Thrown, mergeRecords(allocator, record1, record2));
+        try std.testing.expectEqualStrings(case.message, utils.errors.lastErrorMessage());
+    }
+}
+
+test "cleanupMetadata throws for the missing metadata of a field, which is not ported" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const metadata = try documentOf(allocator, &.{ property("timestamp", numberValue(5)), property("fields", try objectValue(allocator, &.{property("name", .null)})) });
+    try std.testing.expectError(error.Thrown, bdb.merge_records.cleanupMetadata(allocator, metadata, 0));
+    try std.testing.expectEqualStrings("Metadata of field name that is missing is not ported", utils.errors.lastErrorMessage());
+}
