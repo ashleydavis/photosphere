@@ -1831,6 +1831,20 @@ jobs:
         shell: bash
         run: ./sync-smoke-test-zig.sh
 
+      - name: Run the Zig CLI hash cache smoke tests
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        shell: bash
+        run: ./hash-cache-smoke-test-zig.sh
+
+      # Linux only, like the TypeScript lan-share-smoke-test job it mirrors.
+      - name: Run the Zig CLI LAN share smoke tests
+        if: runner.os == 'Linux'
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        shell: bash
+        run: ./smoke-tests-lan-share-zig.sh
+
       - name: Measure the Zig build cache
         id: zig-build-cache-size
         if: always()

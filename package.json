@@ -50,6 +50,8 @@
     "test:cli:encrypted:zig": "cd ./apps/cli/ && bash ./smoke-tests-encrypted-zig.sh && cd ../.. && what-changed baseline capture test:cli:encrypted:zig",
     "test:cli:sync:zig": "cd ./apps/cli/ && bash ./sync-smoke-test-zig.sh && cd ../.. && what-changed baseline capture test:cli:sync:zig",
     "test:cli:write-lock:zig": "cd ./apps/cli/ && bash ./write-lock-smoke-test-zig.sh && cd ../.. && what-changed baseline capture test:cli:write-lock:zig",
+    "test:cli:lan-share:zig": "cd ./apps/cli/ && bash ./smoke-tests-lan-share-zig.sh && cd ../.. && what-changed baseline capture test:cli:lan-share:zig",
+    "test:cli:hash-cache:zig": "cd ./apps/cli/ && bash ./hash-cache-smoke-test-zig.sh && cd ../.. && what-changed baseline capture test:cli:hash-cache:zig",
     "test:cli:hash-cache": "cd ./apps/cli/ && bash ./hash-cache-smoke-test.sh && cd ../.. && what-changed baseline capture test:cli:hash-cache",
     "tch": "bun run test:cli:hash-cache",
     "test:cli:sync": "cd ./apps/cli/ && bash ./sync-smoke-test.sh && cd ../.. && what-changed baseline capture test:cli:sync",

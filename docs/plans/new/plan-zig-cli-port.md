@@ -128,10 +128,10 @@ Each TypeScript suite gets a Zig counterpart covering every test, ticked off as 
 
 - [x] `apps/cli/smoke-tests.sh` (tests 01 to 89)
 - [x] `apps/cli/smoke-tests-encrypted.sh`
-- [ ] `apps/cli/smoke-tests-lan-share.sh`
+- [x] `apps/cli/smoke-tests-lan-share.sh`
 - [x] `apps/cli/sync-smoke-test.sh`
 - [x] `apps/cli/write-lock-smoke-test.sh`
-- [ ] `apps/cli/hash-cache-smoke-test.sh`
+- [x] `apps/cli/hash-cache-smoke-test.sh`
 
 ## Final audit (starts automatically when the main work is complete)
 
