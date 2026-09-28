@@ -399,13 +399,12 @@ pub const DecryptionStream = struct {
 
     //
     // Flush: pushes buffered bytes of data that never started decryption, or the final decrypted block.
+    // (TypeScript first pushes the header bytes of data it passed through; that cannot happen, because passing
+    // data through always empties the header buffer, so the Zig leaves it out.)
     //
     fn flush(stream: *TransformStream) anyerror!void {
         const self: *DecryptionStream = @alignCast(@fieldParentPtr("transform", stream));
-        if (self.passThrough and self.headerBytesReceived > 0) {
-            try stream.push(self.headerBuffer[0..self.headerBytesReceived]);
-        }
-        else if (self.decipher != null) {
+        if (self.decipher != null) {
             try self.decipher.?.finalInto(stream.allocator, &stream.pending);
         }
         else if (self.headerBytesReceived > 0) {

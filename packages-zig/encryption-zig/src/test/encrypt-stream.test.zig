@@ -313,3 +313,19 @@ test "a wrong key makes the decryption stream fail with the Node error" {
     const isModulusError = std.mem.eql(u8, message, "error:02000084:rsa routines::data too large for modulus");
     try std.testing.expect(isOaepError or isModulusError);
 }
+
+test "a decryption stream that failed keeps failing when read again" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const keys = try loadTestKeys(allocator);
+    const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, "secret");
+
+    // No key for the header's hash and no default key: the stream fails.
+    var emptyMap: IPrivateKeyMap = .empty;
+    var input = std.Io.Reader.fixed(encrypted);
+    const decryptionStream = try encrypt_stream.createDecryptionStream(allocator, &emptyMap, &input);
+    try std.testing.expectError(error.ReadFailed, helpers.readAll(allocator, decryptionStream.reader()));
+    try std.testing.expectError(error.ReadFailed, helpers.readAll(allocator, decryptionStream.reader()));
+    try std.testing.expectEqual(error.Thrown, decryptionStream.transform.err.?);
+}
