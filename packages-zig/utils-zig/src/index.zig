@@ -16,3 +16,4 @@ pub const swallow_error = @import("lib/swallow-error.zig");
 pub const retry_or_log = @import("lib/retry-or-log.zig");
 pub const batch_generator = @import("lib/batch-generator.zig");
 pub const standard_streams = @import("lib/standard-streams.zig");
+pub const js_string = @import("lib/js-string.zig");

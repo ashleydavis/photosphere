@@ -512,3 +512,22 @@ test "parseISOString reads what toISOString writes and rejects anything else" {
     try std.testing.expect(parseISOString("2026-13-25T01:02:03.456Z") == null);
     try std.testing.expect(parseISOString("2026-09-25 01:02:03.456Z") == null);
 }
+
+//
+// TypeScript reads the lock with `JSON.parse(lockContent.trim())`, and JavaScript's trim removes a byte order mark
+// and the Unicode spaces as well as ASCII whitespace, so such a lock is read and held rather than broken as corrupt.
+//
+test "a lock file surrounded by Unicode whitespace is read and held, not broken" {
+    var fixture: Fixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const allocator = fixture.arena.allocator();
+    const lockFilePath = try fixture.path("bom.lock");
+    const timestamp = std.Io.Clock.real.now(std.testing.io).toMilliseconds();
+    try helpers.writeFile(std.testing.io, lockFilePath, try std.fmt.allocPrint(allocator, "\u{FEFF}{{\"owner\":\"first-owner\",\"acquiredAt\":\"2020-01-01T00:00:00.000Z\",\"timestamp\":{d}}}\u{3000}", .{timestamp}));
+
+    try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "second-owner"));
+
+    const lockInfo = try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath);
+    try std.testing.expectEqualStrings("first-owner", lockInfo.?.owner);
+}

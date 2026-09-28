@@ -248,7 +248,8 @@ pub const DirectoryWalker = struct {
                 continue;
             }
 
-            if (frame.next != null) {
+            // TypeScript: `while (next)`, so an empty continuation token ends the listing like a missing one.
+            if (frame.next != null and frame.next.?.len > 0) {
                 // The next batch of this listing.
                 frame.fetched = false;
                 continue;

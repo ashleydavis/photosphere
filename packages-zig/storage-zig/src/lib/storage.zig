@@ -82,7 +82,7 @@ pub const LockFileContent = struct {
 // parse, fails with the error JSON.parse would raise.)
 //
 pub fn parseLockContent(allocator: std.mem.Allocator, lockContent: []const u8) !IWriteLockInfo {
-    const trimmed = std.mem.trim(u8, lockContent, " \t\r\n");
+    const trimmed = utils.js_string.trim(lockContent);
     const lockData = std.json.parseFromSliceLeaky(LockFileContent, allocator, trimmed, .{
         .allocate = .alloc_always,
         .ignore_unknown_fields = true,

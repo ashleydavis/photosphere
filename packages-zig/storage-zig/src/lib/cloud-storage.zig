@@ -121,6 +121,48 @@ fn lastPathPart(name: []const u8) []const u8 {
 }
 
 //
+// Decodes base64 like the runtime's `Buffer.from(text, "base64")`, which never fails: characters outside the
+// standard and URL-safe alphabets are skipped, decoding stops at the first "=", and a trailing group of two or three
+// characters gives one or two bytes (a lone trailing character gives none).
+// (No TypeScript counterpart: stands in for the Buffer of the JavaScript runtime.)
+//
+pub fn bufferFromBase64(allocator: std.mem.Allocator, text: []const u8) ![]u8 {
+    var decoded: std.ArrayList(u8) = .empty;
+    var group: u32 = 0;
+    var groupLength: u32 = 0;
+    for (text) |character| {
+        if (character == '=') {
+            break;
+        }
+        const value: u32 = switch (character) {
+            'A'...'Z' => character - 'A',
+            'a'...'z' => character - 'a' + 26,
+            '0'...'9' => character - '0' + 52,
+            '+', '-' => 62,
+            '/', '_' => 63,
+            else => continue,
+        };
+        group = (group << 6) | value;
+        groupLength += 1;
+        if (groupLength == 4) {
+            try decoded.append(allocator, @truncate(group >> 16));
+            try decoded.append(allocator, @truncate(group >> 8));
+            try decoded.append(allocator, @truncate(group));
+            group = 0;
+            groupLength = 0;
+        }
+    }
+    if (groupLength == 2) {
+        try decoded.append(allocator, @truncate(group >> 4));
+    }
+    else if (groupLength == 3) {
+        try decoded.append(allocator, @truncate(group >> 10));
+        try decoded.append(allocator, @truncate(group >> 2));
+    }
+    return decoded.toOwnedSlice(allocator);
+}
+
+//
 // AWS S3:
 // - https://docs.aws.amazon.com/sdkref/latest/guide/environment-variables.html
 // - https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/clients/client-s3/index.html
@@ -450,15 +492,7 @@ pub const CloudStorage = struct {
             return null;
         }
 
-        // (TypeScript: `Buffer.from(checksum, "base64")`, which stops at the first character that is not base64.)
-        const decoder = std.base64.standard.Decoder;
-        const decoded = try allocator.alloc(u8, decoder.calcSizeForSlice(checksum) catch {
-            return errors.throwError("Failed to get the stored hash of {s}: the checksum {s} is not base64", .{ filePath, checksum });
-        });
-        decoder.decode(decoded, checksum) catch {
-            return errors.throwError("Failed to get the stored hash of {s}: the checksum {s} is not base64", .{ filePath, checksum });
-        };
-        return decoded;
+        return try bufferFromBase64(allocator, checksum);
     }
 
     //
