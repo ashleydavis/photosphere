@@ -1,5 +1,6 @@
 const task_queue_zig = @import("task-queue-zig");
 const verify_worker = @import("verify.worker.zig");
+const check_worker = @import("check.worker.zig");
 const upload_asset_worker = @import("upload-asset.worker.zig");
 const replicate_database_worker = @import("replicate-database.worker.zig");
 const import_assets_worker = @import("import-assets.worker.zig");
@@ -10,6 +11,7 @@ const consolidate_database_worker = @import("consolidate-database.worker.zig");
 const create_auto_import_scanner = @import("create-auto-import-scanner.zig");
 const registerHandler = task_queue_zig.worker.registerHandler;
 const verifyFileHandler = verify_worker.verifyFileHandler;
+const checkFileHandler = check_worker.checkFileHandler;
 const uploadAssetHandler = upload_asset_worker.uploadAssetHandler;
 const replicateDatabaseHandler = replicate_database_worker.replicateDatabaseHandler;
 const importAssetsHandler = import_assets_worker.importAssetsHandler;
@@ -30,7 +32,8 @@ pub fn initTaskHandlers() !void {
     try cleanup_sources_worker.registerFolderMediaSourceBuilder();
     // Not ported: test-job (not used by psi add, psi replicate or psi verify).
     try registerHandler("verify-file", verifyFileHandler);
-    // Not ported: check-file, load-assets (not used by psi add, psi replicate or psi verify).
+    try registerHandler("check-file", checkFileHandler);
+    // Not ported: load-assets (not used by psi add, psi replicate or psi verify).
     try registerHandler("prefetch-database", prefetchDatabaseHandler);
     try registerHandler("upload-asset", uploadAssetHandler);
     // Not ported: sync-database (not used by psi add, psi replicate or psi verify).

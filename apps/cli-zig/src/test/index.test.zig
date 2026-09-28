@@ -182,7 +182,7 @@ test "commands that are not ported are unknown commands, and empty command lines
     try std.testing.expect(std.mem.startsWith(u8, help.stdout, "Usage: psi "));
 
     try expectCommanderError(allocator, &.{"news"}, "commander.unknownCommand", "error: unknown command 'news'\n");
-    try expectCommanderError(allocator, &.{ "check", "--db", "x" }, "commander.unknownCommand", "error: unknown command 'check'\n");
+    try expectCommanderError(allocator, &.{ "secrets", "--db", "x" }, "commander.unknownCommand", "error: unknown command 'secrets'\n");
     try expectCommanderError(allocator, &.{ "--db", "x", "replicate" }, "commander.unknownOption", "error: unknown option '--db'\n");
     try expectCommanderError(allocator, &.{ "help", "replicate" }, "commander.unknownCommand", "error: unknown command 'help'\n(Did you mean one of exp, rep?)\n");
     try expectCommanderError(allocator, &.{"replicate2"}, "commander.unknownCommand", "error: unknown command 'replicate2'\n(Did you mean replicate?)\n");
@@ -718,6 +718,40 @@ test "tools command lines parse like commander" {
     try expectCommanderError(allocator, &.{ "tools", "extra" }, "commander.excessArguments", "error: too many arguments for 'tools'. Expected 0 arguments but got 1.\n");
     try expectCommanderError(allocator, &.{ "tools", "--db", "d" }, "commander.unknownOption", "error: unknown option '--db'\n");
     try expectCommanderError(allocator, &.{ "tools", "--verbose" }, "commander.unknownOption", "error: unknown option '--verbose'\n");
+}
+
+test "check command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // The files are the required variadic <files...> argument (index.ts).
+    const plain = try parse(allocator, &.{ "check", "--db", "a", "x.jpg", "dir", "--yes" });
+    try std.testing.expect(plain.outcome == .check);
+    try std.testing.expectEqual(@as(usize, 2), plain.outcome.check.paths.len);
+    try std.testing.expectEqualStrings("x.jpg", plain.outcome.check.paths[0]);
+    try std.testing.expectEqualStrings("dir", plain.outcome.check.paths[1]);
+    try std.testing.expectEqualStrings("a", plain.outcome.check.options.base.db.?);
+    try std.testing.expectEqual(@as(?bool, true), plain.outcome.check.options.base.yes);
+    try std.testing.expectEqual(@as(?bool, false), plain.outcome.check.options.base.verbose);
+    try std.testing.expectEqual(@as(?bool, false), plain.outcome.check.options.base.tools);
+
+    // The alias and every option of the command.
+    const everything = try parse(allocator, &.{ "chk", "-k", "key1", "-v", "--tools", "--workers", "3", "--timeout", "1000", "--cwd", "/tmp", "x.jpg" });
+    try std.testing.expect(everything.outcome == .check);
+    try std.testing.expectEqual(@as(usize, 1), everything.outcome.check.paths.len);
+    try std.testing.expectEqual(@as(?[]const u8, null), everything.outcome.check.options.base.db);
+    try std.testing.expectEqualStrings("key1", everything.outcome.check.options.base.key.?);
+    try std.testing.expectEqual(@as(?bool, true), everything.outcome.check.options.base.verbose);
+    try std.testing.expectEqual(@as(?bool, true), everything.outcome.check.options.base.tools);
+    try std.testing.expectEqual(@as(?bool, false), everything.outcome.check.options.base.yes);
+    try std.testing.expectEqualStrings("3", everything.outcome.check.options.base.workers.?);
+    try std.testing.expectEqualStrings("1000", everything.outcome.check.options.base.timeout.?);
+    try std.testing.expectEqualStrings("/tmp", everything.outcome.check.options.base.cwd.?);
+
+    try expectCommanderError(allocator, &.{"check"}, "commander.missingArgument", "error: missing required argument 'files'\n");
+    try expectCommanderError(allocator, &.{ "check", "x.jpg", "--session-id", "s1" }, "commander.unknownOption", "error: unknown option '--session-id'\n");
+    try expectCommanderError(allocator, &.{ "check", "x.jpg", "--key" }, "commander.optionMissingArgument", "error: option '-k, --key <keyfile>' argument missing\n");
 }
 
 test "remove command lines parse like commander" {
