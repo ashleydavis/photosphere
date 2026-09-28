@@ -334,3 +334,180 @@ test "locationJson prints numbers as JSON.stringify does" {
     });
     try std.testing.expectEqualStrings("{\"lat\":91.5,\"lng\":1e-7}", text);
 }
+
+//
+// One tag of a hand-built EXIF IFD.
+//
+const IExifTag = struct {
+    // The tag number.
+    tag: u16,
+
+    // The TIFF type (2 ASCII, 3 SHORT, 4 LONG, 5 RATIONAL).
+    tiffType: u16,
+
+    // The number of values.
+    count: u32,
+
+    // The value bytes, little-endian (stored in the entry when they fit in four bytes).
+    value: []const u8,
+};
+
+//
+// Appends a little-endian integer.
+//
+fn appendLittle(allocator: std.mem.Allocator, output: *std.ArrayList(u8), comptime IntType: type, value: IntType) !void {
+    var bytes: [@sizeOf(IntType)]u8 = undefined;
+    std.mem.writeInt(IntType, &bytes, value, .little);
+    try output.appendSlice(allocator, &bytes);
+}
+
+//
+// Appends an IFD at the given offset of the TIFF data, its larger values right after it.
+//
+fn appendIfd(allocator: std.mem.Allocator, tiff: *std.ArrayList(u8), tags: []const IExifTag) !void {
+    const ifdOffset: u32 = @intCast(tiff.items.len);
+    var dataOffset: u32 = ifdOffset + 2 + 12 * @as(u32, @intCast(tags.len)) + 4;
+    var data: std.ArrayList(u8) = .empty;
+    try appendLittle(allocator, tiff, u16, @intCast(tags.len));
+    for (tags) |exifTag| {
+        try appendLittle(allocator, tiff, u16, exifTag.tag);
+        try appendLittle(allocator, tiff, u16, exifTag.tiffType);
+        try appendLittle(allocator, tiff, u32, exifTag.count);
+        if (exifTag.value.len <= 4) {
+            var inline_value = [4]u8{ 0, 0, 0, 0 };
+            @memcpy(inline_value[0..exifTag.value.len], exifTag.value);
+            try tiff.appendSlice(allocator, &inline_value);
+        }
+        else {
+            try appendLittle(allocator, tiff, u32, dataOffset);
+            try data.appendSlice(allocator, exifTag.value);
+            dataOffset += @intCast(exifTag.value.len);
+        }
+    }
+    try appendLittle(allocator, tiff, u32, 0);
+    try tiff.appendSlice(allocator, data.items);
+}
+
+//
+// Little-endian RATIONAL values: numerator and denominator pairs.
+//
+fn rationals(allocator: std.mem.Allocator, pairs: []const [2]u32) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    for (pairs) |pair| {
+        try appendLittle(allocator, &output, u32, pair[0]);
+        try appendLittle(allocator, &output, u32, pair[1]);
+    }
+    return output.items;
+}
+
+//
+// Writes test/multiple-files/test-1.jpeg (100x80, no EXIF of its own) with an APP1 EXIF segment of an Orientation and
+// a GPS IFD holding the given tags, and returns its path.
+//
+fn writeJpegWithExif(allocator: std.mem.Allocator, io: std.Io, dir: []const u8, orientation: u16, gpsTags: []const IExifTag) ![]const u8 {
+    var tiff: std.ArrayList(u8) = .empty;
+    try tiff.appendSlice(allocator, "II");
+    try appendLittle(allocator, &tiff, u16, 42);
+    try appendLittle(allocator, &tiff, u32, 8);
+    // IFD0 holds two tags whose values fit in their entries: 2 + 2 * 12 + 4 bytes, so the GPS IFD starts at 38.
+    var orientationValue: [2]u8 = undefined;
+    std.mem.writeInt(u16, &orientationValue, orientation, .little);
+    var gpsOffset: [4]u8 = undefined;
+    std.mem.writeInt(u32, &gpsOffset, 38, .little);
+    try appendIfd(allocator, &tiff, &.{
+        .{ .tag = 0x0112, .tiffType = 3, .count = 1, .value = &orientationValue },
+        .{ .tag = 0x8825, .tiffType = 4, .count = 1, .value = &gpsOffset },
+    });
+    try std.testing.expectEqual(@as(usize, 38), tiff.items.len);
+    try appendIfd(allocator, &tiff, gpsTags);
+
+    const original = try test_helpers.readFile(allocator, io, "../../test/multiple-files/test-1.jpeg");
+    var jpeg: std.ArrayList(u8) = .empty;
+    try jpeg.appendSlice(allocator, original[0..2]);
+    try jpeg.appendSlice(allocator, &.{ 0xFF, 0xE1 });
+    var segmentLength: [2]u8 = undefined;
+    std.mem.writeInt(u16, &segmentLength, @intCast(2 + 6 + tiff.items.len), .big);
+    try jpeg.appendSlice(allocator, &segmentLength);
+    try jpeg.appendSlice(allocator, "Exif\x00\x00");
+    try jpeg.appendSlice(allocator, tiff.items);
+    try jpeg.appendSlice(allocator, original[2..]);
+    const filePath = try std.fmt.allocPrint(allocator, "{s}/exif.jpg", .{dir});
+    try test_helpers.writeFile(io, filePath, jpeg.items);
+    return filePath;
+}
+
+test "getImageDetails turns a photo its Orientation says is on its side, and ignores GPS coordinates out of range" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    _ = try test_helpers.setupEnvironment(io);
+    const tempDir = try test_helpers.makeTempDir(allocator, io, "image-details-rotated");
+    defer test_helpers.removeTempDir(io, tempDir);
+    const filePath = try writeJpegWithExif(allocator, io, tempDir, 6, &.{
+        .{ .tag = 0x0001, .tiffType = 2, .count = 2, .value = "N\x00" },
+        .{ .tag = 0x0002, .tiffType = 5, .count = 3, .value = try rationals(allocator, &.{ .{ 95, 1 }, .{ 0, 1 }, .{ 0, 1 } }) },
+        .{ .tag = 0x0003, .tiffType = 2, .count = 2, .value = "E\x00" },
+        .{ .tag = 0x0004, .tiffType = 5, .count = 3, .value = try rationals(allocator, &.{ .{ 10, 1 }, .{ 30, 1 }, .{ 0, 1 } }) },
+    });
+
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(null, &stderr_capture.writer);
+    defer utils.console.setCapture(null, null);
+    var generator: CountingUuidGenerator = .{};
+    const details = try image.getImageDetails(allocator, io, filePath, tempDir, "image/jpeg", generator.uuidGenerator(), filePath);
+
+    // Orientation 6 turns the 100x80 photo a quarter turn, into 80x100, before the smaller versions are made from it:
+    // the short side is now the width, so each is minSize wide and Math.trunc(100 / 80 * minSize) high.
+    try std.testing.expectEqual(node_api.media_file_database.IResolution{ .width = 80, .height = 100 }, details.resolution);
+    try std.testing.expectEqualStrings("80 100", (try describeImage(allocator, try std.fs.path.join(allocator, &.{ tempDir, "temp_transform_output_generated-1.jpg" })))[0..6]);
+    try std.testing.expectEqualStrings("1000 1250 JPEG 95 exif:[]", try describeImage(allocator, details.displayPath.?));
+    try std.testing.expectEqualStrings("300 375 JPEG 90 exif:[]", try describeImage(allocator, details.thumbnailPath));
+    try std.testing.expectEqualStrings("40 50 JPEG 75 exif:[]", try describeImage(allocator, details.microPath));
+
+    try std.testing.expect(details.coordinates == null);
+    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), try std.fmt.allocPrint(allocator, "Ignoring out of range GPS coordinates: {{\"lat\":95,\"lng\":10.5}}, for asset {s}.", .{filePath})) != null);
+}
+
+test "getImageMetadata writes coordinates that are not numbers as null, and gives up on GPS tags that are not arrays" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    _ = try test_helpers.setupEnvironment(io);
+    const tempDir = try test_helpers.makeTempDir(allocator, io, "image-metadata-gps");
+    defer test_helpers.removeTempDir(io, tempDir);
+
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(null, &stderr_capture.writer);
+    defer utils.console.setCapture(null, null);
+
+    // 0/0 degrees is NaN, which JSON.stringify writes as null.
+    const nanPath = try writeJpegWithExif(allocator, io, tempDir, 1, &.{
+        .{ .tag = 0x0002, .tiffType = 5, .count = 3, .value = try rationals(allocator, &.{ .{ 0, 0 }, .{ 0, 1 }, .{ 0, 1 } }) },
+        .{ .tag = 0x0004, .tiffType = 5, .count = 3, .value = try rationals(allocator, &.{ .{ 1, 0 }, .{ 0, 1 }, .{ 0, 1 } }) },
+    });
+    const nanMetadata = try image.getImageMetadata(allocator, io, nanPath, "image/jpeg");
+    try std.testing.expect(nanMetadata.coordinates == null);
+    try std.testing.expect(nanMetadata.metadata != null);
+    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), try std.fmt.allocPrint(allocator, "Ignoring out of range GPS coordinates: {{\"lat\":null,\"lng\":null}}, for asset {s}.", .{nanPath})) != null);
+
+    // Numbers are written as JavaScript writes them, so a tiny one takes an exponent.
+    const tinyPath = try writeJpegWithExif(allocator, io, tempDir, 1, &.{
+        .{ .tag = 0x0002, .tiffType = 5, .count = 3, .value = try rationals(allocator, &.{ .{ 95, 1 }, .{ 0, 1 }, .{ 0, 1 } }) },
+        .{ .tag = 0x0004, .tiffType = 5, .count = 3, .value = try rationals(allocator, &.{ .{ 0, 1 }, .{ 0, 1 }, .{ 1, 1000 } }) },
+    });
+    _ = try image.getImageMetadata(allocator, io, tinyPath, "image/jpeg");
+    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Ignoring out of range GPS coordinates: {\"lat\":95,\"lng\":2.7777777777777776e-7}") != null);
+
+    // A SHORT latitude is a number and an ASCII longitude a string: destructuring [degrees, minutes, seconds] out of
+    // the number throws, so no metadata is read at all.
+    const scalarPath = try writeJpegWithExif(allocator, io, tempDir, 1, &.{
+        .{ .tag = 0x0002, .tiffType = 3, .count = 1, .value = "\x05\x00" },
+        .{ .tag = 0x0004, .tiffType = 2, .count = 3, .value = "12\x00" },
+    });
+    const scalarMetadata = try image.getImageMetadata(allocator, io, scalarPath, "image/jpeg");
+    try std.testing.expect(scalarMetadata.metadata == null);
+    try std.testing.expect(scalarMetadata.coordinates == null);
+    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), try std.fmt.allocPrint(allocator, "Failed to get exif data from {s}", .{scalarPath})) != null);
+}

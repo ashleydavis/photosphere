@@ -91,9 +91,11 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []con
         // Flips orientation depending on exif data.
         thumbnailPath = try transformImage(allocator, io, thumbnailPath, tempDir, transformation, uuidGenerator);
         if (transformation.changeOrientation orelse false) {
+            // (Zig: a copy is swapped, as assigning a literal to resolution would overwrite its width before the height reads it.)
+            const unswapped = resolution;
             resolution = .{
-                .width = resolution.height,
-                .height = resolution.width,
+                .width = unswapped.height,
+                .height = unswapped.width,
             };
         }
     }

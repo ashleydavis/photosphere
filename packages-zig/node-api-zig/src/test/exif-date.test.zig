@@ -112,6 +112,10 @@ test "parseExifDate refuses a value that is not a date" {
     try expectRefused("");
     try expectRefused("2025-03-27 20:22:57");
     try expectRefused("2025:03:27");
+
+    // The separators are in place but a field is not all digits.
+    try expectRefused("20a5:03:27 20:22:57");
+    try expectRefused("2025:03:27 20:2x:57");
 }
 
 test "parseExifDate refuses the all-zero date a camera writes when its clock was never set" {
