@@ -10,6 +10,15 @@ const IMerkleTree = merkle_tree.IMerkleTree;
 const IStorage = storage_zig.storage.IStorage;
 const IDatabaseState = api.database_state.IDatabaseState;
 const js_date = @import("serialization-zig").js_date;
+const media_file_database = @import("media-file-database.zig");
+const retry_operations = @import("retry-operations.zig");
+const retry = utils.retry.retry;
+const batchGenerator = utils.batch_generator.batchGenerator;
+const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
+const walk_directory = storage_zig.walk_directory;
+const IOrderedFile = walk_directory.IOrderedFile;
+const BsonDocument = @import("serialization-zig").bson.BsonDocument;
+const LARGE_FILE_TIMEOUT = api.constants.LARGE_FILE_TIMEOUT;
 
 //
 // Path for the files Merkle tree (v6). Legacy path was .db/tree.dat.
@@ -166,4 +175,204 @@ pub fn loadShardMerkleTree(
     return bdb.merkle_tree.loadShardMerkleTree(allocator, io, storage, ".db/bson", collectionName, shardId);
 }
 
-// Not ported: IBuildFilesTreeResult, buildFilesTree (psi debug, not psi replicate or psi verify).
+//
+// Result of buildFilesTree: the rebuilt tree and the number of files included.
+//
+pub const IBuildFilesTreeResult = struct {
+    // The rebuilt files tree.
+    merkleTree: IMerkleTree,
+
+    // The number of files in the rebuilt tree.
+    fileCount: u64,
+};
+
+//
+// Called by buildFilesTree with the number of files hashed so far (TypeScript: `(fileCount: number) => void`).
+//
+pub const IBuildFilesTreeProgress = struct {
+    // The state of the callback, passed to function.
+    context: ?*anyopaque,
+
+    // The callback function.
+    function: *const fn (context: ?*anyopaque, fileCount: u64) void,
+
+    //
+    // Invokes the callback.
+    //
+    pub fn call(self: IBuildFilesTreeProgress, fileCount: u64) void {
+        self.function(self.context, fileCount);
+    }
+};
+
+//
+// Matches /^\.db(\/|$)/: the .db directory and everything below it.
+//
+fn matchesDbDirectory(fullPath: []const u8) bool {
+    return std.mem.eql(u8, fullPath, ".db") or std.mem.startsWith(u8, fullPath, ".db/");
+}
+
+//
+// A file read and hashed by buildFilesTree (TypeScript: what the readAndHash inner function resolves to).
+//
+const IReadAndHashResult = struct {
+    // The file name in storage.
+    fileName: []const u8,
+
+    // The hash of the file's logical content.
+    hash: [32]u8,
+
+    // The length of the file.
+    length: u64,
+
+    // When the file was last modified (milliseconds since the Unix epoch).
+    lastModified: i64,
+};
+
+//
+// Gets a file's info and hashes it (TypeScript: the readAndHash inner function of buildFilesTree).
+//
+fn readAndHash(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, fileName: []const u8) !IReadAndHashResult {
+    var infoOperation: retry_operations.InfoOperation("() => storage.info(fileName)") = .{
+        .allocator = allocator,
+        .storage = storage,
+        .fileName = fileName,
+    };
+    const info = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
+        return errors.throwError("No info for file listed in storage: {s}", .{fileName});
+    };
+    var hashOperation: retry_operations.ComputeStorageHashOperation("async () => computeHash(await storage.readStream(fileName))") = .{
+        .allocator = allocator,
+        .storage = storage,
+        .fileName = fileName,
+    };
+    const hash = try retry(io, &hashOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, try std.fmt.allocPrint(allocator, "Failed to hash file {s}", .{fileName}));
+    return .{
+        .fileName = fileName,
+        .hash = hash,
+        .length = info.length,
+        .lastModified = info.lastModified,
+    };
+}
+
+//
+// Reads and hashes one file of a batch (TypeScript: the `({ fileName }) => readAndHash(fileName)` arrow function
+// that `batch.map` runs). Runs concurrently with the rest of its batch, with its own allocator because the caller's
+// is not shared between threads.
+//
+const ReadAndHashTask = struct {
+    // The storage holding the file.
+    storage: IStorage,
+
+    // The file to hash.
+    fileName: []const u8,
+
+    // The result, set when the task succeeded.
+    result: ?IReadAndHashResult = null,
+
+    // The error the task failed with, or null when it succeeded.
+    failure: ?anyerror = null,
+
+    // The message of the error the task failed with, captured on the thread that ran it.
+    errorRecord: errors.ErrorRecord = .{},
+
+    //
+    // Reads and hashes the file, recording the error when it fails.
+    //
+    fn run(self: *ReadAndHashTask, io: std.Io) void {
+        var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        defer arena.deinit();
+        if (readAndHash(arena.allocator(), io, self.storage, self.fileName)) |result| {
+            self.result = result;
+        }
+        else |err| {
+            self.failure = err;
+            errors.captureError(&self.errorRecord);
+        }
+    }
+};
+
+//
+// Builds the files merkle tree from storage: walks only paths that belong in the tree
+// (asset/, display/, thumb/; skips .db/). Hashes each file via storage (logical content
+// when encrypted), upserts into tree, saves once. Reads and hashes up to BATCH_SIZE
+// files in parallel per batch to overlap I/O.
+//
+pub fn buildFilesTree(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    storage: IStorage,
+    progressCallback: IBuildFilesTreeProgress,
+    uuidGenerator: IUuidGenerator,
+) !IBuildFilesTreeResult {
+    var loadOperation: retry_operations.LoadMerkleTreeOperation("() => loadMerkleTree(storage)") = .{
+        .allocator = allocator,
+        .storage = storage,
+    };
+    const existingTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null);
+    const newTreeId = if (existingTree) |existing| existing.id else try uuidGenerator.generate(allocator, io);
+    var merkleTree = merkle_tree.createTree(newTreeId);
+    var databaseMetadata: BsonDocument = undefined;
+    if (existingTree != null and existingTree.?.databaseMetadata != null) {
+        databaseMetadata = try media_file_database.copyDatabaseMetadata(allocator, existingTree.?.databaseMetadata.?);
+    }
+    else {
+        databaseMetadata = try media_file_database.emptyDatabaseMetadata(allocator);
+    }
+    var filesImported: u64 = 0;
+    var fileCount: u64 = 0;
+
+    const BATCH_SIZE = 100;
+    const ignorePatterns = [_]walk_directory.IgnorePattern{matchesDbDirectory};
+    var files = try walk_directory.walkDirectory(allocator, io, storage, "", &ignorePatterns);
+    var batches = batchGenerator(IOrderedFile, allocator, &files, BATCH_SIZE);
+    while (try batches.next()) |batch| {
+        const tasks = try allocator.alloc(ReadAndHashTask, batch.len);
+        for (batch, tasks) |file, *task| {
+            task.* = .{
+                .storage = storage,
+                .fileName = file.fileName,
+            };
+        }
+
+        var group: std.Io.Group = .init;
+        for (tasks) |*task| {
+            group.async(io, ReadAndHashTask.run, .{ task, io });
+        }
+        try group.await(io);
+
+        for (tasks) |*task| {
+            if (task.failure) |failure| {
+                errors.restoreError(&task.errorRecord);
+                return failure;
+            }
+        }
+
+        for (tasks) |*task| {
+            const result = task.result.?;
+            merkleTree = try merkle_tree.upsertItem(allocator, &merkleTree, .{
+                .name = result.fileName,
+                .hash = try allocator.dupe(u8, &result.hash),
+                .length = result.length,
+                .lastModified = result.lastModified,
+            });
+            fileCount += 1;
+            if (std.mem.startsWith(u8, result.fileName, "asset/")) {
+                filesImported += 1;
+            }
+            progressCallback.call(fileCount);
+        }
+    }
+
+    try databaseMetadata.put(allocator, "filesImported", .{ .number = @floatFromInt(filesImported) });
+    merkleTree.databaseMetadata = databaseMetadata;
+    var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(merkleTree, storage)") = .{
+        .allocator = allocator,
+        .merkleTree = &merkleTree,
+        .storage = storage,
+    };
+    try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
+    return .{
+        .merkleTree = merkleTree,
+        .fileCount = fileCount,
+    };
+}

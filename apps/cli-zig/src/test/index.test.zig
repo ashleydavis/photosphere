@@ -190,7 +190,6 @@ test "commands that are not ported fail by name, unknown commands are unknown, a
     try std.testing.expectEqualStrings("news", (try parse(allocator, &.{"news"})).outcome.notPorted);
     try std.testing.expectEqualStrings("bug", (try parse(allocator, &.{ "bug", "--no-browser" })).outcome.notPorted);
     try std.testing.expectEqualStrings("hash-cache show", (try parse(allocator, &.{ "hash-cache", "show" })).outcome.notPorted);
-    try std.testing.expectEqualStrings("debug merkle-tree", (try parse(allocator, &.{ "debug", "merkle-tree", "--records" })).outcome.notPorted);
     try std.testing.expectEqualStrings("dbs view", (try parse(allocator, &.{ "d", "v", "--name", "x" })).outcome.notPorted);
 
     // The secrets and dbs groups are not created with .exitOverride(), so they call process.exit themselves. They
@@ -962,4 +961,76 @@ test "the secrets group shows its help like commander" {
     try std.testing.expect(bare.outcome == .processExit);
     try std.testing.expectEqual(@as(u8, 1), bare.outcome.processExit);
     try std.testing.expectEqualStrings(expectedHelp, bare.stderr);
+}
+
+test "debug command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const merkleTree = try parse(allocator, &.{ "debug", "merkle-tree", "--db", "a", "--key", "k", "--yes", "--cwd", "c", "--verbose", "--records", "--all" });
+    try std.testing.expect(merkleTree.outcome == .debugMerkleTree);
+    try std.testing.expectEqualStrings("a", merkleTree.outcome.debugMerkleTree.base.db.?);
+    try std.testing.expectEqualStrings("k", merkleTree.outcome.debugMerkleTree.base.key.?);
+    try std.testing.expectEqualStrings("c", merkleTree.outcome.debugMerkleTree.base.cwd.?);
+    try std.testing.expectEqual(@as(?bool, true), merkleTree.outcome.debugMerkleTree.base.yes);
+    try std.testing.expectEqual(@as(?bool, true), merkleTree.outcome.debugMerkleTree.base.verbose);
+    try std.testing.expectEqual(@as(?bool, true), merkleTree.outcome.debugMerkleTree.records);
+    try std.testing.expectEqual(@as(?bool, true), merkleTree.outcome.debugMerkleTree.all);
+    try std.testing.expectEqual(@as(?bool, false), merkleTree.state.notificationsQuiet);
+
+    const merkleTreeDefaults = try parse(allocator, &.{ "debug", "merkle-tree" });
+    try std.testing.expect(merkleTreeDefaults.outcome.debugMerkleTree.base.db == null);
+    try std.testing.expectEqual(@as(?bool, false), merkleTreeDefaults.outcome.debugMerkleTree.records);
+    try std.testing.expectEqual(@as(?bool, false), merkleTreeDefaults.outcome.debugMerkleTree.all);
+    try std.testing.expectEqual(@as(?bool, false), merkleTreeDefaults.outcome.debugMerkleTree.base.yes);
+
+    const recordsOnly = try parse(allocator, &.{ "debug", "merkle-tree", "--records" });
+    try std.testing.expectEqual(@as(?bool, true), recordsOnly.outcome.debugMerkleTree.records);
+    try std.testing.expectEqual(@as(?bool, false), recordsOnly.outcome.debugMerkleTree.all);
+    const allOnly = try parse(allocator, &.{ "debug", "merkle-tree", "--all" });
+    try std.testing.expectEqual(@as(?bool, false), allOnly.outcome.debugMerkleTree.records);
+    try std.testing.expectEqual(@as(?bool, true), allOnly.outcome.debugMerkleTree.all);
+
+    const findCollisions = try parse(allocator, &.{ "debug", "find-collisions", "--db", "a", "-o", "out.json" });
+    try std.testing.expect(findCollisions.outcome == .debugFindCollisions);
+    try std.testing.expectEqualStrings("a", findCollisions.outcome.debugFindCollisions.base.db.?);
+    try std.testing.expectEqualStrings("out.json", findCollisions.outcome.debugFindCollisions.output.?);
+    try std.testing.expectEqualStrings("collisions.json", (try parse(allocator, &.{ "debug", "find-collisions" })).outcome.debugFindCollisions.output.?);
+
+    const findDuplicates = try parse(allocator, &.{ "debug", "find-duplicates", "--input", "in.json", "--output", "out.json", "-y" });
+    try std.testing.expect(findDuplicates.outcome == .debugFindDuplicates);
+    try std.testing.expectEqualStrings("in.json", findDuplicates.outcome.debugFindDuplicates.input.?);
+    try std.testing.expectEqualStrings("out.json", findDuplicates.outcome.debugFindDuplicates.output.?);
+    try std.testing.expectEqual(@as(?bool, true), findDuplicates.outcome.debugFindDuplicates.base.yes);
+    const findDuplicatesDefaults = try parse(allocator, &.{ "debug", "find-duplicates" });
+    try std.testing.expectEqualStrings("collisions.json", findDuplicatesDefaults.outcome.debugFindDuplicates.input.?);
+    try std.testing.expectEqualStrings("duplicates.json", findDuplicatesDefaults.outcome.debugFindDuplicates.output.?);
+
+    const removeDuplicates = try parse(allocator, &.{ "debug", "remove-duplicates", "-i", "in.json", "-k", "k" });
+    try std.testing.expect(removeDuplicates.outcome == .debugRemoveDuplicates);
+    try std.testing.expectEqualStrings("in.json", removeDuplicates.outcome.debugRemoveDuplicates.input.?);
+    try std.testing.expectEqualStrings("k", removeDuplicates.outcome.debugRemoveDuplicates.base.key.?);
+    try std.testing.expectEqualStrings("duplicates.json", (try parse(allocator, &.{ "debug", "remove-duplicates" })).outcome.debugRemoveDuplicates.input.?);
+
+    const buildSortIndex = try parse(allocator, &.{ "debug", "build-sort-index", "--db", "a", "-v" });
+    try std.testing.expect(buildSortIndex.outcome == .debugBuildSortIndex);
+    try std.testing.expectEqualStrings("a", buildSortIndex.outcome.debugBuildSortIndex.db.?);
+    try std.testing.expectEqual(@as(?bool, true), buildSortIndex.outcome.debugBuildSortIndex.verbose);
+
+    const buildFilesTree = try parse(allocator, &.{ "-q", "debug", "build-files-tree", "--db", "a" });
+    try std.testing.expect(buildFilesTree.outcome == .debugBuildFilesTree);
+    try std.testing.expectEqualStrings("a", buildFilesTree.outcome.debugBuildFilesTree.db.?);
+    try std.testing.expectEqual(@as(?bool, true), buildFilesTree.state.notificationsQuiet);
+
+    // With no subcommand the group shows its help, like commander does for a command with subcommands and no action.
+    const group = try parse(allocator, &.{"debug"});
+    try std.testing.expect(group.outcome == .failure);
+    try std.testing.expectEqualStrings("commander.help", group.outcome.failure.code);
+    try std.testing.expect(std.mem.startsWith(u8, group.stderr, "Usage: psi debug [options] [command]\n\nDebug commands for inspecting database internals.\n"));
+
+    try expectCommanderError(allocator, &.{ "debug", "nope" }, "commander.unknownCommand", "error: unknown command 'nope'\n");
+    try expectCommanderError(allocator, &.{ "debug", "merkle-tree", "extra" }, "commander.excessArguments", "error: too many arguments for 'merkle-tree'. Expected 0 arguments but got 1.\n");
+    try expectCommanderError(allocator, &.{ "debug", "find-collisions", "--output" }, "commander.optionMissingArgument", "error: option '-o, --output <path>' argument missing\n");
+    try expectCommanderError(allocator, &.{ "debug", "build-sort-index", "--records" }, "commander.unknownOption", "error: unknown option '--records'\n");
 }

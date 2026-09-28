@@ -194,3 +194,41 @@ test "path.dirname, path.basename and path.extname use the rules of the platform
     try std.testing.expectEqualStrings(if (isWindows) "b.jpg" else "a\\b.jpg", path.basename("a\\b.jpg"));
     try std.testing.expectEqualStrings(".jpg", path.extname("a/b.jpg"));
 }
+
+test "path.win32.isAbsolute matches Node" {
+    // Node's test/parallel/test-path-isabsolute.js.
+    try std.testing.expect(path.win32.isAbsolute("/"));
+    try std.testing.expect(path.win32.isAbsolute("//"));
+    try std.testing.expect(path.win32.isAbsolute("//server"));
+    try std.testing.expect(path.win32.isAbsolute("//server/file"));
+    try std.testing.expect(path.win32.isAbsolute("\\\\server\\file"));
+    try std.testing.expect(path.win32.isAbsolute("\\\\server"));
+    try std.testing.expect(path.win32.isAbsolute("\\\\"));
+    try std.testing.expect(!path.win32.isAbsolute("c"));
+    try std.testing.expect(!path.win32.isAbsolute("c:"));
+    try std.testing.expect(path.win32.isAbsolute("c:\\"));
+    try std.testing.expect(path.win32.isAbsolute("c:/"));
+    try std.testing.expect(path.win32.isAbsolute("c://"));
+    try std.testing.expect(path.win32.isAbsolute("C:/Users/"));
+    try std.testing.expect(path.win32.isAbsolute("C:\\Users\\"));
+    try std.testing.expect(!path.win32.isAbsolute("C:cwd/another"));
+    try std.testing.expect(!path.win32.isAbsolute("C:cwd\\another"));
+    try std.testing.expect(!path.win32.isAbsolute("directory/directory"));
+    try std.testing.expect(!path.win32.isAbsolute("directory\\directory"));
+    try std.testing.expect(!path.win32.isAbsolute(""));
+}
+
+test "path.posix.isAbsolute matches Node" {
+    // Node's test/parallel/test-path-isabsolute.js.
+    try std.testing.expect(path.posix.isAbsolute("/home/foo"));
+    try std.testing.expect(path.posix.isAbsolute("/home/foo/.."));
+    try std.testing.expect(!path.posix.isAbsolute("bar/"));
+    try std.testing.expect(!path.posix.isAbsolute("./baz"));
+    try std.testing.expect(!path.posix.isAbsolute(""));
+}
+
+test "path.isAbsolute uses the rules of the platform" {
+    const isWindows = @import("builtin").os.tag == .windows;
+    try std.testing.expect(path.isAbsolute("/a"));
+    try std.testing.expectEqual(isWindows, path.isAbsolute("c:\\a"));
+}

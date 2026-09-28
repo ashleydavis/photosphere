@@ -1,12 +1,12 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `add` (alias `a`), `check` (alias `chk`), `compare` (alias `cmp`), `consolidate`, `database-id`, `decrypt`,
-// `encrypt`, `examples`, `export` (alias `exp`), `find-orphans`, `hash`, `help`, `info` (alias `inf`), `init` (alias `i`),
-// `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `remove-orphans`, `repair`, `replicate` (alias `rep`),
-// `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`, `tools`, `upgrade`, `verify` (alias `ver`) and `version`
-// commands, the `secrets` command group (aliases `sec` and `s`)
-// and the `--version` option are ported. The other commands are defined like in index.ts, so that their help is
-// the help of the TypeScript CLI, but running one fails with an error saying that it is not ported yet.
+// Only the `add` (alias `a`), `check` (alias `chk`), `compare` (alias `cmp`), `consolidate`, `database-id`, `debug` (all
+// its subcommands), `decrypt`, `encrypt`, `examples`, `export` (alias `exp`), `find-orphans`, `hash`, `help`, `info` (alias
+// `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `remove-orphans`, `repair`,
+// `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`, `tools`, `upgrade`, `verify` (alias
+// `ver`) and `version` commands, the `secrets` command group (aliases `sec` and `s`) and the `--version` option are ported.
+// The other commands are defined like in index.ts, so that their help is the help of the TypeScript CLI, but running one
+// fails with an error saying that it is not ported yet.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -51,6 +51,7 @@ pub const sync = @import("src/cmd/sync.zig");
 pub const consolidate = @import("src/cmd/consolidate.zig");
 pub const encrypt = @import("src/cmd/encrypt.zig");
 pub const decrypt = @import("src/cmd/decrypt.zig");
+pub const debug = @import("src/cmd/debug.zig");
 pub const hash = @import("src/cmd/hash.zig");
 pub const tools_cmd = @import("src/cmd/tools.zig");
 pub const check = @import("src/cmd/check.zig");
@@ -106,6 +107,16 @@ const IEncryptCommandOptions = encrypt.IEncryptCommandOptions;
 const encryptCommand = encrypt.encryptCommand;
 const IDecryptCommandOptions = decrypt.IDecryptCommandOptions;
 const decryptCommand = decrypt.decryptCommand;
+const IDebugMerkleTreeCommandOptions = debug.IDebugMerkleTreeCommandOptions;
+const IDebugFindCollisionsCommandOptions = debug.IDebugFindCollisionsCommandOptions;
+const IDebugFindDuplicatesCommandOptions = debug.IDebugFindDuplicatesCommandOptions;
+const IDebugRemoveDuplicatesCommandOptions = debug.IDebugRemoveDuplicatesCommandOptions;
+const debugMerkleTreeCommand = debug.debugMerkleTreeCommand;
+const debugFindCollisionsCommand = debug.debugFindCollisionsCommand;
+const debugFindDuplicatesCommand = debug.debugFindDuplicatesCommand;
+const debugRemoveDuplicatesCommand = debug.debugRemoveDuplicatesCommand;
+const debugBuildSortIndexCommand = debug.debugBuildSortIndexCommand;
+const debugBuildFilesTreeCommand = debug.debugBuildFilesTreeCommand;
 const IHashCommandOptions = hash.IHashCommandOptions;
 const hashCommand = hash.hashCommand;
 const IToolsCommandOptions = tools_cmd.IToolsCommandOptions;
@@ -384,6 +395,24 @@ pub const ParseOutcome = union(enum) {
 
     // Run the decrypt command with these options.
     decrypt: IDecryptCommandOptions,
+
+    // Run the debug merkle-tree command with these options.
+    debugMerkleTree: IDebugMerkleTreeCommandOptions,
+
+    // Run the debug find-collisions command with these options.
+    debugFindCollisions: IDebugFindCollisionsCommandOptions,
+
+    // Run the debug find-duplicates command with these options.
+    debugFindDuplicates: IDebugFindDuplicatesCommandOptions,
+
+    // Run the debug remove-duplicates command with these options.
+    debugRemoveDuplicates: IDebugRemoveDuplicatesCommandOptions,
+
+    // Run the debug build-sort-index command with these options.
+    debugBuildSortIndex: IBaseCommandOptions,
+
+    // Run the debug build-files-tree command with these options.
+    debugBuildFilesTree: IBaseCommandOptions,
 
     // Run the hash command with this file path and these options.
     hash: IHashParsed,
@@ -752,6 +781,92 @@ fn decryptAction(state: *IProgramState, args: []const ArgumentValue, options: *c
         .decrypt = .{
             .base = baseOptions(options),
         },
+    };
+}
+
+//
+// The action of the debug merkle-tree command (`initContext(debugMerkleTreeCommand)`): `run` calls initContext and
+// the command.
+//
+fn debugMerkleTreeAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .debugMerkleTree = .{
+            .base = baseOptions(options),
+            .records = flagValue(options, "records"),
+            .all = flagValue(options, "all"),
+        },
+    };
+}
+
+//
+// The action of the debug find-collisions command (`initContext(debugFindCollisionsCommand)`): `run` calls
+// initContext and the command.
+//
+fn debugFindCollisionsAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .debugFindCollisions = .{
+            .base = baseOptions(options),
+            .output = textValue(options, "output"),
+        },
+    };
+}
+
+//
+// The action of the debug find-duplicates command (`initContext(debugFindDuplicatesCommand)`): `run` calls
+// initContext and the command.
+//
+fn debugFindDuplicatesAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .debugFindDuplicates = .{
+            .base = baseOptions(options),
+            .input = textValue(options, "input"),
+            .output = textValue(options, "output"),
+        },
+    };
+}
+
+//
+// The action of the debug remove-duplicates command (`initContext(debugRemoveDuplicatesCommand)`): `run` calls
+// initContext and the command.
+//
+fn debugRemoveDuplicatesAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .debugRemoveDuplicates = .{
+            .base = baseOptions(options),
+            .input = textValue(options, "input"),
+        },
+    };
+}
+
+//
+// The action of the debug build-sort-index command (`initContext(debugBuildSortIndexCommand)`): `run` calls
+// initContext and the command.
+//
+fn debugBuildSortIndexAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .debugBuildSortIndex = baseOptions(options),
+    };
+}
+
+//
+// The action of the debug build-files-tree command (`initContext(debugBuildFilesTreeCommand)`): `run` calls
+// initContext and the command.
+//
+fn debugBuildFilesTreeAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .debugBuildFilesTree = baseOptions(options),
     };
 }
 
@@ -1277,7 +1392,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
     _ = optionFrom(debugMerkleTree, cwdOption);
     _ = optionFrom(debugMerkleTree, recordsOption);
     _ = optionFrom(debugMerkleTree, allOption);
-    _ = debugMerkleTree.action(state, notPortedAction);
+    _ = debugMerkleTree.action(state, debugMerkleTreeAction);
 
     const debugFindCollisions = debugCommand
         .command("find-collisions", .{})
@@ -1289,7 +1404,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
     _ = optionFrom(debugFindCollisions, cwdOption);
     _ = debugFindCollisions
         .option("-o, --output <path>", "Output JSON file path (default: collisions.json)", .{ .string = "collisions.json" })
-        .action(state, notPortedAction);
+        .action(state, debugFindCollisionsAction);
 
     const debugFindDuplicates = debugCommand
         .command("find-duplicates", .{})
@@ -1302,7 +1417,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
     _ = debugFindDuplicates
         .option("-i, --input <path>", "Input JSON file path from find-collisions command (default: collisions.json)", .{ .string = "collisions.json" })
         .option("-o, --output <path>", "Output JSON file path (default: duplicates.json)", .{ .string = "duplicates.json" })
-        .action(state, notPortedAction);
+        .action(state, debugFindDuplicatesAction);
 
     const debugRemoveDuplicates = debugCommand
         .command("remove-duplicates", .{})
@@ -1314,7 +1429,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
     _ = optionFrom(debugRemoveDuplicates, cwdOption);
     _ = debugRemoveDuplicates
         .option("-i, --input <path>", "Input JSON file path from find-duplicates command (default: duplicates.json)", .{ .string = "duplicates.json" })
-        .action(state, notPortedAction);
+        .action(state, debugRemoveDuplicatesAction);
 
     const debugBuildSortIndex = debugCommand
         .command("build-sort-index", .{})
@@ -1324,7 +1439,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
     _ = optionFrom(debugBuildSortIndex, verboseOption);
     _ = optionFrom(debugBuildSortIndex, yesOption);
     _ = optionFrom(debugBuildSortIndex, cwdOption);
-    _ = debugBuildSortIndex.action(state, notPortedAction);
+    _ = debugBuildSortIndex.action(state, debugBuildSortIndexAction);
 
     const debugBuildFilesTree = debugCommand
         .command("build-files-tree", .{})
@@ -1334,7 +1449,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
     _ = optionFrom(debugBuildFilesTree, verboseOption);
     _ = optionFrom(debugBuildFilesTree, yesOption);
     _ = optionFrom(debugBuildFilesTree, cwdOption);
-    _ = debugBuildFilesTree.action(state, notPortedAction);
+    _ = debugBuildFilesTree.action(state, debugBuildFilesTreeAction);
 
     _ = program
         .command("help [command]", .{})
@@ -2091,6 +2206,54 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try decryptCommand(allocator, io, context, &options);
+        },
+        .debugMerkleTree => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try debugMerkleTreeCommand(allocator, io, context, &options);
+        },
+        .debugFindCollisions => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try debugFindCollisionsCommand(allocator, io, context, &options);
+        },
+        .debugFindDuplicates => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try debugFindDuplicatesCommand(allocator, io, context, &options);
+        },
+        .debugRemoveDuplicates => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try debugRemoveDuplicatesCommand(allocator, io, context, &options);
+        },
+        .debugBuildSortIndex => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options);
+            try debugBuildSortIndexCommand(allocator, io, context, &options);
+        },
+        .debugBuildFilesTree => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options);
+            try debugBuildFilesTreeCommand(allocator, io, context, &options);
         },
         .hash => |parsed| {
             if (state.notificationsQuiet) |quiet| {

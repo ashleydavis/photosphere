@@ -68,6 +68,78 @@ test "should return different collection instances for different names" {
     try std.testing.expect(try database.collection("users") != try database.collection("products"));
 }
 
+//
+// Returns true when the list holds the name (TypeScript: `expect(list).toContain(name)`).
+//
+fn containsName(names: []const []const u8, wanted: []const u8) bool {
+    for (names) |name| {
+        if (std.mem.eql(u8, name, wanted)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+test "should list collections created in memory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var storage = MemoryStorage.init(arena.allocator());
+    const database = try newDatabase(arena.allocator(), &storage);
+    _ = try database.collection("users");
+    _ = try database.collection("products");
+    _ = try database.collection("orders");
+
+    const collections = try database.collections(io);
+
+    try std.testing.expect(containsName(collections, "users"));
+    try std.testing.expect(containsName(collections, "products"));
+    try std.testing.expect(containsName(collections, "orders"));
+}
+
+test "should list collections from storage" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var storage = MemoryStorage.init(arena.allocator());
+    const database = try newDatabase(arena.allocator(), &storage);
+    try storage.write(arena.allocator(), io, "collections/metadata/shards/0", null, "test");
+
+    const collections = try database.collections(io);
+
+    try std.testing.expect(containsName(collections, "metadata"));
+}
+
+test "should merge in-memory and storage collections without duplicates" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var storage = MemoryStorage.init(arena.allocator());
+    const database = try newDatabase(arena.allocator(), &storage);
+    _ = try database.collection("users");
+    try storage.write(arena.allocator(), io, "collections/users/shards/0", null, "test");
+    try storage.write(arena.allocator(), io, "collections/photos/shards/0", null, "test");
+
+    const collections = try database.collections(io);
+
+    var userEntries: usize = 0;
+    for (collections) |name| {
+        if (std.mem.eql(u8, name, "users")) {
+            userEntries += 1;
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 1), userEntries);
+    try std.testing.expect(containsName(collections, "photos"));
+}
+
+test "should return empty array when no collections exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var storage = MemoryStorage.init(arena.allocator());
+    const database = try newDatabase(arena.allocator(), &storage);
+
+    const collections = try database.collections(io);
+
+    try std.testing.expectEqual(@as(usize, 0), collections.len);
+}
+
 test "commit should be a no-op when not dirty" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
