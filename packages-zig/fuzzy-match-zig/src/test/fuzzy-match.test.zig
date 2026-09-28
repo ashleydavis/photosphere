@@ -102,3 +102,32 @@ test "threshold grows with the query length" {
     try std.testing.expectEqual(@as(usize, 1), matches.len);
     try std.testing.expectEqualStrings("abcdefghijklmnoXXXXX", matches[0]);
 }
+
+test "invalid UTF-8 counts one code unit per byte" {
+    // 0xff is never valid UTF-8, so each byte is compared as a code unit of its own.
+    try std.testing.expectEqual(@as(usize, 1), try levenshteinDistance(std.testing.allocator, "a\xffc", "abc"));
+    try std.testing.expectEqual(@as(usize, 2), try levenshteinDistance(std.testing.allocator, "\xff\xfe", ""));
+}
+
+//
+// Calls fuzzyMatch with the allocator and frees the result, for checkAllAllocationFailures.
+//
+fn fuzzyMatchAndFree(allocator: std.mem.Allocator, query: []const u8) !void {
+    const matches = try fuzzyMatch(allocator, query, &.{ "mydb1", "other" });
+    allocator.free(matches);
+}
+
+test "fuzzyMatch frees everything when an allocation fails" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, fuzzyMatchAndFree, .{"mydb"});
+}
+
+//
+// Calls levenshteinDistance with the allocator, for checkAllAllocationFailures.
+//
+fn levenshteinDistanceOf(allocator: std.mem.Allocator, left: []const u8, right: []const u8) !void {
+    _ = try levenshteinDistance(allocator, left, right);
+}
+
+test "levenshteinDistance frees everything when an allocation fails" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, levenshteinDistanceOf, .{ "a\xffc", "abc" });
+}
