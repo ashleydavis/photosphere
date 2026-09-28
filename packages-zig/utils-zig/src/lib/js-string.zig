@@ -89,3 +89,11 @@ pub fn trimEnd(text: []const u8) []const u8 {
 pub fn trim(text: []const u8) []const u8 {
     return trimEnd(trimStart(text));
 }
+
+//
+// Returns the JavaScript truthiness of a string that may be undefined (`if (text)` or `while (text)`): false for
+// undefined and for the empty string, true for any other string.
+//
+pub fn isTruthy(text: ?[]const u8) bool {
+    return text != null and text.?.len > 0;
+}

@@ -334,6 +334,19 @@ pub fn DeserializerEntry(comptime T: type, comptime ContextT: type) type {
 // Not ported: MigrationFunction, MigrationMap (no caller passes migrations to load).
 
 //
+// The range check `buffer.writeUInt32LE(value)` makes before BinarySerializer.writeUInt32 writes a JavaScript
+// number: a value outside 0 to 4294967295 throws the runtime's RangeError. (No TypeScript counterpart: the Zig
+// writeUInt32 takes a u32, so a caller holding a JavaScript number checks it with this first.)
+//
+pub fn checkUInt32(value: i64) errors.ThrownError!u32 {
+    if (value < 0 or value > std.math.maxInt(u32)) {
+        errors.recordError("RangeError", "The value of \"value\" is out of range. It must be >= 0 and <= 4294967295. Received {d}", .{value});
+        return error.Thrown;
+    }
+    return @intCast(value);
+}
+
+//
 // Implementation of ISerializer for writing binary data
 //
 pub const BinarySerializer = struct {

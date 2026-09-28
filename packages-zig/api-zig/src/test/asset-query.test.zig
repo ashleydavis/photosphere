@@ -284,3 +284,24 @@ test "streamAssetToFile maps type 'display' to the display/ storage prefix" {
 
     try std.testing.expectEqual(@as(u64, payload.len), bytes);
 }
+
+//
+// In TypeScript a file storage's read stream opens its file lazily, after `createWriteStream(outputPath)` has
+// created the output file, so exporting an asset that is not there fails and leaves an empty output file behind.
+//
+test "streamAssetToFile fails for a missing asset after creating the output file, like TypeScript" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tempDir = std.testing.tmpDir(.{});
+    defer tempDir.cleanup();
+    const databasePath = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path, "db" });
+    var fileStorage = @import("storage-zig").file_storage.FileStorage.init("fs:");
+    var assetStorage = try @import("storage-zig").storage_prefix_wrapper.StoragePrefixWrapper.init(allocator, fileStorage.storage(), databasePath);
+
+    const outputPath = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path, "out", "missing.bin" });
+    try std.testing.expectError(error.Thrown, streamAssetToFile(allocator, io, assetStorage.storage(), "missing-asset-id", outputPath, "original"));
+
+    const written = try std.Io.Dir.cwd().readFileAlloc(io, outputPath, allocator, .unlimited);
+    try std.testing.expectEqual(@as(usize, 0), written.len);
+}

@@ -19,5 +19,7 @@ pub fn formatFileSize(allocator: std.mem.Allocator, bytes: u64) ![]const u8 {
     const unitIndex: usize = @intFromFloat(@floor(@log(bytesFloat) / @log(k)));
     const value = bytesFloat / std.math.pow(f64, k, @floatFromInt(unitIndex));
     const rounded = @floor(value * 100 + 0.5) / 100;
-    return std.fmt.allocPrint(allocator, "{d} {s}", .{ rounded, sizes[unitIndex] });
+    // TypeScript reads `sizes[i]` past the end of the list from a petabyte up, which is undefined.
+    const unit = if (unitIndex < sizes.len) sizes[unitIndex] else "undefined";
+    return std.fmt.allocPrint(allocator, "{d} {s}", .{ rounded, unit });
 }

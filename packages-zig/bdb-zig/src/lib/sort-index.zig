@@ -60,10 +60,10 @@ pub const TreeNodeMap = std.StringArrayHashMapUnmanaged(*IBTreeNode);
 //
 const ITreeData = struct {
     // Total number of entries stored across all leaf nodes.
-    totalEntries: u32,
+    totalEntries: i64,
 
     // Total number of pages (nodes) in the tree.
-    totalPages: u32,
+    totalPages: i64,
 
     // ID of the root B-tree node.
     rootPageId: []const u8,
@@ -183,13 +183,13 @@ pub const ISortIndexResult = struct {
     records: []ISortIndexRecord,
 
     // Total number of records in the collection
-    totalRecords: u32,
+    totalRecords: i64,
 
     // Current page ID
     currentPageId: []const u8,
 
     // Total number of leaf pages (navigable data pages)
-    totalPages: u32,
+    totalPages: i64,
 
     // Next page ID or undefined if this is the last page
     nextPageId: ?[]const u8 = null,
@@ -321,10 +321,10 @@ pub const SortIndex = struct {
     direction: SortDirection,
 
     // Total number of entries across all leaf pages.
-    totalEntries: u32 = 0,
+    totalEntries: i64 = 0,
 
     // Tracks only leaf nodes (user-facing pages).
-    totalPages: u32 = 0,
+    totalPages: i64 = 0,
 
     // Whether the index has been loaded from storage.
     loaded: bool = false,
@@ -676,8 +676,8 @@ pub const SortIndex = struct {
         std.mem.sort([]const u8, sortedPageIds, {}, pageIdLessThan);
 
         // Write metadata directly as binary data
-        try serializer.writeUInt32(treeData.totalEntries);
-        try serializer.writeUInt32(treeData.totalPages);
+        try serializer.writeUInt32(try serialization.checkUInt32(treeData.totalEntries));
+        try serializer.writeUInt32(try serialization.checkUInt32(treeData.totalPages));
 
         // Write rootPageId with length prefix
         try serializer.writeBuffer(treeData.rootPageId);

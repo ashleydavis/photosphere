@@ -214,11 +214,14 @@ pub fn streamAssetToFile(
     const storageKey = try mapAssetTypeToStorageKey(allocator, @"type", assetId);
     try std.Io.Dir.cwd().createDirPath(io, node_path.dirname(outputPath));
 
-    const readStream = try assetStorage.readStream(allocator, io, storageKey);
-    defer readStream.destroy(io);
-
+    // (Zig: the output file is created before the read stream is opened. A TypeScript file storage opens its stream
+    // lazily, after `createWriteStream(outputPath)` has created the output file, so a missing asset fails with the
+    // output file already made; the Zig storages open the file up front.)
     const outputFile = try std.Io.Dir.cwd().createFile(io, outputPath, .{});
     defer outputFile.close(io);
+
+    const readStream = try assetStorage.readStream(allocator, io, storageKey);
+    defer readStream.destroy(io);
     var writeBuffer: [64 * 1024]u8 = undefined;
     var fileWriter = outputFile.writerStreaming(io, &writeBuffer);
     const bytesWritten = try readStream.reader().streamRemaining(&fileWriter.interface);

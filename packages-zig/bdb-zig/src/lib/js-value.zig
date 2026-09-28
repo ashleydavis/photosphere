@@ -4,6 +4,7 @@ const bson = serialization_zig.bson;
 const BsonValue = bson.BsonValue;
 const BsonDocument = bson.BsonDocument;
 const errors = @import("utils-zig").errors;
+const js_string = @import("utils-zig").js_string;
 
 //
 // No TypeScript counterpart: the JavaScript language semantics that the bdb TypeScript code relies on implicitly
@@ -137,34 +138,13 @@ fn writeUuid(writer: *std.Io.Writer, bytes: []const u8) std.Io.Writer.Error!void
 }
 
 //
-// Returns the byte width of the JavaScript whitespace character at index (the characters String.prototype.trim
-// removes: ASCII whitespace, NBSP, BOM and the line and paragraph separators), or 0 when it is not whitespace.
-//
-fn jsWhitespaceWidth(text: []const u8, index: usize) usize {
-    const character = text[index];
-    if (character == ' ' or character == '\t' or character == '\n' or character == '\r' or character == 0x0b or character == 0x0c) {
-        return 1;
-    }
-    if (std.mem.startsWith(u8, text[index..], "\u{00A0}")) {
-        return 2;
-    }
-    if (std.mem.startsWith(u8, text[index..], "\u{FEFF}")) {
-        return 3;
-    }
-    if (std.mem.startsWith(u8, text[index..], "\u{2028}") or std.mem.startsWith(u8, text[index..], "\u{2029}")) {
-        return 3;
-    }
-    return 0;
-}
-
-//
 // Converts a string to a number like JavaScript's StringToNumber (`Number(string)`).
 //
 pub fn stringToNumber(textValue: []const u8) f64 {
     var start: usize = 0;
     var end: usize = textValue.len;
     while (start < end) {
-        const width = jsWhitespaceWidth(textValue, start);
+        const width = js_string.whitespaceWidthAt(textValue, start);
         if (width == 0) {
             break;
         }
@@ -174,7 +154,7 @@ pub fn stringToNumber(textValue: []const u8) f64 {
         var trimmed = false;
         var back: usize = 1;
         while (back <= 3 and back <= end - start) : (back += 1) {
-            if (jsWhitespaceWidth(textValue, end - back) == back) {
+            if (js_string.whitespaceWidthAt(textValue, end - back) == back) {
                 end -= back;
                 trimmed = true;
                 break;

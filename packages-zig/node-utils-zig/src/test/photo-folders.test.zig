@@ -189,3 +189,15 @@ test "returns only folders that exist on this machine" {
         try std.testing.expectEqual(std.Io.File.Kind.directory, stat.kind);
     }
 }
+
+//
+// TypeScript trims the line with String.prototype.trim and matches it with /\s*/, both of which take the Unicode
+// spaces and line separators as whitespace.
+//
+test "treats Unicode spaces around the key and the value as whitespace" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const contents = "\u{00A0}XDG_PICTURES_DIR\u{3000}=\u{3000}\"$HOME/Pics\"\u{2028}\n";
+    const result = try parseXdgPicturesDir(arena.allocator(), contents, "/home/user");
+    try std.testing.expectEqualStrings(try path.join(arena.allocator(), &.{ "/home/user", "Pics" }), result.?);
+}

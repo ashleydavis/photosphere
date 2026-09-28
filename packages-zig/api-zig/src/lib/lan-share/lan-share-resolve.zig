@@ -21,29 +21,21 @@ const IShareGeocodingKey = index.IShareGeocodingKey;
 const errors = utils.errors;
 
 //
-// Reads a text field of the parsed S3 credentials (`parsed.region` and the like). A field that is absent or not text
-// is thrown as an error naming the secret and the field (TypeScript would send it on as undefined).
+// Reads a field of the parsed S3 credentials (`parsed.region` and the like): null (undefined) when the credentials
+// have no such field, as in TypeScript. A field that is there but is not text is thrown as an error naming the secret
+// and the field (TypeScript would send it on as it is, which is not ported).
 //
-fn s3CredentialField(parsed: std.json.Value, secretName: []const u8, field: []const u8) ![]const u8 {
-    if (parsed == .object) {
-        if (parsed.object.get(field)) |value| {
-            if (value == .string) {
-                return value.string;
-            }
-        }
-    }
-    return errors.throwError("The S3 credentials \"{s}\" have no \"{s}\" text field.", .{ secretName, field });
-}
-
-//
-// Reads the optional endpoint of the parsed S3 credentials (`parsed.endpoint`): null when it is absent, an error when
-// it is there but not text.
-//
-fn s3CredentialEndpoint(parsed: std.json.Value, secretName: []const u8) !?[]const u8 {
-    if (parsed != .object or parsed.object.get("endpoint") == null) {
+fn s3CredentialField(parsed: std.json.Value, secretName: []const u8, field: []const u8) !?[]const u8 {
+    if (parsed != .object) {
         return null;
     }
-    return try s3CredentialField(parsed, secretName, "endpoint");
+    const value = parsed.object.get(field) orelse {
+        return null;
+    };
+    if (value != .string) {
+        return errors.throwError("The S3 credentials \"{s}\" have a \"{s}\" field that is not text.", .{ secretName, field });
+    }
+    return value.string;
 }
 
 //
@@ -62,7 +54,7 @@ pub fn resolveDatabaseSharePayload(allocator: std.mem.Allocator, io: std.Io, ent
                 .region = try s3CredentialField(parsed, entry.s3Key.?, "region"),
                 .accessKeyId = try s3CredentialField(parsed, entry.s3Key.?, "accessKeyId"),
                 .secretAccessKey = try s3CredentialField(parsed, entry.s3Key.?, "secretAccessKey"),
-                .endpoint = try s3CredentialEndpoint(parsed, entry.s3Key.?),
+                .endpoint = try s3CredentialField(parsed, entry.s3Key.?, "endpoint"),
             };
         }
     }

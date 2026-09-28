@@ -19,3 +19,14 @@ test "formatFileSize formats bytes, kilobytes and megabytes like TypeScript" {
     try std.testing.expectEqualStrings("1 MB", try utils.format.formatFileSize(allocator, 1024 * 1024));
     try std.testing.expectEqualStrings("2.5 GB", try utils.format.formatFileSize(allocator, 1024 * 1024 * 1024 * 5 / 2));
 }
+
+//
+// TypeScript's sizes list stops at TB, so a petabyte or more reads `sizes[5]`, which is undefined.
+//
+test "formatFileSize names the unit undefined from a petabyte up, like TypeScript" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expectEqualStrings("1 undefined", try utils.format.formatFileSize(allocator, 1024 * 1024 * 1024 * 1024 * 1024));
+    try std.testing.expectEqualStrings("3 undefined", try utils.format.formatFileSize(allocator, 3 * 1024 * 1024 * 1024 * 1024 * 1024));
+}

@@ -277,3 +277,34 @@ test "an S3 endpoint that is absent is left out of the stored value" {
     // JSON.stringify leaves out a property whose value is undefined.
     try expectStored(&store, "s3-secret", "s3-credentials", "{\"region\":\"r\",\"accessKeyId\":\"AK\",\"secretAccessKey\":\"SK\"}");
 }
+
+//
+// A sender whose stored credentials have no region sends none (TypeScript's payload has region undefined), and the
+// receiver's JSON.stringify leaves it out of what it stores.
+//
+test "an S3 region that is absent is left out of the stored value" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var store = try FakeSecretStore.init(allocator, &.{});
+    var resolver: FixedResolver = .{
+        .resolution = .{
+            .action = .replace,
+        },
+    };
+    const payload: IDatabaseSharePayload = .{
+        .type = "database",
+        .name = "db",
+        .description = "",
+        .path = "/data/db",
+        .s3Credentials = .{
+            .name = "s3-secret",
+            .accessKeyId = "AK",
+            .secretAccessKey = "SK",
+        },
+    };
+
+    _ = try importShareSecrets(allocator, payload, store.secretStore(), resolver.resolver());
+
+    try expectStored(&store, "s3-secret", "s3-credentials", "{\"accessKeyId\":\"AK\",\"secretAccessKey\":\"SK\"}");
+}

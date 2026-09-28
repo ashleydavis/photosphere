@@ -232,3 +232,13 @@ test "getProperty reads a property like value[key]" {
     try std.testing.expect(try js_value.getProperty(.{ .date = 0 }, "a") == .undefined);
     try std.testing.expectError(error.Thrown, js_value.getProperty(.null, "a"));
 }
+
+//
+// Number(string) trims every JavaScript whitespace character (Number("　5 ") is 5, and
+// Number(" 5") is 5), but not the zero width space (Number("​5") is NaN).
+//
+test "stringToNumber trims the Unicode space separators like Number(string)" {
+    try std.testing.expectEqual(@as(f64, 5), js_value.stringToNumber("\u{3000}5\u{2000}"));
+    try std.testing.expectEqual(@as(f64, 5), js_value.stringToNumber("\u{1680}5"));
+    try std.testing.expect(std.math.isNan(js_value.stringToNumber("\u{200B}5")));
+}

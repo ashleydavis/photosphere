@@ -113,7 +113,8 @@ pub fn listShards(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, b
             try shardIds.append(allocator, fileName);
         }
         next = storageResult.next;
-        if (next == null) {
+        // `while (next)`: an empty token ends the listing like a missing one.
+        if (!utils.js_string.isTruthy(next)) {
             break;
         }
     }
@@ -237,7 +238,8 @@ fn listCollections(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, 
             try uniqueSet.put(allocator, name, {});
         }
         next = storageResult.next;
-        if (next == null) {
+        // `while (next)`: an empty token ends the listing like a missing one.
+        if (!utils.js_string.isTruthy(next)) {
             break;
         }
     }

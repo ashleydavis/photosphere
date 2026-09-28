@@ -1350,3 +1350,15 @@ test "verify names the file it could not read once every retry has failed" {
     try expectThrownContaining(serialization.verify(allocator, io, &storage, "data.bin"), "Failed to read data.bin: cannot read data.bin");
     try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Failed to read data.bin. Retrying after: cannot read data.bin") != null);
 }
+
+//
+// checkUInt32 is the range check of `buffer.writeUInt32LE`, with the runtime's message.
+//
+test "checkUInt32 accepts 0 to 4294967295 and refuses anything else like writeUInt32LE" {
+    try std.testing.expectEqual(@as(u32, 0), try serialization.checkUInt32(0));
+    try std.testing.expectEqual(@as(u32, 4294967295), try serialization.checkUInt32(4294967295));
+    try std.testing.expectError(error.Thrown, serialization.checkUInt32(4294967296));
+    try std.testing.expectEqualStrings("The value of \"value\" is out of range. It must be >= 0 and <= 4294967295. Received 4294967296", utils.errors.lastErrorMessage());
+    try std.testing.expectError(error.Thrown, serialization.checkUInt32(-1234567));
+    try std.testing.expectEqualStrings("The value of \"value\" is out of range. It must be >= 0 and <= 4294967295. Received -1234567", utils.errors.lastErrorMessage());
+}
