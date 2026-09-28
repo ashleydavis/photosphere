@@ -24,7 +24,7 @@ const yamlToStateFile = state_format.yamlToStateFile;
 // two installations run side by side.
 //
 pub fn getStatePath(allocator: std.mem.Allocator) ![]const u8 {
-    return std.fs.path.join(allocator, &.{ try fs.getConfigDir(allocator), "state.yaml" });
+    return node_utils.path.join(allocator, &.{ try fs.getConfigDir(allocator), "state.yaml" });
 }
 
 //

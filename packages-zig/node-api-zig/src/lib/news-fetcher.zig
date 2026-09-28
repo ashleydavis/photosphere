@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const yaml = node_utils.yaml;
+const serialization_zig = @import("serialization-zig");
 const fetch_module = @import("fetch.zig");
 const errors = utils.errors;
 const fetch = fetch_module.fetch;
@@ -60,21 +61,37 @@ pub const INewsItem = struct {
 // Not ported: INewsFeed (the parsed feed is a std.json.Value here).
 
 //
-// Converts a JavaScript value to its string form for a template string (`${value}`): strings as they are,
-// numbers and booleans as text, everything else "undefined" or "null".
+// Converts a JavaScript value to its string form for a template string (`${value}`): strings as they are, numbers
+// as JavaScript prints them, an array as its elements joined with commas (null and undefined elements as nothing),
+// an object as "[object Object]", and undefined and null by name.
 //
-fn templateText(allocator: std.mem.Allocator, value: ?std.json.Value) ![]const u8 {
+fn templateText(allocator: std.mem.Allocator, value: ?std.json.Value) anyerror![]const u8 {
     const present = value orelse return "undefined";
     return switch (present) {
         .string => |text| text,
         .null => "null",
         .bool => |flag| if (flag) "true" else "false",
-        .integer => |integer| std.fmt.allocPrint(allocator, "{d}", .{integer}),
-        .float => |float| std.fmt.allocPrint(allocator, "{d}", .{float}),
-        .number_string => |text| text,
-        .array => "",
+        .integer => |integer| jsNumberText(allocator, @floatFromInt(integer)),
+        .float => |float| jsNumberText(allocator, float),
+        .number_string => |text| jsNumberText(allocator, std.fmt.parseFloat(f64, text) catch std.math.nan(f64)),
+        .array => |array| {
+            var parts: std.ArrayList([]const u8) = .empty;
+            for (array.items) |element| {
+                try parts.append(allocator, if (element == .null) "" else try templateText(allocator, element));
+            }
+            return std.mem.join(allocator, ",", parts.items);
+        },
         .object => "[object Object]",
     };
+}
+
+//
+// `String(number)` for a JavaScript number.
+//
+fn jsNumberText(allocator: std.mem.Allocator, number: f64) ![]const u8 {
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    try serialization_zig.js_number.writeNumber(&output.writer, number);
+    return output.written();
 }
 
 //
@@ -110,41 +127,130 @@ fn toLink(allocator: std.mem.Allocator, value: ?std.json.Value) !?INewsLink {
 }
 
 //
-// Converts a `file://` URL to a path (`fileURLToPath`): the path after the host, percent-decoded.
-// On Windows the path uses backslashes and loses the slash before the drive letter ("C:\dir\file"),
-// and a host makes it a UNC path ("\\host\share\file"), like Node's win32 fileURLToPath.
+// Whether a path segment is a single dot of a URL path, written plainly or percent-encoded.
 //
-fn fileURLToPath(allocator: std.mem.Allocator, url: []const u8) ![]const u8 {
-    var rest = url["file://".len..];
-    var hostname: []const u8 = "";
-    if (std.mem.indexOfScalar(u8, rest, '/')) |slash| {
-        hostname = rest[0..slash];
-        rest = rest[slash..];
+fn isSingleDotSegment(segment: []const u8) bool {
+    return std.mem.eql(u8, segment, ".") or std.ascii.eqlIgnoreCase(segment, "%2e");
+}
+
+//
+// Whether a path segment is a double dot of a URL path, written plainly or with either dot percent-encoded.
+//
+fn isDoubleDotSegment(segment: []const u8) bool {
+    return std.mem.eql(u8, segment, "..") or std.ascii.eqlIgnoreCase(segment, ".%2e") or std.ascii.eqlIgnoreCase(segment, "%2e.") or std.ascii.eqlIgnoreCase(segment, "%2e%2e");
+}
+
+//
+// Whether a path segment is a Windows drive letter ("C:" or "C|"), which a `..` in a file URL never removes.
+//
+fn isDriveLetterSegment(segment: []const u8) bool {
+    return segment.len == 2 and std.ascii.isAlphabetic(segment[0]) and (segment[1] == ':' or segment[1] == '|');
+}
+
+//
+// The path of a file URL as the URL parser leaves it: `.` and `..` segments resolved, starting with "/".
+//
+fn normalizeUrlPath(allocator: std.mem.Allocator, rawPath: []const u8) ![]const u8 {
+    var segments: std.ArrayList([]const u8) = .empty;
+    const withoutLeadingSlash = if (rawPath.len > 0 and rawPath[0] == '/') rawPath[1..] else rawPath;
+    var parts = std.mem.splitScalar(u8, withoutLeadingSlash, '/');
+    while (parts.next()) |segment| {
+        const isLast = parts.peek() == null;
+        if (isDoubleDotSegment(segment)) {
+            if (segments.items.len > 0 and !(segments.items.len == 1 and isDriveLetterSegment(segments.items[0]))) {
+                _ = segments.pop();
+            }
+            if (isLast) {
+                try segments.append(allocator, "");
+            }
+        }
+        else if (isSingleDotSegment(segment)) {
+            if (isLast) {
+                try segments.append(allocator, "");
+            }
+        }
+        else {
+            try segments.append(allocator, segment);
+        }
     }
+    const joined = try std.mem.join(allocator, "/", segments.items);
+    return std.mem.concat(allocator, u8, &.{ "/", joined });
+}
+
+//
+// Percent-decodes a URL path. A `%` not followed by two hex digits is kept as it is, which is what Bun's
+// fileURLToPath does (Node's throws a URIError for it).
+//
+fn percentDecode(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
     var result: std.ArrayList(u8) = .empty;
     var index: usize = 0;
-    while (index < rest.len) {
-        if (rest[index] == '%' and index + 2 < rest.len) {
-            if (std.fmt.parseInt(u8, rest[index + 1 .. index + 3], 16)) |byte| {
+    while (index < text.len) {
+        if (text[index] == '%' and index + 2 < text.len) {
+            if (std.fmt.parseInt(u8, text[index + 1 .. index + 3], 16)) |byte| {
                 try result.append(allocator, byte);
                 index += 3;
                 continue;
             }
             else |_| {}
         }
-        try result.append(allocator, rest[index]);
+        try result.append(allocator, text[index]);
         index += 1;
     }
-    if (builtin.os.tag == .windows) {
-        std.mem.replaceScalar(u8, result.items, '/', '\\');
-        if (hostname.len > 0 and !std.mem.eql(u8, hostname, "localhost")) {
-            return std.mem.concat(allocator, u8, &.{ "\\\\", hostname, result.items });
-        }
-        if (result.items.len >= 3 and result.items[2] == ':') {
-            return result.items[1..];
-        }
-    }
     return result.items;
+}
+
+//
+// Node's `fileURLToPath` for a URL starting "file://", as Bun runs it. The URL is parsed first: tabs and
+// newlines are dropped, backslashes are slashes, the query and fragment are cut off, "localhost" is no host at
+// all, and `.` and `..` segments are resolved. Then the path is checked and percent-decoded. On Windows the path
+// uses backslashes and loses the slash before the drive letter ("C:\dir\file"), and a host makes it a UNC path
+// ("\\host\share\file").
+//
+pub fn fileURLToPath(allocator: std.mem.Allocator, url: []const u8) ![]const u8 {
+    var cleaned: std.ArrayList(u8) = .empty;
+    for (url["file://".len..]) |character| {
+        if (character == '\t' or character == '\n' or character == '\r') {
+            continue;
+        }
+        try cleaned.append(allocator, if (character == '\\') '/' else character);
+    }
+    var rest: []const u8 = cleaned.items;
+    if (std.mem.indexOfAny(u8, rest, "?#")) |cut| {
+        rest = rest[0..cut];
+    }
+    const hostEnd = std.mem.indexOfScalar(u8, rest, '/') orelse rest.len;
+    var hostname = rest[0..hostEnd];
+    if (std.ascii.eqlIgnoreCase(hostname, "localhost")) {
+        hostname = "";
+    }
+    const pathname = try normalizeUrlPath(allocator, rest[hostEnd..]);
+
+    if (builtin.os.tag == .windows) {
+        if (std.ascii.indexOfIgnoreCase(pathname, "%2f") != null or std.ascii.indexOfIgnoreCase(pathname, "%5c") != null) {
+            errors.recordError("TypeError", "File URL path must not include encoded \\ or / characters", .{});
+            return error.Thrown;
+        }
+        const decoded = try allocator.dupe(u8, try percentDecode(allocator, pathname));
+        std.mem.replaceScalar(u8, decoded, '/', '\\');
+        if (hostname.len > 0) {
+            return std.mem.concat(allocator, u8, &.{ "\\\\", hostname, decoded });
+        }
+        if (decoded.len < 3 or !std.ascii.isAlphabetic(decoded[1]) or decoded[2] != ':') {
+            errors.recordError("TypeError", "File URL path must be absolute", .{});
+            return error.Thrown;
+        }
+        return decoded[1..];
+    }
+
+    if (hostname.len > 0) {
+        errors.recordError("TypeError", "File URL host must be \"localhost\" or empty on {s}", .{if (builtin.os.tag == .macos) "darwin" else @tagName(builtin.os.tag)});
+        return error.Thrown;
+    }
+    if (std.ascii.indexOfIgnoreCase(pathname, "%2f") != null) {
+        errors.recordError("TypeError", "File URL path must not include encoded / characters", .{});
+        return error.Thrown;
+    }
+    return percentDecode(allocator, pathname);
 }
 
 //

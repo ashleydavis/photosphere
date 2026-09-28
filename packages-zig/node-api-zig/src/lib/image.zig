@@ -84,7 +84,7 @@ pub fn parseExifDate(allocator: std.mem.Allocator, rawValue: ?BsonValue) !?[]con
         else => return null,
     };
 
-    const text = std.mem.trim(u8, untrimmed, " \t\n\r\x0b\x0c");
+    const text = utils.js_string.trim(untrimmed);
     if (text.len < 19 or text[4] != ':' or text[7] != ':' or (text[10] != ' ' and text[10] != 'T') or text[13] != ':' or text[16] != ':') {
         return null;
     }
@@ -98,6 +98,12 @@ pub fn parseExifDate(allocator: std.mem.Allocator, rawValue: ?BsonValue) !?[]con
     // Cameras write an all-zero date when the clock has never been set. It matches the pattern and
     // is not a date, and left alone it files the photo in the year zero.
     if (year == 0 or month == 0 or day == 0) {
+        return null;
+    }
+
+    // Date.UTC reads the years 0 to 99 as 1900 to 1999, so a year below 100 comes back as a different
+    // year and the check that the date came back unchanged refuses it.
+    if (year < 100) {
         return null;
     }
 
@@ -323,7 +329,7 @@ fn readImageMetadata(allocator: std.mem.Allocator, io: std.Io, filePath: []const
 //
 // Formats a location like `JSON.stringify(coordinates)`.
 //
-fn locationJson(allocator: std.mem.Allocator, location: ILocation) ![]const u8 {
+pub fn locationJson(allocator: std.mem.Allocator, location: ILocation) ![]const u8 {
     var output: std.Io.Writer.Allocating = .init(allocator);
     try output.writer.writeAll("{\"lat\":");
     try writeJsonNumber(&output.writer, location.lat);
@@ -334,11 +340,11 @@ fn locationJson(allocator: std.mem.Allocator, location: ILocation) ![]const u8 {
 }
 
 //
-// Writes a number as JSON (null for NaN and the infinities).
+// Writes a number as JSON.stringify does: as JavaScript prints the number, and null for NaN and the infinities.
 //
 fn writeJsonNumber(writer: *std.Io.Writer, number: f64) !void {
     if (std.math.isFinite(number)) {
-        try writer.print("{d}", .{number});
+        try serialization_zig.js_number.writeNumber(writer, number);
     }
     else {
         try writer.writeAll("null");

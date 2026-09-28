@@ -438,3 +438,63 @@ test "a store that cannot say what length its copy reads is not checked by lengt
 
     try std.testing.expectEqualStrings("aabbcc", (try context.record(result)).get("hash").?.string);
 }
+
+//
+// A timestamp provider that records, when the upload date is asked for, whether the display file is already in
+// the database, which is how a test can tell the date was read after the uploads.
+//
+const UploadDateWitness = struct {
+    // The database the asset is uploaded into.
+    databaseDir: []const u8,
+
+    // Whether the display file existed when dateNow was called, or null when it was never called.
+    displayExisted: ?bool = null,
+
+    //
+    // `Date.now()`.
+    //
+    fn now(ptr: *anyopaque, io: std.Io) i64 {
+        _ = ptr;
+        _ = io;
+        return 1700000000000;
+    }
+
+    //
+    // `new Date()`, noting whether the display file had been uploaded yet.
+    //
+    fn dateNow(ptr: *anyopaque, io: std.Io) utils.timestamp_provider.Date {
+        const self: *UploadDateWitness = @ptrCast(@alignCast(ptr));
+        var buffer: [4096]u8 = undefined;
+        const displayPath = std.fmt.bufPrint(&buffer, "{s}/display/asset-1", .{self.databaseDir}) catch unreachable;
+        self.displayExisted = helpers.fileExists(io, displayPath);
+        return .{
+            .epochMilliseconds = 1700000000000,
+        };
+    }
+
+    // The provider's functions.
+    const vtable: utils.timestamp_provider.ITimestampProvider.VTable = .{
+        .now = now,
+        .dateNow = dateNow,
+    };
+};
+
+test "the upload date is read once the files are uploaded, as the TypeScript builds the record after them" {
+    var context: UploadTest = undefined;
+    try context.init();
+    defer context.deinit();
+    var witness: UploadDateWitness = .{
+        .databaseDir = context.databaseDir,
+    };
+    context.context = TaskContext.init(context.uuidGenerator.uuidGenerator(), .{
+        .ptr = &witness,
+        .vtable = &UploadDateWitness.vtable,
+    }, "session-1", "task-1", .{
+        .context = &context.messages,
+        .function = MessageRecorder.send,
+    }, 10);
+
+    _ = try context.run(context.makeUploadAssetData());
+
+    try std.testing.expectEqual(@as(?bool, true), witness.displayExisted);
+}

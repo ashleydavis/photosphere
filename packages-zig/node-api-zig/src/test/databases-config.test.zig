@@ -29,6 +29,23 @@ fn readToml(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8) ![]
     return helpers.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/databases.toml", .{configDir}));
 }
 
+test "the paths of databases.toml and state.yaml are joined and normalized as path.join does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const configDir = try useNewConfigDir(allocator, io);
+    defer helpers.removeTempDir(io, configDir);
+    const unnormalized = try std.fmt.allocPrint(allocator, "{s}/./sub/..//", .{configDir});
+    try helpers.setEnv("PHOTOSPHERE_CONFIG_DIR", unnormalized);
+
+    const expectedDatabases = try node_utils.path.join(allocator, &.{ configDir, "databases.toml" });
+    const expectedState = try node_utils.path.join(allocator, &.{ configDir, "state.yaml" });
+    try std.testing.expect(std.mem.indexOf(u8, expectedDatabases, "..") == null);
+    try std.testing.expectEqualStrings(expectedDatabases, try node_api.databases_config.getDatabasesConfigPath(allocator));
+    try std.testing.expectEqualStrings(expectedState, try node_api.state_file.getStatePath(allocator));
+}
+
 test "returns default config when no file exists" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

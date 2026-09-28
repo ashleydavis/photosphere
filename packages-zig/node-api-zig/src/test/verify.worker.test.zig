@@ -92,6 +92,27 @@ test "verifyFileHandler reports unmodified, removed and modified files" {
     try std.testing.expect(removed.reasons == null);
 }
 
+//
+// Makes the node's timestamp differ from the file's and takes its content hash away.
+//
+fn dropContentHash(node: *SortNode) void {
+    node.lastModified = 0;
+    node.contentHash = null;
+}
+
+test "verifyFileHandler fails like Buffer.compare in Bun for a changed file whose node has no content hash" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
+    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+
+    try std.testing.expectError(error.Thrown, runHandler(allocator, io, databaseDir, THUMB_PATH, dropContentHash));
+    try std.testing.expectEqualStrings("TypeError", utils.errors.lastErrorName());
+    try std.testing.expectEqualStrings("The \"buf2\" argument must be of type Buffer or Uint8Array. Received undefined", utils.errors.lastErrorMessage());
+}
+
 test "verifyFileHandler does not hash a file whose size and timestamp are unchanged" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

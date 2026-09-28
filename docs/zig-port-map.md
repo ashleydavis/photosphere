@@ -4,8 +4,8 @@ Every TypeScript source file the `psi` CLI bundles, the Zig file that ports it, 
 the Zig function that ports it. Use it to read the two side by side: the Zig files have the same names and the same
 function order as the TypeScript ones.
 
-**Progress of the side by side comparison:** storage, bdb, api and lan-share-core done. Still to do: node-utils,
-node-api, encryption, lan-share-network, utils, serialization and the other smaller packages, apps/cli.
+**Progress of the side by side comparison:** storage, bdb, api, lan-share-core and node-api done. Still to do:
+node-utils, encryption, lan-share-network, utils, serialization and the other smaller packages, apps/cli.
 
 ## Which files are listed
 
@@ -947,6 +947,1265 @@ Not reached by the CLI: the apps' sync settings and the desktop's config worker 
 
 <!-- end tables -->
 
+## node-api
+
+`packages/node-api` to `packages-zig/node-api-zig`. Zig only: `fetch.zig` (replaces the global `fetch`),
+`retry-operations.zig` (the arrow functions node-api passes to `retry`), and under `third-party` the ports of the
+`exif-parser`, `jszip`, `lodash/throttle` and `mime` npm packages. The worker tasks the desktop and mobile apps queue
+and the CLI never does are listed with no Zig file.
+
+<!-- tables: packages/node-api node-api.txt -->
+
+#### `packages/node-api/src/index.ts` to `packages-zig/node-api-zig/src/index.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `packages/node-api/src/lib/app-config-format.ts` to no Zig file
+
+Not reached by the CLI: the desktop and mobile apps' settings and remembered interface state (config.yaml and the app state). The CLI keeps its settings in databases.toml and state.yaml.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getAppConfigValue` | none | Not reached by the CLI (see the file note). |
+| `setAppConfigValue` | none | Not reached by the CLI (see the file note). |
+| `appConfigSettings` | none | Not reached by the CLI (see the file note). |
+| `isSection` | none | Not reached by the CLI (see the file note). |
+| `documentSources` | none | Not reached by the CLI (see the file note). |
+| `yamlToAppConfig` | none | Not reached by the CLI (see the file note). |
+| `sourceToYaml` | none | Not reached by the CLI (see the file note). |
+| `writeField` | none | Not reached by the CLI (see the file note). |
+| `writeSection` | none | Not reached by the CLI (see the file note). |
+| `appConfigToYaml` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/app-config.ts` to no Zig file
+
+Not reached by the CLI: the desktop and mobile apps' settings and remembered interface state (config.yaml and the app state). The CLI keeps its settings in databases.toml and state.yaml.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `loadAppConfig` | none | Not reached by the CLI (see the file note). |
+| `updateAppConfig` | none | Not reached by the CLI (see the file note). |
+| `getTheme` | none | Not reached by the CLI (see the file note). |
+| `setTheme` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/app-state-format.ts` to no Zig file
+
+Not reached by the CLI: the desktop and mobile apps' settings and remembered interface state (config.yaml and the app state). The CLI keeps its settings in databases.toml and state.yaml.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getAppStateValue` | none | Not reached by the CLI (see the file note). |
+| `setAppStateValue` | none | Not reached by the CLI (see the file note). |
+| `appStateSettings` | none | Not reached by the CLI (see the file note). |
+| `isSection` | none | Not reached by the CLI (see the file note). |
+| `yamlToAppState` | none | Not reached by the CLI (see the file note). |
+| `writeField` | none | Not reached by the CLI (see the file note). |
+| `writeSection` | none | Not reached by the CLI (see the file note). |
+| `appStateToYaml` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/app-state.ts` to no Zig file
+
+Not reached by the CLI: the desktop and mobile apps' settings and remembered interface state (config.yaml and the app state). The CLI keeps its settings in databases.toml and state.yaml.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `loadAppState` | none | Not reached by the CLI (see the file note). |
+| `updateAppState` | none | Not reached by the CLI (see the file note). |
+| `asFolderStateKey` | none | Not reached by the CLI (see the file note). |
+| `getFolderPath` | none | Not reached by the CLI (see the file note). |
+| `updateFolderPath` | none | Not reached by the CLI (see the file note). |
+| `updateLastFolder` | none | Not reached by the CLI (see the file note). |
+| `updateLastDownloadFolder` | none | Not reached by the CLI (see the file note). |
+| `getRecentSearches` | none | Not reached by the CLI (see the file note). |
+| `addRecentSearch` | none | Not reached by the CLI (see the file note). |
+| `removeRecentSearch` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/apply-database-ops.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `groupOpsByDatabaseId` | none | Not reached by the CLI (see the file note). |
+| `applyMetadataDatabaseOps` | none | Not reached by the CLI (see the file note). |
+| `applyDatabaseOps` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/asset-server-core.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `createAssetServerCore` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/asset-server-routes.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `attachAssetServerRoutes` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/asset-server.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `sleep` | none | Not reached by the CLI (see the file note). |
+| `assetServerHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/auto-import-desktop.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `foldersAsSources` | none | Not reached by the CLI (see the file note). |
+| `getDefaultDatabasePath` | none | Not reached by the CLI (see the file note). |
+| `planDesktopAutoImport` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/auto-import-queue.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `packages/node-api/src/lib/auto-import-scanner.ts` to `packages-zig/node-api-zig/src/lib/auto-import-scanner.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `AutoImportScanner` | `AutoImportScanner` |  |
+| `AutoImportScanner.constructor` | `AutoImportScanner.init` |  |
+| `AutoImportScanner.scan` | `AutoImportScanner.scan` |  |
+| `AutoImportScanner.release` | `AutoImportScanner.release` |  |
+| `AutoImportScanner.progress` | `AutoImportScanner.progress` |  |
+| `AutoImportScanner.pushItem` | `AutoImportScanner.pushItem` |  |
+| `AutoImportScanner.listSourcePage` | `AutoImportScanner.listSourcePage` |  |
+| `AutoImportScanner.queueNeedsAPage` | `AutoImportScanner.queueNeedsAPage` |  |
+| `AutoImportScanner.fetchAPage` | `AutoImportScanner.fetchAPage` |  |
+| `AutoImportScanner.hasNothingLeftToPush` | `AutoImportScanner.hasNothingLeftToPush` |  |
+| none | `IAutoImportScannerProgress` | The TypeScript interface of the same name, as a struct. |
+| none | `IsCancelledFn` | The `isCancelled` field type of IAutoImportScannerDeps, as a closure. |
+| none | `SleepFn` | The `sleep` field type of IAutoImportScannerDeps, as a closure. |
+| none | `AlreadyImportedContentHashFn` | The `alreadyImportedContentHash` field type of IAutoImportScannerDeps, as a closure. |
+| none | `OnLibraryWalkedFn` | The `onLibraryWalked` field type of IAutoImportScannerDeps, as a closure. |
+| none | `OnAutoImportProgressFn` | The `onProgress` field type of IAutoImportScannerDeps, as a closure. |
+| none | `LogInfoFn` | The `logInfo` field type of IAutoImportScannerDeps, as a closure. |
+| none | `IAutoImportScannerDeps` | The TypeScript interface of the same name, as a struct. |
+| none | `PushedItemScan` | The `async result => { ... }` arrow function `pushItem` passes to `scanPath`, and the `pushed` variable it sets. |
+| none | `PushedItemScan.visit` | The body of that arrow function. |
+| none | `AutoImportScanner.importScanner` | Zig plumbing: returns the interface view of the struct (a TypeScript class implements the interface directly). |
+| none | `AutoImportScanner.scanErased` | Zig plumbing: the type-erased vtable entry of the interface method. |
+| none | `AutoImportScanner.releaseErased` | Zig plumbing: the type-erased vtable entry of the interface method. |
+| none | `AutoImportScanner.isCancelled` | `deps.isCancelled()`. |
+
+#### `packages/node-api/src/lib/check-database-exists.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `checkDatabaseExistsHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/check.ts` to `packages-zig/node-api-zig/src/lib/check.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `checkPaths` | `checkPaths` |  |
+| none | `CheckPathsProgressCallback` | The TypeScript type of the same name, as a closure. |
+| none | `CheckPathsState` | The variables checkPaths' callbacks close over. |
+| none | `CheckPathsState.onTaskComplete` | The arrow function passed to `queue.onTaskComplete`. |
+| none | `CheckPathsState.visitFile` | The first arrow function passed to `scanPaths`. |
+| none | `CheckPathsState.onScanProgress` | The second arrow function passed to `scanPaths`. |
+
+#### `packages/node-api/src/lib/check.worker.ts` to `packages-zig/node-api-zig/src/lib/check.worker.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `checkFileHandler` | `checkFileHandler` |  |
+| none | `ICheckFileData` | The TypeScript interface of the same name, as a struct. |
+| none | `ICheckHashedFile` | The TypeScript interface of the same name, as a struct. |
+| none | `ICheckFileResult` | The TypeScript interface of the same name, as a struct. |
+| none | `resultToJson` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+
+#### `packages/node-api/src/lib/cleanup-sources.worker.ts` to `packages-zig/node-api-zig/src/lib/cleanup-sources.worker.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `cleanupSourcesHandler` | `cleanupSourcesHandler` |  |
+| none | `registerFolderMediaSourceBuilder` | The module-level `registerMediaSourceBuilder("folder", ...)` call, which runs when TypeScript loads the module; initTaskHandlers calls it. |
+| none | `ICleanupSourcesData` | The TypeScript interface of the same name, as a struct. |
+| none | `ICleanupSourcesResult` | The TypeScript interface of the same name, as a struct. |
+| none | `RemoveSessionTempDirOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `RemoveSessionTempDirOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `isInTheDatabase` | The nested function `isInTheDatabase` of cleanupSourcesHandler. |
+| none | `resultToJson` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+
+#### `packages/node-api/src/lib/config-file.ts` to no Zig file
+
+Not reached by the CLI: the desktop and mobile apps' settings and remembered interface state (config.yaml and the app state). The CLI keeps its settings in databases.toml and state.yaml.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getConfigPath` | none | Not reached by the CLI (see the file note). |
+| `loadConfigFile` | none | Not reached by the CLI (see the file note). |
+| `saveConfigFile` | none | Not reached by the CLI (see the file note). |
+| `updateConfigFile` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/config-format.ts` to no Zig file
+
+Not reached by the CLI: the desktop and mobile apps' settings and remembered interface state (config.yaml and the app state). The CLI keeps its settings in databases.toml and state.yaml.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `yamlSourceToRawSource` | none | Not reached by the CLI (see the file note). |
+| `sourceToYaml` | none | Not reached by the CLI (see the file note). |
+| `isSection` | none | Not reached by the CLI (see the file note). |
+| `yamlToAutoImportFile` | none | Not reached by the CLI (see the file note). |
+| `yamlToSyncFile` | none | Not reached by the CLI (see the file note). |
+| `yamlToConfigFile` | none | Not reached by the CLI (see the file note). |
+| `configFileToYaml` | none | Not reached by the CLI (see the file note). |
+| `defaultConfigFile` | none | Not reached by the CLI (see the file note). |
+| `sectionsPresent` | none | Not reached by the CLI (see the file note). |
+| `parseConfigYamlChecked` | none | Not reached by the CLI (see the file note). |
+| `parseConfigYaml` | none | Not reached by the CLI (see the file note). |
+| `buildConfigYaml` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/config.worker.ts` to no Zig file
+
+Not reached by the CLI: the desktop and mobile apps' settings and remembered interface state (config.yaml and the app state). The CLI keeps its settings in databases.toml and state.yaml.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `readConfigFromStorage` | none | Not reached by the CLI (see the file note). |
+| `readConfigHandler` | none | Not reached by the CLI (see the file note). |
+| `writeConfigHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/consolidate-database.worker.ts` to `packages-zig/node-api-zig/src/lib/consolidate-database.worker.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `consolidateDatabaseHandler` | `consolidateDatabaseHandler` |  |
+| none | `IConsolidateDatabaseData` | The TypeScript interface of the same name, as a struct. |
+| none | `IConsolidateProgressMessage` | The TypeScript interface of the same name, as a struct. |
+| none | `ProgressMessageSender` | The `(pushed, total) => { ... }` arrow function passed to consolidateDatabases. |
+| none | `ProgressMessageSender.send` | The body of that arrow function. |
+| none | `toJson` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+
+#### `packages/node-api/src/lib/consolidate.ts` to `packages-zig/node-api-zig/src/lib/consolidate.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `originalHashes` | `originalHashes` |  |
+| `planConsolidation` | `planConsolidation` |  |
+| `copyAssetFile` | `copyAssetFile` |  |
+| `consolidateDatabases` | `consolidateDatabases` |  |
+| `findLeaf` | `findLeaf` |  |
+| none | `IConsolidationPlan` | The TypeScript interface of the same name, as a struct. |
+| none | `hexOf` | `contentHash.toString("hex")`. |
+| none | `IConsolidationResult` | The TypeScript interface of the same name, as a struct. |
+| none | `IConsolidationProgressCallback` | The TypeScript interface of the same name, as a struct. |
+| none | `IConsolidationProgressCallback.call` | Zig plumbing: a closure (a context and a function) standing in for the TypeScript function type. |
+| none | `pushAbsentAssets` | The body of the first `try` block of consolidateDatabases (under the remote's write lock), a function so the lock can be released after it whatever it returns. |
+| none | `joinAsPartialReplica` | The body of the second `try` block of consolidateDatabases (under the local write lock). |
+
+#### `packages/node-api/src/lib/create-auto-import-scanner.ts` to `packages-zig/node-api-zig/src/lib/create-auto-import-scanner.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `createAutoImportScanner` | `createAutoImportScanner` |  |
+| none | `buildFolderMediaSource` | The arrow function the module registers as the folder media source builder. |
+| none | `registerFolderMediaSourceBuilder` | The module-level `registerMediaSourceBuilder("folder", ...)` call, which runs when TypeScript loads the module; initTaskHandlers calls it. |
+| none | `ICreateAutoImportScannerOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `AutoImportScannerCallbacks` | The variables the nested functions of createAutoImportScanner close over (`options`, `cacheEntriesRecorded`). |
+| none | `AutoImportScannerCallbacks.alreadyImportedContentHash` | The nested function `alreadyImportedContentHash`. |
+| none | `AutoImportScannerCallbacks.onLibraryWalked` | The nested function `onLibraryWalked`. |
+| none | `AutoImportScannerCallbacks.isCancelled` | The arrow function `() => options.context.isCancelled()`. |
+| none | `AutoImportScannerCallbacks.sleepFor` | The arrow function `milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))`. |
+| none | `AutoImportScannerCallbacks.logInfo` | The arrow function `message => log.info(message)`. |
+| none | `SaveHashCacheOperation` | The arrow function `() => localHashCache.save()` passed to swallowError and retryOrLog (shared by check, import-assets and create-auto-import-scanner). |
+| none | `SaveHashCacheOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+
+#### `packages/node-api/src/lib/create-database.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `createDatabaseHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/create-default-database.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `createDefaultDatabaseHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/database-cache-dir.ts` to `packages-zig/node-api-zig/src/lib/database-cache-dir.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getDatabaseCacheDir` | `getDatabaseCacheDir` |  |
+| `getImportRecordPath` | `getImportRecordPath` |  |
+
+#### `packages/node-api/src/lib/databases-config-format.ts` to `packages-zig/node-api-zig/src/lib/databases-config-format.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `tomlEntryToDatabaseEntry` | `tomlEntryToDatabaseEntry` |  |
+| `databaseEntryToToml` | `databaseEntryToToml` |  |
+| none | `IDatabaseEntry` | The TypeScript interface of the same name, as a struct. |
+| none | `stringProperty` | Reading a string property of the parsed TOML (`tomlEntry.origin` and so on); absent or not a string is null. |
+
+#### `packages/node-api/src/lib/databases-config.ts` to `packages-zig/node-api-zig/src/lib/databases-config.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getDatabasesConfigPath` | `getDatabasesConfigPath` |  |
+| `tomlToDatabasesConfig` | `tomlToDatabasesConfig` |  |
+| `databasesConfigToToml` | `databasesConfigToToml` |  |
+| `namesMatch` | `namesMatch` |  |
+| `loadDatabasesConfig` | `loadDatabasesConfig` |  |
+| `updateDatabasesConfig` | `updateDatabasesConfig` |  |
+| `getDatabases` | `getDatabases` |  |
+| `findDatabase` | `findDatabase` |  |
+| `addDatabaseEntry` | `addDatabaseEntry` |  |
+| `updateDatabaseEntry` | `updateDatabaseEntry` |  |
+| `removeDatabaseEntry` | `removeDatabaseEntry` |  |
+| `getRecentDatabases` | none | Not reached by the CLI: only the desktop app keeps a recent list. |
+| `removeRecentDatabaseName` | none | Not reached by the CLI: only the desktop app keeps a recent list. |
+| `markDatabaseOpened` | none | Not reached by the CLI: only the desktop app keeps a recent list. |
+| `getLastDatabase` | none | Not reached by the CLI: only the desktop app reopens the last database. |
+| `setLastDatabase` | none | Not reached by the CLI: only the desktop app reopens the last database. |
+| none | `IDatabasesConfig` | The TypeScript interface of the same name, as a struct. |
+| none | `DATABASES_FILE` | The module constant DATABASES_FILE, worked out on each call (TypeScript works it out when the module loads). |
+| none | `arrayProperty` | `Array.isArray(toml.x) ? toml.x : ...`. |
+| none | `stringItems` | The `recent_database_names` array. TypeScript keeps it as it is; Zig keeps its strings (see "JavaScript behaviour not emulated"). |
+| none | `DatabasesConfigTomlMutator` | The arrow function updateDatabasesConfig passes to updateToml. |
+| none | `AddDatabaseEntryMutator` | The arrow function addDatabaseEntry passes to updateDatabasesConfig. |
+| none | `AddDatabaseEntryMutator.run` | The body of that arrow function. |
+| none | `UpdateDatabaseEntryMutator` | The arrow function updateDatabaseEntry passes to updateDatabasesConfig. |
+| none | `UpdateDatabaseEntryMutator.run` | The body of that arrow function. |
+| none | `RemoveDatabaseEntryMutator` | The arrow function removeDatabaseEntry passes to updateDatabasesConfig. |
+| none | `RemoveDatabaseEntryMutator.run` | The body of that arrow function. |
+
+#### `packages/node-api/src/lib/databases-config.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `readDatabasesConfigHandler` | none | Not reached by the CLI (see the file note). |
+| `writeDatabasesConfigHandler` | none | Not reached by the CLI (see the file note). |
+| `isTestDatabaseName` | none | Not reached by the CLI (see the file note). |
+| `registerDatabaseInConfig` | none | Not reached by the CLI (see the file note). |
+| `buildDatabasesConfigToml` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/decrypt.ts` to `packages-zig/node-api-zig/src/lib/decrypt.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `decryptFile` | `decryptFile` |  |
+| `decryptableFiles` | `decryptableFiles` |  |
+| `decrypt` | `decrypt` |  |
+| none | `IDecryptProgress` | The TypeScript interface of the same name, as a struct. |
+| none | `IDecryptProgress.call` | Zig plumbing: a closure (a context and a function) standing in for the TypeScript function type. |
+| none | `IDecryptResult` | The TypeScript interface of the same name, as a struct. |
+| none | `DecryptableFilesIterator` | The async generator decryptableFiles, as an iterator. |
+| none | `DecryptableFilesIterator.next` | One step of that generator. |
+| none | `DecryptFileTask` | The `async fileName => { ... }` arrow function mapped over a batch for `Promise.all`; the batch runs concurrently and the tree update is guarded by a mutex. |
+| none | `DecryptFileTask.run` | The body of that arrow function. |
+
+#### `packages/node-api/src/lib/encrypt.ts` to `packages-zig/node-api-zig/src/lib/encrypt.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `encryptFile` | `encryptFile` |  |
+| `encryptableFiles` | `encryptableFiles` |  |
+| `encrypt` | `encrypt` |  |
+| none | `IEncryptProgress` | The TypeScript interface of the same name, as a struct. |
+| none | `IEncryptProgress.call` | Zig plumbing: a closure (a context and a function) standing in for the TypeScript function type. |
+| none | `IEncryptResult` | The TypeScript interface of the same name, as a struct. |
+| none | `EncryptableFilesIterator` | The async generator encryptableFiles, as an iterator. |
+| none | `EncryptableFilesIterator.next` | One step of that generator. |
+| none | `EncryptFileTask` | The `async fileName => { ... }` arrow function mapped over a batch for `Promise.all`; the batch runs concurrently and the tree update is guarded by a mutex. |
+| none | `EncryptFileTask.run` | The body of that arrow function. |
+
+#### `packages/node-api/src/lib/evict-originals.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `indexTreeFiles` | none | Not reached by the CLI (see the file note). |
+| `getDeviceFreeBytes` | none | Not reached by the CLI (see the file note). |
+| `buildEvictionCandidates` | none | Not reached by the CLI (see the file note). |
+| `deleteIfPresent` | none | Not reached by the CLI (see the file note). |
+| `evictOriginalsHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/file-scanner.ts` to `packages-zig/node-api-zig/src/lib/file-scanner.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `shouldIncludeFile` | `shouldIncludeFile` |  |
+| `walkDirectory` | `walkDirectory` |  |
+| `formatZipDisplayPath` | `formatZipDisplayPath` |  |
+| `constructLogicalPath` | `constructLogicalPath` |  |
+| `formatZipProgressPath` | `formatZipProgressPath` |  |
+| `scanZipFile` | `scanZipFile` |  |
+| `scanDirectory` | `scanDirectory` |  |
+| `scanPathInternal` | `scanPathInternal` |  |
+| `scanPaths` | `scanPaths` |  |
+| `scanPath` | `scanPath` |  |
+| none | `IFileStat` | The TypeScript interface of the same name, as a struct. |
+| none | `ScannerState` | The TypeScript interface of the same name (the generator matches only exported functions and classes). |
+| none | `ScanProgressCallback` | The TypeScript type of the same name, as a closure. |
+| none | `ScanProgressCallback.call` | Zig plumbing: a closure (a context and a function) standing in for the TypeScript function type. |
+| none | `FileScannedResult` | The TypeScript interface of the same name. |
+| none | `SimpleFileCallback` | The TypeScript type of the same name, as a closure. |
+| none | `SimpleFileCallback.call` | Zig plumbing: a closure (a context and a function) standing in for the TypeScript function type. |
+| none | `ScannerOptions` | The TypeScript interface of the same name. A pattern is the literal text the TypeScript regular expression matches anywhere in a name. |
+| none | `IOrderedFile` | The TypeScript interface of the same name, as a struct. |
+| none | `getMimeType` | `mime.getType(path)`, through third-party/mime (replaces the `mime` npm package). |
+| none | `IDirectoryEntry` | The TypeScript interface of the same name, as a struct. |
+| none | `entryLessThan` | The sort comparator `a.name.localeCompare(b.name, undefined, { numeric: true })`. |
+| none | `OrderedFileVisitor` | Zig plumbing: the body of the `for await` loop over the walkDirectory generator, as a closure walkDirectory calls. |
+| none | `isIgnored` | The `isIgnored` arrow function inside walkDirectory. |
+| none | `truncateUtf16` | `rootZipName.substring(0, 50)` on UTF-16 code units; a cut through a surrogate pair ends in U+FFFD, as the lone surrogate is written. |
+| none | `statPath` | Replaces `fs.stat`, with Node's message for a missing path. |
+| none | `statModifiedTime` | `stats.mtime`: whole milliseconds, truncated towards zero as the Date constructor truncates mtimeMs. |
+| none | `extractNestedZip` | The body of scanZipFile's `try` block for a nested zip, a function so its errors can be caught. |
+| none | `extractFile` | The body of scanZipFile's `try` block for a media file, a function so its errors can be caught. |
+| none | `DirectoryScan` | The variables the body of scanDirectory's `for await` loop uses. |
+| none | `DirectoryScan.visitOrderedFile` | The body of that loop. |
+
+#### `packages/node-api/src/lib/folder-media-source.ts` to `packages-zig/node-api-zig/src/lib/folder-media-source.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `FolderMediaSource` | `FolderMediaSource` |  |
+| `FolderMediaSource.constructor` | `FolderMediaSource.init` |  |
+| `FolderMediaSource.scan` | `FolderMediaSource.scan` |  |
+| `FolderMediaSource.listPage` | `FolderMediaSource.listPage` |  |
+| `FolderMediaSource.openItem` | `FolderMediaSource.openItem` |  |
+| `FolderMediaSource.closeItem` | `FolderMediaSource.closeItem` |  |
+| `FolderMediaSource.deleteItems` | `FolderMediaSource.deleteItems` |  |
+| none | `IScannedItem` | The TypeScript interface of the same name, as a struct. |
+| none | `scannedItemLessThan` | The sort comparator `left.item.sourceId.localeCompare(right.item.sourceId)`. |
+| none | `FolderScan` | The `async result => { ... }` arrow function FolderMediaSource.scan passes to scanPaths, and what it closes over. |
+| none | `FolderScan.visit` | The body of that arrow function. |
+| none | `FolderMediaSource.mediaSource` | Zig plumbing: returns the interface view of the struct (a TypeScript class implements the interface directly). |
+| none | `FolderMediaSource.listPageErased` | Zig plumbing: the type-erased vtable entry of the interface method. |
+| none | `FolderMediaSource.openItemErased` | Zig plumbing: the type-erased vtable entry of the interface method. |
+| none | `FolderMediaSource.closeItemErased` | Zig plumbing: the type-erased vtable entry of the interface method. |
+| none | `FolderMediaSource.deleteItemsErased` | Zig plumbing: the type-erased vtable entry of the interface method. |
+| none | `FolderMediaSource.findSourceIdIndex` | `scannedItems.findIndex(scannedItem => scannedItem.item.sourceId === cursor)`. |
+
+#### `packages/node-api/src/lib/get-database-summary.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getDatabaseSummaryHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/get-import-record.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getImportRecordHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/hash-cache.ts` to `packages-zig/node-api-zig/src/lib/hash-cache.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `isUpdateContentionError` | `isUpdateContentionError` |  |
+| `getHashCacheDir` | `getHashCacheDir` |  |
+| `HashCache` | `HashCache` |  |
+| `HashCache.constructor` | `HashCache.init` |  |
+| `HashCache.normalizeKey` | `HashCache.normalizeKey` |  |
+| `HashCache.entrySize` | `HashCache.entrySize` |  |
+| `HashCache.readAssetId` | `HashCache.readAssetId` |  |
+| `HashCache.writeAssetId` | `HashCache.writeAssetId` |  |
+| `HashCache.computeChecksum` | `HashCache.computeChecksum` |  |
+| `HashCache.decodeEntries` | `HashCache.decodeEntries` |  |
+| `HashCache.encodeEntries` | `HashCache.encodeEntries` |  |
+| `HashCache.load` | `HashCache.load` |  |
+| `HashCache.initializeFreshCache` | `HashCache.initializeFreshCache` |  |
+| `HashCache.adoptEntries` | `HashCache.adoptEntries` |  |
+| `HashCache.createLookupTable` | `HashCache.createLookupTable` |  |
+| `HashCache.ensureCapacity` | `HashCache.ensureCapacity` |  |
+| `HashCache.save` | `HashCache.save` |  |
+| `HashCache.findEntryOffset` | `HashCache.findEntryOffset` |  |
+| `HashCache.getEntryOffsetByIndex` | `HashCache.getEntryOffsetByIndex` |  |
+| `HashCache.getHash` | `HashCache.getHash` |  |
+| `HashCache.addHash` | `HashCache.addHash` |  |
+| `HashCache.addSourceHash` | `HashCache.addSourceHash` |  |
+| `HashCache.upsertHash` | `HashCache.upsertHash` |  |
+| `HashCache.setAssetId` | `HashCache.setAssetId` |  |
+| `HashCache.removeSourceEntriesNotIn` | `HashCache.removeSourceEntriesNotIn` |  |
+| `HashCache.removeHash` | `HashCache.removeHash` |  |
+| `HashCache.getEntryCount` | `HashCache.getEntryCount` |  |
+| `HashCache.getAllEntries` | `HashCache.getAllEntries` |  |
+| `loadSharedHashCache` | `loadSharedHashCache` |  |
+| `forgetSharedHashCaches` | `forgetSharedHashCaches` |  |
+| none | `IHashCacheEntry` | The TypeScript interface of the same name, as a struct. |
+| none | `ICachedHash` | The TypeScript interface of the same name, as a struct. |
+| none | `IHashCacheListing` | The TypeScript interface of the same name, as a struct. |
+| none | `IHashToCache` | The TypeScript interface of the same name, as a struct. |
+| none | `readUInt32LE` | Replaces Node's `buf.readUInt32LE`. |
+| none | `writeUInt32LE` | Replaces Node's `buf.writeUInt32LE`. |
+| none | `readUInt48LE` | Replaces Node's `buf.readUIntLE(offset, 6)`. |
+| none | `writeUInt48LE` | Replaces Node's `buf.writeUIntLE(value, offset, 6)`, with its RangeError. |
+| none | `IDecodedEntries` | The TypeScript interface of the same name, as a struct. |
+| none | `HashCache.deinit` | Zig plumbing: frees what the struct owns (garbage collected in TypeScript). |
+| none | `HashCache.clearPendingUpserts` | Zig plumbing: `pendingUpserts.clear()`, freeing the keys. |
+| none | `HashCache.clearPendingRemovals` | Zig plumbing: `pendingRemovals.clear()`, freeing the keys. |
+| none | `HashCache.setPendingUpsert` | Zig plumbing: `pendingUpserts.set(key, entry)`, copying the key and asset id. |
+| none | `HashCache.deletePendingUpsert` | Zig plumbing: `pendingUpserts.delete(key)`. |
+| none | `HashCache.deletePendingRemoval` | Zig plumbing: `pendingRemovals.delete(key)`. |
+| none | `HashCache.addPendingRemoval` | Zig plumbing: `pendingRemovals.add(key)`. |
+| none | `HashCache.loadFrom` | The body of load's `try` block, a function so its errors can be caught. |
+| none | `HashCache.entryLessThan` | The sort comparator `first.key.localeCompare(second.key)`. |
+| none | `HashCache.keyAt` | `this.buffer.toString('utf8', ...)` of an entry's key, inline in TypeScript. |
+| none | `ILoadedHashCache` | The TypeScript interface of the same name, as a struct. |
+
+#### `packages/node-api/src/lib/hash-file.worker.ts` to `packages-zig/node-api-zig/src/lib/hash-file.worker.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `hashFileHandler` | `hashFileHandler` |  |
+| none | `IHashFileData` | The TypeScript interface of the same name, as a struct. |
+| none | `IHashFileResult` | The TypeScript interface of the same name, as a struct. |
+| none | `dateNow` | `Date.now()`. |
+
+#### `packages/node-api/src/lib/hash.ts` to `packages-zig/node-api-zig/src/lib/hash.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `computeHash` | `computeHash` |  |
+| `getNativeFileHasher` | `getNativeFileHasher` |  |
+| `computeFileHash` | `computeFileHash` |  |
+| `computeAssetHash` | `computeAssetHash` |  |
+| `getHashFromCache` | `getHashFromCache` |  |
+| `validateAndHash` | `validateAndHash` |  |
+| none | `NativeFileHasher` | The `(filePath: string) => Buffer` type of the native hasher, as a closure. There is none in the CLI. |
+
+#### `packages/node-api/src/lib/image.ts` to `packages-zig/node-api-zig/src/lib/image.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `parseExifDate` | `parseExifDate` |  |
+| `pickExifDate` | `pickExifDate` |  |
+| `getImageDetails` | `getImageDetails` |  |
+| `dimensionsFromExif` | `dimensionsFromExif` |  |
+| `getImageMetadata` | `getImageMetadata` |  |
+| `resizeImage` | `resizeImage` |  |
+| `transformImage` | `transformImage` |  |
+| none | `digitsAt` | The `(\d{2})` groups of EXIF_DATE_PATTERN and their `parseInt(..., 10)`. |
+| none | `dateNow` | `Date.now()`. |
+| none | `IImageMetadata` | The TypeScript interface of the same name, as a struct. |
+| none | `parseExif` | `exifParser.create(fileData)`, `enableSimpleValues(false)` and `parse()`, through third-party/exif-parser (replaces the `exif-parser` npm package). |
+| none | `isTruthy` | JavaScript truthiness of an EXIF tag value. |
+| none | `readImageMetadata` | The body of getImageMetadata's `try` block, a function so its errors can be caught. |
+| none | `locationJson` | `JSON.stringify(coordinates)`. |
+| none | `writeJsonNumber` | A number as JSON.stringify writes it. |
+| none | `jsRound` | `Math.round`. |
+
+#### `packages/node-api/src/lib/import-assets.worker.ts` to `packages-zig/node-api-zig/src/lib/import-assets.worker.zig`
+
+The nested functions and closures of importAssetsHandler (flushImportRecord, recordImportOutcome, flushCacheIfDue, hasWorkInFlight, cacheKeyOfPath, releaseFile, dispatchChildTasks, processPendingDatabaseUpdates, the throttled queue processor, recordChildTaskOutcome, onScannerProgress, sendImportProgress and the two scanPaths callbacks) are the methods of `ImportRun`, whose fields are the variables they close over. `countedStorage`, the Proxy that counts what the database writes, is not ported: its counters are never read.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `shouldWriteDatabaseBatch` | `shouldWriteDatabaseBatch` |  |
+| `describeImportProgress` | `describeImportProgress` |  |
+| `importAssetsHandler` | `importAssetsHandler` |  |
+| none | `IImportAssetsData` | The TypeScript interface of the same name, as a struct. |
+| none | `IImportOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IImportOptions.toJson` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+| none | `importAssetsResultToJson` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+| none | `toJsonValue` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+| none | `IPendingDatabaseUpdate` | The TypeScript interface of the same name, as a struct. |
+| none | `FlushImportRecordOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `FlushImportRecordOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `ReleaseFileOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `ReleaseFileOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `RemoveSessionTempDirOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `RemoveSessionTempDirOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `ImportRun` | The local variables of importAssetsHandler that its nested functions close over. |
+| none | `ImportRun.lock` | Zig plumbing: TypeScript's callbacks run one at a time on the event loop; Zig's task callbacks run on worker threads, so they take this lock. |
+| none | `ImportRun.unlock` | Zig plumbing: see `ImportRun.lock`. |
+| none | `ImportRun.sleepUnlocked` | `await sleep(milliseconds)`, which lets the event loop run the callbacks; Zig releases the lock while it sleeps. |
+| none | `ImportRun.nowIsoString` | `new Date(timestampProvider.dateNow()).toISOString()`. |
+| none | `ImportRun.sendStringMessage` | `context.sendMessage({ ... })` for a message of string fields. |
+| none | `ImportRun.flushImportRecord` | The nested function `flushImportRecord`. |
+| none | `ImportRun.recordImportOutcome` | The nested function `recordImportOutcome`. |
+| none | `ImportRun.flushCacheIfDue` | The nested function `flushCacheIfDue`. |
+| none | `ImportRun.hasWorkInFlight` | The nested function `hasWorkInFlight`. |
+| none | `ImportRun.filesAwaitingHashCount` | `filesAwaitingHash.length` (the array is consumed from a head index instead of `shift()`). |
+| none | `ImportRun.assetsAwaitingUploadCount` | `assetsAwaitingUpload.length` (consumed from a head index instead of `shift()`). |
+| none | `ImportRun.cacheKeyOfPath` | The nested function `cacheKeyOfPath`. |
+| none | `ImportRun.releaseFile` | The nested function `releaseFile`. |
+| none | `ImportRun.dispatchChildTasks` | The nested function `dispatchChildTasks`. |
+| none | `ImportRun.processPendingDatabaseUpdates` | The nested function `processPendingDatabaseUpdates`, up to its `try` block. |
+| none | `ImportRun.writeLockedBatch` | The `try` block of processPendingDatabaseUpdates, a function so the write lock can be released after it whatever it returns. |
+| none | `ImportRun.processQueue` | The async arrow function passed to `throttle` (`throttledProcessQueue`). |
+| none | `ImportRun.processQueueThrottled` | The `catch` of that arrow function: logs the error. |
+| none | `ImportRun.onTaskComplete` | The arrow function passed to `queue.onTaskComplete`. |
+| none | `ImportRun.recordChildTaskOutcome` | The nested function `recordChildTaskOutcome`. |
+| none | `ImportRun.onScannerProgress` | The nested function `onScannerProgress`. |
+| none | `ImportRun.sendImportProgress` | The nested function `sendImportProgress`. |
+| none | `ImportRun.visitFile` | The first arrow function passed to `scanner.scan`. |
+| none | `ImportRun.onScanProgress` | The second arrow function passed to `scanner.scan`. |
+| none | `ImportRun.reportScanProgress` | The body of that arrow function. |
+| none | `CaughtUpFlushOperation` | The async arrow function onScannerProgress hands to swallowError when the scanner has caught up. |
+| none | `CaughtUpFlushOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `optionalStringsEqual` | `stateBeforeWriting?.lastModifiedAt !== lastModifiedAtWrittenByThisRun`. |
+| none | `hexToBuffer` | `Buffer.from(hash, "hex")` of a hash the worker wrote. |
+| none | `jsNumber` | The number `filesImported += n` adds to. |
+| none | `recordMicro` | `assetData.assetRecord.micro`. |
+| none | `isAutoImport` | `data.options?.auto`. |
+| none | `runResult` | The `result` object importAssetsHandler returns. |
+| none | `loadExistingHashes` | The nested function `loadExistingHashes`. |
+
+#### `packages/node-api/src/lib/import-record-storage.ts` to `packages-zig/node-api-zig/src/lib/import-record-storage.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `loadImportRecord` | `loadImportRecord` |  |
+| `recordImports` | `recordImports` |  |
+| none | `AddEntriesMutator` | The arrow function `record => addImportEntries(record, newEntries)`. |
+| none | `AddEntriesMutator.run` | The body of that arrow function. |
+| none | `ParseRecord` | `parseImportRecord` passed as a function value. |
+| none | `ParseRecord.run` | Calls parseImportRecord. |
+| none | `SerializeRecord` | `serializeImportRecord` passed as a function value. |
+| none | `SerializeRecord.run` | Calls serializeImportRecord. |
+| none | `UpdateImportRecordOperation` | The async arrow function recordImports passes to swallowError. |
+| none | `UpdateImportRecordOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+
+#### `packages/node-api/src/lib/import-scanner.ts` to `packages-zig/node-api-zig/src/lib/import-scanner.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| none | `IScannedImportFile` | The TypeScript interface of the same name, as a struct. |
+| none | `IScannedImportFile.fromScanned` | `{ ...result, cacheIdentity }`. |
+| none | `VisitImportFile` | The `(result: IScannedImportFile) => Promise<void>` parameter type of `scan`, as a closure. |
+| none | `VisitImportFile.call` | Zig plumbing: a closure (a context and a function) standing in for the TypeScript function type. |
+| none | `IImportScanner` | The TypeScript interface of the same name, as a struct. |
+| none | `IImportScanner.scan` | The interface method, dispatched through the vtable. |
+| none | `IImportScanner.release` | The interface method, dispatched through the vtable. |
+
+#### `packages/node-api/src/lib/import.ts` to `packages-zig/node-api-zig/src/lib/import.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `addPaths` | `addPaths` |  |
+| none | `AddPathsProgressCallback` | The TypeScript type of the same name, as a closure. |
+| none | `AddPathsState` | The variables addPaths' callbacks close over. |
+| none | `AddPathsState.onAnyTaskMessage` | The arrow function passed to `queue.onAnyTaskMessage`. |
+| none | `AddPathsState.shutdownOnTermination` | The arrow function passed to `registerTerminationCallback`. |
+
+#### `packages/node-api/src/lib/lan-share.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `watchForCancellation` | none | Not reached by the CLI (see the file note). |
+| `receiveShareHandler` | none | Not reached by the CLI (see the file note). |
+| `findReceiverHandler` | none | Not reached by the CLI (see the file note). |
+| `sendPayloadHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/lazy-origin-storage.ts` to `packages-zig/node-api-zig/src/lib/lazy-origin-storage.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `LazyOriginStorage` | `LazyOriginStorage` |  |
+| `LazyOriginStorage.constructor` | `LazyOriginStorage.init` |  |
+| `LazyOriginStorage.location` | none | The getter is the `location` field of the IStorage view. |
+| `LazyOriginStorage.isEmpty` | `LazyOriginStorage.isEmpty` |  |
+| `LazyOriginStorage.listFiles` | `LazyOriginStorage.listFiles` |  |
+| `LazyOriginStorage.listDirs` | `LazyOriginStorage.listDirs` |  |
+| `LazyOriginStorage.fileExists` | `LazyOriginStorage.fileExists` |  |
+| `LazyOriginStorage.dirExists` | `LazyOriginStorage.dirExists` |  |
+| `LazyOriginStorage.info` | `LazyOriginStorage.info` |  |
+| `LazyOriginStorage.readableLength` | `LazyOriginStorage.readableLength` |  |
+| `LazyOriginStorage.writeStreamHashed` | `LazyOriginStorage.writeStreamHashed` |  |
+| `LazyOriginStorage.storedHash` | `LazyOriginStorage.storedHash` |  |
+| `LazyOriginStorage.read` | `LazyOriginStorage.read` |  |
+| `LazyOriginStorage.write` | `LazyOriginStorage.write` |  |
+| `LazyOriginStorage.readStream` | `LazyOriginStorage.readStream` |  |
+| `LazyOriginStorage.writeStream` | `LazyOriginStorage.writeStream` |  |
+| `LazyOriginStorage.deleteFile` | `LazyOriginStorage.deleteFile` |  |
+| `LazyOriginStorage.deleteDir` | `LazyOriginStorage.deleteDir` |  |
+| `LazyOriginStorage.copyTo` | `LazyOriginStorage.copyTo` |  |
+| `LazyOriginStorage.checkWriteLock` | `LazyOriginStorage.checkWriteLock` |  |
+| `LazyOriginStorage.acquireWriteLock` | `LazyOriginStorage.acquireWriteLock` |  |
+| `LazyOriginStorage.releaseWriteLock` | `LazyOriginStorage.releaseWriteLock` |  |
+| `LazyOriginStorage.refreshWriteLock` | none | Not reached by the CLI: IStorage in storage-zig has no refreshWriteLock (see storage). |
+| none | `LazyOriginStorage.storage` | Zig plumbing: the IStorage view of the struct (a TypeScript class implements the interface directly). |
+| none | `writeCache` | `this.local.writeStream(filePath, undefined, cacheStream).catch(() => {})`, run concurrently. |
+| none | `CachePipe` | Replaces the `cacheStream` PassThrough: a bounded pipe from the tee to the cache write. |
+| none | `CachePipe.push` | `cacheStream.write(chunk)`, waiting while the pipe is full (the backpressure `pause`/`drain` gives). |
+| none | `CachePipe.finish` | `cacheStream.end()`, or `cacheStream.destroy(err)` when the origin fails. |
+| none | `CachePipe.finishReading` | Zig only: the cache write has stopped reading, so the tee stops feeding it (see "Divergences kept"). |
+| none | `CachePipe.streamFunction` | The reading end of the pipe, which the cache write reads. |
+| none | `TeeStream` | Replaces the `callerStream` PassThrough and the `data`/`end`/`error` handlers on the origin stream. |
+| none | `TeeStream.readerFunction` | Zig plumbing: the reader of the stream. |
+| none | `TeeStream.destroyFunction` | Zig plumbing: closes the stream and waits for the cache write. |
+| none | `TeeStream.streamFunction` | The origin's `data` handler: each chunk goes to the caller and to the cache. |
+
+#### `packages/node-api/src/lib/load-assets.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `loadAssetsHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/manual-import-scanner.ts` to `packages-zig/node-api-zig/src/lib/manual-import-scanner.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `ManualImportScanner` | `ManualImportScanner` |  |
+| `ManualImportScanner.constructor` | `ManualImportScanner.init` |  |
+| `ManualImportScanner.scan` | `ManualImportScanner.scan` |  |
+| `ManualImportScanner.release` | `ManualImportScanner.release` |  |
+| none | `ManualImportScanner.importScanner` | Zig plumbing: returns the interface view of the struct (a TypeScript class implements the interface directly). |
+| none | `ManualImportScanner.scanErased` | Zig plumbing: the type-erased vtable entry of the interface method. |
+| none | `ManualImportScanner.releaseErased` | Zig plumbing: the type-erased vtable entry of the interface method. |
+| none | `ManualImportScanner.visitScannedFile` | The arrow function `result => visitFile({ ...result, cacheIdentity: undefined })`. |
+
+#### `packages/node-api/src/lib/media-file-database.ts` to `packages-zig/node-api-zig/src/lib/media-file-database.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `extractDominantColorFromThumbnail` | `extractDominantColorFromThumbnail` |  |
+| `createReadme` | `createReadme` |  |
+| `createMediaFileDatabase` | `createMediaFileDatabase` |  |
+| `createDatabase` | `createDatabase` |  |
+| `loadSortIndexes` | `loadSortIndexes` |  |
+| `ensureSortIndex` | `ensureSortIndex` |  |
+| `getDatabaseSummary` | `getDatabaseSummary` |  |
+| `streamAsset` | none | Not reached by the CLI: the desktop asset server and move/save workers. |
+| `writeAsset` | none | Not reached by the CLI: the desktop asset server. |
+| `writeAssetStream` | none | Not reached by the CLI: the desktop asset server. |
+| `writeAssetStreamVerified` | none | Not reached by the CLI: the desktop move-assets worker. |
+| `removeAsset` | `removeAsset` |  |
+| `isDatabasePartial` | none | Not reached by the CLI: the desktop load-assets worker. |
+| `createLazyDatabaseStorage` | none | Not reached by the CLI: desktop workers. `psi export` uses openLazyOriginStorage. |
+| `openLazyOriginStorage` | `openLazyOriginStorage` |  |
+| `checkDatabaseExists` | none | Not reached by the CLI: desktop workers. |
+| none | `ProgressCallback` | The TypeScript type of the same name, as a closure. |
+| none | `ProgressCallback.call` | Zig plumbing: a closure (a context and a function) standing in for the TypeScript function type. |
+| none | `DatabaseMode` | The TypeScript type `"full" \| "partial"`, as an enum. |
+| none | `IDatabaseSummary` | The TypeScript interface of the same name, as a struct. |
+| none | `getFilesImported` | `merkleTree.databaseMetadata?.filesImported \|\| 0` (see "JavaScript behaviour not emulated" for values of the wrong type). |
+| none | `isPartialDatabase` | `merkleTree.databaseMetadata?.isPartial === true`. |
+| none | `emptyDatabaseMetadata` | The object literal `{ filesImported: 0 }`. |
+| none | `copyDatabaseMetadata` | The spread `{ ...databaseMetadata }`. |
+| none | `IAddSummary` | The TypeScript interface of the same name, as a struct. |
+| none | `IAssetDetailTimings` | The TypeScript interface of the same name, as a struct. |
+| none | `IResolution` | The TypeScript interface of the same name, as a struct. |
+| none | `IAssetDetails` | The TypeScript interface of the same name, as a struct. |
+| none | `IMediaFileDatabase` | The TypeScript interface of the same name, as a struct. |
+| none | `EnsureSortIndexOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `GetDatabaseRootHashOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `GetDatabaseRootHashOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `removeAssetUnderLock` | The `try` block of removeAsset, a function so the write lock can be released after it whatever it returns. |
+| none | `configOrigin` | `config?.origin`, falsy when absent or empty. |
+
+#### `packages/node-api/src/lib/media-source-registry.ts` to `packages-zig/node-api-zig/src/lib/media-source-registry.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `registerMediaSourceBuilder` | `registerMediaSourceBuilder` |  |
+| `clearMediaSourceBuilders` | `clearMediaSourceBuilders` |  |
+| `buildMediaSource` | `buildMediaSource` |  |
+| `parseCompositeCursor` | none | Not reached by the CLI: the CLI registers only the folder builder, so buildMediaSource never builds more than one source; Zig throws loudly if it would. |
+| `CompositeMediaSource` | none | Not reached by the CLI (see parseCompositeCursor). |
+| `CompositeMediaSource.constructor` | none | Not reached by the CLI (see parseCompositeCursor). |
+| `CompositeMediaSource.listPage` | none | Not reached by the CLI (see parseCompositeCursor). |
+| `CompositeMediaSource.openItem` | none | Not reached by the CLI (see parseCompositeCursor). |
+| `CompositeMediaSource.closeItem` | none | Not reached by the CLI (see parseCompositeCursor). |
+| `CompositeMediaSource.deleteItems` | none | Not reached by the CLI (see parseCompositeCursor). |
+| `CompositeMediaSource.childAt` | none | Not reached by the CLI (see parseCompositeCursor). |
+| `stampChildIndex` | none | Not reached by the CLI (see parseCompositeCursor). |
+| `parseChildIndex` | none | Not reached by the CLI (see parseCompositeCursor). |
+| `withSourceId` | none | Not reached by the CLI (see parseCompositeCursor). |
+| none | `IMediaSourceBuildOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `lockBuilders` | Zig plumbing: the builder map is shared by every worker thread, so it takes a lock; each TypeScript worker has its own. |
+| none | `getMediaSourceBuilder` | `mediaSourceBuilders.get(sourceType)`, under the lock. |
+
+#### `packages/node-api/src/lib/media-source.ts` to `packages-zig/node-api-zig/src/lib/media-source.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `packages/node-api/src/lib/move-assets.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `moveAssetsHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/news-fetcher.ts` to `packages-zig/node-api-zig/src/lib/news-fetcher.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `fetchNews` | `fetchNews` |  |
+| none | `INewsLink` | The TypeScript interface of the same name, as a struct. |
+| none | `INewsItem` | The TypeScript interface of the same name, as a struct. |
+| none | `templateText` | `${value}` of a link field. print-notifications.ts prints `${item.link.label}`; Zig turns the fields to text when the feed is read. |
+| none | `jsNumberText` | `String(number)`. |
+| none | `isTruthy` | JavaScript truthiness of a parsed value. |
+| none | `toLink` | `item.link` and `item.action` as print-notifications.ts reads them. |
+| none | `isSingleDotSegment` | Part of `fileURLToPath` (the URL parser's `.` segment). |
+| none | `isDoubleDotSegment` | Part of `fileURLToPath` (the URL parser's `..` segment). |
+| none | `isDriveLetterSegment` | Part of `fileURLToPath` (a Windows drive letter segment). |
+| none | `normalizeUrlPath` | Part of `fileURLToPath` (the URL parser's path). |
+| none | `percentDecode` | Part of `fileURLToPath` (decoding the path). |
+| none | `fileURLToPath` | Replaces `fileURLToPath` from node's `url` module, as Bun runs it. |
+
+#### `packages/node-api/src/lib/news-state.ts` to `packages-zig/node-api-zig/src/lib/news-state.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `loadNewsState` | `loadNewsState` |  |
+| `saveNewsState` | `saveNewsState` |  |
+| `getShownNewsIds` | `getShownNewsIds` |  |
+| `addShownNewsIds` | `addShownNewsIds` |  |
+| `getLastShownUpdateVersion` | `getLastShownUpdateVersion` |  |
+| `setLastShownUpdateVersion` | `setLastShownUpdateVersion` |  |
+| none | `loadNewsStateUnsafe` | The body of loadNewsState's `try` block, a function so its errors can be caught. |
+| none | `SaveNewsStateMutator` | The arrow function saveNewsState passes to updateStateFile. |
+| none | `SaveNewsStateMutator.run` | The body of that arrow function. |
+| none | `AddShownNewsIdsMutator` | The arrow function addShownNewsIds passes to updateStateFile. |
+| none | `AddShownNewsIdsMutator.run` | The body of that arrow function. |
+| none | `SetLastShownUpdateVersionMutator` | The arrow function setLastShownUpdateVersion passes to updateStateFile. |
+| none | `SetLastShownUpdateVersionMutator.run` | The body of that arrow function. |
+
+#### `packages/node-api/src/lib/open-storage.ts` to `packages-zig/node-api-zig/src/lib/open-storage.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `openStorage` | `openStorage` |  |
+| none | `IOpenStorageResult` | The TypeScript interface of the same name, as a struct. |
+
+#### `packages/node-api/src/lib/prefetch-database.worker.ts` to `packages-zig/node-api-zig/src/lib/prefetch-database.worker.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `prefetchDatabaseHandler` | `prefetchDatabaseHandler` |  |
+| none | `IPrefetchDatabaseData` | The TypeScript interface of the same name, as a struct. |
+| none | `IPrefetchDatabaseResult` | The TypeScript interface of the same name, as a struct. |
+| none | `configOrigin` | `config?.origin`, falsy when absent or empty. |
+| none | `MissingFilesIterator` | The nested async generator `missingFiles`, as an iterator. |
+| none | `MissingFilesIterator.next` | One step of that generator. |
+| none | `FetchFileTask` | The `async filePath => { ... }` arrow function mapped over a batch for `Promise.all`. |
+| none | `FetchFileTask.run` | Runs the arrow function on its own thread and keeps its error. |
+| none | `FetchFileTask.fetch` | The body of that arrow function. |
+| none | `fetchBatch` | `await Promise.all(batch.map(...))`. |
+| none | `prefetchResultToJson` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+
+#### `packages/node-api/src/lib/repair.ts` to `packages-zig/node-api-zig/src/lib/repair.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `repair` | `repair` |  |
+| none | `IRepairOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IRepairResult` | The TypeScript interface of the same name, as a struct. |
+| none | `reportProgress` | `if (progressCallback) { progressCallback(`...`); }` with a template string. |
+| none | `RepairState` | The variables the nested functions of repair close over. |
+| none | `RepairState.repairFile` | The nested function `repairFile`: its `catch`. |
+| none | `RepairState.tryRepairFile` | The `try` block of repairFile. |
+| none | `RepairState.checkFile` | The nested function `checkFile`. |
+| none | `RepairState.visitNode` | The async arrow function passed to traverseTreeAsync. |
+| none | `InsertOneOperation` | The arrow function `() => metadataCollection.insertOne(minimalRecord)` passed to retry. |
+| none | `InsertOneOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `UpdateOneOperation` | The arrow function `() => metadataCollection.updateOne(assetId, { hash })` passed to retry. |
+| none | `UpdateOneOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+
+#### `packages/node-api/src/lib/replicate-database.ts` to `packages-zig/node-api-zig/src/lib/replicate-database.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `replicateDatabase` | `replicateDatabase` |  |
+| none | `ReplicateProgressCallback` | The TypeScript type of the same name, as a closure. |
+| none | `ReplicateProgressCallback.call` | Zig plumbing: a closure (a context and a function) standing in for the TypeScript function type. |
+| none | `replicateDatabaseDataToJson` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+| none | `onReplicateProgressMessage` | The arrow function passed to `queue.onTaskMessage("replicate-progress", ...)`. |
+| none | `lastPathPart` | `data.destPath.split(/[\\/]/).filter(Boolean).pop()`. |
+
+#### `packages/node-api/src/lib/replicate-database.worker.ts` to `packages-zig/node-api-zig/src/lib/replicate-database.worker.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `replicateDatabaseHandler` | `replicateDatabaseHandler` |  |
+| none | `ProgressMessageSender` | The `progressCallback` arrow function of replicateDatabaseHandler. |
+| none | `ProgressMessageSender.send` | The body of that arrow function. |
+| none | `isTaskCancelled` | The arrow function `() => context.isCancelled()`. |
+| none | `replicationResultToJson` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+
+#### `packages/node-api/src/lib/replicate.ts` to `packages-zig/node-api-zig/src/lib/replicate.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `throwIfCancelled` | `throwIfCancelled` |  |
+| `replicateFiles` | `replicateFiles` |  |
+| `iterateLeaves` | `iterateLeaves` |  |
+| `iterateShardDifferences` | `iterateShardDifferences` |  |
+| `iterateCollectionDifferences` | `iterateCollectionDifferences` |  |
+| `iterateDatabaseDifferences` | `iterateDatabaseDifferences` |  |
+| `replicateBsonDatabase` | `replicateBsonDatabase` |  |
+| `copyFileIfExists` | `copyFileIfExists` |  |
+| `copyBsonMerkleTrees` | `copyBsonMerkleTrees` |  |
+| `replicate` | `replicate` |  |
+| none | `IReplicationResult` | The TypeScript interface of the same name, as a struct. |
+| none | `IsCancelledCallback` | The `isCancelled` option type `() => boolean`, as a closure. |
+| none | `IsCancelledCallback.call` | Zig plumbing: a closure (a context and a function) standing in for the TypeScript function type. |
+| none | `IReplicateOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `reportProgress` | `if (progressCallback) { progressCallback(`...`); }` with a template string. |
+| none | `ReplicateFilesState` | The variables the nested functions of replicateFiles close over. |
+| none | `ReplicateFilesState.copyAsset` | The nested function `copyAsset`. |
+| none | `ReplicateFilesState.processFile` | The nested function `processFile`. |
+| none | `CopyAssetOperation` | The arrow function `() => copyAsset(fileName, sourceFileInfo.hash)` passed to retry. |
+| none | `CopyAssetOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `LeafNameIterator` | The generator `iterateLeaves`, as an iterator (depth first, left before right). |
+| none | `LeafNameIterator.next` | One step of that generator. |
+| none | `ICollectionRecord` | The TypeScript interface of the same name, as a struct. |
+| none | `LoadShardMerkleTreeOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `LoadCollectionMerkleTreeOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `LoadDatabaseMerkleTreeOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `ShardDifferenceIterator` | The async generator `iterateShardDifferences`, as an iterator. |
+| none | `ShardDifferenceIterator.next` | One step of that generator. |
+| none | `CollectionDifferenceIterator` | The async generator `iterateCollectionDifferences`, as an iterator. |
+| none | `CollectionDifferenceIterator.next` | One step of that generator. |
+| none | `DatabaseDifferenceIterator` | The async generator `iterateDatabaseDifferences`, as an iterator. |
+| none | `DatabaseDifferenceIterator.next` | One step of that generator. |
+| none | `SetInternalRecordOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `SetInternalRecordOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `DeleteOneOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `DeleteOneOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+
+#### `packages/node-api/src/lib/reset-app-storage.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `clearDirectory` | none | Not reached by the CLI (see the file note). |
+| `resetAppStorageHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/resolve-storage-credentials.ts` to `packages-zig/node-api-zig/src/lib/resolve-storage-credentials.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `parseEncryptionKeyFromVaultValue` | `parseEncryptionKeyFromVaultValue` |  |
+| `resolveStorageCredentials` | `resolveStorageCredentials` |  |
+| `resolveEncryptionKeyValue` | `resolveEncryptionKeyValue` |  |
+| none | `IResolvedStorageCredentials` | The TypeScript interface of the same name, as a struct. |
+| none | `isTruthy` | JavaScript truthiness of an optional string. |
+| none | `jsonString` | `parsed.region` and the other fields of the parsed vault secret. |
+
+#### `packages/node-api/src/lib/save-asset.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getAssetStorage` | none | Not reached by the CLI (see the file note). |
+| `saveAssetHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/save-assets-batch.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getAssetStorage` | none | Not reached by the CLI (see the file note). |
+| `saveAssetsBatchHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/set-database-origin.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `setDatabaseOriginHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/source-cleanup.ts` to `packages-zig/node-api-zig/src/lib/source-cleanup.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `packages/node-api/src/lib/state-file.ts` to `packages-zig/node-api-zig/src/lib/state-file.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getStatePath` | `getStatePath` |  |
+| `loadStateFile` | `loadStateFile` |  |
+| `updateStateFile` | `updateStateFile` |  |
+| none | `StateMutator` | The arrow function updateStateFile passes to updateYaml. |
+
+#### `packages/node-api/src/lib/state-format.ts` to `packages-zig/node-api-zig/src/lib/state-format.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `isSection` | `isSection` |  |
+| `isUiStateValue` | `isUiStateValue` |  |
+| `yamlToStateDesktopSection` | `yamlToStateDesktopSection` |  |
+| `yamlToSearchesState` | `yamlToSearchesState` |  |
+| `yamlToGalleryState` | `yamlToGalleryState` |  |
+| `yamlToNewsFeedItem` | `yamlToNewsFeedItem` |  |
+| `yamlToNewsState` | `yamlToNewsState` |  |
+| `yamlToUiSection` | `yamlToUiSection` |  |
+| `yamlToStateFile` | `yamlToStateFile` |  |
+| `newsFeedItemToYaml` | `newsFeedItemToYaml` |  |
+| `writeSection` | `writeSection` |  |
+| `stateFileToYaml` | `stateFileToYaml` |  |
+| `defaultStateFile` | none | Not reached by the CLI: the mobile state worker. |
+| `parseStateYamlChecked` | none | Not reached by the CLI: the mobile state worker. |
+| `buildStateYaml` | none | Not reached by the CLI: the mobile state worker. |
+| none | `INewsFeedItem` | The TypeScript interface of the same name, as a struct. |
+| none | `INewsState` | The TypeScript interface of the same name, as a struct. |
+| none | `IStateDesktopSection` | The TypeScript interface of the same name, as a struct. |
+| none | `ISearchesState` | The TypeScript interface of the same name, as a struct. |
+| none | `IGalleryState` | The TypeScript interface of the same name, as a struct. |
+| none | `IStateFile` | The TypeScript interface of the same name, as a struct. |
+| none | `stringField` | `typeof section.x === "string"`. |
+| none | `isNumber` | `typeof value === "number"`. |
+| none | `isFiniteNumber` | `typeof value === "number" && Number.isFinite(value)`. |
+| none | `stringsOf` | `array.filter(entry => typeof entry === "string")`. |
+| none | `stringArray` | A list of strings as a YAML sequence. |
+
+#### `packages/node-api/src/lib/sync-database.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `syncDatabaseHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/sync.ts` to `packages-zig/node-api-zig/src/lib/sync.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `retryOnceNamed` | `retryOnceNamed` |  |
+| `syncDatabases` | `syncDatabases` |  |
+| `extractAssetId` | `extractAssetId` |  |
+| `throughTheDatabases` | `throughTheDatabases` |  |
+| `chooseHowToPushBytes` | `chooseHowToPushBytes` |  |
+| `pushFiles` | `pushFiles` |  |
+| `iterateLeaves` | `iterateLeaves` |  |
+| `iterateShardDifferences` | `iterateShardDifferences` |  |
+| `iterateCollectionDifferences` | `iterateCollectionDifferences` |  |
+| `iterateDatabaseDifferences` | `iterateDatabaseDifferences` |  |
+| `syncDatabase` | `syncDatabase` |  |
+| none | `ISyncResult` | The TypeScript interface of the same name, as a struct. |
+| none | `SyncChangeCallback` | The `onLocalChange` parameter type, as a closure. |
+| none | `SyncChangeCallback.call` | Zig plumbing: a closure (a context and a function) standing in for the TypeScript function type. |
+| none | `now` | `Date.now()`. |
+| none | `deletedAssetIdsOf` | `new Set(merkleTree?.databaseMetadata?.deletedAssetIds \|\| [])`. A value that is not a list of strings throws, loudly, as not ported. |
+| none | `PushFilesOperation` | The arrow function `() => pushFiles(...)` passed to retryOnceNamed. |
+| none | `SyncDatabaseOperation` | The arrow function `() => syncDatabase(...)` passed to retryOnceNamed. |
+| none | `CommitOperation` | The arrow function `() => bsonDatabase.commit()` passed to retryOnceNamed. |
+| none | `StampDatabaseStateOperation` | The arrow function `() => stampDatabaseState(...)` passed to retryOnceNamed. |
+| none | `releaseWriteLockAfter` | The `finally { await releaseWriteLock(...) }` of a try block: releases the lock and returns the block's result (an error thrown by the release wins, as it does in `finally`). |
+| none | `pullIncomingFiles` | The first `try` block of syncDatabases (under this database's write lock). |
+| none | `pushOutgoingFiles` | The second `try` block of syncDatabases (under the origin's write lock). |
+| none | `IFileToConsider` | The TypeScript interface of the same name, as a struct. |
+| none | `IPushBytes` | The TypeScript interface of the same name, as a struct. |
+| none | `PushState` | The variables the nested functions of pushFiles close over. |
+| none | `PushState.sayWhereTheTimeWent` | The nested arrow function `sayWhereTheTimeWent` (the JSON is written in the key order JSON.stringify writes it). |
+| none | `PushState.copyFile` | The nested arrow function `copyFile`. |
+| none | `CopyFileOperation` | The arrow function `() => copyFile(file.name, file.hash)` passed to retry. |
+| none | `CopyFileOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `leavesOf` | The leaves of the generator `iterateLeaves`, as a list. |
+| none | `ISyncDiffRecord` | The TypeScript interface of the same name, as a struct. |
+| none | `DiffVisitor` | Zig plumbing: the consumer of the async generators (the `for await` body of syncDatabase), as a closure the iteration calls, in the same order. |
+| none | `DiffVisitor.yield` | `yield` in the generators. |
+| none | `withoutDashes` | `recordId.replace(/-/g, '')`. |
+| none | `SyncDatabaseState` | The variables the `for await` loop of syncDatabase uses. |
+| none | `SyncDatabaseState.visit` | The body of that loop. |
+
+#### `packages/node-api/src/lib/task-handlers.ts` to `packages-zig/node-api-zig/src/lib/task-handlers.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `initTaskHandlers` | `initTaskHandlers` |  |
+
+#### `packages/node-api/src/lib/test-job.worker.ts` to no Zig file
+
+Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` registers it in the CLI's worker too, but nothing in the CLI queues it.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `describeTestJobProgress` | none | Not reached by the CLI (see the file note). |
+| `testJobHandler` | none | Not reached by the CLI (see the file note). |
+
+#### `packages/node-api/src/lib/tree.ts` to `packages-zig/node-api-zig/src/lib/tree.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `merkleTreeExists` | `merkleTreeExists` |  |
+| `isDatabaseEncrypted` | `isDatabaseEncrypted` |  |
+| `saveMerkleTree` | `saveMerkleTree` |  |
+| `loadMerkleTree` | `loadMerkleTree` |  |
+| `getFilesRootHash` | `getFilesRootHash` |  |
+| `getDatabaseContentHash` | `getDatabaseContentHash` |  |
+| `buildStampPartial` | `buildStampPartial` |  |
+| `stampDatabaseState` | `stampDatabaseState` |  |
+| `stampDatabaseModified` | `stampDatabaseModified` |  |
+| `stampDatabaseStateLocked` | `stampDatabaseStateLocked` |  |
+| `loadCollectionMerkleTree` | `loadCollectionMerkleTree` |  |
+| `loadShardMerkleTree` | `loadShardMerkleTree` |  |
+| `buildFilesTree` | `buildFilesTree` |  |
+| none | `IBuildFilesTreeResult` | The TypeScript interface of the same name, as a struct. |
+| none | `IBuildFilesTreeProgress` | The `progressCallback` parameter type, as a closure. |
+| none | `IBuildFilesTreeProgress.call` | Zig plumbing: a closure (a context and a function) standing in for the TypeScript function type. |
+| none | `matchesDbDirectory` | The ignore pattern `/^\.db(\/\|$)/`. |
+| none | `IReadAndHashResult` | The anonymous return type of readAndHash. |
+| none | `readAndHash` | The nested function `readAndHash` of buildFilesTree. |
+| none | `ReadAndHashTask` | The `({ fileName }) => readAndHash(fileName)` mapped over a batch for `Promise.all`. |
+| none | `ReadAndHashTask.run` | Runs readAndHash on its own thread and keeps its error. |
+
+#### `packages/node-api/src/lib/upload-asset.worker.ts` to `packages-zig/node-api-zig/src/lib/upload-asset.worker.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `uploadAssetHandler` | `uploadAssetHandler` |  |
+| none | `IUploadAssetData` | The TypeScript interface of the same name, as a struct. |
+| none | `IAssetDatabaseData` | The TypeScript interface of the same name, as a struct. |
+| none | `IUploadAssetResult` | The TypeScript interface of the same name, as a struct. |
+| none | `encodeAssetRecord` | Zig plumbing: the asset record crosses threads as base64 BSON inside the JSON task result, which TypeScript posts as an object. |
+| none | `decodeAssetRecord` | Zig plumbing: the other half of encodeAssetRecord. |
+| none | `dateNow` | `Date.now()`. |
+| none | `toISOString` | `dayjs(time).toISOString()`. |
+| none | `WriteFileStreamOperation` | The arrow function `() => storage.writeStream(path, contentType, createReadStream(localPath), length)` passed to retry. |
+| none | `ComputeFileHashOperation` | The arrow function `() => computeFileHash(path, getNativeFileHasher())` passed to retry. |
+| none | `ReverseGeocodeOperation` | The arrow function `() => reverseGeocode(...)` passed to retry. |
+| none | `ReverseGeocodeOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `ReadMicroOperation` | The arrow function `() => fs.readFile(assetDetails.microPath)` passed to retry. |
+| none | `ReadMicroOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `RemoveDirOperation` | The arrow function `() => remove(assetTempDir)` passed to swallowError. |
+| none | `RemoveDirOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `buildLabels` | `data.labels.concat(fileDir.replace(/\\/g, "/").split("/").filter(label => label))`. |
+| none | `stringArray` | A list of strings as a BSON array. |
+| none | `uploadAndDescribe` | The inner `try` block of uploadAssetHandler, a function so its `catch` can run for any error it returns. |
+
+#### `packages/node-api/src/lib/validation.ts` to `packages-zig/node-api-zig/src/lib/validation.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `validateFile` | `validateFile` |  |
+| `validateImage` | `validateImage` |  |
+| `validateVideo` | `validateVideo` |  |
+
+#### `packages/node-api/src/lib/verify.ts` to `packages-zig/node-api-zig/src/lib/verify.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `verify` | `verify` |  |
+| `verifyDatabaseFiles` | `verifyDatabaseFiles` |  |
+| none | `IVerifyOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IVerifyResult` | The TypeScript interface of the same name, as a struct. |
+| none | `reportProgress` | `if (progressCallback) { progressCallback(`...`); }` with a template string. |
+| none | `VerifyState` | The variables verify's callbacks close over. |
+| none | `VerifyState.onTaskComplete` | The arrow function passed to `queue.onTaskComplete`. |
+| none | `VerifyState.visitNode` | The async arrow function passed to traverseTreeAsync. |
+| none | `IDatabaseFileVerifyError` | The TypeScript interface of the same name, as a struct. |
+| none | `IDatabaseFileVerifyResult` | The TypeScript interface of the same name, as a struct. |
+| none | `DatabaseFileVerifyState` | The variables the nested functions of verifyDatabaseFiles close over. |
+| none | `DatabaseFileVerifyState.addError` | The nested function `addError`. |
+| none | `DatabaseFileVerifyState.reportProgress` | The nested function `reportProgress`. |
+
+#### `packages/node-api/src/lib/verify.worker.ts` to `packages-zig/node-api-zig/src/lib/verify.worker.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `verifyFileHandler` | `verifyFileHandler` |  |
+| none | `IVerifyFileOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IVerifyFileData` | The TypeScript interface of the same name, as a struct. |
+| none | `VerifyFileStatus` | The TypeScript union `"unmodified" \| "modified" \| "removed" \| "new"`, as an enum. |
+| none | `IVerifyFileResult` | The TypeScript interface of the same name, as a struct. |
+| none | `verifyFileDataToJson` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+| none | `jsonString` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+| none | `jsonInteger` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+| none | `jsonObject` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+| none | `verifyFileDataFromJson` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+| none | `verifyFileResultToJson` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
+| none | `toLocaleString` | `date.toLocaleString()` for en-US in UTC (see "JavaScript behaviour not emulated"). |
+| none | `ComputeAssetHashOperation` | The async arrow function passed to retry to hash the stored file. |
+| none | `ComputeAssetHashOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+
+#### `packages/node-api/src/lib/video.ts` to `packages-zig/node-api-zig/src/lib/video.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getVideoDetails` | `getVideoDetails` |  |
+| `parseVideoLocation` | `parseVideoLocation` |  |
+| none | `dateNow` | `Date.now()`. |
+| none | `toISOString` | `date.toISOString()` (and dayjs's), with the RangeError each throws for an Invalid Date. |
+| none | `photoTakenTimestamp` | `photoData.photoTakenTime?.timestamp`. |
+| none | `isTruthy` | JavaScript truthiness of a number. |
+| none | `isValueTruthy` | JavaScript truthiness of a parsed value. |
+| none | `jsString` | `String(value)`, which `parseInt` and `String.prototype.match` apply to their argument. |
+| none | `jsNumberString` | `String(number)`. |
+| none | `matchSignedDecimal` | One `([+-]\d+\.\d+)` group of videoLocationRegex. |
+
+#### `packages/node-api/src/lib/zip-utils.ts` to no Zig file
+
+Not reached by the CLI: only exported from index.ts, and only the desktop asset server calls it. The CLI's zip reading is in file-scanner.ts, through JSZip (third-party/jszip in Zig).
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `extractFileFromZip` | none | Not reached by the CLI (see the file note). |
+| `extractNestedZipFromParent` | none | Not reached by the CLI (see the file note). |
+| `extractFileFromZipRecursive` | none | Not reached by the CLI (see the file note). |
+
+#### Zig files with no TypeScript file
+
+| Zig file | What it is |
+|---|---|
+| `packages-zig/node-api-zig/src/lib/fetch.zig` | Replaces the global `fetch` (and `response.ok`, `response.status`, `response.text()`) that news-fetcher.ts calls. |
+| `packages-zig/node-api-zig/src/lib/retry-operations.zig` | Zig plumbing: the arrow functions node-api passes to `retry` over and over (`() => storage.info(fileName)`, `() => loadMerkleTree(storage)` and the like), as structs with a `run` method and the `source` text. |
+| `packages-zig/node-api-zig/src/lib/third-party/exif-parser/bufferstream.zig` | Replaces the `exif-parser` npm package (lib/parser.js, lib/exif.js, lib/jpeg.js, lib/bufferstream.js, lib/exif-tags.js). |
+| `packages-zig/node-api-zig/src/lib/third-party/exif-parser/exif-tags.zig` | Replaces the `exif-parser` npm package (lib/parser.js, lib/exif.js, lib/jpeg.js, lib/bufferstream.js, lib/exif-tags.js). |
+| `packages-zig/node-api-zig/src/lib/third-party/exif-parser/exif.zig` | Replaces the `exif-parser` npm package (lib/parser.js, lib/exif.js, lib/jpeg.js, lib/bufferstream.js, lib/exif-tags.js). |
+| `packages-zig/node-api-zig/src/lib/third-party/exif-parser/jpeg.zig` | Replaces the `exif-parser` npm package (lib/parser.js, lib/exif.js, lib/jpeg.js, lib/bufferstream.js, lib/exif-tags.js). |
+| `packages-zig/node-api-zig/src/lib/third-party/exif-parser/parser.zig` | Replaces the `exif-parser` npm package (lib/parser.js, lib/exif.js, lib/jpeg.js, lib/bufferstream.js, lib/exif-tags.js). |
+| `packages-zig/node-api-zig/src/lib/third-party/jszip/compressedObject.zig` | Replaces the `jszip` npm package (the modules of the same names under lib/), for reading zip files only. |
+| `packages-zig/node-api-zig/src/lib/third-party/jszip/compressions.zig` | Replaces the `jszip` npm package (the modules of the same names under lib/), for reading zip files only. |
+| `packages-zig/node-api-zig/src/lib/third-party/jszip/crc32.zig` | Replaces the `jszip` npm package (the modules of the same names under lib/), for reading zip files only. |
+| `packages-zig/node-api-zig/src/lib/third-party/jszip/flate.zig` | Replaces the `jszip` npm package (the modules of the same names under lib/), for reading zip files only. |
+| `packages-zig/node-api-zig/src/lib/third-party/jszip/index.zig` | Replaces the `jszip` npm package (the modules of the same names under lib/), for reading zip files only. |
+| `packages-zig/node-api-zig/src/lib/third-party/jszip/load.zig` | Replaces the `jszip` npm package (the modules of the same names under lib/), for reading zip files only. |
+| `packages-zig/node-api-zig/src/lib/third-party/jszip/object.zig` | Replaces the `jszip` npm package (the modules of the same names under lib/), for reading zip files only. |
+| `packages-zig/node-api-zig/src/lib/third-party/jszip/reader/DataReader.zig` | Replaces the `jszip` npm package (the modules of the same names under lib/), for reading zip files only. |
+| `packages-zig/node-api-zig/src/lib/third-party/jszip/signature.zig` | Replaces the `jszip` npm package (the modules of the same names under lib/), for reading zip files only. |
+| `packages-zig/node-api-zig/src/lib/third-party/jszip/utf8.zig` | Replaces the `jszip` npm package (the modules of the same names under lib/), for reading zip files only. |
+| `packages-zig/node-api-zig/src/lib/third-party/jszip/utils.zig` | Replaces the `jszip` npm package (the modules of the same names under lib/), for reading zip files only. |
+| `packages-zig/node-api-zig/src/lib/third-party/jszip/zipEntries.zig` | Replaces the `jszip` npm package (the modules of the same names under lib/), for reading zip files only. |
+| `packages-zig/node-api-zig/src/lib/third-party/jszip/zipEntry.zig` | Replaces the `jszip` npm package (the modules of the same names under lib/), for reading zip files only. |
+| `packages-zig/node-api-zig/src/lib/third-party/jszip/zipObject.zig` | Replaces the `jszip` npm package (the modules of the same names under lib/), for reading zip files only. |
+| `packages-zig/node-api-zig/src/lib/third-party/lodash/debounce.zig` | Replaces `lodash/debounce`, which `lodash/throttle` is built on. |
+| `packages-zig/node-api-zig/src/lib/third-party/lodash/throttle.zig` | Replaces `lodash/throttle`. |
+| `packages-zig/node-api-zig/src/lib/third-party/mime/Mime.zig` | Replaces the `mime` npm package (Mime.js, index.js and its type lists). |
+| `packages-zig/node-api-zig/src/lib/third-party/mime/index.zig` | Replaces the `mime` npm package (Mime.js, index.js and its type lists). |
+| `packages-zig/node-api-zig/src/lib/third-party/mime/types/other.zig` | Replaces the `mime` npm package (Mime.js, index.js and its type lists). |
+| `packages-zig/node-api-zig/src/lib/third-party/mime/types/standard.zig` | Replaces the `mime` npm package (Mime.js, index.js and its type lists). |
+
+<!-- end tables -->
+
 ## Divergences fixed
 
 Each was found by reading the two side by side, pinned by a unit test that failed before the fix, and fixed in the Zig.
@@ -1003,6 +2262,55 @@ Each was found by reading the two side by side, pinned by a unit test that faile
     take the Unicode spaces and line separators. Test: `treats Unicode spaces around the key and the value as
     whitespace`.
 
+### node-api, tools and apps/cli
+
+13. A file's modified time was rounded down to whole milliseconds, where a JavaScript Date truncates `mtimeMs`
+    towards zero, so a file modified before 1970 was a millisecond out (Bun: `mtimeMs` -1000.5, `getTime()` -1000).
+    Fixed in the file scanner, `updateFileOptimistic`'s fingerprint (node-utils), `psi hash-cache add` and the log
+    file order of `psi bug`. Tests: `a modified time before 1970 is truncated to whole milliseconds like a JavaScript
+    Date` and the before-1970 case of `hash-cache hash-file and add hash a file like the TypeScript CLI`.
+14. The zip progress name, `rootZipName.substring(0, 50)`, dropped a character cut in half at the 50th code unit,
+    where JavaScript keeps its high surrogate and prints it as U+FFFD. Test: `a zip name cut through a character
+    outside the Basic Multilingual Plane is reported with U+FFFD`.
+15. `parseExifDate` trimmed ASCII whitespace only (`trim()` also removes the Unicode spaces and the byte order mark),
+    and accepted the years 1 to 99, which `Date.UTC` reads as 1901 to 1999 so the round trip check refuses them. Tests:
+    `parseExifDate ignores surrounding whitespace that is not ASCII, as String.prototype.trim does` and `parseExifDate
+    refuses the years 1 to 99, which Date.UTC reads as 1901 to 1999`.
+16. The out of range GPS log line printed coordinates with Zig's number formatting (`0.0000001` for `1e-7`). Test:
+    `locationJson prints numbers as JSON.stringify does`.
+17. A video's JSON sidecar timestamp: an array or object failed the import (`Unsupported JSON value`) where
+    `parseInt` reads `String(value)` and an unusable date is caught and logged; `0x10` read as 0 where `parseInt`
+    reads 16; and a timestamp too large for a Date crashed the process in `@intFromFloat` where dayjs throws a
+    RangeError that is caught. Tests: `a JSON timestamp is read as JavaScript's parseInt reads it` and `a JSON
+    timestamp that is not a number leaves the video undated rather than failing it`.
+18. tools-zig had its own `parseInt` (ASCII whitespace, no `0x`, digits accumulated in a float so a long number
+    rounded differently). It is gone: tools, `psi list` and `psi hash-cache` use `utils-zig` `js_number.parseInt` with
+    the radix the TypeScript passes (none in tools, 10 in the CLI commands).
+19. `psi hash-cache set` let a length of 2 ** 48 or more through to the cache, which then refused it with the number
+    printed as an integer (`18446744073709549568`), where `writeUIntLE` refuses it with the number printed as
+    JavaScript prints it (`18446744073709550000`, `1.2345678901234568e+29`). Test: the new cases of `cachedLength
+    stores a length like writeUIntLE(parseInt(length, 10), offset, 6)`.
+20. The news feed's `fileURLToPath` kept a query and fragment in the path, did not resolve `.` and `..`, took a
+    backslash literally, ignored a host, and decoded `%2F`. It now parses the URL as Bun's `fileURLToPath` does, with
+    its TypeErrors for a host and an encoded slash. Test: `fileURLToPath parses the URL first, as Bun's fileURLToPath
+    does`.
+21. A news link label or url that is not a string printed with Zig's number formatting, and an array as nothing, where
+    the template string prints `1e+21` and `1,,b`. Test: `a link label that is not a string is printed as a
+    JavaScript template string prints it`.
+22. The names in a comma-separated `--key` were trimmed of ASCII whitespace only. Test: `comma-separated
+    encryptionKey names are trimmed of the whitespace String.prototype.trim removes`.
+23. The paths of databases.toml and state.yaml were joined without `path.join`'s normalization, so a
+    PHOTOSPHERE_CONFIG_DIR with `.` or `..` in it gave a different path. `getDatabasesConfigPath` is ported so the
+    path can be read. Test: `the paths of databases.toml and state.yaml are joined and normalized as path.join does`.
+24. `psi verify`'s progress messages were cut at 1024 bytes, so a long `--path` filter was shown truncated. Test:
+    `verify reports a long path filter in full`.
+25. `verifyFileHandler` threw Node's message for `Buffer.compare` with no hash to compare against, where Bun says
+    `The "buf2" argument must be of type Buffer or Uint8Array. Received undefined` with the name TypeError. Test:
+    `verifyFileHandler fails like Buffer.compare in Bun for a changed file whose node has no content hash`.
+26. `upload-asset` read the upload date before uploading the files, where the TypeScript reads it when it builds the
+    record, after them, so the recorded date was early by the length of the upload. Test: `the upload date is read
+    once the files are uploaded, as the TypeScript builds the record after them`.
+
 ## Divergences kept
 
 1. `FileStorage.acquireWriteLock` (storage): an empty lock file younger than the lock timeout is refused
@@ -1011,6 +2319,11 @@ Each was found by reading the two side by side, pinned by a unit test that faile
    properly") failed on macOS CI because of it: two of three contenders got the lock. Removing the fix to match the
    TypeScript would bring that failure back, so it stays until the TypeScript is fixed the same way.
 
+2. `LazyOriginStorage.readStream` (node-api, used by `psi export` on a partial replica): when caching the fetched
+   file locally fails, the Zig stops feeding the cache and hands the caller the whole file. The TypeScript hangs (see
+   "TypeScript bugs"). Matching it would make `psi export` hang, so the Zig keeps working; test: `readStream() streams
+   a file larger than the cache queue in full when the local cache write fails`.
+
 ## TypeScript bugs noted
 
 1. `FileStorage.acquireWriteLock` creates the lock file with `flag: 'wx'` and writes its JSON in the same call, but
@@ -1018,6 +2331,13 @@ Each was found by reading the two side by side, pinned by a unit test that faile
    it, takes it for a corrupt lock, deletes it and creates its own, so both hold the lock.
 2. `CloudStorage.dirExists` has a branch for an empty key that can never run: `parsePath` throws for an empty key
    before it is reached.
+
+3. `LazyOriginStorage.readStream` hangs when the local cache write fails before reading everything: nothing drains
+   `cacheStream` any more, so once its buffer is full the origin stays paused and `callerStream` never ends. Run in Bun
+   with a cache write that rejects and a 192 KB file, the caller stops after 65536 bytes. The existing unit test uses
+   a file small enough to fit the buffer.
+4. `import-assets` logs `File "" is a duplicate in this scan, skipping.`: the template string lost its
+   `${logicalPath}`. The Zig logs the same text.
 
 ## JavaScript behaviour not emulated
 
@@ -1042,3 +2362,23 @@ and case mapping of non-ASCII text) need the Unicode tables of ICU, which the Zi
    cannot be cancelled. Its error log has the error's name and message but no stack.
 6. `BsonCollection.insertOne` with an `_id` that is not a string: TypeScript keeps a truthy non-string id (and then
    fails in `getShardId`), the Zig replaces it with a new UUID.
+7. Error messages of the file system and of `JSON.parse`: where the Zig emulates Node's message it does so for a
+   missing file (`ENOENT: no such file or directory, open '...'`); other file system errors (permission denied, not a
+   directory) show the Zig error name, and a malformed JSON document shows `JSON Parse error:` and the Zig error name
+   rather than JavaScriptCore's description.
+8. Key order of objects: JavaScript lists integer-like keys first, in numeric order, then the others in insertion
+   order. The Zig keeps insertion order, which differs only for integer-like keys (the `ui` section of state.yaml,
+   whose keys the desktop interface chooses).
+9. `verify-file`'s `toLocaleString` of the old and new modified times (a verbose log line) is en-US in UTC, where
+   JavaScript uses the machine's time zone and locale.
+10. File names that are not valid UTF-8: Node decodes them to U+FFFD, the Zig keeps the bytes (the hash cache keys and
+    the zip entry names likewise).
+11. Values of the wrong type in files psi writes, as in item 1: `filesImported` that is not a whole number (read as
+    0 or truncated where JavaScript carries it through, and a string grows by concatenation there), `deletedAssetIds`
+    that is not a list of strings (the Zig throws), non-string `recent_database_names` (dropped) and a database entry
+    without a name.
+12. `loadSharedHashCache` compares the cache file's modified time in nanoseconds where TypeScript compares
+    `mtimeMs`, a double that cannot tell apart two times less than about a quarter of a microsecond apart. Either way
+    the cache is re-read when the file changes.
+13. `iterateLeaves` in sync.zig accepts a leaf with an empty name, where `!node.name` throws; merkle tree leaves are
+    record, shard and collection names, which are never empty.

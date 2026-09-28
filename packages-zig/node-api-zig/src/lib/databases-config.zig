@@ -45,10 +45,18 @@ pub const IDatabasesConfig = struct {
 // each call.)
 //
 fn DATABASES_FILE(allocator: std.mem.Allocator) ![]const u8 {
-    return std.fs.path.join(allocator, &.{ try fs.getConfigDir(allocator), "databases.toml" });
+    return node_utils.path.join(allocator, &.{ try fs.getConfigDir(allocator), "databases.toml" });
 }
 
-// Not ported: getDatabasesConfigPath, MAX_RECENT_DATABASES (not used by the ported commands).
+//
+// The path of that file, for the worker tasks that write it. They take the path as input because a
+// phone keeps the same file somewhere else, so they cannot work it out for themselves.
+//
+pub fn getDatabasesConfigPath(allocator: std.mem.Allocator) ![]const u8 {
+    return DATABASES_FILE(allocator);
+}
+
+// Not ported: MAX_RECENT_DATABASES (not used by the ported commands).
 
 //
 // Gets an array property of a TOML object (null when it is absent or not an array, like Array.isArray).

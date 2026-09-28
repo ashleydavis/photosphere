@@ -160,7 +160,7 @@ pub fn resolveStorageCredentials(
             var pems: std.ArrayList(IEncryptionKeyPem) = .empty;
             var keyNames = std.mem.splitScalar(u8, encryptionKey.?, ',');
             while (keyNames.next()) |keyName| {
-                const trimmedKeyName = std.mem.trim(u8, keyName, &std.ascii.whitespace);
+                const trimmedKeyName = utils.js_string.trim(keyName);
                 if (trimmedKeyName.len == 0) {
                     continue;
                 }

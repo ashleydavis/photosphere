@@ -321,9 +321,9 @@ fn fileFingerprint(io: std.Io, filePath: []const u8) !?IFileFingerprint {
         }
         return err;
     };
-    // (Zig: stats.mtime.getTime() is the modification time in whole milliseconds, rounded down.)
+    // (Zig: stats.mtime.getTime() is the modification time in whole milliseconds, truncated towards zero.)
     return .{
-        .modifiedMs = @intCast(@divFloor(stats.mtime.nanoseconds, std.time.ns_per_ms)),
+        .modifiedMs = stats.mtime.toMilliseconds(),
         .size = stats.size,
     };
 }

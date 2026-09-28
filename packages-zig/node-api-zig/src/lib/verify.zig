@@ -102,16 +102,14 @@ pub const IVerifyResult = struct {
 };
 
 //
-// Formats a progress message into a buffer (the messages are only valid during the progress callback).
+// Formats a progress message and calls the progress callback with it, when there is one.
 // (No TypeScript counterpart: TypeScript uses template strings.)
 //
-fn reportProgress(progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) void {
+fn reportProgress(allocator: std.mem.Allocator, progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) !void {
     const callback = progressCallback orelse {
         return;
     };
-    var buffer: [1024]u8 = undefined;
-    const message = std.fmt.bufPrint(&buffer, format, args) catch buffer[0..];
-    callback.call(message);
+    callback.call(try std.fmt.allocPrint(allocator, format, args));
 }
 
 //
@@ -172,7 +170,7 @@ const VerifyState = struct {
         if (taskResult.status == TaskStatus.Succeeded) {
             const fileResult = try std.json.parseFromValueLeaky(IVerifyFileResult, allocator, taskResult.outputs orelse .null, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
 
-            reportProgress(self.progressCallback, "Verified file {d} of {d}", .{ self.result.filesProcessed, self.totalFiles });
+            try reportProgress(allocator, self.progressCallback, "Verified file {d} of {d}", .{ self.result.filesProcessed, self.totalFiles });
 
             if (fileResult.status == .removed) {
                 // For partial databases, ignore missing files (they're expected to be missing)
@@ -325,7 +323,7 @@ pub fn verify(allocator: std.mem.Allocator, io: std.Io, storageDescriptor: IData
     //
     if (progressCallback) |callback| {
         if (options != null and options.?.pathFilter != null and options.?.pathFilter.?.len > 0) {
-            reportProgress(callback, "Verifying files matching: {s}", .{options.?.pathFilter.?});
+            try reportProgress(allocator, callback, "Verifying files matching: {s}", .{options.?.pathFilter.?});
         }
         else {
             callback.call("Verifying files...");
@@ -353,7 +351,7 @@ pub fn verify(allocator: std.mem.Allocator, io: std.Io, storageDescriptor: IData
             }
         }
         recordsLoaded += 1;
-        reportProgress(progressCallback, "Loaded database records... {d} loaded", .{recordsLoaded});
+        try reportProgress(allocator, progressCallback, "Loaded database records... {d} loaded", .{recordsLoaded});
     }
 
     //
@@ -452,9 +450,9 @@ const DatabaseFileVerifyState = struct {
     //
     // Helper to report progress
     //
-    fn reportProgress(self: *DatabaseFileVerifyState) void {
+    fn reportProgress(self: *DatabaseFileVerifyState) !void {
         self.filesVerified += 1;
-        verify_reportProgress(self.progressCallback, "Verified database file {d} of {d}", .{ self.filesVerified, self.expectedTotal });
+        try verify_reportProgress(self.allocator, self.progressCallback, "Verified database file {d} of {d}", .{ self.filesVerified, self.expectedTotal });
     }
 };
 
@@ -555,7 +553,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
         else {
             try state.addError(".db/files.dat", verifyResult.@"error" orelse "Unknown error");
         }
-        state.reportProgress();
+        try state.reportProgress();
     }
 
     // 2. For each collection, verify all files
@@ -575,7 +573,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
             else {
                 try state.addError(collectionDatPath, verifyResult.@"error" orelse "Unknown error");
             }
-            state.reportProgress();
+            try state.reportProgress();
         }
         // 3b. Get all files in the collection directory (v6: shards/ subdir)
         const collectionFiles = try assetStorage.listFiles(allocator, io, try std.fmt.allocPrint(allocator, "{s}/shards", .{collectionDir}), 10000, null);
@@ -593,7 +591,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
                 else {
                     try state.addError(filePath, verifyResult.@"error" orelse "Unknown error");
                 }
-                state.reportProgress();
+                try state.reportProgress();
             }
             else {
                 // Shard data file (with checksum)
@@ -612,7 +610,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
                         try state.addError(filePath, verifyResult.@"error" orelse "Unknown error");
                     }
                 }
-                state.reportProgress();
+                try state.reportProgress();
             }
         }
     }
@@ -656,7 +654,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
                             try state.addError(filePath, verifyResult.@"error" orelse "Unknown error");
                         }
                     }
-                    state.reportProgress();
+                    try state.reportProgress();
                 }
             }
         }

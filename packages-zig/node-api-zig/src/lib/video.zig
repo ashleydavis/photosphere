@@ -11,7 +11,7 @@ const ILocation = utils.reverse_geocode.ILocation;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const getVideoTransformation = utils.image.getVideoTransformation;
 const parseFloat = utils.js_number.parseFloat;
-const parseInt = tools.image.parseInt;
+const parseInt = utils.js_number.parseInt;
 const pathExists = node_utils.fs.pathExists;
 const path = node_utils.path;
 const BsonValue = serialization_zig.bson.BsonValue;
@@ -36,15 +36,22 @@ fn dateNow(io: std.Io) f64 {
 }
 
 //
-// `date.toISOString()` for a JavaScript time value: throws "Invalid time value" (a RangeError) for an Invalid Date.
-// (No TypeScript counterpart.)
+// `date.toISOString()` for a JavaScript time value, which a Date truncates to whole milliseconds: throws a RangeError
+// with the given message for an Invalid Date, a time that is NaN or more than 8.64e15 milliseconds from 1970. Date
+// says "Invalid time value", and dayjs says "Invalid Date". (No TypeScript counterpart.)
 //
-fn toISOString(allocator: std.mem.Allocator, time: f64) ![]const u8 {
-    if (std.math.isNan(time) or !js_date.isValidTime(@intFromFloat(time))) {
-        return errors.throwError("Invalid time value", .{});
+fn toISOString(allocator: std.mem.Allocator, time: f64, invalidMessage: []const u8) ![]const u8 {
+    if (std.math.isNan(time) or !(@abs(time) <= 8.64e15)) {
+        errors.recordError("RangeError", "{s}", .{invalidMessage});
+        return error.Thrown;
+    }
+    const milliseconds: i64 = @intFromFloat(@trunc(time));
+    if (!js_date.isValidTime(milliseconds)) {
+        errors.recordError("RangeError", "{s}", .{invalidMessage});
+        return error.Thrown;
     }
     var output: std.Io.Writer.Allocating = .init(allocator);
-    try js_date.writeIsoString(&output.writer, @intFromFloat(time));
+    try js_date.writeIsoString(&output.writer, milliseconds);
     return output.written();
 }
 
@@ -97,7 +104,7 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []con
     const microPath = try resizeImage(allocator, io, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
     const microMs = dateNow(io) - microStartedAt;
 
-    var photoDate: ?[]const u8 = if (assetInfo.createdAt) |createdAt| try toISOString(allocator, createdAt) else null;
+    var photoDate: ?[]const u8 = if (assetInfo.createdAt) |createdAt| try toISOString(allocator, createdAt, "Invalid time value") else null;
 
     if (photoDate == null) {
         //
@@ -110,8 +117,8 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []con
             const timestamp = try photoTakenTimestamp(photoData);
             if (isValueTruthy(timestamp)) {
                 const timestampText = try jsString(allocator, timestamp);
-                const seconds = parseInt(timestampText);
-                if (toISOString(allocator, seconds * 1000)) |parsedDate| {
+                const seconds = parseInt(timestampText, null);
+                if (toISOString(allocator, seconds * 1000, "Invalid Date")) |parsedDate| {
                     photoDate = parsedDate;
                     log.verbose(try std.fmt.allocPrint(allocator, "Parsed date {s} from timestamp {s} in JSON file {s}", .{ parsedDate, try jsNumberString(allocator, seconds), jsonFilePath }));
                 }
@@ -201,16 +208,27 @@ fn isValueTruthy(value: BsonValue) bool {
 }
 
 //
-// `String(value)` for the strings and numbers JSON holds. (No TypeScript counterpart.)
+// `String(value)` for a value JSON can hold: an array is its elements joined with commas (null and undefined
+// elements as nothing), and an object is "[object Object]". (No TypeScript counterpart.)
 //
-fn jsString(allocator: std.mem.Allocator, value: BsonValue) ![]const u8 {
+fn jsString(allocator: std.mem.Allocator, value: BsonValue) anyerror![]const u8 {
     return switch (value) {
         .string => |text| text,
         .number, .double => |number| jsNumberString(allocator, number),
         .int32 => |number| std.fmt.allocPrint(allocator, "{d}", .{number}),
         .int64 => |number| std.fmt.allocPrint(allocator, "{d}", .{number}),
         .boolean => |boolean| if (boolean) "true" else "false",
-        else => errors.throwError("Unsupported JSON value", .{}),
+        .null => "null",
+        .undefined => "undefined",
+        .array => |elements| {
+            var parts: std.ArrayList([]const u8) = .empty;
+            for (elements) |element| {
+                try parts.append(allocator, if (element == .null or element == .undefined) "" else try jsString(allocator, element));
+            }
+            return std.mem.join(allocator, ",", parts.items);
+        },
+        .document => "[object Object]",
+        else => errors.throwError("String() of a {s} value is not ported", .{@tagName(value)}),
     };
 }
 
@@ -218,13 +236,9 @@ fn jsString(allocator: std.mem.Allocator, value: BsonValue) ![]const u8 {
 // `String(number)` for a JavaScript number. (No TypeScript counterpart.)
 //
 fn jsNumberString(allocator: std.mem.Allocator, number: f64) ![]const u8 {
-    if (std.math.isNan(number)) {
-        return "NaN";
-    }
-    if (number == @floor(number) and @abs(number) < 1e21) {
-        return std.fmt.allocPrint(allocator, "{d}", .{@as(i128, @intFromFloat(number))});
-    }
-    return std.fmt.allocPrint(allocator, "{d}", .{number});
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    try serialization_zig.js_number.writeNumber(&output.writer, number);
+    return output.written();
 }
 
 //

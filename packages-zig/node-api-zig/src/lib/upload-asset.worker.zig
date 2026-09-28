@@ -417,7 +417,6 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
     const googleApiKey = data.googleApiKey;
     const dryRun = data.dryRun orelse false;
     const uuidGenerator = context.uuidGenerator;
-    const timestampProvider = context.timestampProvider;
 
     const assetId = data.assetId;
     log.verbose(try std.fmt.allocPrint(allocator, "Importing file {s} to asset database with asset id {s}", .{ data.logicalPath, assetId }));
@@ -463,7 +462,7 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
         }
     }
 
-    const uploaded = uploadAndDescribe(allocator, io, data, context, assetDetails, storage, expectedHashBuffer, assetPath, thumbPath, displayPath, dryRun, googleApiKey, timestampProvider.dateNow(io).epochMilliseconds, &uploadMs, &geocodeMs, &dominantColorMs) catch |err| {
+    const uploaded = uploadAndDescribe(allocator, io, data, context, assetDetails, storage, expectedHashBuffer, assetPath, thumbPath, displayPath, dryRun, googleApiKey, &uploadMs, &geocodeMs, &dominantColorMs) catch |err| {
         log.exception(try std.fmt.allocPrint(allocator, "Error importing file {s} ({s})", .{ filePath, assetId }), err);
         var failedMessage: std.json.ObjectMap = .empty;
         try failedMessage.put(allocator, "type", .{ .string = "import-failed" });
@@ -542,7 +541,6 @@ fn uploadAndDescribe(
     displayPath: []const u8,
     dryRun: bool,
     googleApiKey: ?[]const u8,
-    uploadDateNow: i64,
     uploadMs: *f64,
     geocodeMs: *f64,
     dominantColorMs: *f64,
@@ -856,7 +854,7 @@ fn uploadAndDescribe(
         },
         .{
             .key = "uploadDate",
-            .value = .{ .string = try toISOString(allocator, uploadDateNow) },
+            .value = .{ .string = try toISOString(allocator, context.timestampProvider.dateNow(io).epochMilliseconds) },
         },
         .{
             .key = "properties",

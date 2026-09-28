@@ -93,6 +93,22 @@ test "verify with a path filter only verifies the matching files" {
     try std.testing.expectEqualStrings("Verifying files matching: thumb", recorder.messages.items[0]);
 }
 
+test "verify reports a long path filter in full" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
+    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    var recorder: helpers.ProgressRecorder = .{ .allocator = allocator };
+    const longFilter = "thumb/" ++ "x" ** 2000;
+
+    const result = try runVerify(allocator, io, databaseDir, .{ .pathFilter = longFilter }, &recorder);
+
+    try std.testing.expectEqual(@as(u64, 0), result.filesProcessed);
+    try std.testing.expectEqualStrings("Verifying files matching: " ++ longFilter, recorder.messages.items[0]);
+}
+
 test "verify reports a missing database record as a record mismatch" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

@@ -367,6 +367,30 @@ test "readStream() tees a file larger than the cache queue" {
     try std.testing.expectEqualSlices(u8, big, local.get("big.bin").?);
 }
 
+test "readStream() streams a file larger than the cache queue in full when the local cache write fails" {
+    // A divergence kept on purpose (docs/zig-port-map.md, "Divergences kept"): the TypeScript stops after its
+    // PassThrough buffers fill, because nothing drains the cache stream once the cache write has failed, and the
+    // caller waits for ever. The Zig stops feeding the cache and hands the caller the whole file.
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var local: MockStorage = .{};
+    defer local.deinit();
+    var origin: MockStorage = .{};
+    defer origin.deinit();
+    const big = try allocator.alloc(u8, 200_000);
+    for (big, 0..) |*byte, index| {
+        byte.* = @intCast(index % 251);
+    }
+    try origin.put("big.bin", big);
+    local.writeStreamFails = true;
+
+    var lazy = LazyOriginStorage.init(local.storage(), origin.storage());
+    const data = try readAll(allocator, try lazy.storage().readStream(allocator, io, "big.bin"));
+
+    try std.testing.expectEqualSlices(u8, big, data);
+}
+
 test "write() writes to local only and never touches origin" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
