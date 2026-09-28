@@ -1,6 +1,7 @@
 const std = @import("std");
 const node_api = @import("node-api-zig");
 const storage_zig = @import("storage-zig");
+const helpers = @import("test-helpers.zig");
 
 const LazyOriginStorage = node_api.lazy_origin_storage.LazyOriginStorage;
 const storage_module = storage_zig.storage;
@@ -420,4 +421,51 @@ test "writeStream() writes to local only and never touches origin" {
 
     try std.testing.expectEqualStrings("streamdata", local.get("stream.bin").?);
     try std.testing.expect(!origin.writeStreamCalled);
+}
+
+test "every other operation goes to the local storage and never to the origin" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const localDir = try helpers.makeTempDir(allocator, io, "lazy-local");
+    defer helpers.removeTempDir(io, localDir);
+    const originDir = try helpers.makeTempDir(allocator, io, "lazy-origin");
+    defer helpers.removeTempDir(io, originDir);
+    const local = try helpers.directoryStorage(allocator, io, localDir);
+    const origin = try helpers.directoryStorage(allocator, io, originDir);
+    var lazy = LazyOriginStorage.init(local, origin);
+    const storage = lazy.storage();
+
+    try std.testing.expect(try storage.isEmpty(allocator, io, "dir"));
+    var hash: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash("content", &hash, .{});
+    var input = std.Io.Reader.fixed("content");
+    _ = try storage.writeStreamHashed(allocator, io, "dir/file.txt", "text/plain", &input, "content".len, &hash);
+    try std.testing.expect(!try storage.isEmpty(allocator, io, "dir"));
+    try std.testing.expect(try storage.fileExists(allocator, io, "dir/file.txt"));
+    try std.testing.expect(try storage.dirExists(allocator, io, "dir"));
+    try std.testing.expectEqual(@as(usize, 1), (try storage.listFiles(allocator, io, "dir", 10, null)).names.len);
+    try std.testing.expectEqual(@as(usize, 1), (try storage.listDirs(allocator, io, "", 10, null)).names.len);
+    const fileInfo = (try storage.info(allocator, io, "dir/file.txt")).?;
+    try std.testing.expectEqual(@as(u64, "content".len), fileInfo.length);
+    try std.testing.expectEqual(local.readableLength(fileInfo), storage.readableLength(fileInfo));
+
+    // A file storage keeps no hash, so the local storage has none to give.
+    try std.testing.expect((try storage.storedHash(allocator, io, "dir/file.txt")) == null);
+
+    try storage.copyTo(allocator, io, "dir/file.txt", "dir/copy.txt");
+    try std.testing.expectEqualStrings("content", (try local.read(allocator, io, "dir/copy.txt")).?);
+    try storage.deleteFile(allocator, io, "dir/copy.txt");
+    try std.testing.expect(!try local.fileExists(allocator, io, "dir/copy.txt"));
+
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, "write.lock", "owner"));
+    try std.testing.expectEqualStrings("owner", (try storage.checkWriteLock(allocator, io, "write.lock")).?.owner);
+    try storage.releaseWriteLock(allocator, io, "write.lock");
+    try std.testing.expect((try local.checkWriteLock(allocator, io, "write.lock")) == null);
+
+    try storage.deleteDir(allocator, io, "dir");
+    try std.testing.expect(!try local.dirExists(allocator, io, "dir"));
+
+    // The origin was never written to.
+    try std.testing.expect(try origin.isEmpty(allocator, io, ""));
 }
