@@ -1,8 +1,8 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `add` (alias `a`), `check` (alias `chk`), `compare` (alias `cmp`), `consolidate`, `database-id`, `debug` (all
+// Only the `add` (alias `a`), `bug`, `check` (alias `chk`), `compare` (alias `cmp`), `consolidate`, `database-id`, `debug` (all
 // its subcommands), `decrypt`, `encrypt`, `examples`, `export` (alias `exp`), `find-orphans`, `hash`, `hash-cache` (all its
-// subcommands), `help`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias
+// subcommands), `help`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `news`, `origin`, `remove` (alias
 // `rm`), `remove-orphans`, `repair`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`,
 // `tools`, `upgrade`, `verify` (alias `ver`) and `version` commands, the `secrets` command group (aliases `sec` and `s`), the
 // `dbs` command group (alias `d`) and the `--version` option are ported. The other commands are defined like in index.ts, so
@@ -51,6 +51,9 @@ pub const sync = @import("src/cmd/sync.zig");
 pub const consolidate = @import("src/cmd/consolidate.zig");
 pub const encrypt = @import("src/cmd/encrypt.zig");
 pub const decrypt = @import("src/cmd/decrypt.zig");
+pub const news = @import("src/cmd/news.zig");
+pub const bug = @import("src/cmd/bug.zig");
+pub const open = @import("src/lib/third-party/open.zig");
 pub const debug = @import("src/cmd/debug.zig");
 pub const hash = @import("src/cmd/hash.zig");
 pub const tools_cmd = @import("src/cmd/tools.zig");
@@ -111,6 +114,9 @@ const IEncryptCommandOptions = encrypt.IEncryptCommandOptions;
 const encryptCommand = encrypt.encryptCommand;
 const IDecryptCommandOptions = decrypt.IDecryptCommandOptions;
 const decryptCommand = decrypt.decryptCommand;
+const newsCommand = news.newsCommand;
+const IBugReportCommandOptions = bug.IBugReportCommandOptions;
+const bugReportCommand = bug.bugReportCommand;
 const IDebugMerkleTreeCommandOptions = debug.IDebugMerkleTreeCommandOptions;
 const IDebugFindCollisionsCommandOptions = debug.IDebugFindCollisionsCommandOptions;
 const IDebugFindDuplicatesCommandOptions = debug.IDebugFindDuplicatesCommandOptions;
@@ -446,6 +452,12 @@ pub const ParseOutcome = union(enum) {
 
     // Run the decrypt command with these options.
     decrypt: IDecryptCommandOptions,
+
+    // Run the bug command with these options.
+    bug: IBugReportCommandOptions,
+
+    // Run the news command.
+    news,
 
     // Run the debug merkle-tree command with these options.
     debugMerkleTree: IDebugMerkleTreeCommandOptions,
@@ -893,6 +905,33 @@ fn decryptAction(state: *IProgramState, args: []const ArgumentValue, options: *c
             .base = baseOptions(options),
         },
     };
+}
+
+//
+// The action of the bug command (`bugReportCommand`): `run` calls the command. Commander stores `--no-browser`
+// as the `browser` option, so `noBrowser` is never set, as in index.ts.
+//
+fn bugAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .bug = .{
+            .verbose = flagValue(options, "verbose"),
+            .tools = flagValue(options, "tools"),
+            .yes = flagValue(options, "yes"),
+            .noBrowser = flagValue(options, "noBrowser"),
+        },
+    };
+}
+
+//
+// The action of the news command (`newsCommand`): `run` calls the command.
+//
+fn newsAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = options;
+    _ = command;
+    state.outcome = .news;
 }
 
 //
@@ -1504,7 +1543,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
     _ = bugDefinition
         .option("--no-browser", "Don't open the browser automatically", .{ .boolean = false })
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "bug"))
-        .action(state, notPortedAction);
+        .action(state, bugAction);
 
     const checkDefinition = program
         .command("check", .{})
@@ -1860,7 +1899,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .command("news", .{})
         .description("Displays the latest update notification and all news items from the Photosphere feed.")
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "news"))
-        .action(state, notPortedAction);
+        .action(state, newsAction);
 
     const removeDefinition = program
         .command("remove", .{})
@@ -2588,6 +2627,15 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try encryptCommand(allocator, io, context, &options);
+        },
+        .bug => |parsed| {
+            // The preAction hook skips the notifications for bug.
+            const options = parsed;
+            try bugReportCommand(allocator, io, &options);
+        },
+        .news => {
+            // The preAction hook skips the notifications for news.
+            try newsCommand(allocator, io);
         },
         .decrypt => |parsed| {
             var options = parsed;

@@ -1,0 +1,69 @@
+
+🐛 Photosphere Bug Report
+
+[?25l◆  Bug title (short summary):
+   e.g., 'CLI crashes when adding large video files'
+ 
+[999D[3A[J▲  Bug title (short summary):
+   e.g., 'CLI crashes when adding large video files'
+   Please provide a title for the bug report
+[999D[3A[J◆  Bug title (short summary):
+   C█
+ 
+[999D[3A[1B[2K[G   Cr█[2B[999D[3A[1B[2K[G   Cra█[2B[999D[3A[1B[2K[G   Cras█[2B[999D[3A[1B[2K[G   Crash█[2B[999D[3A[1B[2K[G   Crash █[2B[999D[3A[1B[2K[G   Crash o█[2B[999D[3A[1B[2K[G   Crash on█[2B[999D[3A[1B[2K[G   Crash on █[2B[999D[3A[1B[2K[G   Crash on a█[2B[999D[3A[1B[2K[G   Crash on ad█[2B[999D[3A[1B[2K[G   Crash on add█[2B[999D[3A[J◇  Bug title (short summary):
+   Crash on add
+[?25h[?25l◆  Bug description (detailed explanation):
+   Describe what happened in detail...
+ 
+[999D[3A[J▲  Bug description (detailed explanation):
+   Describe what happened in detail...
+   Please provide a description of the bug
+[999D[3A[J◆  Bug description (detailed explanation):
+   I█
+ 
+[999D[3A[1B[2K[G   It█[2B[999D[3A[1B[2K[G   It █[2B[999D[3A[1B[2K[G   It c█[2B[999D[3A[1B[2K[G   It cr█[2B[999D[3A[1B[2K[G   It cra█[2B[999D[3A[1B[2K[G   It cras█[2B[999D[3A[1B[2K[G   It crash█[2B[999D[3A[1B[2K[G   It crashe█[2B[999D[3A[1B[2K[G   It crashed█[2B[999D[3A[J◇  Bug description (detailed explanation):
+   It crashed
+[?25h[?25l◆  Step 1:
+   e.g., Run command 'psi add /path/to/photos'
+ 
+[999D[3A[J▲  Step 1:
+   e.g., Run command 'psi add /path/to/photos'
+   Please provide at least one step
+[999D[3A[J◆  Step 1:
+   R█
+ 
+[999D[3A[1B[2K[G   Ru█[2B[999D[3A[1B[2K[G   Run█[2B[999D[3A[1B[2K[G   Run █[2B[999D[3A[1B[2K[G   Run p█[2B[999D[3A[1B[2K[G   Run ps█[2B[999D[3A[1B[2K[G   Run psi█[2B[999D[3A[1B[2K[G   Run psi █[2B[999D[3A[1B[2K[G   Run psi a█[2B[999D[3A[1B[2K[G   Run psi ad█[2B[999D[3A[1B[2K[G   Run psi add█[2B[999D[3A[J◇  Step 1:
+   Run psi add
+[?25h[?25l◆  Step 2:
+   Next step, or press Enter to finish
+ 
+[999D[3A[1B[2K[G   S█[2B[999D[3A[1B[2K[G   Se█[2B[999D[3A[1B[2K[G   See█[2B[999D[3A[1B[2K[G   See █[2B[999D[3A[1B[2K[G   See e█[2B[999D[3A[1B[2K[G   See er█[2B[999D[3A[1B[2K[G   See err█[2B[999D[3A[1B[2K[G   See erro█[2B[999D[3A[1B[2K[G   See error█[2B[999D[3A[J◇  Step 2:
+   See error
+[?25h[?25l◆  Step 3:
+   Next step, or press Enter to finish
+ 
+[999D[3A[J◇  Step 3:
+ 
+[?25h[?25l◆  Expected behavior:
+   What did you expect to happen?
+ 
+[999D[3A[J▲  Expected behavior:
+   What did you expect to happen?
+   Please describe what you expected to happen
+[999D[3A[J◆  Expected behavior:
+   W█
+ 
+[999D[3A[1B[2K[G   Wo█[2B[999D[3A[1B[2K[G   Wor█[2B[999D[3A[1B[2K[G   Work█[2B[999D[3A[1B[2K[G   Works█[2B[999D[3A[J◇  Expected behavior:
+   Works
+[?25h[?25l◆  Actual behavior:
+   What actually happened?
+ 
+[999D[3A[J▲  Actual behavior:
+   What actually happened?
+   Please describe what actually happened
+[999D[3A[J◆  Actual behavior:
+   C█
+ 
+[999D[3A[1B[2K[G   Cr█[2B[999D[3A[1B[2K[G   Cra█[2B[999D[3A[1B[2K[G   Cras█[2B[999D[3A[1B[2K[G   Crash█[2B[999D[3A[1B[2K[G   Crashe█[2B[999D[3A[1B[2K[G   Crashes█[2B[999D[3A[J◇  Actual behavior:
+   Crashes
+[?25h

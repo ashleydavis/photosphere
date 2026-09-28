@@ -75,4 +75,29 @@ pub fn markUpdateAsShown(allocator: std.mem.Allocator, io: std.Io, latestVersion
     };
 }
 
-// Not ported: getLatestVersion (only used by psi news).
+//
+// The body of getLatestVersion inside its try block (errors become undefined).
+//
+fn getLatestVersionUnsafe(allocator: std.mem.Allocator, io: std.Io) !?[]const u8 {
+    const response = try fetch(allocator, io, LATEST_RELEASE_URL);
+    if (!response.ok) {
+        return null;
+    }
+    const tag = tagName(allocator, response.body) orelse return null;
+    return if (std.mem.startsWith(u8, tag, "v")) tag[1..] else tag;
+}
+
+//
+// Returns the latest release version reported by GitHub (without the leading "v"),
+// or undefined when the running build is dev/nightly or the fetch/parse step fails.
+// Unlike checkForUpdates(), this does NOT apply the `last_shown_update_version` dedup,
+// does NOT compare to the running version, and does NOT record anything. Used by
+// `psi news` to always show the latest available version when known.
+//
+pub fn getLatestVersion(allocator: std.mem.Allocator, io: std.Io) ?[]const u8 {
+    const currentVersion: []const u8 = config.version;
+    if (std.mem.eql(u8, currentVersion, "dev") or std.mem.indexOf(u8, currentVersion, "nightly") != null) {
+        return null;
+    }
+    return getLatestVersionUnsafe(allocator, io) catch null;
+}

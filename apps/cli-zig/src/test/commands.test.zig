@@ -5,6 +5,7 @@ const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const node_path = @import("node-utils-zig").path;
 const encryption = @import("encryption-zig");
+const cli = @import("cli-zig");
 
 //
 // The expected output of these tests is written out here, ported from the TypeScript CLI: the report text from
@@ -2715,8 +2716,7 @@ test "commands that are not ported yet fail with an error that names them" {
     const environment = try helpers.cliEnvironment(allocator, root);
 
     const bugHint = "\nIf you believe this behaviour is a bug, please report it with the following command:\n   psi bug\n";
-    try expectResult(try runZig(allocator, environment, &.{ "-q", "bug", "--no-browser" }), bugHint, "An unknown error occurred\nError: The bug command is not ported to the Zig CLI yet.\n", 1);
-    try expectResult(try runZig(allocator, environment, &.{ "-q", "news" }), bugHint, "An unknown error occurred\nError: The news command is not ported to the Zig CLI yet.\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "-q", "mcp" }), bugHint, "An unknown error occurred\nError: The mcp command is not ported to the Zig CLI yet.\n", 1);
 }
 
 //
@@ -3835,4 +3835,289 @@ fn vaultEntry(allocator: std.mem.Allocator, name: []const u8, secretType: []cons
     try entry.put(allocator, "type", .{ .string = secretType });
     try entry.put(allocator, "value", .{ .string = value });
     return .{ .object = entry };
+}
+
+//
+// The header newsCommand (apps/cli/src/cmd/news.ts) prints before the feed, for the "dev" version (which
+// getLatestVersion never looks up, so no network is used).
+//
+const news_header = "\n📋 Photosphere News\n\nRunning version: vdev\n\n";
+
+//
+// Writes the news feed the CLI test environment reads (<root>/news.yaml).
+//
+fn writeNewsFeed(allocator: std.mem.Allocator, root: []const u8, feed: []const u8) !void {
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/news.yaml", .{root}), .data = feed });
+}
+
+test "news prints the whole feed, newest first, marking the new items, like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-news");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    // The test environment's feed is empty.
+    try expectResult(try runZig(allocator, environment, &.{"news"}), news_header ++ "No news items available.\n", "", 0);
+
+    try writeNewsFeed(allocator, root,
+        \\items:
+        \\  - id: first
+        \\    message: "Hello there"
+        \\    link:
+        \\      label: "Docs"
+        \\      url: "https://example.com/docs"
+        \\
+    );
+    try expectResult(try runZig(allocator, environment, &.{"news"}), news_header ++
+        \\★ Hello there (new)
+        \\     Docs: https://example.com/docs
+        \\
+    , "", 0);
+
+    // The first item is now seen; the new ones are marked, and --quiet changes nothing.
+    try writeNewsFeed(allocator, root,
+        \\items:
+        \\  - id: first
+        \\    message: "Hello there"
+        \\    link:
+        \\      label: "Docs"
+        \\      url: "https://example.com/docs"
+        \\  - id: second
+        \\    message: Second item
+        \\    action:
+        \\      label: Go
+        \\      url: https://example.com/go
+        \\  - id: third
+        \\    message: Third
+        \\
+    );
+    try expectResult(try runZig(allocator, environment, &.{ "-q", "news" }), news_header ++
+        \\★ Third (new)
+        \\★ Second item (new)
+        \\     Go: https://example.com/go
+        \\• Hello there
+        \\     Docs: https://example.com/docs
+        \\
+    , "", 0);
+    try expectResult(try runZig(allocator, environment, &.{"news"}), news_header ++
+        \\• Third
+        \\• Second item
+        \\     Go: https://example.com/go
+        \\• Hello there
+        \\     Docs: https://example.com/docs
+        \\
+    , "", 0);
+    const state = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/config/state.yaml", .{root}), allocator, .unlimited);
+    try std.testing.expectEqualStrings("news:\n  shown_news_ids:\n    - first\n    - second\n    - third\n", state);
+
+    // A feed that cannot be read shows no items.
+    try writeNewsFeed(allocator, root, "items: [unclosed");
+    try expectResult(try runZig(allocator, environment, &.{"news"}), news_header ++ "No news items available.\n", "", 0);
+}
+
+//
+// Sets up the environment of the bug tests: no tools on the PATH (so every tool version is "Not available"), and
+// either no program to open a URL with, or a copy of psi as that program (it fails, but it starts, which is all
+// open waits for). The opener is xdg-open on the PATH (open on macOS), or on Windows the PowerShell under
+// SystemRoot. Windows always has PowerShell (Wine too, which sets SystemRoot itself whatever the environment
+// says), so on Windows the copy of psi is always put there, so that no real browser is opened.
+//
+fn bugEnvironment(allocator: std.mem.Allocator, root: []const u8, withOpener: bool) !*std.process.Environ.Map {
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const binDir = try usePathOfEmptyDirectory(allocator, environment, root);
+    const systemRoot = try std.fs.path.join(allocator, &.{ root, "windows" });
+    if (builtin.os.tag == .windows) {
+        try environment.put("SystemRoot", systemRoot);
+    }
+    if (withOpener or builtin.os.tag == .windows) {
+        const openerPath = if (builtin.os.tag == .windows)
+            try std.fs.path.join(allocator, &.{ systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe" })
+        else
+            try std.fs.path.join(allocator, &.{ binDir, if (builtin.os.tag == .macos) "open" else "xdg-open" });
+        try std.Io.Dir.cwd().createDirPath(std.testing.io, std.fs.path.dirname(openerPath).?);
+        try std.Io.Dir.cwd().copyFile(helpers.psi_path, std.Io.Dir.cwd(), openerPath, std.testing.io, .{});
+    }
+    return environment;
+}
+
+//
+// The summary bugReportCommand (apps/cli/src/cmd/bug.ts) prints for a report with this title, on this system.
+//
+fn bugSummary(allocator: std.mem.Allocator, title: []const u8, logFile: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(allocator, "Title: {s}\nPhotosphere Version: dev\nSystem: {s} {s} ({s})\nLog File: {s}", .{
+        title,
+        cli.file_logger.osPlatform(),
+        cli.file_logger.osArch(),
+        try cli.file_logger.osRelease(allocator),
+        logFile,
+    });
+}
+
+//
+// The URL bugReportCommand opens for a report without tools, on this system, with the details of the bug.
+//
+fn bugUrl(allocator: std.mem.Allocator, title: []const u8, details: []const u8, logHeader: []const u8, logFile: []const u8) ![]const u8 {
+    const body = try std.fmt.allocPrint(allocator, "{s}\n\n## System Information\n- Photosphere Version: dev\n- Platform: {s} {s}\n- OS Release: {s}\n- Node.js Version: {s}\n\n" ++
+        "## Tool Versions\n- ImageMagick: Not available\n- FFmpeg: Not available\n- FFprobe: Not available\n\n" ++
+        "## Log Header\n```\n{s}\n```\n\n## Log File\nPlease attach the full log file located at:\n`{s}`\n\n" ++
+        "You can drag and drop the log file into this issue, or copy and paste its contents into a code block.\n\n" ++
+        "## Additional Context\n<!-- Add any other context about the problem here -->\n\n", .{
+        details,
+        cli.file_logger.osPlatform(),
+        cli.file_logger.osArch(),
+        try cli.file_logger.osRelease(allocator),
+        cli.file_logger.processVersion(),
+        logHeader,
+        logFile,
+    });
+    return cli.bug.createGitHubIssueUrl(allocator, title, body);
+}
+
+//
+// The outro bugReportCommand prints for the report (its summary, and the log file information when there is a log
+// file) in the environment of bugEnvironment without an opener: the URL, as no browser can be opened, or on
+// Windows, where bugEnvironment always puts an opener, that the report was opened.
+//
+fn bugOutro(allocator: std.mem.Allocator, report: []const u8, url: []const u8) ![]const u8 {
+    if (builtin.os.tag == .windows) {
+        return std.fmt.allocPrint(allocator, "✓ Bug report opened in browser!\n\n{s}\n", .{report});
+    }
+    return std.fmt.allocPrint(allocator, "✓ Bug report generated successfully!\n\n{s}\n\nFailed to open browser. Here's the URL:\n{s}\n\nPlease copy the URL above to submit the bug report.\n", .{ report, url });
+}
+
+//
+// The details bugReportCommand puts in the report with --yes.
+//
+const bug_template_details = "## Bug Description\n<!-- Please describe the bug you encountered -->\n\n## Steps to Reproduce\n1. \n2. \n3. \n\n" ++
+    "## Expected Behavior\n<!-- What did you expect to happen? -->\n\n## Actual Behavior\n<!-- What actually happened? -->";
+
+//
+// The header bugReportCommand prints (the intro, with the empty line that ends it and the empty line after it).
+//
+const bug_header = "\n🐛 Photosphere Bug Report\n\n\n";
+
+test "bug --yes reports the bug like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-bug");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try bugEnvironment(allocator, root, false);
+
+    // Commander stores --no-browser as the browser option, so it changes nothing, as in the TypeScript CLI.
+    const outro = try bugOutro(
+        allocator,
+        try bugSummary(allocator, "Bug Report", "None available"),
+        try bugUrl(allocator, "Bug Report", bug_template_details, "No log file available", "No log file available"),
+    );
+    const expected = try std.mem.concat(allocator, u8, &.{ bug_header, outro });
+    try expectResult(try runZig(allocator, environment, &.{ "bug", "--yes" }), expected, "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "bug", "-y", "--no-browser" }), expected, "", 0);
+}
+
+test "bug --yes includes the header of the newest log file, like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-bug-log");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try bugEnvironment(allocator, root, false);
+    const logsDir = try std.fs.path.join(allocator, &.{ root, "tmp", "photosphere", "logs" });
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, logsDir);
+    const logFile = try std.fs.path.join(allocator, &.{ logsDir, "psi-1.log" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = logFile, .data = "Header line\n--- Log Start ---\nbody line\n" });
+
+    const report = try std.fmt.allocPrint(allocator, "{s}\n\n📎 Log File Information:\nThe log file path is included in the bug report template.\nYou can attach it to the GitHub issue by dragging and dropping the file.", .{
+        try bugSummary(allocator, "Bug Report", logFile),
+    });
+    const expected = try std.mem.concat(allocator, u8, &.{ bug_header, try bugOutro(allocator, report, try bugUrl(allocator, "Bug Report", bug_template_details, "Header line\n--- Log Start ---", logFile)) });
+    try expectResult(try runZig(allocator, environment, &.{ "bug", "--yes" }), expected, "", 0);
+}
+
+test "bug --yes opens the report in the browser like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-bug-open");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try bugEnvironment(allocator, root, true);
+
+    const expected = try std.fmt.allocPrint(allocator, bug_header ++ "✓ Bug report opened in browser!\n\n{s}\n", .{
+        try bugSummary(allocator, "Bug Report", "None available"),
+    });
+    try expectResult(try runZig(allocator, environment, &.{ "bug", "--yes" }), expected, "", 0);
+}
+
+//
+// Runs the Zig CLI with the arguments, typing the keys of each prompt once it appears, in a terminal with Unicode.
+//
+fn runZigWithPrompts(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, args: []const []const u8, prompts: []const helpers.IPromptKeys) !helpers.CliResult {
+    const terminalEnvironment = try allocator.create(std.process.Environ.Map);
+    terminalEnvironment.* = try environment.clone(allocator);
+    try terminalEnvironment.put("TERM", "xterm-256color");
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.append(allocator, try zigCliPath(allocator));
+    try argv.appendSlice(allocator, args);
+    return helpers.runWithPrompts(allocator, argv.items, prompts, terminalEnvironment);
+}
+
+test "bug asks for the details of the bug like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-bug-prompts");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try bugEnvironment(allocator, root, false);
+
+    // Each prompt is first answered with nothing, which the required ones reject, and the steps end with an empty
+    // step. src/test/fixtures/bug-prompts.txt is what the TypeScript CLI (apps/cli/index.ts bug) writes for these
+    // keys, up to its outro.
+    const result = try runZigWithPrompts(allocator, environment, &.{"bug"}, &.{
+        .{ .waitFor = "Bug title", .keys = "\rCrash on add\r" },
+        .{ .waitFor = "Bug description", .keys = "\rIt crashed\r" },
+        .{ .waitFor = "Step 1:", .keys = "\rRun psi add\r" },
+        .{ .waitFor = "Step 2:", .keys = "See error\r" },
+        .{ .waitFor = "Step 3:", .keys = "\r" },
+        .{ .waitFor = "Expected behavior", .keys = "\rWorks\r" },
+        .{ .waitFor = "Actual behavior", .keys = "\rCrashes\r" },
+    });
+    const prompts = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "src/test/fixtures/bug-prompts.txt", allocator, .unlimited);
+    const details = "## Bug Description\nIt crashed\n\n## Steps to Reproduce\n1. Run psi add\n2. See error\n\n## Expected Behavior\nWorks\n\n## Actual Behavior\nCrashes";
+    const outro = try bugOutro(
+        allocator,
+        try bugSummary(allocator, "Crash on add", "None available"),
+        try bugUrl(allocator, "Crash on add", details, "No log file available", "No log file available"),
+    );
+    const expected = try std.mem.concat(allocator, u8, &.{ prompts, "\n", outro });
+    try expectResult(result, expected, "", 0);
+}
+
+test "bug is cancelled like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-bug-cancel");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try bugEnvironment(allocator, root, false);
+
+    // A title that is too long is rejected, then Ctrl+C cancels the report.
+    const longTitle = "x" ** 101;
+    const titleCancelled = try runZigWithPrompts(allocator, environment, &.{"bug"}, &.{
+        .{ .waitFor = "Bug title", .keys = longTitle ++ "\r\x03" },
+    });
+    try std.testing.expect(std.mem.indexOf(u8, titleCancelled.stdout, "▲  Bug title (short summary):\n   " ++ longTitle ++ "█\n   Title should be under 100 characters\n") != null);
+    try std.testing.expect(std.mem.endsWith(u8, titleCancelled.stdout, "■  Bug title (short summary):\n   " ++ longTitle ++ "\n \n\x1b[?25h\nBug report cancelled.\n"));
+    try std.testing.expectEqualStrings("", titleCancelled.stderr);
+    try std.testing.expectEqual(@as(u8, 0), titleCancelled.exitCode);
+
+    // Escape cancels a later prompt too.
+    const stepCancelled = try runZigWithPrompts(allocator, environment, &.{"bug"}, &.{
+        .{ .waitFor = "Bug title", .keys = "T\r" },
+        .{ .waitFor = "Bug description", .keys = "D\r" },
+        .{ .waitFor = "Step 1:", .keys = "\x1b" },
+    });
+    try std.testing.expect(std.mem.endsWith(u8, stepCancelled.stdout, "■  Step 1:\n \n\x1b[?25h\nBug report cancelled.\n"));
+    try std.testing.expectEqual(@as(u8, 0), stepCancelled.exitCode);
 }

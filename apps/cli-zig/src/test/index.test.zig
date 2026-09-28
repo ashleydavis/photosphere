@@ -191,8 +191,7 @@ test "commands that are not ported fail by name, unknown commands are unknown, a
     try std.testing.expectEqualStrings("commander.helpDisplayed", help.outcome.failure.code);
     try std.testing.expect(std.mem.startsWith(u8, help.stdout, "Usage: psi "));
 
-    try std.testing.expectEqualStrings("news", (try parse(allocator, &.{"news"})).outcome.notPorted);
-    try std.testing.expectEqualStrings("bug", (try parse(allocator, &.{ "bug", "--no-browser" })).outcome.notPorted);
+    try std.testing.expectEqualStrings("mcp", (try parse(allocator, &.{"mcp"})).outcome.notPorted);
 
     // The secrets and dbs groups are not created with .exitOverride(), so they call process.exit themselves. They
     // are added with addCommand, so they have outputs of their own (parse points them at the captures).
@@ -1291,4 +1290,54 @@ test "the dbs group shows its help like commander" {
         \\  -h, --help               display help for command
         \\
     , addHelp.stdout);
+}
+
+test "bug command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "bug", "--verbose", "--yes" });
+    try std.testing.expect(parsed.outcome == .bug);
+    try std.testing.expectEqual(@as(?bool, true), parsed.outcome.bug.verbose);
+    try std.testing.expectEqual(@as(?bool, true), parsed.outcome.bug.yes);
+    try std.testing.expect(parsed.outcome.bug.tools == null);
+
+    // The preAction hook skips the notifications for bug.
+    try std.testing.expectEqual(@as(?bool, null), parsed.state.notificationsQuiet);
+    try std.testing.expectEqual(@as(?bool, null), (try parse(allocator, &.{ "-q", "bug" })).state.notificationsQuiet);
+
+    const short = try parse(allocator, &.{ "bug", "-v", "-y" });
+    try std.testing.expectEqual(@as(?bool, true), short.outcome.bug.verbose);
+    try std.testing.expectEqual(@as(?bool, true), short.outcome.bug.yes);
+
+    const yesOnly = try parse(allocator, &.{ "bug", "--yes" });
+    try std.testing.expectEqual(@as(?bool, false), yesOnly.outcome.bug.verbose);
+    try std.testing.expectEqual(@as(?bool, true), yesOnly.outcome.bug.yes);
+
+    // Commander stores --no-browser as the browser option, so bugReportCommand's noBrowser is never set.
+    const noBrowser = try parse(allocator, &.{ "bug", "--no-browser" });
+    try std.testing.expect(noBrowser.outcome.bug.noBrowser == null);
+
+    const defaults = try parse(allocator, &.{"bug"});
+    try std.testing.expectEqual(@as(?bool, false), defaults.outcome.bug.verbose);
+    try std.testing.expectEqual(@as(?bool, false), defaults.outcome.bug.yes);
+    try std.testing.expect(defaults.outcome.bug.noBrowser == null);
+    try expectCommanderError(allocator, &.{ "bug", "extra" }, "commander.excessArguments", "error: too many arguments for 'bug'. Expected 0 arguments but got 1.\n");
+    try expectCommanderError(allocator, &.{ "bug", "--db", "d" }, "commander.unknownOption", "error: unknown option '--db'\n");
+}
+
+test "news command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{"news"});
+    try std.testing.expect(parsed.outcome == .news);
+
+    // The preAction hook skips the notifications for news.
+    try std.testing.expectEqual(@as(?bool, null), parsed.state.notificationsQuiet);
+    try std.testing.expect((try parse(allocator, &.{ "-q", "news" })).outcome == .news);
+    try expectCommanderError(allocator, &.{ "news", "extra" }, "commander.excessArguments", "error: too many arguments for 'news'. Expected 0 arguments but got 1.\n");
+    try expectCommanderError(allocator, &.{ "news", "--yes" }, "commander.unknownOption", "error: unknown option '--yes'\n");
 }

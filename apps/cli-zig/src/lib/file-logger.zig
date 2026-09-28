@@ -28,7 +28,7 @@ const log_start_marker = "--- Log Start ---";
 //
 // Node's name for the platform (`os.platform()`).
 //
-fn osPlatform() []const u8 {
+pub fn osPlatform() []const u8 {
     return switch (builtin.os.tag) {
         .linux => "linux",
         .macos => "darwin",
@@ -41,7 +41,7 @@ fn osPlatform() []const u8 {
 //
 // Node's name for the CPU architecture (`os.arch()`).
 //
-fn osArch() []const u8 {
+pub fn osArch() []const u8 {
     return switch (builtin.cpu.arch) {
         .x86_64 => "x64",
         .aarch64 => "arm64",
@@ -54,7 +54,7 @@ fn osArch() []const u8 {
 //
 // The operating system release (`os.release()`).
 //
-fn osRelease(allocator: std.mem.Allocator) ![]const u8 {
+pub fn osRelease(allocator: std.mem.Allocator) ![]const u8 {
     if (builtin.os.tag == .windows) {
         var versionInfo: std.os.windows.RTL_OSVERSIONINFOW = undefined;
         versionInfo.dwOSVersionInfoSize = @sizeOf(std.os.windows.RTL_OSVERSIONINFOW);
@@ -70,14 +70,14 @@ fn osRelease(allocator: std.mem.Allocator) ![]const u8 {
 //
 // The runtime version (`process.version`). The Zig binary reports the Zig version it was built with.
 //
-fn processVersion() []const u8 {
+pub fn processVersion() []const u8 {
     return "zig-" ++ builtin.zig_version_string;
 }
 
 //
 // The current working directory (`process.cwd()`).
 //
-fn processCwd(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
+pub fn processCwd(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
     return std.process.currentPathAlloc(io, allocator);
 }
 
