@@ -1,5 +1,6 @@
 const std = @import("std");
 const bdb = @import("bdb-zig");
+const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
 const helpers = @import("test-helpers.zig");
 const bson = serialization_zig.bson;
@@ -999,4 +1000,31 @@ test "should handle updating to undefined when field does not exist" {
     // Should still track deletion timestamp for undefined field
     try std.testing.expectEqual(@as(?f64, 2000), timestampOf(entry(result, "name").?));
     try std.testing.expectEqual(@as(?f64, 2000), timestampOf(entry(result, "nonexistent").?));
+}
+
+test "throws for a metadata timestamp or fields value that is not ported" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const fields = try objectValue(allocator, &.{property("name", stringValue("old"))});
+    const updates = try objectValue(allocator, &.{property("name", stringValue("new"))});
+
+    const stringTimestamp = (try objectValue(allocator, &.{property("timestamp", stringValue("1000"))})).document;
+    try std.testing.expectError(error.Thrown, updateMetadata(allocator, fields, updates, stringTimestamp, 2000));
+    try std.testing.expectEqualStrings("A metadata timestamp that is a string value is not ported", utils.errors.lastErrorMessage());
+
+    const numberFields = (try objectValue(allocator, &.{ property("timestamp", numberValue(1000)), property("fields", numberValue(5)) })).document;
+    try std.testing.expectError(error.Thrown, updateMetadata(allocator, fields, updates, numberFields, 2000));
+    try std.testing.expectEqualStrings("Metadata that is a number value is not ported", utils.errors.lastErrorMessage());
+}
+
+test "treats a null metadata timestamp and null fields as missing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const fields = try objectValue(allocator, &.{property("name", stringValue("old"))});
+    const updates = try objectValue(allocator, &.{property("name", stringValue("new"))});
+    const metadata = (try objectValue(allocator, &.{ property("timestamp", .null), property("fields", .null) })).document;
+    const result = try updateMetadata(allocator, fields, updates, metadata, 2000);
+    try std.testing.expectEqual(@as(?f64, 2000), timestampOf(entry(result, "name").?));
 }
