@@ -256,3 +256,38 @@ test "streams progress as assets are pushed, so a long upload is not silent" {
     try std.testing.expectEqualStrings("{\"type\":\"consolidate-progress\",\"pushed\":1,\"total\":2}", recording.sentMessages.items[0]);
     try std.testing.expectEqualStrings("{\"type\":\"consolidate-progress\",\"pushed\":2,\"total\":2}", recording.sentMessages.items[1]);
 }
+
+test "does nothing when the two databases are already the same database" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const recording = try makeContext(allocator, io);
+
+    // Two copies of one test database carry the same database id.
+    const dirs = try makeDirectories(allocator, io, "1-asset", "1-asset");
+    defer removeDirectories(io, dirs);
+    const localTreeBefore = try readTreeFile(allocator, io, dirs.local);
+
+    const result = try consolidateDatabaseHandler(allocator, io, try makeData(allocator, dirs.local, dirs.remote), recording.context.taskContext());
+
+    try std.testing.expectEqual(@as(i64, 0), result.object.get("pushedCount").?.integer);
+    try std.testing.expectEqual(@as(i64, 0), result.object.get("alreadyPresentCount").?.integer);
+    try std.testing.expectEqualStrings(localTreeBefore, try readTreeFile(allocator, io, dirs.local));
+}
+
+test "fails when another session holds the local database's write lock" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const recording = try makeContext(allocator, io);
+    const dirs = try makeDirectories(allocator, io, "1-asset", "1-asset-2");
+    defer removeDirectories(io, dirs);
+
+    const localRawStorage = try helpers.directoryStorage(allocator, io, dirs.local);
+    try std.testing.expect(try api.write_lock.acquireWriteLock(allocator, io, localRawStorage, "another-session", 1));
+
+    try std.testing.expectError(error.Thrown, consolidateDatabaseHandler(allocator, io, try makeData(allocator, dirs.local, dirs.remote), recording.context.taskContext()));
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "Failed to acquire the write lock on the local database") != null);
+}
