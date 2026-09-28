@@ -94,3 +94,113 @@ test "a JSON timestamp that is not a number leaves the video undated rather than
     const tooLate = try detailsWithJson(allocator, "video-json-too-late", "{\"photoTakenTime\":{\"timestamp\":\"99999999999999999999999\"}}");
     try std.testing.expect(tooLate.photoDate == null);
 }
+
+//
+// A JSON file beside a video, and the photo date getVideoDetails takes from it.
+//
+const IJsonDateCase = struct {
+    // The contents of the JSON file.
+    json: []const u8,
+
+    // The photo date, or null when there is none.
+    photoDate: ?[]const u8,
+
+    // What is logged about it, or null when nothing is expected.
+    logged: ?[]const u8,
+};
+
+//
+// Writes a verbose message to stdout, where the test captures it (the console log's own verbose writes nothing).
+//
+fn verboseToStdout(ptr: *anyopaque, message: []const u8) void {
+    _ = ptr;
+    utils.console.log(message);
+}
+
+test "reads what it can of the JSON file beside a video, as dayjs.unix(parseInt(timestamp)) does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    _ = try helpers.setupEnvironment(io);
+    const tempDir = try helpers.makeTempDir(allocator, io, "video-json-cases");
+    defer helpers.removeTempDir(io, tempDir);
+    var generator = try TestUuidGenerator.init(allocator);
+
+    // A QuickTime file keeps a location tag as written, and has no date of its own. The first place the location
+    // matches /([+-]\d+\.\d+)([+-]\d+\.\d+)/ is "+1.5-2.5".
+    const videoPath = try std.fmt.allocPrint(allocator, "{s}/video.mov", .{tempDir});
+    const made = try std.process.run(allocator, io, .{ .argv = &.{ "ffmpeg", "-v", "quiet", "-f", "lavfi", "-i", "color=c=red:s=32x16:r=10:d=1", "-metadata", "location=+5 +5. -1.5x +1.5-2.5/", "-pix_fmt", "yuv420p", "-y", videoPath } });
+    try std.testing.expect(made.term == .exited and made.term.exited == 0);
+    const jsonPath = try std.fmt.allocPrint(allocator, "{s}.json", .{videoPath});
+
+    const cases = [_]IJsonDateCase{
+        .{ .json = "{\"photoTakenTime\":{\"timestamp\":1700000000.7}}", .photoDate = "2023-11-14T22:13:20.000Z", .logged = "Parsed date 2023-11-14T22:13:20.000Z from timestamp 1700000000 in JSON file " },
+        .{ .json = "{\"photoTakenTime\":{\"timestamp\":[\"1700000000\",5]}}", .photoDate = "2023-11-14T22:13:20.000Z", .logged = null },
+        .{ .json = "{\"photoTakenTime\":{\"timestamp\":true}}", .photoDate = null, .logged = "Failed to parse date true from JSON file " },
+        .{ .json = "{\"photoTakenTime\":{\"timestamp\":\"99999999999999\"}}", .photoDate = null, .logged = "Failed to parse date 99999999999999 from JSON file " },
+        .{ .json = "{\"photoTakenTime\":{\"timestamp\":{\"a\":1}}}", .photoDate = null, .logged = "Failed to parse date [object Object] from JSON file " },
+        .{ .json = "{\"photoTakenTime\":\"yesterday\"}", .photoDate = null, .logged = null },
+        .{ .json = "{\"photoTakenTime\":{\"timestamp\":\"\"}}", .photoDate = null, .logged = null },
+        .{ .json = "[1]", .photoDate = null, .logged = null },
+    };
+    for (cases) |expected| {
+        errdefer std.debug.print("case: {s}\n", .{expected.json});
+        try helpers.writeFile(io, jsonPath, expected.json);
+        var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+        var stdout_capture = std.Io.Writer.Allocating.init(allocator);
+        utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
+        var verboseLog: utils.log.ConsoleLog = .{ .verbose_enabled = true };
+        var verboseVtable = verboseLog.ilog().vtable.*;
+        verboseVtable.verbose = verboseToStdout;
+        const previousLog = utils.log.log;
+        utils.log.setLog(.{ .ptr = &verboseLog, .vtable = &verboseVtable });
+        const details = getVideoDetails(allocator, io, videoPath, tempDir, "video/quicktime", generator.uuidGenerator(), "video.mov");
+        utils.log.setLog(previousLog);
+        utils.console.setCapture(null, null);
+
+        const result = try details;
+        if (expected.photoDate) |photoDate| {
+            try std.testing.expectEqualStrings(photoDate, result.photoDate.?);
+        }
+        else {
+            try std.testing.expect(result.photoDate == null);
+        }
+        if (expected.logged) |logged| {
+            const everything = try std.mem.concat(allocator, u8, &.{ stdout_capture.written(), stderr_capture.written() });
+            try std.testing.expect(std.mem.indexOf(u8, everything, try std.mem.concat(allocator, u8, &.{ logged, jsonPath })) != null);
+        }
+        try std.testing.expect(result.coordinates != null);
+        try std.testing.expectEqual(@as(f64, 1.5), result.coordinates.?.lat);
+        try std.testing.expectEqual(@as(f64, -2.5), result.coordinates.?.lng);
+    }
+}
+
+test "a JSON file beside a video that holds null fails the video, as reading a property of null does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    _ = try helpers.setupEnvironment(io);
+    const tempDir = try helpers.makeTempDir(allocator, io, "video-json-null");
+    defer helpers.removeTempDir(io, tempDir);
+    var generator = try TestUuidGenerator.init(allocator);
+    const videoPath = try std.fmt.allocPrint(allocator, "{s}/video.mp4", .{tempDir});
+    try helpers.writeFile(io, videoPath, try helpers.readFile(allocator, io, "../../test/multiple-files/test.mp4"));
+    try helpers.writeFile(io, try std.fmt.allocPrint(allocator, "{s}.json", .{videoPath}), "null");
+
+    try std.testing.expectError(error.Thrown, getVideoDetails(allocator, io, videoPath, tempDir, "video/mp4", generator.uuidGenerator(), "video.mp4"));
+    try std.testing.expectEqualStrings("null is not an object (evaluating 'photoData.photoTakenTime')", utils.errors.lastErrorMessage());
+}
+
+test "getVideoDetails refuses a content type that is not a video" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    _ = try helpers.setupEnvironment(io);
+    var generator = try TestUuidGenerator.init(allocator);
+
+    try std.testing.expectError(error.Thrown, getVideoDetails(allocator, io, "../../test/multiple-files/test.mp4", "unused", "application/octet-stream", generator.uuidGenerator(), "test.mp4"));
+    try std.testing.expectEqualStrings("Unsupported file type: application/octet-stream", utils.errors.lastErrorMessage());
+}
