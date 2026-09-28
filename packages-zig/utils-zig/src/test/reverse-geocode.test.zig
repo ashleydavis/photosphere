@@ -181,3 +181,215 @@ test "parseReverseGeocodeResult joins the address components and chooseBestResul
     try std.testing.expectEqualStrings("any", any.type);
     try std.testing.expectEqualStrings("Town", any.location);
 }
+
+test "convert exif coordinates - with the other forms a JavaScript value can take" {
+    // An int32 degree, a fraction without a denominator (NaN), and a fraction array whose denominator is
+    // undefined (NaN) or null (0, so Infinity).
+    const location = try reverse_geocode.convertExifCoordinates(TestDocument{
+        .keys = &.{ "GPSLatitude", "GPSLongitude" },
+        .values = &.{
+            .{ .array = &.{ .{ .int32 = 12 }, .{ .number = 0 }, .{ .number = 0 } } },
+            .{ .array = &.{ .{ .array = &.{ .{ .number = 1 }, .null } }, .{ .number = 0 }, .{ .number = 0 } } },
+        },
+    });
+    try std.testing.expectEqual(@as(f64, 12), location.lat);
+    try std.testing.expect(std.math.isPositiveInf(location.lng));
+
+    const halfFraction = try reverse_geocode.convertExifCoordinates(TestDocument{
+        .keys = &.{ "GPSLatitude", "GPSLongitude" },
+        .values = &.{
+            .{ .array = &.{ .{ .number = 10 }, .{ .number = 0 }, .{ .number = 0 } } },
+            .{ .array = &.{ .{ .document = .{ .keys = &.{"numerator"}, .values = &.{.{ .number = 1 }} } }, .{ .number = 0 }, .{ .number = 0 } } },
+        },
+    });
+    try std.testing.expectEqual(@as(f64, 10), halfFraction.lat);
+    try std.testing.expect(std.math.isNan(halfFraction.lng));
+
+    const undefinedDenominator = try reverse_geocode.convertExifCoordinates(TestDocument{
+        .keys = &.{ "GPSLatitude", "GPSLongitude" },
+        .values = &.{
+            .{ .array = &.{ .{ .array = &.{ .{ .number = 1 }, .undefined } }, .{ .number = 0 }, .{ .number = 0 } } },
+            .{ .array = &.{ .{ .number = 1 }, .{ .number = 0 }, .{ .number = 0 } } },
+        },
+    });
+    try std.testing.expect(std.math.isNan(undefinedDenominator.lat));
+}
+
+test "convert exif coordinates - throws for values JavaScript cannot convert" {
+    // A missing tag, a tag that is not an array and a null component throw a TypeError, like JavaScript.
+    try std.testing.expectError(error.TypeError, reverse_geocode.convertExifCoordinates(TestDocument{ .keys = &.{}, .values = &.{} }));
+    try std.testing.expectError(error.TypeError, reverse_geocode.convertExifCoordinates(TestDocument{
+        .keys = &.{ "GPSLatitude", "GPSLongitude" },
+        .values = &.{ .{ .number = 1 }, .{ .number = 1 } },
+    }));
+    try std.testing.expectError(error.TypeError, reverse_geocode.convertExifCoordinates(TestDocument{
+        .keys = &.{ "GPSLatitude", "GPSLongitude" },
+        .values = &.{ .{ .array = &.{.null} }, .{ .array = &.{} } },
+    }));
+
+    // A string or a boolean component is not ported.
+    try std.testing.expectError(error.UnsupportedCoordinate, reverse_geocode.convertExifCoordinates(TestDocument{
+        .keys = &.{ "GPSLatitude", "GPSLongitude" },
+        .values = &.{ .{ .array = &.{.{ .string = "1" }} }, .{ .array = &.{} } },
+    }));
+    try std.testing.expectError(error.UnsupportedCoordinate, reverse_geocode.convertExifCoordinates(TestDocument{
+        .keys = &.{ "GPSLatitude", "GPSLongitude" },
+        .values = &.{ .{ .array = &.{.{ .array = &.{ .{ .number = 1 }, .{ .boolean = true } } }} }, .{ .array = &.{} } },
+    }));
+}
+
+test "chooseBestResult prefers a premise to any other result, and skips results that are not objects" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const results = try std.json.parseFromSliceLeaky(std.json.Value, allocator,
+        \\[
+        \\  "not an object",
+        \\  {"types":"not an array"},
+        \\  {"types":["locality"],"address_components":[{"types":["locality"],"long_name":"Town"}]},
+        \\  {"types":["premise"],"address_components":[
+        \\    {"types":["premise"],"long_name":"Hall"},
+        \\    {"types":["sublocality_level_1"],"long_name":"Ward"},
+        \\    {"types":["locality"],"long_name":7},
+        \\    {"types":["country"],"long_name":"Land"}
+        \\  ]}
+        \\]
+    , .{});
+    const best = try reverse_geocode.chooseBestResult(allocator, results);
+    try std.testing.expectEqualStrings("premise", best.type);
+    try std.testing.expectEqualStrings("Ward, Land", best.location);
+
+    // The first result is taken when no result has a preferred type, and one that is not an object throws.
+    try std.testing.expectError(error.TypeError, reverse_geocode.chooseBestResult(allocator, .{ .array = .{ .items = results.array.items[0..1], .capacity = 1, .allocator = allocator } }));
+    try std.testing.expectError(error.TypeError, reverse_geocode.parseReverseGeocodeResult(allocator, results.array.items[1]));
+}
+
+//
+// A local HTTP server standing in for the Google geocoding API: it answers one request with a status and body, and
+// keeps the target of the request.
+//
+const GeocodeServer = struct {
+    // The io the server runs on.
+    io: std.Io,
+
+    // The listening socket.
+    server: std.Io.net.Server,
+
+    // The port.
+    port: u16,
+
+    // Runs the one connection the server answers.
+    group: std.Io.Group,
+
+    // The status of the response.
+    status: std.http.Status,
+
+    // The body of the response.
+    body: []const u8,
+
+    // The target of the request received.
+    target: [256]u8,
+
+    // The length of the target received.
+    targetLength: usize,
+
+    //
+    // Starts the server.
+    //
+    fn start(self: *GeocodeServer, io: std.Io, status: std.http.Status, body: []const u8) !void {
+        const address = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
+        self.* = .{ .io = io, .server = try address.listen(io, .{ .reuse_address = true }), .port = 0, .group = .init, .status = status, .body = body, .target = undefined, .targetLength = 0 };
+        self.port = self.server.socket.address.getPort();
+        try self.group.concurrent(io, serveOne, .{self});
+    }
+
+    //
+    // Stops the server once it has answered its one request.
+    //
+    fn stop(self: *GeocodeServer) void {
+        self.group.await(self.io) catch {};
+        self.server.deinit(self.io);
+    }
+
+    //
+    // Accepts one connection and answers its request.
+    //
+    fn serveOne(self: *GeocodeServer) void {
+        const stream = self.server.accept(self.io) catch {
+            return;
+        };
+        defer stream.close(self.io);
+        var receiveBuffer: [4096]u8 = undefined;
+        var sendBuffer: [4096]u8 = undefined;
+        var connectionReader = stream.reader(self.io, &receiveBuffer);
+        var connectionWriter = stream.writer(self.io, &sendBuffer);
+        var httpServer = std.http.Server.init(&connectionReader.interface, &connectionWriter.interface);
+        var request = httpServer.receiveHead() catch {
+            return;
+        };
+        self.targetLength = @min(request.head.target.len, self.target.len);
+        @memcpy(self.target[0..self.targetLength], request.head.target[0..self.targetLength]);
+        request.respond(self.body, .{ .status = self.status, .keep_alive = false }) catch {};
+    }
+};
+
+//
+// Reverse geocodes (1.5, -2) against a local server that answers with the status and body, and returns the result
+// and the target of the request.
+//
+fn reverseGeocodeServed(allocator: std.mem.Allocator, server: *GeocodeServer, status: std.http.Status, body: []const u8) !?reverse_geocode.IReverseGeocodeResult {
+    try server.start(std.testing.io, status, body);
+    defer server.stop();
+    const apiUrl = try std.fmt.allocPrint(allocator, "http://127.0.0.1:{d}/geocode/json", .{server.port});
+    return reverse_geocode.reverseGeocodeAt(allocator, std.testing.io, .{ .lat = 1.5, .lng = -2 }, "the-key", apiUrl);
+}
+
+test "reverse geocoding asks the API for the location and chooses the best result" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var server: GeocodeServer = undefined;
+    const result = (try reverseGeocodeServed(arena.allocator(), &server, .ok,
+        \\{"status":"OK","results":[{"types":["street_address"],"address_components":[
+        \\  {"types":["street_number"],"long_name":"1"},{"types":["route"],"long_name":"Main Rd"}]}]}
+    )).?;
+    try std.testing.expectEqualStrings("/geocode/json?latlng=1.5,-2&key=the-key", server.target[0..server.targetLength]);
+    try std.testing.expectEqualStrings("street_address", result.type);
+    try std.testing.expectEqualStrings("1 Main Rd", result.location);
+    try std.testing.expectEqual(@as(usize, 1), result.fullResult.array.items.len);
+}
+
+test "reverse geocoding throws the API's message when the request is denied" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var server: GeocodeServer = undefined;
+    try std.testing.expectError(error.Thrown, reverseGeocodeServed(arena.allocator(), &server, .ok, "{\"status\":\"REQUEST_DENIED\",\"error_message\":\"The key is bad.\"}"));
+    try std.testing.expectEqualStrings("Reverse geocoding failed: The key is bad.", utils.errors.lastErrorMessage());
+
+    var serverWithoutMessage: GeocodeServer = undefined;
+    try std.testing.expectError(error.Thrown, reverseGeocodeServed(arena.allocator(), &serverWithoutMessage, .ok, "{\"status\":\"REQUEST_DENIED\"}"));
+    try std.testing.expectEqualStrings("Reverse geocoding failed: undefined", utils.errors.lastErrorMessage());
+}
+
+test "reverse geocoding gives nothing when the API finds nothing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var emptyServer: GeocodeServer = undefined;
+    try std.testing.expect((try reverseGeocodeServed(arena.allocator(), &emptyServer, .ok, "{\"status\":\"ZERO_RESULTS\",\"results\":[]}")) == null);
+    var missingServer: GeocodeServer = undefined;
+    try std.testing.expect((try reverseGeocodeServed(arena.allocator(), &missingServer, .ok, "{\"status\":\"ZERO_RESULTS\"}")) == null);
+    var arrayServer: GeocodeServer = undefined;
+    try std.testing.expect((try reverseGeocodeServed(arena.allocator(), &arrayServer, .ok, "[1, 2]")) == null);
+
+    // `response.data.status` of null throws, like JavaScript.
+    var nullServer: GeocodeServer = undefined;
+    try std.testing.expectError(error.Thrown, reverseGeocodeServed(arena.allocator(), &nullServer, .ok, "null"));
+    try std.testing.expectEqualStrings("TypeError: Cannot read properties of null (reading 'status')", utils.errors.lastErrorMessage());
+}
+
+test "reverse geocoding throws when the API answers with an error status" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var server: GeocodeServer = undefined;
+    try std.testing.expectError(error.Thrown, reverseGeocodeServed(arena.allocator(), &server, .internal_server_error, "{}"));
+    try std.testing.expectEqualStrings("Request failed with status code 500", utils.errors.lastErrorMessage());
+}

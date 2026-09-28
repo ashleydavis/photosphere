@@ -32,6 +32,9 @@ const TestValue = union(enum) {
 
     // undefined.
     undefined,
+
+    // A date (a value the orientation code has no JavaScript rendering for).
+    date: i64,
 };
 
 //
@@ -138,3 +141,79 @@ test "getVideoTransformation reads the rotation of the first stream that has one
     try std.testing.expectEqual(@as(?bool, true), transformation.changeOrientation);
 }
 
+test "getImageTransformation reads an int32 orientation and needs no transformation for an orientation of 0" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // 0 is falsy as a number, but an array holding 0 is truthy, so the orientation read is 0.
+    try std.testing.expect((try image.getImageTransformation(allocator, withOrientation(.{ .array = &.{.{ .number = 0 }} }))) == null);
+    const eight = (try image.getImageTransformation(allocator, withOrientation(.{ .int32 = 8 }))).?;
+    try std.testing.expectEqual(@as(?f64, 270), eight.rotate);
+}
+
+//
+// An orientation getImageTransformation does not know, and the message it throws for it.
+//
+const IUnknownOrientation = struct {
+    // The orientation.
+    value: TestValue,
+
+    // The message thrown.
+    message: []const u8,
+};
+
+test "getImageTransformation renders an orientation it does not know like JavaScript" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const cases = [_]IUnknownOrientation{
+        .{ .value = .{ .boolean = true }, .message = "Unsupported orientation: true" },
+        .{ .value = .{ .array = &.{.{ .boolean = false }} }, .message = "Unsupported orientation: false" },
+        .{ .value = .{ .array = &.{.{ .number = std.math.nan(f64) }} }, .message = "Unsupported orientation: NaN" },
+        .{ .value = .{ .array = &.{.{ .number = -std.math.inf(f64) }} }, .message = "Unsupported orientation: -Infinity" },
+        .{ .value = .{ .array = &.{.{ .double = 2.5 }} }, .message = "Unsupported orientation: 2.5" },
+        .{ .value = .{ .array = &.{.{ .string = "" }} }, .message = "Unsupported orientation: " },
+        .{ .value = .{ .array = &.{.null} }, .message = "Unsupported orientation: null" },
+        .{ .value = .{ .array = &.{.{ .array = &.{ .{ .number = 6 }, .null, .{ .string = "x" } } }} }, .message = "Unsupported orientation: 6,,x" },
+        .{ .value = .{ .document = .{ .keys = &.{}, .values = &.{} } }, .message = "Unsupported orientation: [object Object]" },
+        .{ .value = .{ .date = 0 }, .message = "Unsupported orientation: date" },
+    };
+    inline for (cases) |case| {
+        try std.testing.expectError(error.Thrown, image.getImageTransformation(allocator, withOrientation(case.value)));
+        try std.testing.expectEqualStrings(case.message, utils.errors.lastErrorMessage());
+    }
+}
+
+test "getVideoTransformation needs no transformation for falsy streams or rotations" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expect((try image.getVideoTransformation(allocator, @as(?TestDocument, TestDocument{ .keys = &.{"streams"}, .values = &.{.null} }))) == null);
+    try std.testing.expect((try image.getVideoTransformation(allocator, @as(?TestDocument, TestDocument{ .keys = &.{"streams"}, .values = &.{.{ .string = "streams" }} }))) == null);
+
+    // A stream that is not an object, and a rotation of an empty array, whose `toString()` is empty and so falsy.
+    const metadata = TestDocument{
+        .keys = &.{"streams"},
+        .values = &.{.{ .array = &.{
+            .{ .number = 1 },
+            .{ .document = .{ .keys = &.{"rotation"}, .values = &.{.{ .array = &.{} }} } },
+        } }},
+    };
+    try std.testing.expect((try image.getVideoTransformation(allocator, @as(?TestDocument, metadata))) == null);
+}
+
+test "getVideoTransformation reads a rotation held as a string" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const metadata = TestDocument{
+        .keys = &.{"streams"},
+        .values = &.{.{ .array = &.{
+            .{ .document = .{ .keys = &.{"rotation"}, .values = &.{.{ .string = "270" }} } },
+        } }},
+    };
+    const transformation = (try image.getVideoTransformation(allocator, @as(?TestDocument, metadata))).?;
+    try std.testing.expectEqual(@as(?f64, 270), transformation.rotate);
+    try std.testing.expectEqual(@as(?bool, true), transformation.changeOrientation);
+}
