@@ -232,6 +232,8 @@ pub const LinuxKeychainVault = struct {
         .get = getErased,
         .set = setErased,
         .list = listErased,
+        .delete = deleteErased,
+        .checkPrereqs = checkPrereqsErased,
     };
 
     //
@@ -299,7 +301,44 @@ pub const LinuxKeychainVault = struct {
         return secrets.toOwnedSlice(allocator);
     }
 
-    // Not ported: delete, checkPrereqs (not used by psi replicate or psi verify).
+    //
+    // Deletes a secret from the Secret Service.
+    // Does nothing if the secret does not exist.
+    //
+    pub fn delete(self: *LinuxKeychainVault, allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
+        _ = self;
+        try checkTool(allocator, io);
+        const keychainName = try toKeychainName(allocator, name);
+        _ = runCommand(allocator, io, &.{ SECRET_TOOL, "clear", "service", KEYCHAIN_SERVICE, "account", keychainName }) catch {
+            // Secret did not exist; ignore.
+            return;
+        };
+    }
+
+    //
+    // Checks that secret-tool is installed and available on PATH.
+    // Returns ok=true on success, or ok=false with an error message on failure.
+    //
+    pub fn checkPrereqs(self: *LinuxKeychainVault, allocator: std.mem.Allocator, io: std.Io) IPrereqCheckResult {
+        _ = self;
+        return checkPrereqsOnce(allocator, io);
+    }
+
+    //
+    // IVault.delete for this implementation.
+    //
+    fn deleteErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, name: []const u8) anyerror!void {
+        const self: *LinuxKeychainVault = @ptrCast(@alignCast(ptr));
+        return self.delete(allocator, io, name);
+    }
+
+    //
+    // IVault.checkPrereqs for this implementation.
+    //
+    fn checkPrereqsErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!IPrereqCheckResult {
+        const self: *LinuxKeychainVault = @ptrCast(@alignCast(ptr));
+        return self.checkPrereqs(allocator, io);
+    }
 
     //
     // IVault.get for this implementation.

@@ -93,7 +93,7 @@ test_s3_vault_credentials() {
     # --- 2. A broken credential must fail loudly, not read back an empty database. ---
 
     invoke_command "Break the stored access key" \
-        "$(get_cli_command) secrets edit --yes --name $SECRET_NAME --value '{\"region\":\"us-east-1\",\"accessKeyId\":\"WRONGACCESSKEY\",\"secretAccessKey\":\"WRONGSECRETKEY\",\"endpoint\":\"$S3_ENDPOINT\"}'" 0
+        "$(get_zig_cli_command) secrets edit --yes --name $SECRET_NAME --value '{\"region\":\"us-east-1\",\"accessKeyId\":\"WRONGACCESSKEY\",\"secretAccessKey\":\"WRONGSECRETKEY\",\"endpoint\":\"$S3_ENDPOINT\"}'" 0
 
     local broken_list_output
     invoke_command "List with a broken credential fails" "$(get_zig_cli_command) list --db $DB_NAME --yes" 1 "broken_list_output"

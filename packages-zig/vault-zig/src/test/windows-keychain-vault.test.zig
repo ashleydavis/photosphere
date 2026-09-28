@@ -107,6 +107,13 @@ fn fakeSpawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8,
         return .{ .code = 0, .stdout = joined, .stderr = "" };
     }
 
+    if (std.mem.indexOf(u8, script, "Retrieve(") != null and std.mem.indexOf(u8, script, "$vault.Remove(") != null) {
+        // delete
+        const quoted_args = try quotedArgsAfter(allocator, script, "Retrieve(");
+        _ = store.orderedRemove(quoted_args[1]);
+        return .{ .code = 0, .stdout = "", .stderr = "" };
+    }
+
     return errors.throwError("Unrecognised PowerShell script: {s}", .{script});
 }
 
@@ -211,7 +218,30 @@ test "list: returns all stored secrets" {
     try std.testing.expectEqualStrings("b", result[1].name);
 }
 
-// Not ported: "delete" tests (WindowsKeychainVault.delete is not ported: not used by psi replicate or psi verify).
+test "delete: removes the secret (subsequent get returns undefined)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    resetStore();
+    defer restoreSpawn();
+    var vault = WindowsKeychainVault.init();
+
+    try vault.set(allocator, io, .{ .name = "temp", .type = "plain", .value = "val" });
+    try vault.delete(allocator, io, "temp");
+    const result = try vault.get(allocator, io, "temp");
+    try std.testing.expect(result == null);
+}
+
+test "delete: does nothing when the secret does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    resetStore();
+    defer restoreSpawn();
+    var vault = WindowsKeychainVault.init();
+
+    try vault.delete(arena.allocator(), std.testing.io, "nonexistent");
+}
 
 test "psi- prefix: adds psi- prefix on write and strips it on read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

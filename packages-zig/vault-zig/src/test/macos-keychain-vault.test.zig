@@ -82,6 +82,13 @@ fn fakeSpawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8,
         return .{ .code = 44, .stdout = "", .stderr = "SecKeychainSearchCopyNext: The specified item could not be found in the keychain." };
     }
 
+    if (std.mem.eql(u8, subcommand, "delete-generic-password")) {
+        // args: security delete-generic-password -s photosphere -a <name>
+        const keychainName = argAfter(args, "-a");
+        _ = store.orderedRemove(keychainName);
+        return .{ .code = 0, .stdout = "", .stderr = "" };
+    }
+
     if (std.mem.eql(u8, subcommand, "dump-keychain")) {
         // Emit one block per store entry in real security dump-keychain format.
         var output: std.ArrayList(u8) = .empty;
@@ -233,7 +240,45 @@ test "list: excludes entries from other services" {
     try std.testing.expectEqual(@as(usize, 0), (try vault.list(arena.allocator(), std.testing.io)).len);
 }
 
-// Not ported: "delete" tests (MacOSKeychainVault.delete is not ported: not used by psi replicate or psi verify).
+test "delete: removes the secret (subsequent get returns undefined)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    resetStore();
+    defer restoreSpawn();
+    var vault = MacOSKeychainVault.init();
+
+    try vault.set(allocator, io, .{ .name = "temp", .type = "plain", .value = "val" });
+    try vault.delete(allocator, io, "temp");
+    const result = try vault.get(allocator, io, "temp");
+    try std.testing.expect(result == null);
+}
+
+test "delete: no longer appears in list after delete" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    resetStore();
+    defer restoreSpawn();
+    var vault = MacOSKeychainVault.init();
+
+    try vault.set(allocator, io, .{ .name = "gone", .type = "plain", .value = "v" });
+    try vault.delete(allocator, io, "gone");
+    const secrets = try vault.list(allocator, io);
+    try std.testing.expectEqual(@as(usize, 0), secrets.len);
+}
+
+test "delete: does nothing when the secret does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    resetStore();
+    defer restoreSpawn();
+    var vault = MacOSKeychainVault.init();
+
+    try vault.delete(arena.allocator(), std.testing.io, "nonexistent");
+}
 
 test "psi- prefix: adds psi- prefix on write and strips it on read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

@@ -106,7 +106,7 @@ test_s3_encrypted() {
     # --- Without the key, a read must fail loudly. ---
 
     invoke_command "Remove the encryption key from the vault" \
-        "$(get_cli_command) secrets remove --yes --name $KEY_NAME" 0
+        "$(get_zig_cli_command) secrets remove --yes --name $KEY_NAME" 0
 
     local no_key_output
     invoke_command "Listing without the key fails" "$(get_zig_cli_command) list --db \"$s3_db\" --key $KEY_NAME --yes" 1 "no_key_output"

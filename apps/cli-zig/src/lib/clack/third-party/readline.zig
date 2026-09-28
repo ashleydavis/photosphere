@@ -797,6 +797,24 @@ pub const PromptInput = struct {
         return ready > 0;
     }
 
+
+    //
+    // Waits up to timeoutMs for input on the terminal (the `keypress` events block() listens for arrive as it
+    // comes). Returns true when input is ready, at once when bytes are already buffered, and false when the input
+    // is not a TTY.
+    //
+    pub fn waitForInput(self: *PromptInput, timeoutMs: i32) !bool {
+        if (self.reader.bufferedLen() > 0) {
+            return true;
+        }
+        const fd = self.ttyFd orelse return false;
+        if (builtin.os.tag == .windows) {
+            return tty.waitForConsoleInput(fd, @intCast(timeoutMs));
+        }
+        var poll_fds = [_]std.posix.pollfd{.{ .fd = fd, .events = std.posix.POLL.IN, .revents = 0 }};
+        const ready = try std.posix.poll(&poll_fds, timeoutMs);
+        return ready > 0;
+    }
     //
     // Discards the rest of the chunk of input that was read last (TypeScript emits its remaining keys to
     // no listener once the prompt that was reading them has finished).

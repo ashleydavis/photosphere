@@ -2715,3 +2715,226 @@ test "commands that are not ported yet fail with an error that names them" {
     try expectResult(try runZig(allocator, environment, &.{ "-q", "hash-cache", "show" }), bugHint, "An unknown error occurred\nError: The hash-cache show command is not ported to the Zig CLI yet.\n", 1);
     try expectResult(try runZig(allocator, environment, &.{ "-q", "news" }), bugHint, "An unknown error occurred\nError: The news command is not ported to the Zig CLI yet.\n", 1);
 }
+
+//
+// The vault the secrets tests start with (written as the plaintext vault's vault.json): S3 credentials and a plain
+// secret.
+//
+const secrets_seed_vault =
+    \\{"s3a":{"name":"s3a","type":"s3-credentials","value":"{\"region\":\"us-east-1\",\"accessKeyId\":\"AK\"}"},"my-secret":{"name":"my-secret","type":"plain","value":"hello"}}
+;
+
+//
+// Creates a test root whose plaintext vault holds secrets_seed_vault, and returns its environment.
+//
+fn setupSecrets(allocator: std.mem.Allocator, root: []const u8) !*std.process.Environ.Map {
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const vaultDir = try std.fmt.allocPrint(allocator, "{s}/vault", .{root});
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{vaultDir}), .data = secrets_seed_vault });
+    return environment;
+}
+
+//
+// The rule under the header of `psi secrets list` (80 box-drawing characters).
+//
+const secrets_list_rule = "\u{2500}" ** 80;
+
+test "secrets list, view and remove print the reports of the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-secrets");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try setupSecrets(allocator, root);
+
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "list" }), "\nName                                     Type                 Value\n" ++ secrets_list_rule ++ "\ns3a                                      s3-credentials       ****\nmy-secret                                plain                ****\n\n", "", 0);
+
+    // S3 credentials are shown field by field.
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--name", "s3a", "--yes" }), "\nName: s3a\nType: s3-credentials\nValue:\n  region: us-east-1\n  accessKeyId: AK\n\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "s", "v", "--name", "my-secret", "--yes" }), "\nName: my-secret\nType: plain\nValue: hello\n\n", "", 0);
+
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "remove", "--name", "my-secret", "--yes" }), "\n\u{2713} Secret \"my-secret\" deleted.\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "sec", "ls" }), "\nName                                     Type                 Value\n" ++ secrets_list_rule ++ "\ns3a                                      s3-credentials       ****\n\n", "", 0);
+
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "clear", "--yes" }), "\n\u{2713} Deleted 1 secret(s).\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "list" }), "No secrets found.\n", "", 0);
+}
+
+// Ported from apps/cli/src/test/cmd/secrets.test.ts: "secretsView --raw writes only the bare value to stdout" and
+// "without --raw the value is logged with labels rather than written to stdout".
+test "secrets view --raw writes only the bare value, like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-secrets-raw");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const multiLineValue = "-----BEGIN PRIVATE KEY-----\nABC\n-----END PRIVATE KEY-----";
+    const keyFile = try std.fmt.allocPrint(allocator, "{s}/enc.key", .{root});
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = keyFile, .data = multiLineValue });
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "import", "--yes", "--private-key", keyFile }), "\u{2713} Key imported as \"enc\".\n", "", 0);
+
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--name", "enc", "--yes", "--raw" }), multiLineValue, "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--name", "enc", "--yes" }), "\nName: enc\nType: encryption-key\nValue: " ++ multiLineValue ++ "\n\n", "", 0);
+}
+
+// Ported from apps/cli/src/test/cmd/secrets.test.ts: the "logs Did you mean hint when secret not found and
+// suggestions exist" tests of secretsView, secretsEdit, secretsRemove and secretsSend, and "does not log hint when no
+// suggestions exist".
+test "secrets view, edit, remove and send suggest similar names for a missing secret like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-secrets-similar");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try setupSecrets(allocator, root);
+    const hint = "Did you mean:\n  \u{2022} my-secret\n";
+    const notFound = "\u{2717} No secret named \"my-secrt\" found.\n";
+
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--yes", "--name", "my-secrt" }), hint, notFound, 1);
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "edit", "--yes", "--name", "my-secrt", "--value", "x" }), hint, notFound, 1);
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "remove", "--yes", "--name", "my-secrt" }), hint, notFound, 1);
+    const sendResult = try runZig(allocator, environment, &.{ "secrets", "send", "--yes", "--name", "my-secrt" });
+    try std.testing.expect(std.mem.endsWith(u8, sendResult.stdout, "   This does not work over the internet.                              \n" ++ (" " ** 70) ++ "\n" ++ hint));
+    try std.testing.expectEqualStrings(notFound, sendResult.stderr);
+    try std.testing.expectEqual(@as(u8, 1), sendResult.exitCode);
+
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--yes", "--name", "zzzzzzzzzzzzzz" }), "", "\u{2717} No secret named \"zzzzzzzzzzzzzz\" found.\n", 1);
+}
+
+// Ported from apps/cli/src/test/cmd/secrets.test.ts: "secretsSend does not call findSimilarSecretNames when no name
+// is provided".
+test "secrets send with no name and no secrets says so like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-secrets-send-none");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    const expected =
+        \\
+        \\Send Secret
+        \\   ℹ Network Requirement
+        \\                                                                      
+        \\   Both devices must be on the same local network (wired or Wi-Fi).   
+        \\   This does not work over the internet.                              
+        \\                                                                      
+        \\No secrets found.
+        \\Use "psi secrets add" to add a secret first.
+        \\
+    ;
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "send", "--yes" }), expected, "", 0);
+}
+
+test "secrets add and edit store and change secrets like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-secrets-add");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "add", "--yes", "--name", "  test-secret ", "--type", "plain", "--value", "hello123" }), "\u{2713} Secret \"test-secret\" added.\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "add", "--yes", "--name", "test-secret", "--type", "plain", "--value", "x" }), "", "\u{2717} A secret named \"test-secret\" already exists. Use \"secrets edit\" to update it.\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "add", "--yes", "--name", "other" }), "", "\u{2717} --name, --type, and --value are required with --yes\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "add", "--yes", "--name", "other", "--type", "bogus", "--value", "v" }), "", "\u{2717} Invalid secret type \"bogus\". Must be one of: api-key, s3-credentials, encryption-key, plain\n", 1);
+
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "edit", "--yes", "--name", "test-secret" }), "", "\u{2717} --new-name, --value, or --value-file is required with --yes\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "edit", "--yes", "--name", "test-secret", "--value", "updated" }), "\u{2713} Secret \"test-secret\" updated.\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "edit", "--yes", "--name", "test-secret", "--new-name", " renamed " }), "\u{2713} Secret \"renamed\" updated.\n", "", 0);
+    const valueFile = try std.fmt.allocPrint(allocator, "{s}/value.txt", .{root});
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = valueFile, .data = "line1\nline2\n" });
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "edit", "--yes", "--name", "renamed", "--value-file", valueFile }), "\u{2713} Secret \"renamed\" updated.\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--yes", "--name", "renamed", "--raw" }), "line1\nline2\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "list" }), "\nName                                     Type                 Value\n" ++ secrets_list_rule ++ "\nrenamed                                  plain                ****\n\n", "", 0);
+}
+
+test "secrets send and receive transfer a secret over the local network like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const senderRoot = try helpers.makeTempDir(allocator, "cmd-secrets-sender");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, senderRoot) catch {};
+    const receiverRoot = try helpers.makeTempDir(allocator, "cmd-secrets-receiver");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, receiverRoot) catch {};
+    const senderEnvironment = try setupSecrets(allocator, senderRoot);
+    const receiverEnvironment = try helpers.cliEnvironment(allocator, receiverRoot);
+
+    // Discovery is machine-wide, so the pairing code is drawn per run: a fixed one could pair with the receiver of
+    // another run of this test.
+    var randomBytes: [4]u8 = undefined;
+    std.testing.io.random(&randomBytes);
+    const code = try std.fmt.allocPrint(allocator, "{d}", .{1000 + std.mem.readInt(u32, &randomBytes, .little) % 9000});
+
+    const receiverOutput = try std.fmt.allocPrint(allocator, "{s}/receiver.txt", .{receiverRoot});
+    const receiverThread = try std.Thread.spawn(.{}, runReceiver, .{ receiverEnvironment, code, receiverOutput });
+    const sendResult = try runZig(allocator, senderEnvironment, &.{ "secrets", "send", "--yes", "--name", "s3a", "--code", code });
+    receiverThread.join();
+
+    const sendExpected = try std.fmt.allocPrint(allocator,
+        \\
+        \\Send Secret
+        \\   ℹ Network Requirement
+        \\                                                                      
+        \\   Both devices must be on the same local network (wired or Wi-Fi).   
+        \\   This does not work over the internet.                              
+        \\                                                                      
+        \\Hint: Run `psi secrets receive` on another device to receive this secret.
+        \\
+        \\Secret to send:
+        \\  Name: s3a
+        \\  Type: s3-credentials
+        \\
+        \\  Pairing code: {s}
+        \\  Enter this code on the receiver device, then wait.
+        \\
+        \\Waiting for receiver on the local network... (Ctrl+C to cancel)
+        \\Receiver found!
+        \\
+        \\✓ Secret sent successfully!
+        \\
+    , .{code});
+    try expectResult(sendResult, sendExpected, "", 0);
+
+    const receiveExpected =
+        \\
+        \\Receive Secret
+        \\   ℹ Network Requirement
+        \\                                                                      
+        \\   Both devices must be on the same local network (wired or Wi-Fi).   
+        \\   This does not work over the internet.                              
+        \\                                                                      
+        \\Hint: Run `psi secrets send` on another device to send a secret.
+        \\Waiting for sender on the local network... (Ctrl+C to cancel)
+        \\Payload received!
+        \\
+        \\Received secret:
+        \\  Type: s3-credentials
+        \\
+        \\
+        \\✓ Secret "s3a" imported successfully!
+        \\exit 0
+    ;
+    try std.testing.expectEqualStrings(receiveExpected, try std.Io.Dir.cwd().readFileAlloc(std.testing.io, receiverOutput, allocator, .unlimited));
+    try expectResult(try runZig(allocator, receiverEnvironment, &.{ "secrets", "view", "--yes", "--name", "s3a", "--raw" }), "{\"region\":\"us-east-1\",\"accessKeyId\":\"AK\"}", "", 0);
+}
+
+//
+// Runs `psi secrets receive --yes --code <code>` (the receiving device of the send and receive test) and writes its
+// stdout, followed by "exit <code>", to a file.
+//
+fn runReceiver(environment: *const std.process.Environ.Map, code: []const u8, outputPath: []const u8) void {
+    // The test's arena is not thread-safe, so the receiver thread allocates from the process allocator.
+    const allocator = std.heap.smp_allocator;
+    const result = runZig(allocator, environment, &.{ "secrets", "receive", "--yes", "--code", code }) catch |err| {
+        std.debug.panic("Running the receiver failed: {s}", .{@errorName(err)});
+    };
+    const text = std.fmt.allocPrint(allocator, "{s}{s}exit {d}", .{ result.stdout, result.stderr, result.exitCode }) catch |err| {
+        std.debug.panic("Formatting the receiver's output failed: {s}", .{@errorName(err)});
+    };
+    std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = outputPath, .data = text }) catch |err| {
+        std.debug.panic("Writing the receiver's output failed: {s}", .{@errorName(err)});
+    };
+}

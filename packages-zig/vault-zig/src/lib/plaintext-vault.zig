@@ -5,6 +5,7 @@ const node_utils = @import("node-utils-zig");
 const vault_module = @import("vault.zig");
 const ISecret = vault_module.ISecret;
 const IVault = vault_module.IVault;
+const IPrereqCheckResult = vault_module.IPrereqCheckResult;
 const errors = utils.errors;
 const process_env = node_utils.process_env;
 const updateFileOptimistic = node_utils.fs.updateFileOptimistic;
@@ -308,6 +309,22 @@ const SetSecretMutator = struct {
 };
 
 //
+// The change PlaintextVault.delete makes to the vault file (`delete current[name]`).
+//
+const DeleteSecretMutator = struct {
+    // The name of the secret to remove.
+    name: []const u8,
+
+    //
+    // Removes the secret with the name, keeping the order of the others.
+    //
+    pub fn run(self: DeleteSecretMutator, allocator: std.mem.Allocator, contents: *IVaultFile) !void {
+        _ = allocator;
+        _ = contents.orderedRemove(self.name);
+    }
+};
+
+//
 // A vault implementation that persists secrets as a single plain-text JSON
 // file under a directory on the local filesystem.
 //
@@ -326,7 +343,7 @@ pub const PlaintextVault = struct {
     //
     vaultDir: []const u8,
 
-    // Not ported: vaultFilePath (only used by exists, which is not ported).
+    // Not ported: vaultFilePath (only used by exists, which is not ported: not used by psi).
 
     //
     // Creates the vault (TypeScript: constructor(vaultDir = DEFAULT_VAULT_DIR); callers pass
@@ -350,6 +367,8 @@ pub const PlaintextVault = struct {
         .get = getErased,
         .set = setErased,
         .list = listErased,
+        .delete = deleteErased,
+        .checkPrereqs = checkPrereqsErased,
     };
 
     //
@@ -384,7 +403,46 @@ pub const PlaintextVault = struct {
         return secrets.toOwnedSlice(allocator);
     }
 
-    // Not ported: delete, exists, checkPrereqs (not used by psi replicate or psi verify).
+    //
+    // Deletes a secret by name.
+    // Does nothing if the secret does not exist.
+    //
+    pub fn delete(self: *PlaintextVault, allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
+        const contents = try readVaultFile(allocator, io, self.vaultDir);
+        if (contents.get(name) == null) {
+            return;
+        }
+
+        try updateVaultFile(allocator, io, self.vaultDir, DeleteSecretMutator{ .name = name });
+    }
+
+    // Not ported: exists (not used by psi).
+
+    //
+    // The plaintext vault has no external tool dependencies.
+    //
+    pub fn checkPrereqs(self: *PlaintextVault, allocator: std.mem.Allocator, io: std.Io) IPrereqCheckResult {
+        _ = self;
+        _ = allocator;
+        _ = io;
+        return .{ .ok = true, .message = null };
+    }
+
+    //
+    // IVault.delete for this implementation.
+    //
+    fn deleteErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, name: []const u8) anyerror!void {
+        const self: *PlaintextVault = @ptrCast(@alignCast(ptr));
+        return self.delete(allocator, io, name);
+    }
+
+    //
+    // IVault.checkPrereqs for this implementation.
+    //
+    fn checkPrereqsErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!IPrereqCheckResult {
+        const self: *PlaintextVault = @ptrCast(@alignCast(ptr));
+        return self.checkPrereqs(allocator, io);
+    }
 
     //
     // IVault.get for this implementation.

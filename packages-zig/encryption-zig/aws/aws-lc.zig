@@ -784,3 +784,94 @@ pub fn build(b: *std.Build, target: std.Build.ResolvedTarget, dependency: *std.B
     library.installHeadersDirectory(dependency.path("include"), "", .{});
     return library;
 }
+
+//
+// The sources of the ssl target, in the order of ssl/CMakeLists.txt (all C++ except ssl_decrepit.c).
+//
+const ssl_sources_cc = [_][]const u8{
+    "bio_ssl.cc",
+    "custom_extensions.cc",
+    "d1_both.cc",
+    "d1_lib.cc",
+    "d1_pkt.cc",
+    "d1_srtp.cc",
+    "dtls_method.cc",
+    "dtls_record.cc",
+    "encrypted_client_hello.cc",
+    "extensions.cc",
+    "handoff.cc",
+    "handshake.cc",
+    "handshake_client.cc",
+    "handshake_server.cc",
+    "s3_both.cc",
+    "s3_lib.cc",
+    "s3_pkt.cc",
+    "ssl_aead_ctx.cc",
+    "ssl_asn1.cc",
+    "ssl_buffer.cc",
+    "ssl_cert.cc",
+    "ssl_cipher.cc",
+    "ssl_file.cc",
+    "ssl_key_share.cc",
+    "ssl_lib.cc",
+    "ssl_privkey.cc",
+    "ssl_session.cc",
+    "ssl_stat.cc",
+    "ssl_text.cc",
+    "ssl_transcript.cc",
+    "ssl_transfer_asn1.cc",
+    "ssl_versions.cc",
+    "ssl_x509.cc",
+    "t1_enc.cc",
+    "tls_method.cc",
+    "tls_record.cc",
+    "tls13_both.cc",
+    "tls13_client.cc",
+    "tls13_enc.cc",
+    "tls13_server.cc",
+};
+
+//
+// The C++ flags the top-level CMakeLists.txt gives every target with a GCC-compatible compiler: CMAKE_CXX_STANDARD 11,
+// the same `-fvisibility=hidden -fno-common -ffunction-sections -fdata-sections` as the C flags, and
+// `-fno-exceptions -fno-rtti` (BORINGSSL_ALLOW_CXX_RUNTIME is not set).
+//
+const cxx_flags = [_][]const u8{
+    "-std=c++11",
+    "-fvisibility=hidden",
+    "-fno-common",
+    "-ffunction-sections",
+    "-fdata-sections",
+    "-fno-exceptions",
+    "-fno-rtti",
+};
+
+//
+// The C++ flags on Windows: the ones above and `-fms-extensions`, as for the C flags.
+//
+const cxx_flags_windows = cxx_flags ++ [_][]const u8{"-fms-extensions"};
+
+//
+// Builds libssl (the `ssl` target of ssl/CMakeLists.txt) for the target from the aws-lc dependency, linked with the
+// libcrypto that `build` made from the same dependency. It is C++, so the module links Zig's libc++ for the standard
+// headers it includes. Its headers are those of libcrypto (the one include directory of aws-lc).
+//
+pub fn buildSsl(b: *std.Build, target: std.Build.ResolvedTarget, dependency: *std.Build.Dependency, crypto: *std.Build.Step.Compile) !*std.Build.Step.Compile {
+    const os = target.result.os.tag;
+    const context: Context = .{
+        .b = b,
+        .target = target,
+        .isLinux = os == .linux,
+        .isWindows = os == .windows,
+        .isMacos = os == .macos,
+        .isX86_64 = target.result.cpu.arch == .x86_64,
+    };
+    const library = context.createLibrary("ssl");
+    const module = library.root_module;
+    module.link_libcpp = true;
+    addCommonSettings(&context, module, dependency);
+    addSources(module, dependency, "ssl", &ssl_sources_cc, if (context.isWindows) &cxx_flags_windows else &cxx_flags);
+    addSources(module, dependency, "ssl", &.{"ssl_decrepit.c"}, context.cFlags());
+    module.linkLibrary(crypto);
+    return library;
+}
