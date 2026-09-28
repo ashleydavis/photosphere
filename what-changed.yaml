@@ -95,6 +95,20 @@ targets:
       - packages
       - packages-zig
 
+  - name: test:cli:lan-share:zig
+    paths:
+      - apps/cli
+      - apps/cli-zig
+      - packages
+      - packages-zig
+
+  - name: test:cli:hash-cache:zig
+    paths:
+      - apps/cli
+      - apps/cli-zig
+      - packages
+      - packages-zig
+
   - name: test:electron
     paths:
       - apps/desktop
