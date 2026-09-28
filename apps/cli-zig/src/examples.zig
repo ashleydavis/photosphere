@@ -30,7 +30,7 @@ pub const ICommandExamples = struct {
 //
 // Centralized examples for all CLI commands
 // (only the commands implemented in Zig are ported: init, add, consolidate, info, summary, verify, repair, replicate,
-// compare, version, export, list, upgrade, encrypt, decrypt, sync, remove, find-orphans and remove-orphans).
+// compare, version, export, list, upgrade, hash, encrypt, decrypt, sync, remove, find-orphans and remove-orphans).
 //
 pub const COMMAND_EXAMPLES = [_]ICommandExamples{
     .{
@@ -269,6 +269,27 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             .{
                 .command = "psi upgrade --db ./photos",
                 .description = "Upgrades the database in ./photos directory.",
+            },
+        },
+    },
+    .{
+        .commandName = "hash",
+        .examples = &.{
+            .{
+                .command = "psi hash photo.jpg",
+                .description = "Computes hash of a local file using the same algorithm as the database.",
+            },
+            .{
+                .command = "psi hash s3://my-bucket/photo.jpg",
+                .description = "Computes hash of file stored in S3.",
+            },
+            .{
+                .command = "psi hash fs:/path/to/photo.jpg",
+                .description = "Computes hash with explicit filesystem prefix.",
+            },
+            .{
+                .command = "psi hash --key ./key encrypted:photo.jpg",
+                .description = "Computes hash of an encrypted file.",
             },
         },
     },

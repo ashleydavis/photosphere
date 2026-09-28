@@ -667,6 +667,40 @@ test "decrypt command lines parse like commander" {
     try expectCommanderError(allocator, &.{ "decrypt", "--generate-key" }, "commander.unknownOption", "error: unknown option '--generate-key'\n");
 }
 
+test "hash command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "hash", "photo.jpg", "--key", "k", "--verbose", "--yes", "--cwd", "c" });
+    try std.testing.expect(parsed.outcome == .hash);
+    const hashed = parsed.outcome.hash;
+    try std.testing.expectEqualStrings("photo.jpg", hashed.filePath);
+    try std.testing.expectEqualStrings("k", hashed.options.key.?);
+    try std.testing.expectEqual(@as(?bool, true), hashed.options.verbose);
+    try std.testing.expectEqual(@as(?bool, true), hashed.options.yes);
+
+    const short = try parse(allocator, &.{ "hash", "-k", "new,old", "-y", "-v", "s3:bucket/photo.jpg" });
+    try std.testing.expectEqualStrings("s3:bucket/photo.jpg", short.outcome.hash.filePath);
+    try std.testing.expectEqualStrings("new,old", short.outcome.hash.options.key.?);
+    try std.testing.expectEqual(@as(?bool, true), short.outcome.hash.options.yes);
+    try std.testing.expectEqual(@as(?bool, true), short.outcome.hash.options.verbose);
+
+    const defaults = try parse(allocator, &.{ "hash", "photo.jpg" });
+    try std.testing.expect(defaults.outcome.hash.options.key == null);
+    try std.testing.expectEqual(@as(?bool, false), defaults.outcome.hash.options.yes);
+    try std.testing.expectEqual(@as(?bool, false), defaults.outcome.hash.options.verbose);
+
+    const onlyYes = try parse(allocator, &.{ "hash", "--yes", "photo.jpg" });
+    try std.testing.expectEqual(@as(?bool, true), onlyYes.outcome.hash.options.yes);
+    try std.testing.expectEqual(@as(?bool, false), onlyYes.outcome.hash.options.verbose);
+
+    try expectCommanderError(allocator, &.{"hash"}, "commander.missingArgument", "error: missing required argument 'file-path'\n");
+    try expectCommanderError(allocator, &.{ "hash", "a", "b" }, "commander.excessArguments", "error: too many arguments for 'hash'. Expected 1 argument but got 2.\n");
+    try expectCommanderError(allocator, &.{ "hash", "--key" }, "commander.optionMissingArgument", "error: option '-k, --key <keyfile>' argument missing\n");
+    try expectCommanderError(allocator, &.{ "hash", "a", "--db", "d" }, "commander.unknownOption", "error: unknown option '--db'\n");
+}
+
 test "remove command lines parse like commander" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

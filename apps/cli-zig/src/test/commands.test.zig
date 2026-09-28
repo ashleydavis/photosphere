@@ -1903,3 +1903,119 @@ test "decrypt requires a database directory like the TypeScript CLI" {
     const result = try normalize(allocator, try runZig(allocator, environment, &.{ "decrypt", "--db", "", "--key", "zig-key", "--yes" }), root, "<root>");
     try expectEncryptFailure(allocator, result, "✗ Database directory is required (--db).\n");
 }
+
+//
+// The modified time the hash tests give their files: 2024-01-02T03:04:05.678Z, which hashCommand
+// (apps/cli/src/cmd/hash.ts) prints to the second as "2024-01-02 03:04:05".
+//
+const hash_test_modified_milliseconds: i64 = 1704164645678;
+
+//
+// Sets the modified time of a file to hash_test_modified_milliseconds.
+// Set through the open file: Zig 0.16 panics in Dir.setTimestamps on Windows, while File.setTimestamps is implemented.
+//
+fn setHashTestModifiedTime(filePath: []const u8) !void {
+    const io = std.testing.io;
+    const file = try std.Io.Dir.cwd().openFile(io, filePath, .{ .mode = .write_only });
+    defer file.close(io);
+    const modified: std.Io.Timestamp = .{ .nanoseconds = @as(i96, hash_test_modified_milliseconds) * std.time.ns_per_ms };
+    try file.setTimestamps(io, .{
+        .access_timestamp = .{ .new = modified },
+        .modify_timestamp = .{ .new = modified },
+    });
+}
+
+//
+// The path --verbose prints as the path for storage operations: createStorage (storage-factory.ts) converts its
+// backslashes to forward slashes, so a Windows path is printed with forward slashes.
+//
+fn storageOperationsPath(allocator: std.mem.Allocator, directory: []const u8) ![]const u8 {
+    const forwardSlashPath = try allocator.dupe(u8, directory);
+    std.mem.replaceScalar(u8, forwardSlashPath, '\\', '/');
+    return forwardSlashPath;
+}
+
+test "hash prints the hash, date and size of a file like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-hash");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const file = try node_path.join(allocator, &.{ root, "test.jpg" });
+    try std.Io.Dir.cwd().copyFile("../../test/test.jpg", std.Io.Dir.cwd(), file, std.testing.io, .{});
+    try setHashTestModifiedTime(file);
+
+    const report = "Hash: 426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c\nDate: 2024-01-02 03:04:05\nSize: 2049800 bytes\n";
+    const expected = try std.fmt.allocPrint(allocator, "File: {s}\n{s}", .{ file, report });
+    try expectResult(try runZig(allocator, environment, &.{ "hash", file }), expected, "", 0);
+
+    // --verbose first shows the storage the file is read from: the directory of the file.
+    const expectedVerbose = try std.fmt.allocPrint(allocator, "Storage type: fs\nPath for storage operations: {s}\nFile: {s}\n{s}", .{ try storageOperationsPath(allocator, root), file, report });
+    try expectResult(try runZig(allocator, environment, &.{ "hash", "--verbose", file, "--yes" }), expectedVerbose, "", 0);
+
+    // The file path is printed as it was given, with its prefix.
+    const prefixed = try std.fmt.allocPrint(allocator, "fs:{s}", .{file});
+    const expectedPrefixed = try std.fmt.allocPrint(allocator, "File: {s}\n{s}", .{ prefixed, report });
+    try expectResult(try runZig(allocator, environment, &.{ "hash", prefixed }), expectedPrefixed, "", 0);
+}
+
+test "hash reports a file that is not there like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-hash-missing");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    const missing = try node_path.join(allocator, &.{ root, "missing.jpg" });
+    try expectResult(try runZig(allocator, environment, &.{ "hash", missing }), "", try std.fmt.allocPrint(allocator, "File not found: {s}\n", .{missing}), 1);
+
+    // A file in a directory that is not there, and a directory, are not found either.
+    const inMissingDirectory = try node_path.join(allocator, &.{ root, "nodir", "missing.jpg" });
+    try expectResult(try runZig(allocator, environment, &.{ "hash", inMissingDirectory }), "", try std.fmt.allocPrint(allocator, "File not found: {s}\n", .{inMissingDirectory}), 1);
+    try expectResult(try runZig(allocator, environment, &.{ "hash", root }), "", try std.fmt.allocPrint(allocator, "File not found: {s}\n", .{root}), 1);
+
+    // --verbose shows the storage before the file is looked up.
+    const expectedVerbose = try std.fmt.allocPrint(allocator, "Storage type: fs\nPath for storage operations: {s}\n", .{try storageOperationsPath(allocator, root)});
+    try expectResult(try runZig(allocator, environment, &.{ "hash", "-v", missing }), expectedVerbose, try std.fmt.allocPrint(allocator, "File not found: {s}\n", .{missing}), 1);
+
+    try expectResult(try runZig(allocator, environment, &.{ "hash", "" }), "", "File path is required.\n", 1);
+}
+
+test "hash reads an encrypted file through its key like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-hash-encrypted");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try node_path.join(allocator, &.{ root, "db" });
+    const encrypted = try runZig(allocator, environment, &.{ "encrypt", "--db", db, "--key", "zig-key", "--generate-key", "--yes" });
+    try expectResult(encrypted, "\n✅ Encrypted 11 files, 0 were already encrypted.\n", "", 0);
+    const assetDirectory = try node_path.join(allocator, &.{ db, "asset" });
+    const asset = try node_path.join(allocator, &.{ assetDirectory, "89171cd9-a652-4047-b869-1154bf2c95a1" });
+    try setHashTestModifiedTime(asset);
+
+    // With the key the hash is of the decrypted file, the hash of test/dbs/v6's asset, while the size is still the
+    // size of the stored (encrypted) file.
+    const report = try std.fmt.allocPrint(allocator, "File: {s}\nHash: 426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c\nDate: 2024-01-02 03:04:05\nSize: 2050380 bytes\n", .{asset});
+    try expectResult(try runZig(allocator, environment, &.{ "hash", "--key", "zig-key", asset }), report, "", 0);
+    const expectedVerbose = try std.fmt.allocPrint(allocator, "Storage type: encrypted-fs\nPath for storage operations: {s}\n{s}", .{ try storageOperationsPath(allocator, assetDirectory), report });
+    try expectResult(try runZig(allocator, environment, &.{ "hash", "-k", "zig-key", "-v", asset }), expectedVerbose, "", 0);
+
+    // Without the key, or with a key that is not in the vault, the stored bytes are hashed as they are.
+    const stored = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, asset, allocator, .unlimited);
+    var storedHash: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(stored, &storedHash, .{});
+    const storedReport = try std.fmt.allocPrint(allocator, "File: {s}\nHash: {s}\nDate: 2024-01-02 03:04:05\nSize: 2050380 bytes\n", .{ asset, &std.fmt.bytesToHex(storedHash, .lower) });
+    try expectResult(try runZig(allocator, environment, &.{ "hash", asset }), storedReport, "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "hash", "--key", "missing", asset }), storedReport, "", 0);
+
+    // A plain file is read as it is through the key too.
+    const file = try node_path.join(allocator, &.{ root, "test.jpg" });
+    try std.Io.Dir.cwd().copyFile("../../test/test.jpg", std.Io.Dir.cwd(), file, std.testing.io, .{});
+    try setHashTestModifiedTime(file);
+    const plainReport = try std.fmt.allocPrint(allocator, "File: {s}\nHash: 426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c\nDate: 2024-01-02 03:04:05\nSize: 2049800 bytes\n", .{file});
+    try expectResult(try runZig(allocator, environment, &.{ "hash", "--key", "zig-key", file }), plainReport, "", 0);
+}
