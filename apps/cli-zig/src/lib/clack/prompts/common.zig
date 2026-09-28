@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const node_utils = @import("node-utils-zig");
+const standard_streams = @import("utils-zig").standard_streams;
 const color = @import("../../picocolors.zig");
 const tty = @import("../../tty.zig");
 const readline = @import("../third-party/readline.zig");
@@ -179,7 +180,7 @@ pub fn resolveInput(io: std.Io, options: CommonOptions) *PromptInput {
         return input;
     }
     if (stdin_reader == null) {
-        stdin_reader = std.Io.File.stdin().readerStreaming(io, &stdin_buffer);
+        stdin_reader = standard_streams.stdin().readerStreaming(io, &stdin_buffer);
         const ttyFd: ?tty.Fd = if (tty.isatty(tty.stdin_fd)) tty.stdin_fd else null;
         stdin_input = PromptInput.init(std.heap.smp_allocator, &stdin_reader.?.interface, ttyFd);
         stdin_input.exitAtEnd = true;
@@ -195,7 +196,7 @@ pub fn resolveOutput(io: std.Io, options: CommonOptions) *std.Io.Writer {
         return output;
     }
     if (stdout_writer == null) {
-        stdout_writer = std.Io.File.stdout().writerStreaming(io, &stdout_buffer);
+        stdout_writer = standard_streams.stdout().writerStreaming(io, &stdout_buffer);
     }
     return &stdout_writer.?.interface;
 }
