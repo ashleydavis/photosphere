@@ -16,6 +16,12 @@ pub const ExecResult = struct {
 };
 
 //
+// The most bytes Bun's exec takes from each of stdout and stderr (its default `maxBuffer`). A command that writes
+// more is killed and fails with a RangeError.
+//
+const maxBuffer: usize = 1024 * 1024;
+
+//
 // Executes a command using the specified tool.
 // Like Node's `child_process.exec`, the command runs in the shell (/bin/sh -c, or cmd.exe on Windows)
 // with the environment of `process.env` (see process-env.zig), and fails when the command cannot be
@@ -25,11 +31,10 @@ pub fn exec(allocator: std.mem.Allocator, io: std.Io, command: []const u8) !Exec
     if (builtin.os.tag == .windows) {
         return execWindows(allocator, command);
     }
-    const argv: []const []const u8 = &.{ "/bin/sh", "-c", command };
-    const result = std.process.run(allocator, io, .{
-        .argv = argv,
-        .environ_map = process_env.getEnvironMap(),
-    }) catch |err| {
+    const result = runShell(allocator, io, command) catch |err| {
+        if (err == error.Thrown) {
+            return error.Thrown;
+        }
         return errors.throwError("Command failed: {s}\n{s}", .{ command, @errorName(err) });
     };
     const succeeded = switch (result.term) {
@@ -43,6 +48,55 @@ pub fn exec(allocator: std.mem.Allocator, io: std.Io, command: []const u8) !Exec
 }
 
 //
+// Records the RangeError Bun's exec fails with when a command writes more than maxBuffer bytes to a stream.
+//
+fn maxBufferExceeded(streamName: []const u8) errors.ThrownError {
+    errors.recordError("RangeError", "{s} maxBuffer length exceeded", .{streamName});
+    return error.Thrown;
+}
+
+//
+// Runs the command in /bin/sh with the environment of `process.env` and reads its stdout and stderr to their ends,
+// as std.process.run does, but failing as Bun's exec does when either has more than maxBuffer bytes.
+//
+fn runShell(allocator: std.mem.Allocator, io: std.Io, command: []const u8) !std.process.RunResult {
+    var child = try std.process.spawn(io, .{
+        .argv = &.{ "/bin/sh", "-c", command },
+        .environ_map = process_env.getEnvironMap(),
+        .stdin = .ignore,
+        .stdout = .pipe,
+        .stderr = .pipe,
+    });
+    defer child.kill(io);
+
+    var multiReaderBuffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+    var multiReader: std.Io.File.MultiReader = undefined;
+    multiReader.init(allocator, io, multiReaderBuffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
+    defer multiReader.deinit();
+    while (multiReader.fill(64, .none)) |_| {
+        if (multiReader.reader(0).buffered().len > maxBuffer) {
+            return maxBufferExceeded("stdout");
+        }
+        if (multiReader.reader(1).buffered().len > maxBuffer) {
+            return maxBufferExceeded("stderr");
+        }
+    }
+    else |err| {
+        if (err != error.EndOfStream) {
+            return err;
+        }
+    }
+    try multiReader.checkAnyError();
+
+    const term = try child.wait(io);
+    return .{
+        .stdout = try multiReader.toOwnedSlice(0),
+        .stderr = try multiReader.toOwnedSlice(1),
+        .term = term,
+    };
+}
+
+//
 // The Windows version of exec. Node's exec runs `cmd.exe /d /s /c "<command>"` with that command line
 // passed verbatim (libuv's windowsVerbatimArguments), so the quotes inside the command reach cmd.exe
 // untouched. std.process quotes each argument instead, turning those quotes into \", so the process is
@@ -50,6 +104,9 @@ pub fn exec(allocator: std.mem.Allocator, io: std.Io, command: []const u8) !Exec
 //
 fn execWindows(allocator: std.mem.Allocator, command: []const u8) !ExecResult {
     const result = runCmdExe(allocator, command) catch |err| {
+        if (err == error.Thrown) {
+            return error.Thrown;
+        }
         return errors.throwError("Command failed: {s}\n{s}", .{ command, @errorName(err) });
     };
     if (result.exitCode != 0) {
@@ -94,6 +151,12 @@ const kernel32 = struct {
         hHandle: std.os.windows.HANDLE,
         dwMilliseconds: std.os.windows.DWORD,
     ) callconv(.winapi) std.os.windows.DWORD;
+
+    // Ends a process.
+    extern "kernel32" fn TerminateProcess(
+        hProcess: std.os.windows.HANDLE,
+        uExitCode: std.os.windows.UINT,
+    ) callconv(.winapi) std.os.windows.BOOL;
 
     // Gets the exit code of a process.
     extern "kernel32" fn GetExitCodeProcess(
@@ -169,7 +232,8 @@ fn createChildPipe(childReads: bool) !IChildPipe {
 }
 
 //
-// Reads a pipe to its end (when the child process has closed its end), appending what it reads to output.
+// Reads a pipe to its end (when the child process has closed its end), appending what it reads to output, or until
+// it has read more than maxBuffer bytes, which fails with error.MaxBufferExceeded.
 // The output grows with std.heap.smp_allocator since two pipes are read at the same time on two threads.
 //
 fn readPipe(handle: std.os.windows.HANDLE, output: *std.ArrayList(u8)) !void {
@@ -185,6 +249,9 @@ fn readPipe(handle: std.os.windows.HANDLE, output: *std.ArrayList(u8)) !void {
             return windows.unexpectedError(lastError);
         }
         try output.appendSlice(std.heap.smp_allocator, buffer[0..bytesRead]);
+        if (output.items.len > maxBuffer) {
+            return error.MaxBufferExceeded;
+        }
     }
 }
 
@@ -202,10 +269,17 @@ const IPipeReader = struct {
     // The error that stopped the reading, or null when the pipe was read to its end.
     failure: ?anyerror,
 
+    // The process writing to the pipe, killed when it writes more than maxBuffer bytes, as Bun kills it. That closes
+    // its end of the other pipe too, so the read of the other pipe ends rather than waiting for ever.
+    process: std.os.windows.HANDLE,
+
     // The function the thread runs.
     fn run(self: *IPipeReader) void {
         readPipe(self.handle, &self.output) catch |err| {
             self.failure = err;
+            if (err == error.MaxBufferExceeded) {
+                _ = kernel32.TerminateProcess(self.process, 1);
+            }
         };
     }
 };
@@ -280,15 +354,28 @@ fn runCmdExe(allocator: std.mem.Allocator, command: []const u8) !ICmdExeResult {
         .handle = stderrPipe.parentEnd,
         .output = .empty,
         .failure = null,
+        .process = processInformation.hProcess,
     };
     defer stderrReader.output.deinit(std.heap.smp_allocator);
     const stderrThread = try std.Thread.spawn(.{}, IPipeReader.run, .{&stderrReader});
     var stdoutOutput: std.ArrayList(u8) = .empty;
     defer stdoutOutput.deinit(std.heap.smp_allocator);
     const stdoutRead = readPipe(stdoutPipe.parentEnd, &stdoutOutput);
+    const stdoutOverflowed = if (stdoutRead) |_| false else |err| err == error.MaxBufferExceeded;
+
+    // Bun kills a command that writes too much, which also closes its end of the other pipe so the other read ends.
+    if (stdoutOverflowed) {
+        _ = kernel32.TerminateProcess(processInformation.hProcess, 1);
+    }
     stderrThread.join();
+    if (stdoutOverflowed) {
+        return maxBufferExceeded("stdout");
+    }
     try stdoutRead;
     if (stderrReader.failure) |err| {
+        if (err == error.MaxBufferExceeded) {
+            return maxBufferExceeded("stderr");
+        }
         return err;
     }
 

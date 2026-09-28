@@ -359,6 +359,16 @@ test "loadDatabaseConfig reads every field" {
     try std.testing.expectEqual(@as(i64, 5), config.get("unknown").?.integer);
 }
 
+test "loadDatabaseConfig keeps the last value of a repeated key, as JSON.parse does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var memory_storage = MemoryStorage.init(allocator);
+    try memory_storage.files.put(allocator, ".db/config.json", "{\"origin\": \"first\", \"origin\": \"second\"}");
+    const config = (try database_config.loadDatabaseConfig(allocator, std.testing.io, memory_storage.storage())).?.object;
+    try std.testing.expectEqualStrings("second", config.get("origin").?.string);
+}
+
 test "loadDatabaseConfig returns an empty object for an empty config" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

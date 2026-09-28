@@ -153,7 +153,10 @@ fn stringProperty(object: std.json.ObjectMap, name: []const u8) ?[]const u8 {
 // empty and overwritten by the next import.
 //
 pub fn parseImportRecord(allocator: std.mem.Allocator, fileContents: []const u8) !IImportRecord {
-    const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, fileContents, .{}) catch |err| {
+    // JSON.parse keeps the last value of a repeated key.
+    const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, fileContents, .{
+        .duplicate_field_behavior = .use_last,
+    }) catch |err| {
         if (err == error.OutOfMemory) {
             return err;
         }

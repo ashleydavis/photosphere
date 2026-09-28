@@ -124,3 +124,57 @@ test "exec reads stdout and stderr together so a command filling stderr does not
         try std.testing.expect(result.stderr.len > 128 * 1024);
     }
 }
+
+//
+// Writes a file of the given number of bytes to a unique path under the package's .zig-cache directory.
+//
+fn writeFileOfSize(allocator: std.mem.Allocator, io: std.Io, size: usize) ![]const u8 {
+    var random_bytes: [8]u8 = undefined;
+    io.random(&random_bytes);
+    const filePath = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/photosphere-exec-test-{x}.txt", .{std.mem.readInt(u64, &random_bytes, .little)});
+    const data = try allocator.alloc(u8, size);
+    @memset(data, 'a');
+    try node_utils.fs.outputFile(allocator, io, filePath, data);
+    return filePath;
+}
+
+//
+// Prints a file to stdout, or to stderr when toStderr is true, in the shell exec runs.
+//
+fn printFileCommand(allocator: std.mem.Allocator, filePath: []const u8, toStderr: bool) ![]const u8 {
+    const printer = if (builtin.os.tag == .windows) "type" else "cat";
+    const nativePath = if (builtin.os.tag == .windows) try std.mem.replaceOwned(u8, allocator, filePath, "/", "\\") else filePath;
+    const redirect = if (toStderr) " 1>&2" else "";
+    return std.fmt.allocPrint(allocator, "{s} \"{s}\"{s}", .{ printer, nativePath, redirect });
+}
+
+test "exec takes up to maxBuffer (1 MiB) of output, as Bun's exec does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try writeFileOfSize(allocator, io, 1024 * 1024);
+    defer std.Io.Dir.cwd().deleteFile(io, filePath) catch {};
+
+    const toStdout = try exec(allocator, io, try printFileCommand(allocator, filePath, false));
+    try std.testing.expectEqual(@as(usize, 1024 * 1024), toStdout.stdout.len);
+    const toStderr = try exec(allocator, io, try printFileCommand(allocator, filePath, true));
+    try std.testing.expectEqual(@as(usize, 1024 * 1024), toStderr.stderr.len);
+}
+
+test "exec fails with Bun's RangeError when the command writes more than maxBuffer to stdout or stderr" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try writeFileOfSize(allocator, io, 1024 * 1024 + 1);
+    defer std.Io.Dir.cwd().deleteFile(io, filePath) catch {};
+
+    try std.testing.expectError(error.Thrown, exec(allocator, io, try printFileCommand(allocator, filePath, false)));
+    try std.testing.expectEqualStrings("RangeError", utils.errors.lastErrorName());
+    try std.testing.expectEqualStrings("stdout maxBuffer length exceeded", utils.errors.lastErrorMessage());
+
+    try std.testing.expectError(error.Thrown, exec(allocator, io, try printFileCommand(allocator, filePath, true)));
+    try std.testing.expectEqualStrings("RangeError", utils.errors.lastErrorName());
+    try std.testing.expectEqualStrings("stderr maxBuffer length exceeded", utils.errors.lastErrorMessage());
+}

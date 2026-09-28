@@ -111,7 +111,10 @@ pub fn resolveStorageCredentials(
         if (isTruthy(s3KeyToUse)) {
             const secret = try vault.get(allocator, io, s3KeyToUse.?);
             if (secret) |s3Secret| {
-                const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, s3Secret.value, .{}) catch |err| {
+                // JSON.parse keeps the last value of a repeated key.
+                const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, s3Secret.value, .{
+                    .duplicate_field_behavior = .use_last,
+                }) catch |err| {
                     return errors.throwError("JSON Parse error: {s}", .{@errorName(err)});
                 };
                 const parsedObject = switch (parsed) {

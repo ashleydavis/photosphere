@@ -90,6 +90,20 @@ test "loads S3 credentials from vault for an s3: path" {
     try std.testing.expectEqualStrings("https://s3.example.com", result.s3Config.?.endpoint.?);
 }
 
+test "an S3 secret with a repeated key is read with its last value, as JSON.parse reads it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const configDir = try setup(allocator, io, "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = \"s3:my-bucket:/photos\"\ns3_key = \"s3secret\"\n");
+    defer helpers.removeTempDir(io, configDir);
+    try setSecret(allocator, io, "s3secret", "s3-credentials", "{\"region\":\"first\",\"accessKeyId\":\"AKID\",\"secretAccessKey\":\"SECRET\",\"region\":\"second\"}");
+
+    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null);
+
+    try std.testing.expectEqualStrings("second", result.s3Config.?.region.?);
+}
+
 test "falls back to AWS env vars for s3: path when vault entry is missing" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

@@ -75,7 +75,13 @@ fn matchXdgPicturesDir(line: []const u8) ?[]const u8 {
     if (rest.len == 0 or rest[rest.len - 1] != '"') {
         return null;
     }
-    return rest[0 .. rest.len - 1];
+    const value = rest[0 .. rest.len - 1];
+
+    // `.` matches no line terminator (the line has no "\n", which it was split on).
+    if (std.mem.indexOfScalar(u8, value, '\r') != null or std.mem.indexOf(u8, value, "\u{2028}") != null or std.mem.indexOf(u8, value, "\u{2029}") != null) {
+        return null;
+    }
+    return value;
 }
 
 //

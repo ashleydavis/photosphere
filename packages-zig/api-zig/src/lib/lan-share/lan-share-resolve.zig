@@ -48,7 +48,10 @@ pub fn resolveDatabaseSharePayload(allocator: std.mem.Allocator, io: std.Io, ent
     var s3Credentials: ?IShareS3Credentials = null;
     if (entry.s3Key != null and entry.s3Key.?.len > 0) {
         if (try vault.get(allocator, io, entry.s3Key.?)) |secret| {
-            const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, secret.value, .{});
+            // JSON.parse keeps the last value of a repeated key.
+            const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, secret.value, .{
+                .duplicate_field_behavior = .use_last,
+            });
             s3Credentials = .{
                 .name = entry.s3Key.?,
                 .region = try s3CredentialField(parsed, entry.s3Key.?, "region"),

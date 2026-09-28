@@ -169,7 +169,13 @@ fn shutdownOnSignal(io: std.Io, signalName: []const u8, cleanupFailedCode: u8) n
 // rejects, which the `process.on('unhandledRejection')` handler turns into this shutdown.
 //
 fn shutdownOnUnhandledRejection(io: std.Io, err: anyerror) noreturn {
-    utils.log.log.exception("Unhandled promise rejection.", err);
+    // `new Error(reason)`: the reason is the error the signal handler threw, and String() of it is
+    // "<name>: <message>". The message is copied out first since recording the new error overwrites it.
+    var reasonBuffer: [4096]u8 = undefined;
+    const reasonName = if (err == error.Thrown or err == error.FatalError) utils.errors.lastErrorName() else "Error";
+    const reason = std.fmt.bufPrint(&reasonBuffer, "{s}: {s}", .{ reasonName, utils.errors.errorMessage(err) }) catch reasonBuffer[0..];
+    utils.errors.recordError("Error", "{s}", .{reason});
+    utils.log.log.exception("Unhandled promise rejection.", error.Thrown);
 
     var exitCode = EXIT_UNHANDLED_REJECTION;
     invokeTerminationCallbacks(io, EXIT_UNHANDLED_REJECTION) catch |cleanupErr| {

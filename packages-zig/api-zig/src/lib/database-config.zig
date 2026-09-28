@@ -87,7 +87,12 @@ pub fn loadDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: 
         return null;
     };
     const text = data;
-    const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{ .allocate = .alloc_always }) catch |err| {
+    const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{
+        .allocate = .alloc_always,
+
+        // JSON.parse keeps the last value of a repeated key.
+        .duplicate_field_behavior = .use_last,
+    }) catch |err| {
         errors.recordError("SyntaxError", "JSON Parse error: {s}", .{@errorName(err)});
         return errors.throwWrappedError("Failed to parse database config at {s}", .{CONFIG_PATH});
     };

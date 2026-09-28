@@ -118,6 +118,20 @@ test "readJson parses a JSON file" {
     try std.Io.Dir.cwd().deleteFile(io, filePath);
 }
 
+test "readJson keeps the last value of a repeated key, as JSON.parse does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "repeated.json");
+    try fs.outputFile(allocator, io, filePath, "{\"name\": \"first\", \"name\": \"second\"}");
+
+    const result = try fs.readJson(allocator, io, filePath);
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+    try std.testing.expectEqualStrings("second", result.object.get("name").?.string);
+}
+
 test "readJson and readToml fail when the file does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -722,6 +736,34 @@ test "getConfigDir is .config/photosphere under the home directory on desktop an
     try std.testing.expectEqualStrings(expected, try fs.getConfigDir(allocator));
 }
 
+//
+// The home directory of the user's passwd entry, which Bun's os.homedir falls back to when HOME is unset or empty.
+//
+fn passwdHome() []const u8 {
+    const entry = std.c.getpwuid(std.c.getuid()).?;
+    return std.mem.span(entry.dir.?);
+}
+
+test "osHomedir falls back to the passwd entry when HOME is unset or empty, as Bun's os.homedir does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var environ_map = std.process.Environ.Map.init(arena.allocator());
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    // Windows reads USERPROFILE alone.
+    if (builtin.os.tag == .windows) {
+        try std.testing.expectEqualStrings("", fs.osHomedir());
+        return;
+    }
+    try std.testing.expect(passwdHome().len > 0);
+    try std.testing.expectEqualStrings(passwdHome(), fs.osHomedir());
+    try environ_map.put("HOME", "");
+    try std.testing.expectEqualStrings(passwdHome(), fs.osHomedir());
+    try environ_map.put("HOME", "/some-home/");
+    try std.testing.expectEqualStrings("/some-home/", fs.osHomedir());
+}
+
 test "getConfigDir is the storage sandbox root when there is no home directory" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -730,7 +772,14 @@ test "getConfigDir is the storage sandbox root when there is no home directory" 
     node_utils.process_env.setEnvironMap(&environ_map);
     defer node_utils.process_env.setEnvironMap(null);
 
-    try std.testing.expectEqualStrings(".", try fs.getConfigDir(allocator));
+    // Only Windows goes without a home directory when its variable is unset: elsewhere the passwd entry gives one.
+    if (builtin.os.tag == .windows) {
+        try std.testing.expectEqualStrings(".", try fs.getConfigDir(allocator));
+    }
+    else {
+        const expected = try node_utils.path.join(allocator, &.{ passwdHome(), ".config", "photosphere" });
+        try std.testing.expectEqualStrings(expected, try fs.getConfigDir(allocator));
+    }
 }
 
 test "getConfigDir uses PHOTOSPHERE_CONFIG_DIR when it is set" {
@@ -1182,7 +1231,18 @@ test "getCacheDir is the storage sandbox root when there is no home directory" {
     node_utils.process_env.setEnvironMap(&environ_map);
     defer node_utils.process_env.setEnvironMap(null);
 
-    try std.testing.expectEqualStrings(".", try fs.getCacheDir(allocator));
+    // Only Windows goes without a home directory when its variable is unset: elsewhere the passwd entry gives one.
+    if (builtin.os.tag == .windows) {
+        try std.testing.expectEqualStrings(".", try fs.getCacheDir(allocator));
+    }
+    else if (builtin.os.tag == .macos) {
+        const expected = try node_utils.path.join(allocator, &.{ passwdHome(), "Library", "Caches", "photosphere" });
+        try std.testing.expectEqualStrings(expected, try fs.getCacheDir(allocator));
+    }
+    else {
+        const expected = try node_utils.path.join(allocator, &.{ passwdHome(), ".cache", "photosphere" });
+        try std.testing.expectEqualStrings(expected, try fs.getCacheDir(allocator));
+    }
 }
 
 test "getCacheDir uses PHOTOSPHERE_CACHE_DIR when it is set, on every platform" {

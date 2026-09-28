@@ -116,7 +116,7 @@ test "generateDeterministicUuid matches the TypeScript golden values" {
     const golden = try std.json.parseFromSliceLeaky([]GoldenUuid, allocator, @embedFile("fixtures/test-uuid-generator.json"), .{});
     try std.testing.expect(golden.len > 50);
     for (golden) |golden_uuid| {
-        const uuid = try TestUuidGenerator.generateDeterministicUuid(allocator, golden_uuid.counter);
+        const uuid = try TestUuidGenerator.generateDeterministicUuid(allocator, @floatFromInt(golden_uuid.counter));
         try std.testing.expectEqualStrings(golden_uuid.uuid, uuid);
     }
 }

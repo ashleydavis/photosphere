@@ -106,6 +106,50 @@ test "load parses scalars, flow collections and comments like js-yaml" {
     try expectSameJson(allocator, expected, try yaml.load(allocator, source));
 }
 
+test "load reads literal and folded block scalars like js-yaml" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Each input and JSON.stringify(yaml.load(input)) from js-yaml 4.1.0.
+    const expectedLoads = [_][2][]const u8{
+        .{ "a: >-\n  folded line one\n  folded line two\nb: 1\n", "{\"a\":\"folded line one folded line two\",\"b\":1}" },
+        .{ "a: |-\n  line one\n  line two\n", "{\"a\":\"line one\\nline two\"}" },
+        .{ "a: |\n  keep one\n\n  after empty\n", "{\"a\":\"keep one\\n\\nafter empty\\n\"}" },
+        .{ "a: |+\n  keep\n\n\nb: 2\n", "{\"a\":\"keep\\n\\n\\n\",\"b\":2}" },
+        .{ "list:\n  - |2-\n     leading space\n  - >\n    x\n     more\n    y\n", "{\"list\":[\" leading space\",\"x\\n more\\ny\\n\"]}" },
+        .{ "a: >\n  # not a comment\n  text\n", "{\"a\":\"# not a comment text\\n\"}" },
+        .{ "a: |\n  no trailing newline", "{\"a\":\"no trailing newline\\n\"}" },
+        .{ "a: > # comment\n  folded\n\n  para\n", "{\"a\":\"folded\\npara\\n\"}" },
+        .{ "- |\n a\n- b\n", "[\"a\\n\",\"b\"]" },
+    };
+    for (expectedLoads) |expectedLoad| {
+        const expected = try std.json.parseFromSliceLeaky(std.json.Value, allocator, expectedLoad[1], .{});
+        try expectSameJson(allocator, expected, try yaml.load(allocator, expectedLoad[0]));
+    }
+
+    // js-yaml's errors for a bad header.
+    try std.testing.expectError(error.Thrown, yaml.load(allocator, "a: |++\n  x\n"));
+    try std.testing.expectEqualStrings("repeat of a chomping mode identifier (1:1)", utils.errors.lastErrorMessage());
+    try std.testing.expectError(error.Thrown, yaml.load(allocator, "a: |0\n  x\n"));
+    try std.testing.expectEqualStrings("bad explicit indentation width of a block scalar; it cannot be less than one (1:1)", utils.errors.lastErrorMessage());
+    try std.testing.expectError(error.Thrown, yaml.load(allocator, "a: |x\n  y\n"));
+    try std.testing.expectEqualStrings("a line break is expected (1:1)", utils.errors.lastErrorMessage());
+}
+
+test "a long or multi-line string that dump writes as a block scalar loads back as the same string" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const json = "{\"desktop\":{\"last_folder\":\"/Users/someone/Pictures/Holiday photos from the summer of twenty twenty four in the south of France\"},\"ui\":{\"a\":\"line one\\nline two\"}}";
+    const value = try std.json.parseFromSliceLeaky(std.json.Value, allocator, json, .{});
+    const dumped = try yaml.dump(allocator, value);
+
+    // What js-yaml 4.1.0 writes for it.
+    try std.testing.expectEqualStrings("desktop:\n  last_folder: >-\n    /Users/someone/Pictures/Holiday photos from the summer of twenty twenty four\n    in the south of France\nui:\n  a: |-\n    line one\n    line two\n", dumped);
+    try expectSameJson(allocator, value, try yaml.load(allocator, dumped));
+}
+
 test "load reports malformed YAML" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

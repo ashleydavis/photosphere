@@ -188,7 +188,9 @@ pub fn outputFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8
 //
 pub fn readJson(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !std.json.Value {
     const data = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
-    return std.json.parseFromSliceLeaky(std.json.Value, allocator, data, .{});
+
+    // JSON.parse keeps the last value of a repeated key.
+    return std.json.parseFromSliceLeaky(std.json.Value, allocator, data, .{ .duplicate_field_behavior = .use_last });
 }
 
 //
@@ -647,11 +649,21 @@ pub fn getProcessTmpDir(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 }
 
 //
-// Equivalent of Node's `os.homedir()`: $HOME (%USERPROFILE% on Windows), or an empty string when it is not set.
+// Equivalent of Bun's `os.homedir()`: $HOME, or when that is unset or empty the home directory of the user's passwd
+// entry (an empty string when there is none). On Windows %USERPROFILE%, or an empty string when it is not set.
 //
 pub fn osHomedir() []const u8 {
-    const home_variable = if (builtin.os.tag == .windows) "USERPROFILE" else "HOME";
-    return process_env.getEnv(home_variable) orelse "";
+    if (builtin.os.tag == .windows) {
+        return process_env.getEnv("USERPROFILE") orelse "";
+    }
+    if (process_env.getEnv("HOME")) |home| {
+        if (home.len > 0) {
+            return home;
+        }
+    }
+    const entry = std.c.getpwuid(std.c.getuid()) orelse return "";
+    const homeDir = entry.dir orelse return "";
+    return std.mem.span(homeDir);
 }
 
 //

@@ -186,6 +186,31 @@ test "S3 credentials without a region are shared without one" {
     try std.testing.expect(payload.s3Credentials.?.endpoint == null);
 }
 
+test "an S3 secret with a repeated key is read with its last value, as JSON.parse reads it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    try test_vault.useTestVault();
+    defer test_vault.useRealEnvironment();
+    try test_vault.clearTestVault(allocator, io);
+    const vault = try getVault("plaintext");
+    try vault.set(allocator, io, .{
+        .name = "repeated",
+        .type = "s3-credentials",
+        .value = "{\"region\":\"first\",\"accessKeyId\":\"AKID\",\"secretAccessKey\":\"SECRET\",\"region\":\"second\"}",
+    });
+    const entry: IShareDatabaseConfig = .{
+        .name = "db",
+        .description = "",
+        .path = "s3:bucket",
+        .s3Key = "repeated",
+    };
+
+    const payload = try resolveDatabaseSharePayload(allocator, io, entry);
+    try std.testing.expectEqualStrings("second", payload.s3Credentials.?.region.?);
+}
+
 test "resolves secret share payload" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
