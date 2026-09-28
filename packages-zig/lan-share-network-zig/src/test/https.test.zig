@@ -153,19 +153,20 @@ test "a connection writes every slice of a splat and reads to the end of what th
     try std.testing.expectEqualSlices(u8, try receiver_module.extractDerFromPem(allocator, selfSigned.cert), try connection.peerCertificateDer(allocator));
     try connection.writer.writeAll("head-");
 
-    // A last slice larger than the writer's buffer, so the splat reaches the connection rather than the buffer.
+    // Slices larger than the writer's buffer, so they and the splat reach the connection rather than the buffer.
     const large = try allocator.alloc(u8, 20_000);
     @memset(large, 'b');
-    var slices = [_][]const u8{ "a", large };
+    var slices = [_][]const u8{ large, "a", large };
     try connection.writer.writeSplatAll(&slices, 3);
     try connection.writer.flush();
     connection.close();
     server.join();
 
     try std.testing.expect(side.failure == null);
-    try std.testing.expectEqual(@as(usize, "head-a".len + 3 * large.len), side.received.items.len);
-    try std.testing.expectEqualStrings("head-a", side.received.items[0.."head-a".len]);
-    try std.testing.expectEqual(@as(usize, 3 * large.len), std.mem.count(u8, side.received.items, "b"));
+    try std.testing.expectEqual(@as(usize, "head-".len + 1 + 4 * large.len), side.received.items.len);
+    try std.testing.expectEqualStrings("head-", side.received.items[0.."head-".len]);
+    try std.testing.expectEqual(@as(u8, 'a'), side.received.items["head-".len + large.len]);
+    try std.testing.expectEqual(@as(usize, 4 * large.len), std.mem.count(u8, side.received.items, "b"));
 }
 
 test "socket calls report the system error of what failed" {
