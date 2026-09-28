@@ -102,6 +102,30 @@ pub const RecordingStorage = struct {
     }
 
     //
+    // Records writeStreamHashed.
+    //
+    pub fn writeStreamHashed(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64, sha256: []const u8) !bool {
+        _ = allocator;
+        _ = io;
+        _ = contentType;
+        _ = inputStream;
+        _ = contentLength;
+        _ = sha256;
+        try self.record("writeStreamHashed", filePath);
+        return false;
+    }
+
+    //
+    // Records storedHash.
+    //
+    pub fn storedHash(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]const u8 {
+        _ = allocator;
+        _ = io;
+        try self.record("storedHash", filePath);
+        return null;
+    }
+
+    //
     // Records info.
     //
     pub fn info(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?IFileInfo {

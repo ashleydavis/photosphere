@@ -268,6 +268,9 @@ pub const HeadObjectOutput = struct {
 
     // The last modified time in milliseconds since the Unix epoch (null when absent).
     LastModified: ?i64,
+
+    // The base64 SHA-256 checksum S3 kept of the object (null when absent or not asked for with ChecksumMode).
+    ChecksumSHA256: ?[]const u8,
 };
 
 //
@@ -955,6 +958,26 @@ pub const IPutObjectInput = struct {
 
     // "*" writes only when the object does not exist (null for an unconditional write).
     IfNoneMatch: ?[]const u8,
+
+    // The length of the body (null when not given).
+    ContentLength: ?u64,
+
+    // The base64 SHA-256 of the body, which S3 checks the body against (null for none).
+    ChecksumSHA256: ?[]const u8,
+};
+
+//
+// Input of HeadObject.
+//
+pub const IHeadObjectInput = struct {
+    // The bucket.
+    Bucket: []const u8,
+
+    // The object key.
+    Key: []const u8,
+
+    // "ENABLED" asks S3 to return the checksum it kept of the object (null for none).
+    ChecksumMode: ?[]const u8,
 };
 
 //
@@ -990,7 +1013,7 @@ pub const S3Command = union(enum) {
     ListObjectsV2Command: ListObjectsV2Input,
 
     // HeadObjectCommand.
-    HeadObjectCommand: IObjectKey,
+    HeadObjectCommand: IHeadObjectInput,
 
     // GetObjectCommand.
     GetObjectCommand: IGetObjectInput,
@@ -1451,13 +1474,20 @@ pub const S3Client = struct {
     }
 
     //
-    // HeadObject.
+    // HeadObject (checksumMode is the ChecksumMode input: "ENABLED" asks for the checksum S3 kept of the object).
     //
-    pub fn headObject(self: *S3Client, allocator: std.mem.Allocator, io: std.Io, bucket: []const u8, key: []const u8) !HeadObjectOutput {
+    pub fn headObject(self: *S3Client, allocator: std.mem.Allocator, io: std.Io, bucket: []const u8, key: []const u8, checksumMode: ?[]const u8) !HeadObjectOutput {
         if (self.send) |send| {
-            return (try send.function(send.context, .{ .HeadObjectCommand = .{ .Bucket = bucket, .Key = key } })).HeadObject;
+            return (try send.function(send.context, .{ .HeadObjectCommand = .{ .Bucket = bucket, .Key = key, .ChecksumMode = checksumMode } })).HeadObject;
         }
         _ = io;
+        var headers: std.ArrayList(IHeader) = .empty;
+        if (checksumMode) |checksumModeValue| {
+            try headers.append(allocator, .{
+                .name = "x-amz-checksum-mode",
+                .value = checksumModeValue,
+            });
+        }
         const call = try self.run(allocator, .{
             .type = aws.AWS_S3_META_REQUEST_TYPE_DEFAULT,
             .operationName = "HeadObject",
@@ -1465,7 +1495,7 @@ pub const S3Client = struct {
             .bucket = bucket,
             .key = key,
             .query = "",
-            .headers = &.{},
+            .headers = headers.items,
             .body = .none,
             .partSize = 0,
             .maxActiveConnections = 0,
@@ -1483,6 +1513,7 @@ pub const S3Client = struct {
             .ContentType = call.header("content-type"),
             .ContentLength = contentLength,
             .LastModified = lastModified,
+            .ChecksumSHA256 = call.header("x-amz-checksum-sha256"),
         };
     }
 
@@ -1522,11 +1553,21 @@ pub const S3Client = struct {
     }
 
     //
-    // PutObject (ifNoneMatch is the IfNoneMatch input: "*" writes only when the object does not exist).
+    // PutObject (ifNoneMatch is the IfNoneMatch input: "*" writes only when the object does not exist;
+    // contentLength is the ContentLength input and checksumSha256 the base64 ChecksumSHA256 input, which S3 checks the
+    // body against).
     //
-    pub fn putObject(self: *S3Client, allocator: std.mem.Allocator, io: std.Io, bucket: []const u8, key: []const u8, body: []const u8, contentType: ?[]const u8, ifNoneMatch: ?[]const u8) !void {
+    pub fn putObject(self: *S3Client, allocator: std.mem.Allocator, io: std.Io, bucket: []const u8, key: []const u8, body: []const u8, contentType: ?[]const u8, ifNoneMatch: ?[]const u8, contentLength: ?u64, checksumSha256: ?[]const u8) !void {
         if (self.send) |send| {
-            _ = try send.function(send.context, .{ .PutObjectCommand = .{ .Bucket = bucket, .Key = key, .Body = body, .ContentType = contentType, .IfNoneMatch = ifNoneMatch } });
+            _ = try send.function(send.context, .{ .PutObjectCommand = .{
+                .Bucket = bucket,
+                .Key = key,
+                .Body = body,
+                .ContentType = contentType,
+                .IfNoneMatch = ifNoneMatch,
+                .ContentLength = contentLength,
+                .ChecksumSHA256 = checksumSha256,
+            } });
             return;
         }
         _ = io;
@@ -1541,6 +1582,12 @@ pub const S3Client = struct {
             try headers.append(allocator, .{
                 .name = "If-None-Match",
                 .value = ifNoneMatchValue,
+            });
+        }
+        if (checksumSha256) |checksumValue| {
+            try headers.append(allocator, .{
+                .name = "x-amz-checksum-sha256",
+                .value = checksumValue,
             });
         }
         _ = try self.run(allocator, .{
@@ -2015,8 +2062,20 @@ pub const Upload = struct {
     // so large uploads do not grow the caller's arena.
     //
     pub fn done(self: *Upload, allocator: std.mem.Allocator, io: std.Io) !void {
-        _ = io;
         const params = self.options.params;
+        if (self.options.client.send != null) {
+            // lib-storage sends its commands through the client's `send`, so a client whose `send` is replaced sees
+            // them. A body that fits in one part is sent as one PutObjectCommand carrying the params; the commands of a
+            // multipart upload are not ported to the ISend seam.
+            const body = switch (params.Body) {
+                .buffer => |buffer| buffer,
+                .stream => |stream| try stream.allocRemaining(allocator, .unlimited),
+            };
+            if (body.len > self.options.partSize) {
+                return errors.throwError("A multipart upload through a replaced send is not ported", .{});
+            }
+            return self.options.client.putObject(allocator, io, params.Bucket, params.Key, body, params.ContentType, null, params.ContentLength, null);
+        }
         var headers: std.ArrayList(IHeader) = .empty;
         if (params.ContentType) |contentType| {
             try headers.append(allocator, .{

@@ -97,3 +97,18 @@ test "captureError and restoreError move an error between threads" {
     errors.restoreError(record);
     try std.testing.expectEqualStrings("Failed with value 99", errors.lastErrorMessage());
 }
+
+test "lastErrorCauseNames names each cause of the chain, nearest first" {
+    errors.clearError();
+    errors.throwFatalError("root", .{}) catch {};
+    errors.throwWrappedError("Middle", .{}) catch {};
+    errors.throwErrorWithCause("Outer", .{}) catch {};
+    const cause_names = errors.lastErrorCauseNames();
+    try std.testing.expectEqual(@as(usize, 2), cause_names.len);
+    try std.testing.expectEqualStrings("WrappedError", cause_names[0]);
+    try std.testing.expectEqualStrings("FatalError", cause_names[1]);
+
+    // A new error without a cause has none.
+    failWithValue(3) catch {};
+    try std.testing.expectEqual(@as(usize, 0), errors.lastErrorCauseNames().len);
+}

@@ -28,6 +28,11 @@ const max_message_length = 16 * 1024;
 const cause_separator: u8 = 0;
 
 //
+// The maximum number of cause names kept for an error (the names of deeper causes are dropped).
+//
+const max_cause_names = 32;
+
+//
 // The recorded details of the most recent error thrown on a thread.
 // Public so that an error can be captured on one thread and restored on another (see captureError).
 //
@@ -47,6 +52,13 @@ pub const ErrorRecord = struct {
 
     // The TypeScript error class name ("Error", "FatalError" or "WrappedError").
     name: []const u8 = "Error",
+
+    // The TypeScript error class names of the errors of the cause chain, nearest cause first (the name each one
+    // shows in its stack).
+    cause_names: [max_cause_names][]const u8 = undefined,
+
+    // Number of valid entries in cause_names.
+    cause_name_count: usize = 0,
 };
 
 //
@@ -72,6 +84,7 @@ pub fn recordError(name: []const u8, comptime format: []const u8, args: anytype)
     };
     last_error.message_length = formatted.len;
     last_error.cause_length = 0;
+    last_error.cause_name_count = 0;
     last_error.name = name;
 }
 
@@ -125,7 +138,13 @@ fn recordErrorWithCause(name: []const u8, fold_cause_message: bool, comptime for
         cause_length += 1;
         cause_length += copyMessage(cause_buffer[cause_length..], last_error.cause_buffer[0..last_error.cause_length]);
     }
+    var cause_names: [max_cause_names][]const u8 = undefined;
+    cause_names[0] = last_error.name;
+    const kept_cause_names = @min(last_error.cause_name_count, max_cause_names - 1);
+    @memcpy(cause_names[1 .. kept_cause_names + 1], last_error.cause_names[0..kept_cause_names]);
     recordError(name, format, args);
+    last_error.cause_names = cause_names;
+    last_error.cause_name_count = kept_cause_names + 1;
     if (fold_cause_message and cause_message_length > 0) {
         var message_length = last_error.message_length;
         message_length += copyMessage(last_error.message_buffer[message_length..], ": ");
@@ -149,6 +168,14 @@ pub fn lastErrorCauseMessage() []const u8 {
     const chain = last_error.cause_buffer[0..last_error.cause_length];
     const separator_index = std.mem.indexOfScalar(u8, chain, cause_separator) orelse chain.len;
     return chain[0..separator_index];
+}
+
+//
+// Gets the TypeScript error class names of the cause chain of the most recent error, nearest cause first (one per
+// message of lastErrorCauseChain).
+//
+pub fn lastErrorCauseNames() []const []const u8 {
+    return last_error.cause_names[0..last_error.cause_name_count];
 }
 
 //
@@ -201,5 +228,6 @@ pub fn errorMessage(err: anyerror) []const u8 {
 pub fn clearError() void {
     last_error.message_length = 0;
     last_error.cause_length = 0;
+    last_error.cause_name_count = 0;
     last_error.name = "Error";
 }

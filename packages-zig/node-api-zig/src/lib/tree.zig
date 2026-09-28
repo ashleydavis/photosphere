@@ -18,13 +18,23 @@ const js_date = @import("serialization-zig").js_date;
 //
 pub const FILES_TREE_PATH = ".db/files.dat";
 
-// Not ported: ENCRYPTION_PUB_PATH and isDatabaseEncrypted (psi sync, not psi replicate or psi verify).
+//
+// Path for the encryption public-key marker (indicates database is encrypted).
+//
+const ENCRYPTION_PUB_PATH = ".db/encryption.pub";
 
 //
 // Checks if the merkle tree exists.
 //
 pub fn merkleTreeExists(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage) !bool {
     return try assetStorage.fileExists(allocator, io, FILES_TREE_PATH);
+}
+
+//
+// Returns true if the database has an encryption marker (storage is scoped to db root).
+//
+pub fn isDatabaseEncrypted(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage) !bool {
+    return try assetStorage.fileExists(allocator, io, ENCRYPTION_PUB_PATH);
 }
 
 //

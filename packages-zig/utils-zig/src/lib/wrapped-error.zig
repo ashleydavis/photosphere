@@ -12,10 +12,24 @@ pub fn writeErrorChain(writer: *std.Io.Writer, err: anyerror) std.Io.Writer.Erro
         return;
     }
     var cause_chain = errors.lastErrorCauseChain();
+    const cause_names = errors.lastErrorCauseNames();
+    var cause_index: usize = 0;
     while (cause_chain.next()) |cause_message| {
         try writer.writeAll("\nCaused by:\n");
-        try writer.print("Error: {s}", .{cause_message});
+        try writer.print("{s}: {s}", .{ stackName(if (cause_index < cause_names.len) cause_names[cause_index] else "Error"), cause_message });
+        cause_index += 1;
     }
+}
+
+//
+// The name the first line of an error's JavaScript `error.stack` shows: the error's `name`. WrappedError does not set
+// one, so it shows the "Error" of the Error class it extends (Zig records it as "WrappedError" for isInstance).
+//
+fn stackName(name: []const u8) []const u8 {
+    if (std.mem.eql(u8, name, "WrappedError")) {
+        return "Error";
+    }
+    return name;
 }
 
 //

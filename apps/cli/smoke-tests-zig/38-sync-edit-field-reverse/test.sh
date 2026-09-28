@@ -129,7 +129,7 @@ test_sync_edit_field_reverse() {
     # Use sync command to synchronize databases (should pull changes from copy to original)
     log_info "Using sync command to synchronize databases (bidirectional - should pull from copy to original)"
     local sync_output
-    invoke_command "Sync databases (copy changes to original)" "$(get_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
+    invoke_command "Sync databases (copy changes to original)" "$(get_zig_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
     
     # Verify sync completed
     expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"

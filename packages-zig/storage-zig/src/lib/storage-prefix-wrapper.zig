@@ -103,7 +103,19 @@ pub const StoragePrefixWrapper = struct {
         return self.wrappedStorage.readableLength(fileInfo);
     }
 
-    // Not ported: writeStreamHashed, storedHash (not reached by psi add, psi replicate or psi verify).
+    //
+    // Writes a stream whose SHA-256 the caller already knows.
+    //
+    pub fn writeStreamHashed(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64, sha256: []const u8) !bool {
+        return self.wrappedStorage.writeStreamHashed(allocator, io, try self.makeFullPath(allocator, filePath), contentType, inputStream, contentLength, sha256);
+    }
+
+    //
+    // The SHA-256 the store kept of a file, when it can say without sending the bytes back.
+    //
+    pub fn storedHash(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]const u8 {
+        return self.wrappedStorage.storedHash(allocator, io, try self.makeFullPath(allocator, filePath));
+    }
 
     //
     // Gets info about a file.

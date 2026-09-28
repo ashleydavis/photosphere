@@ -364,3 +364,17 @@ test "preserves other state fields when stamping" {
     try std.testing.expect(state.lastModifiedAt != null);
     try std.testing.expect(state.contentHash != null);
 }
+
+test "isDatabaseEncrypted is true only when the database has the encryption marker" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
+    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    const storage = try helpers.directoryStorage(allocator, io, databaseDir);
+    try std.testing.expect(!try tree.isDatabaseEncrypted(allocator, io, storage));
+
+    try storage.write(allocator, io, ".db/encryption.pub", null, "a public key");
+    try std.testing.expect(try tree.isDatabaseEncrypted(allocator, io, storage));
+}

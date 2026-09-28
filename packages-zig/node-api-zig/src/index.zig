@@ -11,7 +11,8 @@ pub const replicate = @import("lib/replicate.zig");
 pub const replicate_database = @import("lib/replicate-database.zig");
 pub const replicate_database_worker = @import("lib/replicate-database.worker.zig");
 pub const tree = @import("lib/tree.zig");
-// Not ported: encrypt, decrypt, sync.
+pub const sync = @import("lib/sync.zig");
+// Not ported: encrypt, decrypt.
 pub const hash = @import("lib/hash.zig");
 pub const exif_parser = @import("lib/third-party/exif-parser/parser.zig");
 pub const exif_parser_exif = @import("lib/third-party/exif-parser/exif.zig");

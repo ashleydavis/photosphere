@@ -45,7 +45,13 @@ const WRITE_LOCK_TIMEOUT_MS = 10000;
 //
 const UPLOAD_PART_BYTES = 5 * 1024 * 1024;
 
-// Not ported: SINGLE_PART_MAX_BYTES (only used by writeStreamHashed, which psi replicate and psi verify do not reach).
+//
+// The largest body writeStreamHashed sends as a single PutObject carrying the whole object's hash.
+//
+// Above this the multipart uploader still runs, so a file too large for one request has a path, and
+// S3's own limit on a single PUT is five gigabytes.
+//
+const SINGLE_PART_MAX_BYTES = 1024 * 1024 * 1024;
 
 //
 // S3 credentials.
@@ -359,7 +365,7 @@ pub const CloudStorage = struct {
             key = key[1..]; // Remove leading slash.
         }
 
-        _ = self.s3.headObject(allocator, io, parsed.bucket, key) catch |err| {
+        _ = self.s3.headObject(allocator, io, parsed.bucket, key, null) catch |err| {
             if (isNotFound(err)) {
                 return false;
             }
@@ -414,7 +420,135 @@ pub const CloudStorage = struct {
         return fileInfo.length;
     }
 
-    // Not ported: storedHash, writeStreamHashed (not reached by psi add, psi replicate or psi verify).
+    //
+    // The SHA-256 S3 kept of the object when it was written, read with a HEAD request.
+    //
+    // Undefined when the object was written without one (by an older version of this code, or by
+    // anything else), when it is not there, or when the checksum is a composite of a multipart
+    // upload's parts, which is a hash of hashes rather than a hash of the file and so cannot be
+    // compared against one. The caller falls back to reading the file and hashing it.
+    //
+    pub fn storedHash(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]const u8 {
+        const parsed = try self.parsePath(filePath);
+        var key = parsed.key;
+        if (std.mem.startsWith(u8, key, "/")) {
+            key = key[1..]; // Remove leading slash.
+        }
+
+        const headResult = self.s3.headObject(allocator, io, parsed.bucket, key, "ENABLED") catch |err| {
+            if (isNotFound(err)) {
+                return null;
+            }
+            const message = try causeMessage(allocator, err);
+            return errors.throwWrappedError("Failed to get the stored hash of {s}: {s}", .{ filePath, message });
+        };
+
+        const checksum = headResult.ChecksumSHA256 orelse {
+            return null;
+        };
+        if (checksum.len == 0 or std.mem.indexOfScalar(u8, checksum, '-') != null) {
+            return null;
+        }
+
+        // (TypeScript: `Buffer.from(checksum, "base64")`, which stops at the first character that is not base64.)
+        const decoder = std.base64.standard.Decoder;
+        const decoded = try allocator.alloc(u8, decoder.calcSizeForSlice(checksum) catch {
+            return errors.throwError("Failed to get the stored hash of {s}: the checksum {s} is not base64", .{ filePath, checksum });
+        });
+        decoder.decode(decoded, checksum) catch {
+            return errors.throwError("Failed to get the stored hash of {s}: the checksum {s} is not base64", .{ filePath, checksum });
+        };
+        return decoded;
+    }
+
+    //
+    // Writes a stream whose SHA-256 the caller already knows, handing the hash to S3 with it.
+    //
+    // S3 checks the body against the hash and refuses the write if they differ, so the upload
+    // verifies itself, and it keeps the hash for storedHash to answer with afterwards. Nothing here
+    // or in the SDK computes it: given the value, the SDK sends it rather than hashing the body,
+    // which is the whole point. Hashing in the embedded engine is pure JavaScript at well under a
+    // megabyte a second, and it held a 100MB video for over a quarter of an hour on a Pixel 6
+    // without a byte reaching the server.
+    //
+    // The hash is sent only for a body that fits in one part. A multipart upload's checksum is a hash
+    // of its parts' hashes rather than a hash of the object, so the two cannot be compared, and a
+    // file bigger than the part size below is written exactly as writeStream writes it.
+    //
+    // The upload goes through the same uploader as the other writes rather than a bare PutObject. It
+    // is what knows how to send a stream: handing the stream straight to PutObject uploaded nothing
+    // at all, and the sync found the file missing at the far end and reported it as a failed copy.
+    //
+    pub fn writeStreamHashed(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64, sha256: []const u8) !bool {
+        const parsed = try self.parsePath(filePath);
+        var key = parsed.key;
+        if (std.mem.startsWith(u8, key, "/")) {
+            key = key[1..]; // Remove leading slash.
+        }
+
+        const knownLength = contentLength orelse {
+            // A body whose length the caller could not find out cannot have a length declared for it,
+            // and declaring one anyway is what this whole path exists to stop: a request that says it
+            // carries more than it sends leaves S3 waiting thirty seconds for the rest and then
+            // refusing the write. So the uploader is handed the stream and reads it to find out how
+            // long it is, which is what it does for any stream of unknown length.
+            try self.writeStream(allocator, io, filePath, contentType, inputStream, null);
+            return false;
+        };
+
+        const fitsInOnePart = knownLength <= SINGLE_PART_MAX_BYTES;
+
+        if (fitsInOnePart) {
+            // One request, with the stream handed to the SDK as it is.
+            //
+            // The multipart uploader would read the stream into a buffer first, and on a phone that
+            // is the expensive half of the work: the mobile shims recognise a file-backed stream
+            // piped into a request and have the file sent from disk to the socket natively, which
+            // only happens if the stream reaches the request unread.
+            // (Zig: aws-c-s3 reads the body of a single PutObject into one buffer before it sends it, so the stream is
+            // read into memory here and handed over as that buffer. It is page allocated so it does not grow the
+            // caller's arena.)
+            const body = inputStream.allocRemaining(std.heap.page_allocator, .unlimited) catch |err| {
+                const message = try causeMessage(allocator, err);
+                return errors.throwWrappedError("Failed to write stream to {s}: {s}", .{ filePath, message });
+            };
+            defer std.heap.page_allocator.free(body);
+            const checksum = try allocator.alloc(u8, std.base64.standard.Encoder.calcSize(sha256.len));
+            _ = std.base64.standard.Encoder.encode(checksum, sha256);
+            self.s3.putObject(allocator, io, parsed.bucket, key, body, contentType, null, knownLength, checksum) catch |err| {
+                const message = try causeMessage(allocator, err);
+                return errors.throwWrappedError("Failed to write stream to {s}: {s}", .{ filePath, message });
+            };
+
+            // The server checked the body against the hash and would have refused it otherwise,
+            // so the caller needs no HEAD afterwards to know the copy is right.
+            return true;
+        }
+
+        var upload = Upload.init(.{
+            .client = &self.s3,
+            .params = .{
+                .Bucket = parsed.bucket,
+                .Key = key,
+                .Body = .{ .stream = inputStream },
+                .ContentType = contentType,
+                .ContentLength = knownLength,
+            },
+            // Only a body too large to send whole reaches here, so it goes up in parts, which
+            // cannot carry a whole-object checksum: a multipart checksum is a hash of the parts'
+            // hashes rather than of the object.
+            .partSize = UPLOAD_PART_BYTES,
+            .queueSize = 1,
+        });
+        upload.done(allocator, io) catch |err| {
+            const message = try causeMessage(allocator, err);
+            return errors.throwWrappedError("Failed to write stream to {s}: {s}", .{ filePath, message });
+        };
+
+        // Each part carried its own checksum, but the object as a whole did not, so nothing here
+        // has compared what landed against the hash the caller holds.
+        return false;
+    }
 
     //
     // Gets info about an asset.
@@ -426,7 +560,7 @@ pub const CloudStorage = struct {
             key = key[1..]; // Remove leading slash.
         }
 
-        const headResult = self.s3.headObject(allocator, io, parsed.bucket, key) catch |err| {
+        const headResult = self.s3.headObject(allocator, io, parsed.bucket, key, null) catch |err| {
             if (isNotFound(err)) {
                 return null;
             }
@@ -692,7 +826,7 @@ pub const CloudStorage = struct {
         const lockBody = lockContent;
 
         // Use conditional write to ensure atomic "create if not exists"
-        self.s3.putObject(allocator, io, bucket, key, lockBody, "application/json", "*") catch |putErr| {
+        self.s3.putObject(allocator, io, bucket, key, lockBody, "application/json", "*", null, null) catch |putErr| {
             // If the condition failed (object already exists), check if it's timed out
             if (putErr == error.Thrown and (s3_client.lastHttpStatusCode() == 412 or std.mem.eql(u8, errors.lastErrorName(), "PreconditionFailed") or std.mem.eql(u8, errors.lastErrorName(), "ConditionalRequestConflict"))) {
                 // Check if existing lock has timed out (10 seconds = 10000ms)
@@ -712,7 +846,7 @@ pub const CloudStorage = struct {
                             };
 
                             // Try to acquire the lock again (without conditional header this time)
-                            self.s3.putObject(allocator, io, bucket, key, lockBody, "application/json", null) catch {
+                            self.s3.putObject(allocator, io, bucket, key, lockBody, "application/json", null, null, null) catch {
                                 break :retryAfterTimeout;
                             };
 

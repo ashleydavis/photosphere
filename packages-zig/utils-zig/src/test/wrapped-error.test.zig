@@ -147,3 +147,25 @@ test "should not duplicate the message when the stack already contains it (V8 st
         try std.testing.expectEqualStrings("Error: already here", result);
     };
 }
+
+//
+// Throws a FatalError, wraps it in `middle`, then wraps that in `outer`.
+//
+fn throwFatalTwiceWrapped() errors.ThrownError!void {
+    errors.throwFatalError("not related", .{}) catch {
+        WrappedError.throw("middle", .{}) catch {
+            return WrappedError.throw("outer", .{});
+        };
+    };
+}
+
+test "writeErrorChain shows each cause under the name its stack shows" {
+    // A FatalError cause shows "FatalError", as the first line of its JavaScript stack does, and a WrappedError
+    // shows "Error", because the class does not set a name of its own.
+    var buffer: [256]u8 = undefined;
+    var fixed_writer = std.Io.Writer.fixed(&buffer);
+    throwFatalTwiceWrapped() catch |err| {
+        try wrapped_error.writeErrorChain(&fixed_writer, err);
+    };
+    try std.testing.expectEqualStrings("Error: outer: middle: not related\nCaused by:\nError: middle: not related\nCaused by:\nFatalError: not related", fixed_writer.buffered());
+}

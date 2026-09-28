@@ -255,3 +255,42 @@ test "readableLength is undefined, because the plaintext length cannot be worked
         .lastModified = 0,
     }));
 }
+
+//
+// writeStreamHashed has no test of its own in TypeScript beyond the length it declares (encrypted-storage-lengths.test.ts):
+// the hash is not handed down and the bytes still make the trip.
+//
+test "writeStreamHashed writes the stream without the hash, and the bytes make the trip" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tempDir = try helpers.makeTempDir(allocator, io, "encrypted-storage-write-stream-hashed");
+    defer helpers.removeTempDir(io, tempDir);
+    var fileStorage = FileStorage.init("fs:");
+    const encryptedStorage = try makeEncryptedStorage(allocator, fileStorage.storage());
+
+    const contents = "a thumbnail's worth of bytes";
+    const filePath = try std.fmt.allocPrint(allocator, "{s}/thumb/one.jpg", .{tempDir});
+    var input = std.Io.Reader.fixed(contents);
+    try std.testing.expectEqual(false, try encryptedStorage.writeStreamHashed(allocator, io, filePath, "image/jpeg", &input, null, &([_]u8{7} ** 32)));
+
+    // The bytes still made the trip, and come back out as what went in.
+    try std.testing.expectEqualStrings(contents, (try encryptedStorage.read(allocator, io, filePath)).?);
+}
+
+//
+// storedHash has no test of its own in TypeScript; what it says of an encrypted store is pinned here.
+//
+test "storedHash is undefined, because the stored bytes are ciphertext" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var recording = RecordingStorage.init(allocator);
+    const encryptedStorage = try makeEncryptedStorage(allocator, recording.storage());
+
+    try std.testing.expect((try encryptedStorage.storedHash(allocator, std.testing.io, "asset/one")) == null);
+
+    // The store underneath is not asked.
+    try std.testing.expectEqual(@as(usize, 0), recording.calls.items.len);
+}

@@ -10,8 +10,9 @@ pub const auto_import_queue = @import("lib/auto-import-queue.zig");
 pub const source_cleanup = @import("lib/source-cleanup.zig");
 pub const import_record = @import("lib/import-record.zig");
 pub const import_assets_types = @import("lib/import-assets.types.zig");
+pub const sync_database_types = @import("lib/sync-database.types.zig");
 
 // Not ported: database-update, load-assets, save-assets.types, asset, op, database-op,
-// database-op-record, asset-query, sync-database.types, lan-share, auto-import-mobile,
+// database-op-record, asset-query, lan-share, auto-import-mobile,
 // retention-policy, sync-gate, sync-settings (not used by psi add, psi replicate or psi verify).
 // IAsset (asset.ts) is only used as a type parameter of IBsonCollection<IAsset>; Zig records are BSON documents.

@@ -178,7 +178,28 @@ pub const FileStorage = struct {
         return fileInfo.length;
     }
 
-    // Not ported: writeStreamHashed, storedHash (not reached by psi add, psi replicate or psi verify).
+    //
+    // Writes the stream, ignoring the hash: a filesystem has nothing to check it against and keeps
+    // no record of it.
+    //
+    pub fn writeStreamHashed(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64, sha256: []const u8) !bool {
+        _ = contentLength;
+        _ = sha256;
+        try self.writeStream(allocator, io, filePath, contentType, inputStream, null);
+        return false;
+    }
+
+    //
+    // Always undefined: a filesystem keeps no hash of what it holds, so the only way to answer would
+    // be to read the whole file, which is what the caller does anyway when this says it cannot.
+    //
+    pub fn storedHash(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]const u8 {
+        _ = self;
+        _ = allocator;
+        _ = io;
+        _ = filePath;
+        return null;
+    }
 
     //
     // Gets info about a file.

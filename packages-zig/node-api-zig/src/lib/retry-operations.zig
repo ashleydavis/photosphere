@@ -44,6 +44,32 @@ pub fn InfoOperation(comptime sourceText: []const u8) type {
 }
 
 //
+// `() => storage.read(fileName)`.
+//
+pub fn ReadOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        pub const source = sourceText;
+
+        // Allocates the result.
+        allocator: std.mem.Allocator,
+
+        // The storage holding the file.
+        storage: IStorage,
+
+        // The file to read.
+        fileName: []const u8,
+
+        //
+        // Reads the file.
+        //
+        pub fn run(self: *@This(), io: std.Io) !?[]u8 {
+            return self.storage.read(self.allocator, io, self.fileName);
+        }
+    };
+}
+
+//
 // `() => storage.write(fileName, contentType, data)`.
 //
 pub fn WriteOperation(comptime sourceText: []const u8) type {

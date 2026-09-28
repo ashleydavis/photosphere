@@ -75,6 +75,8 @@ pub const MemoryStorage = struct {
         .acquireWriteLock = acquireWriteLock,
         .releaseWriteLock = releaseWriteLock,
         .readableLength = readableLength,
+        .writeStreamHashed = writeStreamHashed,
+        .storedHash = storedHash,
     };
 
     //
@@ -83,6 +85,32 @@ pub const MemoryStorage = struct {
     fn readableLength(pointer: *anyopaque, fileInfo: IFileInfo) ?u64 {
         _ = pointer;
         return fileInfo.length;
+    }
+
+    //
+    // Not used by the tests.
+    //
+    fn writeStreamHashed(pointer: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64, sha256: []const u8) anyerror!bool {
+        _ = pointer;
+        _ = allocator;
+        _ = io;
+        _ = filePath;
+        _ = contentType;
+        _ = inputStream;
+        _ = contentLength;
+        _ = sha256;
+        return error.NotImplemented;
+    }
+
+    //
+    // Not used by the tests.
+    //
+    fn storedHash(pointer: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!?[]const u8 {
+        _ = pointer;
+        _ = allocator;
+        _ = io;
+        _ = filePath;
+        return error.NotImplemented;
     }
 
     //
