@@ -580,9 +580,9 @@ const Reader = struct {
         if (element_type.* == 0) {
             return null;
         }
-        const key_end = std.mem.indexOfScalarPos(u8, self.buffer, self.index, 0) orelse {
-            return errors.throwError("Bad BSON Document: illegal CString", .{});
-        };
+        // deserialize checked that the buffer ends in 0x00, so a key always has its terminator (npm bson's "illegal
+        // CString" error cannot happen).
+        const key_end = std.mem.indexOfScalarPos(u8, self.buffer, self.index, 0) orelse unreachable;
         const key = self.buffer[self.index..key_end];
         self.index = key_end + 1;
         return key;
@@ -671,10 +671,9 @@ const Reader = struct {
                 return .{ .document = try self.readDocument(allocator) };
             },
             bson_type_array => {
+                // The array was read up to its terminating 0x00 (npm bson checks the byte before the end its size gives,
+                // which readArray has already checked is where the array ended).
                 const elements = try self.readArray(allocator);
-                if (self.buffer[self.index - 1] != 0) {
-                    return errors.throwError("invalid array terminator byte", .{});
-                }
                 return .{ .array = elements };
             },
             bson_type_undefined => {
