@@ -242,3 +242,61 @@ test "resolves secret share payload throws when secret not found" {
     try std.testing.expectError(error.Thrown, resolveSecretSharePayload(arena.allocator(), std.testing.io, "nonexistent"));
     try std.testing.expectEqualStrings("Secret \"nonexistent\" not found in vault.", errors.lastErrorMessage());
 }
+
+//
+// Resolves the share payload of a database whose S3 credentials secret holds the value.
+//
+fn resolveWithS3Value(allocator: std.mem.Allocator, io: std.Io, value: []const u8) !api.lan_share.IDatabaseSharePayload {
+    try test_vault.clearTestVault(allocator, io);
+    const vault = try getVault("plaintext");
+    try vault.set(allocator, io, .{
+        .name = "odd-credentials",
+        .type = "s3-credentials",
+        .value = value,
+    });
+    const entry: IShareDatabaseConfig = .{
+        .name = "db",
+        .description = "",
+        .path = "s3:bucket",
+        .s3Key = "odd-credentials",
+    };
+    return resolveDatabaseSharePayload(allocator, io, entry);
+}
+
+test "S3 credentials that are not an object share no fields, like reading properties of a primitive" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    try test_vault.useTestVault();
+    defer test_vault.useRealEnvironment();
+
+    const payload = try resolveWithS3Value(allocator, io, "42");
+    try std.testing.expectEqualStrings("odd-credentials", payload.s3Credentials.?.name);
+    try std.testing.expect(payload.s3Credentials.?.region == null);
+    try std.testing.expect(payload.s3Credentials.?.accessKeyId == null);
+}
+
+test "S3 credentials of null throw like reading a property of null" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    try test_vault.useTestVault();
+    defer test_vault.useRealEnvironment();
+
+    try std.testing.expectError(error.Thrown, resolveWithS3Value(allocator, io, "null"));
+    try std.testing.expectEqualStrings("TypeError: Cannot read properties of null (reading 'region')", errors.lastErrorMessage());
+}
+
+test "an S3 credentials field that is not text is refused" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    try test_vault.useTestVault();
+    defer test_vault.useRealEnvironment();
+
+    try std.testing.expectError(error.Thrown, resolveWithS3Value(allocator, io, "{\"region\":5}"));
+    try std.testing.expectEqualStrings("The S3 credentials \"odd-credentials\" have a \"region\" field that is not text.", errors.lastErrorMessage());
+}

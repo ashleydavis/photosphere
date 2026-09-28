@@ -52,3 +52,35 @@ test "releaseWriteLock releases the lock so another owner can acquire it" {
     try std.testing.expect((try storage.asStorage().checkWriteLock(allocator, io, LOCK_PATH)) == null);
     try std.testing.expect(try storage.asStorage().acquireWriteLock(allocator, io, LOCK_PATH, "other"));
 }
+
+//
+// A storage whose write lock can never be acquired and is never held: the lock was let go between the attempt and
+// the check of who holds it.
+//
+fn refuseWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, ioArgument: std.Io, filePath: []const u8, owner: []const u8) anyerror!bool {
+    _ = ptr;
+    _ = allocator;
+    _ = ioArgument;
+    _ = filePath;
+    _ = owner;
+    return false;
+}
+
+test "acquireWriteLock returns false and says the lock looks free when it was let go before the check" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var memoryStorage = MemoryStorage.init(allocator);
+    const storage = memoryStorage.asStorage();
+    var refusingVTable = storage.vtable.*;
+    refusingVTable.acquireWriteLock = refuseWriteLock;
+    var refusingStorage = storage;
+    refusingStorage.vtable = &refusingVTable;
+
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(null, &stderr_capture.writer);
+    defer utils.console.setCapture(null, null);
+
+    try std.testing.expect(!try write_lock.acquireWriteLock(allocator, io, refusingStorage, "session-1", 1));
+    try std.testing.expectEqualStrings("Failed to acquire write lock after 1 attempts. Lock appears to be available but acquisition failed.\n", stderr_capture.written());
+}

@@ -2,6 +2,7 @@ const std = @import("std");
 const api_zig = @import("api-zig");
 const utils = @import("utils-zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
+const storage_zig = @import("storage-zig");
 const database_state = api_zig.database_state;
 const IDatabaseState = database_state.IDatabaseState;
 const loadDatabaseState = database_state.loadDatabaseState;
@@ -238,4 +239,24 @@ test "the state file is byte-identical to the one TypeScript writes" {
         .lastModifiedAt = "2026-01-02T03:04:05.000Z",
         .lastReplicatedAt = "2026-01-02T03:04:07.000Z",
     }, (try loadDatabaseState(allocator, io, storage.asStorage())).?);
+}
+
+test "updateDatabaseStateLocked releases the lock and passes the error on when the merge fails" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tempDir = std.testing.tmpDir(.{});
+    defer tempDir.cleanup();
+    const directory = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path });
+    const storage = (try storage_zig.storage_factory.createStorage(allocator, io, directory, null, null)).storage;
+
+    // A directory where the state file goes, so saving the state fails.
+    try tempDir.dir.createDirPath(io, STATE_PATH);
+
+    try std.testing.expect(std.meta.isError(updateDatabaseStateLocked(allocator, io, storage, "session-1", .{
+        .lastSyncedAt = "X",
+    })));
+
+    // The lock is released afterwards, so another owner can acquire it.
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, LOCK_PATH, "other"));
 }

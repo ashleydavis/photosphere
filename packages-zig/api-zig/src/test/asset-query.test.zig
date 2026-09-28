@@ -305,3 +305,43 @@ test "streamAssetToFile fails for a missing asset after creating the output file
     const written = try std.Io.Dir.cwd().readFileAlloc(io, outputPath, allocator, .unlimited);
     try std.testing.expectEqual(@as(usize, 0), written.len);
 }
+
+test "searchAssets leaves out assets whose photoDate is missing, empty, not a date or not text, and reads a Date" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const ID_D = "44444444-4444-4444-a444-444444444444";
+    const ID_E = "55555555-5555-4555-a555-555555555555";
+
+    // 2022-06-01T00:00:00.500Z as a Date: Date.parse of its string form drops the milliseconds.
+    const assets = [_]IAsset{
+        try makeAsset(allocator, &.{.{ .name = "_id", .value = .{ .string = ID_A } }}),
+        try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_B } }, .{ .name = "photoDate", .value = .{ .string = "" } } }),
+        try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_C } }, .{ .name = "photoDate", .value = .{ .date = 1654041600500 } } }),
+        try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_D } }, .{ .name = "photoDate", .value = .{ .string = "not a date" } } }),
+        try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_E } }, .{ .name = "photoDate", .value = .{ .number = 1654041600000 } } }),
+    };
+    const database = try buildDatabase(allocator, &assets);
+
+    try expectIds(&.{ID_C}, try assetIds(allocator, try searchAssets(allocator, io, database, "", null, "2021-01-01", "2023-12-31", 10)));
+
+    // The bound is inclusive of the Date once its milliseconds are dropped.
+    try expectIds(&.{ID_C}, try assetIds(allocator, try searchAssets(allocator, io, database, "", null, "2022-06-01T00:00:00.000Z", "2022-06-01T00:00:00.000Z", 10)));
+}
+
+test "streamAssetToFile maps type 'thumb' to the thumb/ storage prefix" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tempDir = std.testing.tmpDir(.{});
+    defer tempDir.cleanup();
+    var storage = MemoryStorage.init(allocator);
+    const payload = "thumb-bytes";
+    try storage.asStorage().write(allocator, io, "thumb/thumb-asset-id", "image/jpeg", payload);
+
+    const outputPath = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path, "thumb.bin" });
+    const bytes = try streamAssetToFile(allocator, io, storage.asStorage(), "thumb-asset-id", outputPath, "thumb");
+
+    try std.testing.expectEqual(@as(u64, payload.len), bytes);
+    try std.testing.expectEqualStrings(payload, try std.Io.Dir.cwd().readFileAlloc(io, outputPath, allocator, .unlimited));
+}

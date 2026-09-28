@@ -270,3 +270,38 @@ test "a record is stored as JSON.stringify writes it" {
         try serializeImportRecord(allocator, record),
     );
 }
+
+test "entries is not a list, or an entry's text field is not text, and the record reads as empty or drops the entry" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    try std.testing.expectEqual(@as(usize, 0), (try parseImportRecord(allocator, "{\"entries\":5}")).entries.len);
+    const record = try parseImportRecord(allocator,
+        \\{"entries":[{"logicalPath":7,"outcome":"imported","source":"manual"}]}
+    );
+    try std.testing.expectEqual(@as(usize, 0), record.entries.len);
+}
+
+test "parseImportRecord passes running out of memory on instead of reading the file as empty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const contents =
+        \\{"entries":[{"assetId":"asset-good","logicalPath":"good","outcome":"imported","importedAt":"2026-01-01T00:00:00.000Z","source":"manual","micro":"abc"}],"truncated":false}
+    ;
+
+    // Every allocation fails in turn, until one run gets through.
+    var failIndex: usize = 0;
+    while (true) : (failIndex += 1) {
+        var failing = std.testing.FailingAllocator.init(allocator, .{ .fail_index = failIndex });
+        if (parseImportRecord(failing.allocator(), contents)) |record| {
+            try std.testing.expectEqual(@as(usize, 1), record.entries.len);
+            break;
+        }
+        else |err| {
+            try std.testing.expectEqual(error.OutOfMemory, err);
+        }
+    }
+    try std.testing.expect(failIndex > 0);
+}
