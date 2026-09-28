@@ -28,6 +28,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const node_utils = @import("node-utils-zig");
+const standard_streams = @import("utils-zig").standard_streams;
 const storage_zig = @import("storage-zig");
 const tty = @import("tty.zig");
 
@@ -555,10 +556,10 @@ const IOutputContext = struct {
             output = try stripColor(allocator, output);
         }
         if (self.isError) {
-            writeTo(self.command.outputConfiguration.writeErr, std.Io.File.stderr(), output);
+            writeTo(self.command.outputConfiguration.writeErr, standard_streams.stderr(), output);
         }
         else {
-            writeTo(self.command.outputConfiguration.writeOut, std.Io.File.stdout(), output);
+            writeTo(self.command.outputConfiguration.writeOut, standard_streams.stdout(), output);
         }
     }
 };
@@ -1353,7 +1354,7 @@ pub const Command = struct {
     pub fn @"error"(self: *Command, message: []const u8, errorOptions: IErrorOptions) anyerror {
         // output handling
         const line = std.fmt.allocPrint(self.allocator, "{s}\n", .{message}) catch |err| return err;
-        writeTo(self.outputConfiguration.writeErr, std.Io.File.stderr(), line);
+        writeTo(self.outputConfiguration.writeErr, standard_streams.stderr(), line);
         // exit handling
         return self.exit(errorOptions.exitCode, errorOptions.code, message);
     }
