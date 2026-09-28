@@ -267,8 +267,15 @@ pub const IStorage = struct {
         // cannot say.
         readableLength: *const fn (ptr: *anyopaque, fileInfo: IFileInfo) ?u64,
 
-        // Not ported: writeStreamHashed, storedHash, refreshWriteLock (not reached by psi add, psi replicate or
-        // psi verify).
+        // Writes a stream whose SHA-256 the caller already knows, so nothing has to compute it. Returns true when
+        // the store checked the bytes against the hash as it wrote them.
+        writeStreamHashed: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64, sha256: []const u8) anyerror!bool,
+
+        // The SHA-256 of a stored file, when the store can say what it is without sending the file's bytes back.
+        // Null when it cannot, and null for a file that is not there.
+        storedHash: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!?[]const u8,
+
+        // Not ported: refreshWriteLock (not reached by psi add, psi replicate, psi verify or psi sync).
     };
 
     //
@@ -327,6 +334,48 @@ pub const IStorage = struct {
     //
     pub fn readableLength(self: IStorage, fileInfo: IFileInfo) ?u64 {
         return self.vtable.readableLength(self.ptr, fileInfo);
+    }
+
+    //
+    // Writes a stream whose SHA-256 the caller already knows, so nothing has to compute it.
+    //
+    // A store that can check the bytes against it does (S3 is handed the hash and refuses a write
+    // whose body does not match it, which is a stronger guarantee than checking afterwards), and one
+    // that cannot ignores it and writes the stream as usual.
+    //
+    // It exists because computing the hash is the expensive part on a phone. The AWS SDK hashes
+    // whatever it is asked to checksum in the embedded engine's pure JavaScript SHA-256, which runs
+    // at well under a megabyte a second: measured on a Pixel 6, one 100MB video held the upload for
+    // over a quarter of an hour without a byte reaching the server. The sync already knows every
+    // file's hash, because it is what the merkle tree is made of.
+    //
+    // Returns true when the store checked the bytes against the hash as it wrote them, so the caller
+    // needs nothing further to know the copy is right. False when it could not, and the caller checks
+    // the copy itself.
+    //
+    // The length is how many bytes the stream will produce, and it is undefined when the caller could
+    // not find that out, which is what `readableLength` says of an encrypted source. A store given no
+    // length reads the stream to find out rather than declaring one it does not know.
+    //
+    pub fn writeStreamHashed(self: IStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64, sha256: []const u8) anyerror!bool {
+        return self.vtable.writeStreamHashed(self.ptr, allocator, io, filePath, contentType, inputStream, contentLength, sha256);
+    }
+
+    //
+    // The SHA-256 of a stored file, when the store can say what it is without sending the file's
+    // bytes back. Undefined when it cannot, and undefined for a file that is not there.
+    //
+    // This exists so a copy can be checked without being read back. S3 computes and keeps a SHA-256
+    // of every object written through here, and answers with it in a HEAD request, so comparing a
+    // copy against what was sent costs one small request instead of the whole file again. A store
+    // with no such answer says so, and the caller reads the file back and hashes it as before.
+    //
+    // On a phone that difference is the difference between working and not: the sync's verification
+    // read-back downloads every file a second time and hashes it with the embedded engine's pure
+    // JavaScript SHA-256, which runs at well under a megabyte a second.
+    //
+    pub fn storedHash(self: IStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!?[]const u8 {
+        return self.vtable.storedHash(self.ptr, allocator, io, filePath);
     }
 
     //
@@ -547,6 +596,20 @@ pub fn implement(comptime Implementation: type) *const IStorage.VTable {
         }
 
         //
+        // Forwards writeStreamHashed.
+        //
+        fn writeStreamHashed(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64, sha256: []const u8) anyerror!bool {
+            return cast(ptr).writeStreamHashed(allocator, io, filePath, contentType, inputStream, contentLength, sha256);
+        }
+
+        //
+        // Forwards storedHash.
+        //
+        fn storedHash(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!?[]const u8 {
+            return cast(ptr).storedHash(allocator, io, filePath);
+        }
+
+        //
         // The vtable that forwards to the implementation.
         //
         const vtable: IStorage.VTable = .{
@@ -567,6 +630,8 @@ pub fn implement(comptime Implementation: type) *const IStorage.VTable {
             .acquireWriteLock = acquireWriteLock,
             .releaseWriteLock = releaseWriteLock,
             .readableLength = readableLength,
+            .writeStreamHashed = writeStreamHashed,
+            .storedHash = storedHash,
         };
     };
     return &Adapter.vtable;

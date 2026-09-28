@@ -30,7 +30,7 @@ pub const ICommandExamples = struct {
 //
 // Centralized examples for all CLI commands
 // (only the commands implemented in Zig are ported: init, add, info, summary, verify, repair, replicate, compare,
-// version, export, list, upgrade, remove, find-orphans and remove-orphans).
+// version, export, list, upgrade, sync, remove, find-orphans and remove-orphans).
 //
 pub const COMMAND_EXAMPLES = [_]ICommandExamples{
     .{
@@ -252,6 +252,19 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             .{
                 .command = "psi upgrade --db ./photos",
                 .description = "Upgrades the database in ./photos directory.",
+            },
+        },
+    },
+    .{
+        .commandName = "sync",
+        .examples = &.{
+            .{
+                .command = "psi sync --db ./photos --dest ./backup",
+                .description = "Synchronizes changes between two databases.",
+            },
+            .{
+                .command = "psi sync --db . --dest s3:bucket/photos",
+                .description = "Synchronizes local database with an S3 replica.",
             },
         },
     },

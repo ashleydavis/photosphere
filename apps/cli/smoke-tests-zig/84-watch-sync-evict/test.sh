@@ -39,7 +39,7 @@ expect_output_value "$WATCH_OUTPUT" "Files added:" 1 "The file was imported"
 
 # The two halves of what `psi watch` used to be, run one after the other. Each is separately useful
 # and separately testable, which is the point of splitting them.
-invoke_command "Sync to the origin" "$CLI_COMMAND sync --db $TEST_DB_DIR --yes"
+invoke_command "Sync to the origin" "$(get_zig_cli_command) sync --db $TEST_DB_DIR --yes"
 
 # --- The asset reached the origin. ---
 

@@ -121,7 +121,7 @@ test_config_timestamps() {
     # databases differ and the following sync actually has work to do (and stamps lastSyncedAt).
     invoke_command "Add another file to sync source" "$(get_zig_cli_command) add --db $source_dir $TEST_FILES_DIR/test.png --yes"
 
-    invoke_command "Sync source and replica" "$(get_cli_command) sync --db $source_dir --dest $replica_dir --yes"
+    invoke_command "Sync source and replica" "$(get_zig_cli_command) sync --db $source_dir --dest $replica_dir --yes"
 
     local source_synced=$(read_state_field "$source_dir" "lastSyncedAt")
     local replica_synced=$(read_state_field "$replica_dir" "lastSyncedAt")
@@ -132,7 +132,7 @@ test_config_timestamps() {
 
     # ── 2b. a second sync early-outs because the databases are now identical ──
     # The early-out does no work, so lastSyncedAt must be unchanged from the first sync.
-    invoke_command "Sync again (should early-out)" "$(get_cli_command) sync --db $source_dir --dest $replica_dir --yes"
+    invoke_command "Sync again (should early-out)" "$(get_zig_cli_command) sync --db $source_dir --dest $replica_dir --yes"
 
     local source_synced_again=$(read_state_field "$source_dir" "lastSyncedAt")
     expect_value "$source_synced_again" "$source_synced" "Second identical sync early-outs (lastSyncedAt unchanged)"

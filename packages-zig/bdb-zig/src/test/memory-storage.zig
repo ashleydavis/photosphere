@@ -25,6 +25,10 @@ pub const MemoryStorage = struct {
     // Held write locks by lock file path.
     locks: std.StringArrayHashMapUnmanaged(IWriteLockInfo) = .empty,
 
+    // What storedHash answers for a path, empty unless a test puts something here. A store that keeps no hash of its
+    // own (a filesystem) answers undefined, which is what an empty map does.
+    storedHashes: std.StringArrayHashMapUnmanaged([]const u8) = .empty,
+
     //
     // Creates an empty storage.
     //
@@ -211,6 +215,25 @@ pub const MemoryStorage = struct {
     pub fn readableLength(self: *MemoryStorage, fileInfo: IFileInfo) ?u64 {
         _ = self;
         return fileInfo.length;
+    }
+
+    //
+    // Writes the stream and remembers the hash it was given, so storedHash can answer with it the way a store that
+    // keeps one does.
+    //
+    pub fn writeStreamHashed(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64, sha256: []const u8) !bool {
+        try self.writeStream(allocator, io, filePath, contentType, inputStream, contentLength);
+        try self.storedHashes.put(self.allocator, try self.allocator.dupe(u8, filePath), try self.allocator.dupe(u8, sha256));
+        return true;
+    }
+
+    //
+    // The hash the store kept, when it kept one.
+    //
+    pub fn storedHash(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]const u8 {
+        _ = allocator;
+        _ = io;
+        return self.storedHashes.get(filePath);
     }
 
     //

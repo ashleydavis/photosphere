@@ -207,7 +207,7 @@ assert_no_record_inside "$LOCAL_DB" "Consolidation"
 assert_no_record_inside "$REMOTE_DB" "Consolidation"
 log_success "Consolidation put no record inside either database"
 
-invoke_command "Sync to the remote" "$CLI_COMMAND sync --db $LOCAL_DB --yes"
+invoke_command "Sync to the remote" "$(get_zig_cli_command) sync --db $LOCAL_DB --yes"
 assert_no_record_inside "$LOCAL_DB" "Sync"
 assert_no_record_inside "$REMOTE_DB" "Sync"
 log_success "Sync put no record inside either database"

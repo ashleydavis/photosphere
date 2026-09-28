@@ -53,7 +53,7 @@ expect_output_string "$DEVICE_B_LIST" "from-a.png" "Device B has device A's phot
 
 # --- Device A picks up device B's photo on its next sync. ---
 
-invoke_command "Device A syncs" "$CLI_COMMAND sync --db $DEVICE_A_DB --yes"
+invoke_command "Device A syncs" "$(get_zig_cli_command) sync --db $DEVICE_A_DB --yes"
 
 DEVICE_A_LIST=""
 invoke_command "List device A" "$CLI_COMMAND list --db $DEVICE_A_DB --yes" 0 DEVICE_A_LIST
@@ -67,12 +67,12 @@ cp "$TEST_FILES_DIR/test.webp" "$DEVICE_A_PHOTOS/later-from-a.webp"
 # Two commands rather than one: importing and syncing are separate now. `psi add` knows nothing
 # about the origin, and `psi sync` is what pushes to it.
 invoke_command "Device A imports the new photo" "$(get_zig_cli_command) add --db $DEVICE_A_DB $DEVICE_A_PHOTOS --yes"
-invoke_command "Device A syncs the new photo" "$CLI_COMMAND sync --db $DEVICE_A_DB --yes"
+invoke_command "Device A syncs the new photo" "$(get_zig_cli_command) sync --db $DEVICE_A_DB --yes"
 
 REMOTE_ASSETS=$(ls -1 "$REMOTE_DB/asset" 2>/dev/null | wc -l | tr -d ' ')
 expect_value "$REMOTE_ASSETS" 3 "The remote holds the photo taken after connecting"
 
-invoke_command "Device B syncs" "$CLI_COMMAND sync --db $DEVICE_B_DB --yes"
+invoke_command "Device B syncs" "$(get_zig_cli_command) sync --db $DEVICE_B_DB --yes"
 
 DEVICE_B_LIST=""
 invoke_command "List device B again" "$CLI_COMMAND list --db $DEVICE_B_DB --yes" 0 DEVICE_B_LIST

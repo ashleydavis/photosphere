@@ -270,3 +270,29 @@ test "readableLength is the length in the info, because a file hands out what it
         .lastModified = 0,
     }));
 }
+
+//
+// writeStreamHashed and storedHash have no test of their own in TypeScript; what they do for a file on disk is pinned
+// here.
+//
+test "writeStreamHashed writes the stream and says the filesystem did not check the hash" {
+    var fixture: Fixture = undefined;
+    try fixture.init("file-storage-write-stream-hashed");
+    defer fixture.deinit();
+    const allocator = fixture.arena.allocator();
+    const io = std.testing.io;
+    var input = std.Io.Reader.fixed("hashed");
+    const hash = [_]u8{7} ** 32;
+    try std.testing.expectEqual(false, try fixture.fileStorage.writeStreamHashed(allocator, io, try fixture.path("dir/hashed.bin"), null, &input, 6, &hash));
+    try std.testing.expectEqualStrings("hashed", (try fixture.fileStorage.read(allocator, io, try fixture.path("dir/hashed.bin"))).?);
+}
+
+test "storedHash is undefined, because a filesystem keeps no hash" {
+    var fixture: Fixture = undefined;
+    try fixture.init("file-storage-stored-hash");
+    defer fixture.deinit();
+    const allocator = fixture.arena.allocator();
+    const io = std.testing.io;
+    try helpers.writeFile(io, try fixture.path("a.bin"), "x");
+    try std.testing.expect((try fixture.fileStorage.storedHash(allocator, io, try fixture.path("a.bin"))) == null);
+}

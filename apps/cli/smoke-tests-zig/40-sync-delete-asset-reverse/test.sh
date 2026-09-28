@@ -120,7 +120,7 @@ test_sync_delete_asset_reverse() {
     # Sync from copy to original (should delete the asset in original)
     log_info "Syncing from copy to original (should delete asset in original)"
     local sync_output
-    invoke_command "Sync copy to original" "$(get_cli_command) sync --db $copy_dir --dest $original_dir --yes" 0 "sync_output"
+    invoke_command "Sync copy to original" "$(get_zig_cli_command) sync --db $copy_dir --dest $original_dir --yes" 0 "sync_output"
     
     # Verify sync completed
     expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"

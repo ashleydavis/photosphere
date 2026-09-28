@@ -557,6 +557,32 @@ test "upgrade command lines parse like commander" {
     try expectCommanderError(allocator, &.{ "upgrade", "extra" }, "commander.excessArguments", "error: too many arguments for 'upgrade'. Expected 0 arguments but got 1.\n");
 }
 
+test "sync command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "sync", "--db", "a", "--dest", "b", "--key", "k", "--dk", "dk", "--watch", "--interval", "60", "--yes", "--cwd", "c" });
+    try std.testing.expect(parsed.outcome == .sync);
+    const options = parsed.outcome.sync;
+    try std.testing.expectEqualStrings("a", options.base.db.?);
+    try std.testing.expectEqualStrings("b", options.dest.?);
+    try std.testing.expectEqualStrings("k", options.base.key.?);
+    try std.testing.expectEqualStrings("dk", options.destKey.?);
+    try std.testing.expectEqual(@as(?bool, true), options.watch);
+    try std.testing.expectEqualStrings("60", options.interval.?);
+    try std.testing.expectEqualStrings("c", options.base.cwd.?);
+    try std.testing.expectEqual(@as(?bool, true), options.base.yes);
+
+    const defaults = try parse(allocator, &.{ "sync", "--dest-key", "x" });
+    try std.testing.expectEqualStrings("x", defaults.outcome.sync.destKey.?);
+    try std.testing.expectEqual(@as(?bool, false), defaults.outcome.sync.watch);
+    try std.testing.expect(defaults.outcome.sync.interval == null);
+    try std.testing.expect(defaults.outcome.sync.dest == null);
+    try expectCommanderError(allocator, &.{ "sync", "extra" }, "commander.excessArguments", "error: too many arguments for 'sync'. Expected 0 arguments but got 1.\n");
+    try expectCommanderError(allocator, &.{ "sync", "--interval" }, "commander.optionMissingArgument", "error: option '--interval <seconds>' argument missing\n");
+}
+
 test "remove command lines parse like commander" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

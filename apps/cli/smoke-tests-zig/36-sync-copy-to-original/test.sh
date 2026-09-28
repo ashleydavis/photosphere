@@ -88,7 +88,7 @@ test_sync_copy_to_original() {
     # The sync command is bidirectional, so it should sync the file from copy to original
     log_info "Using sync command to synchronize databases (bidirectional)"
     local sync_output
-    invoke_command "Sync databases (copy changes to original)" "$(get_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
+    invoke_command "Sync databases (copy changes to original)" "$(get_zig_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
     
     # Verify sync completed
     expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"

@@ -903,6 +903,190 @@ test "upgrade upgrades the v5 database like the TypeScript CLI" {
 }
 
 //
+// Replaces the milliseconds of every "Sync timings" line (`"...Ms":<number>`) with N, because they are times.
+//
+fn maskSyncTimings(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
+    var result: std.ArrayList(u8) = .empty;
+    var index: usize = 0;
+    while (index < text.len) {
+        if (std.mem.startsWith(u8, text[index..], "Ms\":")) {
+            try result.appendSlice(allocator, "Ms\":N");
+            index += "Ms\":".len;
+            while (index < text.len and (std.ascii.isDigit(text[index]) or text[index] == '-')) {
+                index += 1;
+            }
+            continue;
+        }
+        try result.append(allocator, text[index]);
+        index += 1;
+    }
+    return result.items;
+}
+
+//
+// The report of `psi sync` (apps/cli/src/cmd/sync.ts and packages/node-api/src/lib/sync.ts) from <root>/db to
+// <root>/dest, a copy of the same database with its one asset removed: the pull deletes the asset from <root>/db.
+//
+const sync_report =
+    \\Starting database sync operation...
+    \\  Source:    <root>/db
+    \\  Target:    <root>/dest
+    \\
+    \\Sync timings: {"filesCopied":0,"leavesVisited":0,"nodesVisited":0,"bytesCopied":0,"elapsedMs":N,"copyFileMs":N,"diffMs":N,"decideMs":N,"openSourceMs":N,"sourceInfoMs":N,"writeMs":N,"treeUpdateMs":N,"treeSaveMs":N,"loggingMs":N,"unaccountedMs":N}
+    \\Push completed: 0 files copied, 0 left behind for the next pass, 1 deleted from target
+    \\Finding differing records using hierarchical merkle trees...
+    \\No differing records found.
+    \\Finding differing records using hierarchical merkle trees...
+    \\No differing records found.
+    \\Sync completed successfully!
+    \\
+;
+
+test "sync synchronizes two databases like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-sync");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
+    const assetId = "89171cd9-a652-4047-b869-1154bf2c95a1";
+    try expectResult(try runZig(allocator, environment, &.{ "remove", "--db", dest, assetId, "--yes" }), "\u{2713} Successfully removed asset 89171cd9-a652-4047-b869-1154bf2c95a1 from database\n", "", 0);
+
+    var result = try normalize(allocator, try runZig(allocator, environment, &.{ "sync", "--db", db, "--dest", dest, "--yes" }), root, "<root>");
+    result.stdout = try maskSyncTimings(allocator, result.stdout);
+    try expectResult(result, sync_report, "", 0);
+
+    // The asset the destination removed is gone from the source too, and the two hold the same files.
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ db, assetId }), .{}));
+    const sourceHash = try runZig(allocator, environment, &.{ "root-hash", "--db", db, "--yes" });
+    const destHash = try runZig(allocator, environment, &.{ "root-hash", "--db", dest, "--yes" });
+    try std.testing.expectEqualStrings("94f27ca43db9c872cfa4a377f3731cb42811e82ec48f2426a541643145a777b7\n", sourceHash.stdout);
+    try std.testing.expectEqualStrings(sourceHash.stdout, destHash.stdout);
+}
+
+test "sync does nothing for databases already in sync like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-sync-in-sync");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
+
+    // Two copies of one database hold the same files and records, but have no state files yet, so the first
+    // sync runs and records their content hashes.
+    const first = try normalize(allocator, try runZig(allocator, environment, &.{ "sync", "--db", db, "--dest", dest, "--yes" }), root, "<root>");
+    try expectResult(first, "Starting database sync operation...\n  Source:    <root>/db\n  Target:    <root>/dest\n\nSync completed successfully!\n", "", 0);
+
+    const second = try normalize(allocator, try runZig(allocator, environment, &.{ "sync", "--db", db, "--dest", dest, "--yes" }), root, "<root>");
+    try expectResult(second, "Starting database sync operation...\n  Source:    <root>/db\n  Target:    <root>/dest\n\nDatabases already in sync, nothing to do.\n", "", 0);
+}
+
+test "sync refuses an encrypted destination without a key like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-sync-encrypted");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
+
+    // The encryption marker is what says a database is encrypted.
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/.db/encryption.pub", .{dest}), .data = "a public key\n" });
+
+    var result = try normalize(allocator, try runZig(allocator, environment, &.{ "sync", "--db", db, "--dest", dest, "--yes" }), root, "<root>");
+    result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
+    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
+    try std.testing.expectEqualStrings(
+        \\✗ The destination database is encrypted and requires a private key to access.
+        \\  Please provide the private key using the --dest-key option.
+        \\
+        \\Example:
+        \\    psi sync --dest-key my-photos.key --dest <root>/dest
+        \\    psi sync --dest-key <full or relative path to key> --dest <root>/dest
+        \\
+    , result.stderr);
+    try std.testing.expect(std.mem.startsWith(u8, result.stdout, "Starting database sync operation...\n  Source:    <root>/db\n  Target:    <root>/dest\n\n\nErrors, warnings, and exceptions were logged to: "));
+    try std.testing.expect(std.mem.endsWith(u8, result.stdout, "-errors.log\nTemporary files retained for inspection: <session dir>\n"));
+}
+
+test "sync rejects a key for an unencrypted destination like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-sync-key");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
+
+    const result = try runZig(allocator, environment, &.{ "sync", "--db", db, "--dest", dest, "--dest-key", "k", "--yes" });
+    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
+    try std.testing.expectEqualStrings(
+        \\✗ You specified an encryption key, but the destination database is not encrypted.
+        \\  Either remove the --dest-key option, or sync to a different location.
+        \\
+    , result.stderr);
+}
+
+test "sync refuses databases that are not related like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-sync-unrelated");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const other = try std.fmt.allocPrint(allocator, "{s}/other", .{root});
+    try helpers.copyDirectory(allocator, "../../test/dbs/1-asset", other);
+
+    // The TypeScript CLI also prints the stack of each error of the chain, which Zig errors do not have.
+    var result = try normalize(allocator, try runZig(allocator, environment, &.{ "sync", "--db", db, "--dest", other, "--yes" }), root, "<root>");
+    result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
+    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
+    try std.testing.expectEqualStrings(
+        \\An unknown error occurred
+        \\Error: Sync gave up while pulling files from the origin: You are trying to sync databases that have different IDs.
+        \\Source database ID: 93886ac9-16e4-48e6-983b-ec65566018d0
+        \\Target database ID: 85fe592c-9b92-4fa1-9ec5-f87f01cf8e72
+        \\The databases are not related to each other.
+        \\Caused by:
+        \\FatalError: You are trying to sync databases that have different IDs.
+        \\Source database ID: 93886ac9-16e4-48e6-983b-ec65566018d0
+        \\Target database ID: 85fe592c-9b92-4fa1-9ec5-f87f01cf8e72
+        \\The databases are not related to each other.
+        \\
+    , result.stderr);
+    try std.testing.expect(std.mem.startsWith(u8, result.stdout, "Starting database sync operation...\n  Source:    <root>/db\n  Target:    <root>/other\n\n\nIf you believe this behaviour is a bug, please report it with the following command:\n   psi bug\n\nErrors, warnings, and exceptions were logged to: "));
+    try std.testing.expect(std.mem.endsWith(u8, result.stdout, "-errors.log\nTemporary files retained for inspection: <session dir>\n"));
+}
+
+test "sync --watch rejects an interval that is not a number like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-sync-interval");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
+
+    // The TypeScript CLI also prints the stack of the error, which Zig errors do not have.
+    const result = try runZig(allocator, environment, &.{ "sync", "--db", db, "--dest", dest, "--watch", "--interval", "hourly", "--yes" });
+    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
+    try std.testing.expectEqualStrings("An unknown error occurred\nError: --interval must be a positive number of seconds, got \"hourly\".\n", result.stderr);
+}
+
+//
 // The report of `psi replicate` (apps/cli/src/cmd/replicate.ts) from <db> to <dest>, with the two lines the
 // replication task logs (packages/node-api/src/lib/replicate-database.worker.ts) through the worker log, for the
 // counts of copied files and records.

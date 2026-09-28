@@ -72,6 +72,7 @@ One command at a time, never in parallel. The time goes on builds, so build less
   until the latest run is green again. Never let it stay red.
 - Never give times in UTC. Say how long from now instead (for example "in 15 minutes").
 - DO NOT NARRATE YOUR WORK. ONE PROGRESS UPDATE PER COMMAND IS ENOUGH. Messages to the user are short. No essays.
+- RULE: IMPLEMENT EVERYTHING IN A SUBAGENT. All porting, testing, fixing, committing and pushing is done by subagents, one command at a time. The main channel is kept for exactly two kinds of message: "<command> committed and pushed", and "Release workflow passing" once the run for that push is green. Nothing else is said to the user.
 - Every CLI command is ticked off in this plan as it is committed.
 
 ## Commands
@@ -102,7 +103,7 @@ To do, in order (each one uses what the earlier ones ported):
 - [x] find-orphans
 - [x] remove-orphans
 - [x] upgrade
-- [ ] sync
+- [x] sync
 - [ ] consolidate
 - [ ] encrypt
 - [ ] decrypt

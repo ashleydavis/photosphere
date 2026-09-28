@@ -430,7 +430,7 @@ worker_process() {
                 
                 # Sync from this database to the other
                 local sync_output
-                sync_output=$($(get_cli_command) sync --db "$db_path" --dest "$other_db" --yes 2>&1)
+                sync_output=$($(get_zig_cli_command) sync --db "$db_path" --dest "$other_db" --yes 2>&1)
                 local sync_exit_code=$?
                 
                 if [ $sync_exit_code -eq 0 ]; then
@@ -524,7 +524,7 @@ final_sync_round() {
                 local dest_db="${DB_PATHS[$j]}"
                 log_info "Syncing database $i -> $j"
                 
-                $(get_cli_command) sync --db "$source_db" --dest "$dest_db" --yes > /dev/null 2>&1
+                $(get_zig_cli_command) sync --db "$source_db" --dest "$dest_db" --yes > /dev/null 2>&1
                 
                 if [ $? -ne 0 ]; then
                     log_error "Failed to sync database $i -> $j"

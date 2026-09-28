@@ -118,3 +118,19 @@ test "readableLength asks the storage underneath" {
     var encryptedWrapper = try StoragePrefixWrapper.init(allocator, encryptedStorage.storage(), "/db");
     try std.testing.expectEqual(@as(?u64, null), encryptedWrapper.storage().readableLength(fileInfo));
 }
+
+test "writeStreamHashed and storedHash join the prefix and the path" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var recording = RecordingStorage.init(allocator);
+    var wrapper = try StoragePrefixWrapper.init(allocator, recording.storage(), "/db");
+    const storage = wrapper.storage();
+    var input = std.Io.Reader.fixed("x");
+    _ = try storage.writeStreamHashed(allocator, io, "asset/1", null, &input, 1, &([_]u8{7} ** 32));
+    _ = try storage.storedHash(allocator, io, "asset/1");
+    try std.testing.expectEqual(@as(usize, 2), recording.calls.items.len);
+    try std.testing.expectEqualStrings("writeStreamHashed /db/asset/1", recording.calls.items[0]);
+    try std.testing.expectEqualStrings("storedHash /db/asset/1", recording.calls.items[1]);
+}

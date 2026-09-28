@@ -100,7 +100,31 @@ pub const EncryptedStorage = struct {
         return null;
     }
 
-    // Not ported: writeStreamHashed, storedHash (not reached by psi add, psi replicate or psi verify).
+    //
+    // Writes the stream, ignoring the hash. It is the hash of the plaintext, and what reaches the
+    // store underneath is ciphertext, so handing it down would have the store reject every correctly
+    // written file.
+    //
+    pub fn writeStreamHashed(self: *EncryptedStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64, sha256: []const u8) !bool {
+        _ = sha256;
+        try self.writeStream(allocator, io, filePath, contentType, inputStream, contentLength);
+        return false;
+    }
+
+    //
+    // Always undefined here, so a caller checking a copy reads it back and hashes the plaintext.
+    //
+    // What the underlying store holds is ciphertext, and its hash is not the hash of the file this
+    // storage reads and writes. Handing that back would compare two different things and call every
+    // correctly written file corrupt.
+    //
+    pub fn storedHash(self: *EncryptedStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]const u8 {
+        _ = self;
+        _ = allocator;
+        _ = io;
+        _ = filePath;
+        return null;
+    }
 
     //
     // Gets info about a file, as the store underneath describes it.

@@ -2,7 +2,7 @@
 // Port of apps/cli/index.ts: the `psi` entry point.
 // Only the `add` (alias `a`), `compare` (alias `cmp`), `database-id`, `export` (alias `exp`), `find-orphans`, `info` (alias
 // `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `remove-orphans`, `repair`,
-// `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `upgrade`, `verify` (alias `ver`) and
+// `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`, `upgrade`, `verify` (alias `ver`) and
 // `version` commands and the `--version` option are ported; the other commands are not registered yet, so commander
 // reports them as unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
@@ -44,6 +44,8 @@ pub const remove = @import("src/cmd/remove.zig");
 pub const repair = @import("src/cmd/repair.zig");
 pub const find_orphans_command = @import("src/cmd/find-orphans.zig");
 pub const find_orphans = @import("src/lib/find-orphans.zig");
+pub const sync_watch = @import("src/lib/sync-watch.zig");
+pub const sync = @import("src/cmd/sync.zig");
 pub const remove_orphans = @import("src/cmd/remove-orphans.zig");
 pub const upgrade = @import("src/cmd/upgrade.zig");
 pub const export_command = @import("src/cmd/export.zig");
@@ -84,6 +86,8 @@ const IRemoveOrphansCommandOptions = remove_orphans.IRemoveOrphansCommandOptions
 const removeOrphansCommand = remove_orphans.removeOrphansCommand;
 const IUpgradeCommandOptions = upgrade.IUpgradeCommandOptions;
 const upgradeCommand = upgrade.upgradeCommand;
+const ISyncCommandOptions = sync.ISyncCommandOptions;
+const syncCommand = sync.syncCommand;
 const IRemoveCommandOptions = remove.IRemoveCommandOptions;
 const removeCommand = remove.removeCommand;
 const ICompareCommandOptions = compare.ICompareCommandOptions;
@@ -294,6 +298,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the upgrade command with these options.
     upgrade: IUpgradeCommandOptions,
+
+    // Run the sync command with these options.
+    sync: ISyncCommandOptions,
 
     // Run the compare command with these options.
     compare: ICompareCommandOptions,
@@ -535,6 +542,23 @@ fn removeOrphansAction(state: *IProgramState, args: []const ArgumentValue, optio
     state.outcome = .{
         .removeOrphans = .{
             .base = baseOptions(options),
+        },
+    };
+}
+
+//
+// The action of the sync command (`initContext(syncCommand)`): `run` calls initContext and the command.
+//
+fn syncAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .sync = .{
+            .base = baseOptions(options),
+            .dest = textValue(options, "dest"),
+            .destKey = textValue(options, "destKey"),
+            .watch = flagValue(options, "watch"),
+            .interval = textValue(options, "interval"),
         },
     };
 }
@@ -965,7 +989,22 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "summary"))
         .action(state, summaryAction);
 
-    // Not ported: sync.
+    const syncDefinition = program
+        .command("sync", .{})
+        .description("Synchronize changes between two databases, once or by watching for more.");
+    _ = optionFrom(syncDefinition, dbOption);
+    _ = optionFrom(syncDefinition, destDbOption);
+    _ = optionFrom(syncDefinition, keyOption);
+    _ = optionFrom(syncDefinition, destKeyOption);
+    _ = syncDefinition
+        .option("--watch", "Keep syncing as the database changes, rather than syncing once and exiting.", .{ .boolean = false })
+        .option("--interval <seconds>", "How long to wait between syncs when watching.", null);
+    _ = optionFrom(syncDefinition, verboseOption);
+    _ = optionFrom(syncDefinition, yesOption);
+    _ = optionFrom(syncDefinition, cwdOption);
+    _ = syncDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "sync"))
+        .action(state, syncAction);
 
     const upgradeDefinition = program
         .command("upgrade", .{})
@@ -1092,6 +1131,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try findOrphansCommand(allocator, io, context, &options);
+        },
+        .sync => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try syncCommand(allocator, io, context, &options);
         },
         .upgrade => |parsed| {
             var options = parsed;

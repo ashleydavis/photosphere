@@ -105,7 +105,19 @@ pub const LazyOriginStorage = struct {
         return self.local.readableLength(fileInfo);
     }
 
-    // Not ported: writeStreamHashed, storedHash (IStorage in storage-zig does not have them).
+    //
+    // Writes a stream whose SHA-256 the caller already knows, into the local store.
+    //
+    pub fn writeStreamHashed(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64, sha256: []const u8) !bool {
+        return self.local.writeStreamHashed(allocator, io, filePath, contentType, inputStream, contentLength, sha256);
+    }
+
+    //
+    // The SHA-256 the local store kept of a file, when it can say without sending the bytes back.
+    //
+    pub fn storedHash(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]const u8 {
+        return self.local.storedHash(allocator, io, filePath);
+    }
 
     //
     // Reads a file from local storage. If the file is absent locally, fetches it from

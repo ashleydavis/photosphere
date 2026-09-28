@@ -2,7 +2,7 @@ pub const database = @import("lib/database.zig");
 pub const shard = @import("lib/shard.zig");
 pub const collection = @import("lib/collection.zig");
 pub const sort_index = @import("lib/sort-index.zig");
-// Not ported: merge-records (not used by psi replicate or psi verify).
+pub const merge_records = @import("lib/merge-records.zig");
 pub const merkle_tree = @import("lib/merkle-tree.zig");
 pub const merkle_tree_ref = @import("lib/merkle-tree-ref.zig");
 // Not ported: tests/mock-database, tests/mock-collection (TypeScript test helpers).

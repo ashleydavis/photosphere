@@ -144,6 +144,32 @@ const MockStorage = struct {
         return fileInfo.length;
     }
 
+    //
+    // Not used by the tests.
+    //
+    pub fn writeStreamHashed(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64, sha256: []const u8) !bool {
+        _ = self;
+        _ = allocator;
+        _ = storageIo;
+        _ = filePath;
+        _ = contentType;
+        _ = inputStream;
+        _ = contentLength;
+        _ = sha256;
+        return error.NotImplemented;
+    }
+
+    //
+    // Not used by the tests.
+    //
+    pub fn storedHash(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, filePath: []const u8) !?[]const u8 {
+        _ = self;
+        _ = allocator;
+        _ = storageIo;
+        _ = filePath;
+        return error.NotImplemented;
+    }
+
     pub fn read(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, filePath: []const u8) !?[]u8 {
         _ = storageIo;
         self.readCalled = true;

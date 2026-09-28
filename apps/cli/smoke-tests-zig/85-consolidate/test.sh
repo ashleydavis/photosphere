@@ -25,7 +25,7 @@ NEW_REMOTE_ASSETS=$(ls -1 "$NEW_REMOTE/asset" 2>/dev/null | wc -l | tr -d ' ')
 expect_value "$NEW_REMOTE_ASSETS" 1 "The created remote holds the photo"
 
 # Sync works straight away, because replication carried the database id across.
-invoke_command "Sync to the created remote" "$CLI_COMMAND sync --db $NEW_LOCAL --yes"
+invoke_command "Sync to the created remote" "$(get_zig_cli_command) sync --db $NEW_LOCAL --yes"
 
 # --- 2. Connecting again just records the origin, because the two are already related. ---
 
@@ -50,7 +50,7 @@ invoke_command "Add a local-only photo" "$(get_zig_cli_command) add --db $LOCAL_
 invoke_command "Add a remote-only photo" "$(get_zig_cli_command) add --db $REMOTE_DB $TEST_FILES_DIR/test.webp --yes"
 
 # Sync refuses these two, and must keep refusing them until they have been consolidated.
-invoke_command "Sync refuses two unrelated databases" "$CLI_COMMAND sync --db $LOCAL_DB --dest $REMOTE_DB --yes" 1
+invoke_command "Sync refuses two unrelated databases" "$(get_zig_cli_command) sync --db $LOCAL_DB --dest $REMOTE_DB --yes" 1
 
 CONNECT_OUTPUT=""
 invoke_command "Consolidate into the unrelated remote" "$CLI_COMMAND consolidate --db $LOCAL_DB $REMOTE_DB --yes" 0 CONNECT_OUTPUT
@@ -67,7 +67,7 @@ invoke_command "Verify the remote" "$(get_zig_cli_command) verify --db $REMOTE_D
 
 # --- 4. Ordinary sync works now, where it refused before. ---
 
-invoke_command "Sync after consolidation" "$CLI_COMMAND sync --db $LOCAL_DB --yes"
+invoke_command "Sync after consolidation" "$(get_zig_cli_command) sync --db $LOCAL_DB --yes"
 
 LOCAL_LIST=""
 invoke_command "List the local database" "$CLI_COMMAND list --db $LOCAL_DB --yes" 0 LOCAL_LIST
