@@ -1705,3 +1705,115 @@ test "init creates an encrypted database with a generated key like the TypeScrip
     try std.testing.expectEqual(@as(u8, 0), verifyResult.exitCode);
     try std.testing.expect(std.mem.indexOf(u8, verifyResult.stdout, "✅ Database verification passed - all files are intact") != null);
 }
+
+//
+// The report of `psi verify` for test/dbs/v6 once `psi encrypt` has encrypted it: the asset, display and thumb
+// files each grow by the encryption header and wrapped key, so the files tree totals 2.75 MiB where the plain
+// database's totals 2.74 MiB (README.md is not encrypted).
+//
+const verify_v6_encrypted_report =
+    \\Asset files verified.
+    \\
+    \\Files imported:    1
+    \\Total files:       4
+    \\Total size:        2.75 MiB
+    \\Files processed:   4
+    \\Nodes processed:   7
+    \\Unmodified:        4
+    \\Modified:          0
+    \\New:               0
+    \\Removed:           0
+    \\Failures:          0
+    \\Record mismatches: 0
+    \\
+    \\Database files:
+    \\  Total files:    8
+    \\  Total size:     355 KiB
+    \\  Valid files:    8
+    \\  Invalid files:  0
+    \\
+    \\✅ Database verification passed - all files are intact
+    \\
+++ "\n" ++ verify_next_steps_healthy;
+
+//
+// Expects a command that failed before doing anything to have written the error to stderr and exited with 1, the
+// termination callbacks of initContext (apps/cli/src/lib/init-cmd.ts) having written where the log and the
+// temporary files were left to stdout.
+//
+fn expectEncryptFailure(allocator: std.mem.Allocator, result: helpers.CliResult, expectedStderr: []const u8) !void {
+    const stdout = try maskRetainedSessionDir(allocator, result.stdout);
+    try std.testing.expectEqualStrings(expectedStderr, result.stderr);
+    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
+    try std.testing.expect(std.mem.startsWith(u8, stdout, "Temporary files retained for inspection: <session dir>\n\nErrors, warnings, and exceptions were logged to: "));
+    try std.testing.expect(std.mem.endsWith(u8, stdout, "-errors.log\n"));
+}
+
+test "encrypt encrypts the database in place, then skips what it already encrypted, like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-encrypt");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+
+    // test/dbs/v6 holds 11 files that encryptableFiles (packages/node-api/src/lib/encrypt.ts) yields: the asset,
+    // display and thumb files, and 8 files under .db/bson.
+    const first = try runZig(allocator, environment, &.{ "encrypt", "--db", db, "--key", "zig-key", "--generate-key", "--yes" });
+    try expectResult(first, "\n✅ Encrypted 11 files, 0 were already encrypted.\n", "", 0);
+
+    const second = try runZig(allocator, environment, &.{ "encrypt", "--db", db, "--key", "zig-key", "--yes" });
+    try expectResult(second, "\n✅ Encrypted 0 files, 11 were already encrypted.\n", "", 0);
+
+    // The public key marks the database as encrypted, the asset is no longer stored in plain form, and the
+    // database verifies with the key.
+    _ = try std.Io.Dir.cwd().statFile(std.testing.io, try std.fs.path.join(allocator, &.{ db, ".db/encryption.pub" }), .{});
+    const assetPath = try std.fs.path.join(allocator, &.{ db, "asset/89171cd9-a652-4047-b869-1154bf2c95a1" });
+    const storedAsset = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, assetPath, allocator, .unlimited);
+    try std.testing.expectEqualStrings("PSEN", storedAsset[0..4]);
+    const verifyResult = try normalize(allocator, try runZig(allocator, environment, &.{ "verify", "--db", db, "--key", "zig-key", "--yes" }), db, "<db>");
+    try expectResult(verifyResult, verify_v6_encrypted_report, "", 0);
+}
+
+test "encrypt without a key fails like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-encrypt-no-key");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+
+    const withoutKey = try normalize(allocator, try runZig(allocator, environment, &.{ "encrypt", "--db", db, "--yes" }), root, "<root>");
+    try expectEncryptFailure(allocator, withoutKey, "✗ Encryption requires --key.\n");
+
+    // A key that is not in the vault cannot be added without prompting, so it is the same as no key.
+    const missingKey = try normalize(allocator, try runZig(allocator, environment, &.{ "encrypt", "--db", db, "--key", "missing", "--yes" }), root, "<root>");
+    try expectEncryptFailure(allocator, missingKey, "✗ Encryption requires --key.\n");
+}
+
+test "encrypt reports a missing database like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-encrypt-no-db");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const missingDb = try std.fmt.allocPrint(allocator, "{s}/nodb", .{root});
+
+    const result = try normalize(allocator, try runZig(allocator, environment, &.{ "encrypt", "--db", missingDb, "--key", "zig-key", "--generate-key", "--yes" }), root, "<root>");
+    try expectEncryptFailure(allocator, result, "✗ No database found at: <root>/nodb\n");
+}
+
+test "encrypt requires a database directory like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-encrypt-empty-db");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    const result = try normalize(allocator, try runZig(allocator, environment, &.{ "encrypt", "--db", "", "--key", "zig-key", "--yes" }), root, "<root>");
+    try expectEncryptFailure(allocator, result, "✗ Database directory is required (--db).\n");
+}

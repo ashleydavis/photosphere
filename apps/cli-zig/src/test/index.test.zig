@@ -608,6 +608,37 @@ test "consolidate command lines parse like commander" {
     try expectCommanderError(allocator, &.{ "consolidate", "a", "b" }, "commander.excessArguments", "error: too many arguments for 'consolidate'. Expected 1 argument but got 2.\n");
 }
 
+test "encrypt command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "encrypt", "--db", "a", "--key", "k", "--generate-key", "--yes", "--cwd", "c", "--verbose" });
+    try std.testing.expect(parsed.outcome == .encrypt);
+    const options = parsed.outcome.encrypt;
+    try std.testing.expectEqualStrings("a", options.base.db.?);
+    try std.testing.expectEqualStrings("k", options.base.key.?);
+    try std.testing.expectEqual(@as(?bool, true), options.generateKey);
+    try std.testing.expectEqual(@as(?bool, true), options.base.yes);
+    try std.testing.expectEqualStrings("c", options.base.cwd.?);
+    try std.testing.expectEqual(@as(?bool, true), options.base.verbose);
+
+    const short = try parse(allocator, &.{ "encrypt", "-k", "new,old", "-g", "-y", "-v" });
+    try std.testing.expectEqualStrings("new,old", short.outcome.encrypt.base.key.?);
+    try std.testing.expectEqual(@as(?bool, true), short.outcome.encrypt.generateKey);
+    try std.testing.expectEqual(@as(?bool, true), short.outcome.encrypt.base.yes);
+    try std.testing.expectEqual(@as(?bool, true), short.outcome.encrypt.base.verbose);
+
+    const defaults = try parse(allocator, &.{"encrypt"});
+    try std.testing.expect(defaults.outcome.encrypt.base.db == null);
+    try std.testing.expect(defaults.outcome.encrypt.base.key == null);
+    try std.testing.expectEqual(@as(?bool, false), defaults.outcome.encrypt.generateKey);
+    try std.testing.expectEqual(@as(?bool, false), defaults.outcome.encrypt.base.yes);
+    try expectCommanderError(allocator, &.{ "encrypt", "extra" }, "commander.excessArguments", "error: too many arguments for 'encrypt'. Expected 0 arguments but got 1.\n");
+    try expectCommanderError(allocator, &.{ "encrypt", "--key" }, "commander.optionMissingArgument", "error: option '-k, --key <keyfile>' argument missing\n");
+    try expectCommanderError(allocator, &.{ "encrypt", "--session-id", "s1" }, "commander.unknownOption", "error: unknown option '--session-id'\n");
+}
+
 test "remove command lines parse like commander" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

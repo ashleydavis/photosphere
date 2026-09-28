@@ -106,7 +106,7 @@ To do, in order (each one uses what the earlier ones ported):
 - [x] upgrade
 - [x] sync
 - [x] consolidate
-- [ ] encrypt
+- [x] encrypt
 - [ ] decrypt
 - [ ] hash
 - [ ] hash-cache (show, clear, hash-file, add, set, set-source, get, get-asset-id, remove, list, count, dir)
