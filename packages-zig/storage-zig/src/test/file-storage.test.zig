@@ -224,6 +224,26 @@ test "writeStream writes the stream to the file and leaves no .tmp file" {
     try std.testing.expect(!try fixture.fileStorage.fileExists(allocator, io, try fixture.path("out/file.bin.tmp")));
 }
 
+test "writeStream replaces the file its input stream is reading, because the stream closes the file at its end" {
+    var fixture: Fixture = undefined;
+    try fixture.init("file-storage-write-stream-over-source");
+    defer fixture.deinit();
+    const allocator = fixture.arena.allocator();
+    const io = std.testing.io;
+    const data = try helpers.makeData(allocator, 200 * 1024 + 3);
+    const filePath = try fixture.path("file.bin");
+    try helpers.writeFile(io, filePath, data);
+
+    // Node's fs.createReadStream closes the file once it has read the end, so a copy onto the file's own path
+    // (as encrypt and decrypt do) replaces it with nothing still holding it open. Windows refuses to replace an
+    // open file.
+    const stream = try fixture.fileStorage.readStream(allocator, io, filePath);
+    defer stream.destroy(io);
+    try fixture.fileStorage.writeStream(allocator, io, filePath, null, stream.reader(), null);
+    try std.testing.expectEqualSlices(u8, data, (try fixture.fileStorage.read(allocator, io, filePath)).?);
+    try std.testing.expect(!try fixture.fileStorage.fileExists(allocator, io, try fixture.path("file.bin.tmp")));
+}
+
 test "deleteFile deletes a file and ignores a missing file" {
     var fixture: Fixture = undefined;
     try fixture.init("file-storage-delete-file");

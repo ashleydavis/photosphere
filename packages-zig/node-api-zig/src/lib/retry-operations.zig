@@ -165,6 +165,44 @@ pub fn CopyStreamOperation(comptime sourceText: []const u8) type {
 }
 
 //
+// `async () => { const stream = await sourceStorage.readStream(fileName);
+//                 await destStorage.writeStream(fileName, contentType, stream, contentLength); }`.
+//
+pub fn CopyStreamWithLengthOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        pub const source = sourceText;
+
+        // Allocates the storage implementations' temporary data.
+        allocator: std.mem.Allocator,
+
+        // The storage to copy the file from.
+        sourceStorage: IStorage,
+
+        // The storage to copy the file to.
+        destStorage: IStorage,
+
+        // The file to copy (the same path in both storages).
+        fileName: []const u8,
+
+        // The content type passed to writeStream.
+        contentType: ?[]const u8,
+
+        // The content length passed to writeStream.
+        contentLength: u64,
+
+        //
+        // Streams the file from the source storage to the destination storage.
+        //
+        pub fn run(self: *@This(), io: std.Io) !void {
+            const readStream = try self.sourceStorage.readStream(self.allocator, io, self.fileName);
+            defer readStream.destroy(io);
+            try self.destStorage.writeStream(self.allocator, io, self.fileName, self.contentType, readStream.reader(), self.contentLength);
+        }
+    };
+}
+
+//
 // `() => merkleTreeExists(storage)`.
 //
 pub fn MerkleTreeExistsOperation(comptime sourceText: []const u8) type {

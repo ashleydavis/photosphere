@@ -1,10 +1,10 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `add` (alias `a`), `compare` (alias `cmp`), `consolidate`, `database-id`, `encrypt`, `export` (alias `exp`),
-// `find-orphans`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`),
-// `remove-orphans`, `repair`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`, `upgrade`,
-// `verify` (alias `ver`) and `version` commands and the `--version` option are ported; the other commands are not registered
-// yet, so commander reports them as unknown commands.
+// Only the `add` (alias `a`), `compare` (alias `cmp`), `consolidate`, `database-id`, `decrypt`, `encrypt`, `export`
+// (alias `exp`), `find-orphans`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove`
+// (alias `rm`), `remove-orphans`, `repair`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`,
+// `upgrade`, `verify` (alias `ver`) and `version` commands and the `--version` option are ported; the other commands are not
+// registered yet, so commander reports them as unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -48,6 +48,7 @@ pub const sync_watch = @import("src/lib/sync-watch.zig");
 pub const sync = @import("src/cmd/sync.zig");
 pub const consolidate = @import("src/cmd/consolidate.zig");
 pub const encrypt = @import("src/cmd/encrypt.zig");
+pub const decrypt = @import("src/cmd/decrypt.zig");
 pub const remove_orphans = @import("src/cmd/remove-orphans.zig");
 pub const upgrade = @import("src/cmd/upgrade.zig");
 pub const export_command = @import("src/cmd/export.zig");
@@ -94,6 +95,8 @@ const IConsolidateCommandOptions = consolidate.IConsolidateCommandOptions;
 const consolidateCommand = consolidate.consolidateCommand;
 const IEncryptCommandOptions = encrypt.IEncryptCommandOptions;
 const encryptCommand = encrypt.encryptCommand;
+const IDecryptCommandOptions = decrypt.IDecryptCommandOptions;
+const decryptCommand = decrypt.decryptCommand;
 const IRemoveCommandOptions = remove.IRemoveCommandOptions;
 const removeCommand = remove.removeCommand;
 const ICompareCommandOptions = compare.ICompareCommandOptions;
@@ -325,6 +328,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the encrypt command with these options.
     encrypt: IEncryptCommandOptions,
+
+    // Run the decrypt command with these options.
+    decrypt: IDecryptCommandOptions,
 
     // Run the compare command with these options.
     compare: ICompareCommandOptions,
@@ -615,6 +621,19 @@ fn encryptAction(state: *IProgramState, args: []const ArgumentValue, options: *c
         .encrypt = .{
             .base = baseOptions(options),
             .generateKey = flagValue(options, "generateKey"),
+        },
+    };
+}
+
+//
+// The action of the decrypt command (`initContext(decryptCommand)`): `run` calls initContext and the command.
+//
+fn decryptAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .decrypt = .{
+            .base = baseOptions(options),
         },
     };
 }
@@ -1125,7 +1144,19 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "encrypt"))
         .action(state, encryptAction);
 
-    // Not ported: the commands after encrypt (decrypt), the secrets and dbs command groups.
+    const decryptDefinition = program
+        .command("decrypt", .{})
+        .description("Decrypts the encrypted database in place (removes encryption; deletes .db/encryption.pub).");
+    _ = optionFrom(decryptDefinition, dbOption);
+    _ = optionFrom(decryptDefinition, keyOption);
+    _ = optionFrom(decryptDefinition, yesOption);
+    _ = optionFrom(decryptDefinition, cwdOption);
+    _ = optionFrom(decryptDefinition, verboseOption);
+    _ = decryptDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "decrypt"))
+        .action(state, decryptAction);
+
+    // Not ported: the secrets and dbs command groups.
     return program;
 }
 
@@ -1237,6 +1268,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try encryptCommand(allocator, io, context, &options);
+        },
+        .decrypt => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try decryptCommand(allocator, io, context, &options);
         },
         .upgrade => |parsed| {
             var options = parsed;
