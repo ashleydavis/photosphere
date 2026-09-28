@@ -205,6 +205,19 @@ test "a file that is not a record reads as empty rather than throwing" {
     try std.testing.expectEqual(@as(usize, 0), (try parseImportRecord(allocator, "{}")).entries.len);
 }
 
+test "a repeated key keeps its last value, as JSON.parse does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const contents =
+        \\{"entries":[],"entries":[{"assetId":"asset-good","logicalPath":"good","outcome":"imported","importedAt":"2026-01-01T00:00:00.000Z","source":"manual"}],"truncated":false}
+    ;
+
+    const record = try parseImportRecord(allocator, contents);
+
+    try expectLogicalPaths(&.{"good"}, record.entries);
+}
+
 test "entries that are not imports are dropped rather than shown" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

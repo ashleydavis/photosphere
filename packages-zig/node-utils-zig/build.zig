@@ -8,7 +8,7 @@ const module_name = "node-utils-zig";
 //
 // Names of the packages this package depends on.
 //
-const dependency_names = [_][]const u8{"utils-zig"};
+const dependency_names = [_][]const u8{ "utils-zig", "serialization-zig" };
 
 //
 // Builds the module and registers a test step that runs every file in src/test.
@@ -21,6 +21,9 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path("src/index.zig"),
         .target = target,
         .optimize = optimize,
+
+        // os.homedir falls back to the passwd entry (getpwuid) when HOME is unset or empty.
+        .link_libc = true,
     });
     for (dependency_names) |dependency_name| {
         const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = optimize });

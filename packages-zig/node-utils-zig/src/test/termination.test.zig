@@ -175,3 +175,26 @@ test "callbacks that throw again during a signal shutdown end it like an unhandl
     try std.testing.expectEqualStrings("callback 0\ncallback 1\ncallback 65\n", outcome.output);
     try std.testing.expectEqual(node_utils.exit_codes.EXIT_UNHANDLED_REJECTION_CLEANUP_FAILED, outcome.exitCode);
 }
+
+test "the unhandled rejection of a failed signal shutdown logs the thrown error as new Error(reason) does" {
+    if (builtin.os.tag == .windows) {
+        // Windows has no signals: Ctrl+C reaches a console process through its console control handler.
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const outcome = try terminateChild(arena.allocator(), "fail-always-logged", .TERM);
+
+    // The rejection's reason is the Error the handler threw, and `new Error(reason)` takes String(reason) as its message.
+    try std.testing.expectEqualStrings(
+        "callback 0\n" ++
+            "exception Error during SIGTERM shutdown. Callback failed\n" ++
+            "callback 1\n" ++
+            "exception Unhandled promise rejection. Error: Callback failed\n" ++
+            "callback 65\n" ++
+            "exception Error during unhandled rejection shutdown. Callback failed\n",
+        outcome.output,
+    );
+    try std.testing.expectEqual(node_utils.exit_codes.EXIT_UNHANDLED_REJECTION_CLEANUP_FAILED, outcome.exitCode);
+}

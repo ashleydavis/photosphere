@@ -64,7 +64,7 @@ pub const TestUuidGenerator = struct {
     //
     pub fn generate(self: *TestUuidGenerator, allocator: std.mem.Allocator) ![]const u8 {
         self.counter += 1;
-        return generateDeterministicUuid(allocator, self.counter);
+        return generateDeterministicUuid(allocator, @floatFromInt(self.counter));
     }
 
     //
@@ -79,11 +79,11 @@ pub const TestUuidGenerator = struct {
     // multiplications are double precision, bitwise operators convert with ToInt32/ToUint32.
     // Public (private in TypeScript) so the file-backed TestUuidGenerator in node-utils-zig can share it.
     //
-    pub fn generateDeterministicUuid(allocator: std.mem.Allocator, counter: i64) ![]const u8 {
+    pub fn generateDeterministicUuid(allocator: std.mem.Allocator, counter: f64) ![]const u8 {
         // Use multiple hash functions to create good distribution
         // Golden ratio multiplier for good distribution
         const phi: f64 = 0x9e3779b9;
-        const counter_number: f64 = @floatFromInt(counter);
+        const counter_number = counter;
 
         // Create multiple hash values from the counter
         const hash1_initial = counter_number * phi;

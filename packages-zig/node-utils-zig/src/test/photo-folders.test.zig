@@ -238,3 +238,17 @@ test "readXdgPicturesDir reports running out of memory instead of reading it as 
     }
     try std.testing.expect(failIndex > 1);
 }
+
+//
+// `.` in the TypeScript regular expression matches no line terminator, so a value holding one does not match and
+// the search carries on to the next line.
+//
+test "a value holding a line terminator does not match, as in the TypeScript regular expression" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expect(try parseXdgPicturesDir(allocator, "XDG_PICTURES_DIR=\"/a\rb\"", "/home/user") == null);
+    try std.testing.expect(try parseXdgPicturesDir(allocator, "XDG_PICTURES_DIR=\"/a\u{2028}b\"", "/home/user") == null);
+    const result = try parseXdgPicturesDir(allocator, "XDG_PICTURES_DIR=\"/a\u{2029}b\"\nXDG_PICTURES_DIR=\"/c\"", "/home/user");
+    try std.testing.expectEqualStrings("/c", result.?);
+}

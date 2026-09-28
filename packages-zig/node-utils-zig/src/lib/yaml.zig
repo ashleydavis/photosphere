@@ -3,9 +3,9 @@
 // news-fetcher.ts (this file has no TypeScript counterpart). The loader covers the YAML that the news feed and
 // the state file use:
 // block mappings and sequences, flow sequences and mappings of scalars, plain, single-quoted and double-quoted
-// scalars with the core schema (null, booleans, numbers), and comments. Block scalars (| and >), anchors,
-// aliases, tags and multi-document streams are not supported and report a YAMLException like js-yaml's
-// errors for malformed input.
+// scalars with the core schema (null, booleans, numbers), literal and folded block scalars (| and >, which js-yaml's
+// dump writes for long and multi-line strings), and comments. Anchors, aliases, tags and multi-document streams are
+// not supported and report a YAMLException like js-yaml's errors for malformed input.
 //
 
 const std = @import("std");
@@ -91,9 +91,6 @@ fn splitLines(allocator: std.mem.Allocator, source: []const u8) ![]const Line {
         if (std.mem.eql(u8, text, "---") and indent == 0 and lines.items.len == 0) {
             continue;
         }
-        if (text[0] == '\t') {
-            return yamlError("tab characters must not be used in indentation", number);
-        }
         try lines.append(allocator, .{ .indent = indent, .text = text, .number = number });
     }
     return lines.items;
@@ -112,6 +109,153 @@ const Parser = struct {
     // The index of the next line.
     position: usize,
 
+    // Every line of the document, without its line break, as if it ended with one (js-yaml adds a final line break
+    // when there is none), so the last entry is the empty text after that break. Block scalars read these, because
+    // their empty lines and `#` characters are content.
+    rawLines: []const []const u8,
+
+    //
+    // The line at `index` when it is read as structure (a key, a sequence entry or a value), refusing a tab where
+    // the indentation ends.
+    //
+    fn structuralLine(self: *Parser, index: usize) !Line {
+        const line = self.lines[index];
+        if (line.text[0] == '\t') {
+            return yamlError("tab characters must not be used in indentation", line.number);
+        }
+        return line;
+    }
+
+    //
+    // Reads a literal (`|`) or folded (`>`) block scalar whose header is `header` on line `lineNumber`, in a node
+    // whose parent is indented `parentIndent` (-1 at the top of the document): a port of js-yaml's readBlockScalar,
+    // with its chomping indicators (`-`, `+`) and indentation indicator. The lines it reads are skipped.
+    //
+    fn parseBlockScalar(self: *Parser, header: []const u8, parentIndent: i64, lineNumber: usize) !std.json.Value {
+        const folding = header[0] == '>';
+        const Chomping = enum {
+            clip,
+            strip,
+            keep,
+        };
+        var chomping: Chomping = .clip;
+        var detectedIndent = false;
+        const nodeIndent = parentIndent + 1;
+        var textIndent = nodeIndent;
+        var index: usize = 1;
+        while (index < header.len) : (index += 1) {
+            const character = header[index];
+            if (character == '+' or character == '-') {
+                if (chomping != .clip) {
+                    return yamlError("repeat of a chomping mode identifier", lineNumber);
+                }
+                chomping = if (character == '+') .keep else .strip;
+            }
+            else if (std.ascii.isDigit(character)) {
+                const width: i64 = character - '0';
+                if (width == 0) {
+                    return yamlError("bad explicit indentation width of a block scalar; it cannot be less than one", lineNumber);
+                }
+                if (detectedIndent) {
+                    return yamlError("repeat of an indentation width identifier", lineNumber);
+                }
+                textIndent = nodeIndent + width - 1;
+                detectedIndent = true;
+            }
+            else {
+                break;
+            }
+        }
+        // Only white space may follow the indicators (a comment was already removed).
+        if (std.mem.trim(u8, header[index..], " \t").len != 0) {
+            return yamlError("a line break is expected", lineNumber);
+        }
+
+        var result: std.ArrayList(u8) = .empty;
+        var didReadContent = false;
+        var emptyLines: usize = 0;
+        var atMoreIndented = false;
+        var rawIndex = lineNumber;
+        while (rawIndex < self.rawLines.len) {
+            const raw = self.rawLines[rawIndex];
+            const atEnd = rawIndex == self.rawLines.len - 1;
+            var lineIndent: i64 = 0;
+            var position: usize = 0;
+            while ((!detectedIndent or lineIndent < textIndent) and position < raw.len and raw[position] == ' ') {
+                lineIndent += 1;
+                position += 1;
+            }
+            if (!detectedIndent and lineIndent > textIndent) {
+                textIndent = lineIndent;
+            }
+            if (!atEnd and position == raw.len) {
+                emptyLines += 1;
+                rawIndex += 1;
+                continue;
+            }
+
+            // End of the scalar.
+            if (lineIndent < textIndent) {
+                if (chomping == .keep) {
+                    try result.appendNTimes(self.allocator, '\n', if (didReadContent) 1 + emptyLines else emptyLines);
+                }
+                else if (chomping == .clip and didReadContent) {
+                    try result.append(self.allocator, '\n');
+                }
+                break;
+            }
+
+            const first: u8 = if (position < raw.len) raw[position] else 0;
+            if (folding) {
+                if (first == ' ' or first == '\t') {
+                    // Lines starting with white space (more-indented lines) are not folded.
+                    atMoreIndented = true;
+                    try result.appendNTimes(self.allocator, '\n', if (didReadContent) 1 + emptyLines else emptyLines);
+                }
+                else if (atMoreIndented) {
+                    atMoreIndented = false;
+                    try result.appendNTimes(self.allocator, '\n', emptyLines + 1);
+                }
+                else if (emptyLines == 0) {
+                    if (didReadContent) {
+                        try result.append(self.allocator, ' ');
+                    }
+                }
+                else {
+                    try result.appendNTimes(self.allocator, '\n', emptyLines);
+                }
+            }
+            else {
+                try result.appendNTimes(self.allocator, '\n', if (didReadContent) 1 + emptyLines else emptyLines);
+            }
+            didReadContent = true;
+            detectedIndent = true;
+            emptyLines = 0;
+            try result.appendSlice(self.allocator, raw[position..]);
+            rawIndex += 1;
+            if (atEnd) {
+                break;
+            }
+        }
+
+        // Skip the structural lines the scalar covered (rawIndex is the 0-based index of the line that ended it, so
+        // the 1-based numbers of the lines it covered are at most rawIndex).
+        while (self.position < self.lines.len and self.lines[self.position].number <= rawIndex) {
+            self.position += 1;
+        }
+        return .{ .string = result.items };
+    }
+
+    //
+    // Parses a value written after a key or a sequence dash: a block scalar, or a value on one line.
+    //
+    fn parseValue(self: *Parser, text: []const u8, parentIndent: i64, lineNumber: usize) anyerror!std.json.Value {
+        if (text[0] == '|' or text[0] == '>') {
+            return self.parseBlockScalar(text, parentIndent, lineNumber);
+        }
+        return parseInlineValue(self.allocator, text, lineNumber);
+    }
+
     //
     // Parses the block node whose lines are indented at least `minIndent`, starting at the next line.
     //
@@ -119,7 +263,7 @@ const Parser = struct {
         if (self.position >= self.lines.len) {
             return .null;
         }
-        const line = self.lines[self.position];
+        const line = try self.structuralLine(self.position);
         if (line.indent < minIndent) {
             return .null;
         }
@@ -130,7 +274,7 @@ const Parser = struct {
             return self.parseMapping(line.indent, null);
         }
         self.position += 1;
-        return parseInlineValue(self.allocator, line.text, line.number);
+        return self.parseValue(line.text, @as(i64, @intCast(minIndent)) - 1, line.number);
     }
 
     //
@@ -139,7 +283,7 @@ const Parser = struct {
     fn parseSequence(self: *Parser, indent: usize) anyerror!std.json.Value {
         var array = std.json.Array.init(self.allocator);
         while (self.position < self.lines.len) {
-            const line = self.lines[self.position];
+            const line = try self.structuralLine(self.position);
             if (line.indent != indent or !isSequenceEntry(line.text)) {
                 if (line.indent > indent) {
                     return yamlError("bad indentation of a sequence entry", line.number);
@@ -165,7 +309,7 @@ const Parser = struct {
                 continue;
             }
             self.position += 1;
-            try array.append(try parseInlineValue(self.allocator, rest, line.number));
+            try array.append(try self.parseValue(rest, @intCast(indent), line.number));
         }
         return .{ .array = array };
     }
@@ -185,7 +329,7 @@ const Parser = struct {
     fn parseMapping(self: *Parser, indent: usize, initial: ?std.json.ObjectMap) anyerror!std.json.Value {
         var object: std.json.ObjectMap = initial orelse .empty;
         while (self.position < self.lines.len) {
-            const line = self.lines[self.position];
+            const line = try self.structuralLine(self.position);
             if (line.indent != indent) {
                 if (line.indent > indent) {
                     return yamlError("bad indentation of a mapping entry", line.number);
@@ -212,7 +356,7 @@ const Parser = struct {
                 }
             }
             else {
-                value = try parseInlineValue(self.allocator, rest, line.number);
+                value = try self.parseValue(rest, @intCast(indent), line.number);
             }
             if (object.contains(key)) {
                 return yamlError("duplicated mapping key", line.number);
@@ -535,7 +679,16 @@ fn parseInlineValue(allocator: std.mem.Allocator, text: []const u8, lineNumber: 
 //
 pub fn load(allocator: std.mem.Allocator, source: []const u8) !std.json.Value {
     const lines = try splitLines(allocator, source);
-    var parser: Parser = .{ .allocator = allocator, .lines = lines, .position = 0 };
+    var rawLines: std.ArrayList([]const u8) = .empty;
+    var rawIterator = std.mem.splitScalar(u8, source, '\n');
+    while (rawIterator.next()) |rawLine| {
+        try rawLines.append(allocator, std.mem.trimEnd(u8, rawLine, "\r"));
+    }
+    if (source.len > 0 and source[source.len - 1] != '\n') {
+        // js-yaml adds a line break to a document that does not end with one.
+        try rawLines.append(allocator, "");
+    }
+    var parser: Parser = .{ .allocator = allocator, .lines = lines, .position = 0, .rawLines = rawLines.items };
     if (lines.len == 0) {
         return .null;
     }

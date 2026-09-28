@@ -1,26 +1,9 @@
 const std = @import("std");
 const utils = @import("utils-zig");
+const serialization = @import("serialization-zig");
 const uuid_generator = utils.uuid_generator;
 const process_env = @import("process-env.zig");
-
-//
-// Equivalent of `parseInt(text, 10) || 0`: parses the leading decimal digits (with an optional sign),
-// returning 0 when there are none.
-//
-fn parseIntOrZero(text: []const u8) i64 {
-    var index: usize = 0;
-    var negative = false;
-    if (index < text.len and (text[index] == '+' or text[index] == '-')) {
-        negative = text[index] == '-';
-        index += 1;
-    }
-    var value: i64 = 0;
-    while (index < text.len and std.ascii.isDigit(text[index])) {
-        value = value *| 10 +| @as(i64, text[index] - '0');
-        index += 1;
-    }
-    return if (negative) -value else value;
-}
+const path = @import("path.zig");
 
 //
 // Test UUID generator that creates deterministic UUIDs with good shard distribution.
@@ -46,7 +29,7 @@ pub const TestUuidGenerator = struct {
             }
             break :blk "./test/tmp";
         };
-        const counterFilePath = try std.fs.path.join(allocator, &.{ testTmpDir, "photosphere-test-uuid-counter" });
+        const counterFilePath = try path.join(allocator, &.{ testTmpDir, "photosphere-test-uuid-counter" });
         return .{
             .counterFilePath = counterFilePath,
             .lockFilePath = try std.fmt.allocPrint(allocator, "{s}.lock", .{counterFilePath}),
@@ -75,9 +58,15 @@ pub const TestUuidGenerator = struct {
         defer self.releaseLock(io);
 
         const cwd = std.Io.Dir.cwd();
-        var counter: i64 = 0;
+        // A JavaScript number, so a counter past the integers a double holds exactly counts on as TypeScript's does.
+        var counter: f64 = 0;
         if (cwd.readFileAlloc(io, self.counterFilePath, allocator, .unlimited)) |data| {
-            counter = parseIntOrZero(std.mem.trim(u8, data, " \t\r\n"));
+            counter = utils.js_number.parseInt(utils.js_string.trim(data), 10);
+
+            // `|| 0`: NaN and -0 are falsy.
+            if (std.math.isNan(counter) or counter == 0) {
+                counter = 0;
+            }
         }
         else |err| {
             if (err != error.FileNotFound) {
@@ -85,8 +74,9 @@ pub const TestUuidGenerator = struct {
             }
         }
         counter += 1;
-        const counterText = try std.fmt.allocPrint(allocator, "{d}", .{counter});
-        try cwd.writeFile(io, .{ .sub_path = self.counterFilePath, .data = counterText });
+        var counterText: std.Io.Writer.Allocating = .init(allocator);
+        try serialization.js_number.writeNumber(&counterText.writer, counter);
+        try cwd.writeFile(io, .{ .sub_path = self.counterFilePath, .data = counterText.written() });
         return generateDeterministicUuid(allocator, counter);
     }
 
@@ -96,7 +86,7 @@ pub const TestUuidGenerator = struct {
     //
     fn acquireLock(self: *TestUuidGenerator, io: std.Io) !void {
         const cwd = std.Io.Dir.cwd();
-        try cwd.createDirPath(io, std.fs.path.dirname(self.lockFilePath) orelse ".");
+        try cwd.createDirPath(io, path.dirname(self.lockFilePath));
         const maxWaitMs: i64 = 5000;
         const startTime = std.Io.Clock.real.now(io).toMilliseconds();
         while (true) {
@@ -139,7 +129,7 @@ pub const TestUuidGenerator = struct {
     // Generates the UUID for a counter value. Same algorithm as the in-memory TestUuidGenerator in utils,
     // so it is shared with utils-zig (which reproduces the JavaScript number semantics exactly).
     //
-    fn generateDeterministicUuid(allocator: std.mem.Allocator, counter: i64) ![]const u8 {
+    fn generateDeterministicUuid(allocator: std.mem.Allocator, counter: f64) ![]const u8 {
         return utils.test_uuid_generator.TestUuidGenerator.generateDeterministicUuid(allocator, counter);
     }
 

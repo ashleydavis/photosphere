@@ -4,8 +4,8 @@ Every TypeScript source file the `psi` CLI bundles, the Zig file that ports it, 
 the Zig function that ports it. Use it to read the two side by side: the Zig files have the same names and the same
 function order as the TypeScript ones.
 
-**Progress of the side by side comparison:** storage, bdb, api, lan-share-core and node-api done. Still to do:
-node-utils, encryption, lan-share-network, utils, serialization and the other smaller packages, apps/cli.
+**Progress of the side by side comparison:** storage, bdb, api, lan-share-core, node-api and node-utils done. Still to
+do: encryption, lan-share-network, utils, serialization and the other smaller packages, apps/cli.
 
 ## Which files are listed
 
@@ -2206,6 +2206,211 @@ Not reached by the CLI: only exported from index.ts, and only the desktop asset 
 
 <!-- end tables -->
 
+## node-utils
+
+`packages/node-utils` to `packages-zig/node-utils-zig`. Zig only: `path.zig` (replaces `node:path`),
+`process-env.zig` (`process.env`), `toml.zig` (the `smol-toml` npm package) and `yaml.zig` (the `js-yaml` npm package).
+
+<!-- tables: packages/node-utils node-utils.txt -->
+
+#### `packages/node-utils/src/index.ts` to `packages-zig/node-utils-zig/src/index.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `packages/node-utils/src/lib/dir.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `isDriveRoot` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `ensureParentDirectoryExists` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+
+#### `packages/node-utils/src/lib/exec.ts` to `packages-zig/node-utils-zig/src/lib/exec.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `exec` | `exec` |  |
+| `execLogged` | `execLogged` |  |
+| none | `ExecResult` | The anonymous `{ stdout, stderr }` type exec returns, named. |
+| none | `maxBufferExceeded` | Replaces Bun's `child_process.exec` maxBuffer check: the RangeError `stdout maxBuffer length exceeded` (or stderr). |
+| none | `runShell` | Replaces Bun's `child_process.exec` on POSIX: `/bin/sh -c`, stdout and stderr read together, at most maxBuffer (1 MiB) of each. |
+| none | `execWindows` | Replaces Bun's `child_process.exec` on Windows. |
+| none | `kernel32` | Replaces libuv's process spawning on Windows: the kernel32 functions std.os.windows does not declare. |
+| none | `ICmdExeResult` | The TypeScript interface of the same name, as a struct. |
+| none | `IChildPipe` | The TypeScript interface of the same name, as a struct. |
+| none | `createChildPipe` | Replaces libuv's process spawning on Windows: a stdio pipe of the child. |
+| none | `readPipe` | Replaces libuv's process spawning on Windows: reads a stdio pipe of the child, up to maxBuffer. |
+| none | `IPipeReader` | The TypeScript interface of the same name, as a struct. |
+| none | `IPipeReader.run` | Replaces libuv's process spawning on Windows: reads stderr on its own thread. |
+| none | `runCmdExe` | Replaces libuv's process spawning on Windows: `cmd.exe /d /s /c "<command>"` passed verbatim, as Node does. |
+| none | `IValidate` | The optional `validate` callback of execLogged, as a context and a function. |
+| none | `execLoggedInner` | The body of the `try` block of execLogged. |
+
+#### `packages/node-utils/src/lib/exit-codes.ts` to `packages-zig/node-utils-zig/src/lib/exit-codes.zig`
+
+
+#### `packages/node-utils/src/lib/find-available-port.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `findAvailablePort` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+
+#### `packages/node-utils/src/lib/fs.ts` to `packages-zig/node-utils-zig/src/lib/fs.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `sleep` | `sleep` |  |
+| `renameIntoPlace` | `renameIntoPlace` |  |
+| `ensureDir` | `ensureDir` |  |
+| `ensureFileDir` | `ensureFileDir` | Takes the directory with std.fs.path.dirname where TypeScript uses path.dirname; the two differ only in the root and repeated separators, which name the same directory to create. |
+| `pathExists` | `pathExists` |  |
+| `remove` | `remove` |  |
+| `outputFile` | `outputFile` |  |
+| `readJson` | `readJson` |  |
+| `readToml` | `readToml` |  |
+| `writeToml` | `writeToml` |  |
+| `readYaml` | `readYaml` |  |
+| `writeYaml` | none | Not reached by the CLI: only the desktop and mobile apps write config.yaml. |
+| `updateYaml` | `updateYaml` |  |
+| `writeJson` | none | Not reached by the CLI. |
+| `readRawFileBytes` | `readRawFileBytes` |  |
+| `fileFingerprint` | `fileFingerprint` |  |
+| `fingerprintsMatch` | `fingerprintsMatch` |  |
+| `tryTakeUpdateLock` | `tryTakeUpdateLock` |  |
+| `updateBackoffMs` | `updateBackoffMs` |  |
+| `takeUpdateLock` | `takeUpdateLock` |  |
+| `updateFileRawOptimistic` | `updateFileRawOptimistic` |  |
+| `updateFileOptimistic` | `updateFileOptimistic` |  |
+| `updateToml` | `updateToml` |  |
+| `updateJson` | none | Not reached by the CLI. |
+| `emptyDir` | none | Not reached by the CLI. |
+| `copy` | none | Not reached by the CLI. |
+| `ensureDirSync` | `ensureDirSync` |  |
+| `removeSync` | none | Not reached by the CLI. |
+| `copySync` | none | Not reached by the CLI. |
+| `getProcessTmpDir` | `getProcessTmpDir` |  |
+| `getConfigDir` | `getConfigDir` |  |
+| `getCacheDir` | `getCacheDir` |  |
+| `readFileHead` | `readFileHead` |  |
+| none | `randomUUID` | Replaces `crypto.randomUUID`. |
+| none | `YamlParse` | The parse arrow function updateYaml passes to updateFileOptimistic. |
+| none | `YamlParse.run` | The parse arrow function updateYaml passes to updateFileOptimistic. |
+| none | `YamlSerialize` | The serialize arrow function updateYaml passes to updateFileOptimistic. |
+| none | `YamlSerialize.run` | The serialize arrow function updateYaml passes to updateFileOptimistic. |
+| none | `IFileFingerprint` | The TypeScript interface of the same name, as a struct. |
+| none | `removeFileForce` | Replaces `fs.rm(path, { force: true })` for a file. |
+| none | `mathRandom` | Replaces `Math.random`. |
+| none | `updateFileRawAttempt` | The body of the `try` block of updateFileRawOptimistic; the `finally` releasing the lock follows the call. |
+| none | `OptimisticMutator` | The arrow function updateFileOptimistic passes to updateFileRawOptimistic. |
+| none | `TomlParse` | The parse arrow function updateToml passes to updateFileOptimistic. |
+| none | `TomlParse.run` | The parse arrow function updateToml passes to updateFileOptimistic. |
+| none | `TomlSerialize` | The serialize arrow function updateToml passes to updateFileOptimistic. |
+| none | `TomlSerialize.run` | The serialize arrow function updateToml passes to updateFileOptimistic. |
+| none | `osTmpDir` | Replaces `os.tmpdir`. |
+| none | `osHomedir` | Replaces Bun's `os.homedir`: HOME, else the passwd entry (USERPROFILE on Windows). |
+
+#### `packages/node-utils/src/lib/photo-folders.ts` to `packages-zig/node-utils-zig/src/lib/photo-folders.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `parseXdgPicturesDir` | `parseXdgPicturesDir` |  |
+| `readXdgPicturesDir` | `readXdgPicturesDir` |  |
+| `getPhotoFolderCandidates` | `getPhotoFolderCandidates` |  |
+| `filterExistingFolders` | `filterExistingFolders` |  |
+| `getDefaultPhotoFolders` | `getDefaultPhotoFolders` |  |
+| none | `matchXdgPicturesDir` | The regular expression `/^XDG_PICTURES_DIR\s*=\s*"(.*)"\s*$/` parseXdgPicturesDir runs inline. |
+| none | `processPlatform` | Replaces `process.platform`. |
+
+#### `packages/node-utils/src/lib/pipe.ts` to no Zig file
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `pipe` | none | No counterpart needed: a Zig IReadStream is destroyed by its reader, and EncryptedStorage's decrypted stream destroys the file stream beneath it (DecryptedReadStream.destroy), which is what the `close` handler of pipe does. |
+
+#### `packages/node-utils/src/lib/termination.ts` to `packages-zig/node-utils-zig/src/lib/termination.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `invokeTerminationCallbacks` | `invokeTerminationCallbacks` |  |
+| `exit` | `exit` |  |
+| `registerTerminationCallback` | `registerTerminationCallback` |  |
+| `initializeTerminationHandlers` | `initializeTerminationHandlers` |  |
+| none | `TerminationCallback` | The TypeScript type of the same name, as a context and a function. |
+| none | `exitProcess` | Replaces `process.exit` and the `'exit'` handler of initializeTerminationHandlers, which logs the exit code. |
+| none | `clearTerminationCallbacks` | For the tests: empties the list of callbacks. |
+| none | `handleSignal` | Replaces `process.on('SIGTERM' / 'SIGINT')`: the POSIX signal handler, which wakes the watcher thread. |
+| none | `handleConsoleCtrl` | Replaces `process.on('SIGINT')` on Windows, where Ctrl+C arrives through the console control handler. |
+| none | `shutdownOnSignal` | The `process.on('SIGTERM')` and `process.on('SIGINT')` handlers of initializeTerminationHandlers. |
+| none | `shutdownOnUnhandledRejection` | The `process.on('unhandledRejection')` handler of initializeTerminationHandlers, which a signal handler that throws twice reaches. The uncaughtException handler has no counterpart: Zig errors are returned to main. |
+| none | `waitForSignal` | Replaces the event loop delivering a signal: blocks the watcher thread until one arrives. |
+| none | `watchSignals` | Replaces the event loop delivering a signal: the thread that runs the signal handlers. |
+
+#### `packages/node-utils/src/lib/test-random-generator.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `TestRandomGenerator` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `TestRandomGenerator.random` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `TestRandomGenerator.randomInt` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `TestRandomGenerator.randomString` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `TestRandomGenerator.reset` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+
+#### `packages/node-utils/src/lib/test-temp-dir.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getTestTempRoot` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `createTestTempDir` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+
+#### `packages/node-utils/src/lib/test-timestamp-provider.ts` to `packages-zig/node-utils-zig/src/lib/test-timestamp-provider.zig`
+
+Used by init-cmd.ts and worker.ts when NODE_ENV is testing (the bundle metafile counts no bytes against the file itself).
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `TestTimestampProvider` | `TestTimestampProvider` |  |
+| `TestTimestampProvider.now` | `TestTimestampProvider.now` |  |
+| `TestTimestampProvider.dateNow` | `TestTimestampProvider.dateNow` |  |
+| `TestTimestampProvider.reset` | `TestTimestampProvider.reset` |  |
+| none | `TestTimestampProvider.timestampProvider` | The ITimestampProvider interface of the provider. |
+| none | `TestTimestampProvider.nowErased` | The vtable entry of now. |
+| none | `TestTimestampProvider.dateNowErased` | The vtable entry of dateNow. |
+
+#### `packages/node-utils/src/lib/test-uuid-generator.ts` to `packages-zig/node-utils-zig/src/lib/test-uuid-generator.zig`
+
+Used by init-cmd.ts and worker.ts when NODE_ENV is testing (the bundle metafile counts no bytes against the file itself).
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `TestUuidGenerator` | `TestUuidGenerator` |  |
+| `TestUuidGenerator.constructor` | `TestUuidGenerator.init` |  |
+| `TestUuidGenerator.generate` | `TestUuidGenerator.generate` |  |
+| `TestUuidGenerator.acquireLock` | `TestUuidGenerator.acquireLock` |  |
+| `TestUuidGenerator.releaseLock` | `TestUuidGenerator.releaseLock` |  |
+| `TestUuidGenerator.reset` | `TestUuidGenerator.reset` |  |
+| `TestUuidGenerator.generateDeterministicUuid` | `TestUuidGenerator.generateDeterministicUuid` | Shares the one in utils-zig, which takes the counter as a JavaScript number. |
+| none | `TestUuidGenerator.uuidGenerator` | The IUuidGenerator interface of the generator. |
+| none | `TestUuidGenerator.generateErased` | The vtable entry of generate. |
+
+#### Zig files with no TypeScript file
+
+| Zig file | What it is |
+|---|---|
+| `packages-zig/node-utils-zig/src/lib/path.zig` | Replaces `node:path` (posix and win32 join, normalize, dirname, basename, extname, isAbsolute). |
+| `packages-zig/node-utils-zig/src/lib/process-env.zig` | Replaces `process.env`. |
+| `packages-zig/node-utils-zig/src/lib/toml.zig` | Replaces the `smol-toml` npm package (parse and stringify). |
+| `packages-zig/node-utils-zig/src/lib/yaml.zig` | Replaces the `js-yaml` npm package for the subset psi reads and writes (see "JavaScript behaviour not emulated"). |
+
+<!-- end tables -->
+
 ## Divergences fixed
 
 Each was found by reading the two side by side, pinned by a unit test that failed before the fix, and fixed in the Zig.
@@ -2311,6 +2516,38 @@ Each was found by reading the two side by side, pinned by a unit test that faile
     record, after them, so the recorded date was early by the length of the upload. Test: `the upload date is read
     once the files are uploaded, as the TypeScript builds the record after them`.
 
+### node-utils, and JSON read by api and node-api
+
+27. The YAML loader did not read literal and folded block scalars (`|` and `>`), which js-yaml's `dump` writes for a
+    string longer than 80 characters or holding a line break, so state.yaml with such a value (a long path) could not
+    be read back. It is a port of js-yaml's `readBlockScalar` now, chomping and indentation indicators included. Tests:
+    `load reads literal and folded block scalars like js-yaml` and the dump and load round trip of long and multi-line
+    strings.
+28. A JSON object with a repeated key was refused (`DuplicateField`) where `JSON.parse` keeps the last value: in
+    readJson, a database's `.db/config.json`, the import record and the S3 credentials stored in the vault (both where
+    the CLI resolves them and where a LAN share sends them). Tests: `readJson keeps the last value of a repeated key,
+    as JSON.parse does`, the repeated key cases of the database config and import record tests, and `an S3 secret with
+    a repeated key is read with its last value, as JSON.parse reads it` (api and node-api).
+29. `exec` had no output limit, where Bun's `child_process.exec` kills a command that writes more than 1 MiB
+    (`maxBuffer`) to stdout or stderr and fails with the RangeError `stdout maxBuffer length exceeded`. Tests: `exec
+    takes up to maxBuffer (1 MiB) of output, as Bun's exec does` and `exec fails with Bun's RangeError when the command
+    writes more than maxBuffer to stdout or stderr`. The Windows branch is compiled for Windows but not run here.
+30. `os.homedir` returned an empty string when HOME was unset or empty, where Bun falls back to the passwd entry, so
+    `psi` run without HOME put databases.toml and the hash cache under `.` instead of the user's home. Tests: `osHomedir
+    falls back to the passwd entry when HOME is unset or empty, as Bun's os.homedir does`, and the no home directory
+    cases of getConfigDir and getCacheDir, which now expect the passwd entry's home everywhere but Windows.
+31. The test UUID generator (NODE_ENV=testing) read its counter file with an ASCII trim and a saturating integer, and
+    joined its path without `path.join`'s normalization. It now trims as `String.prototype.trim` does, parses with
+    `parseInt(text, 10) || 0` and counts in a JavaScript number, written back as `String()` writes it. Tests: `the
+    counter file is read with String.prototype.trim and parseInt, as TypeScript reads it`, `a counter past the
+    integers a double holds exactly counts on as a JavaScript number` and `the counter directory defaults to
+    ./test/tmp`.
+32. `parseXdgPicturesDir` matched a value holding `\r`, U+2028 or U+2029, which `.` in the regular expression does
+    not match. Test: `a value holding a line terminator does not match, as in the TypeScript regular expression`.
+33. The unhandled rejection a signal shutdown ends in (its callbacks threw twice) logged the thrown error itself,
+    where the handler logs `new Error(reason)`, whose message is `String(reason)`: `Error: <message>`. Test: `the
+    unhandled rejection of a failed signal shutdown logs the thrown error as new Error(reason) does`.
+
 ## Divergences kept
 
 1. `FileStorage.acquireWriteLock` (storage): an empty lock file younger than the lock timeout is refused
@@ -2331,7 +2568,6 @@ Each was found by reading the two side by side, pinned by a unit test that faile
    it, takes it for a corrupt lock, deletes it and creates its own, so both hold the lock.
 2. `CloudStorage.dirExists` has a branch for an empty key that can never run: `parsePath` throws for an empty key
    before it is reached.
-
 3. `LazyOriginStorage.readStream` hangs when the local cache write fails before reading everything: nothing drains
    `cacheStream` any more, so once its buffer is full the origin stays paused and `callerStream` never ends. Run in Bun
    with a cache write that rejects and a 192 KB file, the caller stops after 65536 bytes. The existing unit test uses
@@ -2382,3 +2618,10 @@ and case mapping of non-ASCII text) need the Unicode tables of ICU, which the Zi
     the cache is re-read when the file changes.
 13. `iterateLeaves` in sync.zig accepts a leaf with an empty name, where `!node.name` throws; merkle tree leaves are
     record, shard and collection names, which are never empty.
+14. js-yaml features psi never writes: anchors, aliases, tags and documents of more than one part. The Zig loader
+    throws a YAMLException for them where js-yaml reads them.
+15. `exec` gives the command an empty stdin where Node gives it an open pipe that nothing writes to, so a command
+    that reads stdin ends at once in the Zig and waits for ever in TypeScript. The commands psi runs (magick, ffprobe,
+    ffmpeg) read no stdin.
+16. `os.homedir` on Windows reads USERPROFILE only, where Bun falls back to the profile directory Windows reports;
+    Windows always sets USERPROFILE.
