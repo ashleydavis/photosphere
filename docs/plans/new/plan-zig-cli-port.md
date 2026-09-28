@@ -133,6 +133,19 @@ Each TypeScript suite gets a Zig counterpart covering every test, ticked off as 
 - [x] `apps/cli/write-lock-smoke-test.sh`
 - [ ] `apps/cli/hash-cache-smoke-test.sh`
 
+## Final audit (starts automatically when the main work is complete)
+
+The audit begins without being asked, once every command and every smoke suite above is ticked and the
+Release workflow is green. Each point is ticked off as it is confirmed:
+
+- [ ] All Zig code is completely covered by unit tests.
+- [ ] Every TypeScript smoke test is implemented for the Zig commands, with a similar structure, plus a
+  TypeScript `psi verify` that checks the integrity of each database the Zig CLI creates.
+- [ ] All Zig code is a faithful port of the TypeScript code and can be compared side by side with it, so that
+  the Zig logic can be verified to be the same as the TypeScript logic.
+- [ ] The Zig smoke tests complete more quickly than the TypeScript smoke tests. If necessary, exclude the cost
+  of the TypeScript verify calls from the comparison.
+
 ## Never stop
 
 - Work does not stop, ask questions or wait for approval until every command and every smoke suite above
