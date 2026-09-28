@@ -60,7 +60,7 @@ test_add_file_parameterized() {
 
     # Get initial database state - count files in metadata collection
     # Use the info command output to track actual media files added
-    local before_check=$($(get_cli_command) check --db $TEST_DB_DIR $file_path --yes 2>&1)
+    local before_check=$($(get_zig_cli_command) check --db $TEST_DB_DIR $file_path --yes 2>&1)
     local already_in_db=$(parse_numeric "$before_check" "Already added:")
 
     # Add the file and capture output with verbose logging
@@ -79,7 +79,7 @@ test_add_file_parameterized() {
     fi
 
     # Check that the specific file is now in the database
-    invoke_command "Check $file_type file added" "$(get_cli_command) check --db $TEST_DB_DIR $file_path --yes"
+    invoke_command "Check $file_type file added" "$(get_zig_cli_command) check --db $TEST_DB_DIR $file_path --yes"
 
     # Validate the assets in the database
     validate_database_assets "$TEST_DB_DIR" "$file_path" "$expected_mime" "$asset_type" "$add_output"
@@ -127,7 +127,7 @@ test_add_same_file() {
     # Try to re-add the PNG file (should not add it again)
     invoke_command "Re-add same file" "$(get_zig_cli_command) add --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
 
-    invoke_command "Check file still in database" "$(get_cli_command) check --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    invoke_command "Check file still in database" "$(get_zig_cli_command) check --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
     test_passed
 }
 
@@ -149,7 +149,7 @@ test_add_multiple_files() {
     # Check that 5 files were imported (2 images + 1 video + 2 images from the zip archive)
     expect_output_value "$add_output" "Files added:" "5" "Five files imported from multiple files directory"
 
-    invoke_command "Check multiple files added" "$(get_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+    invoke_command "Check multiple files added" "$(get_zig_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     test_passed
 }
 
@@ -164,7 +164,7 @@ test_add_same_multiple_files() {
 
     invoke_command "Re-add multiple files" "$(get_zig_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
 
-    invoke_command "Check multiple files still in database" "$(get_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+    invoke_command "Check multiple files still in database" "$(get_zig_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     test_passed
 }
 

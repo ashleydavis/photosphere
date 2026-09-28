@@ -658,7 +658,7 @@ validate_results() {
         
         # Check if file is in database
         log_info "  Checking database entry for $filename..."
-        if ! $(get_cli_command) check --db "$TEST_DB_DIR" "$file_path" --yes > /dev/null 2>&1; then
+        if ! $(get_zig_cli_command) check --db "$TEST_DB_DIR" "$file_path" --yes > /dev/null 2>&1; then
             log_error "File not found in database: $file_path"
             ((verification_errors++))
         else

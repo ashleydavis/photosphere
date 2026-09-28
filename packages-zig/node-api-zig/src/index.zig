@@ -42,7 +42,9 @@ pub const upload_asset_worker = @import("lib/upload-asset.worker.zig");
 pub const import_assets_worker = @import("lib/import-assets.worker.zig");
 pub const cleanup_sources_worker = @import("lib/cleanup-sources.worker.zig");
 pub const import_module = @import("lib/import.zig");
-// Not ported: zip-utils, check, check.worker,
+pub const check = @import("lib/check.zig");
+pub const check_worker = @import("lib/check.worker.zig");
+// Not ported: zip-utils,
 // load-assets.worker, apply-database-ops.
 pub const resolve_storage_credentials = @import("lib/resolve-storage-credentials.zig");
 pub const open_storage = @import("lib/open-storage.zig");

@@ -29,7 +29,7 @@ pub const ICommandExamples = struct {
 
 //
 // Centralized examples for all CLI commands
-// (only the commands implemented in Zig are ported: init, add, consolidate, info, tools, summary, verify, repair, replicate,
+// (only the commands implemented in Zig are ported: init, add, consolidate, check, info, tools, summary, verify, repair, replicate,
 // compare, version, export, list, upgrade, hash, encrypt, decrypt, sync, remove, find-orphans and remove-orphans).
 //
 pub const COMMAND_EXAMPLES = [_]ICommandExamples{
@@ -77,6 +77,23 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             .{
                 .command = "psi consolidate --db ./photos ./shared",
                 .description = "Records an already-related remote as this database's origin.",
+            },
+        },
+    },
+    .{
+        .commandName = "check",
+        .examples = &.{
+            .{
+                .command = "psi check --db ./photos ~/Pictures",
+                .description = "Checks which files from ~/Pictures are already in database.",
+            },
+            .{
+                .command = "psi check --db ./photos image.jpg",
+                .description = "Checks if the specific file is already in database.",
+            },
+            .{
+                .command = "psi check --db ./photos ~/Downloads",
+                .description = "Checks the directory to see what's already been added.",
             },
         },
     },

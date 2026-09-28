@@ -2292,3 +2292,176 @@ test "tools asks before showing the installation instructions like the TypeScrip
     try std.testing.expect(std.mem.indexOf(u8, accepted.stdout, "◇  Would you like to see installation instructions?\n   Yes\n" ++ tools_instructions_heading) != null);
     try std.testing.expect(std.mem.endsWith(u8, accepted.stdout, tools_instructions_ending));
 }
+
+//
+// The "Next steps" checkCommand (apps/cli/src/cmd/check.ts) prints after the summary, <db> standing for the
+// database path. The first step is only printed when there are files to add.
+//
+fn checkNextSteps(allocator: std.mem.Allocator, hasFilesToAdd: bool) ![]const u8 {
+    const addStep =
+        \\    # Add the new files found to your database
+        \\    psi add <paths> --db <db>
+        \\
+        \\
+    ;
+    const otherSteps =
+        \\    # Verify the integrity of all files in the database
+        \\    psi verify --db <db>
+        \\
+        \\    # View database summary and statistics
+        \\    psi summary --db <db>
+        \\
+    ;
+    return std.mem.concat(allocator, u8, &.{ "\nNext steps:\n", if (hasFilesToAdd) addStep else "", otherSteps });
+}
+
+//
+// Creates a test root with a copy of test/dbs/v6 and points the hash cache at the root, so a check does not write
+// to the cache of the user running the tests.
+//
+fn setupCheck(allocator: std.mem.Allocator, name: []const u8) !*std.process.Environ.Map {
+    const root = try setup(allocator, name);
+    const environment = try helpers.cliEnvironment(allocator, root);
+    try environment.put("PHOTOSPHERE_CACHE_DIR", try std.fmt.allocPrint(allocator, "{s}/cache", .{root}));
+    return environment;
+}
+
+test "check reports which files are already in the database like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const environment = try setupCheck(allocator, "cmd-check");
+    const root = std.fs.path.dirname(environment.get("PHOTOSPHERE_CACHE_DIR").?).?;
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+
+    // test/dbs/v6 holds test.jpg (its one asset) and not test.png.
+    const result = try normalize(allocator, try runZig(allocator, environment, &.{ "check", "--db", db, "../../test/test.jpg", "../../test/test.png", "--yes" }), db, "<db>");
+    const expected = try std.mem.concat(allocator, u8, &.{
+        \\Checked 2 files.
+        \\
+        \\Summary:
+        \\Files considered: 2
+        \\Files to add:     1
+        \\Files ignored:    0
+        \\Files failed:     0
+        \\Already added:    1
+        \\
+        ,
+        try checkNextSteps(allocator, true),
+    });
+    try expectResult(result, expected, "", 0);
+
+    // With the alias, and nothing left to add.
+    const known = try normalize(allocator, try runZig(allocator, environment, &.{ "chk", "--db", db, "../../test/test.jpg", "--yes" }), db, "<db>");
+    const expectedKnown = try std.mem.concat(allocator, u8, &.{
+        \\Checked 1 files.
+        \\
+        \\Summary:
+        \\Files considered: 1
+        \\Files to add:     0
+        \\Files ignored:    0
+        \\Files failed:     0
+        \\Already added:    1
+        \\
+        ,
+        try checkNextSteps(allocator, false),
+    });
+    try expectResult(known, expectedKnown, "", 0);
+}
+
+test "check scans a directory like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const environment = try setupCheck(allocator, "cmd-check-directory");
+    const root = std.fs.path.dirname(environment.get("PHOTOSPHERE_CACHE_DIR").?).?;
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+
+    // test/multiple-files holds 2 images and a video, and a zip of 2 more images, none of them in test/dbs/v6.
+    const result = try normalize(allocator, try runZig(allocator, environment, &.{ "check", "--db", db, "../../test/multiple-files", "--yes" }), db, "<db>");
+    const expected = try std.mem.concat(allocator, u8, &.{
+        \\Checked 5 files.
+        \\
+        \\Summary:
+        \\Files considered: 5
+        \\Files to add:     5
+        \\Files ignored:    0
+        \\Files failed:     0
+        \\Already added:    0
+        \\
+        ,
+        try checkNextSteps(allocator, true),
+    });
+    try expectResult(result, expected, "", 0);
+}
+
+test "check reports a file it cannot hash like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const environment = try setupCheck(allocator, "cmd-check-failed");
+    const root = std.fs.path.dirname(environment.get("PHOTOSPHERE_CACHE_DIR").?).?;
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const broken = try std.fmt.allocPrint(allocator, "{s}/broken.png", .{root});
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = broken,
+        .data = "not an image",
+    });
+
+    var result = try normalize(allocator, try runZig(allocator, environment, &.{ "check", "--db", db, broken, "../../test/test.jpg", "--yes" }), db, "<db>");
+    result.stdout = try withoutErrorLogLine(allocator, result.stdout);
+
+    // The log file is named after the time it was created, so only its directory is checked.
+    const logLabel = "Check the log file for details:\n    ";
+    const logStart = (std.mem.indexOf(u8, result.stdout, logLabel) orelse {
+        return error.LogFileLineMissing;
+    }) + logLabel.len;
+    const logEnd = std.mem.indexOfScalarPos(u8, result.stdout, logStart, '\n').?;
+    // The CLI environment sets the temp directory to <root>/tmp, and the CLI joins the rest on with the separator
+    // of the platform.
+    const logDir = try std.fs.path.join(allocator, &.{ try std.fmt.allocPrint(allocator, "{s}/tmp", .{root}), "photosphere", "logs" });
+    try std.testing.expect(std.mem.startsWith(u8, result.stdout[logStart..logEnd], logDir));
+    const stdout = try std.mem.concat(allocator, u8, &.{ result.stdout[0..logStart], "<log file>", result.stdout[logEnd..] });
+
+    const expected = try std.mem.concat(allocator, u8, &.{
+        \\Checked 1 files.
+        \\
+        \\Summary:
+        \\Files considered: 2
+        \\Files to add:     0
+        \\Files ignored:    0
+        \\Files failed:     1
+        \\Already added:    1
+        \\
+        \\⚠️  1 file failed. Check the log file for details:
+        \\    <log file>
+        \\
+        ,
+        try checkNextSteps(allocator, false),
+        // The blank line printed before the error log line, which is removed above.
+        "\n",
+    });
+    try std.testing.expectEqualStrings(expected, stdout);
+    try std.testing.expectEqual(@as(u8, 0), result.exitCode);
+
+    // What the image tools say about the file differs between platforms, so only the line checkPaths
+    // (packages/node-api/src/lib/check.ts) writes is checked.
+    const failedLine = try std.fmt.allocPrint(allocator, "Failed to get hash for file {s}\n", .{broken});
+    try std.testing.expect(std.mem.endsWith(u8, result.stderr, failedLine));
+}
+
+test "check reports a missing database like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-check-missing");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const missing = try std.fmt.allocPrint(allocator, "{s}/missing", .{root});
+    var result = try normalize(allocator, try runZig(allocator, environment, &.{ "check", "--db", missing, "../../test/test.jpg", "--yes" }), missing, "<missing>");
+    result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
+    try expectResult(result, verify_missing_report, "", 1);
+}

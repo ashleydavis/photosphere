@@ -1,6 +1,6 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `add` (alias `a`), `compare` (alias `cmp`), `consolidate`, `database-id`, `decrypt`, `encrypt`, `export`
+// Only the `add` (alias `a`), `check` (alias `chk`), `compare` (alias `cmp`), `consolidate`, `database-id`, `decrypt`, `encrypt`, `export`
 // (alias `exp`), `find-orphans`, `hash`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`,
 // `remove` (alias `rm`), `remove-orphans`, `repair`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias
 // `sum`), `sync`, `tools`, `upgrade`, `verify` (alias `ver`) and `version` commands and the `--version` option are ported;
@@ -51,6 +51,7 @@ pub const encrypt = @import("src/cmd/encrypt.zig");
 pub const decrypt = @import("src/cmd/decrypt.zig");
 pub const hash = @import("src/cmd/hash.zig");
 pub const tools_cmd = @import("src/cmd/tools.zig");
+pub const check = @import("src/cmd/check.zig");
 pub const remove_orphans = @import("src/cmd/remove-orphans.zig");
 pub const upgrade = @import("src/cmd/upgrade.zig");
 pub const export_command = @import("src/cmd/export.zig");
@@ -103,6 +104,8 @@ const IHashCommandOptions = hash.IHashCommandOptions;
 const hashCommand = hash.hashCommand;
 const IToolsCommandOptions = tools_cmd.IToolsCommandOptions;
 const toolsCommand = tools_cmd.toolsCommand;
+const ICheckCommandOptions = check.ICheckCommandOptions;
+const checkCommand = check.checkCommand;
 const IRemoveCommandOptions = remove.IRemoveCommandOptions;
 const removeCommand = remove.removeCommand;
 const ICompareCommandOptions = compare.ICompareCommandOptions;
@@ -239,6 +242,18 @@ pub const IAddParsed = struct {
 };
 
 //
+// What the check command runs with: its files and its options (TypeScript: the arguments commander passes the
+// action).
+//
+pub const ICheckParsed = struct {
+    // The media files (or directories) to check.
+    paths: []const []const u8,
+
+    // The options of the command.
+    options: ICheckCommandOptions,
+};
+
+//
 // What the set-origin command runs with: its path and its options (TypeScript: the arguments commander passes the
 // action).
 //
@@ -322,6 +337,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the add command with these paths and options.
     add: IAddParsed,
+
+    // Run the check command with these paths and options.
+    check: ICheckParsed,
 
     // Run the repair command with these options.
     repair: IRepairCommandOptions,
@@ -499,6 +517,24 @@ fn addAction(state: *IProgramState, args: []const ArgumentValue, options: *const
                 .dryRun = flagValue(options, "dryRun"),
                 .watch = flagValue(options, "watch"),
                 .cleanup = flagValue(options, "cleanup"),
+            },
+        },
+    };
+}
+
+//
+// The action of the check command (`initContext(checkCommand)`): `run` calls initContext and the command.
+//
+fn checkAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+
+    // <files...> is variadic, so commander always passes it as a list.
+    const paths = args[0].list;
+    state.outcome = .{
+        .check = .{
+            .paths = paths,
+            .options = .{
+                .base = baseOptions(options),
             },
         },
     };
@@ -900,7 +936,24 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "add"))
         .action(state, addAction);
 
-    // Not ported: bug and check.
+    // Not ported: bug.
+
+    const checkDefinition = program
+        .command("check", .{})
+        .alias("chk")
+        .description("Checks files and directories to see what has already been added to the media file database.")
+        .argument("<files...>", "The media files (or directories) to add to the database.");
+    _ = optionFrom(checkDefinition, dbOption);
+    _ = optionFrom(checkDefinition, keyOption);
+    _ = optionFrom(checkDefinition, verboseOption);
+    _ = optionFrom(checkDefinition, toolsOption);
+    _ = optionFrom(checkDefinition, yesOption);
+    _ = optionFrom(checkDefinition, workersOption);
+    _ = optionFrom(checkDefinition, timeoutOption);
+    _ = optionFrom(checkDefinition, cwdOption);
+    _ = checkDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "check"))
+        .action(state, checkAction);
 
     const compareDefinition = program
         .command("compare", .{})
@@ -1302,6 +1355,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try addCommand(allocator, io, context, parsed.paths, &options);
+        },
+        .check => |parsed| {
+            var options = parsed.options;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try checkCommand(allocator, io, context, parsed.paths, &options);
         },
         .repair => |parsed| {
             var options = parsed;
