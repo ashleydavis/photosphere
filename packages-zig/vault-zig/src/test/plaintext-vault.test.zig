@@ -1,5 +1,6 @@
 const std = @import("std");
 const vault_zig = @import("vault-zig");
+const utils = @import("utils-zig");
 const PlaintextVault = vault_zig.plaintext_vault.PlaintextVault;
 const ISecret = vault_zig.vault.ISecret;
 
@@ -609,4 +610,37 @@ test "interop: Zig writes a vault file byte-identical to TypeScript (so TypeScri
         file_count += 1;
     }
     try std.testing.expectEqual(@as(usize, 1), file_count);
+}
+
+test "vault() reaches delete and checkPrereqs through the IVault interface" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var plaintext_vault = PlaintextVault.init(temp_dir.path);
+    const vault = plaintext_vault.vault();
+
+    // The plaintext vault needs no tools.
+    const prereqs = try vault.checkPrereqs(allocator, io);
+    try std.testing.expect(prereqs.ok);
+    try std.testing.expect(prereqs.message == null);
+
+    try vault.set(allocator, io, .{ .name = "gone", .type = "plain", .value = "v" });
+    try vault.delete(allocator, io, "gone");
+    try std.testing.expect((try vault.get(allocator, io, "gone")) == null);
+}
+
+test "a vault file holding JSON that is not an object makes get throw" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+    try temp_dir.tmp_dir.dir.writeFile(io, .{ .sub_path = "vault.json", .data = "[1, 2]" });
+    try std.testing.expectError(error.Thrown, vault.get(allocator, io, "anything"));
+    try std.testing.expectEqualStrings("The vault file does not hold a JSON object", utils.errors.lastErrorMessage());
 }

@@ -375,3 +375,20 @@ fn missingToolSpawn(allocator: std.mem.Allocator, io: std.Io, args: []const []co
     _ = stdinData;
     return errors.throwError("spawn {s} ENOENT", .{args[0]});
 }
+
+test "the IVault interface reaches every operation" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    resetStore();
+    defer restoreSpawn();
+    var macosVault = MacOSKeychainVault.init();
+    const vault = macosVault.vault();
+
+    try std.testing.expect((try vault.checkPrereqs(allocator, std.testing.io)).ok);
+    try vault.set(allocator, std.testing.io, .{ .name = "k", .type = "api-key", .value = "v" });
+    try expectSecretEqual(.{ .name = "k", .type = "api-key", .value = "v" }, try vault.get(allocator, std.testing.io, "k"));
+    try std.testing.expectEqual(@as(usize, 1), (try vault.list(allocator, std.testing.io)).len);
+    try vault.delete(allocator, std.testing.io, "k");
+    try std.testing.expect((try vault.get(allocator, std.testing.io, "k")) == null);
+}
