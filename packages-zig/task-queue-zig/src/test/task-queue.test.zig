@@ -1304,3 +1304,106 @@ test "shutdown: onAnyTaskMessage callbacks receive nothing after shutdown" {
 
     try std.testing.expectEqual(@as(usize, 0), recorder.messageTypes.items.len);
 }
+
+//
+// A completion callback that fails.
+//
+fn failOnComplete(context: ?*anyopaque, result: ITaskResult) anyerror!void {
+    _ = context;
+    _ = result;
+    return error.CompletionCallbackFailed;
+}
+
+//
+// A message callback that fails.
+//
+fn failOnMessage(context: ?*anyopaque, data: types.ITaskMessageData) anyerror!void {
+    _ = context;
+    _ = data;
+    return error.MessageCallbackFailed;
+}
+
+test "callbacks that fail are logged and the other callbacks still run" {
+    var fixture: Fixture = undefined;
+    try fixture.init(2);
+    defer fixture.deinit();
+    try registerHandler("progress-task", progressHandler);
+
+    var stderrCapture = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stderrCapture.deinit();
+    var stdoutCapture = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stdoutCapture.deinit();
+    utils.console.setCapture(&stdoutCapture.writer, &stderrCapture.writer);
+    defer utils.console.setCapture(null, null);
+
+    _ = try fixture.queue.onTaskComplete(.{ .context = null, .function = failOnComplete });
+    _ = try fixture.queue.onTaskMessage("replicate-progress", .{ .context = null, .function = failOnMessage });
+    _ = try fixture.queue.onAnyTaskMessage(.{ .context = null, .function = failOnMessage });
+    var completed = false;
+    _ = try fixture.queue.onTaskComplete(.{ .context = &completed, .function = setFlagOnComplete });
+    var progress: ProgressRecorder = .{ .allocator = fixture.allocator(), .progress = .empty };
+    _ = try fixture.queue.onTaskMessage("replicate-progress", .{ .context = &progress, .function = ProgressRecorder.record });
+
+    const taskId = try fixture.queue.addTask("progress-task", .null, null, null);
+    const result = (try fixture.queue.awaitTask(taskId)).?;
+    try std.testing.expectEqual(TaskStatus.Succeeded, result.status);
+    try std.testing.expect(completed);
+    try std.testing.expectEqual(@as(usize, 2), progress.progress.items.len);
+
+    const logged = stderrCapture.written();
+    try std.testing.expect(std.mem.indexOf(u8, logged, "Error in task completion callback") != null);
+    try std.testing.expect(std.mem.indexOf(u8, logged, "Error in task message callback") != null);
+    try std.testing.expect(std.mem.indexOf(u8, logged, "Error in any task message callback") != null);
+}
+
+test "unsubscribing leaves the other callbacks, and unsubscribing twice does nothing" {
+    var fixture: Fixture = undefined;
+    try fixture.init(2);
+    defer fixture.deinit();
+    try registerHandler("progress-task", progressHandler);
+
+    var firstCompleted = false;
+    var secondCompleted = false;
+    _ = try fixture.queue.onTaskComplete(.{ .context = &firstCompleted, .function = setFlagOnComplete });
+    const unsubscribeCompletion = try fixture.queue.onTaskComplete(.{ .context = &secondCompleted, .function = setFlagOnComplete });
+    var firstMessaged = false;
+    var secondMessaged = false;
+    _ = try fixture.queue.onTaskMessage("replicate-progress", .{ .context = &firstMessaged, .function = setFlagOnMessage });
+    const unsubscribeMessage = try fixture.queue.onTaskMessage("replicate-progress", .{ .context = &secondMessaged, .function = setFlagOnMessage });
+    var firstAnyMessaged = false;
+    var secondAnyMessaged = false;
+    _ = try fixture.queue.onAnyTaskMessage(.{ .context = &firstAnyMessaged, .function = setFlagOnMessage });
+    const unsubscribeAnyMessage = try fixture.queue.onAnyTaskMessage(.{ .context = &secondAnyMessaged, .function = setFlagOnMessage });
+
+    for (0..2) |_| {
+        unsubscribeCompletion.call();
+        unsubscribeMessage.call();
+        unsubscribeAnyMessage.call();
+    }
+
+    const taskId = try fixture.queue.addTask("progress-task", .null, null, null);
+    _ = try fixture.queue.awaitTask(taskId);
+    try std.testing.expect(firstCompleted and !secondCompleted);
+    try std.testing.expect(firstMessaged and !secondMessaged);
+    try std.testing.expect(firstAnyMessaged and !secondAnyMessaged);
+}
+
+test "awaitTask: callers awaiting different tasks each resolve when their own task completes" {
+    var fixture: Fixture = undefined;
+    try fixture.init(2);
+    defer fixture.deinit();
+    try registerHandler("slow-task", slowBlockedHandler);
+    task_unblocked.reset();
+
+    const firstTaskId = try fixture.queue.addTask("slow-task", .null, null, null);
+    const secondTaskId = try fixture.queue.addTask("slow-task", .null, null, null);
+    var returned: [2]std.atomic.Value(bool) = .{ .init(false), .init(false) };
+    const firstThread = try std.Thread.spawn(.{}, awaitTaskOnThread, .{ fixture.queue, firstTaskId, &returned[0] });
+    const secondThread = try std.Thread.spawn(.{}, awaitTaskOnThread, .{ fixture.queue, secondTaskId, &returned[1] });
+    waitForWaiters(fixture.queue, 0, 2);
+    task_unblocked.set(std.testing.io);
+    firstThread.join();
+    secondThread.join();
+    try std.testing.expect(returned[0].load(.acquire));
+    try std.testing.expect(returned[1].load(.acquire));
+}
