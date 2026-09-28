@@ -714,3 +714,169 @@ test "CloudStorage Tests Path Handling should handle various path formats correc
         try shared_storage.deleteFile(allocator, io, fullPath);
     }
 }
+
+// Zig: what the TypeScript suite leaves untested
+
+//
+// The bucket of the suite's location (the part before the first "/").
+//
+fn bucketOf(location: []const u8) []const u8 {
+    return location[0 .. std.mem.indexOfScalar(u8, location, '/') orelse location.len];
+}
+
+test "CloudStorage Zig: credentials given to the storage reach the server" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const location = try setUp();
+
+    var storage = CloudStorage.init(io, location, .{
+        .accessKeyId = node_utils.process_env.getEnv("AWS_ACCESS_KEY_ID").?,
+        .secretAccessKey = node_utils.process_env.getEnv("AWS_SECRET_ACCESS_KEY").?,
+        .region = node_utils.process_env.getEnv("AWS_REGION"),
+        .endpoint = node_utils.process_env.getEnv("AWS_ENDPOINT"),
+    });
+    defer storage.s3.deinit();
+    const filePath = try pathOf(allocator, &.{ location, "zig-credentials", "file.txt" });
+    try storage.write(allocator, io, filePath, "text/plain", "with credentials");
+    try std.testing.expectEqualStrings("with credentials", (try storage.read(allocator, io, filePath)).?);
+}
+
+test "CloudStorage Zig: a key with a leading slash is the key without it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const location = try setUp();
+    const bucket = bucketOf(location);
+    const plainKey = try pathOf(allocator, &.{ location[bucket.len + 1 ..], "zig-leading-slash", "file.txt" });
+    const slashed = try std.fmt.allocPrint(allocator, "{s}//{s}", .{ bucket, plainKey });
+    const plain = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ bucket, plainKey });
+    const slashedDir = try std.fmt.allocPrint(allocator, "{s}//{s}", .{ bucket, std.fs.path.dirnamePosix(plainKey).? });
+
+    try shared_storage.write(allocator, io, slashed, "text/plain", "slashed");
+    try std.testing.expectEqualStrings("slashed", (try shared_storage.read(allocator, io, plain)).?);
+    try std.testing.expectEqualStrings("slashed", (try shared_storage.read(allocator, io, slashed)).?);
+    try std.testing.expect(try shared_storage.fileExists(allocator, io, slashed));
+    try std.testing.expect(try shared_storage.dirExists(allocator, io, slashedDir));
+    try std.testing.expectEqual(@as(u64, "slashed".len), (try shared_storage.info(allocator, io, slashed)).?.length);
+    try std.testing.expectEqual(@as(usize, 1), (try shared_storage.listFiles(allocator, io, slashedDir, 10, null)).names.len);
+    var hash: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash("hashed", &hash, .{});
+    var hashedInput = std.Io.Reader.fixed("hashed");
+    try std.testing.expect(try shared_storage.writeStreamHashed(allocator, io, slashed, "text/plain", &hashedInput, "hashed".len, &hash));
+    try std.testing.expectEqualSlices(u8, &hash, (try shared_storage.storedHash(allocator, io, slashed)).?);
+
+    var input = std.Io.Reader.fixed("streamed");
+    try shared_storage.writeStream(allocator, io, slashed, "text/plain", &input, "streamed".len);
+    const stream = try shared_storage.readStream(allocator, io, slashed);
+    defer stream.destroy(io);
+    var content: std.ArrayList(u8) = .empty;
+    try stream.reader().appendRemainingUnlimited(allocator, &content);
+    try std.testing.expectEqualStrings("streamed", content.items);
+
+    const copied = try std.fmt.allocPrint(allocator, "{s}//{s}.copy", .{ bucket, plainKey });
+    try shared_storage.copyTo(allocator, io, slashed, copied);
+    try std.testing.expectEqualStrings("streamed", (try shared_storage.read(allocator, io, copied)).?);
+
+    try shared_storage.deleteFile(allocator, io, slashed);
+    try std.testing.expect(!try shared_storage.fileExists(allocator, io, plain));
+    try shared_storage.deleteDir(allocator, io, slashedDir);
+    try std.testing.expect(!try shared_storage.dirExists(allocator, io, slashedDir));
+}
+
+test "CloudStorage Zig: copyTo copies a file to another key" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const location = try setUp();
+    const source = try pathOf(allocator, &.{ location, "zig-copy", "source.txt" });
+    const destination = try pathOf(allocator, &.{ location, "zig-copy", "destination.txt" });
+    try shared_storage.write(allocator, io, source, "text/plain", "copied content");
+
+    try shared_storage.copyTo(allocator, io, source, destination);
+    try std.testing.expectEqualStrings("copied content", (try shared_storage.read(allocator, io, destination)).?);
+
+    // Copying a file that is not there fails, naming both paths.
+    const missing = try pathOf(allocator, &.{ location, "zig-copy", "missing.txt" });
+    try std.testing.expectError(error.Thrown, shared_storage.copyTo(allocator, io, missing, destination));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), try std.fmt.allocPrint(allocator, "Failed to copy from {s} to {s}: ", .{ missing, destination })));
+}
+
+test "CloudStorage Zig: every operation on a bucket that does not exist fails, naming what it was doing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    _ = try setUp();
+    const missingBucket = "photosphere-zig-no-such-bucket";
+    var storage = CloudStorage.init(io, missingBucket, null);
+    defer storage.s3.deinit();
+    const filePath = missingBucket ++ "/dir/file.txt";
+    const dirPath = missingBucket ++ "/dir";
+
+    try std.testing.expectError(error.Thrown, storage.listFiles(allocator, io, dirPath, 10, null));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to list files in " ++ dirPath ++ ": "));
+    try std.testing.expectError(error.Thrown, storage.listDirs(allocator, io, dirPath, 10, null));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to list directories in " ++ dirPath ++ ": "));
+    try std.testing.expectError(error.Thrown, storage.dirExists(allocator, io, dirPath));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to check if directory exists: "));
+    try std.testing.expectError(error.Thrown, storage.read(allocator, io, filePath));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to read " ++ filePath ++ ": "));
+    try std.testing.expectError(error.Thrown, storage.checkWriteLock(allocator, io, filePath));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to check write lock for " ++ filePath ++ ": "));
+    try std.testing.expectError(error.Thrown, storage.acquireWriteLock(allocator, io, filePath, "owner"));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to acquire write lock for " ++ filePath ++ ": "));
+    var input = std.Io.Reader.fixed("streamed");
+    try std.testing.expectError(error.Thrown, storage.writeStream(allocator, io, filePath, "text/plain", &input, "streamed".len));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to write stream to " ++ filePath ++ ": "));
+
+    // A file that is not there is not an error, whatever the bucket.
+    try storage.deleteFile(allocator, io, filePath);
+    try storage.releaseWriteLock(allocator, io, filePath);
+}
+
+test "CloudStorage Zig: a lock older than the timeout is broken and taken, and the verbose log says each step" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const location = try setUp();
+
+    // Every [LOCK] line is asked for, and the console log that gets them writes nothing.
+    var verboseLog: utils.log.ConsoleLog = .{ .verbose_enabled = true };
+    const previousLog = utils.log.log;
+    utils.log.setLog(verboseLog.ilog());
+    defer utils.log.setLog(previousLog);
+
+    const lockFile = try pathOf(allocator, &.{ location, "zig-locks", "stale.lock" });
+    const staleTimestamp = nowMilliseconds() - 60_000;
+    try shared_storage.write(allocator, io, lockFile, "application/json", try std.fmt.allocPrint(allocator, "{{\"owner\":\"dead-owner\",\"acquiredAt\":\"2020-01-01T00:00:00.000Z\",\"timestamp\":{d}}}", .{staleTimestamp}));
+
+    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, lockFile, "new-owner"));
+    try std.testing.expectEqualStrings("new-owner", (try shared_storage.checkWriteLock(allocator, io, lockFile)).?.owner);
+
+    // A fresh lock is refused, and releasing it twice is fine.
+    try std.testing.expect(!try shared_storage.acquireWriteLock(allocator, io, lockFile, "third-owner"));
+    try shared_storage.releaseWriteLock(allocator, io, lockFile);
+    try shared_storage.releaseWriteLock(allocator, io, lockFile);
+}
+
+test "CloudStorage Zig: a lock file that is not a lock is reported" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const location = try setUp();
+    const lockFile = try pathOf(allocator, &.{ location, "zig-locks", "garbage.lock" });
+    try shared_storage.write(allocator, io, lockFile, "application/json", "not json");
+
+    try std.testing.expectError(error.Thrown, shared_storage.checkWriteLock(allocator, io, lockFile));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), try std.fmt.allocPrint(allocator, "Failed to check write lock for {s}: ", .{lockFile})));
+
+    // An empty lock file holds no lock.
+    try shared_storage.write(allocator, io, lockFile, "application/json", "");
+    try std.testing.expect((try shared_storage.checkWriteLock(allocator, io, lockFile)) == null);
+}
