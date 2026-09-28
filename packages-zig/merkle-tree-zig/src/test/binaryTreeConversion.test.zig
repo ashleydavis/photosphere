@@ -5,6 +5,7 @@
 
 const std = @import("std");
 const merkle_tree_zig = @import("merkle-tree-zig");
+const utils = @import("utils-zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const IMerkleTree = merkle_tree.IMerkleTree;
 const SortNode = merkle_tree.SortNode;
@@ -216,3 +217,16 @@ test "should maintain correct tree structure after round-trip" {
     try verifyTreeStructure(try roundTrip(allocator, tree.sort));
 }
 
+
+test "arrayToBinaryTree throws for an array that ends before a parent's children, like TypeScript" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    // A parent of two children with only its first child in the array: TypeScript reads `node.right!.leafCount`
+    // of undefined.
+    try std.testing.expectError(error.Thrown, merkle_tree.arrayToBinaryTree(arena.allocator(), &.{
+        .{ .nodeCount = 3, .leafCount = 2, .size = 2 },
+        .{ .name = "A", .contentHash = "hash", .nodeCount = 1, .leafCount = 1, .size = 1 },
+    }));
+    try std.testing.expectEqualStrings("TypeError: Cannot read properties of undefined (reading 'leafCount')", utils.errors.lastErrorMessage());
+}

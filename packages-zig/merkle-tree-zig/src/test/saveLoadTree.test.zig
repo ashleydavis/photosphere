@@ -9,6 +9,7 @@ const merkle_verify = @import("merkle-verify.zig");
 const memory_storage = @import("memory-storage.zig");
 const errors = @import("utils-zig").errors;
 const bson = @import("serialization-zig").bson;
+const serialization = @import("serialization-zig").serialization;
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const IMerkleTree = merkle_tree.IMerkleTree;
 const SortNode = merkle_tree.SortNode;
@@ -296,4 +297,164 @@ test "should work correctly with large tree files" {
     try std.testing.expectEqual(@as(?u32, merkle_tree.CURRENT_DATABASE_VERSION), version);
     try std.testing.expectEqual(merkle_tree.CURRENT_DATABASE_VERSION, fullTree.version);
     try std.testing.expectEqual(@as(u32, 100), fullTree.sort.?.leafCount);
+}
+
+//
+// The streams of a hand-written tree file, to check how loadTree reads files that are not what saveTree writes.
+// Files of version 5 and later hold a string table of one string ("a") and a hash table of one hash.
+//
+const ITreeFile = struct {
+    // The file format version.
+    version: u32,
+
+    // The 32-bit values of the sort tree.
+    sortTree: []const u32,
+
+    // The 32-bit values of the merkle tree.
+    merkleTree: []const u32,
+};
+
+//
+// Writes the values of a stream through a compressed serializer when compressed, otherwise straight to the file.
+//
+fn writeStream(allocator: std.mem.Allocator, serializer: serialization.ISerializer, values: []const u32, compressed: bool) !void {
+    if (!compressed) {
+        for (values) |value| {
+            try serializer.writeUInt32(value);
+        }
+        return;
+    }
+    var streamSerializer = try serialization.CompressedBinarySerializer.init(allocator, serializer, 64);
+    for (values) |value| {
+        try streamSerializer.writeUInt32(value);
+    }
+    try streamSerializer.finish();
+}
+
+//
+// Serializes a hand-written tree file (the SerializerFunction of serialization.save).
+//
+fn writeTreeFile(allocator: std.mem.Allocator, file: ITreeFile, serializer: serialization.ISerializer) anyerror!void {
+    try serializer.writeBSON(bson.BsonDocument.empty);
+    try serializer.writeBytes(&([_]u8{0} ** 16));
+    const withTables = file.version >= 5;
+    if (withTables) {
+        var strings = try serialization.CompressedBinarySerializer.init(allocator, serializer, 64);
+        try strings.writeUInt32(1);
+        try strings.writeString("a");
+        try strings.finish();
+        try serializer.writeUInt32(1);
+        try serializer.writeBytes(&([_]u8{7} ** 32));
+    }
+    try writeStream(allocator, serializer, file.sortTree, withTables);
+    try writeStream(allocator, serializer, file.merkleTree, withTables);
+}
+
+//
+// Saves a hand-written tree file and loads it with loadTree.
+//
+fn loadTreeFile(allocator: std.mem.Allocator, file: ITreeFile) !?IMerkleTree {
+    var storage = MemoryStorage.init(allocator);
+    try serialization.save(allocator, io, storage.asStorage(), TEST_FILE_PATH, file, file.version, "FTRE", writeTreeFile);
+    return merkle_tree.loadTree(allocator, io, TEST_FILE_PATH, storage.asStorage(), "FTRE");
+}
+
+//
+// A version 6 tree file with an index out of bounds, and the message loadTree throws for it.
+//
+const IOutOfBoundsTreeFile = struct {
+    // The 32-bit values of the sort tree.
+    sortTree: []const u32,
+
+    // The 32-bit values of the merkle tree.
+    merkleTree: []const u32,
+
+    // The message thrown.
+    message: []const u8,
+};
+
+test "loadTree throws for a string or hash index outside the file's tables" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const cases = [_]IOutOfBoundsTreeFile{
+        // A sort leaf naming string 5.
+        .{ .sortTree = &.{ 1, 5, 0, 0, 0, 0, 0 }, .merkleTree = &.{0}, .message = "name index 5 is out of bounds for string table of size 1" },
+        // A sort leaf whose content is hash 9.
+        .{ .sortTree = &.{ 1, 0, 9, 0, 0, 0, 0 }, .merkleTree = &.{0}, .message = "Content hash index 9 is out of bounds for hash table of size 1" },
+        // A merkle root whose hash is hash 3.
+        .{ .sortTree = &.{0}, .merkleTree = &.{ 1, 3 }, .message = "Hash index 3 is out of bounds for hash table of size 1" },
+        // A merkle root leaf naming string 4.
+        .{ .sortTree = &.{0}, .merkleTree = &.{ 1, 0, 4 }, .message = "name index 4 is out of bounds for string table of size 1" },
+        // A merkle child whose hash is hash 2.
+        .{ .sortTree = &.{0}, .merkleTree = &.{ 3, 0, 1, 2 }, .message = "Hash index 2 is out of bounds for hash table of size 1" },
+        // A merkle child leaf naming string 6.
+        .{ .sortTree = &.{0}, .merkleTree = &.{ 3, 0, 1, 0, 6 }, .message = "name index 6 is out of bounds for string table of size 1" },
+    };
+    for (cases) |case| {
+        errdefer std.debug.print("case: {s}\n", .{case.message});
+        try std.testing.expectError(error.Thrown, loadTreeFile(allocator, .{ .version = 6, .sortTree = case.sortTree, .merkleTree = case.merkleTree }));
+        try std.testing.expectEqualStrings(case.message, errors.lastErrorMessage());
+    }
+}
+
+test "loadTree reads a version 6 file of an empty tree, and a version 4 file with no sort or merkle tree" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const versionSix = (try loadTreeFile(allocator, .{ .version = 6, .sortTree = &.{0}, .merkleTree = &.{0} })).?;
+    try std.testing.expect(versionSix.sort == null and versionSix.merkle == null);
+
+    const versionFour = (try loadTreeFile(allocator, .{ .version = 4, .sortTree = &.{0}, .merkleTree = &.{0} })).?;
+    try std.testing.expectEqual(@as(u32, 4), versionFour.version);
+    try std.testing.expect(versionFour.sort == null and versionFour.merkle == null);
+}
+
+test "saveTree refuses a hash that is not 32 bytes, or a leaf without a name" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+
+    var shortHashLeaf: SortNode = .{ .name = "A", .contentHash = "short", .nodeCount = 1, .leafCount = 1, .size = 1, .minName = "A" };
+    var shortHashTree = merkle_tree.createTree(merkle_verify.TEST_TREE_ID);
+    shortHashTree.sort = &shortHashLeaf;
+    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, TEST_FILE_PATH, &shortHashTree, storage.asStorage(), "FTRE"));
+    try std.testing.expectEqualStrings("BufferSet expects 32-byte hashes (SHA-256), got 5 bytes", errors.lastErrorMessage());
+
+    const hash = [_]u8{1} ** 32;
+    var namelessLeaf: SortNode = .{ .contentHash = &hash, .nodeCount = 1, .leafCount = 1, .size = 1, .minName = "" };
+    var namelessTree = merkle_tree.createTree(merkle_verify.TEST_TREE_ID);
+    namelessTree.sort = &namelessLeaf;
+    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, TEST_FILE_PATH, &namelessTree, storage.asStorage(), "FTRE"));
+    try std.testing.expectEqualStrings("Leaf node has no name. This could be a bug.", errors.lastErrorMessage());
+
+    // A merkle leaf without a name, under a sort tree that is fine.
+    var namedLeaf: SortNode = .{ .name = "A", .contentHash = &hash, .nodeCount = 1, .leafCount = 1, .size = 1, .minName = "A" };
+    var namelessMerkleLeaf: merkle_tree.MerkleNode = .{ .hash = &hash, .nodeCount = 1 };
+    var namelessMerkleTree = merkle_tree.createTree(merkle_verify.TEST_TREE_ID);
+    namelessMerkleTree.sort = &namedLeaf;
+    namelessMerkleTree.merkle = &namelessMerkleLeaf;
+    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, TEST_FILE_PATH, &namelessMerkleTree, storage.asStorage(), "FTRE"));
+    try std.testing.expectEqualStrings("Leaf node has no name", errors.lastErrorMessage());
+
+    // buildMerkleTree refuses the nameless sort leaf too.
+    try std.testing.expectError(error.Thrown, merkle_tree.buildMerkleTree(allocator, &namelessLeaf));
+    try std.testing.expectEqualStrings("Leaf node has no name", errors.lastErrorMessage());
+}
+
+test "loadTree throws for an internal sort node whose child is an empty tree" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Version 6: an internal node (3) whose left child is empty (0).
+    try std.testing.expectError(error.Thrown, loadTreeFile(allocator, .{ .version = 6, .sortTree = &.{ 3, 0, 0 }, .merkleTree = &.{0} }));
+    try std.testing.expectEqualStrings("TypeError: Cannot read properties of undefined (reading 'leafCount')", errors.lastErrorMessage());
+
+    // Version 4: the same, with the leaf count and size of the internal node.
+    try std.testing.expectError(error.Thrown, loadTreeFile(allocator, .{ .version = 4, .sortTree = &.{ 3, 2, 0, 0, 0, 0 }, .merkleTree = &.{0} }));
+    try std.testing.expectEqualStrings("TypeError: Cannot read properties of undefined (reading 'leafCount')", errors.lastErrorMessage());
 }

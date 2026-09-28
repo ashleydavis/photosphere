@@ -306,3 +306,26 @@ test "compareTrees reports its progress to the callback" {
     try std.testing.expectEqual(@as(u32, 1), recorder.count);
     try std.testing.expectEqualStrings("Comparing merkle trees...", recorder.lastMessage);
 }
+
+test "should leave out leaves with no name or no content hash" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // A tree of one leaf that has a name but no content hash, and one that has a content hash but no name.
+    var noHash: merkle_tree.SortNode = .{ .name = "noHash.txt", .nodeCount = 1, .leafCount = 1, .size = 1, .minName = "noHash.txt" };
+    var noName: merkle_tree.SortNode = .{ .contentHash = &([_]u8{1} ** 32), .nodeCount = 1, .leafCount = 1, .size = 1, .minName = "" };
+    var root: merkle_tree.SortNode = .{ .nodeCount = 3, .leafCount = 2, .size = 2, .minName = "", .left = &noName, .right = &noHash };
+    var treeA = merkle_tree.createTree(merkle_verify.TEST_TREE_ID);
+    treeA.sort = &root;
+    const treeB = try buildTree(allocator, &.{"file1.txt"});
+
+    const diff = try compare.compareTrees(allocator, &treeA, &treeB, null);
+    try expectNames(&.{}, diff.onlyInA);
+    try expectNames(&.{"file1.txt"}, diff.onlyInB);
+    try expectNames(&.{}, diff.modified);
+
+    const reversed = try compare.compareTrees(allocator, &treeB, &treeA, null);
+    try expectNames(&.{"file1.txt"}, reversed.onlyInA);
+    try expectNames(&.{}, reversed.onlyInB);
+}
