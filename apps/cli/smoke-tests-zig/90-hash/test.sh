@@ -63,7 +63,9 @@ test_hash() {
     # --- 2. The asset file a database stored for an import is the imported file, byte for byte. ---
 
     invoke_command "Create a database" "$(get_zig_cli_command) init --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
     invoke_command "Add a JPG file" "$(get_zig_cli_command) add --db \"$db_dir\" \"$TEST_FILES_DIR/test.jpg\" --yes"
+    ts_verify "$db_dir"
 
     local asset_ids
     asset_ids="$(ls "$db_dir/asset")"
@@ -91,7 +93,7 @@ test_hash() {
     invoke_command "Hash a missing file with the TypeScript CLI (should fail)" "$(get_cli_command) -q hash \"$missing_path\"" 1 "ts_missing_output"
     expect_value "$zig_missing_output" "$ts_missing_output" "The Zig CLI reports a missing file as the TypeScript CLI does"
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
 
     test_passed
 }

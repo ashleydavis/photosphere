@@ -21,25 +21,31 @@ mkdir -p "$WATCH_DIR"
 
 CLI_COMMAND=$(get_zig_cli_command)
 
-invoke_command "Initialize the local database" "$(get_zig_cli_command) init --db $TEST_DB_DIR --yes"
+invoke_command "Initialize the local database" "$CLI_COMMAND init --db $TEST_DB_DIR --yes"
+ts_verify "$TEST_DB_DIR"
 
 # The origin is made by replicating the local database rather than by initializing a second one.
 # Two databases created independently have different ids and sync refuses them, which is the
 # refusal this feature deliberately leaves in place: making them related is what `psi replicate`
 # (or `psi connect`, for a remote that already has content) is for.
-invoke_command "Replicate the local database to the origin" "$(get_zig_cli_command) replicate --db $TEST_DB_DIR --dest $ORIGIN_DB_DIR --yes"
+invoke_command "Replicate the local database to the origin" "$CLI_COMMAND replicate --db $TEST_DB_DIR --dest $ORIGIN_DB_DIR --yes"
+ts_verify "$ORIGIN_DB_DIR"
 invoke_command "Point the local database at the origin" "$CLI_COMMAND set-origin --db $TEST_DB_DIR $ORIGIN_DB_DIR --yes"
+ts_verify "$TEST_DB_DIR"
 
 cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/holiday.png"
 
 WATCH_OUTPUT=""
-invoke_command "Import the folder" "$(get_zig_cli_command) add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
+invoke_command "Import the folder" "$CLI_COMMAND add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
+ts_verify "$TEST_DB_DIR"
 
 expect_output_value "$WATCH_OUTPUT" "Files added:" 1 "The file was imported"
 
 # The two halves of what `psi watch` used to be, run one after the other. Each is separately useful
 # and separately testable, which is the point of splitting them.
-invoke_command "Sync to the origin" "$(get_zig_cli_command) sync --db $TEST_DB_DIR --yes"
+invoke_command "Sync to the origin" "$CLI_COMMAND sync --db $TEST_DB_DIR --yes"
+ts_verify "$TEST_DB_DIR"
+ts_verify "$ORIGIN_DB_DIR"
 
 # --- The asset reached the origin. ---
 
@@ -51,15 +57,15 @@ expect_value "$ORIGIN_ASSET_COUNT" 1 "The origin holds the original"
 ORIGIN_THUMB_COUNT=$(ls -1 "$ORIGIN_DB_DIR/thumb" 2>/dev/null | wc -l | tr -d ' ')
 expect_value "$ORIGIN_THUMB_COUNT" 1 "The origin holds the thumbnail"
 
-invoke_command "Verify the origin" "$(get_zig_cli_command) verify --db $ORIGIN_DB_DIR --yes"
+invoke_command "Verify the origin" "$CLI_COMMAND verify --db $ORIGIN_DB_DIR --yes"
 
 # --- The local database still holds everything: nothing here deletes local originals. ---
 
 LOCAL_ASSET_COUNT=$(ls -1 "$TEST_DB_DIR/asset" 2>/dev/null | wc -l | tr -d ' ')
 expect_value "$LOCAL_ASSET_COUNT" 1 "The local original was kept"
 
-invoke_command "Verify the local database" "$(get_zig_cli_command) verify --db $TEST_DB_DIR --yes"
+invoke_command "Verify the local database" "$CLI_COMMAND verify --db $TEST_DB_DIR --yes"
 
-invoke_command "Verify the origin with the TypeScript CLI" "$(get_cli_command) verify --db $ORIGIN_DB_DIR --yes"
+ts_verify "$ORIGIN_DB_DIR"
 
 test_passed

@@ -12,6 +12,9 @@ REPO_ROOT="$(cd "$SMOKE_TESTS_DIR/../../.." && pwd)"
 # LAN pairing codes, allocated so a test cannot take one another run on the machine is using.
 source "$REPO_ROOT/scripts/lib/test-lib.sh"
 
+# Timing for the TypeScript verify calls ts_verify makes.
+source "$SMOKE_TESTS_DIR/lib/ts-verify-timing.sh"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -716,6 +719,29 @@ invoke_command() {
     fi
 }
 
+# Runs the TypeScript CLI's psi verify on a database the Zig CLI has just created or modified, and
+# fails the test unless it passes, so the reference implementation checks the integrity of every
+# database the Zig CLI writes. Any further arguments (a --key) go to verify. The time it takes is
+# appended to ts-verify-milliseconds.log in the test's directory, so the runner can report how much
+# of the Zig suite is spent in the TypeScript CLI.
+# Usage: ts_verify <database> [verify arguments...]
+ts_verify() {
+    local database_dir="$1"
+    shift
+    local verify_arguments=""
+    if [ $# -gt 0 ]; then
+        verify_arguments="$(printf ' %q' "$@")"
+    fi
+    local verify_start
+    verify_start="$(current_milliseconds)"
+    # The TypeScript CLI takes its deterministic test UUIDs from a counter of its own, so checking a
+    # database does not move the ids the Zig CLI hands out next, which the tests assert on.
+    local verify_counter_dir="$TEST_TMP_DIR/ts-verify-uuid-counter"
+    mkdir -p "$verify_counter_dir"
+    invoke_command "Verify $database_dir with the TypeScript CLI" "TEST_TMP_DIR=\"$verify_counter_dir\" $(get_cli_command) verify --db \"$database_dir\"$verify_arguments --yes"
+    record_ts_verify_milliseconds "$TEST_TMP_DIR/ts-verify-milliseconds.log" "$verify_start"
+}
+
 
 # Check if a directory/file exists
 check_exists() {
@@ -948,6 +974,7 @@ create_db_with_5_files() {
     fi
 
     invoke_command "Initialize database" "$(get_zig_cli_command) init --db $db_dir --yes"
+    ts_verify "$db_dir"
     populate_db_with_5_files "$db_dir"
 }
 
@@ -955,10 +982,14 @@ create_db_with_5_files() {
 populate_db_with_5_files() {
     local db_dir="$1"
     invoke_command "Add PNG file" "$(get_zig_cli_command) add --db $db_dir $TEST_FILES_DIR/test.png --yes"
+    ts_verify "$db_dir"
     invoke_command "Add JPG file" "$(get_zig_cli_command) add --db $db_dir $TEST_FILES_DIR/test.jpg --yes"
+    ts_verify "$db_dir"
     invoke_command "Add MP4 file" "$(get_zig_cli_command) add --db $db_dir $TEST_FILES_DIR/multiple-files/test.mp4 --yes"
+    ts_verify "$db_dir"
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
         invoke_command "Add multiple images" "$(get_zig_cli_command) add --db $db_dir $MULTIPLE_IMAGES_DIR/ --yes"
+        ts_verify "$db_dir"
     fi
 }
 

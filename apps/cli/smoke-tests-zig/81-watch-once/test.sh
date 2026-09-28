@@ -14,14 +14,16 @@ mkdir -p "$WATCH_DIR"
 
 CLI_COMMAND=$(get_zig_cli_command)
 
-invoke_command "Initialize database" "$(get_zig_cli_command) init --db $TEST_DB_DIR --yes"
+invoke_command "Initialize database" "$CLI_COMMAND init --db $TEST_DB_DIR --yes"
+ts_verify "$TEST_DB_DIR"
 
 # --- 1. A file sitting in the watched folder is imported. ---
 
 cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/first.png"
 
 WATCH_OUTPUT=""
-invoke_command "Import the folder" "$(get_zig_cli_command) add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
+invoke_command "Import the folder" "$CLI_COMMAND add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
+ts_verify "$TEST_DB_DIR"
 
 expect_output_value "$WATCH_OUTPUT" "Files added:" 1 "One file was imported"
 expect_output_value "$WATCH_OUTPUT" "Already added:" 0 "Nothing was already in the database"
@@ -37,7 +39,8 @@ check_exists "$WATCH_DIR/first.png" "The source file"
 # --- 2. Running again over the same file imports nothing a second time. ---
 
 WATCH_OUTPUT=""
-invoke_command "Import the folder again" "$(get_zig_cli_command) add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
+invoke_command "Import the folder again" "$CLI_COMMAND add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
+ts_verify "$TEST_DB_DIR"
 
 expect_output_value "$WATCH_OUTPUT" "Files added:" 0 "The file was not imported a second time"
 expect_output_value "$WATCH_OUTPUT" "Already added:" 1 "The file was recognised as already in the database"
@@ -51,7 +54,8 @@ expect_output_value "$SUMMARY_OUTPUT" "Files imported:" 1 "The database still ho
 cp "$TEST_FILES_DIR/test.jpg" "$WATCH_DIR/second.jpg"
 
 WATCH_OUTPUT=""
-invoke_command "Import after adding a file" "$(get_zig_cli_command) add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
+invoke_command "Import after adding a file" "$CLI_COMMAND add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
+ts_verify "$TEST_DB_DIR"
 
 expect_output_value "$WATCH_OUTPUT" "Files added:" 1 "The new file was imported"
 expect_output_value "$WATCH_OUTPUT" "Already added:" 1 "The old file was recognised"
@@ -66,7 +70,8 @@ mkdir -p "$WATCH_DIR/holiday"
 cp "$TEST_FILES_DIR/test.webp" "$WATCH_DIR/holiday/third.webp"
 
 WATCH_OUTPUT=""
-invoke_command "Import with a subfolder" "$(get_zig_cli_command) add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
+invoke_command "Import with a subfolder" "$CLI_COMMAND add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
+ts_verify "$TEST_DB_DIR"
 
 expect_output_value "$WATCH_OUTPUT" "Files added:" 1 "The file in the subfolder was imported"
 
@@ -74,6 +79,6 @@ SUMMARY_OUTPUT=""
 invoke_command "Summarize after the subfolder" "$CLI_COMMAND summary --db $TEST_DB_DIR --yes" 0 SUMMARY_OUTPUT
 expect_output_value "$SUMMARY_OUTPUT" "Files imported:" 3 "The database holds all three assets"
 
-invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db $TEST_DB_DIR --yes"
+ts_verify "$TEST_DB_DIR"
 
 test_passed

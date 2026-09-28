@@ -10,4 +10,4 @@ create_db_with_5_files "$TEST_DB_DIR"
 
 test_detect_deleted_file 15
 
-invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db $TEST_DB_DIR --yes"
+ts_verify "$TEST_DB_DIR"

@@ -18,6 +18,7 @@ test_create_database() {
     log_info "Database path: $TEST_DB_DIR"
 
     invoke_command "Initialize new database" "$(get_zig_cli_command) init --db $TEST_DB_DIR --yes"
+    ts_verify "$TEST_DB_DIR"
 
     # Check if required files were created (v6 layout: BSON under .db/bson)
     check_exists "$TEST_DB_DIR" "Database directory"
@@ -66,6 +67,7 @@ test_add_file_parameterized() {
     # Add the file and capture output with verbose logging
     local add_output
     invoke_command "$test_description" "$(get_zig_cli_command) add --db $TEST_DB_DIR $file_path --verbose --yes" 0 "add_output"
+    ts_verify "$TEST_DB_DIR"
 
     # Verify exactly one file was added (or was already there)
     if [ "$already_in_db" -eq "1" ]; then
@@ -126,6 +128,7 @@ test_add_same_file() {
 
     # Try to re-add the PNG file (should not add it again)
     invoke_command "Re-add same file" "$(get_zig_cli_command) add --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
+    ts_verify "$TEST_DB_DIR"
 
     invoke_command "Check file still in database" "$(get_zig_cli_command) check --db $TEST_DB_DIR $TEST_FILES_DIR/test.png --yes"
     test_passed
@@ -145,6 +148,7 @@ test_add_multiple_files() {
 
     local add_output
     invoke_command "Add multiple files" "$(get_zig_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes" 0 "add_output"
+    ts_verify "$TEST_DB_DIR"
 
     # Check that 5 files were imported (2 images + 1 video + 2 images from the zip archive)
     expect_output_value "$add_output" "Files added:" "5" "Five files imported from multiple files directory"
@@ -163,6 +167,7 @@ test_add_same_multiple_files() {
     check_exists "$MULTIPLE_IMAGES_DIR" "Multiple images fixture directory"
 
     invoke_command "Re-add multiple files" "$(get_zig_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+    ts_verify "$TEST_DB_DIR"
 
     invoke_command "Check multiple files still in database" "$(get_zig_cli_command) check --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
     test_passed
@@ -183,17 +188,17 @@ test_add_duplicate_images() {
 
     log_info "Creating new database at: $db_dir"
     invoke_command "Initialize new database" "$(get_zig_cli_command) init --db $db_dir --yes"
+    ts_verify "$db_dir"
 
     local add_output
     invoke_command "Add duplicate images directory" "$(get_zig_cli_command) add --db $db_dir $DUPLICATE_IMAGES_DIR/ --yes" 0 "add_output"
+    ts_verify "$db_dir"
 
     local summary_output
     invoke_command "Get database summary" "$(get_zig_cli_command) summary --db $db_dir --yes" 0 "summary_output"
 
     local files_imported=$(parse_numeric "$summary_output" "Files imported:" "0")
     expect_value "$files_imported" "1" "Database should have exactly 1 asset after importing two identical files"
-
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db $db_dir --yes"
 
     rm -rf "$db_dir"
     test_passed
@@ -554,6 +559,7 @@ test_database_replicate() {
     # Run replicate command and capture output
     local replicate_output
     invoke_command "Replicate database" "$(get_zig_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes --force" 0 "replicate_output"
+    ts_verify "$replica_dir"
 
     # Check if replication was successful
     expect_output_string "$replicate_output" "Replication completed successfully" "Database replication completed successfully"
@@ -671,6 +677,7 @@ test_database_replicate_second() {
     # Run second replicate command and capture output
     local second_replication_output
     invoke_command "Second replication (no changes)" "$(get_zig_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes --force" 0 "second_replication_output"
+    ts_verify "$replica_dir"
 
     # Check if replication was successful
     expect_output_string "$second_replication_output" "Replication completed successfully" "Second replication completed successfully"
@@ -727,6 +734,7 @@ test_compare_with_changes() {
     local new_test_file="$TEST_FILES_DIR/test.webp"
     local webp_add_output
     invoke_command "Add new asset to original database" "$(get_zig_cli_command) add --db $TEST_DB_DIR $new_test_file --verbose --yes" 0 "webp_add_output"
+    ts_verify "$TEST_DB_DIR"
 
     # Validate the WEBP asset in the database
     validate_database_assets "$TEST_DB_DIR" "$new_test_file" "image/webp" "image" "$webp_add_output"
@@ -754,6 +762,7 @@ test_replicate_after_changes() {
     # Replicate the changes from original to replica
     local replication_output
     invoke_command "Replicate changes to replica" "$(get_zig_cli_command) replicate --db $TEST_DB_DIR --dest $replica_dir --yes --force" 0 "replication_output"
+    ts_verify "$replica_dir"
 
     # Check that the 8 changed files were replicated
     expect_output_value "$replication_output" "Total files copied:" "3" "Files copied (the changes)"
@@ -782,6 +791,7 @@ test_cannot_create_over_existing() {
     log_info "Database path: $TEST_DB_DIR"
 
     invoke_command "Fail to create database over existing" "$(get_zig_cli_command) init --db $TEST_DB_DIR --yes" 1
+    ts_verify "$TEST_DB_DIR"
     test_passed
 }
 
@@ -799,6 +809,7 @@ test_repair_ok_database() {
     # Run repair on the intact database using replica as source
     local repair_output
     invoke_command "Repair intact database" "$(get_zig_cli_command) repair --db $TEST_DB_DIR --source $replica_dir --yes" 0 "repair_output"
+    ts_verify "$TEST_DB_DIR"
 
     # Check that repair reports no issues found
     expect_output_string "$repair_output" "Database repair completed - no issues found" "Repair of OK database shows no issues"
@@ -848,6 +859,7 @@ test_remove_asset() {
     # Remove the asset
     local remove_output
     invoke_command "Remove asset from database" "$(get_zig_cli_command) remove --db $TEST_DB_DIR $test_asset_id --verbose --yes" 0 "remove_output"
+    ts_verify "$TEST_DB_DIR"
 
     # Check that removal was successful
     expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
@@ -1037,6 +1049,7 @@ test_repair_damaged_database() {
     log_info "Running repair to fix issues..."
     local repair_output
     invoke_command "Repair damaged database" "$(get_zig_cli_command) repair --db $damaged_dir --source $replica_dir --yes --full" 0 "repair_output"
+    ts_verify "$damaged_dir"
 
     # Repair should fix the issues
     expect_output_string "$repair_output" "Database repair completed successfully" "Repair completes successfully"

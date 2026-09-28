@@ -25,6 +25,7 @@ test_v5_database_upgrade() {
     
     local upgrade_output
     invoke_command "Upgrade v5 database to v6" "$(get_zig_cli_command) upgrade --db $temp_v5_dir --yes" 0 "upgrade_output"
+    ts_verify "$temp_v5_dir"
     
     expect_output_string "$upgrade_output" "Database upgraded successfully to version 6" "Upgrade completed successfully"
     
@@ -40,7 +41,7 @@ test_v5_database_upgrade() {
     
     check_merkle_tree_order "$temp_v5_dir/.db/files.dat" "upgraded v5 database"
     
-    invoke_command "Verify the upgraded database with the TypeScript CLI" "$(get_cli_command) verify --db $temp_v5_dir --yes"
+    ts_verify "$temp_v5_dir"
 
     rm -rf "$temp_v5_dir"
     log_success "Cleaned up temporary v5 upgrade database"

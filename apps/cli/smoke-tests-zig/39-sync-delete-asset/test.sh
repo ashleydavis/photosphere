@@ -30,6 +30,7 @@ test_sync_delete_asset() {
     rm -rf "$copy_dir"
     local replicate_output
     invoke_command "Replicate to create copy" "$(get_zig_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
+    ts_verify "$copy_dir"
     
     # Verify both databases exist
     check_exists "$original_dir" "Original database directory"
@@ -62,6 +63,7 @@ test_sync_delete_asset() {
     log_info "Deleting asset '$test_asset_id' from original database"
     local remove_output
     invoke_command "Remove asset from original database" "$(get_zig_cli_command) remove --db $original_dir $test_asset_id --verbose --yes" 0 "remove_output"
+    ts_verify "$original_dir"
     
     # Check that removal was successful
     expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
@@ -121,6 +123,8 @@ test_sync_delete_asset() {
     log_info "Syncing from original to copy (should delete asset in copy)"
     local sync_output
     invoke_command "Sync original to copy" "$(get_zig_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
+    ts_verify "$copy_dir"
+    ts_verify "$original_dir"
     
     # Verify sync completed
     expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
@@ -179,7 +183,7 @@ test_sync_delete_asset() {
     check_merkle_tree_order "$original_dir/.db/files.dat" "sync delete original database"
     check_merkle_tree_order "$copy_dir/.db/files.dat" "sync delete copy database"
     
-    invoke_command "Verify the copy with the TypeScript CLI" "$(get_cli_command) verify --db $copy_dir --yes"
+    ts_verify "$copy_dir"
 
     # Clean up temporary databases
     rm -rf "$original_dir"

@@ -35,6 +35,7 @@ test_replicate_with_deleted_asset() {
     log_info "Deleting asset '$test_asset_id' from source database"
     local remove_output
     invoke_command "Remove asset from source database" "$(get_zig_cli_command) remove --db $source_dir $test_asset_id --verbose --yes" 0 "remove_output"
+    ts_verify "$source_dir"
     
     # Check that removal was successful
     expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
@@ -56,6 +57,7 @@ test_replicate_with_deleted_asset() {
     rm -rf "$replica_dir"
     local replicate_output
     invoke_command "Replicate database with deleted asset" "$(get_zig_cli_command) replicate --db $source_dir --dest $replica_dir --yes --force" 0 "replicate_output"
+    ts_verify "$replica_dir"
     
     # Verify replica database exists
     check_exists "$replica_dir" "Replica database directory"
@@ -117,7 +119,7 @@ test_replicate_with_deleted_asset() {
     check_merkle_tree_order "$source_dir/.db/files.dat" "replicate deleted source database"
     check_merkle_tree_order "$replica_dir/.db/files.dat" "replicate deleted replica database"
     
-    invoke_command "Verify the replica with the TypeScript CLI" "$(get_cli_command) verify --db $replica_dir --yes"
+    ts_verify "$replica_dir"
 
     # Clean up temporary databases
     rm -rf "$source_dir"

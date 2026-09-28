@@ -41,7 +41,9 @@ test_remove_orphans() {
     local ts_db_dir="$test_dir/orphans-db-ts"
 
     invoke_command "Create a database" "$(get_zig_cli_command) init --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
     invoke_command "Add a PNG file" "$(get_zig_cli_command) add --db \"$db_dir\" \"$TEST_FILES_DIR/test.png\" --yes"
+    ts_verify "$db_dir"
     local asset_id
     asset_id="$(ls "$db_dir/asset")"
 
@@ -52,6 +54,7 @@ test_remove_orphans() {
 
     local clean_output
     invoke_command "Remove orphans from a database that has none" "$(get_zig_cli_command) -q remove-orphans --db \"$db_dir\" --yes" 0 "clean_output"
+    ts_verify "$db_dir"
     expect_output_string "$clean_output" "No orphaned files found" "A database the CLI wrote has no orphans"
 
     # --- 2. Files nothing in the database refers to. ---
@@ -67,6 +70,7 @@ test_remove_orphans() {
 
     local remove_output
     expect_same_orphans_output "Remove the orphans" "remove-orphans" "$db_dir" "$ts_db_dir" "remove_output"
+    ts_verify "$db_dir"
     local orphan_path
     for orphan_path in asset/orphan-asset display/orphan-display thumb/orphan-thumb; do
         expect_output_string "$remove_output" "✗ $orphan_path$" "$orphan_path is listed for removal"
@@ -99,7 +103,7 @@ test_remove_orphans() {
     expect_output_string "$again_output" "No orphaned files found" "Nothing is left to remove"
 
     invoke_command "Verify the database" "$(get_zig_cli_command) verify --db \"$db_dir\" --yes"
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
 
     test_passed
 }

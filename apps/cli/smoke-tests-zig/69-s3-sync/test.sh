@@ -131,6 +131,7 @@ test_s3_sync() {
 
     invoke_command "Replicate the local database up to S3" \
         "$(get_zig_cli_command) replicate --db $local_db --dest \"$s3_db\" --yes --force" 0
+    ts_verify "$s3_db"
     expect_hashes_converged "$local_db" "$s3_db" "The pair starts with matching root hashes"
 
     # --- 1. A field edited locally syncs up to S3. ---
@@ -142,6 +143,8 @@ test_s3_sync() {
 
     local sync_edit_output
     invoke_command "Sync the field edit up to S3" "$(get_zig_cli_command) sync --db $local_db --dest \"$s3_db\" --yes" 0 "sync_edit_output"
+    ts_verify "$local_db"
+    ts_verify "$s3_db"
     expect_output_string "$sync_edit_output" "Sync completed successfully" "The field-edit sync completed"
     expect_hashes_converged "$local_db" "$s3_db" "The root hashes converged after syncing the field edit up"
 
@@ -149,10 +152,13 @@ test_s3_sync() {
 
     invoke_command "Add a WEBP to the local database" \
         "$(get_zig_cli_command) add --db $local_db $TEST_FILES_DIR/test.webp --yes" 0
+    ts_verify "$local_db"
     expect_hashes_diverged "$local_db" "$s3_db" "The local add moved the local root hash away from S3's"
 
     local sync_up_output
     invoke_command "Sync local to S3" "$(get_zig_cli_command) sync --db $local_db --dest \"$s3_db\" --yes" 0 "sync_up_output"
+    ts_verify "$local_db"
+    ts_verify "$s3_db"
     expect_output_string "$sync_up_output" "Sync completed successfully" "The local-to-S3 sync completed"
     expect_hashes_converged "$local_db" "$s3_db" "The root hashes converged after syncing the local add up"
 
@@ -165,6 +171,7 @@ test_s3_sync() {
     local add_on_s3_output
     invoke_command "Add a JPEG directly to the S3 database" \
         "$(get_zig_cli_command) add --db \"$s3_db\" $TEST_FILES_DIR/multiple-files/test-1.jpeg --verbose --yes" 0 "add_on_s3_output"
+    ts_verify "$s3_db"
     local s3_added_asset_id
     s3_added_asset_id="$(asset_id_from_add_output "$add_on_s3_output")"
     if [ -z "$s3_added_asset_id" ]; then
@@ -176,6 +183,8 @@ test_s3_sync() {
 
     local sync_down_output
     invoke_command "Sync S3 to local" "$(get_zig_cli_command) sync --db $local_db --dest \"$s3_db\" --yes" 0 "sync_down_output"
+    ts_verify "$local_db"
+    ts_verify "$s3_db"
     expect_output_string "$sync_down_output" "Sync completed successfully" "The S3-to-local sync completed"
     expect_hashes_converged "$local_db" "$s3_db" "The root hashes converged after syncing the S3 add down"
 
@@ -187,10 +196,13 @@ test_s3_sync() {
 
     invoke_command "Remove an asset from the local database" \
         "$(get_zig_cli_command) remove --db $local_db $V6_RECORD_ID --yes" 0
+    ts_verify "$local_db"
     expect_hashes_diverged "$local_db" "$s3_db" "The local deletion moved the local root hash away from S3's"
 
     local sync_delete_up_output
     invoke_command "Sync the local deletion up to S3" "$(get_zig_cli_command) sync --db $local_db --dest \"$s3_db\" --yes" 0 "sync_delete_up_output"
+    ts_verify "$local_db"
+    ts_verify "$s3_db"
     expect_output_string "$sync_delete_up_output" "Sync completed successfully" "The deletion sync completed"
     expect_hashes_converged "$local_db" "$s3_db" "The root hashes converged after syncing the local deletion up"
 
@@ -202,10 +214,13 @@ test_s3_sync() {
 
     invoke_command "Remove an asset from the S3 database" \
         "$(get_zig_cli_command) remove --db \"$s3_db\" $s3_added_asset_id --yes" 0
+    ts_verify "$s3_db"
     expect_hashes_diverged "$local_db" "$s3_db" "The S3 deletion moved the S3 root hash away from the local one"
 
     local sync_delete_down_output
     invoke_command "Sync the S3 deletion back down" "$(get_zig_cli_command) sync --db $local_db --dest \"$s3_db\" --yes" 0 "sync_delete_down_output"
+    ts_verify "$local_db"
+    ts_verify "$s3_db"
     expect_output_string "$sync_delete_down_output" "Sync completed successfully" "The reverse deletion sync completed"
     expect_hashes_converged "$local_db" "$s3_db" "The root hashes converged after syncing the S3 deletion down"
 
@@ -213,7 +228,7 @@ test_s3_sync() {
     invoke_command "List the local database after the deletion synced down" "$(get_zig_cli_command) list --db $local_db --yes" 0 "local_list_after_delete"
     expect_output_string "$local_list_after_delete" "$s3_added_asset_id" "The asset deleted on S3 is gone locally" "false"
 
-    invoke_command "Verify the S3 database with the TypeScript CLI" "$(get_cli_command) verify --db \"$s3_db\" --yes"
+    ts_verify "$s3_db"
 
     test_passed
 }

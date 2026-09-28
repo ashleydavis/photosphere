@@ -75,6 +75,7 @@ test_s3_verify_repair() {
     # Take the repair source now, while the database is intact.
     invoke_command "Replicate the intact database down to a local repair source" \
         "$(get_zig_cli_command) replicate --db \"$s3_db\" --dest $good_replica --yes" 0
+    ts_verify "$good_replica"
 
     # --- 2. A deleted asset object is reported by verify. ---
 
@@ -98,6 +99,7 @@ test_s3_verify_repair() {
 
     invoke_command "Repair the S3 database from the local replica" \
         "$(get_zig_cli_command) repair --db \"$s3_db\" --source $good_replica --yes" 0
+    ts_verify "$s3_db"
 
     local verify_repaired_output
     invoke_command "Verify after the repair" "$(get_zig_cli_command) verify --db \"$s3_db\" --yes" 0 "verify_repaired_output"
@@ -115,6 +117,7 @@ test_s3_verify_repair() {
 
     invoke_command "Repair the overwritten object from the local replica" \
         "$(get_zig_cli_command) repair --db \"$s3_db\" --source $good_replica --full --yes" 0
+    ts_verify "$s3_db"
 
     local verify_repaired_again_output
     invoke_command "Fully verify after the second repair" "$(get_zig_cli_command) verify --db \"$s3_db\" --full --yes" 0 "verify_repaired_again_output"
@@ -130,7 +133,7 @@ test_s3_verify_repair() {
     invoke_command "Find orphans in the S3 database" "$(get_zig_cli_command) find-orphans --db \"$s3_db\" --yes" 0 "orphans_output"
     expect_output_string "$orphans_output" "00000000-0000-0000-0000-00000000beef" "The unreferenced object is reported as an orphan"
 
-    invoke_command "Verify the local replica with the TypeScript CLI" "$(get_cli_command) verify --db $good_replica --yes"
+    ts_verify "$good_replica"
 
     test_passed
 }

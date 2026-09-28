@@ -32,6 +32,7 @@ test_sync_original_to_copy() {
     rm -rf "$copy_dir"
     local replicate_output
     invoke_command "Replicate to create copy" "$(get_zig_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
+    ts_verify "$copy_dir"
     
     # Verify both databases exist
     check_exists "$original_dir" "Original database directory"
@@ -60,6 +61,7 @@ test_sync_original_to_copy() {
     log_info "Adding new file to original database"
     local add_output
     invoke_command "Add test file to original database" "$(get_zig_cli_command) add --db $original_dir $test_file --yes" 0 "add_output"
+    ts_verify "$original_dir"
     
     # Verify file was added
     expect_output_string "$add_output" "Added" "File was added successfully to original"
@@ -85,6 +87,8 @@ test_sync_original_to_copy() {
     log_info "Using sync command to synchronize databases"
     local sync_output
     invoke_command "Sync original to copy" "$(get_zig_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
+    ts_verify "$copy_dir"
+    ts_verify "$original_dir"
     
     # Verify sync completed
     expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"
@@ -119,7 +123,7 @@ test_sync_original_to_copy() {
     check_merkle_tree_order "$original_dir/.db/files.dat" "sync original database"
     check_merkle_tree_order "$copy_dir/.db/files.dat" "sync copy database"
     
-    invoke_command "Verify the copy with the TypeScript CLI" "$(get_cli_command) verify --db $copy_dir --yes"
+    ts_verify "$copy_dir"
 
     # Clean up temporary databases
     rm -rf "$original_dir"

@@ -9,4 +9,4 @@ TEST_DB_DIR="$(get_test_dir 1)/test-db"
 
 test_create_database 1
 
-invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db $TEST_DB_DIR --yes"
+ts_verify "$TEST_DB_DIR"

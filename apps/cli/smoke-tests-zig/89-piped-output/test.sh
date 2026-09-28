@@ -47,6 +47,7 @@ test_piped_output() {
     mkdir -p "$TEST_DIR"
 
     invoke_command "Initialize the database" "$(get_zig_cli_command) init --db \"$db_path\" --yes" 0
+    ts_verify "$db_path"
 
     log_info "Creating $ORPHAN_COUNT orphaned files ..."
     mkdir -p "$db_path/asset"
@@ -86,7 +87,7 @@ test_piped_output() {
     fi
     expect_value "$reported_orphans" "$ORPHAN_COUNT" "The summary line survived with the right count"
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_path\" --yes"
+    ts_verify "$db_path"
 
     test_passed
 }

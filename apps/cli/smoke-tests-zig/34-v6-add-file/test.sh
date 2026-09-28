@@ -34,6 +34,7 @@ test_v6_database_add_file() {
     
     local add_output
     invoke_command "Add test file to v6 database" "$(get_zig_cli_command) add --db $temp_v6_dir $test_file --yes" 0 "add_output"
+    ts_verify "$temp_v6_dir"
     
     expect_output_string "$add_output" "Added" "File was added successfully"
     
@@ -73,7 +74,7 @@ test_v6_database_add_file() {
     
     check_merkle_tree_order "$temp_v6_dir/.db/files.dat" "v6 add-file test database"
     
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db $temp_v6_dir --yes"
+    ts_verify "$temp_v6_dir"
 
     rm -rf "$temp_v6_dir"
     log_success "Cleaned up temporary v6 add-file database"

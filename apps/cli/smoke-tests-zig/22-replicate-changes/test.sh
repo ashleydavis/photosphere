@@ -8,8 +8,10 @@ trap cleanup_and_show_summary EXIT
 TEST_DB_DIR="$(get_test_dir 22)/test-db"
 create_db_with_5_files "$TEST_DB_DIR"
 invoke_command "Replicate (setup)" "$(get_zig_cli_command) replicate --db $TEST_DB_DIR --dest $TEST_DB_DIR-replica --yes --force"
+ts_verify "$TEST_DB_DIR-replica"
 invoke_command "Add webp (setup)" "$(get_zig_cli_command) add --db $TEST_DB_DIR $TEST_FILES_DIR/test.webp --yes"
+ts_verify "$TEST_DB_DIR"
 
 test_replicate_after_changes 22
 
-invoke_command "Verify the replica with the TypeScript CLI" "$(get_cli_command) verify --db $TEST_DB_DIR-replica --yes"
+ts_verify "$TEST_DB_DIR-replica"

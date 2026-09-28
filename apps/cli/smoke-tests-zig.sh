@@ -52,6 +52,36 @@ source "$_CLI_ABS_DIR/../../scripts/lib/test-concurrency.sh"
 # scheduler rather than a copy per suite.
 source "$_CLI_ABS_DIR/../../scripts/lib/test-pool.sh"
 
+# Timing for the TypeScript verify calls the tests make on every database the Zig CLI writes.
+source "$_CLI_ABS_DIR/smoke-tests-zig/lib/ts-verify-timing.sh"
+
+# The TypeScript verify calls the finished tests made, and the milliseconds they took, summed over
+# the tests for the summary. Tests run side by side, so this is time spent rather than wall clock.
+TS_VERIFY_TOTAL_MILLISECONDS=0
+TS_VERIFY_TOTAL_CALLS=0
+
+# The seconds the finished tests took, summed, to set beside the TypeScript verify total.
+TESTS_TOTAL_SECONDS=0
+
+# The verify time of the test account_test_timing last took, for its result line.
+LAST_TS_VERIFY_NOTE=""
+
+#
+# Adds one finished test's TypeScript verify calls and duration to the suite totals, and sets
+# LAST_TS_VERIFY_NOTE to its verify time for the result line. Not run in a subshell, so the totals stick.
+# Usage: account_test_timing <test_dir> <test seconds>
+#
+account_test_timing() {
+    local test_dir="$1"
+    local test_seconds="$2"
+    local verify_milliseconds
+    verify_milliseconds="$(sum_ts_verify_milliseconds "$test_dir/ts-verify-milliseconds.log")"
+    TS_VERIFY_TOTAL_MILLISECONDS=$((TS_VERIFY_TOTAL_MILLISECONDS + verify_milliseconds))
+    TS_VERIFY_TOTAL_CALLS=$((TS_VERIFY_TOTAL_CALLS + $(count_ts_verify_calls "$test_dir/ts-verify-milliseconds.log")))
+    TESTS_TOTAL_SECONDS=$((TESTS_TOTAL_SECONDS + test_seconds))
+    LAST_TS_VERIFY_NOTE="(TypeScript verify $(format_milliseconds_as_seconds "$verify_milliseconds"))"
+}
+
 # Test configuration
 #
 # The suite root, which holds the build output and whatever the setup and reset commands work on.
@@ -533,7 +563,8 @@ run_one() {
     if [ "$test_status" -eq 0 ]; then
         local test_duration
         test_duration=$(format_duration $((SECONDS - test_start)))
-        printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
+        account_test_timing "$TEST_TMP_DIR" $((SECONDS - test_start))
+        printf "${GREEN}PASS${NC}  %2s  %-30s  %s  %s\n" "$num" "$name" "$test_duration" "$LAST_TS_VERIFY_NOTE"
         return 0
     else
         local test_duration
@@ -650,7 +681,8 @@ report_cli_pool_result() {
         printf "${BLUE}SKIP${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$log_file"
         skip=$((skip + 1))
     elif [ "$status" -eq 0 ]; then
-        printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
+        account_test_timing "$test_dir" "$(cat "$test_dir/test-duration.txt" 2>/dev/null || echo 0)"
+        printf "${GREEN}PASS${NC}  %2s  %-30s  %s  %s\n" "$num" "$name" "$test_duration" "$LAST_TS_VERIFY_NOTE"
         pass=$((pass + 1))
     elif test_timed_out "$status"; then
         # The subshell exits with what run_test_with_timeout returned, so a test that ran out
@@ -707,6 +739,7 @@ print_summary() {
     else
         printf "Duration: %ds\n" "$secs"
     fi
+    printf "TypeScript verify: %d calls, %s of the %ds the passing tests took between them\n" "$TS_VERIFY_TOTAL_CALLS" "$(format_milliseconds_as_seconds "$TS_VERIFY_TOTAL_MILLISECONDS")" "$TESTS_TOTAL_SECONDS"
 }
 
 # Print the log output for every failed test.
@@ -753,6 +786,7 @@ build_shared_fixtures() {
     local fixture_dir
     fixture_dir="$(allocate_isolated_test_dir "fixture-db-5-files")"
     log_info "Building the shared five-file database in $fixture_dir"
+    local fixture_start=$SECONDS
     # In a subshell with its own TEST_TMP_DIR, so the UUID counter the build leaves behind lands
     # beside the database rather than in the suite root, and so this run's own TEST_TMP_DIR is not
     # changed by building it.
@@ -766,7 +800,8 @@ build_shared_fixtures() {
         return 1
     fi
     export PHOTOSPHERE_SMOKE_FIXTURE_5_FILES="$fixture_dir"
-    log_success "Built the shared five-file database"
+    account_test_timing "$fixture_dir" $((SECONDS - fixture_start))
+    log_success "Built the shared five-file database $LAST_TS_VERIFY_NOTE"
 }
 
 # Map a test number to its individual script path.

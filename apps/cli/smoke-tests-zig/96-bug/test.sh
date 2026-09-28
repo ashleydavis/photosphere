@@ -222,6 +222,7 @@ test_bug() {
     # --- 3. The latest log file is named in the report and its header is in the issue body. ---
 
     invoke_command "Create a database" "$(get_zig_cli_command) init --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
     invoke_command "Summarize it, writing its log files" "PHOTOSPHERE_TMP_DIR=\"$bug_tmp_dir\" $(get_zig_cli_command) summary --db \"$db_dir\" --yes"
 
     # A command writes a log and an error log, psi-<time>.log and psi-<time>-errors.log.
@@ -272,7 +273,7 @@ test_bug() {
     invoke_command "Report a bug with nothing on the PATH with the TypeScript CLI" "$no_opener_environment PATH=\"$empty_path_dir\" PHOTOSPHERE_TMP_DIR=\"$bug_tmp_dir\" $ts_cli_command bug --yes" 0 "ts_no_opener_report"
     expect_value "$no_opener_report" "$ts_no_opener_report" "The Zig CLI reports a missing opener as the TypeScript CLI does"
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
 
     test_passed
 }

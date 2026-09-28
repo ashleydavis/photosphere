@@ -75,10 +75,12 @@ test_s3_vault_credentials() {
     # the header. They are unset immediately afterwards so nothing below can fall back to them.
     export_s3_env_credentials
     invoke_command "Initialize the database on S3" "$(get_zig_cli_command) init --db \"$s3_db\" --yes" 0
+    ts_verify "$s3_db"
     unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_ENDPOINT AWS_REGION
 
     invoke_command "Add an image to the database by name" \
         "$(get_zig_cli_command) add $TEST_FILES_DIR/test.jpg --db $DB_NAME --yes" 0
+    ts_verify "$DB_NAME"
 
     local summary_output
     invoke_command "Summarise the database by name" "$(get_zig_cli_command) summary --db $DB_NAME --yes" 0 "summary_output"
@@ -113,7 +115,7 @@ test_s3_vault_credentials() {
     invoke_command "Initialize an S3 database whose credential is only in the vault" \
         "$(get_zig_cli_command) init --db \"$second_db\" --yes" 0
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$second_db\" --yes"
+    ts_verify "$second_db"
 
     test_passed
 }

@@ -39,8 +39,10 @@ test_edit_asset_metadata() {
     # to it. One asset is all the endpoint's behaviour needs.
     invoke_command "Create the database" \
         "$(get_zig_cli_command) init --db \"$db_dir\" --yes" 0
+    ts_verify "$db_dir"
     invoke_command "Add a photo to the database" \
         "$(get_zig_cli_command) add \"$TEST_FILES_DIR/test.jpg\" --db \"$db_dir\" --yes" 0
+    ts_verify "$db_dir"
 
     # The asset's id is whatever `add` generated, so it is read out of the listing rather than
     # hardcoded the way test 37 hardcodes its v6 fixture's id.
@@ -71,7 +73,7 @@ test_edit_asset_metadata() {
         "$(get_zig_cli_command) info $record_id --db \"$db_dir\" --yes" 0 "after_output"
     expect_output_string "$after_output" "$new_description" "The edited description is reported by 'psi info'"
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
 
     test_passed
 }

@@ -24,6 +24,7 @@ test_replicate_partial() {
     # Run partial replicate command
     local replicate_output
     invoke_command "Partial replicate database" "$(get_zig_cli_command) replicate --db $source_db_dir --dest $replica_dir --partial --yes --force" 0 "replicate_output"
+    ts_verify "$replica_dir"
 
     # Check if replication was successful
     expect_output_string "$replicate_output" "Replication completed successfully" "Partial replication completed successfully"
@@ -109,7 +110,7 @@ test_replicate_partial() {
     expect_output_string "$replica_summary" "Mode:.*partial" "Partial replica summary reports partial mode"
     expect_output_string "$source_summary" "Mode:.*full" "Source database summary reports full mode"
 
-    invoke_command "Verify the partial replica with the TypeScript CLI" "$(get_cli_command) verify --db $replica_dir --yes"
+    ts_verify "$replica_dir"
 
     rm -rf "$test_dir"
     test_passed

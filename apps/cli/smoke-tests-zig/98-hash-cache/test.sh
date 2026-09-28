@@ -76,7 +76,9 @@ test_hash_cache() {
     # --- 1. An import records the file it hashed, with the asset id it was given. ---
 
     invoke_command "Create a database" "$(get_zig_cli_command) init --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
     invoke_command "Add a PNG file" "$(get_zig_cli_command) add --db \"$db_dir\" \"$TEST_FILES_DIR/test.png\" --yes"
+    ts_verify "$db_dir"
     local asset_id
     asset_id="$(ls "$db_dir/asset")"
 
@@ -222,7 +224,7 @@ test_hash_cache() {
         log_success "The Zig CLI wrote $cache_file_name byte for byte as the TypeScript CLI did"
     done
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
 
     test_passed
 }

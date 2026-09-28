@@ -25,6 +25,7 @@ test_v6_database_upgrade_no_effect() {
     
     local upgrade_output
     invoke_command "Upgrade v6 database (should be no-op)" "$(get_zig_cli_command) upgrade --db $temp_v6_dir --yes" 0 "upgrade_output"
+    ts_verify "$temp_v6_dir"
     
     expect_output_string "$upgrade_output" "Database is already at the latest version (6)" "Upgrade reports database is already current"
     
@@ -40,7 +41,7 @@ test_v6_database_upgrade_no_effect() {
     
     check_merkle_tree_order "$temp_v6_dir/.db/files.dat" "v6 upgrade test database"
     
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db $temp_v6_dir --yes"
+    ts_verify "$temp_v6_dir"
 
     rm -rf "$temp_v6_dir"
     log_success "Cleaned up temporary v6 upgrade database"

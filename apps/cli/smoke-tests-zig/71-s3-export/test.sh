@@ -82,10 +82,12 @@ test_s3_export() {
     log_info "Database path: $s3_db"
 
     invoke_command "Initialize the S3 database" "$(get_zig_cli_command) init --db \"$s3_db\" --yes" 0
+    ts_verify "$s3_db"
 
     local add_jpg_output
     invoke_command "Add a JPG to the S3 database" \
         "$(get_zig_cli_command) add $TEST_FILES_DIR/test.jpg --db \"$s3_db\" --verbose --yes" 0 "add_jpg_output"
+    ts_verify "$s3_db"
     local jpg_asset_id
     jpg_asset_id="$(asset_id_from_add_output "$add_jpg_output")"
     if [ -z "$jpg_asset_id" ]; then
@@ -96,6 +98,7 @@ test_s3_export() {
     local add_mp4_output
     invoke_command "Add an MP4 to the S3 database" \
         "$(get_zig_cli_command) add $TEST_FILES_DIR/multiple-files/test.mp4 --db \"$s3_db\" --verbose --yes" 0 "add_mp4_output"
+    ts_verify "$s3_db"
     local mp4_asset_id
     mp4_asset_id="$(asset_id_from_add_output "$add_mp4_output")"
     if [ -z "$mp4_asset_id" ]; then
@@ -106,7 +109,7 @@ test_s3_export() {
     expect_byte_exact_export "$s3_db" "$jpg_asset_id" "$TEST_FILES_DIR/test.jpg" "$TEST_DIR/exported-test.jpg"
     expect_byte_exact_export "$s3_db" "$mp4_asset_id" "$TEST_FILES_DIR/multiple-files/test.mp4" "$TEST_DIR/exported-test.mp4"
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$s3_db\" --yes"
+    ts_verify "$s3_db"
 
     test_passed
 }
