@@ -311,7 +311,7 @@ pub fn syncDatabases(
 // not, then passes on the section's result. (No TypeScript counterpart: TypeScript writes try/finally inline. The
 // error message of a failed section is kept across the release, which records errors of its own.)
 //
-fn releaseWriteLockAfter(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, sectionResult: anyerror!void) !void {
+pub fn releaseWriteLockAfter(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, sectionResult: anyerror!void) !void {
     var sectionError: errors.ErrorRecord = undefined;
     errors.captureError(&sectionError);
     try releaseWriteLock(allocator, io, rawStorage);

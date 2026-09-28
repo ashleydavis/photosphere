@@ -5,6 +5,8 @@ const replicate_database_worker = @import("replicate-database.worker.zig");
 const import_assets_worker = @import("import-assets.worker.zig");
 const hash_file_worker = @import("hash-file.worker.zig");
 const cleanup_sources_worker = @import("cleanup-sources.worker.zig");
+const prefetch_database_worker = @import("prefetch-database.worker.zig");
+const consolidate_database_worker = @import("consolidate-database.worker.zig");
 const create_auto_import_scanner = @import("create-auto-import-scanner.zig");
 const registerHandler = task_queue_zig.worker.registerHandler;
 const verifyFileHandler = verify_worker.verifyFileHandler;
@@ -13,6 +15,8 @@ const replicateDatabaseHandler = replicate_database_worker.replicateDatabaseHand
 const importAssetsHandler = import_assets_worker.importAssetsHandler;
 const hashFileHandler = hash_file_worker.hashFileHandler;
 const cleanupSourcesHandler = cleanup_sources_worker.cleanupSourcesHandler;
+const prefetchDatabaseHandler = prefetch_database_worker.prefetchDatabaseHandler;
+const consolidateDatabaseHandler = consolidate_database_worker.consolidateDatabaseHandler;
 
 //
 // Register all task handlers
@@ -26,7 +30,8 @@ pub fn initTaskHandlers() !void {
     try cleanup_sources_worker.registerFolderMediaSourceBuilder();
     // Not ported: test-job (not used by psi add, psi replicate or psi verify).
     try registerHandler("verify-file", verifyFileHandler);
-    // Not ported: check-file, load-assets, prefetch-database (not used by psi add, psi replicate or psi verify).
+    // Not ported: check-file, load-assets (not used by psi add, psi replicate or psi verify).
+    try registerHandler("prefetch-database", prefetchDatabaseHandler);
     try registerHandler("upload-asset", uploadAssetHandler);
     // Not ported: sync-database (not used by psi add, psi replicate or psi verify).
     try registerHandler("replicate-database", replicateDatabaseHandler);
@@ -38,5 +43,6 @@ pub fn initTaskHandlers() !void {
     // receive-share, find-receiver, send-payload, check-database-exists, evict-originals (not used by psi add,
     // psi replicate or psi verify).
     try registerHandler("cleanup-sources", cleanupSourcesHandler);
-    // Not ported: consolidate-database, reset-app-storage (not used by psi add, psi replicate or psi verify).
+    try registerHandler("consolidate-database", consolidateDatabaseHandler);
+    // Not ported: reset-app-storage (not used by psi add, psi replicate or psi verify).
 }

@@ -29,8 +29,8 @@ pub const ICommandExamples = struct {
 
 //
 // Centralized examples for all CLI commands
-// (only the commands implemented in Zig are ported: init, add, info, summary, verify, repair, replicate, compare,
-// version, export, list, upgrade, sync, remove, find-orphans and remove-orphans).
+// (only the commands implemented in Zig are ported: init, add, consolidate, info, summary, verify, repair, replicate,
+// compare, version, export, list, upgrade, sync, remove, find-orphans and remove-orphans).
 //
 pub const COMMAND_EXAMPLES = [_]ICommandExamples{
     .{
@@ -60,6 +60,23 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             .{
                 .command = "psi add --db ./photos ~/Downloads/photos",
                 .description = "Adds a directory recursively.",
+            },
+        },
+    },
+    .{
+        .commandName = "consolidate",
+        .examples = &.{
+            .{
+                .command = "psi consolidate --db ./photos ./backup",
+                .description = "Creates the remote as a copy of this database when nothing is there.",
+            },
+            .{
+                .command = "psi consolidate --db ./photos s3:my-bucket/photos",
+                .description = "Joins an S3 remote that already holds a different database, so the two can sync.",
+            },
+            .{
+                .command = "psi consolidate --db ./photos ./shared",
+                .description = "Records an already-related remote as this database's origin.",
             },
         },
     },

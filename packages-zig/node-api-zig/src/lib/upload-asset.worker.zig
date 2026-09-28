@@ -49,6 +49,7 @@ const extractDominantColorFromThumbnail = media_file_database.extractDominantCol
 const getVideoDetails = video.getVideoDetails;
 const getImageDetails = image.getImageDetails;
 const InfoOperation = retry_operations.InfoOperation;
+const DeleteFileOperation = retry_operations.DeleteFileOperation;
 
 //
 // Payload for the upload-asset task.
@@ -336,32 +337,6 @@ const ReadMicroOperation = struct {
         return std.Io.Dir.cwd().readFileAlloc(io, self.localPath, self.allocator, .unlimited);
     }
 };
-
-//
-// `() => storage.deleteFile(filePath)`.
-//
-fn DeleteFileOperation(comptime sourceText: []const u8) type {
-    return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
-        pub const source = sourceText;
-
-        // Allocates the storage implementation's temporary data.
-        allocator: std.mem.Allocator,
-
-        // The storage to delete from.
-        storage: IStorage,
-
-        // The file to delete.
-        filePath: []const u8,
-
-        //
-        // Deletes the file.
-        //
-        pub fn run(self: *@This(), io: std.Io) !void {
-            try self.storage.deleteFile(self.allocator, io, self.filePath);
-        }
-    };
-}
 
 //
 // `() => remove(assetTempDir)`.

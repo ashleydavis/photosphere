@@ -69,7 +69,7 @@ fn isSet(value: ?[]const u8) bool {
 //
 // Gets `config?.origin` (null when the config or its origin is missing, or the origin is not a string).
 //
-fn configOrigin(config: ?std.json.Value) ?[]const u8 {
+pub fn configOrigin(config: ?std.json.Value) ?[]const u8 {
     const value = config orelse return null;
     const object = switch (value) {
         .object => |object| object,

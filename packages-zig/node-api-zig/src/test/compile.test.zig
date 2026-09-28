@@ -16,6 +16,9 @@ test "every file of the package compiles" {
     std.testing.refAllDecls(node_api.replicate_database_worker);
     std.testing.refAllDecls(node_api.tree);
     std.testing.refAllDecls(node_api.sync);
+    std.testing.refAllDecls(node_api.consolidate);
+    std.testing.refAllDecls(node_api.consolidate_database_worker);
+    std.testing.refAllDecls(node_api.prefetch_database_worker);
     std.testing.refAllDecls(node_api.hash);
     std.testing.refAllDecls(node_api.resolve_storage_credentials);
     std.testing.refAllDecls(node_api.open_storage);

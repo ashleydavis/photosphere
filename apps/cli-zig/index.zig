@@ -1,10 +1,10 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
-// Only the `add` (alias `a`), `compare` (alias `cmp`), `database-id`, `export` (alias `exp`), `find-orphans`, `info` (alias
-// `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `remove-orphans`, `repair`,
-// `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`, `upgrade`, `verify` (alias `ver`) and
-// `version` commands and the `--version` option are ported; the other commands are not registered yet, so commander
-// reports them as unknown commands.
+// Only the `add` (alias `a`), `compare` (alias `cmp`), `consolidate`, `database-id`, `export` (alias `exp`), `find-orphans`,
+// `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `remove-orphans`,
+// `repair`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`, `upgrade`, `verify` (alias
+// `ver`) and `version` commands and the `--version` option are ported; the other commands are not registered yet, so
+// commander reports them as unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -46,6 +46,7 @@ pub const find_orphans_command = @import("src/cmd/find-orphans.zig");
 pub const find_orphans = @import("src/lib/find-orphans.zig");
 pub const sync_watch = @import("src/lib/sync-watch.zig");
 pub const sync = @import("src/cmd/sync.zig");
+pub const consolidate = @import("src/cmd/consolidate.zig");
 pub const remove_orphans = @import("src/cmd/remove-orphans.zig");
 pub const upgrade = @import("src/cmd/upgrade.zig");
 pub const export_command = @import("src/cmd/export.zig");
@@ -88,6 +89,8 @@ const IUpgradeCommandOptions = upgrade.IUpgradeCommandOptions;
 const upgradeCommand = upgrade.upgradeCommand;
 const ISyncCommandOptions = sync.ISyncCommandOptions;
 const syncCommand = sync.syncCommand;
+const IConsolidateCommandOptions = consolidate.IConsolidateCommandOptions;
+const consolidateCommand = consolidate.consolidateCommand;
 const IRemoveCommandOptions = remove.IRemoveCommandOptions;
 const removeCommand = remove.removeCommand;
 const ICompareCommandOptions = compare.ICompareCommandOptions;
@@ -248,6 +251,18 @@ pub const IRemoveParsed = struct {
 };
 
 //
+// What the consolidate command runs with: its remote and options (TypeScript: the arguments commander passes the
+// action).
+//
+pub const IConsolidateParsed = struct {
+    // Path or URI of the remote database.
+    remote: []const u8,
+
+    // The options of the command.
+    options: IConsolidateCommandOptions,
+};
+
+//
 // What the export command runs with: its asset ID, output path and options (TypeScript: the arguments commander
 // passes the action).
 //
@@ -301,6 +316,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the sync command with these options.
     sync: ISyncCommandOptions,
+
+    // Run the consolidate command with this remote and these options.
+    consolidate: IConsolidateParsed,
 
     // Run the compare command with these options.
     compare: ICompareCommandOptions,
@@ -559,6 +577,24 @@ fn syncAction(state: *IProgramState, args: []const ArgumentValue, options: *cons
             .destKey = textValue(options, "destKey"),
             .watch = flagValue(options, "watch"),
             .interval = textValue(options, "interval"),
+        },
+    };
+}
+
+//
+// The action of the consolidate command
+// (`initContext((ctx, remote, options) => consolidateCommand(ctx, remote, options))`): `run` calls initContext and the
+// command.
+//
+fn consolidateAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+    state.outcome = .{
+        .consolidate = .{
+            .remote = args[0].string,
+            .options = .{
+                .base = baseOptions(options),
+                .destKey = textValue(options, "destKey"),
+            },
         },
     };
 }
@@ -874,7 +910,20 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
     _ = optionFrom(setOriginDefinition, cwdOption);
     _ = setOriginDefinition.action(state, setOriginAction);
 
-    // Not ported: consolidate.
+    const consolidateDefinition = program
+        .command("consolidate", .{})
+        .description("Joins this database to a remote one so the two can sync, creating the remote when it does not exist and recording it as the origin.")
+        .argument("<remote>", "Path or URI of the remote database (a directory or an s3: location).");
+    _ = optionFrom(consolidateDefinition, dbOption);
+    _ = optionFrom(consolidateDefinition, keyOption);
+    _ = optionFrom(consolidateDefinition, destKeyOption);
+    _ = optionFrom(consolidateDefinition, verboseOption);
+    _ = optionFrom(consolidateDefinition, yesOption);
+    _ = optionFrom(consolidateDefinition, cwdOption);
+    _ = optionFrom(consolidateDefinition, sessionIdOption);
+    _ = consolidateDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "consolidate"))
+        .action(state, consolidateAction);
 
     const listDefinition = program
         .command("list", .{})
@@ -1139,6 +1188,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             }
             const context = try initContext(allocator, io, options.base);
             try syncCommand(allocator, io, context, &options);
+        },
+        .consolidate => |parsed| {
+            var options = parsed.options;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try consolidateCommand(allocator, io, context, parsed.remote, &options);
         },
         .upgrade => |parsed| {
             var options = parsed;

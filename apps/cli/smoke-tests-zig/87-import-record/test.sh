@@ -202,7 +202,7 @@ assert_no_record_inside() {
 assert_no_record_inside "$LOCAL_DB" "Importing"
 log_success "Importing put no record inside the database it imported into"
 
-invoke_command "Create the remote and consolidate into it" "$CLI_COMMAND consolidate --db $LOCAL_DB $REMOTE_DB --yes"
+invoke_command "Create the remote and consolidate into it" "$(get_zig_cli_command) consolidate --db $LOCAL_DB $REMOTE_DB --yes"
 assert_no_record_inside "$LOCAL_DB" "Consolidation"
 assert_no_record_inside "$REMOTE_DB" "Consolidation"
 log_success "Consolidation put no record inside either database"

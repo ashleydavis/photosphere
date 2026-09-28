@@ -169,3 +169,27 @@ test "writeErrorChain shows each cause under the name its stack shows" {
     };
     try std.testing.expectEqualStrings("Error: outer: middle: not related\nCaused by:\nError: middle: not related\nCaused by:\nFatalError: not related", fixed_writer.buffered());
 }
+
+//
+// Throws a FatalError.
+//
+fn throwFatal(message: []const u8) errors.FatalErrorSet!void {
+    return errors.throwFatalError("{s}", .{message});
+}
+
+test "writeErrorChain shows the error under the name its stack shows" {
+    // A FatalError shows "FatalError" and an error class with a name of its own shows that name, as the first line
+    // of their JavaScript stacks do.
+    var fatalBuffer: [256]u8 = undefined;
+    var fatalWriter = std.Io.Writer.fixed(&fatalBuffer);
+    throwFatal("not related") catch |err| {
+        try wrapped_error.writeErrorChain(&fatalWriter, err);
+    };
+    try std.testing.expectEqualStrings("FatalError: not related", fatalWriter.buffered());
+
+    var namedBuffer: [256]u8 = undefined;
+    var namedWriter = std.Io.Writer.fixed(&namedBuffer);
+    errors.recordError("UnsupportedVersionError", "No deserializer found for version {d}", .{7});
+    try wrapped_error.writeErrorChain(&namedWriter, error.Thrown);
+    try std.testing.expectEqualStrings("UnsupportedVersionError: No deserializer found for version 7", namedWriter.buffered());
+}

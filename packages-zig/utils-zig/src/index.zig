@@ -14,3 +14,4 @@ pub const image = @import("lib/image.zig");
 pub const reverse_geocode = @import("lib/reverse-geocode.zig");
 pub const swallow_error = @import("lib/swallow-error.zig");
 pub const retry_or_log = @import("lib/retry-or-log.zig");
+pub const batch_generator = @import("lib/batch-generator.zig");

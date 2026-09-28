@@ -4,11 +4,13 @@ const errors = @import("errors.zig");
 //
 // Writes an error and its full cause chain to `writer` (used by formatErrorChain and by the default
 // log, which must not allocate). Zig errors carry no stack trace, so the first line of the JavaScript
-// `error.stack` ("Error: <message>") stands in for the stack.
+// `error.stack` ("<name>: <message>") stands in for the stack. A runtime Zig error has no recorded name, so it
+// shows "Error".
 //
 pub fn writeErrorChain(writer: *std.Io.Writer, err: anyerror) std.Io.Writer.Error!void {
-    try writer.print("Error: {s}", .{errors.errorMessage(err)});
-    if (err != error.Thrown and err != error.FatalError) {
+    const recorded = err == error.Thrown or err == error.FatalError;
+    try writer.print("{s}: {s}", .{ if (recorded) stackName(errors.lastErrorName()) else "Error", errors.errorMessage(err) });
+    if (!recorded) {
         return;
     }
     var cause_chain = errors.lastErrorCauseChain();
