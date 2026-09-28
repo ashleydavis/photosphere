@@ -463,7 +463,7 @@ test_init_encrypted() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/db"
@@ -495,7 +495,7 @@ test_init_generate_key_file() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/db"
@@ -527,7 +527,7 @@ test_replicate_to_encrypted() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local src_dir="$test_dir/plain-db"
@@ -580,7 +580,7 @@ test_replicate_from_encrypted() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local enc_dir="$test_dir/encrypted-db"
@@ -638,7 +638,7 @@ test_encrypt_plain() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local plain_dir="$test_dir/plain-db"
@@ -690,7 +690,7 @@ test_encrypt_generate_key_file() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local plain_dir="$test_dir/plain-db"
@@ -732,7 +732,7 @@ test_encrypt_reencrypt() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local enc1_dir="$test_dir/encrypted-db-1"
@@ -794,7 +794,7 @@ test_encrypt_old_to_new_format() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local old_dir="$test_dir/old-encrypted-db"
@@ -897,7 +897,7 @@ test_add_encrypted_file() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/encrypted-db"
@@ -933,7 +933,7 @@ test_export_encrypted_file() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/encrypted-db"
@@ -993,7 +993,7 @@ test_verify_encrypted_db() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/encrypted-db"
@@ -1034,7 +1034,7 @@ test_delete_encrypted_file() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/encrypted-db"
@@ -1144,7 +1144,7 @@ test_replicate_decrypted_from_encrypted() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local enc_dir="$test_dir/encrypted-db"
@@ -1202,7 +1202,7 @@ test_export_with_multiple_keys() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/encrypted-db"
@@ -1295,7 +1295,7 @@ test_multi_key_encrypt() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db1_dir="$test_dir/encrypted-db1"
@@ -1377,7 +1377,7 @@ test_partial_encrypt() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/encrypted-db"
@@ -1450,7 +1450,7 @@ test_key_not_found_noninteractive() {
     print_test_header "$name"
 
     local cli
-    cli="$(get_cli_command)"
+    cli="$(get_zig_cli_command)"
 
     local test_dir="$TEST_TMP_DIR/$name"
     local db_dir="$test_dir/db"

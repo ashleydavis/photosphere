@@ -78,4 +78,23 @@ pub fn build(b: *std.Build) !void {
     const run_test = b.addRunArtifact(unit_test);
     run_test.setCwd(b.path("."));
     test_step.dependOn(&run_test.step);
+
+    // The integration tests, against the real S3 server the environment names (see
+    // integration-tests/cloud-storage.test.zig). They are not part of the unit tests. They always run when
+    // asked for, because what they test is the server, which the build cannot see change.
+    const integration_test_step = b.step("test-integration", "Run the integration tests against the S3 server the environment names");
+    const integration_test_module = b.createModule(.{
+        .root_source_file = b.path("integration-tests/cloud-storage.test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    integration_test_module.addImport(module_name, module);
+    for (dependency_names) |dependency_name| {
+        const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = optimize });
+        integration_test_module.addImport(dependency_name, dependency.module(dependency_name));
+    }
+    const integration_test = b.addTest(.{ .root_module = integration_test_module });
+    const run_integration_test = b.addRunArtifact(integration_test);
+    run_integration_test.has_side_effects = true;
+    integration_test_step.dependOn(&run_integration_test.step);
 }
