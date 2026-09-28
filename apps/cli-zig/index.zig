@@ -3,8 +3,8 @@
 // Only the `add` (alias `a`), `compare` (alias `cmp`), `consolidate`, `database-id`, `decrypt`, `encrypt`, `export`
 // (alias `exp`), `find-orphans`, `hash`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`,
 // `remove` (alias `rm`), `remove-orphans`, `repair`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias
-// `sum`), `sync`, `upgrade`, `verify` (alias `ver`) and `version` commands and the `--version` option are ported; the other
-// commands are not registered yet, so commander reports them as unknown commands.
+// `sum`), `sync`, `tools`, `upgrade`, `verify` (alias `ver`) and `version` commands and the `--version` option are ported;
+// the other commands are not registered yet, so commander reports them as unknown commands.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -50,6 +50,7 @@ pub const consolidate = @import("src/cmd/consolidate.zig");
 pub const encrypt = @import("src/cmd/encrypt.zig");
 pub const decrypt = @import("src/cmd/decrypt.zig");
 pub const hash = @import("src/cmd/hash.zig");
+pub const tools_cmd = @import("src/cmd/tools.zig");
 pub const remove_orphans = @import("src/cmd/remove-orphans.zig");
 pub const upgrade = @import("src/cmd/upgrade.zig");
 pub const export_command = @import("src/cmd/export.zig");
@@ -100,6 +101,8 @@ const IDecryptCommandOptions = decrypt.IDecryptCommandOptions;
 const decryptCommand = decrypt.decryptCommand;
 const IHashCommandOptions = hash.IHashCommandOptions;
 const hashCommand = hash.hashCommand;
+const IToolsCommandOptions = tools_cmd.IToolsCommandOptions;
+const toolsCommand = tools_cmd.toolsCommand;
 const IRemoveCommandOptions = remove.IRemoveCommandOptions;
 const removeCommand = remove.removeCommand;
 const ICompareCommandOptions = compare.ICompareCommandOptions;
@@ -349,6 +352,9 @@ pub const ParseOutcome = union(enum) {
 
     // Run the hash command with this file path and these options.
     hash: IHashParsed,
+
+    // Run the tools command with these options.
+    tools: IToolsCommandOptions,
 
     // Run the compare command with these options.
     compare: ICompareCommandOptions,
@@ -669,6 +675,19 @@ fn hashAction(state: *IProgramState, args: []const ArgumentValue, options: *cons
                 .yes = flagValue(options, "yes"),
                 .key = textValue(options, "key"),
             },
+        },
+    };
+}
+
+//
+// The action of the tools command (`toolsCommand`): `run` calls the command.
+//
+fn toolsAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .tools = .{
+            .yes = flagValue(options, "yes"),
         },
     };
 }
@@ -1141,6 +1160,14 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "sync"))
         .action(state, syncAction);
 
+    const toolsDefinition = program
+        .command("tools", .{})
+        .description("Checks for required media processing tools (ImageMagick, ffmpeg, ffprobe).");
+    _ = optionFrom(toolsDefinition, yesOption);
+    _ = toolsDefinition
+        .addHelpText(.after, try getCommandExamplesHelp(allocator, "tools"))
+        .action(state, toolsAction);
+
     const upgradeDefinition = program
         .command("upgrade", .{})
         .description("Upgrades a media file database to the latest version.");
@@ -1329,6 +1356,12 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
             try hashCommand(allocator, io, parsed.filePath, &parsed.options);
+        },
+        .tools => |parsed| {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try toolsCommand(allocator, io, &parsed);
         },
         .upgrade => |parsed| {
             var options = parsed;

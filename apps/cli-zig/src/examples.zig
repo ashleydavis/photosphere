@@ -29,7 +29,7 @@ pub const ICommandExamples = struct {
 
 //
 // Centralized examples for all CLI commands
-// (only the commands implemented in Zig are ported: init, add, consolidate, info, summary, verify, repair, replicate,
+// (only the commands implemented in Zig are ported: init, add, consolidate, info, tools, summary, verify, repair, replicate,
 // compare, version, export, list, upgrade, hash, encrypt, decrypt, sync, remove, find-orphans and remove-orphans).
 //
 pub const COMMAND_EXAMPLES = [_]ICommandExamples{
@@ -102,6 +102,15 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
             .{
                 .command = "psi info --db ./photos <hash>",
                 .description = "Shows database metadata for asset(s) with the given hash.",
+            },
+        },
+    },
+    .{
+        .commandName = "tools",
+        .examples = &.{
+            .{
+                .command = "psi tools",
+                .description = "Checks the status of all required media processing tools.",
             },
         },
     },

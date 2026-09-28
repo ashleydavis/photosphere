@@ -237,6 +237,15 @@ get_cli_command() {
     fi
 }
 
+# Get the Zig CLI command: the Zig port of psi (apps/cli-zig), which runs the ported commands.
+get_zig_cli_command() {
+    if [ "$(detect_platform)" = "win" ]; then
+        echo "../cli-zig/zig-out/bin/psi.exe"
+    else
+        echo "../cli-zig/zig-out/bin/psi"
+    fi
+}
+
 # Detect platform and set build command
 detect_platform() {
     case "$(uname -s)" in
@@ -403,7 +412,7 @@ test_setup() {
 check_tools() {
     # shellcheck source=./check-tools.sh
     source "$SMOKE_TESTS_DIR/check-tools.sh"
-    run_check_tools
+    run_check_tools "$(get_zig_cli_command)"
 }
 
 # Reset function to clean up test artifacts

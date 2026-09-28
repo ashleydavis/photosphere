@@ -2,13 +2,20 @@
 #
 # Shared check-tools logic for Photosphere CLI smoke tests.
 # Source this file and call run_check_tools, or run the script directly.
-# When sourced, uses the caller's get_cli_command, invoke_command, and log_*.
+# When sourced, uses the caller's invoke_command and log_*. run_check_tools takes the psi command that runs
+# `tools` (the TypeScript CLI in the TypeScript suites, the Zig port in the *-zig suites).
 # Sets IMAGEMAGICK_IDENTIFY_CMD in the caller's scope when sourced.
 #
 
 _CHECK_TOOLS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 run_check_tools() {
+    local cli_command="$1"
+    if [ -z "$cli_command" ]; then
+        log_error "run_check_tools needs the psi command to run tools with"
+        exit 1
+    fi
+
     echo ""
     echo "=== CHECK TOOLS ==="
 
@@ -18,8 +25,6 @@ run_check_tools() {
         return 1
     fi
 
-    local cli_command
-    cli_command=$(get_cli_command)
     log_info "Using CLI command: $cli_command"
 
     # Verify NODE_ENV is set for deterministic UUID generation
@@ -31,7 +36,7 @@ run_check_tools() {
     fi
 
     log_info "Checking for required tools in system PATH"
-    invoke_command "Check tools" "$(get_cli_command) tools --yes"
+    invoke_command "Check tools" "$cli_command tools --yes"
     echo ""
 
     log_info "Verifying tools are installed and working..."
@@ -145,6 +150,6 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
         fi
         echo "$output"
     }
-    run_check_tools
+    run_check_tools "$(get_cli_command)"
     exit $?
 fi

@@ -2019,3 +2019,276 @@ test "hash reads an encrypted file through its key like the TypeScript CLI" {
     const plainReport = try std.fmt.allocPrint(allocator, "File: {s}\nHash: 426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c\nDate: 2024-01-02 03:04:05\nSize: 2049800 bytes\n", .{file});
     try expectResult(try runZig(allocator, environment, &.{ "hash", "--key", "zig-key", file }), plainReport, "", 0);
 }
+
+//
+// The report toolsCommand (apps/cli/src/cmd/tools.ts) prints before the status of the tools.
+//
+const tools_report_header = "\n📦 Media Processing Tools Status\n\nTool Status:\n\n";
+
+//
+// The report of `psi tools` when no tool is found, up to the installation instructions.
+//
+const tools_none_available_report = tools_report_header ++
+    \\❌ ImageMagick: Not found
+    \\   Image processing - resizing, format conversion, metadata extraction
+    \\
+    \\❌ ffmpeg: Not found
+    \\   Video processing - format conversion and thumbnail extraction
+    \\
+    \\❌ ffprobe: Not found
+    \\   Video analysis - metadata extraction, duration, dimensions, codecs
+    \\
+    \\⚠️ 3 tool(s) missing: ImageMagick, ffmpeg, ffprobe
+    \\
+    \\
+;
+
+//
+// The heading showInstallationInstructions (apps/cli/src/lib/installation-instructions.ts) starts with.
+//
+const tools_instructions_heading = "\nInstallation Instructions:\n\n";
+
+//
+// The line showInstallationInstructions ends with.
+//
+const tools_instructions_ending = "\nAfter installation, run this command again to verify all tools are available.\n";
+
+//
+// Replaces what differs between machines in the report of `psi tools`: the kind of ImageMagick found (in its
+// name) and the version of each tool found.
+//
+fn maskToolVersions(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
+    var masked: std.ArrayList(u8) = .empty;
+    var lines = std.mem.splitScalar(u8, text, '\n');
+    var first = true;
+    while (lines.next()) |line| {
+        if (!first) {
+            try masked.append(allocator, '\n');
+        }
+        first = false;
+        var maskedLine = line;
+        for ([_][]const u8{ "ImageMagick (convert/identify)", "ImageMagick (magick)" }) |imageMagickName| {
+            maskedLine = try std.mem.replaceOwned(u8, allocator, maskedLine, imageMagickName, "ImageMagick (<kind>)");
+        }
+        const versionLabel = ": Available (v";
+        if (std.mem.indexOf(u8, maskedLine, versionLabel)) |position| {
+            if (std.mem.endsWith(u8, maskedLine, ")")) {
+                maskedLine = try std.mem.concat(allocator, u8, &.{ maskedLine[0 .. position + versionLabel.len], "<version>)" });
+            }
+        }
+        try masked.appendSlice(allocator, maskedLine);
+    }
+    return masked.items;
+}
+
+//
+// Copies the executable of a tool found on the PATH of the environment into the directory, failing when it is
+// not on the PATH.
+//
+fn copyToolFromPath(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, toolName: []const u8, destDir: []const u8) !void {
+    const fileName = try std.mem.concat(allocator, u8, &.{ toolName, builtin.os.tag.exeFileExt(builtin.cpu.arch) });
+    var pathDirs = std.mem.splitScalar(u8, environment.get("PATH").?, std.fs.path.delimiter);
+    while (pathDirs.next()) |pathDir| {
+        if (pathDir.len == 0) {
+            continue;
+        }
+        const candidate = try std.fs.path.join(allocator, &.{ pathDir, fileName });
+        std.Io.Dir.cwd().access(std.testing.io, candidate, .{}) catch {
+            continue;
+        };
+        try std.Io.Dir.cwd().copyFile(candidate, std.Io.Dir.cwd(), try std.fs.path.join(allocator, &.{ destDir, fileName }), std.testing.io, .{});
+        return;
+    }
+    std.debug.print("This test needs {s} on the PATH.\n", .{toolName});
+    return error.RequiredToolMissing;
+}
+
+//
+// Runs the Zig CLI with the arguments, writing the keys to its stdin (a pipe) and then closing it. TERM is set to
+// a terminal that isUnicodeSupported (apps/cli/src/lib/clack/prompts/common.ts) accepts on every platform, so
+// the prompts render the same symbols everywhere.
+//
+fn runZigWithInput(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, args: []const []const u8, keys: []const u8) !helpers.CliResult {
+    const terminalEnvironment = try allocator.create(std.process.Environ.Map);
+    terminalEnvironment.* = try environment.clone(allocator);
+    try terminalEnvironment.put("TERM", "xterm-256color");
+    const io = std.testing.io;
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.append(allocator, try zigCliPath(allocator));
+    try argv.appendSlice(allocator, args);
+    const cliDir = try std.Io.Dir.cwd().openDir(io, "../cli", .{});
+    defer cliDir.close(io);
+    var child = try std.process.spawn(io, .{
+        .argv = argv.items,
+        .cwd = .{ .dir = cliDir },
+        .environ_map = terminalEnvironment,
+        .stdin = .pipe,
+        .stdout = .pipe,
+        .stderr = .pipe,
+    });
+    defer child.kill(io);
+    try child.stdin.?.writeStreamingAll(io, keys);
+    child.stdin.?.close(io);
+    child.stdin = null;
+
+    var multiReaderBuffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+    var multiReader: std.Io.File.MultiReader = undefined;
+    multiReader.init(allocator, io, multiReaderBuffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
+    defer multiReader.deinit();
+    while (true) {
+        multiReader.fill(64, .none) catch |err| {
+            if (err == error.EndOfStream) {
+                break;
+            }
+            return err;
+        };
+    }
+    try multiReader.checkAnyError();
+    const term = try child.wait(io);
+    const exitCode: u8 = switch (term) {
+        .exited => |code| code,
+        else => 255,
+    };
+    return .{
+        .exitCode = exitCode,
+        .stdout = try multiReader.toOwnedSlice(0),
+        .stderr = try multiReader.toOwnedSlice(1),
+    };
+}
+
+//
+// Gives the CLI environment a PATH holding only a new, empty directory under the root, and returns the directory.
+//
+fn usePathOfEmptyDirectory(allocator: std.mem.Allocator, environment: *std.process.Environ.Map, root: []const u8) ![]const u8 {
+    const binDir = try std.fs.path.join(allocator, &.{ root, "bin" });
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, binDir);
+    try environment.put("PATH", binDir);
+    return binDir;
+}
+
+test "tools reports every tool available like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-tools-available");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    for ([_][]const []const u8{ &.{ "tools", "--yes" }, &.{"tools"}, &.{ "tools", "-y" } }) |args| {
+        const result = try runZig(allocator, environment, args);
+        if (result.exitCode != 0) {
+            std.debug.print("This test needs ImageMagick and ffmpeg installed. psi tools printed:\n{s}\n", .{result.stdout});
+        }
+        const masked: helpers.CliResult = .{
+            .exitCode = result.exitCode,
+            .stdout = try maskToolVersions(allocator, result.stdout),
+            .stderr = result.stderr,
+        };
+
+        // The versions are masked by maskToolVersions.
+        try expectResult(masked, tools_report_header ++
+            \\✅ ImageMagick (<kind>): Available (v<version>)
+            \\   Image processing - resizing, format conversion, metadata extraction
+            \\
+            \\✅ ffmpeg: Available (v<version>)
+            \\   Video processing - format conversion and thumbnail extraction
+            \\
+            \\✅ ffprobe: Available (v<version>)
+            \\   Video analysis - metadata extraction, duration, dimensions, codecs
+            \\
+            \\🎉 All tools are available and ready to use!
+            \\
+        , "", 0);
+    }
+}
+
+test "tools --yes reports the missing tools and shows the installation instructions like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-tools-none");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    _ = try usePathOfEmptyDirectory(allocator, environment, root);
+
+    const result = try runZig(allocator, environment, &.{ "tools", "--yes" });
+    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
+    try std.testing.expectEqualStrings("", result.stderr);
+
+    // The installation instructions differ by platform (installation-instructions.test.zig checks them), so
+    // only their heading and ending are checked here.
+    const report = result.stdout[0..@min(tools_none_available_report.len, result.stdout.len)];
+    try std.testing.expectEqualStrings(tools_none_available_report, report);
+    const instructions = result.stdout[report.len..];
+    try std.testing.expect(std.mem.startsWith(u8, instructions, tools_instructions_heading));
+    try std.testing.expect(std.mem.endsWith(u8, instructions, tools_instructions_ending));
+}
+
+test "tools names the one missing tool like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-tools-no-imagemagick");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    // A PATH with ffmpeg and ffprobe but no ImageMagick.
+    const toolsEnvironment = try allocator.create(std.process.Environ.Map);
+    toolsEnvironment.* = try environment.clone(allocator);
+    const binDir = try usePathOfEmptyDirectory(allocator, toolsEnvironment, root);
+    try copyToolFromPath(allocator, environment, "ffmpeg", binDir);
+    try copyToolFromPath(allocator, environment, "ffprobe", binDir);
+
+    const result = try runZig(allocator, toolsEnvironment, &.{ "tools", "--yes" });
+    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
+    try std.testing.expectEqualStrings("", result.stderr);
+    const expectedReport = tools_report_header ++
+        \\❌ ImageMagick: Not found
+        \\   Image processing - resizing, format conversion, metadata extraction
+        \\
+        \\✅ ffmpeg: Available (v<version>)
+        \\   Video processing - format conversion and thumbnail extraction
+        \\
+        \\✅ ffprobe: Available (v<version>)
+        \\   Video analysis - metadata extraction, duration, dimensions, codecs
+        \\
+        \\⚠️ 1 tool(s) missing: ImageMagick
+        \\
+        \\
+    ;
+    const masked = try maskToolVersions(allocator, result.stdout);
+    const report = masked[0..@min(expectedReport.len, masked.len)];
+    try std.testing.expectEqualStrings(expectedReport, report);
+    const instructions = masked[report.len..];
+    try std.testing.expect(std.mem.startsWith(u8, instructions, tools_instructions_heading));
+    try std.testing.expect(std.mem.endsWith(u8, instructions, tools_instructions_ending));
+
+    // Only ImageMagick is missing, so the instructions do not mention ffmpeg.
+    try std.testing.expect(std.mem.indexOf(u8, instructions, "ffmpeg") == null);
+}
+
+test "tools asks before showing the installation instructions like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-tools-declined");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    _ = try usePathOfEmptyDirectory(allocator, environment, root);
+
+    // The confirm prompt answered with "n", as it renders to an input that is not a TTY in a terminal with Unicode
+    // (runZigWithInput sets TERM for that), then the message printed when the instructions are declined.
+    const declined = try runZigWithInput(allocator, environment, &.{"tools"}, "n");
+    try expectResult(declined, tools_none_available_report ++
+        "\x1b[?25l \n◆  Would you like to see installation instructions?\n   ● Yes / ○ No\n \n\x1b[1A\n" ++
+        "\x1b[?25h\x1b[999D\x1b[4A\x1b[1B\x1b[J◇  Would you like to see installation instructions?\n   No\n\n" ++
+        "Please install the missing tools and try again.\n", "", 1);
+
+    // Answering yes shows the installation instructions after the prompt.
+    const accepted = try runZigWithInput(allocator, environment, &.{"tools"}, "y");
+    try std.testing.expectEqual(@as(u8, 1), accepted.exitCode);
+    try std.testing.expectEqualStrings("", accepted.stderr);
+    try std.testing.expect(std.mem.startsWith(u8, accepted.stdout, tools_none_available_report ++ "\x1b[?25l \n◆  Would you like to see installation instructions?\n"));
+    try std.testing.expect(std.mem.indexOf(u8, accepted.stdout, "◇  Would you like to see installation instructions?\n   Yes\n" ++ tools_instructions_heading) != null);
+    try std.testing.expect(std.mem.endsWith(u8, accepted.stdout, tools_instructions_ending));
+}
