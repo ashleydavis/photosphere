@@ -10,4 +10,4 @@ create_db_with_5_files "$TEST_DB_DIR"
 
 test_database_summary 10
 
-invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db $TEST_DB_DIR --yes"
+ts_verify "$TEST_DB_DIR"

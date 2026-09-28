@@ -42,9 +42,11 @@ create_and_read_back() {
 
     invoke_command "Initialize the database at $s3_path" \
         "$(get_zig_cli_command) init --db \"$s3_path\" --yes" 0
+    ts_verify "$s3_path"
 
     invoke_command "Add $expected_name to $s3_path" \
         "$(get_zig_cli_command) add \"$source_file\" --db \"$s3_path\" --yes" 0
+    ts_verify "$s3_path"
 
     local list_output
     invoke_command "List $s3_path" "$(get_zig_cli_command) list --db \"$s3_path\" --yes" 0 "list_output"
@@ -91,10 +93,13 @@ test_s3_paths() {
 
     invoke_command "Initialize the awkward-names database" \
         "$(get_zig_cli_command) init --db \"$awkward_db\" --yes" 0
+    ts_verify "$awkward_db"
     invoke_command "Add a file whose name contains a space" \
         "$(get_zig_cli_command) add \"$awkward_space_file\" --db \"$awkward_db\" --yes" 0
+    ts_verify "$awkward_db"
     invoke_command "Add a file whose name contains non-ASCII characters" \
         "$(get_zig_cli_command) add \"$awkward_unicode_file\" --db \"$awkward_db\" --yes" 0
+    ts_verify "$awkward_db"
 
     local awkward_list
     invoke_command "List the awkward-names database" "$(get_zig_cli_command) list --db \"$awkward_db\" --yes" 0 "awkward_list"
@@ -110,7 +115,7 @@ test_s3_paths() {
     expect_not_listed "$awkward_db" "test.jpg"
     expect_not_listed "$awkward_db" "test.png"
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$awkward_db\" --yes"
+    ts_verify "$awkward_db"
 
     test_passed
 }

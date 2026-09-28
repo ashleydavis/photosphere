@@ -43,8 +43,10 @@ test_s3_database() {
     log_info "Database path: $s3_db"
 
     invoke_command "Initialize a database on S3" "$(get_zig_cli_command) init --db $s3_db --yes" 0
+    ts_verify "$s3_db"
 
     invoke_command "Add an image to the S3 database" "$(get_zig_cli_command) add $TEST_FILES_DIR/test.jpg --db $s3_db --yes" 0
+    ts_verify "$s3_db"
 
     # Read the database back off S3. A summary that reports the imported file proves the write landed
     # in the bucket and was read back out of it, not out of any local cache.
@@ -59,7 +61,7 @@ test_s3_database() {
     invoke_command "List the S3 database's assets" "$(get_zig_cli_command) list --db $s3_db --yes" 0 "list_output"
     expect_output_string "$list_output" "test.jpg" "The imported asset is listed from S3"
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db $s3_db --yes"
+    ts_verify "$s3_db"
 
     test_passed
 }

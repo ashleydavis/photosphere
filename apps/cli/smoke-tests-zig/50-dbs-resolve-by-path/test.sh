@@ -18,9 +18,11 @@ test_dbs_resolve_by_path() {
 
     # Init an encrypted database with a generated key.
     invoke_command "Init encrypted database" "$(get_zig_cli_command) init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes" 0
+    ts_verify "$db_dir" --key "$key_name"
 
     # Add a test file.
     invoke_command "Add PNG to database" "$(get_zig_cli_command) add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes" 0
+    ts_verify "$db_dir" --key "$key_name"
 
     # Extract the private key PEM from the CLI vault and store it as a shared secret.
     local cli_vault_file="${PHOTOSPHERE_VAULT_DIR}/vault.json"
@@ -40,7 +42,7 @@ test_dbs_resolve_by_path() {
     # of them (a file count, a byte count and two hashes), so it could not fail.
     expect_output_value "$summary_output" "Files imported:" "1" "Summary shows the one asset that was added"
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --key \"$key_name\" --yes"
+    ts_verify "$db_dir" --key "$key_name"
 
     test_passed
 }

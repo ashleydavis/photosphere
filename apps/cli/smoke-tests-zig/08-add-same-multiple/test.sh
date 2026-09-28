@@ -7,10 +7,12 @@ trap cleanup_and_show_summary EXIT
 
 TEST_DB_DIR="$(get_test_dir 8)/test-db"
 invoke_command "Initialize database" "$(get_zig_cli_command) init --db $TEST_DB_DIR --yes"
+ts_verify "$TEST_DB_DIR"
 if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
     invoke_command "Add multiple images (setup)" "$(get_zig_cli_command) add --db $TEST_DB_DIR $MULTIPLE_IMAGES_DIR/ --yes"
+    ts_verify "$TEST_DB_DIR"
 fi
 
 test_add_same_multiple_files 8
 
-invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db $TEST_DB_DIR --yes"
+ts_verify "$TEST_DB_DIR"

@@ -74,9 +74,21 @@ test_debug() {
     # --- The same photo under two asset ids. ---
 
     invoke_command "Create the database" "$(get_zig_cli_command) init --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
     invoke_command "Replicate it" "$(get_zig_cli_command) replicate --db \"$db_dir\" --dest \"$replica_dir\" --yes"
+    ts_verify "$replica_dir"
     invoke_command "Add a JPG and a PNG to the database" "$(get_zig_cli_command) add --db \"$db_dir\" \"$TEST_FILES_DIR/test.jpg\" \"$TEST_FILES_DIR/test.png\" --yes"
+    ts_verify "$db_dir"
     invoke_command "Add the same PNG to the replica" "$(get_zig_cli_command) add --db \"$replica_dir\" \"$TEST_FILES_DIR/test.png\" --yes"
+    ts_verify "$replica_dir"
+    # No TypeScript verify after this sync, on either side. Both databases now hold the same PNG under
+    # two asset ids, and with the fixed timestamps of NODE_ENV=testing the two records hash the same.
+    # Sync matches records by hash, so neither side takes the other's record and each is left with an
+    # asset file no record names. The TypeScript CLI leaves exactly the same state (its verify fails
+    # on it too), so this is not a difference between the two ports. Both databases are verified
+    # before the sync, and this one again at the end, once the debug commands have repaired it. The
+    # remove-duplicates and build-sort-index steps below leave that asset file unnamed too, so they
+    # are not followed by one either.
     invoke_command "Sync the two" "$(get_zig_cli_command) sync --db \"$db_dir\" --dest \"$replica_dir\" --yes"
 
     local asset_count
@@ -227,7 +239,7 @@ test_debug() {
     expect_output_string "$rebuild_output" "Rebuilt files merkle tree: 9 files." "The rebuilt tree no longer holds the untracked file"
 
     invoke_command "Verify the database" "$(get_zig_cli_command) verify --db \"$db_dir\" --yes"
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
 
     test_passed
 }

@@ -45,8 +45,10 @@ test_s3_failures() {
     log_info "Database path: $s3_db"
 
     invoke_command "Initialize the S3 database" "$(get_zig_cli_command) init --db \"$s3_db\" --yes" 0
+    ts_verify "$s3_db"
     invoke_command "Add an image to the S3 database" \
         "$(get_zig_cli_command) add $TEST_FILES_DIR/test.jpg --db \"$s3_db\" --yes" 0
+    ts_verify "$s3_db"
 
     # Prove the database really does read back while the server is up, so the failures below are the
     # server going away and not a database that never worked.
@@ -54,7 +56,7 @@ test_s3_failures() {
     invoke_command "List the S3 database while the server is up" "$(get_zig_cli_command) list --db \"$s3_db\" --yes" 0 "working_list"
     expect_output_string "$working_list" "test.jpg" "The database reads back while the server is up"
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$s3_db\" --yes"
+    ts_verify "$s3_db"
 
     # --- 2. Wrong bucket, on a live server. ---
 
@@ -87,6 +89,7 @@ test_s3_failures() {
     local mid_import_db="s3:$S3_EMULATOR_BUCKET/mid-import"
     invoke_command "Initialize a database for the mid-import test" \
         "$(get_zig_cli_command) init --db \"$mid_import_db\" --yes" 0
+    ts_verify "$mid_import_db"
 
     # The import needs to still be running when the server is taken away, and the five standard
     # fixtures are small enough to finish in well under a second, which made this a race that the

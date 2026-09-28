@@ -18,7 +18,9 @@ test_check() {
     local db_dir="$test_dir/check-db"
 
     invoke_command "Create a database" "$(get_zig_cli_command) init --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
     invoke_command "Add a PNG file" "$(get_zig_cli_command) add --db \"$db_dir\" \"$TEST_FILES_DIR/test.png\" --yes"
+    ts_verify "$db_dir"
 
     local hash_before
     invoke_command "Get the root hash before checking" "$(get_zig_cli_command) -q root-hash --db \"$db_dir\" --yes" 0 "hash_before"
@@ -59,7 +61,7 @@ test_check() {
     invoke_command "Summarize the database" "$(get_zig_cli_command) -q summary --db \"$db_dir\" --yes" 0 "summary_output"
     expect_output_value "$summary_output" "Files imported:" "1" "The database still holds only the one file that was added"
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
 
     test_passed
 }

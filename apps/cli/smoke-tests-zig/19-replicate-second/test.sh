@@ -8,7 +8,8 @@ trap cleanup_and_show_summary EXIT
 TEST_DB_DIR="$(get_test_dir 19)/test-db"
 create_db_with_5_files "$TEST_DB_DIR"
 invoke_command "First replication (setup)" "$(get_zig_cli_command) replicate --db $TEST_DB_DIR --dest $TEST_DB_DIR-replica --yes --force"
+ts_verify "$TEST_DB_DIR-replica"
 
 test_database_replicate_second 19
 
-invoke_command "Verify the replica with the TypeScript CLI" "$(get_cli_command) verify --db $TEST_DB_DIR-replica --yes"
+ts_verify "$TEST_DB_DIR-replica"

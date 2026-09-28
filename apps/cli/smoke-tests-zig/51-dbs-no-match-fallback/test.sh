@@ -17,8 +17,10 @@ test_dbs_no_match_fallback() {
 
     # Create a plain (unencrypted) database.
     invoke_command "Init plain database" "$(get_zig_cli_command) init --db \"$db_dir\" --yes" 0
+    ts_verify "$db_dir"
 
     invoke_command "Add PNG to plain database" "$(get_zig_cli_command) add --db \"$db_dir\" \"$TEST_FILES_DIR/test.png\" --yes" 0
+    ts_verify "$db_dir"
 
     # Clear databases.json so there's no match.
     seed_databases_config '[]'
@@ -32,7 +34,7 @@ test_dbs_no_match_fallback() {
     # of them (a file count, a byte count and two hashes), so it could not fail.
     expect_output_value "$summary_output" "Files imported:" "1" "Summary shows the one asset that was added"
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
 
     test_passed
 }

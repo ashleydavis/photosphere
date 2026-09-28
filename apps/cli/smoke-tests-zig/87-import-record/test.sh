@@ -102,12 +102,14 @@ find_record_naming() {
     return 1
 }
 
-invoke_command "Initialize the local database" "$(get_zig_cli_command) init --db $LOCAL_DB --yes"
+invoke_command "Initialize the local database" "$CLI_COMMAND init --db $LOCAL_DB --yes"
+ts_verify "$LOCAL_DB"
 
 # --- 1. A manual import is recorded, and badged as manual. ---
 
 cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/asked-for.png"
-invoke_command "Import a photo by hand" "$(get_zig_cli_command) add --db $LOCAL_DB $WATCH_DIR/asked-for.png --yes"
+invoke_command "Import a photo by hand" "$CLI_COMMAND add --db $LOCAL_DB $WATCH_DIR/asked-for.png --yes"
+ts_verify "$LOCAL_DB"
 
 RECORD_FILE="$(find_record_naming "asked-for.png")"
 if [ -z "$RECORD_FILE" ]; then
@@ -144,7 +146,7 @@ log_success "The manual import is recorded and badged manual"
 # is no bounded version of it to run instead.
 WATCH_LOG="$TEST_DIR/watch.log"
 set -m
-env NODE_ENV=testing $(get_zig_cli_command) add --db "$LOCAL_DB" "$WATCH_DIR" --watch --yes > "$WATCH_LOG" 2>&1 &
+env NODE_ENV=testing $CLI_COMMAND add --db "$LOCAL_DB" "$WATCH_DIR" --watch --yes > "$WATCH_LOG" 2>&1 &
 WATCH_PID=$!
 set +m
 
@@ -159,6 +161,7 @@ done
 
 stop_watch_command || exit 1
 log_success "The watch command stopped"
+ts_verify "$LOCAL_DB"
 
 if ! grep -q '"source":"automatic"' "$RECORD_FILE"; then
     log_error "An automatically imported photo was not badged automatic"
@@ -202,17 +205,22 @@ assert_no_record_inside() {
 assert_no_record_inside "$LOCAL_DB" "Importing"
 log_success "Importing put no record inside the database it imported into"
 
-invoke_command "Create the remote and consolidate into it" "$(get_zig_cli_command) consolidate --db $LOCAL_DB $REMOTE_DB --yes"
+invoke_command "Create the remote and consolidate into it" "$CLI_COMMAND consolidate --db $LOCAL_DB $REMOTE_DB --yes"
+ts_verify "$LOCAL_DB"
+ts_verify "$REMOTE_DB"
 assert_no_record_inside "$LOCAL_DB" "Consolidation"
 assert_no_record_inside "$REMOTE_DB" "Consolidation"
 log_success "Consolidation put no record inside either database"
 
-invoke_command "Sync to the remote" "$(get_zig_cli_command) sync --db $LOCAL_DB --yes"
+invoke_command "Sync to the remote" "$CLI_COMMAND sync --db $LOCAL_DB --yes"
+ts_verify "$LOCAL_DB"
+ts_verify "$REMOTE_DB"
 assert_no_record_inside "$LOCAL_DB" "Sync"
 assert_no_record_inside "$REMOTE_DB" "Sync"
 log_success "Sync put no record inside either database"
 
-invoke_command "Replicate to a third database" "$(get_zig_cli_command) replicate --db $LOCAL_DB --dest $REPLICA_DB --yes"
+invoke_command "Replicate to a third database" "$CLI_COMMAND replicate --db $LOCAL_DB --dest $REPLICA_DB --yes"
+ts_verify "$REPLICA_DB"
 assert_no_record_inside "$LOCAL_DB" "Replication"
 assert_no_record_inside "$REPLICA_DB" "Replication"
 log_success "Replication put no record inside either database"
@@ -235,10 +243,12 @@ expect_output_value "$REPLICA_SUMMARY" "Files imported:" 2 "Both photos reached 
 
 # This is what the per-database record buys. A single record for the machine would show photos put
 # into one database as having gone into the other, which is a lie about where they are.
-invoke_command "Initialize a second database" "$(get_zig_cli_command) init --db $OTHER_DB --yes"
+invoke_command "Initialize a second database" "$CLI_COMMAND init --db $OTHER_DB --yes"
+ts_verify "$OTHER_DB"
 
 cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/into-the-other.png"
-invoke_command "Import a photo into the second database" "$(get_zig_cli_command) add --db $OTHER_DB $WATCH_DIR/into-the-other.png --yes"
+invoke_command "Import a photo into the second database" "$CLI_COMMAND add --db $OTHER_DB $WATCH_DIR/into-the-other.png --yes"
+ts_verify "$OTHER_DB"
 
 OTHER_RECORD_FILE="$(find_record_naming "into-the-other.png")"
 if [ -z "$OTHER_RECORD_FILE" ]; then
@@ -261,6 +271,6 @@ if grep -q '"logicalPath":"[^"]*asked-for.png"' "$OTHER_RECORD_FILE"; then
 fi
 log_success "Each database's record holds only what went into that database"
 
-invoke_command "Verify the replica with the TypeScript CLI" "$(get_cli_command) verify --db $REPLICA_DB --yes"
+ts_verify "$REPLICA_DB"
 
 log_success "Test $TEST_NUMBER passed: the import record persists, badges its source, stays on this machine, and is kept per database"

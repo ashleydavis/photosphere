@@ -26,10 +26,12 @@ test_replicate_unrelated_databases_fail() {
     # Create first independent database
     log_info "Creating first independent database"
     invoke_command "Initialize first database" "$(get_zig_cli_command) init --db $first_db_dir --yes"
+    ts_verify "$first_db_dir"
     
     # Create second independent database
     log_info "Creating second independent database"
     invoke_command "Initialize second database" "$(get_zig_cli_command) init --db $second_db_dir --yes"
+    ts_verify "$second_db_dir"
     
     # Verify both databases exist
     check_exists "$first_db_dir" "First database directory"
@@ -69,7 +71,7 @@ test_replicate_unrelated_databases_fail() {
     
     log_success "Replication correctly failed between unrelated databases"
     
-    invoke_command "Verify the destination database with the TypeScript CLI" "$(get_cli_command) verify --db $second_db_dir --yes"
+    ts_verify "$second_db_dir"
 
     # Preserve temporary databases for inspection
     log_info "Temporary databases preserved for inspection in test directory: $test_dir"

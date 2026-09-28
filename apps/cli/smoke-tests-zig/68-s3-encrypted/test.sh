@@ -60,9 +60,11 @@ test_s3_encrypted() {
 
     invoke_command "Initialize an encrypted database on S3" \
         "$(get_zig_cli_command) init --db \"$s3_db\" --key $KEY_NAME --generate-key --yes" 0
+    ts_verify "$s3_db" --key "$KEY_NAME"
 
     invoke_command "Add a JPG to the encrypted S3 database" \
         "$(get_zig_cli_command) add $TEST_FILES_DIR/test.jpg --db \"$s3_db\" --key $KEY_NAME --yes" 0
+    ts_verify "$s3_db" --key "$KEY_NAME"
 
     # --- The bytes in the bucket must not be the source file's bytes. ---
 
@@ -89,6 +91,7 @@ test_s3_encrypted() {
 
     invoke_command "Add an MP4 to the encrypted S3 database" \
         "$(get_zig_cli_command) add $TEST_FILES_DIR/multiple-files/test.mp4 --db \"$s3_db\" --key $KEY_NAME --yes" 0
+    ts_verify "$s3_db" --key "$KEY_NAME"
 
     local list_output
     invoke_command "List the encrypted S3 database" "$(get_zig_cli_command) list --db \"$s3_db\" --key $KEY_NAME --yes" 0 "list_output"
@@ -101,7 +104,7 @@ test_s3_encrypted() {
 
     invoke_command "Verify the encrypted S3 database" "$(get_zig_cli_command) verify --db \"$s3_db\" --key $KEY_NAME --yes" 0
 
-    invoke_command "Verify the encrypted S3 database with the TypeScript CLI" "$(get_cli_command) verify --db \"$s3_db\" --key $KEY_NAME --yes"
+    ts_verify "$s3_db" --key "$KEY_NAME"
 
     # --- Without the key, a read must fail loudly. ---
 

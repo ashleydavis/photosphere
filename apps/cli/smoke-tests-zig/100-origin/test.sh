@@ -37,6 +37,7 @@ test_origin() {
     local copy_dir="$test_dir/origin-copy"
 
     invoke_command "Create a database" "$(get_zig_cli_command) init --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
 
     # --- database-id ---
 
@@ -57,6 +58,7 @@ test_origin() {
     expect_output_string "$empty_hash" "^[0-9a-f]\{64\}$" "The root hash is a SHA-256"
 
     invoke_command "Add a PNG file" "$(get_zig_cli_command) add --db \"$db_dir\" \"$TEST_FILES_DIR/test.png\" --yes"
+    ts_verify "$db_dir"
 
     local one_file_hash
     expect_same_value "Get the root hash after an import" "root-hash --db \"$db_dir\" --yes" "one_file_hash"
@@ -69,6 +71,7 @@ test_origin() {
     # --- A copy shares the database id and the root hash, and records where it came from. ---
 
     invoke_command "Replicate the database" "$(get_zig_cli_command) replicate --db \"$db_dir\" --dest \"$copy_dir\" --yes"
+    ts_verify "$copy_dir"
 
     local copy_id
     expect_same_value "Get the database id of the copy" "database-id --db \"$copy_dir\" --yes" "copy_id"
@@ -86,6 +89,7 @@ test_origin() {
 
     local set_output
     invoke_command "Set the database's origin to the copy" "$(get_zig_cli_command) -q set-origin --db \"$db_dir\" \"$copy_dir\" --yes" 0 "set_output"
+    ts_verify "$db_dir"
 
     local config_origin
     config_origin="$(jq -r '.origin' "$db_dir/.db/config.json")"
@@ -96,7 +100,10 @@ test_origin() {
 
     # The origin is what a sync goes to when it is given no destination.
     invoke_command "Add a JPG file to the database" "$(get_zig_cli_command) add --db \"$db_dir\" \"$TEST_FILES_DIR/test.jpg\" --yes"
+    ts_verify "$db_dir"
     invoke_command "Sync the database with no destination" "$(get_zig_cli_command) sync --db \"$db_dir\" --yes"
+    ts_verify "$db_dir"
+    ts_verify "$copy_dir"
 
     local synced_hash
     expect_same_value "Get the root hash of the database after the sync" "root-hash --db \"$db_dir\" --yes" "synced_hash"
@@ -107,11 +114,12 @@ test_origin() {
     # --- Clearing the origin. ---
 
     invoke_command "Clear the database's origin" "$(get_zig_cli_command) -q set-origin --db \"$db_dir\" \"\" --yes"
+    ts_verify "$db_dir"
     expect_same_value "Get the origin after clearing it" "origin --db \"$db_dir\" --yes" "origin_output"
     expect_value "$origin_output" "(not set)" "A cleared origin is not set"
 
-    invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes"
-    invoke_command "Verify the copy with the TypeScript CLI" "$(get_cli_command) verify --db \"$copy_dir\" --yes"
+    ts_verify "$db_dir"
+    ts_verify "$copy_dir"
 
     test_passed
 }
