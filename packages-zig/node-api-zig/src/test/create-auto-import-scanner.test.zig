@@ -371,3 +371,84 @@ test "what the import records is an identity the next listing produces again" {
     try std.testing.expectEqual(identity.length, pushed[0].cacheIdentity.?.length);
     try std.testing.expectEqual(identity.lastModified, pushed[0].cacheIdentity.?.lastModified);
 }
+
+test "an automatic import with no sources is refused rather than run over nothing" {
+    var context: ScannerTest = undefined;
+    try context.init();
+    defer context.deinit();
+    const allocator = context.arena.allocator();
+    var options: std.json.ObjectMap = .empty;
+    try options.put(allocator, "auto", .{ .bool = true });
+    try options.put(allocator, "sources", .{ .array = .init(allocator) });
+
+    try std.testing.expectError(error.Thrown, createAutoImportScanner(allocator, .{
+        .importOptions = .{ .object = options },
+        .storage = context.database.assetStorage,
+        .metadataCollection = context.database.metadataCollection,
+        .localHashCache = &context.hashCache,
+        .sessionTempDir = context.tempDir,
+        .context = context.context.taskContext(),
+        .onProgress = .{
+            .context = null,
+            .function = ignoreScannerProgress,
+        },
+    }));
+    try std.testing.expectEqualStrings("Automatic import was started with no sources configured. Nothing would be imported.", utils.errors.lastErrorMessage());
+}
+
+test "entries of photos no longer in the source are dropped from the cache after a walk" {
+    var context: ScannerTest = undefined;
+    try context.init();
+    defer context.deinit();
+    const allocator = context.arena.allocator();
+
+    // A photo imported from the folder that has since been deleted from it, and a manual import from elsewhere.
+    const gonePath = try path.join(allocator, &.{ context.watchedDir, "gone.jpg" });
+    var identity = try context.photoIdentity();
+    const contentHash = photoHash();
+    identity.hash = &contentHash;
+    try context.hashCache.addSourceHash(gonePath, identity);
+    const manualPath = try path.join(allocator, &.{ context.tempDir, "manual.jpg" });
+    try context.hashCache.addHash(manualPath, identity);
+
+    _ = try context.runOnePass();
+
+    try std.testing.expect(try context.hashCache.getHash(allocator, gonePath) == null);
+    try std.testing.expect(try context.hashCache.getHash(allocator, manualPath) != null);
+}
+
+test "the cache is saved every hundred photos the database is asked about" {
+    var context: ScannerTest = undefined;
+    try context.init();
+    defer context.deinit();
+    const allocator = context.arena.allocator();
+    const io = std.testing.io;
+
+    // A hundred photos an earlier run hashed without recording where they went, all of them in the database.
+    for (0..100) |index| {
+        const photoPath = try path.join(allocator, &.{ context.watchedDir, try std.fmt.allocPrint(allocator, "batch-{d:0>3}.jpg", .{index}) });
+        const contents = try std.fmt.allocPrint(allocator, "photo number {d}", .{index});
+        try helpers.writeFile(io, photoPath, contents);
+        const stat = try std.Io.Dir.cwd().statFile(io, photoPath, .{});
+        var digest: [32]u8 = undefined;
+        Sha256.hash(contents, &digest, .{});
+        try context.hashCache.addSourceHash(photoPath, .{
+            .hash = &digest,
+            .length = stat.size,
+            .lastModified = @intCast(@divFloor(stat.mtime.nanoseconds, std.time.ns_per_ms)),
+        });
+        // (The record keeps the hex it is given, so it gets a copy of its own.)
+        try context.addAsset(try std.fmt.allocPrint(allocator, "a1b2c3d4-e5f6-4890-abcd-ef1234567{d:0>3}", .{index}), try allocator.dupe(u8, &std.fmt.bytesToHex(digest, .lower)));
+    }
+
+    const pushed = try context.runOnePass();
+
+    // Only the original photo is new; the hundredth answer saved the cache, so a fresh load sees the asset ids.
+    try std.testing.expectEqual(@as(usize, 1), pushed.len);
+    var reloaded = try HashCache.init(try path.join(allocator, &.{ context.tempDir, "hash-cache" }), true);
+    defer reloaded.deinit();
+    try std.testing.expect(try reloaded.load(io));
+    try std.testing.expect(reloaded.getEntryCount() >= 100);
+    const first = try path.join(allocator, &.{ context.watchedDir, "batch-000.jpg" });
+    try std.testing.expectEqualStrings("a1b2c3d4-e5f6-4890-abcd-ef1234567000", (try reloaded.getHash(allocator, first)).?.assetId.?);
+}
