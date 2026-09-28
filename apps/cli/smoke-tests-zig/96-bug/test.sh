@@ -1,10 +1,14 @@
 #!/bin/bash
 DESCRIPTION="psi bug builds the GitHub issue URL from the system, the tools and the latest log, and hands it to the platform's opener"
 
-# No browser is started: every run finds a stand-in for the platform's opener (opener-stub/, first on
-# the PATH) that records the URL it was given. That includes the runs with --no-browser, because the
-# TypeScript CLI registers the option as `--no-browser`, which commander stores as `browser`, while the
-# command reads `noBrowser`: the option changes nothing, and the Zig port reproduces that.
+# No browser is started: every run finds a stand-in for the platform's opener that records what it was
+# given. On Linux and macOS that is a script in opener-stub/, first on the PATH. On Windows the opener is
+# PowerShell under SYSTEMROOT, so the test builds opener-stub/powershell.zig as that PowerShell under a
+# SYSTEMROOT of its own and decodes the URL from the arguments it records.
+#
+# That includes the runs with --no-browser, because the TypeScript CLI registers the option as
+# `--no-browser`, which commander stores as `browser`, while the command reads `noBrowser`: the option
+# changes nothing, and the Zig port reproduces that.
 #
 # Each CLI's report and opened URL are compared with the TypeScript CLI's for the same state. The one
 # field they differ in by design is the runtime version (Node's for TypeScript, Zig's for the port),
@@ -16,6 +20,9 @@ trap cleanup_and_show_summary EXIT
 
 # The directory of the opener stand-ins.
 OPENER_STUB_DIR="$SCRIPT_DIR/opener-stub"
+
+# The variable assignments that make psi bug find the opener stand-in, set by test_bug for the platform.
+OPENER_ENVIRONMENT=""
 
 #
 # Replaces the runtime version in an issue URL, the one part that differs between the two CLIs.
@@ -44,8 +51,48 @@ wait_for_opened_url() {
 }
 
 #
+# Builds the PowerShell stand-in (opener-stub/powershell.zig) as powershell.exe under a SYSTEMROOT in
+# the test directory, where psi bug and the `open` package look for PowerShell, and prints that
+# SYSTEMROOT as a Windows path.
+#
+build_powershell_stand_in() {
+    local test_dir="$1"
+    local system_root="$test_dir/windows"
+    local powershell_dir="$system_root/System32/WindowsPowerShell/v1.0"
+    mkdir -p "$powershell_dir"
+    zig build-exe "$OPENER_STUB_DIR/powershell.zig" --cache-dir "$test_dir/zig-cache" -femit-bin="$powershell_dir/powershell.exe" >&2
+    cygpath -w "$system_root"
+}
+
+#
+# Waits for the opener stand-in to record what it was given and leaves the URL in the named variable.
+# The PowerShell stand-in records its arguments, which must be those the `open` package gives
+# PowerShell, the last a base64 UTF-16LE `Start "<url>"`, so the URL is decoded from that.
+#
+read_opened_url() {
+    local capture_file="$1"
+    local url_var_name="$2"
+
+    local captured
+    captured="$(wait_for_opened_url "$capture_file")" || exit 1
+    if [ "$(detect_platform)" != "win" ]; then
+        eval "$url_var_name=\"\$captured\""
+        return
+    fi
+
+    expect_value "$(echo "$captured" | grep -c '')" "6" "PowerShell is started with six arguments"
+    expect_value "$(echo "$captured" | head -n 5 | paste -sd ' ')" "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand" "PowerShell is started with the options of the open package"
+    local start_command
+    start_command="$(echo "$captured" | sed -n 6p | base64 -d | iconv -f UTF-16LE -t UTF-8)"
+    expect_output_string "$start_command" '^Start "https://github\.com/.*"$' "PowerShell is told to start the URL"
+    local decoded_url
+    decoded_url="$(echo "$start_command" | sed 's/^Start "\(.*\)"$/\1/')"
+    eval "$url_var_name=\"\$decoded_url\""
+}
+
+#
 # Runs `bug` with the given arguments through the Zig CLI and the TypeScript CLI, each with the opener
-# stand-in first on the PATH and PHOTOSPHERE_TMP_DIR at the given directory. Expects the two to report
+# stand-in's environment (OPENER_ENVIRONMENT) and PHOTOSPHERE_TMP_DIR at the given directory. Expects the two to report
 # the same and to open the same URL, and leaves the Zig CLI's report and URL in the named variables.
 #
 run_bug_with_both() {
@@ -57,14 +104,14 @@ run_bug_with_both() {
     local url_var_name="$6"
 
     local zig_report
-    invoke_command "$description with the Zig CLI" "PATH=\"$OPENER_STUB_DIR:$PATH\" BUG_OPENER_CAPTURE_FILE=\"$capture_prefix-zig.txt\" PHOTOSPHERE_TMP_DIR=\"$bug_tmp_dir\" $(get_zig_cli_command) bug $bug_arguments" 0 "zig_report"
+    invoke_command "$description with the Zig CLI" "$OPENER_ENVIRONMENT BUG_OPENER_CAPTURE_FILE=\"$capture_prefix-zig.txt\" PHOTOSPHERE_TMP_DIR=\"$bug_tmp_dir\" $(get_zig_cli_command) bug $bug_arguments" 0 "zig_report"
     local zig_url
-    zig_url="$(wait_for_opened_url "$capture_prefix-zig.txt")"
+    read_opened_url "$capture_prefix-zig.txt" "zig_url"
 
     local ts_report
-    invoke_command "$description with the TypeScript CLI" "PATH=\"$OPENER_STUB_DIR:$PATH\" BUG_OPENER_CAPTURE_FILE=\"$capture_prefix-ts.txt\" PHOTOSPHERE_TMP_DIR=\"$bug_tmp_dir\" $(get_cli_command) bug $bug_arguments" 0 "ts_report"
+    invoke_command "$description with the TypeScript CLI" "$OPENER_ENVIRONMENT BUG_OPENER_CAPTURE_FILE=\"$capture_prefix-ts.txt\" PHOTOSPHERE_TMP_DIR=\"$bug_tmp_dir\" $(get_cli_command) bug $bug_arguments" 0 "ts_report"
     local ts_url
-    ts_url="$(wait_for_opened_url "$capture_prefix-ts.txt")"
+    read_opened_url "$capture_prefix-ts.txt" "ts_url"
 
     expect_value "$zig_report" "$ts_report" "$description: the Zig CLI reports what the TypeScript CLI reports"
     expect_value "$(without_runtime_version "$zig_url")" "$(without_runtime_version "$ts_url")" "$description: the Zig CLI opens the URL the TypeScript CLI opens"
@@ -77,18 +124,19 @@ test_bug() {
     local test_number="$1"
     print_test_header "$test_number" "BUG"
 
-    # On Windows the opener is PowerShell, found through SYSTEMROOT rather than the PATH, so it cannot
-    # be replaced by a stand-in and every run would start a real browser. The unit tests of the Zig
-    # port cover the report there (apps/cli-zig/src/test/commands.test.zig).
-    if [ "$(detect_platform)" = "win" ]; then
-        log_warning "psi bug is not run on Windows: its opener is PowerShell under SYSTEMROOT, which has no stand-in"
-        test_passed
-        return
-    fi
-
     local test_dir
     test_dir="$(get_test_dir "$test_number")"
     local db_dir="$test_dir/bug-db"
+
+    # The environment that makes each psi bug find the opener stand-in: on Windows a SYSTEMROOT holding
+    # the PowerShell stand-in (PowerShell is found through SYSTEMROOT, not the PATH), elsewhere the PATH.
+    if [ "$(detect_platform)" = "win" ]; then
+        local system_root
+        system_root="$(build_powershell_stand_in "$test_dir")"
+        OPENER_ENVIRONMENT="SYSTEMROOT=\"$system_root\""
+    else
+        OPENER_ENVIRONMENT="PATH=\"$OPENER_STUB_DIR:$PATH\""
+    fi
 
     # The bug report reads the log directory under PHOTOSPHERE_TMP_DIR. A directory of its own keeps
     # the logs of the rest of this test out of it until the test puts one there.
@@ -151,6 +199,13 @@ test_bug() {
     local empty_path_dir="$test_dir/empty-path"
     mkdir -p "$empty_path_dir"
 
+    # On Windows the opener is not looked for on the PATH but under SYSTEMROOT, so SYSTEMROOT is the
+    # empty directory too, which has no PowerShell in it.
+    local no_opener_environment=""
+    if [ "$(detect_platform)" = "win" ]; then
+        no_opener_environment="SYSTEMROOT=\"$(cygpath -w "$empty_path_dir")\""
+    fi
+
     # Run from the sources, the TypeScript CLI is started through `bun run`, which finds bun and a
     # shell on the PATH. With an empty PATH it is started by bun's full path instead.
     local ts_cli_command
@@ -160,11 +215,11 @@ test_bug() {
     fi
 
     local no_opener_report
-    invoke_command "Report a bug with nothing on the PATH with the Zig CLI" "PATH=\"$empty_path_dir\" PHOTOSPHERE_TMP_DIR=\"$bug_tmp_dir\" $(get_zig_cli_command) bug --yes" 0 "no_opener_report"
+    invoke_command "Report a bug with nothing on the PATH with the Zig CLI" "$no_opener_environment PATH=\"$empty_path_dir\" PHOTOSPHERE_TMP_DIR=\"$bug_tmp_dir\" $(get_zig_cli_command) bug --yes" 0 "no_opener_report"
     expect_output_string "$no_opener_report" "Bug report opened in browser!" "The report says it was opened although no opener could start"
 
     local ts_no_opener_report
-    invoke_command "Report a bug with nothing on the PATH with the TypeScript CLI" "PATH=\"$empty_path_dir\" PHOTOSPHERE_TMP_DIR=\"$bug_tmp_dir\" $ts_cli_command bug --yes" 0 "ts_no_opener_report"
+    invoke_command "Report a bug with nothing on the PATH with the TypeScript CLI" "$no_opener_environment PATH=\"$empty_path_dir\" PHOTOSPHERE_TMP_DIR=\"$bug_tmp_dir\" $ts_cli_command bug --yes" 0 "ts_no_opener_report"
     expect_value "$no_opener_report" "$ts_no_opener_report" "The Zig CLI reports a missing opener as the TypeScript CLI does"
 
     invoke_command "Verify the database with the TypeScript CLI" "$(get_cli_command) verify --db \"$db_dir\" --yes"
