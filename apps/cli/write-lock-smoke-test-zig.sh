@@ -255,7 +255,7 @@ clear_s3_test_directory() {
             log_info "Using AWS CLI to clear S3 directory: s3://$s3_path"
             
             # List and delete all objects in the test path
-            local temp_file="/tmp/s3-objects-to-delete.txt"
+            local temp_file="$WRITE_LOCK_TEST_ROOT/s3-objects-to-delete.txt"
             aws s3api list-objects-v2 --bucket "$bucket_name" --prefix "$test_path/" --query 'Contents[].Key' --output text > "$temp_file" 2>/dev/null || true
             
             if [ -s "$temp_file" ]; then
@@ -382,11 +382,11 @@ worker_process() {
         
         # Add file to database and capture timing and detailed output
         local start_time=$(date +%s%N)
-        local add_stdout_file="/tmp/stdout_p${process_id}_i${i}.tmp"
-        local add_stderr_file="/tmp/stderr_p${process_id}_i${i}.tmp"
+        local add_stdout_file="$process_dir/stdout_i${i}.tmp"
+        local add_stderr_file="$process_dir/stderr_i${i}.tmp"
         local add_exit_code=0
         local add_result="SUCCESS"
-        local cli_command="$(get_cli_command) add --db \"$TEST_DB_DIR\" \"$file_path\" --verbose --yes --session-id \"process-$process_id-iter-$i\""
+        local cli_command="$(get_zig_cli_command) add --db \"$TEST_DB_DIR\" \"$file_path\" --verbose --yes --session-id \"process-$process_id-iter-$i\""
         
         # Set failure simulation environment variable if enabled
         if [ "$SIMULATE_FAILURE" = "true" ]; then
@@ -394,7 +394,7 @@ worker_process() {
         fi
         
         # Run command and capture stdout/stderr to temporary files
-        $(get_cli_command) add --db "$TEST_DB_DIR" "$file_path" --verbose --yes --session-id "process-$process_id-iter-$i" > "$add_stdout_file" 2> "$add_stderr_file"
+        $(get_zig_cli_command) add --db "$TEST_DB_DIR" "$file_path" --verbose --yes --session-id "process-$process_id-iter-$i" > "$add_stdout_file" 2> "$add_stderr_file"
         add_exit_code=$?
         
         # Read captured output
@@ -548,7 +548,7 @@ validate_results() {
     
     # Check database integrity
     log_info "Checking database integrity..."
-    local verify_output_file="/tmp/verify_output.log"
+    local verify_output_file="$PROCESS_OUTPUT_DIR/verify_output.log"
     if ! $(get_zig_cli_command) verify --db "$TEST_DB_DIR" --yes > "$verify_output_file" 2>&1; then
         log_error "Database integrity check failed"
         cat "$verify_output_file"
@@ -691,6 +691,7 @@ main() {
     echo "  Use binary: $USE_BINARY"
     echo "  Cloud mode: $USE_CLOUD"
     echo "  CLI command: $(get_cli_command)"
+    echo "  Zig CLI command: $(get_zig_cli_command)"
     echo "============================================================================"
     
     # Check dependencies
