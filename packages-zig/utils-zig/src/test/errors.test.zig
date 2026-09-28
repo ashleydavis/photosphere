@@ -16,6 +16,14 @@ test "throwError records the formatted message" {
     try std.testing.expectEqualStrings("Error", errors.lastErrorName());
 }
 
+test "throwStacklessError records the message under no name" {
+    errors.clearError();
+    const result: errors.ThrownError!void = errors.throwStacklessError("Missing {s}", .{"file"});
+    try std.testing.expectError(error.Thrown, result);
+    try std.testing.expectEqualStrings("Missing file", errors.lastErrorMessage());
+    try std.testing.expectEqualStrings("", errors.lastErrorName());
+}
+
 test "throwFatalError records a FatalError" {
     errors.clearError();
     const result: errors.FatalErrorSet!void = errors.throwFatalError("Fatal {s}", .{"problem"});

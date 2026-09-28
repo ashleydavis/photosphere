@@ -358,6 +358,22 @@ test "should validate hash length" {
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "Invalid hash length") != null);
 }
 
+test "addHash refuses a length that does not fit 48 bits with a RangeError" {
+    // Node's `buf.writeUIntLE(value, offset, 6)` throws a RangeError for a value of 2 ** 48 or more.
+    var context: CacheTest = undefined;
+    try context.init("hash-cache-test");
+    defer context.deinit();
+    _ = try context.hashCache.load(std.testing.io);
+
+    try std.testing.expectError(error.Thrown, context.hashCache.addHash("test/file.txt", .{
+        .hash = try createHash(context.arena.allocator(), "content"),
+        .length = 300000000000000,
+        .lastModified = 1000,
+    }));
+    try std.testing.expectEqualStrings("RangeError", errors.lastErrorName());
+    try std.testing.expectEqualStrings("The value of \"value\" is out of range. It must be >= 0 and < 2 ** 48. Received 300000000000000", errors.lastErrorMessage());
+}
+
 test "should handle binary search edge cases" {
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");

@@ -189,7 +189,6 @@ test "commands that are not ported fail by name, unknown commands are unknown, a
 
     try std.testing.expectEqualStrings("news", (try parse(allocator, &.{"news"})).outcome.notPorted);
     try std.testing.expectEqualStrings("bug", (try parse(allocator, &.{ "bug", "--no-browser" })).outcome.notPorted);
-    try std.testing.expectEqualStrings("hash-cache show", (try parse(allocator, &.{ "hash-cache", "show" })).outcome.notPorted);
     try std.testing.expectEqualStrings("dbs view", (try parse(allocator, &.{ "d", "v", "--name", "x" })).outcome.notPorted);
 
     // The secrets and dbs groups are not created with .exitOverride(), so they call process.exit themselves. They
@@ -1033,4 +1032,128 @@ test "debug command lines parse like commander" {
     try expectCommanderError(allocator, &.{ "debug", "merkle-tree", "extra" }, "commander.excessArguments", "error: too many arguments for 'merkle-tree'. Expected 0 arguments but got 1.\n");
     try expectCommanderError(allocator, &.{ "debug", "find-collisions", "--output" }, "commander.optionMissingArgument", "error: option '-o, --output <path>' argument missing\n");
     try expectCommanderError(allocator, &.{ "debug", "build-sort-index", "--records" }, "commander.unknownOption", "error: unknown option '--records'\n");
+}
+
+test "hash-cache command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const show = try parse(allocator, &.{ "hash-cache", "show", "--db", "a", "--key", "k", "--yes", "--cwd", "c", "--verbose" });
+    try std.testing.expect(show.outcome == .hashCacheShow);
+    try std.testing.expectEqualStrings("a", show.outcome.hashCacheShow.base.db.?);
+    try std.testing.expectEqualStrings("k", show.outcome.hashCacheShow.base.key.?);
+    try std.testing.expectEqual(@as(?bool, true), show.outcome.hashCacheShow.base.yes);
+    try std.testing.expectEqualStrings("c", show.outcome.hashCacheShow.base.cwd.?);
+    try std.testing.expectEqual(@as(?bool, true), show.outcome.hashCacheShow.base.verbose);
+
+    const clear = try parse(allocator, &.{ "hash-cache", "clear", "-k", "k", "-y", "-v" });
+    try std.testing.expect(clear.outcome == .hashCacheClear);
+    try std.testing.expect(clear.outcome.hashCacheClear.base.db == null);
+    try std.testing.expectEqualStrings("k", clear.outcome.hashCacheClear.base.key.?);
+    try std.testing.expectEqual(@as(?bool, true), clear.outcome.hashCacheClear.base.yes);
+    try std.testing.expectEqual(@as(?bool, true), clear.outcome.hashCacheClear.base.verbose);
+
+    const hashFile = try parse(allocator, &.{ "hash-cache", "hash-file", "f.jpg" });
+    try std.testing.expectEqualStrings("f.jpg", hashFile.outcome.hashCacheHashFile);
+
+    const add = try parse(allocator, &.{ "hash-cache", "add", "f.jpg", "--db", "d" });
+    try std.testing.expectEqualStrings("f.jpg", add.outcome.hashCacheAdd.file);
+    try std.testing.expectEqualStrings("d", add.outcome.hashCacheAdd.options.db);
+
+    const set = try parse(allocator, &.{ "hash-cache", "set", "--db", "d", "p", "h", "12" });
+    try std.testing.expectEqualStrings("p", set.outcome.hashCacheSet.key);
+    try std.testing.expectEqualStrings("h", set.outcome.hashCacheSet.hash);
+    try std.testing.expectEqualStrings("12", set.outcome.hashCacheSet.length);
+    try std.testing.expectEqualStrings("d", set.outcome.hashCacheSet.options.db);
+
+    const setSource = try parse(allocator, &.{ "hash-cache", "set-source", "s", "h", "7", "--db", "d" });
+    try std.testing.expectEqualStrings("s", setSource.outcome.hashCacheSetSource.key);
+    try std.testing.expectEqualStrings("h", setSource.outcome.hashCacheSetSource.hash);
+    try std.testing.expectEqualStrings("7", setSource.outcome.hashCacheSetSource.length);
+    try std.testing.expectEqualStrings("d", setSource.outcome.hashCacheSetSource.options.db);
+
+    const get = try parse(allocator, &.{ "hash-cache", "get", "p", "--db", "d" });
+    try std.testing.expectEqualStrings("p", get.outcome.hashCacheGet.key);
+    try std.testing.expectEqualStrings("d", get.outcome.hashCacheGet.options.db);
+    const getAssetId = try parse(allocator, &.{ "hash-cache", "get-asset-id", "p", "--db", "d" });
+    try std.testing.expectEqualStrings("p", getAssetId.outcome.hashCacheGetAssetId.key);
+    try std.testing.expectEqualStrings("d", getAssetId.outcome.hashCacheGetAssetId.options.db);
+    const remove = try parse(allocator, &.{ "hash-cache", "remove", "p", "--db", "d" });
+    try std.testing.expectEqualStrings("p", remove.outcome.hashCacheRemove.key);
+    try std.testing.expectEqualStrings("d", remove.outcome.hashCacheRemove.options.db);
+
+    try std.testing.expectEqualStrings("d", (try parse(allocator, &.{ "hash-cache", "list", "--db", "d" })).outcome.hashCacheList.db);
+    try std.testing.expectEqualStrings("d", (try parse(allocator, &.{ "hash-cache", "count", "--db", "d" })).outcome.hashCacheCount.db);
+    try std.testing.expectEqualStrings("d", (try parse(allocator, &.{ "hash-cache", "dir", "--db", "d" })).outcome.hashCacheDir.db);
+
+    try expectCommanderError(allocator, &.{ "hash-cache", "bogus" }, "commander.unknownCommand", "error: unknown command 'bogus'\n");
+    try expectCommanderError(allocator, &.{ "hash-cache", "hash-file" }, "commander.missingArgument", "error: missing required argument 'file'\n");
+    try expectCommanderError(allocator, &.{ "hash-cache", "get", "--db", "d" }, "commander.missingArgument", "error: missing required argument 'path'\n");
+    try expectCommanderError(allocator, &.{ "hash-cache", "show", "extra" }, "commander.excessArguments", "error: too many arguments for 'show'. Expected 0 arguments but got 1.\n");
+    try expectCommanderError(allocator, &.{ "hash-cache", "list" }, "commander.missingMandatoryOptionValue", "error: required option '--db <path>' not specified\n");
+    try expectCommanderError(allocator, &.{ "hash-cache", "set", "a", "b" }, "commander.missingMandatoryOptionValue", "error: required option '--db <path>' not specified\n");
+}
+
+//
+// The help commander prints for the hash-cache command group (apps/cli/index.ts).
+//
+const hash_cache_help =
+    \\Usage: psi hash-cache [options] [command]
+    \\
+    \\Inspect and manage a database's hash cache.
+    \\
+    \\Options:
+    \\  -h, --help                                        display help for command
+    \\
+    \\Commands:
+    \\  show [options]                                    Display information about a database's hash cache.
+    \\  clear [options]                                   Clear a database's hash cache to force re-hashing of files.
+    \\  hash-file <file>                                  Compute the SHA-256 hash of a file without touching the cache.
+    \\  add [options] <file>                              Hash a file and record it in the hash cache.
+    \\  set [options] <path> <hash> <length>              Record a hash in the hash cache against an arbitrary path.
+    \\  set-source [options] <source-id> <hash> <length>  Record a hash in the hash cache against a photo library source id.
+    \\  get [options] <path>                              Print the cached hash for a key. Exits 1 when it is not cached.
+    \\  get-asset-id [options] <path>                     Print the asset id recorded against a key. Exits 1 when there is none.
+    \\  remove [options] <path>                           Remove a key from the hash cache. Exits 1 when it was not cached.
+    \\  list [options]                                    Print the key of every entry in the hash cache, one per line.
+    \\  count [options]                                   Print how many entries the hash cache holds.
+    \\  dir [options]                                     Print the directory holding a database's hash cache.
+    \\  help [command]                                    display help for command
+    \\
+;
+
+test "the hash-cache command group shows its help like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Without a subcommand the help goes to stderr, with --help and the help subcommand to stdout.
+    const bare = try parse(allocator, &.{"hash-cache"});
+    try std.testing.expect(bare.outcome == .failure);
+    try std.testing.expectEqualStrings("commander.help", bare.outcome.failure.code);
+    try std.testing.expectEqualStrings(hash_cache_help, bare.stderr);
+
+    const help = try parse(allocator, &.{ "hash-cache", "--help" });
+    try std.testing.expectEqualStrings("commander.helpDisplayed", help.outcome.failure.code);
+    try std.testing.expectEqualStrings(hash_cache_help, help.stdout);
+
+    const helpCommand = try parse(allocator, &.{ "hash-cache", "help" });
+    try std.testing.expectEqualStrings(hash_cache_help, helpCommand.stdout);
+
+    const helpGet = try parse(allocator, &.{ "hash-cache", "help", "get" });
+    try std.testing.expectEqualStrings(
+        \\Usage: psi hash-cache get [options] <path>
+        \\
+        \\Print the cached hash for a key. Exits 1 when it is not cached.
+        \\
+        \\Options:
+        \\  --db <path>  The directory that contains the media file database
+        \\  -h, --help   display help for command
+        \\
+    , helpGet.stdout);
+
+    // The group is hidden from the program help.
+    const programHelp = try parse(allocator, &.{"--help"});
+    try std.testing.expect(std.mem.indexOf(u8, programHelp.stdout, "hash-cache") == null);
 }

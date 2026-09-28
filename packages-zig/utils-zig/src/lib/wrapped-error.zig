@@ -9,7 +9,14 @@ const errors = @import("errors.zig");
 //
 pub fn writeErrorChain(writer: *std.Io.Writer, err: anyerror) std.Io.Writer.Error!void {
     const recorded = err == error.Thrown or err == error.FatalError;
-    try writer.print("{s}: {s}", .{ if (recorded) stackName(errors.lastErrorName()) else "Error", errors.errorMessage(err) });
+    const name = if (recorded) stackName(errors.lastErrorName()) else "Error";
+    if (name.len == 0) {
+        // An error without a stack (errors.throwStacklessError) shows its message alone.
+        try writer.writeAll(errors.errorMessage(err));
+    }
+    else {
+        try writer.print("{s}: {s}", .{ name, errors.errorMessage(err) });
+    }
     if (!recorded) {
         return;
     }

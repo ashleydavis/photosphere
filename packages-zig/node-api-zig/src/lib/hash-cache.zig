@@ -221,7 +221,8 @@ fn readUInt48LE(buffer: []const u8, offset: usize) u64 {
 //
 fn writeUInt48LE(buffer: []u8, value: i128, offset: usize) !void {
     if (value < 0 or value >= (1 << 48)) {
-        return errors.throwError("The value of \"value\" is out of range. It must be >= 0 and < 2 ** 48. Received {d}", .{value});
+        errors.recordError("RangeError", "The value of \"value\" is out of range. It must be >= 0 and < 2 ** 48. Received {d}", .{value});
+        return error.Thrown;
     }
     std.mem.writeInt(u48, buffer[offset..][0..6], @intCast(value), .little);
 }

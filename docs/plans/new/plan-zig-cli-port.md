@@ -109,7 +109,7 @@ To do, in order (each one uses what the earlier ones ported):
 - [x] encrypt
 - [x] decrypt
 - [x] hash
-- [ ] hash-cache (show, clear, hash-file, add, set, set-source, get, get-asset-id, remove, list, count, dir)
+- [x] hash-cache (show, clear, hash-file, add, set, set-source, get, get-asset-id, remove, list, count, dir)
 - [x] debug (merkle-tree, find-collisions, find-duplicates, remove-duplicates, build-sort-index, build-files-tree)
 - [x] check
 - [x] tools

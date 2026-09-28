@@ -97,6 +97,15 @@ pub fn throwError(comptime format: []const u8, args: anytype) ThrownError {
 }
 
 //
+// Equivalent of throwing an Error that has no `stack`, as the error a Bun file stream emits has none, so that
+// formatErrorChain shows its message alone. (No TypeScript counterpart: the runtime creates these errors.)
+//
+pub fn throwStacklessError(comptime format: []const u8, args: anytype) ThrownError {
+    recordError("", format, args);
+    return error.Thrown;
+}
+
+//
 // Equivalent of `throw new FatalError(message)`.
 //
 pub fn throwFatalError(comptime format: []const u8, args: anytype) FatalErrorSet {
