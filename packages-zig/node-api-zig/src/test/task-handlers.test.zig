@@ -16,6 +16,12 @@ test "initTaskHandlers registers the handlers psi add runs" {
     try std.testing.expect(task_queue_zig.worker.getHandler("cleanup-sources") == node_api.cleanup_sources_worker.cleanupSourcesHandler);
 }
 
+test "initTaskHandlers registers the handlers psi consolidate runs" {
+    try node_api.task_handlers.initTaskHandlers();
+    try std.testing.expect(task_queue_zig.worker.getHandler("consolidate-database") == node_api.consolidate_database_worker.consolidateDatabaseHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler("prefetch-database") == node_api.prefetch_database_worker.prefetchDatabaseHandler);
+}
+
 test "initTaskHandlers registers the folder media source builder, as loading its modules does in TypeScript" {
     node_api.media_source_registry.clearMediaSourceBuilders();
     try node_api.task_handlers.initTaskHandlers();

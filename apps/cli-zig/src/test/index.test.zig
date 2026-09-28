@@ -583,6 +583,31 @@ test "sync command lines parse like commander" {
     try expectCommanderError(allocator, &.{ "sync", "--interval" }, "commander.optionMissingArgument", "error: option '--interval <seconds>' argument missing\n");
 }
 
+test "consolidate command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "consolidate", "s3:b/p", "--db", "a", "--key", "k", "--dk", "dk", "--verbose", "--yes", "--cwd", "c", "--session-id", "s1" });
+    try std.testing.expect(parsed.outcome == .consolidate);
+    const consolidate = parsed.outcome.consolidate;
+    try std.testing.expectEqualStrings("s3:b/p", consolidate.remote);
+    try std.testing.expectEqualStrings("a", consolidate.options.base.db.?);
+    try std.testing.expectEqualStrings("k", consolidate.options.base.key.?);
+    try std.testing.expectEqualStrings("dk", consolidate.options.destKey.?);
+    try std.testing.expectEqual(@as(?bool, true), consolidate.options.base.verbose);
+    try std.testing.expectEqual(@as(?bool, true), consolidate.options.base.yes);
+    try std.testing.expectEqualStrings("c", consolidate.options.base.cwd.?);
+    try std.testing.expectEqualStrings("s1", consolidate.options.base.sessionId.?);
+
+    const defaults = try parse(allocator, &.{ "consolidate", "./remote", "--dest-key", "x" });
+    try std.testing.expectEqualStrings("./remote", defaults.outcome.consolidate.remote);
+    try std.testing.expectEqualStrings("x", defaults.outcome.consolidate.options.destKey.?);
+    try std.testing.expect(defaults.outcome.consolidate.options.base.db == null);
+    try expectCommanderError(allocator, &.{"consolidate"}, "commander.missingArgument", "error: missing required argument 'remote'\n");
+    try expectCommanderError(allocator, &.{ "consolidate", "a", "b" }, "commander.excessArguments", "error: too many arguments for 'consolidate'. Expected 1 argument but got 2.\n");
+}
+
 test "remove command lines parse like commander" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

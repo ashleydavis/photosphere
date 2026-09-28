@@ -235,3 +235,29 @@ pub fn SaveMerkleTreeOperation(comptime sourceText: []const u8) type {
         }
     };
 }
+
+//
+// `() => storage.deleteFile(filePath)`.
+//
+pub fn DeleteFileOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        pub const source = sourceText;
+
+        // Allocates the storage implementation's temporary data.
+        allocator: std.mem.Allocator,
+
+        // The storage to delete from.
+        storage: IStorage,
+
+        // The file to delete.
+        filePath: []const u8,
+
+        //
+        // Deletes the file.
+        //
+        pub fn run(self: *@This(), io: std.Io) !void {
+            try self.storage.deleteFile(self.allocator, io, self.filePath);
+        }
+    };
+}

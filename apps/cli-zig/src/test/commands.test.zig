@@ -1087,6 +1087,167 @@ test "sync --watch rejects an interval that is not a number like the TypeScript 
 }
 
 //
+// Replaces who holds a write lock and since when in the "Failed to acquire write lock" warning
+// (`held by "<owner>" since <time> ago (acquired at <date>)`), because the owner is a session id and the rest are
+// times.
+//
+fn maskLockHolder(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
+    const label = "Lock is currently held by ";
+    const start = std.mem.indexOf(u8, text, label) orelse {
+        return text;
+    };
+    const end = std.mem.indexOfPos(u8, text, start, ").") orelse text.len;
+    return std.mem.concat(allocator, u8, &.{ text[0 .. start + label.len], "<holder>", text[end..] });
+}
+
+//
+// The first lines of `psi consolidate` (apps/cli/src/cmd/consolidate.ts) from <root>/db to <root>/<remote>.
+//
+fn consolidateHeader(allocator: std.mem.Allocator, remote: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(allocator,
+        \\Connecting to a remote database.
+        \\  Database:  <root>/db
+        \\  Remote:    <root>/{s}
+        \\
+        \\
+    , .{remote});
+}
+
+test "consolidate creates a remote that does not exist, then finds it already joined, like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-consolidate-create");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const remote = try std.fmt.allocPrint(allocator, "{s}/remote", .{root});
+
+    const created = try normalize(allocator, try runZig(allocator, environment, &.{ "consolidate", "--db", db, remote, "--yes" }), root, "<root>");
+    try expectResult(created, try std.mem.concat(allocator, u8, &.{ try consolidateHeader(allocator, "remote"),
+        \\There is no database at the remote path, so it is being created as a copy of this one.
+        \\[W1:<task>] Replication started from <root>/db to <root>/remote
+        \\[W1:<task>] Replication completed from <root>/db to <root>/remote
+        \\✓ Created the remote database and set it as this database's origin.
+        \\
+    }), "", 0);
+
+    // The remote is a copy of the database, and is now its origin.
+    const sourceHash = try runZig(allocator, environment, &.{ "root-hash", "--db", db, "--yes" });
+    const remoteHash = try runZig(allocator, environment, &.{ "root-hash", "--db", remote, "--yes" });
+    try std.testing.expectEqualStrings(sourceHash.stdout, remoteHash.stdout);
+    const origin = try normalize(allocator, try runZig(allocator, environment, &.{ "origin", "--db", db, "--yes" }), root, "<root>");
+    try std.testing.expectEqualStrings("<root>/remote\n", origin.stdout);
+
+    const again = try normalize(allocator, try runZig(allocator, environment, &.{ "consolidate", "--db", db, remote, "--yes" }), root, "<root>");
+    try expectResult(again, try std.mem.concat(allocator, u8, &.{ try consolidateHeader(allocator, "remote"), "\u{2713} Already joined to <root>/remote.\n" }), "", 0);
+}
+
+test "consolidate records a remote that is the same database as the origin like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-consolidate-same");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const same = try std.fmt.allocPrint(allocator, "{s}/same", .{root});
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", same);
+
+    const result = try normalize(allocator, try runZig(allocator, environment, &.{ "consolidate", "--db", db, same, "--yes" }), root, "<root>");
+    try expectResult(result, try std.mem.concat(allocator, u8, &.{ try consolidateHeader(allocator, "same"), "\u{2713} The remote is the same database, so it has been set as this database's origin.\n" }), "", 0);
+
+    const origin = try normalize(allocator, try runZig(allocator, environment, &.{ "origin", "--db", db, "--yes" }), root, "<root>");
+    try std.testing.expectEqualStrings("<root>/same\n", origin.stdout);
+}
+
+test "consolidate joins an unrelated remote like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-consolidate-unrelated");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const other = try std.fmt.allocPrint(allocator, "{s}/other", .{root});
+    try helpers.copyDirectory(allocator, "../../test/dbs/1-asset-2", other);
+
+    // The warning is the local write lock that replicating the remote down cannot take while consolidation holds it,
+    // as in TypeScript.
+    var result = try normalize(allocator, try runZig(allocator, environment, &.{ "consolidate", "--db", db, other, "--yes" }), root, "<root>");
+    result.stderr = try maskLockHolder(allocator, result.stderr);
+    try expectResult(result, try std.mem.concat(allocator, u8, &.{ try consolidateHeader(allocator, "other"),
+        \\The remote holds a different database, so the two are being consolidated.
+        \\Content the remote already has is not pushed a second time.
+        \\
+        \\[W1:<task>] Consolidating "<root>/db" into "<root>/other".
+        \\[W1:<task>] Consolidated "<root>/db" into "<root>/other": 1 pushed, 0 already there.
+        \\✓ Connected to <root>/other.
+        \\Assets pushed to the remote:      1
+        \\Assets the remote already had:    0
+        \\
+        \\Next steps:
+        \\    # Bring down everything the remote has that this database does not
+        \\    psi sync --db <root>/db
+        \\
+    }), "[W1:<task>] Failed to acquire write lock after 3 attempts. Lock is currently held by <holder>).\n", 0);
+
+    // The remote holds its own photo and the one pushed, and the database is now a partial replica of it.
+    var assetDir = try std.Io.Dir.cwd().openDir(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset", .{other}), .{ .iterate = true });
+    defer assetDir.close(std.testing.io);
+    var assetCount: usize = 0;
+    var assets = assetDir.iterate();
+    while (try assets.next(std.testing.io)) |entry| {
+        _ = entry;
+        assetCount += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 2), assetCount);
+    const dbHash = try runZig(allocator, environment, &.{ "root-hash", "--db", db, "--yes" });
+    const otherHash = try runZig(allocator, environment, &.{ "root-hash", "--db", other, "--yes" });
+    try std.testing.expectEqualStrings(otherHash.stdout, dbHash.stdout);
+    const summary = try runZig(allocator, environment, &.{ "summary", "--db", db, "--yes" });
+    try std.testing.expect(std.mem.indexOf(u8, summary.stdout, "Mode:             partial\n") != null);
+}
+
+test "consolidate reports a remote it cannot lock like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-consolidate-locked");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const locked = try std.fmt.allocPrint(allocator, "{s}/locked", .{root});
+    try helpers.copyDirectory(allocator, "../../test/dbs/1-asset-2", locked);
+
+    // Another session holds the remote's write lock, with a timestamp that never times out.
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = try std.fmt.allocPrint(allocator, "{s}/.db/write.lock", .{locked}),
+        .data = "{\"owner\":\"other-session\",\"acquiredAt\":\"2026-01-01T00:00:00.000Z\",\"timestamp\":9999999999999}",
+    });
+
+    var result = try normalize(allocator, try runZig(allocator, environment, &.{ "consolidate", "--db", db, locked, "--yes" }), root, "<root>");
+    result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
+    result.stderr = try maskLockHolder(allocator, result.stderr);
+    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
+    try std.testing.expectEqualStrings(
+        \\[W1:<task>] Failed to acquire write lock after 3 attempts. Lock is currently held by <holder>).
+        \\✗ Consolidation failed: Failed to acquire the write lock on the remote database at <root>/locked.
+        \\
+    , result.stderr);
+    const expectedStart = try std.mem.concat(allocator, u8, &.{ try consolidateHeader(allocator, "locked"),
+        \\The remote holds a different database, so the two are being consolidated.
+        \\Content the remote already has is not pushed a second time.
+        \\
+        \\[W1:<task>] Consolidating "<root>/db" into "<root>/locked".
+        \\
+        \\Errors, warnings, and exceptions were logged to: 
+    });
+    try std.testing.expect(std.mem.startsWith(u8, result.stdout, expectedStart));
+    try std.testing.expect(std.mem.endsWith(u8, result.stdout, "-errors.log\nTemporary files retained for inspection: <session dir>\n"));
+}
+
+//
 // The report of `psi replicate` (apps/cli/src/cmd/replicate.ts) from <db> to <dest>, with the two lines the
 // replication task logs (packages/node-api/src/lib/replicate-database.worker.ts) through the worker log, for the
 // counts of copied files and records.

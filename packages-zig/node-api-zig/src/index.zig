@@ -12,6 +12,9 @@ pub const replicate_database = @import("lib/replicate-database.zig");
 pub const replicate_database_worker = @import("lib/replicate-database.worker.zig");
 pub const tree = @import("lib/tree.zig");
 pub const sync = @import("lib/sync.zig");
+pub const consolidate = @import("lib/consolidate.zig");
+pub const consolidate_database_worker = @import("lib/consolidate-database.worker.zig");
+pub const prefetch_database_worker = @import("lib/prefetch-database.worker.zig");
 // Not ported: encrypt, decrypt.
 pub const hash = @import("lib/hash.zig");
 pub const exif_parser = @import("lib/third-party/exif-parser/parser.zig");
@@ -51,7 +54,7 @@ pub const state_file = @import("lib/state-file.zig");
 pub const lazy_origin_storage = @import("lib/lazy-origin-storage.zig");
 // Not ported: desktop-config, get-database-summary.worker, move-assets.worker,
 // hash-file.worker, save-asset.worker, save-assets-batch.worker, create-database.worker,
-// prefetch-database.worker, sync-database.worker (not used by psi replicate or psi verify).
+// sync-database.worker (not used by psi replicate or psi verify).
 
 //
 // Files with no TypeScript counterpart (the arrow functions that are passed to retry, and the fetch stand-in).
