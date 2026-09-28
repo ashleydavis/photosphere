@@ -280,3 +280,80 @@ test "getDatabaseSummary reads the counts and hashes of test/dbs/v6" {
     const combined = merkle_tree_zig.merkle_tree.combineHashes(filesTree.merkle.?.hash, databaseHash);
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{x}", .{&combined}), summary.fullHash);
 }
+
+//
+// The id of the one asset in test/dbs/v6.
+//
+const V6_ASSET_ID = "89171cd9-a652-4047-b869-1154bf2c95a1";
+
+test "removeAsset removes the files, the tree entries and the record of an asset and records its id as deleted" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const generators = try makeGenerators(allocator, io);
+    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
+    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    const storage = try helpers.directoryStorage(allocator, io, databaseDir);
+    const database = try media_file_database.createMediaFileDatabase(allocator, storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
+
+    try media_file_database.removeAsset(allocator, io, storage, storage, "session", database.bsonDatabase, database.metadataCollection, V6_ASSET_ID, true);
+
+    for ([_][]const u8{ "asset", "display", "thumb" }) |directory| {
+        const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}/{s}", .{ databaseDir, directory, V6_ASSET_ID });
+        try std.testing.expect(!helpers.fileExists(io, filePath));
+    }
+    try std.testing.expect(!helpers.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/write.lock", .{databaseDir})));
+
+    // The tree holds only the README, and its metadata counts no imports and names the asset as deleted.
+    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
+    try std.testing.expectEqual(@as(u32, 1), filesTree.sort.?.leafCount);
+    try std.testing.expectEqual(@as(u64, 0), media_file_database.getFilesImported(filesTree.databaseMetadata));
+    const deletedAssetIds = filesTree.databaseMetadata.?.get("deletedAssetIds").?.array;
+    try std.testing.expectEqual(@as(usize, 1), deletedAssetIds.len);
+    try std.testing.expectEqualStrings(V6_ASSET_ID, deletedAssetIds[0].string);
+
+    // The record is gone from a fresh read of the collection.
+    const reloaded = try media_file_database.createMediaFileDatabase(allocator, storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
+    try std.testing.expect((try reloaded.metadataCollection.getOne(io, V6_ASSET_ID)) == null);
+
+    // Removing it again finds no record, so the metadata is left as it is.
+    try media_file_database.removeAsset(allocator, io, storage, storage, "session", reloaded.bsonDatabase, reloaded.metadataCollection, V6_ASSET_ID, true);
+    const again = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
+    try std.testing.expectEqual(@as(usize, 1), again.databaseMetadata.?.get("deletedAssetIds").?.array.len);
+}
+
+test "removeAsset leaves deletedAssetIds alone when the removal is not to be recorded" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const generators = try makeGenerators(allocator, io);
+    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
+    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    const storage = try helpers.directoryStorage(allocator, io, databaseDir);
+    const database = try media_file_database.createMediaFileDatabase(allocator, storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
+
+    try media_file_database.removeAsset(allocator, io, storage, storage, "session", database.bsonDatabase, database.metadataCollection, V6_ASSET_ID, false);
+
+    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
+    try std.testing.expectEqual(@as(u64, 0), media_file_database.getFilesImported(filesTree.databaseMetadata));
+    try std.testing.expect(filesTree.databaseMetadata.?.get("deletedAssetIds") == null);
+}
+
+test "removeAsset throws when another session holds the write lock" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const generators = try makeGenerators(allocator, io);
+    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
+    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    const storage = try helpers.directoryStorage(allocator, io, databaseDir);
+    const database = try media_file_database.createMediaFileDatabase(allocator, storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, ".db/write.lock", "another-session"));
+
+    try std.testing.expectError(error.Thrown, media_file_database.removeAsset(allocator, io, storage, storage, "session", database.bsonDatabase, database.metadataCollection, V6_ASSET_ID, true));
+    try std.testing.expectEqualStrings("Failed to acquire write lock.", errors.lastErrorMessage());
+    try std.testing.expect(helpers.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ databaseDir, V6_ASSET_ID })));
+}
