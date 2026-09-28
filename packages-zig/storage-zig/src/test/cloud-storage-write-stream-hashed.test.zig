@@ -277,3 +277,49 @@ test "storedHash is undefined for an object that is not there" {
 
     try std.testing.expect((try storage.storedHash(allocator, std.testing.io, "bucket/db/asset/one")) == null);
 }
+
+//
+// Answers a HEAD with a checksum carrying characters outside the base64 alphabet.
+//
+fn headWithUntidyChecksum(commandName: []const u8) anyerror!S3CommandOutput {
+    _ = commandName;
+    return .{ .HeadObject = .{
+        .ContentType = null,
+        .ContentLength = 0,
+        .LastModified = 0,
+        .ChecksumSHA256 = "QU!J D",
+    } };
+}
+
+//
+// TypeScript decodes the checksum with `Buffer.from(checksum, "base64")`, which skips what is not base64 rather than
+// failing.
+//
+test "storedHash decodes a checksum the way Buffer.from does, skipping characters that are not base64" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var client: FakeClient = undefined;
+    var storage = createStorage(allocator, &client, headWithUntidyChecksum);
+    defer storage.s3.deinit();
+
+    const stored = try storage.storedHash(allocator, std.testing.io, "bucket/db/asset/one");
+    try std.testing.expectEqualSlices(u8, "ABC", stored.?);
+}
+
+//
+// The expected bytes are what Bun's `Buffer.from(text, "base64")` returns for each text.
+//
+test "bufferFromBase64 decodes like Buffer.from" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const bufferFromBase64 = storage_zig.cloud_storage.bufferFromBase64;
+    try std.testing.expectEqualSlices(u8, "ABC", try bufferFromBase64(allocator, "QUJD"));
+    try std.testing.expectEqualSlices(u8, "ABC", try bufferFromBase64(allocator, "QU!JD"));
+    try std.testing.expectEqualSlices(u8, "A", try bufferFromBase64(allocator, "QU=JD"));
+    try std.testing.expectEqualSlices(u8, "AB", try bufferFromBase64(allocator, "QUJ"));
+    try std.testing.expectEqualSlices(u8, "", try bufferFromBase64(allocator, "Q"));
+    try std.testing.expectEqualSlices(u8, "ABC", try bufferFromBase64(allocator, "QU JD"));
+    try std.testing.expectEqualSlices(u8, &.{ 0x41, 0x4f, 0xbf }, try bufferFromBase64(allocator, "QU-_"));
+}

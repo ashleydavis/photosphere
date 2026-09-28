@@ -66,3 +66,67 @@ test "walkDirectory yields nothing for a missing directory" {
     const fileNames = try walkAll(allocator, fileStorage.storage(), "/definitely/missing/directory", &walk_directory.default_ignore_patterns);
     try std.testing.expectEqual(@as(usize, 0), fileNames.len);
 }
+
+//
+// Counts the listings made by the storage below, for the empty continuation token test.
+//
+var emptyTokenListingCount: usize = 0;
+
+//
+// A listFiles that answers one file with an empty continuation token the first time and fails after that.
+//
+fn listFilesWithEmptyToken(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, path: []const u8, max: u32, next: ?[]const u8) anyerror!storage_zig.storage.IListResult {
+    _ = ptr;
+    _ = allocator;
+    _ = io;
+    _ = path;
+    _ = max;
+    _ = next;
+    emptyTokenListingCount += 1;
+    if (emptyTokenListingCount > 1) {
+        return error.ListedAgainAfterAnEmptyToken;
+    }
+    return .{
+        .names = &.{"only-file"},
+        .next = "",
+    };
+}
+
+//
+// A listDirs that answers no directories with an empty continuation token.
+//
+fn listDirsWithEmptyToken(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, path: []const u8, max: u32, next: ?[]const u8) anyerror!storage_zig.storage.IListResult {
+    _ = ptr;
+    _ = allocator;
+    _ = io;
+    _ = path;
+    _ = max;
+    _ = next;
+    return .{
+        .names = &.{},
+        .next = "",
+    };
+}
+
+//
+// `while (next)` in TypeScript ends the listing loop on an empty continuation token, because "" is falsy.
+//
+test "walkDirectory stops listing on an empty continuation token" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var recording = @import("recording-storage.zig").RecordingStorage.init(allocator);
+    var vtable = storage_zig.storage.implement(@import("recording-storage.zig").RecordingStorage).*;
+    vtable.listFiles = listFilesWithEmptyToken;
+    vtable.listDirs = listDirsWithEmptyToken;
+    const storage: storage_zig.storage.IStorage = .{
+        .ptr = &recording,
+        .vtable = &vtable,
+        .location = "rec:",
+    };
+    emptyTokenListingCount = 0;
+    const fileNames = try walkAll(allocator, storage, "dir", &.{});
+    try std.testing.expectEqual(@as(usize, 1), fileNames.len);
+    try std.testing.expectEqualStrings("dir/only-file", fileNames[0]);
+    try std.testing.expectEqual(@as(usize, 1), emptyTokenListingCount);
+}
