@@ -14,8 +14,9 @@ pub const sync_database_types = @import("lib/sync-database.types.zig");
 pub const lan_share = @import("lib/lan-share/index.zig");
 pub const lan_share_resolve = @import("lib/lan-share/lan-share-resolve.zig");
 pub const lan_share_receive = @import("lib/lan-share/lan-share-receive.zig");
+pub const asset_query = @import("lib/asset-query.zig");
 
 // Not ported: database-update, load-assets, save-assets.types, asset, op, database-op,
-// database-op-record, asset-query, auto-import-mobile,
+// database-op-record, auto-import-mobile,
 // retention-policy, sync-gate, sync-settings (not used by psi add, psi replicate or psi verify).
 // IAsset (asset.ts) is only used as a type parameter of IBsonCollection<IAsset>; Zig records are BSON documents.

@@ -176,7 +176,7 @@ fn expectCommanderError(allocator: std.mem.Allocator, args: []const []const u8, 
     try std.testing.expectEqualStrings(stderr, parsed.stderr);
 }
 
-test "commands that are not ported fail by name, unknown commands are unknown, and empty command lines show the help" {
+test "unknown commands are unknown, and empty command lines show the help" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -190,8 +190,6 @@ test "commands that are not ported fail by name, unknown commands are unknown, a
     try std.testing.expect(help.outcome == .failure);
     try std.testing.expectEqualStrings("commander.helpDisplayed", help.outcome.failure.code);
     try std.testing.expect(std.mem.startsWith(u8, help.stdout, "Usage: psi "));
-
-    try std.testing.expectEqualStrings("mcp", (try parse(allocator, &.{"mcp"})).outcome.notPorted);
 
     // The secrets and dbs groups are not created with .exitOverride(), so they call process.exit themselves. They
     // are added with addCommand, so they have outputs of their own (parse points them at the captures).
@@ -1340,4 +1338,26 @@ test "news command lines parse like commander" {
     try std.testing.expect((try parse(allocator, &.{ "-q", "news" })).outcome == .news);
     try expectCommanderError(allocator, &.{ "news", "extra" }, "commander.excessArguments", "error: too many arguments for 'news'. Expected 0 arguments but got 1.\n");
     try expectCommanderError(allocator, &.{ "news", "--yes" }, "commander.unknownOption", "error: unknown option '--yes'\n");
+}
+
+test "mcp command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "mcp", "--verbose", "--yes", "--cwd", "c" });
+    try std.testing.expect(parsed.outcome == .mcp);
+    const options = parsed.outcome.mcp.base;
+    try std.testing.expectEqual(@as(?bool, true), options.verbose);
+    try std.testing.expectEqual(@as(?bool, true), options.yes);
+    try std.testing.expectEqualStrings("c", options.cwd.?);
+    try std.testing.expectEqual(@as(?[]const u8, null), options.db);
+
+    const bare = try parse(allocator, &.{"mcp"});
+    try std.testing.expect(bare.outcome == .mcp);
+    try std.testing.expectEqual(@as(?bool, false), bare.outcome.mcp.base.yes);
+
+    // No --db on purpose: the MCP client picks the database with open_database.
+    try expectCommanderError(allocator, &.{ "mcp", "--db", "x" }, "commander.unknownOption", "error: unknown option '--db'\n");
+    try expectCommanderError(allocator, &.{ "mcp", "extra" }, "commander.excessArguments", "error: too many arguments for 'mcp'. Expected 0 arguments but got 1.\n");
 }

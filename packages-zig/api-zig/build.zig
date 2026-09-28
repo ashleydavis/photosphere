@@ -8,7 +8,7 @@ const module_name = "api-zig";
 //
 // Names of the packages this package depends on.
 //
-const dependency_names = [_][]const u8{ "utils-zig", "storage-zig", "serialization-zig", "task-queue-zig", "vault-zig", "lan-share-core-zig", "node-utils-zig", "encryption-zig" };
+const dependency_names = [_][]const u8{ "utils-zig", "storage-zig", "serialization-zig", "task-queue-zig", "vault-zig", "lan-share-core-zig", "node-utils-zig", "encryption-zig", "bdb-zig" };
 
 //
 // Builds the module and registers a test step that runs every file in src/test.

@@ -120,7 +120,7 @@ To do, in order (each one uses what the earlier ones ported):
 - [x] bug
 - [x] dbs (all subcommands, including LAN share send and receive)
 - [x] secrets (all subcommands, including LAN share send and receive)
-- [ ] mcp
+- [x] mcp
 
 ## Smoke suites to match
 

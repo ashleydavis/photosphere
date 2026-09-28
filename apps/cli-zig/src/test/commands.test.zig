@@ -2707,16 +2707,72 @@ test "help prints the help of a command like the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{"secrets"}), "", secretsHelp, 1);
 }
 
-test "commands that are not ported yet fail with an error that names them" {
+//
+// A path as it appears inside a JSON string (a Windows path's backslashes are escaped).
+//
+fn jsonEscapedPath(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
+    return std.mem.replaceOwned(u8, allocator, path, "\\", "\\\\");
+}
+
+test "mcp answers an MCP session like the TypeScript CLI" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const root = try helpers.makeTempDir(allocator, "cmd-not-ported");
+    const root = try setup(allocator, "cmd-mcp");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = try std.fmt.allocPrint(allocator, "{s}/config/databases.toml", .{root}),
+        .data = try std.fmt.allocPrint(allocator, "[[databases]]\nname = 'photos'\ndescription = 'My photos'\npath = '{s}/db'\n", .{root}),
+    });
+
+    // src/test/fixtures/mcp-session.jsonl is an MCP session with every tool of test/dbs/v6, <ROOT> standing for the
+    // test root. mcp-session-expected.jsonl is what the TypeScript CLI (`bun run start -- -q mcp --yes`) answered to
+    // it, fed one message at a time.
+    const escapedRoot = try jsonEscapedPath(allocator, root);
+    const session = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "src/test/fixtures/mcp-session.jsonl", allocator, .unlimited);
+    const expected = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "src/test/fixtures/mcp-session-expected.jsonl", allocator, .unlimited);
+    const result = try helpers.runCliWithInput(allocator, &.{ try zigCliPath(allocator), "-q", "mcp", "--yes" }, try std.mem.replaceOwned(u8, allocator, session, "<ROOT>", escapedRoot), environment);
+    try expectResult(.{
+        .exitCode = result.exitCode,
+        .stdout = try std.mem.replaceOwned(u8, allocator, result.stdout, escapedRoot, "<ROOT>"),
+        .stderr = result.stderr,
+    }, expected, "Photosphere MCP server running\n", 0);
+
+    // save_media_file wrote the thumbnail of the asset (130,591 bytes).
+    const thumb = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/out/thumb.jpg", .{root}), allocator, .unlimited);
+    const storedThumb = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/db/thumb/89171cd9-a652-4047-b869-1154bf2c95a1", .{root}), allocator, .unlimited);
+    try std.testing.expectEqual(@as(usize, 130591), thumb.len);
+    try std.testing.expectEqualSlices(u8, storedThumb, thumb);
+}
+
+test "mcp answers messages that are not JSON-RPC requests with the JSON-RPC errors, and ends when its input ends" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-mcp-errors");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
 
-    const bugHint = "\nIf you believe this behaviour is a bug, please report it with the following command:\n   psi bug\n";
-    try expectResult(try runZig(allocator, environment, &.{ "-q", "mcp" }), bugHint, "An unknown error occurred\nError: The mcp command is not ported to the Zig CLI yet.\n", 1);
+    // A line that is not JSON, JSON that is not a request, a request with no jsonrpc, a request whose params is not
+    // an object, a notification (no answer), a CRLF line, and a last line with no newline, which is not a message.
+    const input =
+        "not json\n" ++
+        "[]\n" ++
+        "{\"id\":1,\"method\":\"ping\"}\n" ++
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\",\"params\":[]}\n" ++
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n" ++
+        "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"ping\"}\r\n" ++
+        "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"ping\"}";
+    const expected =
+        \\{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}
+        \\{"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"Invalid Request"}}
+        \\{"jsonrpc":"2.0","id":1,"error":{"code":-32600,"message":"Invalid Request"}}
+        \\{"jsonrpc":"2.0","id":2,"error":{"code":-32600,"message":"Invalid Request"}}
+        \\{"result":{},"jsonrpc":"2.0","id":3}
+        \\
+    ;
+    try expectResult(try helpers.runCliWithInput(allocator, &.{ try zigCliPath(allocator), "-q", "mcp" }, input, environment), expected, "Photosphere MCP server running\n", 0);
 }
 
 //
