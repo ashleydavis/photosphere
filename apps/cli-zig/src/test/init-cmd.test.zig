@@ -29,16 +29,6 @@ const public_key_path = "../../packages-zig/encryption-zig/src/test/fixtures/ts-
 const key_not_found_prompt = "was not found. How would you like to add it?";
 
 //
-// The plaintext vault directory shared by the tests of this file (getVault caches the vault).
-//
-var vault_dir_buffer: [std.fs.max_path_bytes]u8 = undefined;
-
-//
-// The length of the vault directory path.
-//
-var vault_dir_length: usize = 0;
-
-//
 // The test environment: a plaintext vault in a temporary directory.
 //
 const TestEnvironment = struct {
@@ -54,14 +44,7 @@ const TestEnvironment = struct {
     fn init(self: *TestEnvironment) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
-        if (vault_dir_length == 0) {
-            const path = try helpers.makeTempDir(allocator, "init-cmd-vault");
-            @memcpy(vault_dir_buffer[0..path.len], path);
-            vault_dir_length = path.len;
-        }
-        const vaultDir = vault_dir_buffer[0..vault_dir_length];
-        std.Io.Dir.cwd().deleteTree(std.testing.io, vaultDir) catch {};
-        try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
+        const vaultDir = try helpers.emptySharedVaultDir(allocator);
         self.environ_map = std.process.Environ.Map.init(allocator);
 
         // The tools (ImageMagick, ffmpeg) are found through the PATH of the process running the tests.

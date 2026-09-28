@@ -6,7 +6,9 @@ browser.
 On Windows `psi bug` (the TypeScript CLI through the `open` package, and the Zig port) runs
 `%SYSTEMROOT%\System32\WindowsPowerShell\v1.0\powershell.exe`, not a program found on the `PATH`. The test builds this
 file at test time with `zig build-exe` as that `powershell.exe` under a directory in its per-test temp dir, and runs each
-`psi bug` with `SYSTEMROOT` pointing at that directory. No binary is checked in.
+`psi bug` with `SYSTEMROOT` pointing at that directory. Every other entry of the real `SYSTEMROOT`, and of its `System32`,
+is linked into that directory, because the TypeScript CLI (a Bun executable) does not start under a `SYSTEMROOT` that
+holds only PowerShell. No binary is checked in.
 
 Arguments:
 

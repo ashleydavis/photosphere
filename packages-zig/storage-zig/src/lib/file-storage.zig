@@ -378,6 +378,15 @@ pub const FileStorage = struct {
                 }
                 return false;
             }
+            else if (try self.checkWriteLock(allocator, io, filePath) != null) {
+                // The owner wrote the lock file after it was read empty above and before it was
+                // stat'ed, so it is a freshly acquired lock, not a corrupt one. Breaking it here
+                // let two owners hold the lock at once.
+                if (log.verboseEnabled()) {
+                    log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},ACQUIRE_FAILED_EXISTS,{d},{s},{s}", .{ timestamp, processId, owner, filePath }));
+                }
+                return false;
+            }
             else {
                 // Corrupted lock file, remove it
                 if (log.verboseEnabled()) {

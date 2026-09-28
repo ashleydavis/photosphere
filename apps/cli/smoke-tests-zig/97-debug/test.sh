@@ -119,7 +119,8 @@ test_debug() {
     collision_hashes="$(jq -r 'keys[]' "$db_dir/collisions.json")"
     expect_value "$collision_hashes" "$png_hash" "The colliding hash is the PNG's"
     local collision_sizes
-    collision_sizes="$(jq -r ".[\"$png_hash\"][].size" "$db_dir/collisions.json" | tr '\n' ' ')"
+    # Joined by jq itself: the Windows jq ends each line it prints with CRLF, which `tr '\n' ' '` leaves a CR of.
+    collision_sizes="$(jq -j ".[\"$png_hash\"][] | \"\(.size) \"" "$db_dir/collisions.json")"
     expect_value "$collision_sizes" "1317 1317 " "Both colliding assets have the PNG's size"
 
     local ts_collisions

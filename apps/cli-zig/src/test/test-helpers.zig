@@ -68,6 +68,34 @@ pub fn makeTempDir(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
 }
 
 //
+// The plaintext vault directory shared by every test that runs commands in the test process.
+//
+var shared_vault_dir_buffer: [std.fs.max_path_bytes]u8 = undefined;
+
+//
+// The length of the shared vault directory path (0 until the first call of emptySharedVaultDir).
+//
+var shared_vault_dir_length: usize = 0;
+
+//
+// Empties the plaintext vault directory shared by the tests that run commands in the test process, creating
+// it on the first call, and returns its path. getVault caches the first plaintext vault it makes for the rest
+// of the process, so a test that set PHOTOSPHERE_VAULT_DIR to a directory of its own would read and write the
+// vault of whichever test ran first. Every in-process test therefore uses this one directory.
+//
+pub fn emptySharedVaultDir(allocator: std.mem.Allocator) ![]const u8 {
+    if (shared_vault_dir_length == 0) {
+        const path = try makeTempDir(allocator, "vault");
+        @memcpy(shared_vault_dir_buffer[0..path.len], path);
+        shared_vault_dir_length = path.len;
+    }
+    const vaultDir = shared_vault_dir_buffer[0..shared_vault_dir_length];
+    std.Io.Dir.cwd().deleteTree(std.testing.io, vaultDir) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
+    return vaultDir;
+}
+
+//
 // A reader that delivers its input one chunk per read, like a terminal delivers keypresses (and like the
 // TypeScript fixture generator writes one key per chunk).
 //
