@@ -101,8 +101,26 @@ pub fn build(b: *std.Build) !void {
         const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = optimize });
         test_module.addImport(dependency_name, dependency.module(dependency_name));
     }
-    const unit_test = b.addTest(.{ .root_module = test_module });
-    const run_test = b.addRunArtifact(unit_test);
+    // The directory to write a kcov line-coverage report of the unit tests to (see docs/zig-test-coverage.md).
+    // The tests are then compiled with the LLVM backend, whose debug info kcov reads, and run under kcov.
+    const coverage_dir = b.option([]const u8, "coverage", "Write a kcov line-coverage report of the unit tests to this directory");
+    const unit_test = b.addTest(.{ .root_module = test_module, .use_llvm = if (coverage_dir != null) true else null });
+    const run_test = if (coverage_dir) |directory| addCoverageRun(b, unit_test, directory) else b.addRunArtifact(unit_test);
     run_test.setCwd(b.path("."));
     test_step.dependOn(&run_test.step);
+}
+
+//
+// Runs the unit test program under kcov, which writes a line-coverage report of this package's own sources (not its
+// tests or dependencies) to the directory.
+//
+fn addCoverageRun(b: *std.Build, unit_test: *std.Build.Step.Compile, coverage_dir: []const u8) *std.Build.Step.Run {
+    const run = b.addSystemCommand(&.{
+        "kcov",
+        b.fmt("--include-path={s}", .{b.pathFromRoot("src")}),
+        b.fmt("--exclude-path={s}", .{b.pathFromRoot("src/test")}),
+        coverage_dir,
+    });
+    run.addArtifactArg(unit_test);
+    return run;
 }
