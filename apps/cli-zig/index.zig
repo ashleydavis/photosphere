@@ -1,12 +1,12 @@
 //
 // Port of apps/cli/index.ts: the `psi` entry point.
 // Only the `add` (alias `a`), `check` (alias `chk`), `compare` (alias `cmp`), `consolidate`, `database-id`, `debug` (all
-// its subcommands), `decrypt`, `encrypt`, `examples`, `export` (alias `exp`), `find-orphans`, `hash`, `help`, `info` (alias
-// `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias `rm`), `remove-orphans`, `repair`,
-// `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`, `tools`, `upgrade`, `verify` (alias
-// `ver`) and `version` commands, the `secrets` command group (aliases `sec` and `s`) and the `--version` option are ported.
-// The other commands are defined like in index.ts, so that their help is the help of the TypeScript CLI, but running one
-// fails with an error saying that it is not ported yet.
+// its subcommands), `decrypt`, `encrypt`, `examples`, `export` (alias `exp`), `find-orphans`, `hash`, `hash-cache` (all its
+// subcommands), `help`, `info` (alias `inf`), `init` (alias `i`), `list` (aliases `ls` and `l`), `origin`, `remove` (alias
+// `rm`), `remove-orphans`, `repair`, `replicate` (alias `rep`), `root-hash`, `set-origin`, `summary` (alias `sum`), `sync`,
+// `tools`, `upgrade`, `verify` (alias `ver`) and `version` commands, the `secrets` command group (aliases `sec` and `s`)
+// and the `--version` option are ported. The other commands are defined like in index.ts, so that their help is the help
+// of the TypeScript CLI, but running one fails with an error saying that it is not ported yet.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -55,6 +55,9 @@ pub const debug = @import("src/cmd/debug.zig");
 pub const hash = @import("src/cmd/hash.zig");
 pub const tools_cmd = @import("src/cmd/tools.zig");
 pub const check = @import("src/cmd/check.zig");
+pub const hash_cache = @import("src/cmd/hash-cache.zig");
+pub const clear_cache = @import("src/cmd/clear-cache.zig");
+pub const hash_cache_tools = @import("src/cmd/hash-cache-tools.zig");
 pub const remove_orphans = @import("src/cmd/remove-orphans.zig");
 pub const upgrade = @import("src/cmd/upgrade.zig");
 pub const export_command = @import("src/cmd/export.zig");
@@ -123,6 +126,11 @@ const IToolsCommandOptions = tools_cmd.IToolsCommandOptions;
 const toolsCommand = tools_cmd.toolsCommand;
 const ICheckCommandOptions = check.ICheckCommandOptions;
 const checkCommand = check.checkCommand;
+const IHashCacheCommandOptions = hash_cache.IHashCacheCommandOptions;
+const hashCacheCommand = hash_cache.hashCacheCommand;
+const IClearCacheCommandOptions = clear_cache.IClearCacheCommandOptions;
+const clearCacheCommand = clear_cache.clearCacheCommand;
+const IHashCacheToolOptions = hash_cache_tools.IHashCacheToolOptions;
 const IRemoveCommandOptions = remove.IRemoveCommandOptions;
 const removeCommand = remove.removeCommand;
 const ICompareCommandOptions = compare.ICompareCommandOptions;
@@ -356,6 +364,48 @@ pub const IHashParsed = struct {
 };
 
 //
+// What the hash-cache add command runs with: its file and its options (TypeScript: the arguments commander passes
+// the action).
+//
+pub const IHashCacheAddParsed = struct {
+    // The file to hash and record.
+    file: []const u8,
+
+    // The options of the command.
+    options: IHashCacheToolOptions,
+};
+
+//
+// What the hash-cache set and set-source commands run with: the key, hash, length and options (TypeScript: the
+// arguments commander passes the action).
+//
+pub const IHashCacheSetParsed = struct {
+    // The path (set) or photo library source id (set-source) to record the hash against.
+    key: []const u8,
+
+    // The hash, in hex.
+    hash: []const u8,
+
+    // The length of the file in bytes, as typed.
+    length: []const u8,
+
+    // The options of the command.
+    options: IHashCacheToolOptions,
+};
+
+//
+// What the hash-cache get, get-asset-id and remove commands run with: the key and options (TypeScript: the
+// arguments commander passes the action).
+//
+pub const IHashCacheKeyParsed = struct {
+    // The key of the entry.
+    key: []const u8,
+
+    // The options of the command.
+    options: IHashCacheToolOptions,
+};
+
+//
 // The command a parsed command line runs.
 //
 pub const ParseOutcome = union(enum) {
@@ -419,6 +469,42 @@ pub const ParseOutcome = union(enum) {
 
     // Run the tools command with these options.
     tools: IToolsCommandOptions,
+
+    // Run the hash-cache show command with these options.
+    hashCacheShow: IHashCacheCommandOptions,
+
+    // Run the hash-cache clear command with these options.
+    hashCacheClear: IClearCacheCommandOptions,
+
+    // Run the hash-cache hash-file command on this file.
+    hashCacheHashFile: []const u8,
+
+    // Run the hash-cache add command with this file and these options.
+    hashCacheAdd: IHashCacheAddParsed,
+
+    // Run the hash-cache set command with this key, hash, length and options.
+    hashCacheSet: IHashCacheSetParsed,
+
+    // Run the hash-cache set-source command with this source id, hash, length and options.
+    hashCacheSetSource: IHashCacheSetParsed,
+
+    // Run the hash-cache get command with this key and options.
+    hashCacheGet: IHashCacheKeyParsed,
+
+    // Run the hash-cache get-asset-id command with this key and options.
+    hashCacheGetAssetId: IHashCacheKeyParsed,
+
+    // Run the hash-cache remove command with this key and options.
+    hashCacheRemove: IHashCacheKeyParsed,
+
+    // Run the hash-cache list command with these options.
+    hashCacheList: IHashCacheToolOptions,
+
+    // Run the hash-cache count command with these options.
+    hashCacheCount: IHashCacheToolOptions,
+
+    // Run the hash-cache dir command with these options.
+    hashCacheDir: IHashCacheToolOptions,
 
     // Run the compare command with these options.
     compare: ICompareCommandOptions,
@@ -901,6 +987,170 @@ fn toolsAction(state: *IProgramState, args: []const ArgumentValue, options: *con
 }
 
 //
+// The action of the hash-cache show command (`initContext(hashCacheCommand)`): `run` calls initContext and the
+// command.
+//
+fn hashCacheShowAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .hashCacheShow = .{
+            .base = baseOptions(options),
+        },
+    };
+}
+
+//
+// The action of the hash-cache clear command (`initContext(clearCacheCommand)`): `run` calls initContext and the
+// command.
+//
+fn hashCacheClearAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .hashCacheClear = .{
+            .base = baseOptions(options),
+        },
+    };
+}
+
+//
+// Converts the parsed values to the options of the hash cache tools. --db is a required option, so commander has
+// checked that it has a value.
+//
+fn hashCacheToolOptions(values: *const OptionValues) IHashCacheToolOptions {
+    return .{
+        .db = textValue(values, "db").?,
+    };
+}
+
+//
+// The action of the hash-cache hash-file command (`hashFileCommand`): `run` calls the command.
+//
+fn hashCacheHashFileAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = options;
+    _ = command;
+    state.outcome = .{
+        .hashCacheHashFile = args[0].string,
+    };
+}
+
+//
+// The action of the hash-cache add command (`hashCacheAddCommand`): `run` calls the command.
+//
+fn hashCacheAddAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+    state.outcome = .{
+        .hashCacheAdd = .{
+            .file = args[0].string,
+            .options = hashCacheToolOptions(options),
+        },
+    };
+}
+
+//
+// The action of the hash-cache set command (`hashCacheSetCommand`): `run` calls the command.
+//
+fn hashCacheSetAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+    state.outcome = .{
+        .hashCacheSet = .{
+            .key = args[0].string,
+            .hash = args[1].string,
+            .length = args[2].string,
+            .options = hashCacheToolOptions(options),
+        },
+    };
+}
+
+//
+// The action of the hash-cache set-source command (`hashCacheSetSourceCommand`): `run` calls the command.
+//
+fn hashCacheSetSourceAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+    state.outcome = .{
+        .hashCacheSetSource = .{
+            .key = args[0].string,
+            .hash = args[1].string,
+            .length = args[2].string,
+            .options = hashCacheToolOptions(options),
+        },
+    };
+}
+
+//
+// The action of the hash-cache get command (`hashCacheGetCommand`): `run` calls the command.
+//
+fn hashCacheGetAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+    state.outcome = .{
+        .hashCacheGet = .{
+            .key = args[0].string,
+            .options = hashCacheToolOptions(options),
+        },
+    };
+}
+
+//
+// The action of the hash-cache get-asset-id command (`hashCacheGetAssetIdCommand`): `run` calls the command.
+//
+fn hashCacheGetAssetIdAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+    state.outcome = .{
+        .hashCacheGetAssetId = .{
+            .key = args[0].string,
+            .options = hashCacheToolOptions(options),
+        },
+    };
+}
+
+//
+// The action of the hash-cache remove command (`hashCacheRemoveCommand`): `run` calls the command.
+//
+fn hashCacheRemoveAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+    state.outcome = .{
+        .hashCacheRemove = .{
+            .key = args[0].string,
+            .options = hashCacheToolOptions(options),
+        },
+    };
+}
+
+//
+// The action of the hash-cache list command (`hashCacheListCommand`): `run` calls the command.
+//
+fn hashCacheListAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .hashCacheList = hashCacheToolOptions(options),
+    };
+}
+
+//
+// The action of the hash-cache count command (`hashCacheCountCommand`): `run` calls the command.
+//
+fn hashCacheCountAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .hashCacheCount = hashCacheToolOptions(options),
+    };
+}
+
+//
+// The action of the hash-cache dir command (`hashCacheDirCommand`): `run` calls the command.
+//
+fn hashCacheDirAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .hashCacheDir = hashCacheToolOptions(options),
+    };
+}
+
+//
 // The action of the upgrade command (`initContext(upgradeCommand)`): `run` calls initContext and the command.
 //
 fn upgradeAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
@@ -1318,7 +1568,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
     // for development and for the concurrency smoke test, not for end users, and it is documented
     // in the wiki rather than in the program help.
     //
-    const hashCacheCmd = program
+    const hashCacheDefinition = program
         .command("hash-cache", .{ .hidden = true })
         .description("Inspect and manage a database's hash cache.");
 
@@ -1334,49 +1584,84 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
         .description = "The directory that contains the media file database",
     };
 
-    const hashCacheShow = hashCacheCmd
+    const hashCacheShowDefinition = hashCacheDefinition
         .command("show", .{})
         .description("Display information about a database's hash cache.");
-    _ = optionFrom(hashCacheShow, dbOption);
-    _ = optionFrom(hashCacheShow, keyOption);
-    _ = optionFrom(hashCacheShow, verboseOption);
-    _ = optionFrom(hashCacheShow, yesOption);
-    _ = optionFrom(hashCacheShow, cwdOption);
-    _ = hashCacheShow.action(state, notPortedAction);
+    _ = optionFrom(hashCacheShowDefinition, dbOption);
+    _ = optionFrom(hashCacheShowDefinition, keyOption);
+    _ = optionFrom(hashCacheShowDefinition, verboseOption);
+    _ = optionFrom(hashCacheShowDefinition, yesOption);
+    _ = optionFrom(hashCacheShowDefinition, cwdOption);
+    _ = hashCacheShowDefinition.action(state, hashCacheShowAction);
 
-    const hashCacheClear = hashCacheCmd
+    const hashCacheClearDefinition = hashCacheDefinition
         .command("clear", .{})
         .description("Clear a database's hash cache to force re-hashing of files.");
-    _ = optionFrom(hashCacheClear, dbOption);
-    _ = optionFrom(hashCacheClear, keyOption);
-    _ = optionFrom(hashCacheClear, verboseOption);
-    _ = optionFrom(hashCacheClear, yesOption);
-    _ = optionFrom(hashCacheClear, cwdOption);
-    _ = hashCacheClear.action(state, notPortedAction);
+    _ = optionFrom(hashCacheClearDefinition, dbOption);
+    _ = optionFrom(hashCacheClearDefinition, keyOption);
+    _ = optionFrom(hashCacheClearDefinition, verboseOption);
+    _ = optionFrom(hashCacheClearDefinition, yesOption);
+    _ = optionFrom(hashCacheClearDefinition, cwdOption);
+    _ = hashCacheClearDefinition.action(state, hashCacheClearAction);
 
-    _ = hashCacheCmd
+    _ = hashCacheDefinition
         .command("hash-file <file>", .{})
         .description("Compute the SHA-256 hash of a file without touching the cache.")
-        .action(state, notPortedAction);
+        .action(state, hashCacheHashFileAction);
 
-    const hashCacheTools = [_][2][]const u8{
-        .{ "add <file>", "Hash a file and record it in the hash cache." },
-        .{ "set <path> <hash> <length>", "Record a hash in the hash cache against an arbitrary path." },
-        .{ "set-source <source-id> <hash> <length>", "Record a hash in the hash cache against a photo library source id." },
-        .{ "get <path>", "Print the cached hash for a key. Exits 1 when it is not cached." },
-        .{ "get-asset-id <path>", "Print the asset id recorded against a key. Exits 1 when there is none." },
-        .{ "remove <path>", "Remove a key from the hash cache. Exits 1 when it was not cached." },
-        .{ "list", "Print the key of every entry in the hash cache, one per line." },
-        .{ "count", "Print how many entries the hash cache holds." },
-        .{ "dir", "Print the directory holding a database's hash cache." },
-    };
-    for (hashCacheTools) |hashCacheTool| {
-        _ = hashCacheCmd
-            .command(hashCacheTool[0], .{})
-            .description(hashCacheTool[1])
-            .requiredOption(hashCacheToolDbOption.flags, hashCacheToolDbOption.description, null)
-            .action(state, notPortedAction);
-    }
+    _ = hashCacheDefinition
+        .command("add <file>", .{})
+        .description("Hash a file and record it in the hash cache.")
+        .requiredOption(hashCacheToolDbOption.flags, hashCacheToolDbOption.description, null)
+        .action(state, hashCacheAddAction);
+
+    _ = hashCacheDefinition
+        .command("set <path> <hash> <length>", .{})
+        .description("Record a hash in the hash cache against an arbitrary path.")
+        .requiredOption(hashCacheToolDbOption.flags, hashCacheToolDbOption.description, null)
+        .action(state, hashCacheSetAction);
+
+    _ = hashCacheDefinition
+        .command("set-source <source-id> <hash> <length>", .{})
+        .description("Record a hash in the hash cache against a photo library source id.")
+        .requiredOption(hashCacheToolDbOption.flags, hashCacheToolDbOption.description, null)
+        .action(state, hashCacheSetSourceAction);
+
+    _ = hashCacheDefinition
+        .command("get <path>", .{})
+        .description("Print the cached hash for a key. Exits 1 when it is not cached.")
+        .requiredOption(hashCacheToolDbOption.flags, hashCacheToolDbOption.description, null)
+        .action(state, hashCacheGetAction);
+
+    _ = hashCacheDefinition
+        .command("get-asset-id <path>", .{})
+        .description("Print the asset id recorded against a key. Exits 1 when there is none.")
+        .requiredOption(hashCacheToolDbOption.flags, hashCacheToolDbOption.description, null)
+        .action(state, hashCacheGetAssetIdAction);
+
+    _ = hashCacheDefinition
+        .command("remove <path>", .{})
+        .description("Remove a key from the hash cache. Exits 1 when it was not cached.")
+        .requiredOption(hashCacheToolDbOption.flags, hashCacheToolDbOption.description, null)
+        .action(state, hashCacheRemoveAction);
+
+    _ = hashCacheDefinition
+        .command("list", .{})
+        .description("Print the key of every entry in the hash cache, one per line.")
+        .requiredOption(hashCacheToolDbOption.flags, hashCacheToolDbOption.description, null)
+        .action(state, hashCacheListAction);
+
+    _ = hashCacheDefinition
+        .command("count", .{})
+        .description("Print how many entries the hash cache holds.")
+        .requiredOption(hashCacheToolDbOption.flags, hashCacheToolDbOption.description, null)
+        .action(state, hashCacheCountAction);
+
+    _ = hashCacheDefinition
+        .command("dir", .{})
+        .description("Print the directory holding a database's hash cache.")
+        .requiredOption(hashCacheToolDbOption.flags, hashCacheToolDbOption.description, null)
+        .action(state, hashCacheDirAction);
 
     const debugCommand = program
         .command("debug", .{})
@@ -2141,7 +2426,9 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (userArgs.len == 0) {
                 exit(io, 0);
             }
-            return utils.errors.throwError("{s}", .{failure.message});
+            // The error rethrown is commander's CommanderError, which shows under that name.
+            utils.errors.recordError("CommanderError", "{s}", .{failure.message});
+            return error.Thrown;
         },
         .add => |parsed| {
             var options = parsed.options;
@@ -2266,6 +2553,82 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
             try toolsCommand(allocator, io, &parsed);
+        },
+        .hashCacheShow => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try hashCacheCommand(allocator, io, context, &options);
+        },
+        .hashCacheClear => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            const context = try initContext(allocator, io, options.base);
+            try clearCacheCommand(allocator, io, context, &options);
+        },
+        .hashCacheHashFile => |file| {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try hash_cache_tools.hashFileCommand(allocator, io, file);
+        },
+        .hashCacheAdd => |parsed| {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try hash_cache_tools.hashCacheAddCommand(allocator, io, parsed.file, parsed.options);
+        },
+        .hashCacheSet => |parsed| {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try hash_cache_tools.hashCacheSetCommand(allocator, io, parsed.key, parsed.hash, parsed.length, parsed.options);
+        },
+        .hashCacheSetSource => |parsed| {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try hash_cache_tools.hashCacheSetSourceCommand(allocator, io, parsed.key, parsed.hash, parsed.length, parsed.options);
+        },
+        .hashCacheGet => |parsed| {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try hash_cache_tools.hashCacheGetCommand(allocator, io, parsed.key, parsed.options);
+        },
+        .hashCacheGetAssetId => |parsed| {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try hash_cache_tools.hashCacheGetAssetIdCommand(allocator, io, parsed.key, parsed.options);
+        },
+        .hashCacheRemove => |parsed| {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try hash_cache_tools.hashCacheRemoveCommand(allocator, io, parsed.key, parsed.options);
+        },
+        .hashCacheList => |parsed| {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try hash_cache_tools.hashCacheListCommand(allocator, io, parsed);
+        },
+        .hashCacheCount => |parsed| {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try hash_cache_tools.hashCacheCountCommand(allocator, io, parsed);
+        },
+        .hashCacheDir => |parsed| {
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, quiet);
+            }
+            try hash_cache_tools.hashCacheDirCommand(allocator, io, parsed);
         },
         .upgrade => |parsed| {
             var options = parsed;

@@ -118,6 +118,13 @@ test "should use stack when available" {
     };
 }
 
+//
+// Throws an error without a stack with the given message.
+//
+fn throwStackless(message: []const u8) errors.ThrownError!void {
+    return errors.throwStacklessError("{s}", .{message});
+}
+
 test "should fall back to message when stack is absent" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -125,6 +132,12 @@ test "should fall back to message when stack is absent" {
     // Runtime Zig errors have no recorded message: the error name is used.
     const result = try wrapped_error.formatErrorChain(arena.allocator(), error.FileNotFound);
     try std.testing.expectEqualStrings("Error: FileNotFound", result);
+
+    // An error thrown without a stack shows its message alone.
+    throwStackless("no stack here") catch |err| {
+        const stacklessResult = try wrapped_error.formatErrorChain(arena.allocator(), err);
+        try std.testing.expectEqualStrings("no stack here", stacklessResult);
+    };
 }
 
 test "writeErrorChain writes the chain to a writer" {

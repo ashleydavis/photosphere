@@ -2712,7 +2712,7 @@ test "commands that are not ported yet fail with an error that names them" {
     const environment = try helpers.cliEnvironment(allocator, root);
 
     const bugHint = "\nIf you believe this behaviour is a bug, please report it with the following command:\n   psi bug\n";
-    try expectResult(try runZig(allocator, environment, &.{ "-q", "hash-cache", "show" }), bugHint, "An unknown error occurred\nError: The hash-cache show command is not ported to the Zig CLI yet.\n", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "-q", "dbs", "view", "--name", "x" }), bugHint, "An unknown error occurred\nError: The dbs view command is not ported to the Zig CLI yet.\n", 1);
     try expectResult(try runZig(allocator, environment, &.{ "-q", "news" }), bugHint, "An unknown error occurred\nError: The news command is not ported to the Zig CLI yet.\n", 1);
 }
 
@@ -2732,6 +2732,16 @@ fn setupSecrets(allocator: std.mem.Allocator, root: []const u8) !*std.process.En
     const vaultDir = try std.fmt.allocPrint(allocator, "{s}/vault", .{root});
     try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{vaultDir}), .data = secrets_seed_vault });
+    return environment;
+}
+
+//
+// The environment of the hash-cache tests: the CLI test environment with the cache in <root>/cache, so the
+// test's hash caches are its own.
+//
+fn hashCacheEnvironment(allocator: std.mem.Allocator, root: []const u8) !*std.process.Environ.Map {
+    const environment = try helpers.cliEnvironment(allocator, root);
+    try environment.put("PHOTOSPHERE_CACHE_DIR", try std.fs.path.join(allocator, &.{ root, "cache" }));
     return environment;
 }
 
@@ -3265,4 +3275,182 @@ test "debug find-duplicates reports an input file it cannot read like the TypeSc
         try std.fmt.allocPrint(allocator, "Error: Failed to read input file {s}: JSON Parse error: SyntaxError\nTemporary files retained for inspection: <session dir>\n", .{badPath}),
         try maskRetainedSessionDir(allocator, malformed.stdout),
     );
+}
+
+//
+// A hash in hex, as the hash-cache tools take and print it.
+//
+const hash_cache_test_hash = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+
+//
+// The "bug report" hint handleError (apps/cli/index.ts) prints to stdout after an unknown error.
+//
+const bug_report_hint = "\nIf you believe this behaviour is a bug, please report it with the following command:\n   psi bug\n";
+
+test "hash-cache tools record, read back and remove entries like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-hash-cache-tools");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try hashCacheEnvironment(allocator, root);
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+
+    // hashCacheDirCommand (apps/cli/src/cmd/hash-cache-tools.ts) prints getHashCacheDir(db): <cache>/<16 hex digits
+    // of the database path's hash>/hash-cache.
+    const dirResult = try runZig(allocator, environment, &.{ "hash-cache", "dir", "--db", db });
+    const cachePrefix = try std.fmt.allocPrint(allocator, "{s}{c}", .{ try std.fs.path.join(allocator, &.{ root, "cache" }), std.fs.path.sep });
+    try std.testing.expect(std.mem.startsWith(u8, dirResult.stdout, cachePrefix));
+    try std.testing.expect(std.mem.endsWith(u8, dirResult.stdout, try std.fmt.allocPrint(allocator, "{c}hash-cache\n", .{std.fs.path.sep})));
+    try std.testing.expectEqual(cachePrefix.len + 16 + "/hash-cache\n".len, dirResult.stdout.len);
+    try std.testing.expectEqualStrings("", dirResult.stderr);
+    try std.testing.expectEqual(@as(u8, 0), dirResult.exitCode);
+
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "count", "--db", db }), "0\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "list", "--db", db }), "", "", 0);
+
+    // set and set-source print nothing. A length that parseInt cannot read is recorded as 0.
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "set", "b/photo.jpg", hash_cache_test_hash, "1234", "--db", db }), "", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "set", "a.jpg", hash_cache_test_hash, "abc", "--db", db }), "", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "set-source", "source-1", hash_cache_test_hash, "5000000", "--db", db }), "", "", 0);
+
+    // Entries are listed in key order.
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "list", "--db", db }), "a.jpg\nb/photo.jpg\nsource-1\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "count", "--db", db }), "3\n", "", 0);
+
+    // get prints the hash, and a miss prints nothing and exits 1. get-asset-id exits 1 for an entry without an
+    // asset id as well as for a missing one.
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "get", "b/photo.jpg", "--db", db }), hash_cache_test_hash ++ "\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "get", "missing.jpg", "--db", db }), "", "", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "get-asset-id", "b/photo.jpg", "--db", db }), "", "", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "get-asset-id", "missing.jpg", "--db", db }), "", "", 1);
+
+    // remove exits 1 when there was nothing to remove.
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "remove", "a.jpg", "--db", db }), "", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "remove", "a.jpg", "--db", db }), "", "", 1);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "list", "--db", db }), "b/photo.jpg\nsource-1\n", "", 0);
+}
+
+test "hash-cache set fails like the TypeScript CLI for a hash or length the cache cannot hold" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-hash-cache-set-errors");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try hashCacheEnvironment(allocator, root);
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+
+    // Buffer.from(hash, 'hex') stops at the first pair that is not hex, so this hash has no bytes.
+    const badHash = try runZig(allocator, environment, &.{ "hash-cache", "set", "a.jpg", "zz" ++ hash_cache_test_hash, "1", "--db", db });
+    try expectResult(badHash, bug_report_hint, "An unknown error occurred\nError: Invalid hash length: 0. Expected 32 bytes.\n", 1);
+
+    // The length is written as 6 bytes, and Node's writeUIntLE throws a RangeError for a larger one.
+    const tooLong = try runZig(allocator, environment, &.{ "hash-cache", "set", "a.jpg", hash_cache_test_hash, "300000000000000", "--db", db });
+    try expectResult(tooLong, bug_report_hint, "An unknown error occurred\nRangeError: The value of \"value\" is out of range. It must be >= 0 and < 2 ** 48. Received 300000000000000\n", 1);
+
+    // A negative length is out of range too.
+    const negative = try runZig(allocator, environment, &.{ "hash-cache", "set", "a.jpg", hash_cache_test_hash, "--db", db, "--", "-5" });
+    try expectResult(negative, bug_report_hint, "An unknown error occurred\nRangeError: The value of \"value\" is out of range. It must be >= 0 and < 2 ** 48. Received -5\n", 1);
+
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "count", "--db", db }), "0\n", "", 0);
+}
+
+test "hash-cache hash-file and add hash a file like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-hash-cache-add");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try hashCacheEnvironment(allocator, root);
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+
+    // The SHA-256 hash of test/test.png. The CLI runs in apps/cli.
+    const pngHash = "3d9d6f073e60a13e6706bec322b47615f76b594b17bd64495614996b995908d9";
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "hash-file", "../../test/test.png" }), pngHash ++ "\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "count", "--db", db }), "0\n", "", 0);
+
+    // add records the file under the path it was given.
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "add", "../../test/test.png", "--db", db }), pngHash ++ "\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "list", "--db", db }), "../../test/test.png\n", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "get", "../../test/test.png", "--db", db }), pngHash ++ "\n", "", 0);
+
+    // Bun's createReadStream fails for a missing file with the path resolved against the cwd, and with no stack,
+    // so the error shows its message alone.
+    const missingPath = try std.fs.path.join(allocator, &.{ root, "missing.png" });
+    const expectedError = try std.fmt.allocPrint(allocator, "An unknown error occurred\nENOENT: no such file or directory, open '{s}'\n", .{missingPath});
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "hash-file", missingPath }), bug_report_hint, expectedError, 1);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "add", missingPath, "--db", db }), bug_report_hint, expectedError, 1);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "count", "--db", db }), "1\n", "", 0);
+}
+
+test "hash-cache show and clear display and clear a database's hash cache like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try setup(allocator, "cmd-hash-cache-show");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try hashCacheEnvironment(allocator, root);
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const dirResult = try runZig(allocator, environment, &.{ "hash-cache", "dir", "--db", db });
+    const location = dirResult.stdout[0 .. dirResult.stdout.len - 1];
+
+    const empty = try runZig(allocator, environment, &.{ "hash-cache", "show", "--db", db, "--yes" });
+    try expectResult(empty, "\n=== Local Hash Cache ===\nLocal hash cache not found or empty.\n\n", "", 0);
+
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "set", "b/photo.jpg", hash_cache_test_hash, "1234", "--db", db }), "", "", 0);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "set-source", "source-1", hash_cache_test_hash, "5000000", "--db", db }), "", "", 0);
+
+    // The tools record a last modified time of 0, and formatBytes (apps/cli/src/lib/format.ts) prints the sizes.
+    const shown = try runZig(allocator, environment, &.{ "hash-cache", "show", "--db", db, "--yes" });
+    const expectedShown = try std.fmt.allocPrint(allocator,
+        \\
+        \\=== Local Hash Cache ===
+        \\Database: {s}
+        \\Location: {s}
+        \\Entries: 2
+        \\
+        \\Cache entries:
+        \\
+        \\  b/photo.jpg
+        \\    Keyed by: file path
+        \\    Size: 1.21 KiB
+        \\    Modified: 1970-01-01 00:00:00
+        \\    Hash: {s}
+        \\    Asset id: (not known to be in the database)
+        \\
+        \\  source-1
+        \\    Keyed by: photo library source id
+        \\    Size: 4.77 MiB
+        \\    Modified: 1970-01-01 00:00:00
+        \\    Hash: {s}
+        \\    Asset id: (not known to be in the database)
+        \\
+        \\  Total: 2 entries
+        \\
+        \\
+    , .{ db, location, hash_cache_test_hash, hash_cache_test_hash });
+    try expectResult(shown, expectedShown, "", 0);
+
+    const cleared = try runZig(allocator, environment, &.{ "hash-cache", "clear", "--db", db, "--yes" });
+    try expectResult(cleared, try std.fmt.allocPrint(allocator, "✓ Cleared hash cache at: {s}\n", .{location}), "", 0);
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(std.testing.io, location, .{}));
+
+    const clearedAgain = try runZig(allocator, environment, &.{ "hash-cache", "clear", "--db", db, "--yes" });
+    try expectResult(clearedAgain, "Local hash cache not found or already empty.\n", "", 0);
+}
+
+test "hash-cache commands without --db fail like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-hash-cache-no-db");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try hashCacheEnvironment(allocator, root);
+
+    // Commander's missing mandatory option error is not one main() exits quietly for, so it is rethrown and
+    // reported as the CommanderError it is.
+    const message = "error: required option '--db <path>' not specified";
+    const expectedStderr = message ++ "\nAn unknown error occurred\nCommanderError: " ++ message ++ "\n";
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "list" }), bug_report_hint, expectedStderr, 1);
+    try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "set", "a", "b" }), bug_report_hint, expectedStderr, 1);
 }
