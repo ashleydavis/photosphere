@@ -403,7 +403,7 @@ test_setup() {
 check_tools() {
     # shellcheck source=./check-tools.sh
     source "$SMOKE_TESTS_DIR/check-tools.sh"
-    run_check_tools
+    run_check_tools "$(get_cli_command)"
 }
 
 # Reset function to clean up test artifacts

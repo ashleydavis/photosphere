@@ -112,7 +112,7 @@ To do, in order (each one uses what the earlier ones ported):
 - [ ] hash-cache (show, clear, hash-file, add, set, set-source, get, get-asset-id, remove, list, count, dir)
 - [ ] debug (merkle-tree, find-collisions, find-duplicates, remove-duplicates, build-sort-index, build-files-tree)
 - [ ] check
-- [ ] tools
+- [x] tools
 - [ ] examples
 - [ ] help
 - [ ] news

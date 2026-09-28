@@ -701,6 +701,25 @@ test "hash command lines parse like commander" {
     try expectCommanderError(allocator, &.{ "hash", "a", "--db", "d" }, "commander.unknownOption", "error: unknown option '--db'\n");
 }
 
+test "tools command lines parse like commander" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try parse(allocator, &.{ "tools", "--yes" });
+    try std.testing.expect(parsed.outcome == .tools);
+    try std.testing.expectEqual(@as(?bool, true), parsed.outcome.tools.yes);
+
+    const short = try parse(allocator, &.{ "tools", "-y" });
+    try std.testing.expectEqual(@as(?bool, true), short.outcome.tools.yes);
+
+    const defaults = try parse(allocator, &.{"tools"});
+    try std.testing.expectEqual(@as(?bool, false), defaults.outcome.tools.yes);
+    try expectCommanderError(allocator, &.{ "tools", "extra" }, "commander.excessArguments", "error: too many arguments for 'tools'. Expected 0 arguments but got 1.\n");
+    try expectCommanderError(allocator, &.{ "tools", "--db", "d" }, "commander.unknownOption", "error: unknown option '--db'\n");
+    try expectCommanderError(allocator, &.{ "tools", "--verbose" }, "commander.unknownOption", "error: unknown option '--verbose'\n");
+}
+
 test "remove command lines parse like commander" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

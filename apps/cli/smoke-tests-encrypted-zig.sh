@@ -337,7 +337,7 @@ check_tools() {
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     # shellcheck source=./check-tools.sh
     source "$script_dir/check-tools.sh"
-    run_check_tools
+    run_check_tools "$(get_zig_cli_command)"
 }
 
 # Ensure directory exists and is empty
