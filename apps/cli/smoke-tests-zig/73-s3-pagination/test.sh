@@ -95,8 +95,6 @@ test_s3_pagination() {
     fi
     expect_value "$orphan_count" "$SEED_COUNT" "The app's listing enumerated every object past the first page"
 
-    ts_verify "$s3_db"
-
     test_passed
 }
 

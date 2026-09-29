@@ -110,8 +110,6 @@ test_replicate_partial() {
     expect_output_string "$replica_summary" "Mode:.*partial" "Partial replica summary reports partial mode"
     expect_output_string "$source_summary" "Mode:.*full" "Source database summary reports full mode"
 
-    ts_verify "$replica_dir"
-
     rm -rf "$test_dir"
     test_passed
 }

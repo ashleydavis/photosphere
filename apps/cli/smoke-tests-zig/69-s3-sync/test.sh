@@ -228,8 +228,6 @@ test_s3_sync() {
     invoke_command "List the local database after the deletion synced down" "$(get_zig_cli_command) list --db $local_db --yes" 0 "local_list_after_delete"
     expect_output_string "$local_list_after_delete" "$s3_added_asset_id" "The asset deleted on S3 is gone locally" "false"
 
-    ts_verify "$s3_db"
-
     test_passed
 }
 

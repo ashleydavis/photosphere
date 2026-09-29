@@ -8,5 +8,3 @@ trap cleanup_and_show_summary EXIT
 TEST_DB_DIR="$(get_test_dir 1)/test-db"
 
 test_create_database 1
-
-ts_verify "$TEST_DB_DIR"

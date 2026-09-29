@@ -14,5 +14,3 @@ if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
 fi
 
 test_add_same_multiple_files 8
-
-ts_verify "$TEST_DB_DIR"

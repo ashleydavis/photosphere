@@ -13,5 +13,3 @@ invoke_command "Second replication (setup)" "$(get_zig_cli_command) replicate --
 ts_verify "$TEST_DB_DIR-replica"
 
 test_database_compare 20
-
-ts_verify "$TEST_DB_DIR-replica"

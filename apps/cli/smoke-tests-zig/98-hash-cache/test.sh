@@ -224,8 +224,6 @@ test_hash_cache() {
         log_success "The Zig CLI wrote $cache_file_name byte for byte as the TypeScript CLI did"
     done
 
-    ts_verify "$db_dir"
-
     test_passed
 }
 

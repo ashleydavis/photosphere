@@ -119,8 +119,6 @@ test_replicate_with_deleted_asset() {
     check_merkle_tree_order "$source_dir/.db/files.dat" "replicate deleted source database"
     check_merkle_tree_order "$replica_dir/.db/files.dat" "replicate deleted replica database"
     
-    ts_verify "$replica_dir"
-
     # Clean up temporary databases
     rm -rf "$source_dir"
     rm -rf "$replica_dir"

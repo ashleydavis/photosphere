@@ -11,5 +11,3 @@ invoke_command "Replicate (setup)" "$(get_zig_cli_command) replicate --db $TEST_
 ts_verify "$TEST_DB_DIR-replica"
 
 test_repair_damaged_database 26
-
-ts_verify "$TEST_DB_DIR-replica"

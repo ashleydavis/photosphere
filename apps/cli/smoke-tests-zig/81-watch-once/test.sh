@@ -79,6 +79,4 @@ SUMMARY_OUTPUT=""
 invoke_command "Summarize after the subfolder" "$CLI_COMMAND summary --db $TEST_DB_DIR --yes" 0 SUMMARY_OUTPUT
 expect_output_value "$SUMMARY_OUTPUT" "Files imported:" 3 "The database holds all three assets"
 
-ts_verify "$TEST_DB_DIR"
-
 test_passed

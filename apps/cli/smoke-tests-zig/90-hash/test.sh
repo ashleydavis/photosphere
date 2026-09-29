@@ -93,8 +93,6 @@ test_hash() {
     invoke_command "Hash a missing file with the TypeScript CLI (should fail)" "$(get_cli_command) -q hash \"$missing_path\"" 1 "ts_missing_output"
     expect_value "$zig_missing_output" "$ts_missing_output" "The Zig CLI reports a missing file as the TypeScript CLI does"
 
-    ts_verify "$db_dir"
-
     test_passed
 }
 

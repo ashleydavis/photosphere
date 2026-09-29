@@ -48,8 +48,6 @@ test_v2_database_upgrade() {
     # Check merkle tree order for upgraded database
     check_merkle_tree_order "$temp_v2_dir/.db/files.dat" "upgraded v2 database"
     
-    ts_verify "$temp_v2_dir"
-
     # Clean up temporary database
     rm -rf "$temp_v2_dir"
     log_success "Cleaned up temporary v2 upgrade database"

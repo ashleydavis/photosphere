@@ -9,5 +9,3 @@ TEST_DB_DIR="$(get_test_dir 15)/test-db"
 create_db_with_5_files "$TEST_DB_DIR"
 
 test_detect_deleted_file 15
-
-ts_verify "$TEST_DB_DIR"

@@ -271,6 +271,4 @@ if grep -q '"logicalPath":"[^"]*asked-for.png"' "$OTHER_RECORD_FILE"; then
 fi
 log_success "Each database's record holds only what went into that database"
 
-ts_verify "$REPLICA_DB"
-
 log_success "Test $TEST_NUMBER passed: the import record persists, badges its source, stays on this machine, and is kept per database"

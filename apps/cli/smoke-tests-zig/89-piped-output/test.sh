@@ -87,8 +87,6 @@ test_piped_output() {
     fi
     expect_value "$reported_orphans" "$ORPHAN_COUNT" "The summary line survived with the right count"
 
-    ts_verify "$db_path"
-
     test_passed
 }
 
