@@ -298,3 +298,16 @@ test "get rebuilds the merkle tree when the tree is dirty" {
     try std.testing.expect(!tree.dirty);
     try std.testing.expect(tree.merkle != null);
 }
+
+test "remove on a loaded tree without items is a no-op that leaves the ref clean" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var state: RefState = .{ .stored = try makeTree(allocator) };
+    var ref = state.makeRef(allocator);
+    try ref.remove(io, "file1");
+    try std.testing.expect((try ref.get(io)) != null);
+    try ref.commit(io);
+    try std.testing.expectEqual(@as(u32, 0), state.saveCount);
+    try std.testing.expectEqual(@as(u32, 0), state.deleteCount);
+}

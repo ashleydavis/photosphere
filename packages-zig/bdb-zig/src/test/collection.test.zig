@@ -990,3 +990,35 @@ test "getAll reads its continuation token like parseInt" {
     try std.testing.expectEqual(@as(usize, 0), fromNothing.records.len);
     try std.testing.expect(fromNothing.next == null);
 }
+
+test "insertOne adds the record to every sort index the collection has, and sortIndexes skips directories that are not sort indexes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    try collection.setInternalRecord(io, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "Older", 40, "user"));
+    try (try collection.sortIndex("age", .asc)).ensure(io, collection, .number);
+    try (try collection.sortIndex("name", .desc)).ensure(io, collection, .string);
+    try storage.putFile("/indexes/users/notes/readme.txt", "not a sort index");
+    try collection.commit(io);
+
+    var user = try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "Younger", 20, "user");
+    try collection.insertOne(io, &user, null);
+
+    const indexes = try collection.sortIndexes(io);
+    try std.testing.expectEqual(@as(usize, 2), indexes.len);
+    const byAge = try helpers.sortIndexValues(allocator, io, try collection.sortIndex("age", .asc));
+    try std.testing.expectEqual(@as(usize, 2), byAge.len);
+    try std.testing.expectEqual(@as(f64, 20), byAge[0].number);
+    const byName = try helpers.sortIndexValues(allocator, io, try collection.sortIndex("name", .desc));
+    try std.testing.expectEqual(@as(usize, 2), byName.len);
+    try std.testing.expectEqualStrings("Younger", byName[0].string);
+
+    // Once committed, the sort indexes are flushed with the rest of the cache.
+    try collection.commit(io);
+    try collection.flush();
+    const sortIndex = try collection.sortIndex("age", .asc);
+    try std.testing.expectEqual(@as(usize, 0), sortIndex.leafCache.count());
+    try std.testing.expectEqual(@as(usize, 2), (try sortIndex.getPage(io, null)).records.len);
+}

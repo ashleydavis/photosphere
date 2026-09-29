@@ -120,8 +120,9 @@ pub const MemoryStorage = struct {
         var startIndex: usize = 0;
         if (next) |marker| {
             for (sorted, 0..) |candidate, candidateIndex| {
+                // The token is the first name the page before did not return.
                 if (std.mem.eql(u8, candidate, marker)) {
-                    startIndex = candidateIndex + 1;
+                    startIndex = candidateIndex;
                     break;
                 }
             }

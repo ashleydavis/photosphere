@@ -78,3 +78,14 @@ test "stringify sorts keys and leaves out undefined fields" {
     });
     try std.testing.expectEqualStrings("{\"a\":\"x\\ny\",\"b\":1}", try json_stable_stringify.stringifyDocument(allocator, document));
 }
+
+test "stringify writes null for an array element JSON cannot hold, as JSON.stringify does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const elements = try allocator.dupe(bson.BsonValue, &.{ .{ .number = 1 }, .undefined, .{ .string = "x" } });
+    const document = try bson.BsonDocument.fromFields(allocator, &.{
+        .{ .key = "list", .value = .{ .array = elements } },
+    });
+    try std.testing.expectEqualStrings("{\"list\":[1,null,\"x\"]}", try json_stable_stringify.stringifyDocument(allocator, document));
+}
