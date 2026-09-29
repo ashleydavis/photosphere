@@ -619,6 +619,13 @@ start_cli_pool_job() {
     # Started here in the runner's own shell, never through a command substitution: a job started
     # inside one is the subshell's child, so this shell could not `wait` for it and would have no
     # exit status to report.
+    #
+    # Started with job control on, so the test gets SIGINT and SIGQUIT as a terminal would give them
+    # rather than ignored, which is what a background job of a shell without job control gets and
+    # what bash 3.2 then passes on to everything the job runs. A test cannot undo an ignore it
+    # inherited, so a Ctrl+C test such as 78-dbs-share-cancel would signal a CLI that drops it. Input
+    # comes from /dev/null, as it did before, because a job-control job does not get that by default.
+    set -m
     (
         local_start=$SECONDS
         TEST_TMP_DIR="$test_dir" run_test_with_timeout "$PHOTOSPHERE_PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1
@@ -654,8 +661,9 @@ start_cli_pool_job() {
 
         echo $((SECONDS - local_start)) > "$test_dir/test-duration.txt"
         exit $local_exit
-    ) &
+    ) < /dev/null &
     TEST_POOL_JOB_PID="$!"
+    set +m
     TEST_POOL_JOB_CONTEXT="$test_dir"
 }
 
