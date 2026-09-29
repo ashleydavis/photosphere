@@ -493,3 +493,68 @@ test "sign fails for a key that is not a private key" {
     try signer.update("photosphere");
     try std.testing.expectError(error.Thrown, signer.sign(allocator, "garbage"));
 }
+
+test "Sign.sign refuses keys that cannot sign with SHA-256, with the errors Node gives" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var signer = try crypto.createSign(allocator, "SHA256");
+    try signer.update("x");
+
+    // An Ed25519 key, which signs in one go without a separate digest.
+    try std.testing.expectError(error.Thrown, signer.sign(allocator, "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIPGvf7MAn4THs5ynWMeoXVBmB98AVq7oL2qwp27ss5+V\n-----END PRIVATE KEY-----\n"));
+    try std.testing.expectEqualStrings("Unsupported crypto operation", utils.errors.lastErrorMessage());
+
+    // An X25519 key, which is for key agreement and cannot sign.
+    try std.testing.expectError(error.Thrown, signer.sign(allocator, "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VuBCIEIFC1BHVUd7wpW+CCfRbnyyOzYTPXFumyuZWh+oIr2P9H\n-----END PRIVATE KEY-----\n"));
+    try std.testing.expectEqualStrings("error:03000096:digital envelope routines::operation not supported for this keytype", utils.errors.lastErrorMessage());
+}
+
+//
+// Decodes the base64 body of a PEM text.
+//
+fn pemBody(allocator: std.mem.Allocator, pem: []const u8) ![]u8 {
+    var body: std.ArrayList(u8) = .empty;
+    var lines = std.mem.splitScalar(u8, pem, '\n');
+    while (lines.next()) |line| {
+        if (line.len > 0 and !std.mem.startsWith(u8, line, "-----")) {
+            try body.appendSlice(allocator, line);
+        }
+    }
+    const decoded = try allocator.alloc(u8, try std.base64.standard.Decoder.calcSizeForSlice(body.items));
+    try std.base64.standard.Decoder.decode(decoded, body.items);
+    return decoded;
+}
+
+test "publicEncrypt and privateDecrypt report libcrypto's error for keys it cannot use for RSA" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // createPublicKey and createPrivateKey only make RSA keys; these are built by hand, as nothing else makes them.
+    const unreadablePublic: crypto.PublicKey = .{
+        .spki = "not a key",
+        .modulus_length = 256,
+    };
+    try std.testing.expectError(error.Thrown, crypto.publicEncrypt(allocator, std.testing.io, &unreadablePublic, "data"));
+    try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "error:") != null);
+    const ecPublic: crypto.PublicKey = .{
+        .spki = try pemBody(allocator, ec_public_key_pem),
+        .modulus_length = 64,
+    };
+    try std.testing.expectError(error.Thrown, crypto.publicEncrypt(allocator, std.testing.io, &ecPublic, "data"));
+    try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "error:") != null);
+
+    const unreadablePrivate: crypto.PrivateKey = .{
+        .pkcs8 = "not a key",
+        .public_key = unreadablePublic,
+    };
+    try std.testing.expectError(error.Thrown, crypto.privateDecrypt(allocator, &unreadablePrivate, "data"));
+    try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "error:") != null);
+    const ecPrivate: crypto.PrivateKey = .{
+        .pkcs8 = try pemBody(allocator, ec_private_key_pem),
+        .public_key = ecPublic,
+    };
+    try std.testing.expectError(error.Thrown, crypto.privateDecrypt(allocator, &ecPrivate, "data"));
+    try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "error:") != null);
+}

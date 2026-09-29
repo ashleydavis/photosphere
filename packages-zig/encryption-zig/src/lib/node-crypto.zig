@@ -768,8 +768,14 @@ pub const Sign = struct {
             return throwLibraryError("EVP_MD_CTX_new");
         };
         defer c.EVP_MD_CTX_free(context);
+        // Node refuses a key that signs in one go (Ed25519) before it starts, and gives the error of OpenSSL 3 for a key
+        // of a type that cannot sign (X25519).
+        if (c.EVP_PKEY_id(key) == c.EVP_PKEY_ED25519) {
+            return errors.throwError("Unsupported crypto operation", .{});
+        }
         if (c.EVP_DigestSignInit(context, null, c.EVP_sha256(), null, key) != 1) {
-            return throwLibraryError("EVP_DigestSignInit");
+            c.ERR_clear_error();
+            return errors.throwError("error:03000096:digital envelope routines::operation not supported for this keytype", .{});
         }
         var signatureLength: usize = 0;
         if (c.EVP_DigestSign(context, null, &signatureLength, self.data.items.ptr, self.data.items.len) != 1) {
