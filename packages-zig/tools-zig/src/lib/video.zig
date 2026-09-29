@@ -12,6 +12,7 @@ const pathExists = node_utils.fs.pathExists;
 const errors = utils.errors;
 const parseFloat = utils.js_number.parseFloat;
 const parseInt = utils.js_number.parseInt;
+const stringToNumber = utils.js_number.stringToNumber;
 const types = @import("types.zig");
 const AssetInfo = types.AssetInfo;
 const Dimensions = types.Dimensions;
@@ -169,45 +170,39 @@ pub const Video = struct {
             .null => return typeError("null is not an object (evaluating 'probeData.streams.find')"),
             else => return typeError("probeData.streams.find is not a function. (In 'probeData.streams.find((s) => s.codec_type === \"video\")', 'probeData.streams.find' is undefined)"),
         };
-        const videoStream = findStream(streams, "video");
-        const audioStream = findStream(streams, "audio");
+        const videoStream = try findStream(streams, "video");
+        const audioStream = try findStream(streams, "audio");
         const stream = videoStream orelse {
             return errors.throwError("No video stream found in file", .{});
         };
 
-        const tags = property(format, "tags");
-
         // Parse creation time if available
         var createdAt: ?f64 = null;
+        const tags = switch (format) {
+            .undefined => return typeError("undefined is not an object (evaluating 'format.tags')"),
+            .null => return typeError("null is not an object (evaluating 'format.tags')"),
+            else => property(format, "tags"),
+        };
         const creationTime = property(tags, "creation_time");
         if (isTruthy(creationTime)) {
-            createdAt = switch (creationTime) {
-                .string => |text| js_date.parseDate(text),
-                else => std.math.nan(f64),
-            };
+            createdAt = try newDate(allocator, creationTime);
         }
 
         // Parse framerate
         var fps: ?f64 = null;
         const frameRate = property(.{ .document = stream }, "r_frame_rate");
         if (isTruthy(frameRate)) {
-            if (frameRate == .string) {
-                var parts = std.mem.splitScalar(u8, frameRate.string, '/');
-                const num = jsNumber(parts.next() orelse "");
-                const den = if (parts.next()) |text| jsNumber(text) else std.math.nan(f64);
-                fps = num / den;
+            if (frameRate != .string) {
+                return typeError("videoStream.r_frame_rate.split is not a function. (In 'videoStream.r_frame_rate.split(\"/\")', 'videoStream.r_frame_rate.split' is undefined)");
             }
+            var parts = std.mem.splitScalar(u8, frameRate.string, '/');
+            const num = stringToNumber(parts.next() orelse "");
+            const den = if (parts.next()) |text| stringToNumber(text) else std.math.nan(f64);
+            fps = num / den;
         }
 
         var metadata: BsonDocument = .{};
-        switch (tags) {
-            .document => |tagsDocument| {
-                for (tagsDocument.fields.items) |field| {
-                    try metadata.put(allocator, field.key, field.value);
-                }
-            },
-            else => {},
-        }
+        try spreadInto(allocator, &metadata, tags);
         try metadata.put(allocator, "videoCodec", property(.{ .document = stream }, "codec_name"));
         try metadata.put(allocator, "audioCodec", if (audioStream) |audio| property(.{ .document = audio }, "codec_name") else .undefined);
         try metadata.put(allocator, "pixelFormat", property(.{ .document = stream }, "pix_fmt"));
@@ -220,9 +215,9 @@ pub const Video = struct {
                 .height = numberProperty(stream, "height"),
             },
 
-            .duration = parseFloat(textOf(property(format, "duration"))),
+            .duration = parseFloat(try jsString(allocator, property(format, "duration"))),
             .fps = fps,
-            .bitrate = parseInt(textOf(property(format, "bit_rate")), null),
+            .bitrate = parseInt(try jsString(allocator, property(format, "bit_rate")), null),
             .hasAudio = audioStream != null,
 
             .createdAt = createdAt,
@@ -259,16 +254,19 @@ pub const Video = struct {
 
         const quality: f64 = 85;
 
-        var command: std.ArrayList(u8) = .empty;
-        try command.print(allocator, "{s} -i \"{s}\" -ss {d} -vframes 1", .{ ffmpegCommand, self.filePath, timeInSeconds });
+        var command: std.Io.Writer.Allocating = .init(allocator);
+        try command.writer.print("{s} -i \"{s}\" -ss ", .{ ffmpegCommand, self.filePath });
+        try utils.js_number.writeNumber(&command.writer, timeInSeconds);
+        try command.writer.writeAll(" -vframes 1");
 
         // Add quality
-        try command.print(allocator, " -q:v {d}", .{jsRound((100 - quality) / 10)});
+        try command.writer.writeAll(" -q:v ");
+        try utils.js_number.writeNumber(&command.writer, jsRound((100 - quality) / 10));
 
         // Force overwrite and specify output
-        try command.print(allocator, " -y \"{s}\"", .{outputPath});
+        try command.writer.print(" -y \"{s}\"", .{outputPath});
 
-        _ = exec(allocator, io, command.items) catch |err| {
+        _ = exec(allocator, io, command.written()) catch |err| {
             return errors.throwError("Failed to extract screenshot: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
         return outputPath;
@@ -276,9 +274,10 @@ pub const Video = struct {
 };
 
 //
-// The first stream of the given codec type (TypeScript: `probeData.streams.find(s => s.codec_type === type)`).
+// The first stream of the given codec type (TypeScript: `probeData.streams.find(s => s.codec_type === type)`), which
+// throws Bun's TypeError at a null stream it reaches.
 //
-fn findStream(streams: []const BsonValue, codecType: []const u8) ?BsonDocument {
+fn findStream(streams: []const BsonValue, codecType: []const u8) !?BsonDocument {
     for (streams) |stream| {
         switch (stream) {
             .document => |document| {
@@ -287,6 +286,7 @@ fn findStream(streams: []const BsonValue, codecType: []const u8) ?BsonDocument {
                     return document;
                 }
             },
+            .null => return typeError("null is not an object (evaluating 's.codec_type')"),
             else => {},
         }
     }
@@ -315,14 +315,98 @@ fn numberProperty(document: BsonDocument, name: []const u8) f64 {
 }
 
 //
-// The text `parseFloat` and `parseInt` read from a value (`String(value)` for a string, "undefined" otherwise,
-// which parses to NaN).
+// `String(value)` for a value JSON.parse gives, the text `parseFloat` and `parseInt` read: an array is its elements
+// joined with commas (null elements as nothing), and an object is "[object Object]".
 //
-fn textOf(value: BsonValue) []const u8 {
-    return switch (value) {
-        .string => |text| text,
-        else => "undefined",
+fn jsString(allocator: std.mem.Allocator, value: BsonValue) ![]const u8 {
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    try writeJsString(&output.writer, value);
+    return output.written();
+}
+
+//
+// Writes `String(value)` for a value JSON.parse gives.
+//
+fn writeJsString(writer: *std.Io.Writer, value: BsonValue) std.Io.Writer.Error!void {
+    switch (value) {
+        .string => |text| try writer.writeAll(text),
+        .number, .double => |number| try utils.js_number.writeNumber(writer, number),
+        .int32 => |number| try writer.print("{d}", .{number}),
+        .boolean => |boolean| try writer.writeAll(if (boolean) "true" else "false"),
+        .null => try writer.writeAll("null"),
+        .undefined => try writer.writeAll("undefined"),
+        .array => |elements| {
+            for (elements, 0..) |element, elementIndex| {
+                if (elementIndex > 0) {
+                    try writer.writeAll(",");
+                }
+                if (element != .null and element != .undefined) {
+                    try writeJsString(writer, element);
+                }
+            }
+        },
+        else => try writer.writeAll("[object Object]"),
+    }
+}
+
+//
+// The time value of `new Date(value)` for a value JSON.parse gives: a string is parsed, a number or boolean is the
+// time itself (TimeClip: NaN beyond 8.64e15, fractions dropped), and an array or object is parsed from its String().
+//
+fn newDate(allocator: std.mem.Allocator, value: BsonValue) !f64 {
+    const time: f64 = switch (value) {
+        .string => |text| return js_date.parseDate(text),
+        .number, .double => |number| number,
+        .int32 => |number| @floatFromInt(number),
+        .boolean => |boolean| if (boolean) 1 else 0,
+        .null => 0,
+        else => return js_date.parseDate(try jsString(allocator, value)),
     };
+    if (std.math.isNan(time) or @abs(time) > @as(f64, @floatFromInt(js_date.MAX_TIME_VALUE))) {
+        return std.math.nan(f64);
+    }
+    return @trunc(time) + 0;
+}
+
+//
+// Copies the own enumerable properties of a value JSON.parse gives into the document, as `{ ...value }` does: the
+// fields of an object, the characters of a string and the elements of an array, under their index. Other values have
+// none.
+//
+fn spreadInto(allocator: std.mem.Allocator, document: *BsonDocument, value: BsonValue) !void {
+    switch (value) {
+        .document => |source| {
+            for (source.fields.items) |field| {
+                try document.put(allocator, field.key, field.value);
+            }
+        },
+        .string => |text| {
+            // A string spreads its UTF-16 code units; a character outside the BMP gives its two surrogates, which
+            // are written as U+FFFD each, as a lone surrogate is when the string is encoded as UTF-8.
+            var index: usize = 0;
+            var characterIndex: usize = 0;
+            while (index < text.len) {
+                const width = std.unicode.utf8ByteSequenceLength(text[index]) catch 1;
+                const end = @min(index + width, text.len);
+                if (width == 4) {
+                    try document.put(allocator, try std.fmt.allocPrint(allocator, "{d}", .{characterIndex}), .{ .string = "\u{FFFD}" });
+                    characterIndex += 1;
+                    try document.put(allocator, try std.fmt.allocPrint(allocator, "{d}", .{characterIndex}), .{ .string = "\u{FFFD}" });
+                }
+                else {
+                    try document.put(allocator, try std.fmt.allocPrint(allocator, "{d}", .{characterIndex}), .{ .string = text[index..end] });
+                }
+                characterIndex += 1;
+                index = end;
+            }
+        },
+        .array => |elements| {
+            for (elements, 0..) |element, elementIndex| {
+                try document.put(allocator, try std.fmt.allocPrint(allocator, "{d}", .{elementIndex}), element);
+            }
+        },
+        else => {},
+    }
 }
 
 //
@@ -345,18 +429,6 @@ fn isTruthy(value: BsonValue) bool {
 fn typeError(message: []const u8) errors.ThrownError {
     errors.recordError("TypeError", "{s}", .{message});
     return error.Thrown;
-}
-
-//
-// JavaScript's `Number(text)` for a string: the trimmed text as a decimal number, 0 when it is empty, NaN when it
-// is not a number.
-//
-fn jsNumber(text: []const u8) f64 {
-    const trimmed = utils.js_string.trim(text);
-    if (trimmed.len == 0) {
-        return 0;
-    }
-    return std.fmt.parseFloat(f64, trimmed) catch std.math.nan(f64);
 }
 
 //

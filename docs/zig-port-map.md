@@ -5,9 +5,8 @@ the Zig function that ports it. Use it to read the two side by side: the Zig fil
 function order as the TypeScript ones.
 
 **Progress of the side by side comparison:** storage, bdb, api, lan-share-core, node-api, node-utils, utils,
-encryption, vault, fuzzy-match, config, lan-share-network, serialization, merkle-tree and task-queue done. tools and
-apps/cli: their trims and the EXIF and ffprobe parsing compared and fixed; their tables and the rest of the comparison
-are still to do.
+encryption, vault, fuzzy-match, config, lan-share-network, serialization, merkle-tree, task-queue and tools done.
+apps/cli: its trims compared and fixed; its tables and the rest of the comparison are still to do.
 
 ## Which files are listed
 
@@ -3485,6 +3484,110 @@ No Zig file: Zig workers are threads of the CLI's process and share its queue ba
 
 <!-- end tables -->
 
+## tools
+
+`packages/tools` to `packages-zig/tools-zig`. Zig only: `types.zig` (the port of `types.ts`, which is types only and so not bundled) and `version-match.zig`.
+
+<!-- tables: packages/tools tools.txt -->
+
+#### `packages/tools/src/index.ts` to `packages-zig/tools-zig/src/index.zig`
+
+Barrel file. `index.zig` re-exports the same modules, and also `types.zig` and `version-match.zig`.
+
+
+#### `packages/tools/src/lib/file-info.ts` to `packages-zig/tools-zig/src/lib/file-info.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getFileInfo` | `getFileInfo` |  |
+
+#### `packages/tools/src/lib/image.ts` to `packages-zig/tools-zig/src/lib/image.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `Image` | `Image` |  |
+| `Image.constructor` | `Image.init` |  |
+| `Image.configure` | none | Not reached by the CLI: nothing configures custom ImageMagick binaries. |
+| `Image.initializeCommands` | `Image.initializeCommands` | The two legacy commands run one after the other, where `Promise.all` runs them together. |
+| `Image.verifyImageMagick` | `Image.verifyImageMagick` |  |
+| `Image.getImageMagickType` | `Image.getImageMagickType` |  |
+| `Image.getImageInfo` | `Image.getImageInfo` |  |
+| `Image.getDimensions` | `Image.getDimensions` |  |
+| `Image.getInfo` | `Image.getInfo` |  |
+| `Image.getExifData` | `Image.getExifData` | The loop over the output lines is `parseExifOutput`. |
+| `Image.resize` | `Image.resize` |  |
+| `Image.saveAs` | none | Not reached by the CLI. |
+| `Image.getDominantColor` | `Image.getDominantColor` | The body of the try block is `getDominantColorInner`. |
+| `Image.getDominantColorHistogram` | none | Not reached by the CLI. |
+| `Image.getDominantColors` | none | Not reached by the CLI. |
+| `Image.getPath` | none | Not reached by the CLI. |
+| `Image.transform` | `Image.transform` |  |
+| none | `ImageMagickType` | The TypeScript union `'modern' \| 'legacy' \| 'none'`. |
+| none | `ImageMagickStatus` | The anonymous return type of verifyImageMagick. |
+| none | `imageMagickVersion` | Replaces `stdout.match(/Version: ImageMagick ([\d.-]+)/)` and its `'unknown'` fallback. |
+| none | `Image.parseExifOutput` | The loop over the lines of getExifData: `trim().split('\n')` and `/exif:([^=]+)=(.*)/`. |
+| none | `Image.getDominantColorInner` | The body of the try block of getDominantColor. |
+| none | `Image.resetInitialization` | Test scaffolding: forgets the detected installation, as the tests cannot reload the module. |
+| none | `isTruthy` | Replaces JavaScript truthiness of a number. |
+| none | `exifDateToDashes` | Replaces `.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3')`. |
+| none | `numberText` | Replaces `${number}` in a template string. |
+
+#### `packages/tools/src/lib/tool-downloader.ts` to no Zig file
+
+Not reached by the CLI: tree-shaken out of the bundle (nothing the CLI runs calls it).
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getToolsDirectory` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `promptAndDownloadTools` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+
+#### `packages/tools/src/lib/tool-verification.ts` to `packages-zig/tools-zig/src/lib/tool-verification.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `verifyTools` | `verifyTools` |  |
+| `ensureToolsAvailable` | none | Not reached by the CLI: apps/cli has its own ensureTools. |
+| none | `ToolStatus` | The TypeScript interface of the same name. |
+| none | `ToolsStatus` | The TypeScript interface of the same name. |
+
+#### `packages/tools/src/lib/video.ts` to `packages-zig/tools-zig/src/lib/video.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `Video` | `Video` |  |
+| `Video.constructor` | `Video.init` |  |
+| `Video.configure` | none | Not reached by the CLI: nothing configures custom ffmpeg binaries. |
+| `Video.initializeCommands` | `Video.initializeCommands` | The constructor does not await it in TypeScript, so its two verbose lines can come later; Zig runs it before the constructor returns. |
+| `Video.verifyFfprobe` | `Video.verifyFfprobe` |  |
+| `Video.verifyFfmpeg` | `Video.verifyFfmpeg` |  |
+| `Video.getVideoInfo` | `Video.getVideoInfo` | The body of the try block is `getVideoInfoInner`. |
+| `Video.getInfo` | `Video.getInfo` |  |
+| `Video.getDimensions` | `Video.getDimensions` |  |
+| `Video.getDuration` | none | Not reached by the CLI. |
+| `Video.extractScreenshot` | `Video.extractScreenshot` | Only the default options are ported (no scaling, quality 85), which is how getVideoDetails calls it. |
+| `Video.getPath` | none | Not reached by the CLI. |
+| none | `VideoToolStatus` | The anonymous return type of verifyFfprobe and verifyFfmpeg. |
+| none | `Video.getVideoInfoInner` | The body of the try block of getVideoInfo. |
+| none | `findStream` | Replaces `probeData.streams.find(s => s.codec_type === type)`, TypeError at a null stream included. |
+| none | `property` | Replaces `value?.name`. |
+| none | `numberProperty` | Replaces `videoStream.width` and `videoStream.height` read as numbers. |
+| none | `jsString` | Replaces `String(value)`, which parseFloat and parseInt apply to their argument. |
+| none | `writeJsString` | Replaces `String(value)`. |
+| none | `newDate` | Replaces `new Date(value)` of any value JSON.parse gives. |
+| none | `spreadInto` | Replaces `{ ...format.tags }`. |
+| none | `isTruthy` | Replaces JavaScript truthiness. |
+| none | `typeError` | Throws the TypeError Bun throws. |
+| none | `jsRound` | Replaces `Math.round`. |
+
+#### Zig files with no TypeScript file
+
+| Zig file | What it is |
+|---|---|
+| `packages-zig/tools-zig/src/lib/types.zig` | The port of `packages/tools/src/lib/types.ts` (types only, so not in the bundle): Dimensions, AssetInfo and ResizeOptions. ImageMagickConfig and VideoConfig are not ported, as configure is not. |
+| `packages-zig/tools-zig/src/lib/version-match.zig` | Replaces the regular expressions image.ts and video.ts pull tool versions out with (`/Version: ImageMagick ([\d.-]+)/`, `/ffprobe version (\S+)/`). |
+
+<!-- end tables -->
+
 ## Divergences fixed
 
 Each was found by reading the two side by side, pinned by a unit test that failed before the fix, and fixed in the Zig.
@@ -3691,4 +3794,21 @@ Each was found by reading the two side by side, pinned by a unit test that faile
     encrypt`, the directory picker and the clack prompts' titles) removed ASCII whitespace only. They use
     `js_string.trim` now. Test: the Unicode case of `jsNumber converts option text like Number()`; the prompt
     validators are not covered by unit tests of their own.
-
+48. A video's ffprobe output was read more strictly than the TypeScript reads it. A null stream, which
+    `streams.find` reaches, was skipped where Bun throws `null is not an object (evaluating 's.codec_type')`; a
+    missing or null `format` gave no tags where `format.tags` throws; an `r_frame_rate` that was not a string gave no
+    frame rate where `.split` is not a function; `creation_time` that was not a string was an Invalid Date where
+    `new Date(value)` takes a number as the time; the frame rate was read with Zig's float parsing (`inf`, hex floats,
+    no `0b`) where `Number()` is used; `duration` and `bit_rate` that were not strings were NaN where parseFloat and
+    parseInt read `String(value)`; and tags that were a string or an array were dropped where the spread copies their
+    characters or elements. Tests: `ffprobe output is read as the TypeScript reads it: a null stream, a missing format
+    and an r_frame_rate that is not a string throw Bun's TypeErrors` and `ffprobe output is read as the TypeScript
+    reads it: new Date, Number, parseFloat and parseInt of any value and the spread of the tags`. `Number()` of text
+    is `js_number.stringToNumber` in utils-zig now (moved from bdb-zig's js-value.zig, which re-exports it).
+49. The numbers in the ImageMagick and ffmpeg command lines (the resize geometry and quality, the rotation, the
+    screenshot time) were written with Zig's formatting, where the template strings write `1e+21` and `1e-7`.
+    Tests: `resize and transform write their numbers as a template string writes a number` and `extractScreenshot
+    writes the time as a template string writes a number`.
+50. The `\S` of `/ffprobe version (\S+)/` and `/ffmpeg version (\S+)/` stopped only at ASCII whitespace, where it
+    stops at every JavaScript whitespace character. Test: `matchAfter ends \S at a Unicode space as the regular
+    expression does`.

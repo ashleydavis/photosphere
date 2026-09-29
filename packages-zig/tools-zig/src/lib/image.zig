@@ -367,15 +367,15 @@ pub const Image = struct {
         var geometry: []const u8 = "";
         if (isTruthy(width) and isTruthy(height)) {
             geometry = if (maintainAspectRatio)
-                try std.fmt.allocPrint(allocator, "{d}x{d}", .{ width, height })
+                try std.fmt.allocPrint(allocator, "{s}x{s}", .{ try numberText(allocator, width), try numberText(allocator, height) })
             else
-                try std.fmt.allocPrint(allocator, "{d}x{d}!", .{ width, height });
+                try std.fmt.allocPrint(allocator, "{s}x{s}!", .{ try numberText(allocator, width), try numberText(allocator, height) });
         }
         else if (isTruthy(width)) {
-            geometry = try std.fmt.allocPrint(allocator, "{d}x", .{width});
+            geometry = try std.fmt.allocPrint(allocator, "{s}x", .{try numberText(allocator, width)});
         }
         else if (isTruthy(height)) {
-            geometry = try std.fmt.allocPrint(allocator, "x{d}", .{height});
+            geometry = try std.fmt.allocPrint(allocator, "x{s}", .{try numberText(allocator, height)});
         }
 
         // Build the convert command.
@@ -397,7 +397,7 @@ pub const Image = struct {
             if (quality < 0 or quality > 100) {
                 return errors.throwError("Quality must be between 0 and 100", .{});
             }
-            try command.print(allocator, " -quality {d}", .{quality});
+            try command.print(allocator, " -quality {s}", .{try numberText(allocator, quality)});
         }
 
         // Add format specification and output file
@@ -485,7 +485,7 @@ pub const Image = struct {
 
         if (options.rotate) |rotate| {
             if (isTruthy(rotate)) {
-                try transformCommand.print(allocator, " -rotate {d}", .{rotate});
+                try transformCommand.print(allocator, " -rotate {s}", .{try numberText(allocator, rotate)});
             }
         }
 
@@ -538,4 +538,13 @@ pub fn exifDateToDashes(allocator: std.mem.Allocator, text: []const u8) ![]const
         return result;
     }
     return text;
+}
+
+//
+// `${number}` in a template string: the number as JavaScript writes it.
+//
+fn numberText(allocator: std.mem.Allocator, number: f64) ![]const u8 {
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    try utils.js_number.writeNumber(&output.writer, number);
+    return output.written();
 }

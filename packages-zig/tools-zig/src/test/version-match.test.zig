@@ -15,3 +15,8 @@ test "matchAfter needs at least one matching character" {
 test "matchAfter keeps searching after a failed match" {
     try std.testing.expectEqualStrings("1.2", version_match.matchAfter("v: x v: 1.2", "v: ", version_match.isVersionNumberCharacter).?);
 }
+
+test "matchAfter ends \\S at a Unicode space as the regular expression does" {
+    try std.testing.expectEqualStrings("6.1", version_match.matchAfter("ffprobe version 6.1\u{00A0}Copyright", "ffprobe version ", version_match.isNonWhitespaceCharacter).?);
+    try std.testing.expectEqualStrings("6.1\u{00E9}", version_match.matchAfter("ffprobe version 6.1\u{00E9}\u{3000}x", "ffprobe version ", version_match.isNonWhitespaceCharacter).?);
+}
