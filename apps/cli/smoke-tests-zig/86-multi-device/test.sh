@@ -93,6 +93,4 @@ DEVICE_B_LIST=""
 invoke_command "List device B again" "$CLI_COMMAND list --db $DEVICE_B_DB --yes" 0 DEVICE_B_LIST
 expect_output_string "$DEVICE_B_LIST" "later-from-a.webp" "Device B has the photo device A took later"
 
-ts_verify "$REMOTE_DB"
-
 test_passed

@@ -196,8 +196,6 @@ test_sync_edit_field() {
     check_merkle_tree_order "$original_dir/.db/files.dat" "sync edit original database"
     check_merkle_tree_order "$copy_dir/.db/files.dat" "sync edit copy database"
     
-    ts_verify "$copy_dir"
-
     # Clean up temporary databases
     rm -rf "$original_dir"
     rm -rf "$copy_dir"

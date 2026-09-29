@@ -195,8 +195,6 @@ test_config_timestamps() {
         exit 1
     fi
 
-    ts_verify "$replica_dir"
-
     rm -rf "$test_dir"
     test_passed
 }

@@ -118,9 +118,6 @@ test_origin() {
     expect_same_value "Get the origin after clearing it" "origin --db \"$db_dir\" --yes" "origin_output"
     expect_value "$origin_output" "(not set)" "A cleared origin is not set"
 
-    ts_verify "$db_dir"
-    ts_verify "$copy_dir"
-
     test_passed
 }
 

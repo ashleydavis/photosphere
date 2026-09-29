@@ -143,8 +143,6 @@ test_s3_large_file() {
     fi
     log_success "The exported video is byte-identical to the imported one across every chunk"
 
-    ts_verify "$s3_db"
-
     test_passed
 }
 

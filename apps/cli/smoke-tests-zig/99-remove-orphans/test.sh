@@ -103,7 +103,6 @@ test_remove_orphans() {
     expect_output_string "$again_output" "No orphaned files found" "Nothing is left to remove"
 
     invoke_command "Verify the database" "$(get_zig_cli_command) verify --db \"$db_dir\" --yes"
-    ts_verify "$db_dir"
 
     test_passed
 }

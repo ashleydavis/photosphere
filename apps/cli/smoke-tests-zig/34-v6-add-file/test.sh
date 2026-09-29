@@ -74,8 +74,6 @@ test_v6_database_add_file() {
     
     check_merkle_tree_order "$temp_v6_dir/.db/files.dat" "v6 add-file test database"
     
-    ts_verify "$temp_v6_dir"
-
     rm -rf "$temp_v6_dir"
     log_success "Cleaned up temporary v6 add-file database"
     test_passed

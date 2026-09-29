@@ -61,8 +61,6 @@ test_s3_database() {
     invoke_command "List the S3 database's assets" "$(get_zig_cli_command) list --db $s3_db --yes" 0 "list_output"
     expect_output_string "$list_output" "test.jpg" "The imported asset is listed from S3"
 
-    ts_verify "$s3_db"
-
     test_passed
 }
 

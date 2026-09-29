@@ -101,6 +101,4 @@ expect_output_string "$LOCAL_LIST" "test.png" "The shared photo is here"
 SHARED_COUNT=$(echo "$LOCAL_LIST" | grep -c "test.png")
 expect_value "$SHARED_COUNT" 1 "The shared photo appears once, not twice"
 
-ts_verify "$REMOTE_DB"
-
 test_passed

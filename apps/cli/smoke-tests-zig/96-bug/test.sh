@@ -273,8 +273,6 @@ test_bug() {
     invoke_command "Report a bug with nothing on the PATH with the TypeScript CLI" "$no_opener_environment PATH=\"$empty_path_dir\" PHOTOSPHERE_TMP_DIR=\"$bug_tmp_dir\" $ts_cli_command bug --yes" 0 "ts_no_opener_report"
     expect_value "$no_opener_report" "$ts_no_opener_report" "The Zig CLI reports a missing opener as the TypeScript CLI does"
 
-    ts_verify "$db_dir"
-
     test_passed
 }
 

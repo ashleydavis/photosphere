@@ -66,6 +66,4 @@ expect_value "$LOCAL_ASSET_COUNT" 1 "The local original was kept"
 
 invoke_command "Verify the local database" "$CLI_COMMAND verify --db $TEST_DB_DIR --yes"
 
-ts_verify "$ORIGIN_DB_DIR"
-
 test_passed

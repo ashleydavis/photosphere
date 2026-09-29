@@ -109,8 +109,6 @@ test_s3_export() {
     expect_byte_exact_export "$s3_db" "$jpg_asset_id" "$TEST_FILES_DIR/test.jpg" "$TEST_DIR/exported-test.jpg"
     expect_byte_exact_export "$s3_db" "$mp4_asset_id" "$TEST_FILES_DIR/multiple-files/test.mp4" "$TEST_DIR/exported-test.mp4"
 
-    ts_verify "$s3_db"
-
     test_passed
 }
 

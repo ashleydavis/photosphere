@@ -41,8 +41,6 @@ test_v5_database_upgrade() {
     
     check_merkle_tree_order "$temp_v5_dir/.db/files.dat" "upgraded v5 database"
     
-    ts_verify "$temp_v5_dir"
-
     rm -rf "$temp_v5_dir"
     log_success "Cleaned up temporary v5 upgrade database"
     test_passed

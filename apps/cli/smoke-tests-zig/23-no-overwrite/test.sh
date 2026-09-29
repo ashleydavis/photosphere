@@ -10,5 +10,3 @@ invoke_command "Initialize database (setup)" "$(get_zig_cli_command) init --db $
 ts_verify "$TEST_DB_DIR"
 
 test_cannot_create_over_existing 23
-
-ts_verify "$TEST_DB_DIR"

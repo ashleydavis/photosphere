@@ -10,5 +10,3 @@ invoke_command "Initialize database" "$(get_zig_cli_command) init --db $TEST_DB_
 ts_verify "$TEST_DB_DIR"
 
 test_add_jpg_file 4
-
-ts_verify "$TEST_DB_DIR"

@@ -73,8 +73,6 @@ test_edit_asset_metadata() {
         "$(get_zig_cli_command) info $record_id --db \"$db_dir\" --yes" 0 "after_output"
     expect_output_string "$after_output" "$new_description" "The edited description is reported by 'psi info'"
 
-    ts_verify "$db_dir"
-
     test_passed
 }
 

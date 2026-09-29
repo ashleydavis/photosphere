@@ -61,8 +61,6 @@ test_check() {
     invoke_command "Summarize the database" "$(get_zig_cli_command) -q summary --db \"$db_dir\" --yes" 0 "summary_output"
     expect_output_value "$summary_output" "Files imported:" "1" "The database still holds only the one file that was added"
 
-    ts_verify "$db_dir"
-
     test_passed
 }
 

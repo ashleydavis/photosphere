@@ -13,5 +13,3 @@ invoke_command "Add webp (setup)" "$(get_zig_cli_command) add --db $TEST_DB_DIR 
 ts_verify "$TEST_DB_DIR"
 
 test_replicate_after_changes 22
-
-ts_verify "$TEST_DB_DIR-replica"

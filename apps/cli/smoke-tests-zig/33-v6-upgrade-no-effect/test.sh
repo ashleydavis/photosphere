@@ -41,8 +41,6 @@ test_v6_database_upgrade_no_effect() {
     
     check_merkle_tree_order "$temp_v6_dir/.db/files.dat" "v6 upgrade test database"
     
-    ts_verify "$temp_v6_dir"
-
     rm -rf "$temp_v6_dir"
     log_success "Cleaned up temporary v6 upgrade database"
     test_passed

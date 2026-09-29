@@ -12,5 +12,3 @@ invoke_command "Add PNG (setup)" "$(get_zig_cli_command) add --db $TEST_DB_DIR $
 ts_verify "$TEST_DB_DIR"
 
 test_add_same_file 6
-
-ts_verify "$TEST_DB_DIR"

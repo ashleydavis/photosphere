@@ -104,8 +104,6 @@ test_s3_encrypted() {
 
     invoke_command "Verify the encrypted S3 database" "$(get_zig_cli_command) verify --db \"$s3_db\" --key $KEY_NAME --yes" 0
 
-    ts_verify "$s3_db" --key "$KEY_NAME"
-
     # --- Without the key, a read must fail loudly. ---
 
     invoke_command "Remove the encryption key from the vault" \

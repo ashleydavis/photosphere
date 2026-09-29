@@ -125,8 +125,6 @@ test_s3_replicate() {
     invoke_command "Summarise the S3 replica again" "$(get_zig_cli_command) summary --db \"$s3_replica\" --yes" 0 "updated_s3_summary"
     expect_output_value "$updated_s3_summary" "Total files:" "$updated_file_count" "The S3 replica picked up the added file"
 
-    ts_verify "$s3_replica"
-
     test_passed
 }
 

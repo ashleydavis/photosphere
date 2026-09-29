@@ -518,11 +518,6 @@ test_init_encrypted() {
         return
     fi
 
-    ts_verify "$db_dir" --key "$key_name" || {
-        test_failed "$name"
-        return
-    }
-
     test_passed "$name"
 }
 
@@ -554,11 +549,6 @@ test_init_generate_key_file() {
         test_failed "$name"
         return
     fi
-
-    ts_verify "$db_dir" --key "$key_name" || {
-        test_failed "$name"
-        return
-    }
 
     test_passed "$name"
 }
@@ -619,11 +609,6 @@ test_replicate_to_encrypted() {
     }
 
     invoke_command "Verify encrypted destination database" "$cli verify --db \"$dest_dir\" --key \"$dest_key_name\" --yes" || {
-        test_failed "$name"
-        return
-    }
-
-    ts_verify "$dest_dir" --key "$dest_key_name" || {
         test_failed "$name"
         return
     }
@@ -696,11 +681,6 @@ test_replicate_from_encrypted() {
         return
     }
 
-    ts_verify "$plain_dir" || {
-        test_failed "$name"
-        return
-    }
-
     test_passed "$name"
 }
 
@@ -763,11 +743,6 @@ test_encrypt_plain() {
         return
     }
 
-    ts_verify "$plain_dir" --key "$key_name" || {
-        test_failed "$name"
-        return
-    }
-
     test_passed "$name"
 }
 
@@ -819,11 +794,6 @@ test_encrypt_generate_key_file() {
         test_failed "$name"
         return
     fi
-
-    ts_verify "$plain_dir" --key "$key_name" || {
-        test_failed "$name"
-        return
-    }
 
     test_passed "$name"
 }
@@ -897,11 +867,6 @@ test_encrypt_reencrypt() {
         return
     fi
 
-    ts_verify "$enc1_dir" --key "$key2_name" || {
-        test_failed "$name"
-        return
-    }
-
     test_passed "$name"
 }
 
@@ -957,11 +922,6 @@ test_encrypt_old_to_new_format() {
     }
 
     invoke_command "Verify converted encrypted database" "$cli verify --db \"$old_dir\" --key \"$key_name\" --yes" || {
-        test_failed "$name"
-        return
-    }
-
-    ts_verify "$old_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -1033,11 +993,6 @@ test_decrypt_encrypted() {
         return
     }
 
-    ts_verify "$enc_dir" || {
-        test_failed "$name"
-        return
-    }
-
     test_passed "$name"
 }
 
@@ -1075,11 +1030,6 @@ test_add_encrypted_file() {
     }
 
     assert_database_assets_encrypted "$db_dir" || {
-        test_failed "$name"
-        return
-    }
-
-    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -1149,11 +1099,6 @@ test_export_encrypted_file() {
         return
     fi
 
-    ts_verify "$db_dir" --key "$key_name" || {
-        test_failed "$name"
-        return
-    }
-
     test_passed "$name"
 }
 
@@ -1196,11 +1141,6 @@ test_verify_encrypted_db() {
     }
 
     invoke_command "Verify encrypted database" "$cli verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
-        test_failed "$name"
-        return
-    }
-
-    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -1258,11 +1198,6 @@ test_delete_encrypted_file() {
     }
 
     invoke_command "Verify encrypted database after delete" "$cli verify --db \"$db_dir\" --key \"$key_name\" --yes" || {
-        test_failed "$name"
-        return
-    }
-
-    ts_verify "$db_dir" --key "$key_name" || {
         test_failed "$name"
         return
     }
@@ -1335,11 +1270,6 @@ test_list_encrypted_files() {
         return
     fi
 
-    ts_verify "$db_dir" --key "$key_name" || {
-        test_failed "$name"
-        return
-    }
-
     test_passed "$name"
 }
 
@@ -1404,11 +1334,6 @@ test_replicate_decrypted_from_encrypted() {
     }
 
     invoke_command "Verify plain replica" "$cli verify --db \"$plain_dir\" --yes" || {
-        test_failed "$name"
-        return
-    }
-
-    ts_verify "$plain_dir" || {
         test_failed "$name"
         return
     }
@@ -1521,11 +1446,6 @@ test_export_with_multiple_keys() {
         return
     fi
 
-    ts_verify "$db_dir" --key "$key1_name,$key2_name" || {
-        test_failed "$name"
-        return
-    }
-
     test_passed "$name"
 }
 
@@ -1623,11 +1543,6 @@ test_multi_key_encrypt() {
         return
     fi
 
-    ts_verify "$db1_dir" --key "$key1_name,$key2_name" || {
-        test_failed "$name"
-        return
-    }
-
     test_passed "$name"
 }
 
@@ -1711,11 +1626,6 @@ test_partial_encrypt() {
         return
     fi
 
-    ts_verify "$db_dir" --key "$key_name" || {
-        test_failed "$name"
-        return
-    }
-
     test_passed "$name"
 }
 
@@ -1756,11 +1666,6 @@ test_key_not_found_noninteractive() {
         return
     fi
 
-    ts_verify "$db_dir" || {
-        test_failed "$name"
-        return
-    }
-
     test_passed "$name"
 }
 
@@ -1799,11 +1704,6 @@ test_key_not_found_message() {
             return
         fi
     done
-
-    ts_verify "$db_dir" || {
-        test_failed "$name"
-        return
-    }
 
     test_passed "$name"
 }

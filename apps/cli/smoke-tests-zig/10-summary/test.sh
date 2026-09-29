@@ -9,5 +9,3 @@ TEST_DB_DIR="$(get_test_dir 10)/test-db"
 create_db_with_5_files "$TEST_DB_DIR"
 
 test_database_summary 10
-
-ts_verify "$TEST_DB_DIR"

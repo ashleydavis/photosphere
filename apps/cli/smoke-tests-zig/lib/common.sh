@@ -682,8 +682,10 @@ invoke_command() {
         if [ $expected_exit_code -eq 0 ]; then
             log_success "$description"
             
-            # Print root hash after successful psi commands that might affect the database
-            if [[ "$command" == *"psi"* ]] || [[ "$command" == *"bun run start"* ]]; then
+            # Print root hash after successful psi commands that might affect the database. Not after a
+            # TypeScript verify (ts_verify sets SKIP_ROOT_HASH_PRINT), which reads the database and
+            # changes nothing, so the hash would be the one printed after the step it checks.
+            if { [[ "$command" == *"psi"* ]] || [[ "$command" == *"bun run start"* ]]; } && [ "${SKIP_ROOT_HASH_PRINT:-}" != "true" ]; then
                 # Extract database path from command
                 local db_path=""
                 if [[ "$command" == *"--db "* ]]; then
@@ -738,7 +740,7 @@ ts_verify() {
     # database does not move the ids the Zig CLI hands out next, which the tests assert on.
     local verify_counter_dir="$TEST_TMP_DIR/ts-verify-uuid-counter"
     mkdir -p "$verify_counter_dir"
-    invoke_command "Verify $database_dir with the TypeScript CLI" "TEST_TMP_DIR=\"$verify_counter_dir\" $(get_cli_command) verify --db \"$database_dir\"$verify_arguments --yes"
+    SKIP_ROOT_HASH_PRINT=true invoke_command "Verify $database_dir with the TypeScript CLI" "TEST_TMP_DIR=\"$verify_counter_dir\" $(get_cli_command) verify --db \"$database_dir\"$verify_arguments --yes"
     record_ts_verify_milliseconds "$TEST_TMP_DIR/ts-verify-milliseconds.log" "$verify_start"
 }
 

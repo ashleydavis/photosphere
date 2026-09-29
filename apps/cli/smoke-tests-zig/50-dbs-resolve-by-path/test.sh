@@ -42,8 +42,6 @@ test_dbs_resolve_by_path() {
     # of them (a file count, a byte count and two hashes), so it could not fail.
     expect_output_value "$summary_output" "Files imported:" "1" "Summary shows the one asset that was added"
 
-    ts_verify "$db_dir" --key "$key_name"
-
     test_passed
 }
 

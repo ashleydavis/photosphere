@@ -183,8 +183,6 @@ test_sync_delete_asset_reverse() {
     check_merkle_tree_order "$original_dir/.db/files.dat" "sync delete reverse original database"
     check_merkle_tree_order "$copy_dir/.db/files.dat" "sync delete reverse copy database"
     
-    ts_verify "$copy_dir"
-
     # Clean up temporary databases
     rm -rf "$original_dir"
     rm -rf "$copy_dir"

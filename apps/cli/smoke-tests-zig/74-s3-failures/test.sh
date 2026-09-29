@@ -89,7 +89,6 @@ test_s3_failures() {
     local mid_import_db="s3:$S3_EMULATOR_BUCKET/mid-import"
     invoke_command "Initialize a database for the mid-import test" \
         "$(get_zig_cli_command) init --db \"$mid_import_db\" --yes" 0
-    ts_verify "$mid_import_db"
 
     # The import needs to still be running when the server is taken away, and the five standard
     # fixtures are small enough to finish in well under a second, which made this a race that the

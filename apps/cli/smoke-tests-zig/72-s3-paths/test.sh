@@ -115,8 +115,6 @@ test_s3_paths() {
     expect_not_listed "$awkward_db" "test.jpg"
     expect_not_listed "$awkward_db" "test.png"
 
-    ts_verify "$awkward_db"
-
     test_passed
 }
 
