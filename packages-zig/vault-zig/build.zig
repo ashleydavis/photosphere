@@ -106,8 +106,10 @@ fn addStandIns(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bu
         const file_name = b.fmt("{s}{s}", .{ stand_in_name, target.result.exeFileExt() });
         install_step.dependOn(&b.addInstallFileWithDir(stand_in.getEmittedBin(), install_dir, file_name).step);
     }
+    // Built as a dependency (the CLI's test-all), the install prefix is under the root's cache, relative to the
+    // directory the build runs in, while the tests run from this package's directory. The path is made absolute.
     return .{
-        .directory = b.getInstallPath(install_dir, ""),
+        .directory = b.pathResolve(&.{ b.graph.cache.cwd, b.getInstallPath(install_dir, "") }),
         .install_step = install_step,
     };
 }
