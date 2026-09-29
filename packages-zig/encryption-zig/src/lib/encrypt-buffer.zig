@@ -98,14 +98,15 @@ pub fn decryptBuffer(allocator: std.mem.Allocator, data: []const u8, privateKeyM
         return decrypted;
     }
     else |err| {
-        if (err == error.OutOfMemory) {
-            return err;
+        // Every other error decryptNewFormat can give is thrown, so it has recorded its message (the switch fails to
+        // compile if it gains one that is not).
+        switch (err) {
+            error.OutOfMemory => {
+                return err;
+            },
+            error.Thrown => {},
         }
         if (carriesEncryptionTag) {
-            // (Zig: a runtime error has no recorded message, so its name is recorded as the cause's message.)
-            if (err != error.Thrown and err != error.FatalError) {
-                errors.recordError("Error", "{s}", .{@errorName(err)});
-            }
             const causeMessage = try allocator.dupe(u8, errors.lastErrorMessage());
             return errors.throwErrorWithCause("Could not decrypt data that says it is encrypted: {s}", .{causeMessage});
         }
