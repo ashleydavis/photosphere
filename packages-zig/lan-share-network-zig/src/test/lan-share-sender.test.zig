@@ -256,3 +256,130 @@ test "a falsy payload is received as no payload, as the callers' `if (!rawPayloa
     try std.testing.expect((try sendAndReceive(allocator, .{ .string = "" })) == null);
     try std.testing.expectEqualStrings("x", (try sendAndReceive(allocator, .{ .string = "x" })).?.string);
 }
+
+//
+// What announceUntilStopped sends, and when to stop.
+//
+const IAnnouncer = struct {
+    // The datagrams to send, in order, every round.
+    datagrams: []const []const u8,
+
+    // Set to stop sending.
+    stop: std.atomic.Value(bool),
+};
+
+//
+// Sends the datagrams of an announcer to the discovery port, by broadcast and to this machine as a receiver does,
+// every 50ms until it is stopped.
+//
+fn announceUntilStopped(announcer: *IAnnouncer) void {
+    const udpSocket = lan_share.socket.createUdp(true, true) catch @panic("could not make a UDP socket");
+    defer lan_share.socket.close(udpSocket);
+    while (!announcer.stop.load(.acquire)) {
+        for (announcer.datagrams) |datagram| {
+            lan_share.socket.sendTo(udpSocket, datagram, .{ .address = .{ 255, 255, 255, 255 }, .port = lan_share.lan_share_sender.DISCOVERY_PORT }) catch {};
+            lan_share.socket.sendTo(udpSocket, datagram, .{ .address = .{ 127, 0, 0, 1 }, .port = lan_share.lan_share_sender.DISCOVERY_PORT }) catch {};
+        }
+        std.Io.sleep(std.testing.io, .fromMilliseconds(50), .awake) catch {};
+    }
+}
+
+test "discovery skips announcements it cannot read, and reads a fingerprint that holds colons" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const code = try helpers.pairingCode();
+    const codeHash = lan_share.lan_share_sender.sha256Hex(code);
+    var announcer: IAnnouncer = .{
+        .datagrams = &.{
+            "not an announcement",
+            "PSIE_RECV:4321",
+            try std.fmt.allocPrint(allocator, "PSIE_RECV:4321:{s}", .{&codeHash}),
+            try std.fmt.allocPrint(allocator, "PSIE_RECV:port:{s}:aa:bb", .{&codeHash}),
+            try std.fmt.allocPrint(allocator, "PSIE_RECV:4321:{s}:", .{&codeHash}),
+            try std.fmt.allocPrint(allocator, "PSIE_RECV:4321:{s}:aa:bb", .{&codeHash}),
+        },
+        .stop = .init(false),
+    };
+    const thread = try std.Thread.spawn(.{}, announceUntilStopped, .{&announcer});
+    defer thread.join();
+    defer announcer.stop.store(true, .release);
+
+    var sender = try LanShareSender.init(allocator, std.testing.io, .null, code);
+    const endpoint = (try sender.waitForReceiver(std.testing.io, 10000)).?;
+    try std.testing.expectEqual(@as(u16, 4321), endpoint.port);
+    try std.testing.expectEqualStrings("aa:bb", endpoint.certFingerprint);
+}
+
+//
+// Starts a receiver and finds it with a sender holding its code, without sending any request to it.
+//
+fn discoverReceiver(allocator: std.mem.Allocator, receiver: *LanShareReceiver, code: []const u8) !IReceiverEndpoint {
+    try receiver.start(code);
+    var finder = try LanShareSender.init(allocator, std.testing.io, .null, code);
+    return (try finder.waitForReceiver(std.testing.io, 10000)).?;
+}
+
+//
+// Spends requests of a receiver's budget with payloads it refuses.
+//
+fn spendRequests(allocator: std.mem.Allocator, endpoint: IReceiverEndpoint, count: usize) !void {
+    for (0..count) |_| {
+        const connection = try lan_share.https.Connection.connect(allocator, .{ .address = .{ 127, 0, 0, 1 }, .port = endpoint.port });
+        defer connection.close();
+        _ = try lan_share.https.request(allocator, connection, "127.0.0.1", "POST", "/share-payload", "{}");
+    }
+}
+
+test "send refuses a receiver whose certificate is not the one announced" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const code = try helpers.pairingCode();
+    var receiver = LanShareReceiver.init(std.testing.io, 15000);
+    defer receiver.deinit();
+    const endpoint = try discoverReceiver(allocator, &receiver, code);
+
+    var sender = try LanShareSender.init(allocator, std.testing.io, .{ .string = "x" }, code);
+    var forged = endpoint;
+    forged.certFingerprint = "00";
+    try std.testing.expectError(error.Thrown, sender.send(forged));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Certificate fingerprint mismatch - possible MITM attack. Expected 00, got "));
+
+    receiver.cancel();
+    _ = try receiver.receive();
+}
+
+test "send gives up when the receiver refuses its first request, and fails on a status it does not expect" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // The whole budget spent: the check of the code is refused with 429.
+    const code = try helpers.pairingCode();
+    var receiver = LanShareReceiver.init(std.testing.io, 15000);
+    defer receiver.deinit();
+    const endpoint = try discoverReceiver(allocator, &receiver, code);
+    try spendRequests(allocator, endpoint, 5);
+    var sender = try LanShareSender.init(allocator, std.testing.io, .{ .string = "x" }, code);
+    try std.testing.expect(!try sender.send(endpoint));
+    try std.testing.expect((try receiver.receive()) == null);
+
+    // All but one request spent: the check passes and the payload is refused with 429.
+    const otherCode = try helpers.otherPairingCode(code);
+    var otherReceiver = LanShareReceiver.init(std.testing.io, 15000);
+    defer otherReceiver.deinit();
+    const otherEndpoint = try discoverReceiver(allocator, &otherReceiver, otherCode);
+    try spendRequests(allocator, otherEndpoint, 4);
+    var otherSender = try LanShareSender.init(allocator, std.testing.io, .{ .string = "x" }, otherCode);
+    try std.testing.expectError(error.Thrown, otherSender.send(otherEndpoint));
+    try std.testing.expectEqualStrings("Unexpected status code: 429", utils.errors.lastErrorMessage());
+    try std.testing.expect((try otherReceiver.receive()) == null);
+}
+
+test "pairingCodeHashMatches fails for a response that is not JSON, as JSON.parse does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expectError(error.Thrown, lan_share.lan_share_sender.pairingCodeHashMatches(arena.allocator(), "not json", "hash"));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "JSON Parse error: "));
+}
