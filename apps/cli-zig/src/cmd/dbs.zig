@@ -168,10 +168,10 @@ pub const IDbsReceiveOptions = struct {
 };
 
 //
-// `text.trim()`: removes the ASCII characters JavaScript's String.prototype.trim removes.
+// `text.trim()`.
 //
 fn trim(value: []const u8) []const u8 {
-    return std.mem.trim(u8, value, " \t\n\r\x0b\x0c");
+    return utils.js_string.trim(value);
 }
 
 //

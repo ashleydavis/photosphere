@@ -203,3 +203,22 @@ test "generateSelfSignedCert makes a certificate the HTTPS server loads, with th
     var context = try https.ServerContext.init(selfSigned.cert, selfSigned.key);
     context.deinit();
 }
+
+test "a payload with a repeated key is read with its last value, as JSON.parse reads it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const code = try helpers.pairingCode();
+    var receiver = LanShareReceiver.init(std.testing.io, 10000);
+    defer receiver.deinit();
+    try receiver.start(code);
+
+    const codeHash = sha256Hex(code);
+    const body = try std.fmt.allocPrint(allocator, "{{\"codeHash\":\"wrong\",\"codeHash\":\"{s}\",\"payload\":{{\"message\":\"first\",\"message\":\"second\"}}}}", .{&codeHash});
+
+    const response = try requestReceiver(allocator, &receiver, "POST", "/share-payload", body);
+    try std.testing.expectEqual(@as(u16, 200), response.statusCode);
+
+    const result = try receiver.receive();
+    try std.testing.expectEqualStrings("second", result.?.object.get("message").?.string);
+}

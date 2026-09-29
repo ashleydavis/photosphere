@@ -221,6 +221,9 @@ pub fn lastErrorName() []const u8 {
 }
 
 //
+// TODO: a runtime error's message is its Zig error name, where Node gives its own message ("EACCES: permission
+// denied, open '...'", or JavaScriptCore's description of malformed JSON). Only a missing file's message is emulated.
+//
 // Gets the message for an error: the recorded message for thrown errors, otherwise the Zig error name
 // (the equivalent of `error.message` for errors raised by the runtime).
 //

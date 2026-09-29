@@ -127,7 +127,7 @@ pub fn normaliseDatabaseId(databaseId: ?[]const u8) !?[]const u8 {
     const value = databaseId orelse return null;
 
     // JavaScript's trim() removes the whitespace and line terminators.
-    const trimmed = std.mem.trim(u8, value, " \t\n\r\x0b\x0c");
+    const trimmed = utils.js_string.trim(value);
     if (trimmed.len == 0) {
         return utils.errors.throwError("--database-id was given with no value. Leave it off to create a database with a new identity of its own.", .{});
     }
@@ -187,7 +187,7 @@ pub fn resolveGeocodingApiKey(allocator: std.mem.Allocator, io: std.Io, geocodin
     const googleApiKey = process_env.getEnv("GOOGLE_API_KEY") orelse {
         return null;
     };
-    return std.mem.trim(u8, googleApiKey, " \t\n\r\x0b\x0c");
+    return utils.js_string.trim(googleApiKey);
 }
 
 //
@@ -209,7 +209,7 @@ fn validateEndpoint(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
 fn validateRegion(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
     _ = context;
     const region = value orelse return "Region is required";
-    if (std.mem.trim(u8, region, " \t\r\n").len == 0) {
+    if (utils.js_string.trim(region).len == 0) {
         return "Region is required";
     }
     return null;
@@ -221,7 +221,7 @@ fn validateRegion(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
 fn validateAccessKeyId(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
     _ = context;
     const accessKeyId = value orelse return "Access Key ID is required";
-    if (std.mem.trim(u8, accessKeyId, " \t\r\n").len == 0) {
+    if (utils.js_string.trim(accessKeyId).len == 0) {
         return "Access Key ID is required";
     }
     return null;
@@ -233,7 +233,7 @@ fn validateAccessKeyId(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
 fn validateSecretAccessKey(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
     _ = context;
     const secretAccessKey = value orelse return "Secret Access Key is required";
-    if (std.mem.trim(u8, secretAccessKey, " \t\r\n").len == 0) {
+    if (utils.js_string.trim(secretAccessKey).len == 0) {
         return "Secret Access Key is required";
     }
     return null;
@@ -329,13 +329,13 @@ pub fn configureS3IfNeeded(allocator: std.mem.Allocator, io: std.Io, nonInteract
     }
 
     var credentials: IS3Credentials = .{
-        .region = std.mem.trim(u8, region.value, " \t\r\n"),
-        .accessKeyId = std.mem.trim(u8, accessKeyId.value, " \t\r\n"),
-        .secretAccessKey = std.mem.trim(u8, secretAccessKey.value.?, " \t\r\n"),
+        .region = utils.js_string.trim(region.value),
+        .accessKeyId = utils.js_string.trim(accessKeyId.value),
+        .secretAccessKey = utils.js_string.trim(secretAccessKey.value.?),
         .endpoint = null,
     };
 
-    const endpointStr = std.mem.trim(u8, endpoint.value, " \t\r\n");
+    const endpointStr = utils.js_string.trim(endpoint.value);
     if (endpointStr.len > 0) {
         credentials.endpoint = endpointStr;
     }
@@ -418,7 +418,7 @@ pub const IEncryptionPromptResult = struct {
 fn validateKeyName(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
     _ = context;
     const keyName = value orelse return "Key name is required";
-    if (std.mem.trim(u8, keyName, " \t\r\n").len == 0) {
+    if (utils.js_string.trim(keyName).len == 0) {
         return "Key name is required";
     }
     for (keyName) |character| {
@@ -489,7 +489,7 @@ pub fn promptForEncryption(allocator: std.mem.Allocator, io: std.Io, message: []
             exit(io, 1);
         }
 
-        const keyName = std.mem.trim(u8, keyNameInput.value, " \t\r\n");
+        const keyName = utils.js_string.trim(keyNameInput.value);
         const privateKeyPem = try generatePrivateKeyPem(allocator, io);
 
         const vault = try getVault(getDefaultVaultType());
@@ -519,7 +519,7 @@ pub fn resolveKeyPems(allocator: std.mem.Allocator, io: std.Io, keyNames: ?[]con
     var pairs: std.ArrayList(IEncryptionKeyPem) = .empty;
     var name_iterator = std.mem.splitScalar(u8, names_text, ',');
     while (name_iterator.next()) |untrimmed| {
-        const name = std.mem.trim(u8, untrimmed, " \t\r\n");
+        const name = utils.js_string.trim(untrimmed);
         if (name.len == 0) {
             continue;
         }
@@ -600,7 +600,7 @@ pub fn promptToAddKey(allocator: std.mem.Allocator, io: std.Io, keyName: []const
         if (isCancel(filePath)) {
             return null;
         }
-        const pem = try readPemFile(allocator, io, std.mem.trim(u8, filePath.value, " \t\r\n"));
+        const pem = try readPemFile(allocator, io, utils.js_string.trim(filePath.value));
         return try buildAndStoreKeyPem(allocator, io, keyName, pem);
     }
 
@@ -648,7 +648,7 @@ pub fn promptToGenerateOrAddKey(allocator: std.mem.Allocator, io: std.Io, keyNam
         if (isCancel(filePath)) {
             return null;
         }
-        const pem = try readPemFile(allocator, io, std.mem.trim(u8, filePath.value, " \t\r\n"));
+        const pem = try readPemFile(allocator, io, utils.js_string.trim(filePath.value));
         return try buildAndStoreKeyPem(allocator, io, keyName, pem);
     }
 
@@ -910,7 +910,7 @@ pub const ICommandContext = struct {
 // Equivalent of JavaScript `Number(text)` for the numeric options (NaN when the text is not a number).
 //
 pub fn jsNumber(textValue: []const u8) f64 {
-    const trimmed = std.mem.trim(u8, textValue, " \t\r\n");
+    const trimmed = utils.js_string.trim(textValue);
     if (trimmed.len == 0) {
         return 0;
     }

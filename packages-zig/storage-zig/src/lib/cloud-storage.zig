@@ -424,6 +424,8 @@ pub const CloudStorage = struct {
         const parsed = try self.parsePath(dirPath);
         var key = parsed.key;
 
+        // TODO: mirrors the TypeScript until both are fixed: parsePath throws for an empty key, so this branch can
+        // never run.
         if (key.len == 0) {
             // Empty path is ok, bucket always exists if we've gotten this far
             return true;
@@ -800,6 +802,9 @@ pub const CloudStorage = struct {
         };
     }
 
+    //
+    // TODO: a lock file whose JSON has fields of other types (no owner, a string timestamp, an acquiredAt that is not
+    // toISOString output) is unreadable here, where the TypeScript carries undefined, NaN or an Invalid Date forward.
     //
     // Checks if a write lock is acquired for the specified file.
     // Returns the lock information if it exists, undefined otherwise.

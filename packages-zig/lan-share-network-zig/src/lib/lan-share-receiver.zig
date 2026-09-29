@@ -1,5 +1,6 @@
 const std = @import("std");
 const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
 const encryption = @import("encryption-zig");
 const lan_share_types = @import("lan-share-types.zig");
 const lan_share_sender = @import("lan-share-sender.zig");
@@ -641,6 +642,15 @@ pub const LanShareReceiver = struct {
                 return true;
             };
 
+            // TODO: replicates a TypeScript bug. `parsed.codeHash` of a body of `null` throws inside the request's 'end'
+            // handler, an uncaught TypeError that ends the receiving process, so one request from any device on the
+            // LAN stops `psi dbs receive`. Fix it in the TypeScript first, then here.
+            if (shareRequest == .null) {
+                errors.recordError("TypeError", "null is not an object (evaluating 'parsed.codeHash')", .{});
+                node_utils.termination.shutdownOnUncaughtException(self.io, error.Thrown);
+            }
+
+            // Any other value that is not an object has no codeHash.
             const codeHash: ?std.json.Value = if (shareRequest == .object) shareRequest.object.get("codeHash") else null;
             if (codeHash == null or codeHash.? != .string or !std.mem.eql(u8, codeHash.?.string, &self.codeHash)) {
                 try respondJson(request, .forbidden, "{\"error\":\"Invalid pairing code\"}");

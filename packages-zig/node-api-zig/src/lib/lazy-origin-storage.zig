@@ -152,6 +152,11 @@ pub const LazyOriginStorage = struct {
     // Cache write errors are non-fatal — the caller's stream is unaffected.
     // (Zig: the cache write runs concurrently and destroying the returned stream waits for it to finish.)
     //
+    // TODO: the TypeScript hangs when the cache write fails before the file is read: nothing drains cacheStream any
+    // more, so once its buffer is full the origin stays paused and the caller's stream never ends (in Bun a 192 KB
+    // file stops after 65536 bytes). The Zig stops feeding the cache and hands the caller the whole file, since
+    // matching it would make `psi export` hang. Fix the TypeScript to drain or drop the cache branch the same way.
+    //
     pub fn readStream(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
         if (try self.local.fileExists(allocator, io, filePath)) {
             return self.local.readStream(allocator, io, filePath);

@@ -469,6 +469,9 @@ test "jsNumber converts option text like Number()" {
     try std.testing.expectEqual(@as(f64, 1000), init_cmd.jsNumber(" 1000 "));
     try std.testing.expectEqual(@as(f64, 0), init_cmd.jsNumber(""));
     try std.testing.expect(std.math.isNan(init_cmd.jsNumber("abc")));
+
+    // Number() trims the whitespace String.prototype.trim removes, Unicode spaces included.
+    try std.testing.expectEqual(@as(f64, 1000), init_cmd.jsNumber("\u{00A0}1000\u{3000}"));
 }
 
 test "initContext creates the session, the worker pool and the cleanup callback" {

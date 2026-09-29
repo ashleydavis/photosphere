@@ -12,6 +12,9 @@ const std = @import("std");
 //
 
 //
+// TODO: characters outside ASCII sort by code point after all ASCII characters, where ICU sorts them by its
+// collation table ("é" next to "e"). The Zig does not link ICU's tables.
+//
 // Compares two strings like `left.localeCompare(right)`.
 // Returns negative if left < right, zero if equal, positive if left > right.
 //

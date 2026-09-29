@@ -198,3 +198,46 @@ test "the unhandled rejection of a failed signal shutdown logs the thrown error 
     );
     try std.testing.expectEqual(node_utils.exit_codes.EXIT_UNHANDLED_REJECTION_CLEANUP_FAILED, outcome.exitCode);
 }
+
+//
+// Runs the termination child with the callback mode to its end and returns what it wrote and its exit code.
+//
+fn runChild(allocator: std.mem.Allocator, callbackMode: []const u8) !ChildOutcome {
+    const io = std.testing.io;
+    var child = try std.process.spawn(io, .{
+        .argv = &.{ test_options.termination_child_path, callbackMode },
+        .stdin = .ignore,
+        .stdout = .pipe,
+        .stderr = .ignore,
+    });
+    defer child.kill(io);
+    var buffer: [256]u8 = undefined;
+    var reader = child.stdout.?.readerStreaming(io, &buffer);
+    const output = try reader.interface.allocRemaining(allocator, .unlimited);
+    const term = try child.wait(io);
+    const exitCode: u8 = switch (term) {
+        .exited => |code| code,
+        else => return error.ChildDidNotExit,
+    };
+    return .{ .exitCode = exitCode, .output = output };
+}
+
+test "an uncaught exception is logged, runs the termination callbacks and exits with EXIT_UNCAUGHT_EXCEPTION" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const outcome = try runChild(arena.allocator(), "uncaught");
+
+    try std.testing.expectEqualStrings("exception Uncaught exception. Boom\ncallback 64\n", outcome.output);
+    try std.testing.expectEqual(node_utils.exit_codes.EXIT_UNCAUGHT_EXCEPTION, outcome.exitCode);
+}
+
+test "an uncaught exception whose callbacks throw exits with EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const outcome = try runChild(arena.allocator(), "uncaught-fail");
+
+    try std.testing.expectEqualStrings("exception Uncaught exception. Boom\ncallback 64\nexception Error during uncaught exception shutdown. Callback failed\n", outcome.output);
+    try std.testing.expectEqual(node_utils.exit_codes.EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED, outcome.exitCode);
+}

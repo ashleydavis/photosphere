@@ -56,6 +56,9 @@ fn maxBufferExceeded(streamName: []const u8) errors.ThrownError {
 }
 
 //
+// TODO: the command gets an empty stdin, where Node gives it an open pipe nothing writes to, so a command that
+// reads stdin ends at once here and waits for ever in TypeScript.
+//
 // Runs the command in /bin/sh with the environment of `process.env` and reads its stdout and stderr to their ends,
 // as std.process.run does, but failing as Bun's exec does when either has more than maxBuffer bytes.
 //

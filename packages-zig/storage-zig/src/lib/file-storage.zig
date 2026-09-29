@@ -320,6 +320,9 @@ pub const FileStorage = struct {
     }
 
     //
+    // TODO: a lock file whose JSON has fields of other types (no owner, a string timestamp, an acquiredAt that is not
+    // toISOString output) is unreadable here, where the TypeScript carries undefined, NaN or an Invalid Date forward.
+    //
     // Checks if a write lock is acquired for the specified file.
     // Returns the lock information if it exists, undefined otherwise.
     //
@@ -373,6 +376,10 @@ pub const FileStorage = struct {
             else if (lockFileBeingWritten(io, filePath, timestamp) catch |err| return failAcquire(allocator, timestamp, processId, owner, filePath, err)) {
                 // The lock file is empty because its owner has created it and not yet written it.
                 // Breaking it here as corrupt let two owners hold the lock at once.
+                // TODO: the TypeScript acquireWriteLock has this race: it creates the lock file and writes its JSON in
+                // one call, and a contender that reads it empty in between breaks it as corrupt, so both hold the lock.
+                // The Zig refuses the empty lock instead, because the ported unit test "should handle race conditions
+                // properly" failed on macOS CI with the race. Fix the TypeScript the same way.
                 if (log.verboseEnabled()) {
                     log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},ACQUIRE_FAILED_BEING_WRITTEN,{d},{s},{s}", .{ timestamp, processId, owner, filePath }));
                 }

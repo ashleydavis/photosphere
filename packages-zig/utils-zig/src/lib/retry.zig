@@ -82,6 +82,8 @@ fn waitForTimeout(io: std.Io, timeoutMS: u64) std.Io.Cancelable!void {
 }
 
 //
+// TODO: a timed out operation is canceled, where the TypeScript leaves it running in the background.
+//
 // Attempts an operation once, rejecting if it doesn't complete within timeoutMS.
 // The operation runs concurrently with a timer (the `setTimeout` in TypeScript).
 // When the timer wins, TypeScript leaves the operation running in the background, kept alive by the

@@ -8,7 +8,8 @@ const termination = node_utils.termination;
 // signal the test sends it. The callback writes "callback <exit code>" to stdout. The first argument says
 // how the callback behaves: "succeed" always succeeds, "fail-once" throws on its first call only and
 // "fail-always" always throws. "fail-always-logged" always throws too and writes the exceptions the log is given to
-// stdout. "exit-verbose" writes verbose log messages to stdout and calls exit with 7 straight away instead of waiting
+// stdout. "uncaught" and "uncaught-fail" (whose callback always throws) write the exceptions the log is given to stdout
+// and end at once in an uncaught exception, "Boom". "exit-verbose" writes verbose log messages to stdout and calls exit with 7 straight away instead of waiting
 // for a signal.
 //
 
@@ -69,7 +70,7 @@ fn reportExitCode(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void 
     var buffer: [32]u8 = undefined;
     const line = try std.fmt.bufPrint(&buffer, "callback {d}\n", .{exitCode});
     try std.Io.File.stdout().writeStreamingAll(io, line);
-    const failsAlways = std.mem.eql(u8, callbackMode, "fail-always") or std.mem.eql(u8, callbackMode, "fail-always-logged");
+    const failsAlways = std.mem.eql(u8, callbackMode, "fail-always") or std.mem.eql(u8, callbackMode, "fail-always-logged") or std.mem.eql(u8, callbackMode, "uncaught-fail");
     if (failsAlways or (std.mem.eql(u8, callbackMode, "fail-once") and callbackCalls == 1)) {
         return utils.errors.throwError("Callback failed", .{});
     }
@@ -96,7 +97,8 @@ pub fn main(init: std.process.Init) !void {
         };
         termination.exit(io, 7);
     }
-    if (std.mem.eql(u8, callbackMode, "fail-always-logged")) {
+    const logsExceptions = std.mem.eql(u8, callbackMode, "fail-always-logged") or std.mem.eql(u8, callbackMode, "uncaught") or std.mem.eql(u8, callbackMode, "uncaught-fail");
+    if (logsExceptions) {
         stdoutIo = io;
         verboseVtable = utils.log.log.vtable.*;
         verboseVtable.exception = writeException;
@@ -104,6 +106,9 @@ pub fn main(init: std.process.Init) !void {
             .ptr = utils.log.log.ptr,
             .vtable = &verboseVtable,
         };
+    }
+    if (std.mem.eql(u8, callbackMode, "uncaught") or std.mem.eql(u8, callbackMode, "uncaught-fail")) {
+        termination.shutdownOnUncaughtException(io, utils.errors.throwError("Boom", .{}));
     }
     try std.Io.File.stdout().writeStreamingAll(io, "ready\n");
     while (true) {

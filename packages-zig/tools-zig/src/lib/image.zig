@@ -206,7 +206,7 @@ pub const Image = struct {
         const command = try std.fmt.allocPrint(allocator, "{s} -format \"%w %h\" \"{s}\"", .{ identifyCommand, self.filePath });
         const result = try execLogged(allocator, io, "magick", command, null);
 
-        var parts = std.mem.splitScalar(u8, std.mem.trim(u8, result.stdout, " \t\n\r\x0b\x0c"), ' ');
+        var parts = std.mem.splitScalar(u8, utils.js_string.trim(result.stdout), ' ');
         const width = parseInt(parts.next() orelse "undefined", null);
         const height = parseInt(parts.next() orelse "undefined", null);
 
@@ -272,22 +272,37 @@ pub const Image = struct {
             return errors.throwError("Failed to get EXIF data: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
 
+        return parseExifOutput(allocator, result.stdout);
+    }
+
+    //
+    // Reads the EXIF tags out of the output of `identify -format "%[EXIF:*]"` (the loop over its lines in getExifData).
+    //
+    pub fn parseExifOutput(allocator: std.mem.Allocator, stdout: []const u8) !std.StringArrayHashMapUnmanaged([]const u8) {
         var exifData: std.StringArrayHashMapUnmanaged([]const u8) = .empty;
-        var lines = std.mem.splitScalar(u8, std.mem.trim(u8, result.stdout, " \t\n\r\x0b\x0c"), '\n');
+        var lines = std.mem.splitScalar(u8, utils.js_string.trim(stdout), '\n');
 
         while (lines.next()) |line| {
-            // TypeScript: `line.match(/exif:([^=]+)=(.*)/)`, where `.` does not match a line terminator.
-            if (std.mem.indexOf(u8, line, "exif:")) |start| {
+            // TypeScript: `line.match(/exif:([^=]+)=(.*)/)`. The first "exif:" followed by at least one character that
+            // is not "=" and then "=" matches, and the value runs to the first line terminator, which `.` does not match.
+            var searchStart: usize = 0;
+            while (std.mem.indexOfPos(u8, line, searchStart, "exif:")) |start| {
                 const rest = line[start + 5 ..];
-                if (std.mem.indexOfScalar(u8, rest, '=')) |equals| {
-                    if (equals > 0) {
-                        var value = rest[equals + 1 ..];
-                        if (std.mem.indexOfScalar(u8, value, '\r')) |carriageReturn| {
-                            value = value[0..carriageReturn];
-                        }
-                        try exifData.put(allocator, rest[0..equals], value);
+                const equals = std.mem.indexOfScalar(u8, rest, '=') orelse {
+                    break;
+                };
+                if (equals == 0) {
+                    searchStart = start + 1;
+                    continue;
+                }
+                var value = rest[equals + 1 ..];
+                for ([_][]const u8{ "\r", "\u{2028}", "\u{2029}" }) |terminator| {
+                    if (std.mem.indexOf(u8, value, terminator)) |terminatorIndex| {
+                        value = value[0..terminatorIndex];
                     }
                 }
+                try exifData.put(allocator, rest[0..equals], value);
+                break;
             }
         }
 
@@ -432,7 +447,7 @@ pub const Image = struct {
         const command = try std.fmt.allocPrint(allocator, "{s} \"{s}\" -resize 1x1! -format \"%[fx:int(mean.r*255)],%[fx:int(mean.g*255)],%[fx:int(mean.b*255)]\" info:", .{ convertCommand, self.filePath });
         const result = try execLogged(allocator, io, "magick", command, null);
 
-        const rgbString = std.mem.trim(u8, result.stdout, " \t\n\r\x0b\x0c");
+        const rgbString = utils.js_string.trim(result.stdout);
         var rgbValues: std.ArrayList(f64) = .empty;
         var values = std.mem.splitScalar(u8, rgbString, ',');
         while (values.next()) |value| {

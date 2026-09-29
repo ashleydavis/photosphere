@@ -96,6 +96,8 @@ pub fn tomlToDatabasesConfig(allocator: std.mem.Allocator, toml: std.json.Object
             try databases.append(allocator, tomlEntryToDatabaseEntry(tomlEntry));
         }
     }
+
+    // TODO: non-string recent database names are dropped, where JavaScript carries them through.
     const recentDatabaseNames = if (arrayProperty(toml, "recent_database_names")) |names|
         try stringItems(allocator, names)
     else

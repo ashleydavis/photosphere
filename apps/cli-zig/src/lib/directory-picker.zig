@@ -90,7 +90,7 @@ const SubdirectoryValidateContext = struct {
 fn validateSubdirectoryName(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
     const self: *SubdirectoryValidateContext = @ptrCast(@alignCast(context.?));
     const name = value orelse return "Directory name is required";
-    if (std.mem.trim(u8, name, " \t\r\n").len == 0) {
+    if (utils.js_string.trim(name).len == 0) {
         return "Directory name is required";
     }
     // Check for invalid characters
@@ -116,7 +116,7 @@ fn validateSubdirectoryName(context: ?*anyopaque, value: ?[]const u8) ?[]const u
 fn validateFullPath(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
     _ = context;
     const pathText = value orelse return "Path is required";
-    if (std.mem.trim(u8, pathText, " \t\r\n").len == 0) {
+    if (utils.js_string.trim(pathText).len == 0) {
         return "Path is required";
     }
     return null;
@@ -199,7 +199,7 @@ pub fn pickDirectory(
             return null;
         }
 
-        const trimmedName = std.mem.trim(u8, subdirName.value, " \t\r\n");
+        const trimmedName = utils.js_string.trim(subdirName.value);
         const subdirPath = try join(allocator, currentPath, trimmedName);
         const relativePath = try std.fmt.allocPrint(allocator, "./{s}", .{trimmedName});
         mkdirRecursive(io, subdirPath) catch |err| {
@@ -229,7 +229,7 @@ pub fn pickDirectory(
             return null;
         }
 
-        const resolvedPath = try resolve(allocator, io, std.mem.trim(u8, fullPath.value, " \t\r\n"));
+        const resolvedPath = try resolve(allocator, io, utils.js_string.trim(fullPath.value));
 
         // Create directory if it doesn't exist
         if (!pathExists(io, resolvedPath)) {

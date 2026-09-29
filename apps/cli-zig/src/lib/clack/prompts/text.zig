@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 const core = @import("../core/index.zig");
 const color = @import("../../picocolors.zig");
 const common = @import("common.zig");
@@ -60,7 +61,7 @@ const TextRender = struct {
         switch (prompt.state) {
             .@"error" => {
                 const errorText = if (prompt.@"error".len > 0) try std.fmt.allocPrint(allocator, "  {s}", .{try color.yellow(allocator, prompt.@"error")}) else "";
-                return try std.fmt.allocPrint(allocator, "{s}\n{s}  {s}\n{s}{s}\n", .{ std.mem.trim(u8, title, " \t\n\r"), try color.yellow(allocator, S_BAR()), userInput, try color.yellow(allocator, S_BAR_END()), errorText });
+                return try std.fmt.allocPrint(allocator, "{s}\n{s}  {s}\n{s}{s}\n", .{ utils.js_string.trim(title), try color.yellow(allocator, S_BAR()), userInput, try color.yellow(allocator, S_BAR_END()), errorText });
             },
             .submit => {
                 const valueText = if (value.len > 0) try std.fmt.allocPrint(allocator, "  {s}", .{try color.dim(allocator, value)}) else "";
@@ -68,7 +69,7 @@ const TextRender = struct {
             },
             .cancel => {
                 const valueText = if (value.len > 0) try std.fmt.allocPrint(allocator, "  {s}", .{try color.strikethrough(allocator, try color.dim(allocator, value))}) else "";
-                const trailer = if (std.mem.trim(u8, value, " \t\n\r").len > 0) try std.fmt.allocPrint(allocator, "\n{s}", .{try color.gray(allocator, S_BAR())}) else "";
+                const trailer = if (utils.js_string.trim(value).len > 0) try std.fmt.allocPrint(allocator, "\n{s}", .{try color.gray(allocator, S_BAR())}) else "";
                 return try std.fmt.allocPrint(allocator, "{s}{s}{s}{s}", .{ title, try color.gray(allocator, S_BAR()), valueText, trailer });
             },
             else => {

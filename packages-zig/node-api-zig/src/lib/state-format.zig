@@ -220,6 +220,9 @@ fn stringsOf(allocator: std.mem.Allocator, array: std.json.Array) ![]const []con
 }
 
 //
+// TODO: object keys keep their insertion order, where JavaScript lists integer-like keys first in numeric order
+// (the ui section's keys, which the desktop interface chooses).
+//
 // True when the value is one an interface key is allowed to hold.
 //
 pub fn isUiStateValue(value: std.json.Value) bool {

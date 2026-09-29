@@ -760,6 +760,9 @@ fn scanPathInternal(
 }
 
 //
+// TODO: a file name that is not valid UTF-8 keeps its bytes, where Node decodes it to U+FFFD (the hash cache keys
+// and zip entry names likewise).
+//
 // Scans a list of files or directories
 //
 pub fn scanPaths(

@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 const core = @import("../core/index.zig");
 const color = @import("../../picocolors.zig");
 const common = @import("common.zig");
@@ -54,7 +55,7 @@ const MultilineRender = struct {
                 for (allLines.items) |line| {
                     try linesText.append(allocator, try std.fmt.allocPrint(allocator, "{s}  {s}", .{ try color.yellow(allocator, S_BAR()), line }));
                 }
-                return try std.fmt.allocPrint(allocator, "{s}\n{s}\n{s}  {s}\n", .{ std.mem.trim(u8, title, " \t\n\r"), try std.mem.join(allocator, "\n", linesText.items), try color.yellow(allocator, S_BAR_END()), try color.yellow(allocator, prompt.@"error") });
+                return try std.fmt.allocPrint(allocator, "{s}\n{s}\n{s}  {s}\n", .{ utils.js_string.trim(title), try std.mem.join(allocator, "\n", linesText.items), try color.yellow(allocator, S_BAR_END()), try color.yellow(allocator, prompt.@"error") });
             },
             .submit => {
                 var lineCount: usize = 0;
