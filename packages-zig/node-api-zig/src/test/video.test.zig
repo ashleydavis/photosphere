@@ -149,7 +149,7 @@ test "reads what it can of the JSON file beside a video, as dayjs.unix(parseInt(
         try helpers.writeFile(io, jsonPath, expected.json);
         var stderr_capture = std.Io.Writer.Allocating.init(allocator);
         var stdout_capture = std.Io.Writer.Allocating.init(allocator);
-        utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
+        helpers.captureConsole(&stdout_capture.writer, &stderr_capture.writer);
         var verboseLog: utils.log.ConsoleLog = .{ .verbose_enabled = true };
         var verboseVtable = verboseLog.ilog().vtable.*;
         verboseVtable.verbose = verboseToStdout;
@@ -157,7 +157,7 @@ test "reads what it can of the JSON file beside a video, as dayjs.unix(parseInt(
         utils.log.setLog(.{ .ptr = &verboseLog, .vtable = &verboseVtable });
         const details = getVideoDetails(allocator, io, videoPath, tempDir, "video/quicktime", generator.uuidGenerator(), "video.mov");
         utils.log.setLog(previousLog);
-        utils.console.setCapture(null, null);
+        helpers.endConsoleCapture();
 
         const result = try details;
         if (expected.photoDate) |photoDate| {
