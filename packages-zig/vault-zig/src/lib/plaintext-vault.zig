@@ -7,19 +7,15 @@ const ISecret = vault_module.ISecret;
 const IVault = vault_module.IVault;
 const IPrereqCheckResult = vault_module.IPrereqCheckResult;
 const errors = utils.errors;
-const process_env = node_utils.process_env;
 const updateFileOptimistic = node_utils.fs.updateFileOptimistic;
 
 //
 // Default directory under which the plain-text vault stores its vault file.
 // TypeScript computes this constant when the module loads (path.join(os.homedir(), ".config", "photosphere", "vault")).
 // Zig has no process-wide environment until `main` sets it (see node-utils process-env.zig), so it is computed on demand.
-// Like os.homedir() the home directory is $HOME (%USERPROFILE% on Windows).
 //
 pub fn DEFAULT_VAULT_DIR(allocator: std.mem.Allocator) ![]const u8 {
-    const home_variable = if (builtin.os.tag == .windows) "USERPROFILE" else "HOME";
-    const home_dir = process_env.getEnv(home_variable) orelse "";
-    return std.fs.path.join(allocator, &.{ home_dir, ".config", "photosphere", "vault" });
+    return node_utils.path.join(allocator, &.{ node_utils.fs.osHomedir(), ".config", "photosphere", "vault" });
 }
 
 //
@@ -78,7 +74,7 @@ pub fn ensureDir(io: std.Io, dirPath: []const u8) !void {
 // The path of the single file that holds every secret in a vault directory.
 //
 pub fn getVaultFilePath(allocator: std.mem.Allocator, vaultDir: []const u8) ![]const u8 {
-    return std.fs.path.join(allocator, &.{ vaultDir, VAULT_FILE_NAME });
+    return node_utils.path.join(allocator, &.{ vaultDir, VAULT_FILE_NAME });
 }
 
 //

@@ -263,3 +263,26 @@ test "chooseBestResult prefers a premise to any other result, and skips results 
     try std.testing.expectError(error.TypeError, reverse_geocode.chooseBestResult(allocator, .{ .array = .{ .items = results.array.items[0..1], .capacity = 1, .allocator = allocator } }));
     try std.testing.expectError(error.TypeError, reverse_geocode.parseReverseGeocodeResult(allocator, results.array.items[1]));
 }
+
+test "a coordinate is written in the error message as a template string writes a number" {
+    try testBadReverseGeocode(1e21, 10, "Bad \"lat\" field, value 1e+21 is more than maximum 90");
+    try testBadReverseGeocode(10, -1.5e300, "Bad \"lng\" field, value -1.5e+300 is less than mininmum -180");
+}
+
+test "the response body is read as axios reads it: JSON.parse, or the text itself when it is not JSON" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // JSON.parse keeps the last value of a repeated key.
+    const repeated = try reverse_geocode.axiosResponseData(allocator, "{\"status\":\"OK\",\"status\":\"REQUEST_DENIED\"}");
+    try std.testing.expectEqualStrings("REQUEST_DENIED", repeated.object.get("status").?.string);
+
+    // axios parses silently: a body that is not JSON is handed back as text, which has no status and no results.
+    const notJson = try reverse_geocode.axiosResponseData(allocator, "<html>Service unavailable</html>");
+    try std.testing.expectEqualStrings("<html>Service unavailable</html>", notJson.string);
+    const empty = try reverse_geocode.axiosResponseData(allocator, "");
+    try std.testing.expectEqualStrings("", empty.string);
+
+    try std.testing.expect((try reverse_geocode.axiosResponseData(allocator, "null")) == .null);
+}

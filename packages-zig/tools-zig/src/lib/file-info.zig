@@ -17,13 +17,13 @@ pub fn getFileInfo(allocator: std.mem.Allocator, io: std.Io, filePath: []const u
         return image.getInfo(allocator, io) catch |err| {
             // The stack goes in because the message alone does not say where the failure came from.
             // (Zig: the error name stands in for the stack.)
-            return errors.throwError("Failed to get image info for {s}: Error: {s}\n{s}", .{ filePath, try allocator.dupe(u8, utils.errors.errorMessage(err)), @errorName(err) });
+            return errors.throwError("Failed to get image info for {s}: {s}\n{s}", .{ filePath, try utils.errors.errorToString(allocator, err), @errorName(err) });
         };
     }
     else if (std.mem.startsWith(u8, contentType, "video/")) {
         var video = Video.init(allocator, io, filePath);
         return video.getInfo(allocator, io) catch |err| {
-            return errors.throwError("Failed to get video info for {s}: Error: {s}\n{s}", .{ filePath, try allocator.dupe(u8, utils.errors.errorMessage(err)), @errorName(err) });
+            return errors.throwError("Failed to get video info for {s}: {s}\n{s}", .{ filePath, try utils.errors.errorToString(allocator, err), @errorName(err) });
         };
     }
 

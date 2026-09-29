@@ -1,6 +1,8 @@
 const std = @import("std");
 const vault_zig = @import("vault-zig");
 const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
+const builtin = @import("builtin");
 const PlaintextVault = vault_zig.plaintext_vault.PlaintextVault;
 const ISecret = vault_zig.vault.ISecret;
 
@@ -643,4 +645,25 @@ test "a vault file holding JSON that is not an object makes get throw" {
     try temp_dir.tmp_dir.dir.writeFile(io, .{ .sub_path = "vault.json", .data = "[1, 2]" });
     try std.testing.expectError(error.Thrown, vault.get(allocator, io, "anything"));
     try std.testing.expectEqualStrings("The vault file does not hold a JSON object", utils.errors.lastErrorMessage());
+}
+
+test "getVaultFilePath joins and normalizes the path as path.join does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const expected = try vault_zig.plaintext_vault.getVaultFilePath(allocator, "vaults");
+    try std.testing.expectEqualStrings(expected, try vault_zig.plaintext_vault.getVaultFilePath(allocator, "./vaults/other/../"));
+}
+
+test "DEFAULT_VAULT_DIR is under the home directory os.homedir gives, the passwd entry's when HOME is unset" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    const expected = try node_utils.path.join(allocator, &.{ node_utils.fs.osHomedir(), ".config", "photosphere", "vault" });
+    try std.testing.expect(node_utils.fs.osHomedir().len > 0 or builtin.os.tag == .windows);
+    try std.testing.expectEqualStrings(expected, try vault_zig.plaintext_vault.DEFAULT_VAULT_DIR(allocator));
 }

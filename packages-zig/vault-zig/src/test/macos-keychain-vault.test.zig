@@ -392,3 +392,16 @@ test "the IVault interface reaches every operation" {
     try vault.delete(allocator, std.testing.io, "k");
     try std.testing.expect((try vault.get(allocator, std.testing.io, "k")) == null);
 }
+
+test "get: a payload with a repeated key is read with its last value, as JSON.parse reads it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    resetStore();
+    defer restoreSpawn();
+    try store.put(store_arena.allocator(), "psi-repeated", "{\"type\":\"plain\",\"value\":\"first\",\"value\":\"second\"}");
+    var vault = MacOSKeychainVault.init();
+
+    const secret = try vault.get(allocator, std.testing.io, "repeated");
+    try std.testing.expectEqualStrings("second", secret.?.value);
+}

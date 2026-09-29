@@ -120,3 +120,26 @@ test "lastErrorCauseNames names each cause of the chain, nearest first" {
     failWithValue(3) catch {};
     try std.testing.expectEqual(@as(usize, 0), errors.lastErrorCauseNames().len);
 }
+
+test "errorToString gives String(error): the name JavaScript gives the error and its message" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    errors.recordError("RangeError", "stdout maxBuffer length exceeded", .{});
+    try std.testing.expectEqualStrings("RangeError: stdout maxBuffer length exceeded", try errors.errorToString(allocator, error.Thrown));
+
+    try std.testing.expectEqual(error.FatalError, errors.throwFatalError("No database", .{}));
+    try std.testing.expectEqualStrings("FatalError: No database", try errors.errorToString(allocator, error.FatalError));
+
+    // A WrappedError sets no name, so it is an Error; so is an error without a stack.
+    try std.testing.expectEqual(error.Thrown, errors.throwWrappedError("Outer", .{}));
+    try std.testing.expectEqualStrings("Error: Outer: No database", try errors.errorToString(allocator, error.Thrown));
+    try std.testing.expectEqual(error.Thrown, errors.throwStacklessError("stream closed", .{}));
+    try std.testing.expectEqualStrings("Error: stream closed", try errors.errorToString(allocator, error.Thrown));
+
+    // A runtime error is an Error with the Zig error name as its message, and an empty message leaves the name alone.
+    try std.testing.expectEqualStrings("Error: FileNotFound", try errors.errorToString(allocator, error.FileNotFound));
+    errors.recordError("TypeError", "", .{});
+    try std.testing.expectEqualStrings("TypeError", try errors.errorToString(allocator, error.Thrown));
+}

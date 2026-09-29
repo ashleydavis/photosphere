@@ -147,6 +147,9 @@ pub const WindowsKeychainVault = struct {
         const payload = std.json.parseFromSliceLeaky(IKeychainPayload, allocator, raw, .{
             .ignore_unknown_fields = true,
             .allocate = .alloc_always,
+
+            // JSON.parse keeps the last value of a repeated key.
+            .duplicate_field_behavior = .use_last,
         }) catch |err| {
             return errors.throwError("JSON Parse error: {s}", .{@errorName(err)});
         };
@@ -199,7 +202,7 @@ pub const WindowsKeychainVault = struct {
         var secrets: std.ArrayList(ISecret) = .empty;
         var lines = std.mem.splitScalar(u8, output, '\n');
         while (lines.next()) |line| {
-            const keychainName = std.mem.trim(u8, line, keychain_types.whitespace);
+            const keychainName = utils.js_string.trim(line);
             if (std.mem.startsWith(u8, keychainName, "psi-")) {
                 const name = fromKeychainName(keychainName);
                 const secret = try self.get(allocator, io, name);

@@ -36,3 +36,21 @@ test "Date.toISOString matches JavaScript" {
     try std.testing.expectEqualStrings("2001-09-09T01:46:40.123Z", try (timestamp_provider.Date{ .epochMilliseconds = 1000000000123 }).toISOString(allocator));
     try std.testing.expectEqualStrings("1969-12-31T23:59:59.999Z", try (timestamp_provider.Date{ .epochMilliseconds = -1 }).toISOString(allocator));
 }
+
+test "Date.toISOString writes years outside 0 to 9999 in the expanded form and refuses an invalid time, as JavaScript does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Values from `new Date(ms).toISOString()` in Bun.
+    try std.testing.expectEqualStrings("+010000-01-01T00:00:00.000Z", try (timestamp_provider.Date{ .epochMilliseconds = 253402300800000 }).toISOString(allocator));
+    try std.testing.expectEqualStrings("-000001-01-01T00:00:00.000Z", try (timestamp_provider.Date{ .epochMilliseconds = -62198755200000 }).toISOString(allocator));
+    try std.testing.expectEqualStrings("-000001-12-31T23:59:59.999Z", try (timestamp_provider.Date{ .epochMilliseconds = -62167219200001 }).toISOString(allocator));
+    try std.testing.expectEqualStrings("+275760-09-13T00:00:00.000Z", try (timestamp_provider.Date{ .epochMilliseconds = 8_640_000_000_000_000 }).toISOString(allocator));
+    try std.testing.expectEqualStrings("-271821-04-20T00:00:00.000Z", try (timestamp_provider.Date{ .epochMilliseconds = -8_640_000_000_000_000 }).toISOString(allocator));
+
+    // Past 8.64e15 milliseconds a Date is invalid, and toISOString throws a RangeError.
+    try std.testing.expectError(error.Thrown, (timestamp_provider.Date{ .epochMilliseconds = 8_640_000_000_000_001 }).toISOString(allocator));
+    try std.testing.expectEqualStrings("RangeError", utils.errors.lastErrorName());
+    try std.testing.expectEqualStrings("Invalid Date", utils.errors.lastErrorMessage());
+}

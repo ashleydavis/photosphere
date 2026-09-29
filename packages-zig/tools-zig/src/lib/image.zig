@@ -150,7 +150,7 @@ pub const Image = struct {
             const result = exec(allocator, io, "magick -version") catch |err| {
                 return .{
                     .available = false,
-                    .@"error" = try std.fmt.allocPrint(allocator, "Modern ImageMagick 'magick' command failed: Error: {s}", .{utils.errors.errorMessage(err)}),
+                    .@"error" = try std.fmt.allocPrint(allocator, "Modern ImageMagick 'magick' command failed: {s}", .{try utils.errors.errorToString(allocator, err)}),
                 };
             };
             return .{
@@ -163,7 +163,7 @@ pub const Image = struct {
             const result = exec(allocator, io, "convert -version") catch |err| {
                 return .{
                     .available = false,
-                    .@"error" = try std.fmt.allocPrint(allocator, "Legacy ImageMagick 'convert' command failed: Error: {s}", .{utils.errors.errorMessage(err)}),
+                    .@"error" = try std.fmt.allocPrint(allocator, "Legacy ImageMagick 'convert' command failed: {s}", .{try utils.errors.errorToString(allocator, err)}),
                 };
             };
             return .{
@@ -269,7 +269,7 @@ pub const Image = struct {
 
         const command = try std.fmt.allocPrint(allocator, "{s} -format \"%[EXIF:*]\" \"{s}\"", .{ identifyCommand, self.filePath });
         const result = execLogged(allocator, io, "magick", command, null) catch |err| {
-            return errors.throwError("Failed to get EXIF data: Error: {s}", .{try allocator.dupe(u8, utils.errors.errorMessage(err))});
+            return errors.throwError("Failed to get EXIF data: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
 
         var exifData: std.StringArrayHashMapUnmanaged([]const u8) = .empty;
@@ -420,7 +420,7 @@ pub const Image = struct {
         try initializeCommands(allocator, io);
 
         return self.getDominantColorInner(allocator, io) catch |err| {
-            return errors.throwError("Failed to extract dominant color: Error: {s}", .{try allocator.dupe(u8, utils.errors.errorMessage(err))});
+            return errors.throwError("Failed to extract dominant color: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
     }
 

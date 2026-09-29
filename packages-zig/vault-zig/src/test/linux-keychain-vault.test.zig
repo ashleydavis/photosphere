@@ -527,3 +527,13 @@ test "get and list skip secrets whose value is empty or cannot be read" {
     try std.testing.expectEqual(@as(usize, 1), secrets.len);
     try std.testing.expectEqualStrings("good", secrets[0].name);
 }
+
+test "parseSearchOutput trims lines and values as String.prototype.trim does, Unicode spaces included" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const output = "\u{00A0}attribute.account = psi-one\u{3000}\n\u{FEFF}attribute.secrettype = api-key\u{00A0}\n";
+    const entries = try linux_keychain_vault.parseSearchOutput(arena.allocator(), output);
+    try std.testing.expectEqual(@as(usize, 1), entries.len);
+    try std.testing.expectEqualStrings("psi-one", entries[0].account);
+    try std.testing.expectEqualStrings("api-key", entries[0].secretType);
+}
