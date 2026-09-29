@@ -30,13 +30,13 @@ const consolidateDatabaseHandler = consolidate_database_worker.consolidateDataba
 pub fn initTaskHandlers() !void {
     try create_auto_import_scanner.registerFolderMediaSourceBuilder();
     try cleanup_sources_worker.registerFolderMediaSourceBuilder();
-    // Not ported: test-job (not used by psi add, psi replicate or psi verify).
+    // Not ported: test-job (not reached by the CLI).
     try registerHandler("verify-file", verifyFileHandler);
     try registerHandler("check-file", checkFileHandler);
-    // Not ported: load-assets (not used by psi add, psi replicate or psi verify).
+    // Not ported: load-assets (not reached by the CLI).
     try registerHandler("prefetch-database", prefetchDatabaseHandler);
     try registerHandler("upload-asset", uploadAssetHandler);
-    // Not ported: sync-database (not used by psi add, psi replicate or psi verify).
+    // Not ported: sync-database (not reached by the CLI).
     try registerHandler("replicate-database", replicateDatabaseHandler);
     // Not ported: save-asset, save-assets-batch, create-database, create-default-database (not used by psi add,
     // psi replicate or psi verify).
@@ -47,5 +47,5 @@ pub fn initTaskHandlers() !void {
     // psi replicate or psi verify).
     try registerHandler("cleanup-sources", cleanupSourcesHandler);
     try registerHandler("consolidate-database", consolidateDatabaseHandler);
-    // Not ported: reset-app-storage (not used by psi add, psi replicate or psi verify).
+    // Not ported: reset-app-storage (not reached by the CLI).
 }

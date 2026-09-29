@@ -57,7 +57,7 @@ pub fn formatBytes(allocator: std.mem.Allocator, bytes: f64, options: IFormatByt
     return std.fmt.allocPrint(allocator, "{s} {s}", .{ formatted, unit });
 }
 
-// Not ported: formatDuration, formatBitrate (not used by replicate or verify).
+// Not ported: formatDuration, formatBitrate (not reached by the CLI).
 
 //
 // JavaScript Math.round: rounds half up (towards +Infinity).

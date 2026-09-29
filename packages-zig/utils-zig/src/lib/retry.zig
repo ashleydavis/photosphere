@@ -54,7 +54,7 @@ fn operationSourceOf(comptime OperationT: type) []const u8 {
     }
 }
 
-// Not ported: rejectAfter (not used by replicate or verify).
+// Not ported: rejectAfter (not reached by the CLI).
 
 //
 // Runs an operation on a concurrent task, capturing the thread-local error message of a failure

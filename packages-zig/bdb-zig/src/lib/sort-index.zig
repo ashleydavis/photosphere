@@ -81,7 +81,7 @@ const ITreeData = struct {
     treeNodes: TreeNodeMap,
 };
 
-// Not ported: IRangeOptions (findByRange is not used by psi replicate or psi verify).
+// Not ported: IRangeOptions (findByRange is not reached by the CLI).
 
 //
 // Split internal nodes when they exceed 1.2x the key size.
@@ -411,7 +411,7 @@ pub const SortIndex = struct {
         _ = try self.load(io);
     }
 
-    // Not ported: exists (not used by psi replicate or psi verify).
+    // Not ported: exists (not reached by the CLI).
 
     //
     // Ensures the index is loaded; builds it from collection data if it does not exist on disk.
@@ -2344,7 +2344,7 @@ pub const SortIndex = struct {
         return results;
     }
 
-    // Not ported: findByRange (not used by psi replicate or psi verify).
+    // Not ported: findByRange (not reached by the CLI).
 
     //
     // Splits an internal node when it gets too large

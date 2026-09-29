@@ -9,7 +9,6 @@ const https = @import("https.zig");
 // Names used from other files (the equivalent of the TypeScript imports).
 //
 const IReceiverEndpoint = lan_share_types.IReceiverEndpoint;
-const IPairingCodeHashResponse = lan_share_types.IPairingCodeHashResponse;
 const errors = utils.errors;
 const mathRandom = node_utils.fs.mathRandom;
 
@@ -44,6 +43,33 @@ pub fn sha256Hex(text: []const u8) [64]u8 {
 fn generatePairingCode(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
     const code: u32 = @intFromFloat(@floor(1000 + mathRandom(io) * 9000));
     return std.fmt.allocPrint(allocator, "{d}", .{code});
+}
+
+//
+// Reads the body of a GET /pairing-code-hash response and reports whether it holds the code hash
+// (TypeScript: `(JSON.parse(hashResponse.body) as IPairingCodeHashResponse).codeHash === codeHash`).
+//
+pub fn pairingCodeHashMatches(allocator: std.mem.Allocator, body: []const u8, codeHash: []const u8) !bool {
+    // JSON.parse keeps the last value of a repeated key.
+    const hashBody = std.json.parseFromSliceLeaky(std.json.Value, allocator, body, .{
+        .duplicate_field_behavior = .use_last,
+    }) catch |err| {
+        return errors.throwError("JSON Parse error: {s}", .{@errorName(err)});
+    };
+    const object = switch (hashBody) {
+        .object => |object| object,
+        .null => {
+            errors.recordError("TypeError", "null is not an object (evaluating 'hashBody.codeHash')", .{});
+            return error.Thrown;
+        },
+
+        // Any other value has no codeHash.
+        else => return false,
+    };
+    const received = object.get("codeHash") orelse {
+        return false;
+    };
+    return received == .string and std.mem.eql(u8, received.string, codeHash);
 }
 
 //
@@ -230,13 +256,7 @@ pub const LanShareSender = struct {
             return false;
         }
 
-        const hashBody = std.json.parseFromSliceLeaky(IPairingCodeHashResponse, self.allocator, hashResponse.body, .{
-            .ignore_unknown_fields = true,
-            .allocate = .alloc_always,
-        }) catch |err| {
-            return errors.throwError("JSON Parse error: {s}", .{@errorName(err)});
-        };
-        if (!std.mem.eql(u8, hashBody.codeHash, &codeHash)) {
+        if (!try pairingCodeHashMatches(self.allocator, hashResponse.body, &codeHash)) {
             return false;
         }
 
@@ -285,18 +305,13 @@ pub const LanShareSender = struct {
 };
 
 //
-// Parses the leading decimal digits of a text like `parseInt(text, 10)` (optional whitespace and sign, then digits,
-// ignoring anything after them). Returns null for NaN, and for a number that is not a port (the TypeScript sender
-// would use it and fail to connect).
+// Reads the announced port with `parseInt(text, 10)`. Returns null for NaN, and for a number that is not a port (the
+// TypeScript sender would use it and fail to connect).
 //
-fn parseIntLikeJavaScript(text: []const u8) ?u16 {
-    const trimmed = std.mem.trimStart(u8, text, " \t\n\r");
-    var end: usize = 0;
-    while (end < trimmed.len and std.ascii.isDigit(trimmed[end])) {
-        end += 1;
-    }
-    if (end == 0) {
+pub fn parseIntLikeJavaScript(text: []const u8) ?u16 {
+    const port = utils.js_number.parseInt(text, 10);
+    if (std.math.isNan(port) or port < 0 or port > 65535) {
         return null;
     }
-    return std.fmt.parseInt(u16, trimmed[0..end], 10) catch null;
+    return @intFromFloat(port);
 }

@@ -1362,3 +1362,28 @@ test "checkUInt32 accepts 0 to 4294967295 and refuses anything else like writeUI
     try std.testing.expectError(error.Thrown, serialization.checkUInt32(-1234567));
     try std.testing.expectEqualStrings("The value of \"value\" is out of range. It must be >= 0 and <= 4294967295. Received -1234567", utils.errors.lastErrorMessage());
 }
+
+test "the type code is read as toString(\"ascii\") reads it, which drops the high bit of each byte" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const deserializers = [_]Entry{
+        .{ .version = 1, .deserializer = deserializeV1 },
+    };
+    try serialization.save(allocator, io, &storage, "data.bin", TestDataV1{ .name = "test", .value = 42 }, 1, "TEST", serializeV1);
+
+    // Set the high bit of each byte of the type code and write the checksum again.
+    const saved = (try storage.read(allocator, io, "data.bin")).?;
+    const data = saved[0 .. saved.len - 32];
+    for (data[4..8]) |*byte| {
+        byte.* |= 0x80;
+    }
+    var checksum: [32]u8 = undefined;
+    Sha256.hash(data, &checksum, .{});
+    @memcpy(saved[saved.len - 32 ..], &checksum);
+    try storage.write(allocator, io, "data.bin", null, saved);
+
+    const loaded = try serialization.load(TestData, allocator, io, &storage, "data.bin", "TEST", {}, &deserializers);
+    try expectTestData(.{ .name = "test", .value = 42 }, loaded);
+}

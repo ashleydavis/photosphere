@@ -104,21 +104,21 @@ pub fn BufferMap(comptime V: type) type {
             return bucket.items[index].value;
         }
 
-        // Not ported: has (not reached by psi replicate or psi verify)
+        // Not ported: has (not reached by the CLI)
 
-        // Not ported: delete (not reached by psi replicate or psi verify)
+        // Not ported: delete (not reached by the CLI)
 
-        // Not ported: clear (not reached by psi replicate or psi verify)
+        // Not ported: clear (not reached by the CLI)
 
-        // Not ported: size (not reached by psi replicate or psi verify)
+        // Not ported: size (not reached by the CLI)
 
-        // Not ported: forEach (not reached by psi replicate or psi verify)
+        // Not ported: forEach (not reached by the CLI)
 
-        // Not ported: values (not reached by psi replicate or psi verify)
+        // Not ported: values (not reached by the CLI)
 
-        // Not ported: keys (not reached by psi replicate or psi verify)
+        // Not ported: keys (not reached by the CLI)
 
-        // Not ported: entries (not reached by psi replicate or psi verify)
+        // Not ported: entries (not reached by the CLI)
 
         //
         // One [key, value] pair of the map (TypeScript: `[Buffer, V]`).

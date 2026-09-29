@@ -18,5 +18,5 @@ pub const asset_query = @import("lib/asset-query.zig");
 
 // Not ported: database-update, load-assets, save-assets.types, asset, op, database-op,
 // database-op-record, auto-import-mobile,
-// retention-policy, sync-gate, sync-settings (not used by psi add, psi replicate or psi verify).
+// retention-policy, sync-gate, sync-settings (not reached by the CLI).
 // IAsset (asset.ts) is only used as a type parameter of IBsonCollection<IAsset>; Zig records are BSON documents.

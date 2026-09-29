@@ -5,8 +5,8 @@ the Zig function that ports it. Use it to read the two side by side: the Zig fil
 function order as the TypeScript ones.
 
 **Progress of the side by side comparison:** storage, bdb, api, lan-share-core, node-api, node-utils, utils,
-encryption, vault, fuzzy-match and config done. Still to do: lan-share-network, serialization, merkle-tree, task-queue,
-tools, apps/cli.
+encryption, vault, fuzzy-match, config, lan-share-network, serialization, merkle-tree and task-queue done. Still to
+do: tools, apps/cli.
 
 ## Which files are listed
 
@@ -2937,6 +2937,555 @@ Types and re-exports only: nothing of it is left in the bundled CLI.
 
 <!-- end tables -->
 
+## lan-share-network
+
+`packages/lan-share-network` to `packages-zig/lan-share-network-zig`. Zig only: `https.zig` (node:https and node:tls over libssl) and `socket.zig` (node:dgram and node:net).
+
+<!-- tables: packages/lan-share-network lan-share-network.txt -->
+
+#### `packages/lan-share-network/src/index.ts` to `packages-zig/lan-share-network-zig/src/index.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `packages/lan-share-network/src/lib/lan-share-receiver.ts` to `packages-zig/lan-share-network-zig/src/lib/lan-share-receiver.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `generateSelfSignedCert` | `generateSelfSignedCert` |  |
+| `extractDerFromPem` | `extractDerFromPem` |  |
+| `buildSelfSignedCert` | `buildSelfSignedCert` |  |
+| `encodeAsn1Length` | `encodeAsn1Length` |  |
+| `encodeAsn1Tag` | `encodeAsn1Tag` |  |
+| `encodeAsn1Sequence` | `encodeAsn1Sequence` |  |
+| `encodeAsn1Set` | `encodeAsn1Set` |  |
+| `encodeAsn1Integer` | `encodeAsn1Integer` |  |
+| `encodeAsn1BitString` | `encodeAsn1BitString` |  |
+| `encodeAsn1Null` | `encodeAsn1Null` |  |
+| `encodeAsn1Oid` | `encodeAsn1Oid` |  |
+| `encodeAsn1Utf8String` | `encodeAsn1Utf8String` |  |
+| `encodeAsn1UtcTime` | `encodeAsn1UtcTime` |  |
+| `encodeAsn1Explicit` | `encodeAsn1Explicit` |  |
+| `LanShareReceiver` | `LanShareReceiver` |  |
+| `LanShareReceiver.constructor` | `LanShareReceiver.init` |  |
+| `LanShareReceiver.start` | `LanShareReceiver.start` |  |
+| `LanShareReceiver.receive` | `LanShareReceiver.receive` |  |
+| `LanShareReceiver.cancel` | `LanShareReceiver.cancel` |  |
+| `LanShareReceiver.handleRequest` | `LanShareReceiver.handleRequest` |  |
+| `LanShareReceiver.complete` | `LanShareReceiver.complete` |  |
+| none | `ISelfSignedCert` | The TypeScript interface of the same name, as a struct. |
+| none | `LanShareReceiver.deinit` | Zig plumbing: frees what the struct owns (garbage collected in TypeScript). |
+| none | `LanShareReceiver.allocator` | The receiver's arena, which its threads share (the JavaScript heap). |
+| none | `LanShareReceiver.broadcast` | The body of the broadcast interval's callback: the announcement sent to the broadcast address and loopback. |
+| none | `LanShareReceiver.broadcastEvery` | Replaces `setInterval` of the broadcast: a thread that sends the announcement until the receive is done. |
+| none | `LanShareReceiver.serve` | Replaces `https.createServer(...).listen()`: a thread accepting connections. |
+| none | `LanShareReceiver.waitForRequest` | Replaces node:http's keep-alive wait for the next request on a connection. |
+| none | `LanShareReceiver.serveConnection` | Replaces node:https's handling of one connection (the TLS handshake, then its requests). |
+| none | `LanShareReceiver.respondJson` | `response.writeHead(status, { "Content-Type": "application/json" }); response.end(body)`. |
+| none | `LanShareReceiver.isFalsy` | Replaces JavaScript falsiness, for the callers' `if (!rawPayload)`. |
+| none | `LanShareReceiver.shutdown` | The cleanup of complete(): the threads are joined and the sockets closed. |
+
+#### `packages/lan-share-network/src/lib/lan-share-sender.ts` to `packages-zig/lan-share-network-zig/src/lib/lan-share-sender.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `generatePairingCode` | `generatePairingCode` |  |
+| `LanShareSender` | `LanShareSender` |  |
+| `LanShareSender.constructor` | `LanShareSender.init` |  |
+| `LanShareSender.waitForReceiver` | `LanShareSender.waitForReceiver` |  |
+| `LanShareSender.makeRequest` | `LanShareSender.makeRequest` |  |
+| `LanShareSender.send` | `LanShareSender.send` |  |
+| `LanShareSender.cancel` | `LanShareSender.cancel` |  |
+| `LanShareSender.cleanupUdp` | `LanShareSender.cleanupUdp` |  |
+| none | `sha256Hex` | `createHash("sha256").update(text).digest("hex")`. |
+| none | `pairingCodeHashMatches` | `(JSON.parse(hashResponse.body) as IPairingCodeHashResponse).codeHash === codeHash` in send. |
+| none | `parseIntLikeJavaScript` | `parseInt(parts[0], 10)` of the announced port in waitForReceiver. |
+
+#### `packages/lan-share-network/src/lib/lan-share-types.ts` to `packages-zig/lan-share-network-zig/src/lib/lan-share-types.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| none | `IPairingCodeHashResponse` | The TypeScript interface of the same name, as a struct. |
+| none | `IReceiverEndpoint` | The TypeScript interface of the same name, as a struct. |
+
+#### Zig files with no TypeScript file
+
+| Zig file | What it is |
+|---|---|
+| `packages-zig/lan-share-network-zig/src/lib/https.zig` | Replaces node:https and node:tls (over libssl). |
+| `packages-zig/lan-share-network-zig/src/lib/socket.zig` | Replaces node:dgram and node:net (the operating system's socket API). |
+
+<!-- end tables -->
+
+## serialization
+
+`packages/serialization` to `packages-zig/serialization-zig`. Zig only: `bson.zig` (the npm `bson` package), `js-date.zig`, `js-number.zig` and `json-parse.zig`.
+
+<!-- tables: packages/serialization serialization.txt -->
+
+#### `packages/serialization/src/index.ts` to `packages-zig/serialization-zig/src/index.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `packages/serialization/src/lib/serialization.ts` to `packages-zig/serialization-zig/src/lib/serialization.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `BinarySerializer` | `BinarySerializer` |  |
+| `BinarySerializer.constructor` | `BinarySerializer.init` |  |
+| `BinarySerializer.ensureCapacity` | `BinarySerializer.ensureCapacity` |  |
+| `BinarySerializer.writeUInt32` | `BinarySerializer.writeUInt32` |  |
+| `BinarySerializer.writeInt32` | `BinarySerializer.writeInt32` |  |
+| `BinarySerializer.writeUInt64` | `BinarySerializer.writeUInt64` |  |
+| `BinarySerializer.writeInt64` | `BinarySerializer.writeInt64` |  |
+| `BinarySerializer.writeFloat` | `BinarySerializer.writeFloat` |  |
+| `BinarySerializer.writeDouble` | `BinarySerializer.writeDouble` |  |
+| `BinarySerializer.writeBoolean` | `BinarySerializer.writeBoolean` |  |
+| `BinarySerializer.writeUInt8` | `BinarySerializer.writeUInt8` |  |
+| `BinarySerializer.writeString` | `BinarySerializer.writeString` |  |
+| `BinarySerializer.writeBuffer` | `BinarySerializer.writeBuffer` |  |
+| `BinarySerializer.writeBytes` | `BinarySerializer.writeBytes` |  |
+| `BinarySerializer.writeBSON` | `BinarySerializer.writeBSON` |  |
+| `BinarySerializer.getBuffer` | `BinarySerializer.getBuffer` |  |
+| `CompressedBinarySerializer` | `CompressedBinarySerializer` |  |
+| `CompressedBinarySerializer.constructor` | `CompressedBinarySerializer.init` |  |
+| `CompressedBinarySerializer.writeUInt32` | `CompressedBinarySerializer.writeUInt32` |  |
+| `CompressedBinarySerializer.writeInt32` | `CompressedBinarySerializer.writeInt32` |  |
+| `CompressedBinarySerializer.writeUInt64` | `CompressedBinarySerializer.writeUInt64` |  |
+| `CompressedBinarySerializer.writeInt64` | `CompressedBinarySerializer.writeInt64` |  |
+| `CompressedBinarySerializer.writeFloat` | `CompressedBinarySerializer.writeFloat` |  |
+| `CompressedBinarySerializer.writeDouble` | `CompressedBinarySerializer.writeDouble` |  |
+| `CompressedBinarySerializer.writeBoolean` | `CompressedBinarySerializer.writeBoolean` |  |
+| `CompressedBinarySerializer.writeUInt8` | `CompressedBinarySerializer.writeUInt8` |  |
+| `CompressedBinarySerializer.writeString` | `CompressedBinarySerializer.writeString` |  |
+| `CompressedBinarySerializer.writeBuffer` | `CompressedBinarySerializer.writeBuffer` |  |
+| `CompressedBinarySerializer.writeBytes` | `CompressedBinarySerializer.writeBytes` |  |
+| `CompressedBinarySerializer.writeBSON` | `CompressedBinarySerializer.writeBSON` |  |
+| `CompressedBinarySerializer.finish` | `CompressedBinarySerializer.finish` |  |
+| `CompressedBinaryDeserializer` | `CompressedBinaryDeserializer` |  |
+| `CompressedBinaryDeserializer.constructor` | `CompressedBinaryDeserializer.init` |  |
+| `CompressedBinaryDeserializer.readUInt32` | `CompressedBinaryDeserializer.readUInt32` |  |
+| `CompressedBinaryDeserializer.readInt32` | `CompressedBinaryDeserializer.readInt32` |  |
+| `CompressedBinaryDeserializer.readUInt64` | `CompressedBinaryDeserializer.readUInt64` |  |
+| `CompressedBinaryDeserializer.readInt64` | `CompressedBinaryDeserializer.readInt64` |  |
+| `CompressedBinaryDeserializer.readFloat` | `CompressedBinaryDeserializer.readFloat` |  |
+| `CompressedBinaryDeserializer.readDouble` | `CompressedBinaryDeserializer.readDouble` |  |
+| `CompressedBinaryDeserializer.readBoolean` | `CompressedBinaryDeserializer.readBoolean` |  |
+| `CompressedBinaryDeserializer.readUInt8` | `CompressedBinaryDeserializer.readUInt8` |  |
+| `CompressedBinaryDeserializer.readString` | `CompressedBinaryDeserializer.readString` |  |
+| `CompressedBinaryDeserializer.readBuffer` | `CompressedBinaryDeserializer.readBuffer` |  |
+| `CompressedBinaryDeserializer.readBytes` | `CompressedBinaryDeserializer.readBytes` |  |
+| `CompressedBinaryDeserializer.readBSON` | `CompressedBinaryDeserializer.readBSON` |  |
+| `BinaryDeserializer` | `BinaryDeserializer` |  |
+| `BinaryDeserializer.constructor` | `BinaryDeserializer.init` |  |
+| `BinaryDeserializer.readUInt32` | `BinaryDeserializer.readUInt32` |  |
+| `BinaryDeserializer.readInt32` | `BinaryDeserializer.readInt32` |  |
+| `BinaryDeserializer.readUInt64` | `BinaryDeserializer.readUInt64` |  |
+| `BinaryDeserializer.readInt64` | `BinaryDeserializer.readInt64` |  |
+| `BinaryDeserializer.readFloat` | `BinaryDeserializer.readFloat` |  |
+| `BinaryDeserializer.readDouble` | `BinaryDeserializer.readDouble` |  |
+| `BinaryDeserializer.readBoolean` | `BinaryDeserializer.readBoolean` |  |
+| `BinaryDeserializer.readUInt8` | `BinaryDeserializer.readUInt8` |  |
+| `BinaryDeserializer.readString` | `BinaryDeserializer.readString` |  |
+| `BinaryDeserializer.readBuffer` | `BinaryDeserializer.readBuffer` |  |
+| `BinaryDeserializer.readBytes` | `BinaryDeserializer.readBytes` |  |
+| `BinaryDeserializer.readBSON` | `BinaryDeserializer.readBSON` |  |
+| `BinaryDeserializer.checkBounds` | `BinaryDeserializer.checkBounds` |  |
+| `UnsupportedVersionError` | `UnsupportedVersionError` |  |
+| `UnsupportedVersionError.constructor` | `UnsupportedVersionError.throw` | `throw new UnsupportedVersionError(...)`. |
+| `typeCodeToBuffer` | `typeCodeToBuffer` |  |
+| `save` | `save` |  |
+| `load` | `load` |  |
+| `loadVersion` | `loadVersion` |  |
+| `verify` | `verify` |  |
+| `applyMigrations` | none | Not reached by the CLI: no caller of load passes migrations. |
+| `findMigrationPath` | none | Not reached by the CLI: no caller of load passes migrations. |
+| none | `ISerializer` | The TypeScript interface of the same name, as a struct. |
+| none | `ISerializer.writeUInt32` | The dispatch of the ISerializer interface method of the same name. |
+| none | `ISerializer.writeInt32` | The dispatch of the ISerializer interface method of the same name. |
+| none | `ISerializer.writeUInt64` | The dispatch of the ISerializer interface method of the same name. |
+| none | `ISerializer.writeInt64` | The dispatch of the ISerializer interface method of the same name. |
+| none | `ISerializer.writeFloat` | The dispatch of the ISerializer interface method of the same name. |
+| none | `ISerializer.writeDouble` | The dispatch of the ISerializer interface method of the same name. |
+| none | `ISerializer.writeBoolean` | The dispatch of the ISerializer interface method of the same name. |
+| none | `ISerializer.writeUInt8` | The dispatch of the ISerializer interface method of the same name. |
+| none | `ISerializer.writeString` | The dispatch of the ISerializer interface method of the same name. |
+| none | `ISerializer.writeBuffer` | The dispatch of the ISerializer interface method of the same name. |
+| none | `ISerializer.writeBytes` | The dispatch of the ISerializer interface method of the same name. |
+| none | `ISerializer.writeBSON` | The dispatch of the ISerializer interface method of the same name. |
+| none | `IDeserializer` | The TypeScript interface of the same name, as a struct. |
+| none | `IDeserializer.readUInt32` | The dispatch of the IDeserializer interface method of the same name. |
+| none | `IDeserializer.readInt32` | The dispatch of the IDeserializer interface method of the same name. |
+| none | `IDeserializer.readUInt64` | The dispatch of the IDeserializer interface method of the same name. |
+| none | `IDeserializer.readInt64` | The dispatch of the IDeserializer interface method of the same name. |
+| none | `IDeserializer.readFloat` | The dispatch of the IDeserializer interface method of the same name. |
+| none | `IDeserializer.readDouble` | The dispatch of the IDeserializer interface method of the same name. |
+| none | `IDeserializer.readBoolean` | The dispatch of the IDeserializer interface method of the same name. |
+| none | `IDeserializer.readUInt8` | The dispatch of the IDeserializer interface method of the same name. |
+| none | `IDeserializer.readString` | The dispatch of the IDeserializer interface method of the same name. |
+| none | `IDeserializer.readBuffer` | The dispatch of the IDeserializer interface method of the same name. |
+| none | `IDeserializer.readBytes` | The dispatch of the IDeserializer interface method of the same name. |
+| none | `IDeserializer.readBSON` | The dispatch of the IDeserializer interface method of the same name. |
+| none | `SerializerFunction` | The TypeScript type of the same name, as a function type. |
+| none | `DeserializerFunction` | The TypeScript type of the same name, as a function type. |
+| none | `DeserializerEntry` | An entry of the `Record<number, DeserializerFunction>` load takes. |
+| none | `checkUInt32` | The range check `writeUInt32LE` makes on a JavaScript number. |
+| none | `BinarySerializer.asSerializer` | The ISerializer interface of the serializer. |
+| none | `implementation` | Casts an interface's pointer back to its implementation. |
+| none | `serializerVTable` | The ISerializer vtable of an implementation. |
+| none | `CompressedBinarySerializer.asSerializer` | The ISerializer interface of the serializer. |
+| none | `throwZlibError` | Replaces the errors node:zlib throws. |
+| none | `gzipSync` | Replaces node:zlib's gzipSync (over zlib-ng). |
+| none | `gunzipSync` | Replaces node:zlib's gunzipSync (over zlib-ng). |
+| none | `CompressedBinaryDeserializer.asDeserializer` | The IDeserializer interface of the deserializer. |
+| none | `BinaryDeserializer.asDeserializer` | The IDeserializer interface of the deserializer. |
+| none | `deserializerVTable` | The IDeserializer vtable of an implementation. |
+| none | `VersionList` | Replaces `availableVersions.join(', ')`. |
+| none | `VersionList.format` | Replaces `availableVersions.join(', ')`. |
+| none | `sha256` | `createHash('sha256').update(data).digest()`. |
+| none | `WriteOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `ReadOperation` | The `() => storage.read(filePath)` arrow function load and verify pass to retry. |
+| none | `findDeserializer` | `deserializers[version]`. |
+| none | `asciiString` | Replaces `buffer.toString('ascii')`, which drops the high bit of each byte. |
+| none | `IVerifyResult` | The TypeScript interface of the same name, as a struct. |
+
+#### Zig files with no TypeScript file
+
+| Zig file | What it is |
+|---|---|
+| `packages-zig/serialization-zig/src/lib/bson.zig` | Replaces the npm `bson` package (serialize and deserialize with default options). |
+| `packages-zig/serialization-zig/src/lib/js-date.zig` | Replaces JavaScript's Date parsing and formatting. |
+| `packages-zig/serialization-zig/src/lib/js-number.zig` | Re-exports utils-zig's `String(number)`. |
+| `packages-zig/serialization-zig/src/lib/json-parse.zig` | Replaces `JSON.parse`, producing a JavaScript value. |
+
+<!-- end tables -->
+
+## merkle-tree
+
+`packages/merkle-tree` to `packages-zig/merkle-tree-zig`.
+
+<!-- tables: packages/merkle-tree merkle-tree.txt -->
+
+#### `packages/merkle-tree/src/index.ts` to `packages-zig/merkle-tree-zig/src/index.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `packages/merkle-tree/src/lib/buffer-map.ts` to `packages-zig/merkle-tree-zig/src/lib/buffer-map.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `BufferMap` | `BufferMap` |  |
+| `BufferMap.constructor` | `BufferMap.init` | The constructor. |
+| `BufferMap._hash` | `BufferMap._hash` | A method of the struct the generic BufferMap(V) returns. |
+| `BufferMap.set` | `BufferMap.set` | A method of the struct the generic BufferMap(V) returns. |
+| `BufferMap.get` | `BufferMap.get` | A method of the struct the generic BufferMap(V) returns. |
+| `BufferMap.has` | none | Not reached by the CLI. |
+| `BufferMap.delete` | none | Not reached by the CLI. |
+| `BufferMap.clear` | none | Not reached by the CLI. |
+| `BufferMap.size` | none | Not reached by the CLI. |
+| `BufferMap.forEach` | none | Not reached by the CLI. |
+| `BufferMap.values` | none | Not reached by the CLI. |
+| `BufferMap.keys` | none | Not reached by the CLI. |
+| `BufferMap.entries` | none | Not reached by the CLI. |
+
+#### `packages/merkle-tree/src/lib/buffer-set.ts` to `packages-zig/merkle-tree-zig/src/lib/buffer-set.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `BufferSet` | `BufferSet` |  |
+| `BufferSet.constructor` | `BufferSet.init` |  |
+| `BufferSet._hash` | `BufferSet._hash` |  |
+| `BufferSet.add` | `BufferSet.add` |  |
+| `BufferSet.has` | `BufferSet.has` |  |
+| `BufferSet.delete` | `BufferSet.delete` |  |
+| `BufferSet.clear` | none | Not reached by the CLI. |
+| `BufferSet.size` | none | Not reached by the CLI. |
+| `BufferSet.forEach` | none | Not reached by the CLI. |
+| `BufferSet.values` | `BufferSet.values` |  |
+| `BufferSet.keys` | none | Not reached by the CLI. |
+| `BufferSet.entries` | none | Not reached by the CLI. |
+| none | `findBufferIndex` | Replaces `bucket.some(b => b.equals(buffer))` (and findIndex). |
+
+#### `packages/merkle-tree/src/lib/compare.ts` to `packages-zig/merkle-tree-zig/src/lib/compare.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `compareTrees` | `compareTrees` |  |
+| none | `ICompareResult` | The TypeScript interface of the same name, as a struct. |
+| none | `CompareProgressCallback` | The `(progress: string) => void` callback of compareTrees, as a closure. |
+| none | `CompareProgressCallback.call` | The `(progress: string) => void` callback of compareTrees, as a closure. |
+
+#### `packages/merkle-tree/src/lib/merkle-diff.ts` to `packages-zig/merkle-tree-zig/src/lib/merkle-diff.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `processRemainingNodes` | `processRemainingNodes` |  |
+| `findDifferingNodes` | `findDifferingNodes` |  |
+| `findMerkleTreeDifferences` | `findMerkleTreeDifferences` |  |
+| none | `MerkleTreeDiff` | The TypeScript interface of the same name, as a struct. |
+
+#### `packages/merkle-tree/src/lib/merkle-tree.ts` to `packages-zig/merkle-tree-zig/src/lib/merkle-tree.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `findItemInTree` | `findItemInTree` |  |
+| `updateNodeInTree` | `updateNodeInTree` |  |
+| `combineHashes` | `combineHashes` |  |
+| `compareNames` | `compareNames` |  |
+| `createLeafNode` | `createLeafNode` |  |
+| `createParentNode` | `createParentNode` |  |
+| `binaryTreeToArray` | `binaryTreeToArray` |  |
+| `arrayToBinaryTree` | `arrayToBinaryTree` |  |
+| `rebalanceTree` | `rebalanceTree` |  |
+| `rotateRight` | `rotateRight` |  |
+| `rotateLeft` | `rotateLeft` |  |
+| `_addItem` | `_addItem` |  |
+| `createTree` | `createTree` |  |
+| `addItem` | `addItem` |  |
+| `iterateNodes` | none | Not reached by the CLI. |
+| `iterateLeaves` | `iterateLeaves` |  |
+| `buildMerkleTree` | `buildMerkleTree` |  |
+| `upsertItem` | `upsertItem` |  |
+| `updateItem` | `updateItem` |  |
+| `getItemInfo` | `getItemInfo` |  |
+| `findItemNode` | none | Not reached by the CLI. |
+| `splitBigNum` | `splitBigNum` |  |
+| `combineBigNum` | `combineBigNum` |  |
+| `serializeMerkleNodeV5` | `serializeMerkleNodeV5` |  |
+| `serializeMerkleNode` | none | Not reached by the CLI: trees are saved in the current format, which does not use it. |
+| `serializeMerkleV5` | `serializeMerkleV5` |  |
+| `serializeMerkle` | none | Not reached by the CLI: trees are saved in the current format, which does not use it. |
+| `serializeSortTreeV5` | `serializeSortTreeV5` |  |
+| `serializeSortNodeV5` | `serializeSortNodeV5` |  |
+| `collectStrings` | `collectStrings` |  |
+| `collectHashes` | `collectHashes` |  |
+| `serializeMerkleTree` | `serializeMerkleTree` |  |
+| `rebuildTree` | `rebuildTree` |  |
+| `deserializeMerkleNodeV5` | `deserializeMerkleNodeV5` |  |
+| `deserializeMerkleNode` | `deserializeMerkleNode` |  |
+| `deserializeMerkleV5` | `deserializeMerkleV5` |  |
+| `deserializeMerkle` | `deserializeMerkle` |  |
+| `deserializeSortNodeV5` | `deserializeSortNodeV5` |  |
+| `deserializeSortNode` | `deserializeSortNode` |  |
+| `deserializeSortTreeV5` | `deserializeSortTreeV5` |  |
+| `deserializeSortTree` | `deserializeSortTree` |  |
+| `deserializeMerkleTreeV6` | `deserializeMerkleTreeV6` |  |
+| `deserializeMerkleTreeV5` | `deserializeMerkleTreeV5` |  |
+| `deserializeMerkleTreeV4` | `deserializeMerkleTreeV4` |  |
+| `deserializeMerkleTreeV3` | `deserializeMerkleTreeV3` |  |
+| `deserializeMerkleTreeV2` | `deserializeMerkleTreeV2` |  |
+| `saveTree` | `saveTree` |  |
+| `loadTreeVersion` | `loadTreeVersion` |  |
+| `loadTree` | `loadTree` |  |
+| `deleteItem` | `deleteItem` |  |
+| `_deleteNode` | `_deleteNode` |  |
+| `pruneTree` | `pruneTree` |  |
+| `deleteItems` | none | Not reached by the CLI (only its tests call it). |
+| none | `SortNode` | The TypeScript interface of the same name, as a struct. |
+| none | `MerkleNode` | The TypeScript interface of the same name, as a struct. |
+| none | `IHashedData` | The TypeScript interface of the same name, as a struct. |
+| none | `HashedItem` | The TypeScript interface of the same name, as a struct. |
+| none | `IMerkleTree` | The TypeScript interface of the same name, as a struct. |
+| none | `CollationElement` | Replaces ICU's collation for `localeCompare(b, undefined, { numeric: true })`: a character or a run of digits. |
+| none | `CollationIterator` | Replaces ICU's collation for `localeCompare`: the collation elements of a name. |
+| none | `CollationIterator.next` | Replaces ICU's collation for `localeCompare`: the collation elements of a name. |
+| none | `decodeCodePoint` | Decodes UTF-8 as a JavaScript string holds it (U+FFFD for invalid bytes). |
+| none | `comparePrimaryWeights` | Replaces ICU's collation for `localeCompare`: compares two collation elements. |
+| none | `Utf16Iterator` | Replaces the UTF-16 code units of a JavaScript string. |
+| none | `Utf16Iterator.next` | Replaces the UTF-16 code units of a JavaScript string. |
+| none | `lessThanUtf16` | Replaces the order of `Array.prototype.sort()` for strings (UTF-16 code units). |
+| none | `FlatSortNode` | `Omit<SortNode, 'minName'>`, the node of the flat arrays of version 2 and 3 files. |
+| none | `requireChild` | Replaces reading a property of a missing child (`node.left!.leafCount`), which throws. |
+| none | `NodeIterator` | The generator iterateLeaves returns, as an iterator. |
+| none | `SplitNumber` | The `{ high, low }` object of splitBigNum and combineBigNum. |
+| none | `validateUuid` | Replaces the `uuid` package's validate. |
+| none | `parseUuid` | Replaces the `uuid` package's parse. |
+| none | `stringifyUuid` | Replaces the `uuid` package's stringify. |
+
+#### `packages/merkle-tree/src/lib/traverse.ts` to `packages-zig/merkle-tree-zig/src/lib/traverse.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `traverseTreeSync` | `traverseTreeSync` |  |
+| `traverseTreeAsync` | `traverseTreeAsync` |  |
+
+#### `packages/merkle-tree/src/lib/visualize.ts` to `packages-zig/merkle-tree-zig/src/lib/visualize.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `visualizeSortTree` | `visualizeSortTree` |  |
+| `visualizeMerkleTree` | `visualizeMerkleTree` |  |
+| `visualizeTree` | `visualizeTree` |  |
+| none | `writeShortHash` | `hashHex.substring(0, 2) + hashHex.substring(hashHex.length - 2)`. |
+| none | `writeMetadataValue` | `${value}` of a database metadata value. |
+| none | `writeRule` | `"=".repeat(50) + "\n"`. |
+
+<!-- end tables -->
+
+## task-queue
+
+`packages/task-queue` to `packages-zig/task-queue-zig`. Zig only: `json-value.zig`. `worker-queue-backend.ts` has no Zig file: Zig workers are threads sharing the CLI's queue backend.
+
+<!-- tables: packages/task-queue task-queue.txt -->
+
+#### `packages/task-queue/src/index.ts` to `packages-zig/task-queue-zig/src/index.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `packages/task-queue/src/lib/job-progress.ts` to `packages-zig/task-queue-zig/src/lib/job-progress.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `sendJobProgress` | `sendJobProgress` |  |
+| none | `jobTagToJson` | The IJobTag object of the message, as JSON.stringify writes it. |
+
+#### `packages/task-queue/src/lib/pending-task-queue.ts` to `packages-zig/task-queue-zig/src/lib/pending-task-queue.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `resolveTaskPriority` | `resolveTaskPriority` |  |
+| `insertTaskByPriority` | `insertTaskByPriority` |  |
+| none | `priorityOf` | Reads the priority of a pending task, which a Zig pool keeps in its own record of the task. |
+
+#### `packages/task-queue/src/lib/queue-backend.ts` to `packages-zig/task-queue-zig/src/lib/queue-backend.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `setQueueBackend` | `setQueueBackend` |  |
+| `getQueueBackend` | `getQueueBackend` |  |
+| none | `IQueueBackend` | The TypeScript interface of the same name, as a struct. |
+| none | `IQueueBackend.addTask` | The dispatch of the IQueueBackend interface method of the same name. |
+| none | `IQueueBackend.onTaskAdded` | The dispatch of the IQueueBackend interface method of the same name. |
+| none | `IQueueBackend.onTaskComplete` | The dispatch of the IQueueBackend interface method of the same name. |
+| none | `IQueueBackend.onTaskMessage` | The dispatch of the IQueueBackend interface method of the same name. |
+| none | `IQueueBackend.onAnyTaskMessage` | The dispatch of the IQueueBackend interface method of the same name. |
+| none | `IQueueBackend.cancelTasks` | The dispatch of the IQueueBackend interface method of the same name. |
+| none | `IQueueBackend.onTasksCancelled` | The dispatch of the IQueueBackend interface method of the same name. |
+| none | `IQueueBackend.shutdown` | The dispatch of the IQueueBackend interface method of the same name. |
+
+#### `packages/task-queue/src/lib/task-context.ts` to `packages-zig/task-queue-zig/src/lib/task-context.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `TaskContext` | `TaskContext` |  |
+| `TaskContext.constructor` | `TaskContext.init` |  |
+| `TaskContext.sendMessage` | `TaskContext.sendMessage` |  |
+| `TaskContext.cancel` | `TaskContext.cancel` |  |
+| `TaskContext.isCancelled` | `TaskContext.isCancelled` |  |
+| none | `SendMessageFn` | The `(message: any) => void` constructor argument, as a closure. |
+| none | `SendMessageFn.call` | The `(message: any) => void` constructor argument, as a closure. |
+| none | `TaskContext.taskContext` | The ITaskContext interface of the context. |
+| none | `TaskContext.sendMessageErased` | The vtable entry of sendMessage. |
+| none | `TaskContext.isCancelledErased` | The vtable entry of isCancelled. |
+
+#### `packages/task-queue/src/lib/task-queue.ts` to `packages-zig/task-queue-zig/src/lib/task-queue.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `TaskQueue` | `TaskQueue` |  |
+| `TaskQueue.constructor` | `TaskQueue.init` |  |
+| `TaskQueue.resolveAllWaiters` | `TaskQueue.resolveAllWaiters` |  |
+| `TaskQueue.addTask` | `TaskQueue.addTask` |  |
+| `TaskQueue.onTaskComplete` | `TaskQueue.onTaskComplete` |  |
+| `TaskQueue.onTaskMessage` | `TaskQueue.onTaskMessage` |  |
+| `TaskQueue.onAnyTaskMessage` | `TaskQueue.onAnyTaskMessage` |  |
+| `TaskQueue.awaitAllTasks` | `TaskQueue.awaitAllTasks` |  |
+| `TaskQueue.awaitTask` | `TaskQueue.awaitTask` |  |
+| `TaskQueue.notifyCompletionCallbacks` | `TaskQueue.notifyCompletionCallbacks` |  |
+| `TaskQueue.notifyMessageCallbacks` | `TaskQueue.notifyMessageCallbacks` |  |
+| `TaskQueue.shutdown` | `TaskQueue.shutdown` |  |
+| none | `QueueEventKind` | Replaces the JavaScript event loop: a completion or a message delivered by the backend, dispatched by the thread that awaits. |
+| none | `IQueueEvent` | The TypeScript interface of the same name, as a struct. |
+| none | `IAwaitAllResolver` | The TypeScript interface of the same name, as a struct. |
+| none | `IAwaitTaskResolver` | The TypeScript interface of the same name, as a struct. |
+| none | `ICompletionCallbackRegistration` | The TypeScript interface of the same name, as a struct. |
+| none | `IMessageCallbackRegistration` | The TypeScript interface of the same name, as a struct. |
+| none | `IAnyMessageCallbackRegistration` | The TypeScript interface of the same name, as a struct. |
+| none | `TaskQueue.deinit` | Zig plumbing: frees what the struct owns (garbage collected in TypeScript). |
+| none | `TaskQueue.lock` | Guards the queue's state, which backend callbacks reach from worker threads. |
+| none | `TaskQueue.unlock` | Guards the queue's state, which backend callbacks reach from worker threads. |
+| none | `TaskQueue.onBackendTaskAdded` | The onTaskAdded arrow function of the constructor. |
+| none | `TaskQueue.onBackendTaskComplete` | The onTaskComplete arrow function of the constructor. |
+| none | `TaskQueue.onBackendAnyTaskMessage` | The onAnyTaskMessage arrow function of the constructor. |
+| none | `TaskQueue.onBackendTasksCancelled` | The onTasksCancelled arrow function of the constructor. |
+| none | `TaskQueue.queueEvent` | Replaces the JavaScript event loop: queues a backend event for the thread that awaits. |
+| none | `TaskQueue.unsubscribeCompletionCallback` | The unsubscribe arrow function onTaskComplete returns. |
+| none | `TaskQueue.unsubscribeMessageCallback` | The unsubscribe arrow function onTaskMessage returns. |
+| none | `TaskQueue.unsubscribeAnyMessageCallback` | The unsubscribe arrow function onAnyTaskMessage returns. |
+| none | `TaskQueue.waitUntilResolved` | Replaces awaiting a promise: runs queued events until the waiter is resolved. |
+| none | `TaskQueue.dispatchEvent` | Replaces the JavaScript event loop: runs the callbacks of one event. |
+
+#### `packages/task-queue/src/lib/types.ts` to `packages-zig/task-queue-zig/src/lib/types.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| none | `ITaskContext` | The TypeScript interface of the same name, as a struct. |
+| none | `ITaskContext.sendMessage` | The dispatch of the ITaskContext interface method of the same name. |
+| none | `ITaskContext.isCancelled` | The dispatch of the ITaskContext interface method of the same name. |
+| none | `TaskPriority` | The TypeScript enum of the same name. |
+| none | `TaskPriority.toString` | The string value of the enum member. |
+| none | `TaskStatus` | The TypeScript enum of the same name. |
+| none | `TaskStatus.toString` | The string value of the enum member. |
+| none | `ITask` | The TypeScript interface of the same name, as a struct. |
+| none | `ITaskError` | The TypeScript interface of the same name, as a struct. |
+| none | `ITaskResult` | The TypeScript interface of the same name, as a struct. |
+| none | `WorkerTaskCompletionCallback` | The TypeScript type of the same name, as a closure. |
+| none | `WorkerTaskCompletionCallback.call` | The TypeScript type of the same name, as a closure. |
+| none | `ITaskMessageData` | The TypeScript interface of the same name, as a struct. |
+| none | `TaskMessageCallback` | The TypeScript type of the same name, as a closure. |
+| none | `TaskMessageCallback.call` | The TypeScript type of the same name, as a closure. |
+| none | `UnsubscribeFn` | The TypeScript type of the same name, as a closure. |
+| none | `UnsubscribeFn.call` | The TypeScript type of the same name, as a closure. |
+| none | `IJobTag` | The TypeScript interface of the same name, as a struct. |
+| none | `IJobProgressMessage` | The TypeScript interface of the same name, as a struct. |
+| none | `IMessageCallbackEntry` | The TypeScript interface of the same name, as a struct. |
+| none | `TaskAddedCallback` | The `(taskId: string) => void` callback of onTaskAdded, as a closure. |
+| none | `TaskAddedCallback.call` | The `(taskId: string) => void` callback of onTaskAdded, as a closure. |
+| none | `TasksCancelledCallback` | The `() => void` callback of onTasksCancelled, as a closure. |
+| none | `TasksCancelledCallback.call` | The `() => void` callback of onTasksCancelled, as a closure. |
+| none | `messageTypeOf` | `message && typeof message === "object" && "type" in message ? message.type : undefined` in notifyMessageCallbacks. |
+
+#### `packages/task-queue/src/lib/worker-queue-backend.ts` to no Zig file
+
+No Zig file: Zig workers are threads of the CLI's process and share its queue backend, so there is no worker-side backend posting to the main process.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `WorkerQueueBackend` | none | No counterpart (see the file note). |
+| `WorkerQueueBackend.constructor` | none | No counterpart (see the file note). |
+| `WorkerQueueBackend.addTask` | none | No counterpart (see the file note). |
+| `WorkerQueueBackend.onTaskAdded` | none | No counterpart (see the file note). |
+| `WorkerQueueBackend.onTaskComplete` | none | No counterpart (see the file note). |
+| `WorkerQueueBackend.onTaskMessage` | none | No counterpart (see the file note). |
+| `WorkerQueueBackend.onAnyTaskMessage` | none | No counterpart (see the file note). |
+| `WorkerQueueBackend.cancelTasks` | none | No counterpart (see the file note). |
+| `WorkerQueueBackend.onTasksCancelled` | none | No counterpart (see the file note). |
+| `WorkerQueueBackend.shutdown` | none | No counterpart (see the file note). |
+| `WorkerQueueBackend.notifyTaskCompleted` | none | No counterpart (see the file note). |
+| `WorkerQueueBackend.notifyTaskMessage` | none | No counterpart (see the file note). |
+
+#### `packages/task-queue/src/lib/worker.ts` to `packages-zig/task-queue-zig/src/lib/worker.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `registerHandler` | `registerHandler` |  |
+| `getHandler` | `getHandler` |  |
+| `getRegisteredHandlerTypes` | `getRegisteredHandlerTypes` |  |
+| `executeTaskHandler` | `executeTaskHandler` |  |
+
+#### Zig files with no TypeScript file
+
+| Zig file | What it is |
+|---|---|
+| `packages-zig/task-queue-zig/src/lib/json-value.zig` | Replaces the implicit copies JavaScript makes of task data, results and messages (structured clone): an explicit deep copy. |
+
+<!-- end tables -->
+
 ## Divergences fixed
 
 Each was found by reading the two side by side, pinned by a unit test that failed before the fix, and fixed in the Zig.
@@ -3109,6 +3658,23 @@ Each was found by reading the two side by side, pinned by a unit test that faile
     normalization. Tests: `DEFAULT_VAULT_DIR is under the home directory os.homedir gives, the passwd entry's when HOME
     is unset` and `getVaultFilePath joins and normalizes the path as path.join does`.
 
+### lan-share-network and serialization
+
+41. The LAN share sender refused a /pairing-code-hash response whose `codeHash` was missing or not a string, and one
+    with a repeated key, with a JSON error, where TypeScript reads `codeHash` (the last of a repeated key) and
+    answers false when it is not the code hash, and throws the TypeError `null is not an object` for a body of
+    `null`. Test: `the pairing code hash response is read as JSON.parse reads it`.
+42. The announced port was read with an ASCII trim and no sign, where `parseInt(text, 10)` skips every JavaScript
+    whitespace character and takes a sign. Test: `the announced port is read as parseInt(text, 10) reads it`.
+43. The LAN share receiver handed a falsy payload (`false`, `0`, `""`) to `psi dbs receive` and `psi secrets
+    receive` as a payload, where their `if (!rawPayload)` treats it as nothing received; only `null` was treated
+    so. Test: `a falsy payload is received as no payload, as the callers' \`if (!rawPayload)\` reads it`. The receiver
+    also answered a /share-payload body with a repeated key `Invalid JSON` where JSON.parse keeps the last value;
+    that is fixed too, but the unit tests have no client that can send a repeated key, so it is not covered.
+44. `load` compared a file's type code byte for byte, where `toString('ascii')` drops the high bit of each byte, so a
+    file whose type code bytes had the high bit set was read as a legacy file instead. Test: `the type code is read
+    as toString("ascii") reads it, which drops the high bit of each byte`.
+
 ## Divergences kept
 
 1. `FileStorage.acquireWriteLock` (storage): an empty lock file younger than the lock timeout is refused
@@ -3121,6 +3687,11 @@ Each was found by reading the two side by side, pinned by a unit test that faile
    file locally fails, the Zig stops feeding the cache and hands the caller the whole file. The TypeScript hangs (see
    "TypeScript bugs"). Matching it would make `psi export` hang, so the Zig keeps working; test: `readStream() streams
    a file larger than the cache queue in full when the local cache write fails`.
+
+3. The LAN share receiver (lan-share-network) answers a /share-payload body of `null` with 403 Invalid pairing code.
+   The TypeScript reads `parsed.codeHash` of null inside the request's 'end' handler, which throws an uncaught
+   TypeError and ends the receiving process. Matching it would let any device on the LAN stop a `psi dbs receive`
+   with one request, so the Zig keeps answering 403 (see "TypeScript bugs").
 
 ## TypeScript bugs noted
 
@@ -3135,6 +3706,8 @@ Each was found by reading the two side by side, pinned by a unit test that faile
    a file small enough to fit the buffer.
 4. `import-assets` logs `File "" is a duplicate in this scan, skipping.`: the template string lost its
    `${logicalPath}`. The Zig logs the same text.
+5. `LanShareReceiver` (lan-share-network): a /share-payload body of `null` makes the request's 'end' handler throw
+   an uncaught TypeError (`parsed.codeHash` of null), which ends the receiving process.
 
 ## JavaScript behaviour not emulated
 
@@ -3195,3 +3768,8 @@ and case mapping of non-ASCII text) need the Unicode tables of ICU, which the Zi
 20. `runCommand` in the keychain vaults closes the child's stdin, where TypeScript leaves the pipe open; the security,
     secret-tool and PowerShell commands psi runs read no stdin (secret-tool store gets its secret and then end of input
     in both).
+21. An announced LAN share port that is not a port (negative or past 65535): TypeScript takes the receiver and then
+    fails to connect, the Zig ignores the announcement and keeps listening.
+22. A merkle tree leaf's modified time past what a Date holds (8.64e15 milliseconds) is an Invalid Date in TypeScript;
+    the Zig keeps the number (a time of 2 ** 63 milliseconds or more reads as negative). psi writes real modified
+    times.

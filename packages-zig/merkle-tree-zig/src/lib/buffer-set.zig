@@ -114,11 +114,11 @@ pub const BufferSet = struct {
         return true;
     }
 
-    // Not ported: clear (not reached by psi replicate or psi verify)
+    // Not ported: clear (not reached by the CLI)
 
-    // Not ported: size (not reached by psi replicate or psi verify)
+    // Not ported: size (not reached by the CLI)
 
-    // Not ported: forEach (not reached by psi replicate or psi verify)
+    // Not ported: forEach (not reached by the CLI)
 
     //
     // Iterates the buffers in the set (the Zig form of the TypeScript generator).
@@ -127,9 +127,9 @@ pub const BufferSet = struct {
         return .{ .buckets = self._map.values(), .bucketIndex = 0, .bufferIndex = 0 };
     }
 
-    // Not ported: keys (not reached by psi replicate or psi verify)
+    // Not ported: keys (not reached by the CLI)
 
-    // Not ported: entries (not reached by psi replicate or psi verify)
+    // Not ported: entries (not reached by the CLI)
 
     //
     // Iterator returned by values().

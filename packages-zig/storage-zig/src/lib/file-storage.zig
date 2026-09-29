@@ -442,7 +442,7 @@ pub const FileStorage = struct {
         }
     }
 
-    // Not ported: refreshWriteLock (not reached by psi replicate or psi verify).
+    // Not ported: refreshWriteLock (not reached by the CLI).
 };
 
 //
