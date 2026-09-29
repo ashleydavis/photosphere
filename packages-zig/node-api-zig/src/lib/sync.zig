@@ -264,6 +264,11 @@ pub fn syncDatabases(
     // nothing to sync. Reading the two small state files avoids acquiring the remote write lock and
     // downloading the remote merkle trees when there are no differences.
     //
+    // TODO: fix together with the TypeScript (sync.ts). A record's hash covers its fields but not its id,
+    // so two databases that each hold a different record with the same content have equal content hashes
+    // and this early-out skips the sync, leaving each side without the other's record. This mirrors the
+    // TypeScript on purpose until both are fixed.
+    //
     const sourceState = try loadDatabaseState(allocator, io, sourceRawStorage);
     const targetState = try loadDatabaseState(allocator, io, targetRawStorage);
     const sourceContentHash = if (sourceState) |state| state.contentHash else null;
@@ -856,6 +861,7 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: I
         );
     }
 
+    // TODO: fix together with the TypeScript. Files with the same content hash the same (the file name is not hashed), so equal roots can hide a file one side lacks. Mirrors sync.ts on purpose; see syncDatabases.
     // Don't do anything if the source and target merkle trees are identical.
     if (sourceMerkleTree.merkle != null and targetMerkleTree.merkle != null
         and std.mem.eql(u8, sourceMerkleTree.merkle.?.hash, targetMerkleTree.merkle.?.hash)) {
@@ -1164,6 +1170,7 @@ fn iterateShardDifferences(
     visitor: DiffVisitor,
 ) !void {
 
+    // TODO: fix together with the TypeScript. Records with the same content hash the same (the id is not hashed), so this can skip or lose one of them. Mirrors sync.ts on purpose; see syncDatabases.
     const diff = try findMerkleTreeDifferences(allocator, if (sourceShardTree) |shardTree| shardTree.merkle else null, if (targetShardTree) |shardTree| shardTree.merkle else null);
     const sourceShard = try sourceCollection.shard(shardId);
     const targetShard = try targetCollection.shard(shardId);
@@ -1232,6 +1239,7 @@ fn iterateCollectionDifferences(
     targetCollectionTree: ?*IMerkleTree,
     visitor: DiffVisitor,
 ) !void {
+    // TODO: fix together with the TypeScript. Records with the same content hash the same (the id is not hashed), so this can skip or lose one of them. Mirrors sync.ts on purpose; see syncDatabases.
     const diff = try findMerkleTreeDifferences(allocator, if (sourceCollectionTree) |collectionTree| collectionTree.merkle else null, if (targetCollectionTree) |collectionTree| collectionTree.merkle else null);
 
     // Track shard keys we've seen to avoid duplicates (only track, don't collect all)
@@ -1282,6 +1290,7 @@ fn iterateDatabaseDifferences( //todo: todo this could be in the bdb package and
         return;
     }
 
+    // TODO: fix together with the TypeScript. Records with the same content hash the same (the id is not hashed), so this can skip or lose one of them. Mirrors sync.ts on purpose; see syncDatabases.
     const diff = try findMerkleTreeDifferences(allocator, if (sourceDbTree) |dbTree| dbTree.merkle else null, if (targetDbTree) |dbTree| dbTree.merkle else null);
 
     // Track collections we've seen to avoid duplicates (only track, don't collect all)
@@ -1426,6 +1435,7 @@ pub fn syncDatabase(
     const sourceDbTree = try (try sourceBsonDatabase.merkleTree()).get(io);
     const targetDbTree = try (try targetBsonDatabase.merkleTree()).get(io);
 
+    // TODO: fix together with the TypeScript. Records with the same content hash the same (the id is not hashed), so this can skip or lose one of them. Mirrors sync.ts on purpose; see syncDatabases.
     if (sourceDbTree != null and sourceDbTree.?.merkle != null and targetDbTree != null and targetDbTree.?.merkle != null) { //todo: move this comparison to the iterateDatabaseDifferences function.
         if (std.mem.eql(u8, sourceDbTree.?.merkle.?.hash, targetDbTree.?.merkle.?.hash)) {
             log.verbose("Databases are identical, no sync needed.");

@@ -82,6 +82,7 @@ pub fn processRemainingNodes(allocator: std.mem.Allocator, nodes: []const *Merkl
 // @param treeB - The second Merkle tree root
 // @returns Nodes that are different or new in treeA compared to treeB
 //
+// TODO: fix together with the TypeScript. Leaves are matched by hash, so two leaves with the same hash but different names count as one. Mirrors merkle-diff.ts on purpose.
 pub fn findDifferingNodes(allocator: std.mem.Allocator, treeA: *MerkleNode, treeB: *MerkleNode) ![]*MerkleNode {
 
     // Map of hash counts from tree B (lazily populated)
