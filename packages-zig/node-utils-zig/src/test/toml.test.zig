@@ -271,3 +271,110 @@ test "stringify refuses tables and arrays nested deeper than smol-toml's maximum
     try std.testing.expectError(error.Thrown, toml.stringify(allocator, tables));
     try std.testing.expectEqualStrings("Could not stringify the object: maximum object depth exceeded", errors.lastErrorMessage());
 }
+
+test "parse reads the escape character and escapes in multi-line strings like smol-toml" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // smol-toml.parse('a = "x\\ey"') is { a: "x\u001by" }, and a tab escape in a multi-line string is a tab.
+    try std.testing.expectEqualStrings("x\x1by", (try toml.parse(allocator, "a = \"x\\ey\"\n")).object.get("a").?.string);
+    try std.testing.expectEqualStrings("p\tq", (try toml.parse(allocator, "a = \"\"\"p\\tq\"\"\"\n")).object.get("a").?.string);
+}
+
+test "stringify refuses null inside a nested array like smol-toml" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // smol-toml.stringify({ a: [[1, null]] }) throws "arrays cannot contain null or undefined values".
+    var inner = std.json.Array.init(allocator);
+    try inner.append(.{
+        .integer = 1,
+    });
+    try inner.append(.null);
+    var outer = std.json.Array.init(allocator);
+    try outer.append(.{
+        .array = inner,
+    });
+    var object: std.json.ObjectMap = .empty;
+    try object.put(allocator, "a", .{
+        .array = outer,
+    });
+    try std.testing.expectError(error.Thrown, toml.stringify(allocator, .{
+        .object = object,
+    }));
+    try std.testing.expectEqualStrings("arrays cannot contain null or undefined values", errors.lastErrorMessage());
+}
+
+test "stringify leaves out keys whose value is null, like smol-toml" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // smol-toml.stringify({ a: null }) is "\n", and stringify({ a: [{ b: null }] }) is "[[a]]\n".
+    var nullValue: std.json.ObjectMap = .empty;
+    try nullValue.put(allocator, "a", .null);
+    try std.testing.expectEqualStrings("\n", try toml.stringify(allocator, .{
+        .object = nullValue,
+    }));
+
+    var entry: std.json.ObjectMap = .empty;
+    try entry.put(allocator, "b", .null);
+    var entries = std.json.Array.init(allocator);
+    try entries.append(.{
+        .object = entry,
+    });
+    var arrayTable: std.json.ObjectMap = .empty;
+    try arrayTable.put(allocator, "a", .{
+        .array = entries,
+    });
+    try std.testing.expectEqualStrings("[[a]]\n", try toml.stringify(allocator, .{
+        .object = arrayTable,
+    }));
+}
+
+//
+// Stringifies { a: value } and returns the message it is refused with.
+//
+fn refusedMessage(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
+    var object: std.json.ObjectMap = .empty;
+    try object.put(allocator, "a", value);
+    try std.testing.expectError(error.Thrown, toml.stringify(allocator, .{
+        .object = object,
+    }));
+    return errors.lastErrorMessage();
+}
+
+//
+// A JSON array of the values.
+//
+fn jsonArray(allocator: std.mem.Allocator, values: []const std.json.Value) !std.json.Value {
+    var array = std.json.Array.init(allocator);
+    try array.appendSlice(values);
+    return .{
+        .array = array,
+    };
+}
+
+test "stringify refuses null where smol-toml does, with smol-toml's messages" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var nullEntry: std.json.ObjectMap = .empty;
+    try nullEntry.put(allocator, "b", .null);
+
+    // { a: [null] } and { a: [[{ b: null }]] } fail in Object.keys of the null; { a: [[null]] } and { a: [1, null] }
+    // fail in stringifyArray.
+    try std.testing.expectEqualStrings("Cannot convert undefined or null to object", try refusedMessage(allocator, try jsonArray(allocator, &.{.null})));
+    try std.testing.expectEqualStrings("Cannot convert undefined or null to object", try refusedMessage(allocator, try jsonArray(allocator, &.{try jsonArray(allocator, &.{.{
+        .object = nullEntry,
+    }})})));
+    try std.testing.expectEqualStrings("arrays cannot contain null or undefined values", try refusedMessage(allocator, try jsonArray(allocator, &.{try jsonArray(allocator, &.{.null})})));
+    try std.testing.expectEqualStrings("arrays cannot contain null or undefined values", try refusedMessage(allocator, try jsonArray(allocator, &.{
+        .{
+            .integer = 1,
+        },
+        .null,
+    })));
+}
