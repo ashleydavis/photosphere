@@ -79,6 +79,16 @@ TEST_TIMED_OUT_EXIT_CODE=124
 #   emulator bridge; killing the script's own pid leaves those running, still holding the port or the
 #   device that the next test needs. The tree walk reaches them.
 #
+# The test is started with job control on, so it gets SIGINT and SIGQUIT as a terminal would give
+# them. A shell without job control sets both to ignored for every background job it starts, and a
+# test started that way passes the ignore on to every command it runs. Nothing below can take it back:
+# a shell that finds a signal ignored when it starts may not reset it, so the test's own `set -m` does
+# not help. That made Ctrl+C a no-op for `psi dbs send` until the command installed its own handler,
+# and 78-dbs-share-cancel waited out the sender's 60 second timeout on macOS, which takes this path.
+# With job control on the job leads its own process group, which changes nothing here: the killer
+# walks the tree from the pid. Its standard input is /dev/null, which is what the shell gave a
+# background job without job control, so no test starts reading a terminal it never read before.
+#
 # Usage: run_test_with_timeout <seconds> <command...>
 #
 run_test_with_timeout() {
@@ -99,8 +109,18 @@ run_test_with_timeout() {
         return $?
     fi
 
-    "$@" &
+    local monitor_was_on="no"
+    case "$-" in
+        *m*)
+            monitor_was_on="yes"
+            ;;
+    esac
+    set -m
+    "$@" < /dev/null &
     local child_pid=$!
+    if [ "$monitor_was_on" = "no" ]; then
+        set +m
+    fi
     local timed_out_marker
     timed_out_marker="$(mktemp "${TMPDIR:-/tmp}/photosphere-test-timeout-XXXXXX")"
     rm -f "$timed_out_marker"
