@@ -5,8 +5,9 @@ the Zig function that ports it. Use it to read the two side by side: the Zig fil
 function order as the TypeScript ones.
 
 **Progress of the side by side comparison:** storage, bdb, api, lan-share-core, node-api, node-utils, utils,
-encryption, vault, fuzzy-match, config, lan-share-network, serialization, merkle-tree and task-queue done. Still to
-do: tools, apps/cli.
+encryption, vault, fuzzy-match, config, lan-share-network, serialization, merkle-tree and task-queue done. tools and
+apps/cli: their trims and the EXIF and ffprobe parsing compared and fixed; their tables and the rest of the comparison
+are still to do.
 
 ## Which files are listed
 
@@ -136,11 +137,11 @@ Barrel file. `index.zig` re-exports the same modules; `tests/mock-storage` and `
 | `FileStorage.deleteDir` | `FileStorage.deleteDir` |  |
 | `FileStorage.copyTo` | `FileStorage.copyTo` | Copies one file. TypeScript's fs-extra `copy` also copies a directory; nothing in the CLI calls `copyTo` (only `LazyOriginStorage.copyTo` forwards to it, and nothing calls that). |
 | `FileStorage.checkWriteLock` | `FileStorage.checkWriteLock` |  |
-| `FileStorage.acquireWriteLock` | `FileStorage.acquireWriteLock` | See "Divergences kept" for the empty lock file branch. |
+| `FileStorage.acquireWriteLock` | `FileStorage.acquireWriteLock` | The empty lock file branch differs from the TypeScript: see the `// TODO:` in the Zig. |
 | `FileStorage.releaseWriteLock` | `FileStorage.releaseWriteLock` |  |
 | `FileStorage.refreshWriteLock` | none | Not reached by the CLI: only `writeAsset` and `writeAssetStream` in media-file-database.ts refresh the lock, and only the desktop asset server calls them. |
 | none | `FileStorage.storage` | Zig plumbing: the IStorage view of the struct (a TypeScript class implements the interface directly). |
-| none | `lockFileBeingWritten` | Zig only, kept on purpose: see "Divergences kept". An empty lock file younger than the timeout is being written by its owner and is refused rather than broken. |
+| none | `lockFileBeingWritten` | Zig only, kept on purpose: see the `// TODO:` in the Zig. An empty lock file younger than the timeout is being written by its owner and is refused rather than broken. |
 | none | `logAcquireError` | The `catch` of the one try block around `acquireWriteLock`'s body: each fallible step passes its result through this to log ACQUIRE_FAILED_ERROR and rethrow. |
 | none | `failAcquire` | Same `catch` block as `logAcquireError`, for an error already in hand. |
 | none | `readDirNames` | Replaces `fs.readdir(path, { withFileTypes: true })` and the `isDirectory()` filter. |
@@ -313,7 +314,7 @@ Test helper, bundled only because `index.ts` re-exports it. Nothing the CLI runs
 
 | Zig file | What it is |
 |---|---|
-| `packages-zig/storage-zig/src/lib/locale-compare.zig` | Replaces ICU's `localeCompare(other, undefined, { numeric: true })` for FileStorage's listing order. ASCII is ordered as ICU orders it; see "JavaScript behaviour not emulated" for non-ASCII. |
+| `packages-zig/storage-zig/src/lib/locale-compare.zig` | Replaces ICU's `localeCompare(other, undefined, { numeric: true })` for FileStorage's listing order. ASCII is ordered as ICU orders it; see the `// TODO:` in the Zig for non-ASCII. |
 | `packages-zig/storage-zig/src/lib/s3-client.zig` | Replaces the npm packages `@aws-sdk/client-s3` and `@aws-sdk/lib-storage` (the S3 client, its commands and `Upload`) with a binding to the AWS SDK for C (aws-c-s3), built from upstream sources. |
 
 <!-- end tables -->
@@ -624,7 +625,7 @@ Test helper, not reached by the CLI (see mock-collection.ts).
 |---|---|
 | `packages-zig/bdb-zig/src/lib/js-value.zig` | Replaces the JavaScript language semantics the bdb code relies on implicitly (`String(x)`, `Number(x)`, `<`, `===`, `typeof`, `JSON.stringify(x, null, 2)`, `toJSON`) for the values npm bson deserializes. |
 | `packages-zig/bdb-zig/src/lib/json-stable-stringify.zig` | Replaces the npm package `json-stable-stringify` 1.3.0 (`stringify(obj)` with no options), which `hashRecord` calls. |
-| `packages-zig/bdb-zig/src/lib/locale-compare.zig` | Replaces ICU's `localeCompare(other)` (no options), which orders shard records, tree pages and string sort values. See "JavaScript behaviour not emulated" for non-ASCII. |
+| `packages-zig/bdb-zig/src/lib/locale-compare.zig` | Replaces ICU's `localeCompare(other)` (no options), which orders shard records, tree pages and string sort values. Non-ASCII differs from ICU: see the `// TODO:` in the Zig. |
 
 <!-- end tables -->
 
@@ -676,7 +677,7 @@ The Zig file is under lib/. See "Divergences fixed" for credentials without a re
 | TypeScript | Zig | Notes |
 |---|---|---|
 | `listAssetPage` | `listAssetPage` |  |
-| `searchAssets` | `searchAssets` | `toLowerCase` is ASCII only in Zig; see "JavaScript behaviour not emulated". |
+| `searchAssets` | `searchAssets` | `toLowerCase` is ASCII only in Zig; see the `// TODO:` in the Zig. |
 | `matchesAsset` | `matchesAsset` |  |
 | `getAsset` | `getAsset` |  |
 | `streamAssetToFile` | `streamAssetToFile` | See "Divergences fixed": the output file is made before the read stream is opened. |
@@ -1283,7 +1284,7 @@ Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` regi
 | none | `IDatabasesConfig` | The TypeScript interface of the same name, as a struct. |
 | none | `DATABASES_FILE` | The module constant DATABASES_FILE, worked out on each call (TypeScript works it out when the module loads). |
 | none | `arrayProperty` | `Array.isArray(toml.x) ? toml.x : ...`. |
-| none | `stringItems` | The `recent_database_names` array. TypeScript keeps it as it is; Zig keeps its strings (see "JavaScript behaviour not emulated"). |
+| none | `stringItems` | The `recent_database_names` array. TypeScript keeps it as it is; Zig keeps its strings (see the `// TODO:` in the Zig). |
 | none | `DatabasesConfigTomlMutator` | The arrow function updateDatabasesConfig passes to updateToml. |
 | none | `AddDatabaseEntryMutator` | The arrow function addDatabaseEntry passes to updateDatabasesConfig. |
 | none | `AddDatabaseEntryMutator.run` | The body of that arrow function. |
@@ -1656,7 +1657,7 @@ Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` regi
 | none | `CachePipe` | Replaces the `cacheStream` PassThrough: a bounded pipe from the tee to the cache write. |
 | none | `CachePipe.push` | `cacheStream.write(chunk)`, waiting while the pipe is full (the backpressure `pause`/`drain` gives). |
 | none | `CachePipe.finish` | `cacheStream.end()`, or `cacheStream.destroy(err)` when the origin fails. |
-| none | `CachePipe.finishReading` | Zig only: the cache write has stopped reading, so the tee stops feeding it (see "Divergences kept"). |
+| none | `CachePipe.finishReading` | Zig only: the cache write has stopped reading, so the tee stops feeding it (see the `// TODO:` in the Zig). |
 | none | `CachePipe.streamFunction` | The reading end of the pipe, which the cache write reads. |
 | none | `TeeStream` | Replaces the `callerStream` PassThrough and the `data`/`end`/`error` handlers on the origin stream. |
 | none | `TeeStream.readerFunction` | Zig plumbing: the reader of the stream. |
@@ -1708,7 +1709,7 @@ Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` regi
 | none | `ProgressCallback.call` | Zig plumbing: a closure (a context and a function) standing in for the TypeScript function type. |
 | none | `DatabaseMode` | The TypeScript type `"full" \| "partial"`, as an enum. |
 | none | `IDatabaseSummary` | The TypeScript interface of the same name, as a struct. |
-| none | `getFilesImported` | `merkleTree.databaseMetadata?.filesImported \|\| 0` (see "JavaScript behaviour not emulated" for values of the wrong type). |
+| none | `getFilesImported` | `merkleTree.databaseMetadata?.filesImported \|\| 0` (see the `// TODO:` in the Zig for values of the wrong type). |
 | none | `isPartialDatabase` | `merkleTree.databaseMetadata?.isPartial === true`. |
 | none | `emptyDatabaseMetadata` | The object literal `{ filesImported: 0 }`. |
 | none | `copyDatabaseMetadata` | The spread `{ ...databaseMetadata }`. |
@@ -2144,7 +2145,7 @@ Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` regi
 | none | `jsonObject` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
 | none | `verifyFileDataFromJson` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
 | none | `verifyFileResultToJson` | Zig plumbing: task data and task results cross between worker threads as JSON values, which TypeScript posts as objects. |
-| none | `toLocaleString` | `date.toLocaleString()` for en-US in UTC (see "JavaScript behaviour not emulated"). |
+| none | `toLocaleString` | `date.toLocaleString()` for en-US in UTC (see the `// TODO:` in the Zig). |
 | none | `ComputeAssetHashOperation` | The async arrow function passed to retry to hash the stored file. |
 | none | `ComputeAssetHashOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
 
@@ -2408,7 +2409,7 @@ Used by init-cmd.ts and worker.ts when NODE_ENV is testing (the bundle metafile 
 | `packages-zig/node-utils-zig/src/lib/path.zig` | Replaces `node:path` (posix and win32 join, normalize, dirname, basename, extname, isAbsolute). |
 | `packages-zig/node-utils-zig/src/lib/process-env.zig` | Replaces `process.env`. |
 | `packages-zig/node-utils-zig/src/lib/toml.zig` | Replaces the `smol-toml` npm package (parse and stringify). |
-| `packages-zig/node-utils-zig/src/lib/yaml.zig` | Replaces the `js-yaml` npm package for the subset psi reads and writes (see "JavaScript behaviour not emulated"). |
+| `packages-zig/node-utils-zig/src/lib/yaml.zig` | Replaces the `js-yaml` npm package for the subset psi reads and writes (see the `// TODO:` in the Zig). |
 
 <!-- end tables -->
 
@@ -3669,107 +3670,27 @@ Each was found by reading the two side by side, pinned by a unit test that faile
 43. The LAN share receiver handed a falsy payload (`false`, `0`, `""`) to `psi dbs receive` and `psi secrets
     receive` as a payload, where their `if (!rawPayload)` treats it as nothing received; only `null` was treated
     so. Test: `a falsy payload is received as no payload, as the callers' \`if (!rawPayload)\` reads it`. The receiver
-    also answered a /share-payload body with a repeated key `Invalid JSON` where JSON.parse keeps the last value;
-    that is fixed too, but the unit tests have no client that can send a repeated key, so it is not covered.
+    also answered a /share-payload body with a repeated key `Invalid JSON` where JSON.parse keeps the last value.
+    Test: `a payload with a repeated key is read with its last value, as JSON.parse reads it`.
 44. `load` compared a file's type code byte for byte, where `toString('ascii')` drops the high bit of each byte, so a
     file whose type code bytes had the high bit set was read as a legacy file instead. Test: `the type code is read
     as toString("ascii") reads it, which drops the high bit of each byte`.
 
-## Divergences kept
+### tools and apps/cli
 
-1. `FileStorage.acquireWriteLock` (storage): an empty lock file younger than the lock timeout is refused
-   (`ACQUIRE_FAILED_BEING_WRITTEN`) instead of being broken as corrupt. The TypeScript has the same race (see
-   "TypeScript bugs"), and the Zig unit test ported from `file-storage-locks.test.ts` ("should handle race conditions
-   properly") failed on macOS CI because of it: two of three contenders got the lock. Removing the fix to match the
-   TypeScript would bring that failure back, so it stays until the TypeScript is fixed the same way.
+45. `getExifData` trimmed ImageMagick's output of ASCII whitespace only, ended a value at `\r` but not at U+2028
+    or U+2029 (which `.` does not match either), and gave up on a line whose first `exif:` had nothing before the
+    `=`, where the regular expression goes on to the next `exif:`. The parsing is `Image.parseExifOutput` now. Test:
+    `parseExifOutput reads the tags as String.prototype.trim and the regular expression /exif:([^=]+)=(.*)/ do`.
+    `getInfo` and `getDominantColor` trim their output as `trim()` does too.
+46. A video's ffprobe output that was not a JSON object crashed the process (a union field read of the wrong kind),
+    and `streams` that was not an array failed with the message written as `TypeError: ...` under the name Error.
+    They now fail with Bun's TypeErrors (`null is not an object (evaluating 'probeData.format')`, `undefined is not
+    an object (evaluating 'probeData.streams.find')`, `probeData.streams.find is not a function. ...`), which the
+    caller wraps as `Failed to get video info: TypeError: ...`. Not covered by a unit test: the output comes from
+    running ffprobe.
+47. The CLI's own `trim()`s (the prompts and options of `psi secrets`, `psi dbs`, `psi bug`, `psi init`, `psi
+    encrypt`, the directory picker and the clack prompts' titles) removed ASCII whitespace only. They use
+    `js_string.trim` now. Test: the Unicode case of `jsNumber converts option text like Number()`; the prompt
+    validators are not covered by unit tests of their own.
 
-2. `LazyOriginStorage.readStream` (node-api, used by `psi export` on a partial replica): when caching the fetched
-   file locally fails, the Zig stops feeding the cache and hands the caller the whole file. The TypeScript hangs (see
-   "TypeScript bugs"). Matching it would make `psi export` hang, so the Zig keeps working; test: `readStream() streams
-   a file larger than the cache queue in full when the local cache write fails`.
-
-3. The LAN share receiver (lan-share-network) answers a /share-payload body of `null` with 403 Invalid pairing code.
-   The TypeScript reads `parsed.codeHash` of null inside the request's 'end' handler, which throws an uncaught
-   TypeError and ends the receiving process. Matching it would let any device on the LAN stop a `psi dbs receive`
-   with one request, so the Zig keeps answering 403 (see "TypeScript bugs").
-
-## TypeScript bugs noted
-
-1. `FileStorage.acquireWriteLock` creates the lock file with `flag: 'wx'` and writes its JSON in the same call, but
-   the file exists and is empty between the create and the write. A second contender that reads it then cannot parse
-   it, takes it for a corrupt lock, deletes it and creates its own, so both hold the lock.
-2. `CloudStorage.dirExists` has a branch for an empty key that can never run: `parsePath` throws for an empty key
-   before it is reached.
-3. `LazyOriginStorage.readStream` hangs when the local cache write fails before reading everything: nothing drains
-   `cacheStream` any more, so once its buffer is full the origin stays paused and `callerStream` never ends. Run in Bun
-   with a cache write that rejects and a 192 KB file, the caller stops after 65536 bytes. The existing unit test uses
-   a file small enough to fit the buffer.
-4. `import-assets` logs `File "" is a duplicate in this scan, skipping.`: the template string lost its
-   `${logicalPath}`. The Zig logs the same text.
-5. `LanShareReceiver` (lan-share-network): a /share-payload body of `null` makes the request's 'end' handler throw
-   an uncaught TypeError (`parsed.codeHash` of null), which ends the receiving process.
-
-## JavaScript behaviour not emulated
-
-Places where the Zig does not reproduce the JavaScript runtime, each with its reason. They are still divergences and
-are listed so a reviewer does not have to find them again. Most are JavaScript's dynamic typing of data read from a
-file only psi writes: the Zig reads the data as the type psi writes and fails loudly on anything else. Two (collation
-and case mapping of non-ASCII text) need the Unicode tables of ICU, which the Zig does not link.
-
-1. A lock file whose JSON is valid but has fields of other types (a missing `owner`, a string `timestamp`, an
-   `acquiredAt` that is not `toISOString` output). TypeScript carries `undefined`, `NaN` or an Invalid Date forward;
-   the Zig treats the lock file as unreadable (`FileStorage` breaks it as corrupt, `CloudStorage` throws the
-   `Failed to check write lock` error).
-2. Collation of non-ASCII names (`locale-compare.zig`): characters outside ASCII sort by code point after all ASCII
-   characters, where ICU sorts them by its collation table (for example "é" next to "e"). The names storage lists and
-   the merkle tree sorts are asset ids and database file names, which are ASCII.
-3. Unicode case mapping in `searchAssets` (the MCP `search_media_files` tool): `toLowerCase` lowercases ASCII letters
-   only, where JavaScript lowercases every letter with a lowercase form, so a query and a file name that differ only in
-   the case of a non-ASCII letter ("É" and "é") match in TypeScript and not in Zig.
-4. Records holding values of types the bdb code never writes (for example a string where the merge expects a
-   metadata object): the Zig throws an error naming the value's type, where JavaScript carries it through.
-5. `retryOnce` cancels an operation that times out; TypeScript leaves it running in the background, since a promise
-   cannot be cancelled. Its error log has the error's name and message but no stack.
-6. `BsonCollection.insertOne` with an `_id` that is not a string: TypeScript keeps a truthy non-string id (and then
-   fails in `getShardId`), the Zig replaces it with a new UUID.
-7. Error messages of the file system and of `JSON.parse`: where the Zig emulates Node's message it does so for a
-   missing file (`ENOENT: no such file or directory, open '...'`); other file system errors (permission denied, not a
-   directory) show the Zig error name, and a malformed JSON document shows `JSON Parse error:` and the Zig error name
-   rather than JavaScriptCore's description.
-8. Key order of objects: JavaScript lists integer-like keys first, in numeric order, then the others in insertion
-   order. The Zig keeps insertion order, which differs only for integer-like keys (the `ui` section of state.yaml,
-   whose keys the desktop interface chooses).
-9. `verify-file`'s `toLocaleString` of the old and new modified times (a verbose log line) is en-US in UTC, where
-   JavaScript uses the machine's time zone and locale.
-10. File names that are not valid UTF-8: Node decodes them to U+FFFD, the Zig keeps the bytes (the hash cache keys and
-    the zip entry names likewise).
-11. Values of the wrong type in files psi writes, as in item 1: `filesImported` that is not a whole number (read as
-    0 or truncated where JavaScript carries it through, and a string grows by concatenation there), `deletedAssetIds`
-    that is not a list of strings (the Zig throws), non-string `recent_database_names` (dropped) and a database entry
-    without a name.
-12. `loadSharedHashCache` compares the cache file's modified time in nanoseconds where TypeScript compares
-    `mtimeMs`, a double that cannot tell apart two times less than about a quarter of a microsecond apart. Either way
-    the cache is re-read when the file changes.
-13. `iterateLeaves` in sync.zig accepts a leaf with an empty name, where `!node.name` throws; merkle tree leaves are
-    record, shard and collection names, which are never empty.
-14. js-yaml features psi never writes: anchors, aliases, tags, plain scalars that go on over several lines and
-    documents of more than one part. The Zig loader throws a YAMLException for them where js-yaml reads them.
-15. `exec` gives the command an empty stdin where Node gives it an open pipe that nothing writes to, so a command
-    that reads stdin ends at once in the Zig and waits for ever in TypeScript. The commands psi runs (magick, ffprobe,
-    ffmpeg) read no stdin.
-16. `os.homedir` on Windows reads USERPROFILE only, where Bun falls back to the profile directory Windows reports;
-    Windows always sets USERPROFILE.
-17. `String(value)` of an orientation that is a Date: JavaScript writes the date (`Thu Jan 01 1970 ...`), the Zig
-    writes `date`. exif-parser gives numbers.
-18. `getVideoTransformation` with `streams` that is not an array: `for...of` throws a TypeError for a value that is
-    not iterable, the Zig returns no transformation. ffprobe's JSON always has an array.
-19. Keys that are not RSA: `createPrivateKey` and `createPublicKey` accept any key type, and encryption fails later
-    with OpenSSL's message; the Zig refuses the key when it is loaded (`error:1E08010C:DECODER routines::unsupported`).
-20. `runCommand` in the keychain vaults closes the child's stdin, where TypeScript leaves the pipe open; the security,
-    secret-tool and PowerShell commands psi runs read no stdin (secret-tool store gets its secret and then end of input
-    in both).
-21. An announced LAN share port that is not a port (negative or past 65535): TypeScript takes the receiver and then
-    fails to connect, the Zig ignores the announcement and keeps listening.
-22. A merkle tree leaf's modified time past what a Date holds (8.64e15 milliseconds) is an Invalid Date in TypeScript;
-    the Zig keeps the number (a time of 2 ** 63 milliseconds or more reads as negative). psi writes real modified
-    times.

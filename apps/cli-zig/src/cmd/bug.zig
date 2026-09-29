@@ -102,20 +102,16 @@ pub const IToolVersions = struct {
     ffprobe: []const u8,
 };
 
-//
-// The characters JavaScript's `String.prototype.trim` removes (the ASCII ones).
-//
-const js_whitespace = " \t\n\r\x0b\x0c";
 
 //
 // Validates the bug title.
 //
 fn validateTitle(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
     _ = context;
-    if (value == null or std.mem.trim(u8, value.?, js_whitespace).len == 0) {
+    if (value == null or utils.js_string.trim(value.?).len == 0) {
         return "Please provide a title for the bug report";
     }
-    if (jsLength(std.mem.trim(u8, value.?, js_whitespace)) > 100) {
+    if (jsLength(utils.js_string.trim(value.?)) > 100) {
         return "Title should be under 100 characters";
     }
     return null;
@@ -126,7 +122,7 @@ fn validateTitle(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
 //
 fn validateDescription(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
     _ = context;
-    if (value == null or std.mem.trim(u8, value.?, js_whitespace).len == 0) {
+    if (value == null or utils.js_string.trim(value.?).len == 0) {
         return "Please provide a description of the bug";
     }
     return null;
@@ -137,7 +133,7 @@ fn validateDescription(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
 //
 fn validateStep(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
     const stepNumber: *const usize = @ptrCast(@alignCast(context.?));
-    if (stepNumber.* == 1 and (value == null or std.mem.trim(u8, value.?, js_whitespace).len == 0)) {
+    if (stepNumber.* == 1 and (value == null or utils.js_string.trim(value.?).len == 0)) {
         return "Please provide at least one step";
     }
     return null;
@@ -148,7 +144,7 @@ fn validateStep(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
 //
 fn validateExpectedBehavior(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
     _ = context;
-    if (value == null or std.mem.trim(u8, value.?, js_whitespace).len == 0) {
+    if (value == null or utils.js_string.trim(value.?).len == 0) {
         return "Please describe what you expected to happen";
     }
     return null;
@@ -159,7 +155,7 @@ fn validateExpectedBehavior(context: ?*anyopaque, value: ?[]const u8) ?[]const u
 //
 fn validateActualBehavior(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
     _ = context;
-    if (value == null or std.mem.trim(u8, value.?, js_whitespace).len == 0) {
+    if (value == null or utils.js_string.trim(value.?).len == 0) {
         return "Please describe what actually happened";
     }
     return null;
@@ -238,7 +234,7 @@ pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, options: *cons
             // (TypeScript also breaks when the step is undefined; the Zig prompt returns an empty string for it,
             // which the next check breaks on.)
 
-            const stepText = std.mem.trim(u8, step.value, js_whitespace);
+            const stepText = utils.js_string.trim(step.value);
             if (stepText.len == 0 and stepNumber > 1) {
                 break; // User finished entering steps
             }

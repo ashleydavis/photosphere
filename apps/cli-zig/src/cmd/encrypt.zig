@@ -112,7 +112,7 @@ pub fn encryptCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
     // If --generate-key is set, generate the first key in the list if it doesn't exist in the vault.
     if ((options.generateKey orelse false) and options.base.key != null and options.base.key.?.len > 0) {
         var keyNames = std.mem.splitScalar(u8, options.base.key.?, ',');
-        const firstKeyName = std.mem.trim(u8, keyNames.first(), " \t\r\n");
+        const firstKeyName = utils.js_string.trim(keyNames.first());
         const vault = try getVault(getDefaultVaultType());
         const existing = try vault.get(allocator, io, firstKeyName);
         if (existing == null) {

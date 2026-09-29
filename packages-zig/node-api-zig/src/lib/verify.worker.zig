@@ -209,6 +209,8 @@ pub fn verifyFileResultToJson(allocator: std.mem.Allocator, result: IVerifyFileR
 }
 
 //
+// TODO: always en-US in UTC, where JavaScript uses the machine's time zone and locale.
+//
 // Formats a date like JavaScript's `date.toLocaleString()` in the en-US locale ("M/D/YYYY, h:mm:ss AM"), in UTC
 // (the time zone of the environments psi runs its tests in). (No TypeScript counterpart: a JavaScript built-in.)
 //

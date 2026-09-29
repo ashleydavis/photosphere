@@ -392,3 +392,22 @@ test "exifDateToDashes turns the date of an EXIF date into dashes and leaves any
     try std.testing.expectEqualStrings("20231225", try tools.image.exifDateToDashes(allocator, "20231225"));
     try std.testing.expectEqualStrings("", try tools.image.exifDateToDashes(allocator, ""));
 }
+
+test "parseExifOutput reads the tags as String.prototype.trim and the regular expression /exif:([^=]+)=(.*)/ do" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // trim() removes the U+3000 ending the output, which ends the last value.
+    const trimmed = try Image.parseExifOutput(allocator, "exif:Make=Canon\nexif:Model=EOS\u{3000}");
+    try std.testing.expectEqualStrings("EOS", trimmed.get("Model").?);
+
+    // `.` stops at U+2028 as it does at \r.
+    const separated = try Image.parseExifOutput(allocator, "exif:Artist=Ann\u{2028}Lee\nexif:Copyright=Me\rYou");
+    try std.testing.expectEqualStrings("Ann", separated.get("Artist").?);
+    try std.testing.expectEqualStrings("Me", separated.get("Copyright").?);
+
+    // An "exif:" with nothing before the "=" does not match there, so the search goes on to the next "exif:".
+    const later = try Image.parseExifOutput(allocator, "exif:=x exif:Make=Nikon");
+    try std.testing.expectEqualStrings("Nikon", later.get("Make").?);
+}

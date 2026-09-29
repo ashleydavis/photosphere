@@ -960,6 +960,8 @@ const ImportRun = struct {
                 }
                 else {
                     if (try self.hashesQueuedForImport.has(hashBuffer)) {
+                        // TODO: replicates a TypeScript bug. The template string lost its `${logicalPath}`, so the name is
+                        // empty. Fix it in the TypeScript first, then here.
                         log.verbose("File \"\" is a duplicate in this scan, skipping.");
                         self.releaseFile(hashFileData.filePath);
                     }

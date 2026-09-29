@@ -143,6 +143,9 @@ pub const IDatabaseSummary = struct {
 //
 
 //
+// TODO: a filesImported that is not a whole number reads as 0 or truncated, where JavaScript carries it through
+// (and a string grows by concatenation).
+//
 // Equivalent of `databaseMetadata?.filesImported || 0`. (No TypeScript counterpart: the expression is inline.)
 //
 pub fn getFilesImported(databaseMetadata: ?BsonDocument) u64 {

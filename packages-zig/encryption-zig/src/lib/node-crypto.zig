@@ -310,6 +310,9 @@ pub fn generateKeyPairSync(allocator: std.mem.Allocator, io: std.Io, modulusLeng
 }
 
 //
+// TODO: a key that is not RSA is refused when it is loaded, where node:crypto accepts it and encryption fails
+// later with OpenSSL's message.
+//
 // Makes a PrivateKey from a parsed key, which must be RSA.
 //
 fn makePrivateKey(allocator: std.mem.Allocator, key: *c.EVP_PKEY) !*const PrivateKey {

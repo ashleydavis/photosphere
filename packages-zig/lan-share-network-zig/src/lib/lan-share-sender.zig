@@ -311,6 +311,9 @@ pub const LanShareSender = struct {
 };
 
 //
+// TODO: a port that is not a port is ignored and discovery keeps listening, where the TypeScript takes the
+// receiver and fails to connect.
+//
 // Reads the announced port with `parseInt(text, 10)`. Returns null for NaN, and for a number that is not a port (the
 // TypeScript sender would use it and fail to connect).
 //

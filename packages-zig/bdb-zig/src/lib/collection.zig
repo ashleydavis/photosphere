@@ -587,6 +587,9 @@ pub const BsonCollection = struct {
     pub fn insertOne(self: *BsonCollection, io: std.Io, record: *IRecord, timestamp: ?i64) !void {
         const existingId = record.get("_id");
         if (existingId == null or existingId.? != .string or existingId.?.string.len == 0) {
+
+            // TODO: an _id that is not a string is replaced with a new UUID, where the TypeScript keeps a truthy one (and
+            // then fails in getShardId).
             try record.put(self.allocator, "_id", .{ .string = try self.uuidGenerator.generate(self.allocator, io) });
         }
         const recordId = record.get("_id").?.string;

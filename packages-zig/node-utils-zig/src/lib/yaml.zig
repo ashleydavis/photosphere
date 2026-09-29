@@ -8,6 +8,8 @@
 // not supported and report a YAMLException like js-yaml's errors for malformed input.
 //
 
+// TODO: anchors, aliases, tags, plain scalars over several lines and documents of more than one part throw a
+// YAMLException, where js-yaml reads them.
 const std = @import("std");
 const utils = @import("utils-zig");
 const errors = utils.errors;

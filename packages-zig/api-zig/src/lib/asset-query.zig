@@ -75,6 +75,8 @@ pub fn searchAssets(
 ) ![]const IAsset {
     const metadataCollection = try bsonDatabase.collection("metadata");
 
+    // TODO: lowercases ASCII letters only, where toLowerCase lowercases every letter with a lowercase form, so
+    // names that differ in the case of a non-ASCII letter match in TypeScript and not here.
     const queryLower = try std.ascii.allocLowerString(allocator, query);
     const contentTypePrefix: ?[]const u8 = if (isTruthy(contentType)) try std.ascii.allocLowerString(allocator, contentType.?) else null;
     const dateFromMs: ?f64 = if (isTruthy(dateFrom)) parseDate(dateFrom.?) else null;

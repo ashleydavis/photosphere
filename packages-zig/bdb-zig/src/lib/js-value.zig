@@ -600,6 +600,8 @@ pub fn objectKeys(allocator: std.mem.Allocator, value: BsonValue) ![]const []con
             return &.{};
         },
         else => {
+
+            // TODO: values of types the bdb code never writes throw here, where JavaScript carries them through.
             return errors.throwError("Object.keys of a {s} value is not ported", .{@tagName(value)});
         },
     }

@@ -92,6 +92,8 @@ pub fn spawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8,
 }
 
 //
+// TODO: closes the child's stdin, where the TypeScript runCommand leaves the pipe open.
+//
 // The default SpawnFunction: runs the process with std.process.spawn, inheriting `process.env`.
 // A program that cannot be found fails like Node's spawn ("spawn <cmd> ENOENT").
 //

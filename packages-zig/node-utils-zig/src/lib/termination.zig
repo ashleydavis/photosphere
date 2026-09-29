@@ -7,6 +7,8 @@ const EXIT_SUCCESS = exit_codes.EXIT_SUCCESS;
 const EXIT_TERMINATION_CALLBACKS_THREW = exit_codes.EXIT_TERMINATION_CALLBACKS_THREW;
 const EXIT_SIGTERM_CLEANUP_FAILED = exit_codes.EXIT_SIGTERM_CLEANUP_FAILED;
 const EXIT_SIGINT_CLEANUP_FAILED = exit_codes.EXIT_SIGINT_CLEANUP_FAILED;
+const EXIT_UNCAUGHT_EXCEPTION = exit_codes.EXIT_UNCAUGHT_EXCEPTION;
+const EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED = exit_codes.EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED;
 const EXIT_UNHANDLED_REJECTION = exit_codes.EXIT_UNHANDLED_REJECTION;
 const EXIT_UNHANDLED_REJECTION_CLEANUP_FAILED = exit_codes.EXIT_UNHANDLED_REJECTION_CLEANUP_FAILED;
 
@@ -165,6 +167,32 @@ fn shutdownOnSignal(io: std.Io, signalName: []const u8, cleanupFailedCode: u8) n
 }
 
 //
+// Ends the process for an error that nothing catches (TypeScript: an uncaught exception, which Zig does not have, so
+// the code that throws one calls this). Once the termination handlers are initialized it is the
+// `process.on('uncaughtException')` handler: the error is logged, the termination callbacks run and the process exits
+// with EXIT_UNCAUGHT_EXCEPTION (EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED when they throw). Before that it is Bun's own
+// handling, which prints the error to stderr and exits with 1.
+//
+pub fn shutdownOnUncaughtException(io: std.Io, err: anyerror) noreturn {
+    if (!terminationCallbacksInitialized) {
+        var buffer: [16 * 1024]u8 = undefined;
+        var fixedWriter = std.Io.Writer.fixed(&buffer);
+        utils.wrapped_error.writeErrorChain(&fixedWriter, err) catch {};
+        utils.console.@"error"(fixedWriter.buffered());
+        std.process.exit(1);
+    }
+
+    utils.log.log.exception("Uncaught exception.", err);
+
+    var exitCode = EXIT_UNCAUGHT_EXCEPTION;
+    invokeTerminationCallbacks(io, EXIT_UNCAUGHT_EXCEPTION) catch |cleanupErr| {
+        utils.log.log.exception("Error during uncaught exception shutdown.", cleanupErr);
+        exitCode = EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED;
+    };
+    exitProcess(exitCode);
+}
+
+//
 // Handles an error thrown out of a signal handler. In TypeScript the async signal handler's promise
 // rejects, which the `process.on('unhandledRejection')` handler turns into this shutdown.
 //
@@ -227,9 +255,10 @@ fn watchSignals() void {
 
 //
 // Initializes the termination handlers for the process.
-// Not ported: the 'uncaughtException', 'unhandledRejection' and 'beforeExit' handlers
-// (Zig has no uncaught exceptions or rejections; errors are returned to `main`, which handles them, and the
-// commands always end in exit). The 'exit' handler's log line is written by exitProcess.
+// The 'uncaughtException' handler is shutdownOnUncaughtException, which the code that throws an error nothing catches
+// calls, and the 'unhandledRejection' handler is shutdownOnUnhandledRejection, which a signal handler that throws
+// reaches. Not ported: the 'beforeExit' handler, which only logs (the commands always end in exit). The 'exit'
+// handler's log line is written by exitProcess.
 //
 fn initializeTerminationHandlers(io: std.Io) !void {
     if (terminationCallbacksInitialized) {

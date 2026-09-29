@@ -35,6 +35,8 @@ const IOrientation = union(enum) {
 };
 
 //
+// TODO: a Date renders as `date`, where String(date) writes the date.
+//
 // Reads a JavaScript value (serialization-zig's BsonValue, taken by duck typing because utils cannot depend on
 // serialization) as an orientation.
 //
@@ -175,6 +177,8 @@ pub fn getImageTransformation(allocator: std.mem.Allocator, exif: anytype) !?IIm
     return errors.throwError("Unsupported orientation: {s}", .{writer.buffered()});
 }
 
+//
+// TODO: streams that are not an array give no transformation, where `for...of` throws a TypeError.
 //
 // Gets the transformation for a video. The metadata is a JavaScript object (serialization-zig's BsonDocument, or
 // null for undefined), taken by duck typing like getImageTransformation.

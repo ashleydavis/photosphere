@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 const core = @import("../core/index.zig");
 const color = @import("../../picocolors.zig");
 const common = @import("common.zig");
@@ -51,7 +52,7 @@ const PasswordRender = struct {
         switch (prompt.state) {
             .@"error" => {
                 const maskedText = if (masked.len > 0) try std.fmt.allocPrint(allocator, "  {s}", .{masked}) else "";
-                return try std.fmt.allocPrint(allocator, "{s}\n{s}{s}\n{s}  {s}\n", .{ std.mem.trim(u8, title, " \t\n\r"), try color.yellow(allocator, S_BAR()), maskedText, try color.yellow(allocator, S_BAR_END()), try color.yellow(allocator, prompt.@"error") });
+                return try std.fmt.allocPrint(allocator, "{s}\n{s}{s}\n{s}  {s}\n", .{ utils.js_string.trim(title), try color.yellow(allocator, S_BAR()), maskedText, try color.yellow(allocator, S_BAR_END()), try color.yellow(allocator, prompt.@"error") });
             },
             .submit => {
                 const maskedText = if (masked.len > 0) try std.fmt.allocPrint(allocator, "  {s}", .{try color.dim(allocator, masked)}) else "";

@@ -1780,6 +1780,9 @@ fn deserializeSortNodeV5(allocator: std.mem.Allocator, deserializer: IDeserializ
         const lastModifiedLow = try deserializer.readUInt32();
         const lastModifiedHigh = try deserializer.readUInt32();
         const lastModifiedTimestamp = combineBigNum(.{ .low = lastModifiedLow, .high = lastModifiedHigh });
+
+        // TODO: a time past what a Date holds is kept as a number (2 ** 63 or more reads as negative), where the
+        // TypeScript gives an Invalid Date.
         const lastModified: ?i64 = if (lastModifiedTimestamp > 0) @bitCast(lastModifiedTimestamp) else null;
 
         // For leaf nodes, minName equals name

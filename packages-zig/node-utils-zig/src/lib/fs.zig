@@ -649,6 +649,8 @@ pub fn getProcessTmpDir(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 }
 
 //
+// TODO: on Windows USERPROFILE only, where Bun falls back to the profile directory Windows reports.
+//
 // Equivalent of Bun's `os.homedir()`: $HOME, or when that is unset or empty the home directory of the user's passwd
 // entry (an empty string when there is none). On Windows %USERPROFILE%, or an empty string when it is not set.
 //

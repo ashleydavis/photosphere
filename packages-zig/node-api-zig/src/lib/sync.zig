@@ -1078,6 +1078,8 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: I
 }
 
 //
+// TODO: accepts a leaf with an empty name, where `!node.name` throws in the TypeScript.
+//
 // Extracts leaf node names from MerkleNode arrays.
 // (Zig: collects the names into a list in place of the TypeScript generator yielding them.)
 //

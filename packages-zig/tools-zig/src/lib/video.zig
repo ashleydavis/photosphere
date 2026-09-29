@@ -155,11 +155,19 @@ pub const Video = struct {
         const command = try std.fmt.allocPrint(allocator, "{s} -v quiet -print_format json -show_format -show_streams \"{s}\"", .{ ffprobeCommand, self.filePath });
         const result = try exec(allocator, io, command);
 
-        const probeData = (try jsonParse(allocator, result.stdout)).document;
+        const probeData = switch (try jsonParse(allocator, result.stdout)) {
+            .document => |document| document,
+
+            // `probeData.format` of null throws; any other value that is not an object has no format and no streams.
+            .null => return typeError("null is not an object (evaluating 'probeData.format')"),
+            else => return typeError("undefined is not an object (evaluating 'probeData.streams.find')"),
+        };
         const format = probeData.get("format") orelse BsonValue.undefined;
         const streams = switch (probeData.get("streams") orelse BsonValue.undefined) {
             .array => |items| items,
-            else => return errors.throwError("TypeError: probeData.streams.find is not a function", .{}),
+            .undefined => return typeError("undefined is not an object (evaluating 'probeData.streams.find')"),
+            .null => return typeError("null is not an object (evaluating 'probeData.streams.find')"),
+            else => return typeError("probeData.streams.find is not a function. (In 'probeData.streams.find((s) => s.codec_type === \"video\")', 'probeData.streams.find' is undefined)"),
         };
         const videoStream = findStream(streams, "video");
         const audioStream = findStream(streams, "audio");
@@ -332,11 +340,19 @@ fn isTruthy(value: BsonValue) bool {
 }
 
 //
+// Throws the TypeError Bun throws with the message.
+//
+fn typeError(message: []const u8) errors.ThrownError {
+    errors.recordError("TypeError", "{s}", .{message});
+    return error.Thrown;
+}
+
+//
 // JavaScript's `Number(text)` for a string: the trimmed text as a decimal number, 0 when it is empty, NaN when it
 // is not a number.
 //
 fn jsNumber(text: []const u8) f64 {
-    const trimmed = std.mem.trim(u8, text, " \t\n\r\x0b\x0c");
+    const trimmed = utils.js_string.trim(text);
     if (trimmed.len == 0) {
         return 0;
     }

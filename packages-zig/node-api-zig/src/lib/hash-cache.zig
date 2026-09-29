@@ -1321,6 +1321,9 @@ const ILoadedHashCache = struct {
 threadlocal var loadedHashCaches: std.StringHashMapUnmanaged(ILoadedHashCache) = .empty;
 
 //
+// TODO: compares the cache file's modified time in nanoseconds, where the TypeScript compares mtimeMs, a double
+// that cannot tell apart two times less than about a quarter of a microsecond apart.
+//
 // Returns a read-only hash cache for a directory, reading the file only when it has changed.
 //
 // Loading a hash cache reads and decodes the whole file, and hashing a file asked for a fresh one

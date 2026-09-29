@@ -43,10 +43,10 @@ const findSimilarSecretNames = init_cmd.findSimilarSecretNames;
 const SECRET_TYPES = [_][]const u8{ "api-key", "s3-credentials", "encryption-key", "plain" };
 
 //
-// `text.trim()`: removes the ASCII characters JavaScript's String.prototype.trim removes.
+// `text.trim()`.
 //
 fn trim(value: []const u8) []const u8 {
-    return std.mem.trim(u8, value, " \t\n\r\x0b\x0c");
+    return utils.js_string.trim(value);
 }
 
 //
