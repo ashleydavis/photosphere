@@ -53,14 +53,6 @@ fn checkTool(allocator: std.mem.Allocator, io: std.Io) !void {
 }
 
 //
-// Forgets that the tool availability check has been performed (tests only; TypeScript tests get a
-// fresh module per test file instead).
-//
-pub fn resetToolChecked() void {
-    toolChecked.store(false, .release);
-}
-
-//
 // Preamble that forces Windows PowerShell to load the WinRT projections for
 // the Windows.Security.Credentials namespace. Without this, New-Object fails
 // with "Cannot find type [Windows.Security.Credentials.PasswordVault]".

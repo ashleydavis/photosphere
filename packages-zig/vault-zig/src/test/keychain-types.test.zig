@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const vault_zig = @import("vault-zig");
 const utils = @import("utils-zig");
 const keychain_types = vault_zig.keychain_types;
+const IStandIns = @import("stand-ins.zig").IStandIns;
 const errors = utils.errors;
 
 test "KEYCHAIN_PREFIX is psi-" {
@@ -106,4 +107,14 @@ test "runCommand trims stdout and stderr as String.prototype.trim does, Unicode 
     try std.testing.expectEqualStrings("hello", stdout);
     try std.testing.expectError(error.Thrown, keychain_types.runCommand(arena.allocator(), std.testing.io, &.{ "sh", "-c", "printf '\\302\\240oops\\302\\240' >&2; exit 3" }));
     try std.testing.expectEqualStrings("Command \"sh -c printf '\\302\\240oops\\302\\240' >&2; exit 3\" exited with code 3. stderr: oops", errors.lastErrorMessage());
+}
+
+test "runCommand runs the program PATH finds and rejects a program PATH does not find" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
+    defer standIns.tearDown();
+    try std.testing.expectEqualStrings("fake", try keychain_types.runCommand(arena.allocator(), std.testing.io, &.{"photosphere-stand-in-output"}));
+    try std.testing.expectError(error.Thrown, keychain_types.runCommand(arena.allocator(), std.testing.io, &.{"photosphere-no-such-program"}));
+    try std.testing.expectEqualStrings("spawn photosphere-no-such-program ENOENT", errors.lastErrorMessage());
 }
