@@ -430,14 +430,9 @@ const IInputFileResult = union(enum) {
 // Reads and parses a JSON input file (TypeScript: `JSON.parse(await fs.readFile(inputPath, 'utf8'))`).
 //
 fn readInputFile(allocator: std.mem.Allocator, io: std.Io, inputPath: []const u8) !IInputFileResult {
-    const inputContent = std.Io.Dir.cwd().readFileAlloc(io, inputPath, allocator, .unlimited) catch |err| {
-        if (err == error.FileNotFound) {
-            return .{
-                .failure = try std.fmt.allocPrint(allocator, "ENOENT: no such file or directory, open '{s}'", .{inputPath}),
-            };
-        }
+    const inputContent = node_utils.node_fs.readFile(allocator, io, inputPath) catch |err| {
         return .{
-            .failure = @errorName(err),
+            .failure = errorMessage(err),
         };
     };
     const parsed = jsonParse(allocator, inputContent) catch |err| {
@@ -640,10 +635,7 @@ pub fn debugFindCollisionsCommand(allocator: std.mem.Allocator, io: std.Io, cont
     const collisionsJson = try js_value.jsonStringifyIndented(allocator, .{
         .document = collisionsData,
     });
-    try std.Io.Dir.cwd().writeFile(io, .{
-        .sub_path = outputPath,
-        .data = collisionsJson,
-    });
+    try node_utils.node_fs.writeFile(io, outputPath, collisionsJson);
 
     var totalAssetIds: usize = 0;
     for (collisions.items) |collision| {
@@ -764,10 +756,7 @@ pub fn debugFindDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, cont
     const duplicatesJson = try js_value.jsonStringifyIndented(allocator, .{
         .document = duplicatesData,
     });
-    try std.Io.Dir.cwd().writeFile(io, .{
-        .sub_path = outputPath,
-        .data = duplicatesJson,
-    });
+    try node_utils.node_fs.writeFile(io, outputPath, duplicatesJson);
 
     // Calculate statistics
     const totalCollisions = hashes.len;

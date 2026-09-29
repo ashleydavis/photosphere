@@ -37,6 +37,21 @@ pub const TextOptions = struct {
 };
 
 //
+// The placeholder with its first character inverted and the rest dimmed
+// (`color.inverse(opts.placeholder[0]) + color.dim(opts.placeholder.slice(1))`). The first character is the first
+// UTF-16 code unit, so a character outside the Basic Multilingual Plane is split into its two surrogates, and each
+// lone surrogate is written as U+FFFD.
+//
+fn placeholderWithFirstInverted(allocator: std.mem.Allocator, placeholderText: []const u8) ![]const u8 {
+    const firstLength = @min(std.unicode.utf8ByteSequenceLength(placeholderText[0]) catch 1, placeholderText.len);
+    if (firstLength == 4) {
+        const rest = try std.fmt.allocPrint(allocator, "\u{FFFD}{s}", .{placeholderText[4..]});
+        return std.fmt.allocPrint(allocator, "{s}{s}", .{ try color.inverse(allocator, "\u{FFFD}"), try color.dim(allocator, rest) });
+    }
+    return std.fmt.allocPrint(allocator, "{s}{s}", .{ try color.inverse(allocator, placeholderText[0..firstLength]), try color.dim(allocator, placeholderText[firstLength..]) });
+}
+
+//
 // The state of the render function of a text prompt.
 //
 const TextRender = struct {
@@ -51,8 +66,8 @@ const TextRender = struct {
         const textPrompt = prompt.kind.text;
         const allocator = prompt.allocator;
         const title = try std.fmt.allocPrint(allocator, "{s}  {s}\n", .{ try symbol(allocator, prompt.state), self.opts.message });
-        const placeholder = if (self.opts.placeholder) |placeholderText|
-            try std.fmt.allocPrint(allocator, "{s}{s}", .{ try color.inverse(allocator, placeholderText[0..@min(1, placeholderText.len)]), try color.dim(allocator, placeholderText[@min(1, placeholderText.len)..]) })
+        const placeholder = if (self.opts.placeholder != null and self.opts.placeholder.?.len > 0)
+            try placeholderWithFirstInverted(allocator, self.opts.placeholder.?)
         else
             try color.inverse(allocator, try color.hidden(allocator, "_"));
         const userInput = if (prompt.userInput.len == 0) placeholder else try textPrompt.userInputWithCursor(allocator);

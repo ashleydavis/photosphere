@@ -6,8 +6,9 @@ function order as the TypeScript ones.
 
 **Progress of the side by side comparison:** storage, bdb, api, lan-share-core, node-api, node-utils, utils,
 encryption, vault, fuzzy-match, config, lan-share-network, serialization, merkle-tree, task-queue and tools done.
-apps/cli: its trims and most of its lib files and commands compared and fixed; its tables, the rest of its
-lib files and commands, its MCP tools and its ports of third party packages are still to do.
+apps/cli: its files, its commands and its copy of the clack prompts are mapped, compared and fixed; the ports of the
+third party packages it uses (commander, picocolors, open, readline, string-width, wrap-ansi, sisteransi, the MCP SDK)
+are checked by the golden fixtures their tests compare with, not yet read side by side with the packages.
 
 ## Which files are listed
 
@@ -2210,8 +2211,8 @@ Not reached by the CLI: only exported from index.ts, and only the desktop asset 
 
 ## node-utils
 
-`packages/node-utils` to `packages-zig/node-utils-zig`. Zig only: `path.zig` (replaces `node:path`),
-`process-env.zig` (`process.env`), `toml.zig` (the `smol-toml` npm package) and `yaml.zig` (the `js-yaml` npm package).
+`packages/node-utils` to `packages-zig/node-utils-zig`. Zig only: `node-fs.zig` (replaces `readFile` and `writeFile` of `node:fs`),
+`path.zig` (replaces `node:path`), `process-env.zig` (`process.env`), `toml.zig` (the `smol-toml` npm package) and `yaml.zig` (the `js-yaml` npm package).
 
 <!-- tables: packages/node-utils node-utils.txt -->
 
@@ -2406,6 +2407,7 @@ Used by init-cmd.ts and worker.ts when NODE_ENV is testing (the bundle metafile 
 
 | Zig file | What it is |
 |---|---|
+| `packages-zig/node-utils-zig/src/lib/node-fs.zig` | Replaces `readFile` and `writeFile` of `node:fs`, with the messages of the errors they throw. |
 | `packages-zig/node-utils-zig/src/lib/path.zig` | Replaces `node:path` (posix and win32 join, normalize, dirname, basename, extname, isAbsolute). |
 | `packages-zig/node-utils-zig/src/lib/process-env.zig` | Replaces `process.env`. |
 | `packages-zig/node-utils-zig/src/lib/toml.zig` | Replaces the `smol-toml` npm package (parse and stringify). |
@@ -3589,6 +3591,1461 @@ Not reached by the CLI: tree-shaken out of the bundle (nothing the CLI runs call
 
 <!-- end tables -->
 
+## apps/cli
+
+`apps/cli` to `apps/cli-zig`. The third party packages the CLI is built on have Zig ports of their own under
+`src/lib` (commander, picocolors, open and the parts of the clack prompts' dependencies it uses), listed at the end.
+
+<!-- tables: apps/cli cli.txt -->
+
+#### `apps/cli/index.ts` to `apps/cli-zig/index.zig`
+
+The command line is defined in `createProgram` (main's `program...` calls, with the ported commander in `commander.zig`), parsed in `parseCommandLine` and run in `run`: the actions of index.ts run inside `parseAsync`, here they record what to run (`IProgramState`) and `run` runs it after the parse, in the same order.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `main` | `main`, `createProgram`, `parseCommandLine`, `run` |  |
+| `handleError` | `handleError` | The `uncaughtException` and `unhandledRejection` handlers of index.ts have no counterpart: every Zig error returns to main, which handles it as `main().catch` does. |
+| none | `IOptionSpec` | The `[flags, description, default?]` option tuples at the top of main. |
+| none | `optionFrom` | Replaces `.option(...tuple)`. |
+| none | `IAddParsed` | The TypeScript interface of the same name, as a struct. |
+| none | `ICheckParsed` | The TypeScript interface of the same name, as a struct. |
+| none | `ISetOriginParsed` | The TypeScript interface of the same name, as a struct. |
+| none | `IRemoveParsed` | The TypeScript interface of the same name, as a struct. |
+| none | `IConsolidateParsed` | The TypeScript interface of the same name, as a struct. |
+| none | `IExportParsed` | The TypeScript interface of the same name, as a struct. |
+| none | `IInfoParsed` | The TypeScript interface of the same name, as a struct. |
+| none | `IHashParsed` | The TypeScript interface of the same name, as a struct. |
+| none | `IHashCacheAddParsed` | The TypeScript interface of the same name, as a struct. |
+| none | `IHashCacheSetParsed` | The TypeScript interface of the same name, as a struct. |
+| none | `IHashCacheKeyParsed` | The TypeScript interface of the same name, as a struct. |
+| none | `ParseOutcome` | Zig plumbing: the command an action asked `run` to run (see the file note). |
+| none | `IProgramState` | Zig plumbing: what the preAction hook and the actions leave for `run`. |
+| none | `versionOption` | The `--version` option's callback, which prints the version and exits. |
+| none | `preActionHook` | The `program.hook('preAction', ...)` arrow function. |
+| none | `textValue` | Replaces reading a string option of commander's options object. |
+| none | `flagValue` | Replaces reading a boolean option of commander's options object. |
+| none | `baseOptions` | Replaces the options object an action is given, read as IBaseCommandOptions. |
+| none | `addAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `checkAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `initAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `replicateAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `compareAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `repairAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `findOrphansAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `removeOrphansAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `syncAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `consolidateAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `encryptAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `decryptAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `bugAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `newsAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `debugMerkleTreeAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `debugFindCollisionsAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `debugFindDuplicatesAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `debugRemoveDuplicatesAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `debugBuildSortIndexAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `debugBuildFilesTreeAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `hashAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `toolsAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `hashCacheShowAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `hashCacheClearAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `hashCacheToolOptions` | Replaces the options object of the hash cache tools, read as IHashCacheToolOptions. |
+| none | `hashCacheHashFileAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `hashCacheAddAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `hashCacheSetAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `hashCacheSetSourceAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `hashCacheGetAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `hashCacheGetAssetIdAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `hashCacheRemoveAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `hashCacheListAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `hashCacheCountAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `hashCacheDirAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `upgradeAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `removeAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `exportAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `infoAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `listAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `originAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `setOriginAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `rootHashAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `databaseIdAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `summaryAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `verifyAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `versionAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `examplesAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `helpAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `mcpAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `helpCommand` | The action of the `help [command]` command added in alphabetical order. |
+| none | `mainHelpText` | The text of `program.addHelpText('after', ...)`. |
+| none | `secretsAddAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `secretsListAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `secretsViewAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `secretsEditAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `secretsRemoveAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `secretsClearAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `secretsImportAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `secretsSendAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `secretsReceiveAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `secretsCommand` | The `psi secrets` group, which secrets.ts builds in its own secretsCommand. |
+| none | `dbsListAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `dbsAddAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `dbsViewAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `dbsEditAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `dbsRemoveAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `dbsClearAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `dbsSendAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `dbsReceiveAction` | The `.action(...)` of its command in main: reads the arguments and options for `run`, which calls initContext and the command as `initContext(command)` does. |
+| none | `dbsCommand` | The `psi dbs` group, which dbs.ts builds in its own dbsCommand. |
+| none | `isHelpCode` | The `err.code === 'commander.help' \|\| ...` test of main's catch. |
+| none | `isQuietCommanderError` | The test of the codes main's catch exits 1 for. |
+
+#### `apps/cli/src/cmd/add.ts` to `apps/cli-zig/src/cmd/add.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `addCommand` | `addCommand` |  |
+| `watchSettings` | `watchSettings` |  |
+| `cleanUpImportedSources` | `cleanUpImportedSources` |  |
+| none | `IAddCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `padCount` | Replaces `count.toString().padStart(4)`. |
+| none | `ProgressState` | The variables the progress arrow function of runImport closes over. |
+| none | `ProgressState.onProgress` | The `(currentlyScanning, summary) => { ... }` arrow function of runImport. |
+| none | `ProgressState.buildProgressMessage` | The message that arrow function builds. |
+
+#### `apps/cli/src/cmd/bug.ts` to `apps/cli-zig/src/cmd/bug.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `bugReportCommand` | `bugReportCommand` |  |
+| `getSystemInfo` | `getSystemInfo` |  |
+| `getToolVersions` | `getToolVersions` |  |
+| `getLatestLogFile` | `getLatestLogFile` |  |
+| `getLogHeader` | `getLogHeader` |  |
+| `generateBugReportTemplate` | `generateBugReportTemplate` |  |
+| `createGitHubIssueUrl` | `createGitHubIssueUrl` |  |
+| none | `IBugReportCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IBugInfo` | The TypeScript interface of the same name, as a struct. |
+| none | `ISystemInfo` | The TypeScript interface of the same name, as a struct. |
+| none | `IToolVersions` | The TypeScript interface of the same name, as a struct. |
+| none | `validateTitle` | The `validate` arrow function of the prompt. |
+| none | `validateDescription` | The `validate` arrow function of the prompt. |
+| none | `validateStep` | The `validate` arrow function of the prompt. |
+| none | `validateExpectedBehavior` | The `validate` arrow function of the prompt. |
+| none | `validateActualBehavior` | The `validate` arrow function of the prompt. |
+| none | `cancelled` | The `if (isCancel(...)) { outro(...); await exit(0); }` repeated after each prompt. |
+| none | `ILogFileEntry` | The TypeScript interface of the same name, as a struct. |
+| none | `newerFirst` | The comparison function of the log files' `sort`. |
+| none | `nameOrder` | The name order `readdirSync` lists the log files in (libuv sorts them; not on Windows). |
+| none | `getLatestLogFileUnsafe` | The body of getLatestLogFile's try block. |
+| none | `appendFormEncoded` | Replaces `URLSearchParams.toString()`. |
+
+#### `apps/cli/src/cmd/check.ts` to `apps/cli-zig/src/cmd/check.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `checkCommand` | `checkCommand` |  |
+| none | `ICheckCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `onProgress` | The progress arrow function passed to the node-api call. |
+| none | `buildProgressMessage` | The message that arrow function builds. |
+
+#### `apps/cli/src/cmd/clear-cache.ts` to `apps/cli-zig/src/cmd/clear-cache.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `clearCacheCommand` | `clearCacheCommand` |  |
+| none | `IClearCacheCommandOptions` | The TypeScript interface of the same name, as a struct. |
+
+#### `apps/cli/src/cmd/compare.ts` to `apps/cli-zig/src/cmd/compare.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `compareCommand` | `compareCommand` |  |
+| none | `ICompareCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `onProgress` | The progress arrow function passed to compareTrees. |
+| none | `configOrigin` | Replaces `config?.origin`. |
+| none | `sliceEnd` | Replaces the end index of `slice(0, maxItems)` for any JavaScript number. |
+| none | `showFiles` | The block repeated for each kind of difference. |
+
+#### `apps/cli/src/cmd/consolidate.ts` to `apps/cli-zig/src/cmd/consolidate.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `consolidateCommand` | `consolidateCommand` |  |
+| none | `IConsolidateCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `onReplicateProgress` | The `progress => { log.verbose(progress); }` arrow function. |
+| none | `consolidateDatabaseDataToJson` | Zig plumbing: the task data as the JSON value that is queued. |
+
+#### `apps/cli/src/cmd/database-id.ts` to `apps/cli-zig/src/cmd/database-id.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `databaseIdCommand` | `databaseIdCommand` |  |
+| none | `IDatabaseIdCommandOptions` | The TypeScript interface of the same name, as a struct. |
+
+#### `apps/cli/src/cmd/dbs.ts` to `apps/cli-zig/src/cmd/dbs.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `isLocalPath` | `isLocalPath` |  |
+| `findDatabaseByPath` | `findDatabaseByPath` |  |
+| `findDatabaseByIdentifier` | `findDatabaseByIdentifier` |  |
+| `promptForSecretType` | `promptForSecretType` |  |
+| `pickOrCreateSecret` | `pickOrCreateSecret` |  |
+| `createSharedSecret` | `createSharedSecret` |  |
+| `suffixForSecretType` | `suffixForSecretType` |  |
+| `inferSecretName` | `inferSecretName` |  |
+| `resolveUniqueSecretName` | `resolveUniqueSecretName` |  |
+| `promptRequired` | `promptRequired` |  |
+| `promptOptional` | `promptOptional` |  |
+| `dbsCommand` | none | The `psi dbs` group is defined in index.zig (dbsCommand there), with the ported commander. |
+| `dbsList` | `dbsList` |  |
+| `dbsAdd` | `dbsAdd` |  |
+| `dbsView` | `dbsView` |  |
+| `dbsEdit` | `dbsEdit` |  |
+| `dbsRemove` | `dbsRemove` |  |
+| `dbsClear` | `dbsClear` |  |
+| `dbsSend` | `dbsSend` |  |
+| `buildConflictResolver` | `buildConflictResolver` |  |
+| `dbsReceive` | `dbsReceive` |  |
+| `resolveDatabaseNameConflict` | `resolveDatabaseNameConflict` |  |
+| none | `IDbsAddOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IDbsViewOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IDbsEditOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IDbsRemoveOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IDbsSendOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IDbsClearOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IDbsReceiveOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `trim` | Replaces `text.trim()`. |
+| none | `format` | Replaces a template string. |
+| none | `padEnd` | Replaces `text.padEnd(length)`. |
+| none | `rule` | Replaces `'─'.repeat(count)`. |
+| none | `isGiven` | Replaces the truthiness test of an option. |
+| none | `trimGiven` | Replaces `if (option) { option = option.trim(); }`. |
+| none | `logDidYouMean` | The "Did you mean" hint repeated by several subcommands. |
+| none | `exitNoMatchingDatabase` | The not-found branch repeated by view, remove and send. |
+| none | `checkSecretsExist` | The secret checks repeated by `dbs add --yes` and `dbs edit --yes`. |
+| none | `IS3CredentialsValue` | The TypeScript interface of the same name, as a struct. |
+| none | `validateRequired` | The `validate` arrow function of a required field. |
+| none | `validateName` | The `validate` arrow function of the name prompt. |
+| none | `validatePath` | The `validate` arrow function of the path prompt. |
+| none | `validatePairingCode` | The `validate` arrow function of the pairing code prompt (`/^\d{4}$/.test(val.trim())`). |
+| none | `IDatabaseSelection` | The TypeScript interface of the same name, as a struct. |
+| none | `selectDatabase` | The database picker repeated by view, edit and remove. |
+| none | `networkRequirementNote` | The `note(...)` of the network requirement, repeated in send and receive. |
+| none | `logPayloadFields` | The payload display repeated by send and receive. |
+| none | `confirmPayloadSecrets` | The secret confirmations repeated by send and receive. |
+| none | `editPayloadFields` | The field editing repeated by send and receive. |
+| none | `payloadToJson` | Zig plumbing: the payload as the JSON value the sender sends. |
+| none | `cancelSender` | The SIGINT listener of send (`() => { sender.cancel(); }`). |
+| none | `cancelReceiver` | The SIGINT listener of receive (`() => { receiver.cancel(); }`). |
+| none | `IConflictResolverContext` | The TypeScript interface of the same name, as a struct. |
+| none | `resolveSecretConflict` | The resolver arrow function of buildConflictResolver. |
+| none | `toDatabaseSharePayload` | Replaces `rawPayload as IDatabaseSharePayload`. |
+| none | `IDatabaseNameResolution` | The TypeScript interface of the same name, as a struct. |
+
+#### `apps/cli/src/cmd/debug.ts` to `apps/cli-zig/src/cmd/debug.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `truncateLongStrings` | `truncateLongStrings` |  |
+| `debugMerkleTreeCommand` | `debugMerkleTreeCommand` |  |
+| `debugFindCollisionsCommand` | `debugFindCollisionsCommand` |  |
+| `debugFindDuplicatesCommand` | `debugFindDuplicatesCommand` |  |
+| `debugRemoveDuplicatesCommand` | `debugRemoveDuplicatesCommand` |  |
+| `debugBuildSortIndexCommand` | `debugBuildSortIndexCommand` |  |
+| `debugBuildFilesTreeCommand` | `debugBuildFilesTreeCommand` |  |
+| none | `IDebugMerkleTreeCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `utf16Substring` | Replaces `text.substring(0, length)` on UTF-16 code units. |
+| none | `objectEntries` | Replaces `Object.entries(value)`. |
+| none | `indentLines` | Replaces `text.split('\n').map(line => indent + line).join('\n')`. |
+| none | `repeat` | Replaces `character.repeat(count)`. |
+| none | `IDebugFindCollisionsCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IDebugFindDuplicatesCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IDebugRemoveDuplicatesCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IHashAssetIds` | The TypeScript interface of the same name, as a struct. |
+| none | `moreAssetIds` | The comparison function of the collisions' `sort`. |
+| none | `resolveDatabaseFilePath` | The `path.isAbsolute(...) ? ... : path.join(...)` expression of the input and output paths. |
+| none | `IInputFileResult` | The TypeScript interface of the same name, as a struct. |
+| none | `readInputFile` | Replaces `JSON.parse(await fs.readFile(inputPath, 'utf8'))` and its catch. |
+| none | `expectObject` | Replaces the `as CollisionsData` and `as DuplicatesData` casts. |
+| none | `expectArray` | Replaces reading a property of the parsed JSON as an array. |
+| none | `property` | Replaces `object.name` on the parsed JSON. |
+| none | `resolveDbDir` | The `if (dbDir === undefined)` block repeated by each command. |
+| none | `ISizeGroup` | The TypeScript interface of the same name, as a struct. |
+| none | `onFilesHashed` | The progress arrow function passed to buildFilesTree. |
+
+#### `apps/cli/src/cmd/decrypt.ts` to `apps/cli-zig/src/cmd/decrypt.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `decryptCommand` | `decryptCommand` |  |
+| none | `IDecryptCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `onDecryptProgress` | The `(msg) => writeProgress(msg)` arrow function. |
+
+#### `apps/cli/src/cmd/encrypt.ts` to `apps/cli-zig/src/cmd/encrypt.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `encryptCommand` | `encryptCommand` |  |
+| none | `IEncryptCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `onEncryptProgress` | The `(msg) => writeProgress(msg)` arrow function. |
+
+#### `apps/cli/src/cmd/examples.ts` to `apps/cli-zig/src/cmd/examples.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `examplesCommand` | `examplesCommand` |  |
+| none | `IExampleCategory` | The TypeScript interface of the same name, as a struct. |
+| none | `findExamples` | Replaces `COMMAND_EXAMPLES[commandName]`. |
+
+#### `apps/cli/src/cmd/export.ts` to `apps/cli-zig/src/cmd/export.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `exportCommand` | `exportCommand` |  |
+| none | `AssetType` | The TypeScript type of the same name. |
+| none | `IExportCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `getAssetStoragePath` | The `getAssetStoragePath` arrow function. |
+| none | `getOutputFileName` | The `getOutputFileName` arrow function. |
+| none | `streamToFile` | Replaces `pipeline(await assetStorage.readStream(...), createWriteStream(...))`. |
+
+#### `apps/cli/src/cmd/find-orphans.ts` to `apps/cli-zig/src/cmd/find-orphans.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `findOrphansCommand` | `findOrphansCommand` |  |
+| none | `IFindOrphansCommandOptions` | The TypeScript interface of the same name, as a struct. |
+
+#### `apps/cli/src/cmd/hash-cache-tools.ts` to `apps/cli-zig/src/cmd/hash-cache-tools.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `openHashCache` | `openHashCache` |  |
+| `hashFileCommand` | `hashFileCommand` |  |
+| `hashCacheAddCommand` | `hashCacheAddCommand` |  |
+| `hashCacheSetCommand` | `hashCacheSetCommand` |  |
+| `hashCacheSetSourceCommand` | `hashCacheSetSourceCommand` |  |
+| `hashCacheGetCommand` | `hashCacheGetCommand` |  |
+| `hashCacheGetAssetIdCommand` | `hashCacheGetAssetIdCommand` |  |
+| `hashCacheRemoveCommand` | `hashCacheRemoveCommand` |  |
+| `hashCacheListCommand` | `hashCacheListCommand` |  |
+| `hashCacheCountCommand` | `hashCacheCountCommand` |  |
+| `hashCacheDirCommand` | `hashCacheDirCommand` |  |
+| none | `IHashCacheToolOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `hashFile` | Replaces `computeHash(createReadStream(filePath))`. |
+| none | `bufferFromHex` | Replaces `Buffer.from(text, 'hex')`. |
+| none | `cachedLength` | Replaces the length as the hash cache stores it (`writeUIntLE(value, offset, 6)`). |
+
+#### `apps/cli/src/cmd/hash-cache.ts` to `apps/cli-zig/src/cmd/hash-cache.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `hashCacheCommand` | `hashCacheCommand` |  |
+| `displayHashCacheEntries` | `displayHashCacheEntries` |  |
+| none | `IHashCacheCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `showHashCache` | The body of hashCacheCommand's try block. |
+| none | `formatModified` | Replaces `lastModified.toISOString().replace('T', ' ').slice(0, 19)`. |
+
+#### `apps/cli/src/cmd/hash.ts` to `apps/cli-zig/src/cmd/hash.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `hashCommand` | `hashCommand` |  |
+| none | `IHashCommandOptions` | The TypeScript interface of the same name, as a struct. |
+
+#### `apps/cli/src/cmd/info.ts` to `apps/cli-zig/src/cmd/info.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `classifyInput` | `classifyInput` |  |
+| `infoCommand` | `infoCommand` |  |
+| `assetToFileAnalysis` | `assetToFileAnalysis` |  |
+| `analyzeFile` | `analyzeFile` |  |
+| `displayFileInfo` | `displayFileInfo` |  |
+| `displayAssetInfo` | `displayAssetInfo` |  |
+| none | `IInfoCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `InputKind` | The TypeScript type of the same name. |
+| none | `isUuid` | Replaces `UUID_REGEX.test(input)`. |
+| none | `isHash` | Replaces `HASH_REGEX.test(input)`. |
+| none | `FileAnalysis` | The TypeScript interface of the same name. |
+| none | `ScanState` | The variables the scanPaths arrow functions close over. |
+| none | `visitScannedFile` | The file arrow function passed to scanPaths. |
+| none | `scanProgress` | The progress arrow function passed to scanPaths. |
+| none | `progressMessage` | The message that arrow function builds. |
+| none | `field` | Replaces `asset.<name>`. |
+| none | `isTruthy` | Replaces JavaScript truthiness. |
+| none | `hashFile` | Replaces `computeHash(createReadStream(filePath))`. |
+
+#### `apps/cli/src/cmd/init.ts` to `apps/cli-zig/src/cmd/init.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `initCommand` | `initCommand` |  |
+| none | `text` | Replaces a template string. |
+
+#### `apps/cli/src/cmd/list.ts` to `apps/cli-zig/src/cmd/list.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `listCommand` | `listCommand` |  |
+| `displayPage` | `displayPage` |  |
+| `waitForUserInput` | `waitForUserInput` |  |
+| none | `IListCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `sliceEnd` | Replaces the end index of `slice(0, pageSize)` for any JavaScript number. |
+| none | `isSet` | Replaces the truthiness of `result.nextPageId`. |
+| none | `isTruthy` | Replaces JavaScript truthiness. |
+| none | `dateTime` | Replaces the time of `new Date(record.photoDate)`. |
+| none | `toLocaleDateString` | Replaces `new Date(value).toLocaleDateString()`. |
+| none | `getProperties` | Replaces `record.properties`. |
+
+#### `apps/cli/src/cmd/mcp.ts` to `apps/cli-zig/src/cmd/mcp.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `mcpCommand` | `mcpCommand` |  |
+| none | `IMcpCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `createMcpServer` | The lines of mcpCommand that create the server and register the tools. |
+
+#### `apps/cli/src/cmd/news.ts` to `apps/cli-zig/src/cmd/news.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `newsCommand` | `newsCommand` |  |
+| none | `text` | Replaces a template string. |
+
+#### `apps/cli/src/cmd/origin.ts` to `apps/cli-zig/src/cmd/origin.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `originCommand` | `originCommand` |  |
+| none | `IOriginCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `getOrigin` | Replaces `config?.origin`. |
+| none | `isTruthy` | Replaces JavaScript truthiness. |
+| none | `jsString` | Replaces `String(value)`, which `log.info` is given. |
+| none | `jsNumberString` | Replaces `String(number)`. |
+| none | `isTruthyNumber` | Replaces JavaScript truthiness of a number. |
+
+#### `apps/cli/src/cmd/remove-orphans.ts` to `apps/cli-zig/src/cmd/remove-orphans.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `removeOrphansCommand` | `removeOrphansCommand` |  |
+| none | `IRemoveOrphansCommandOptions` | The TypeScript interface of the same name, as a struct. |
+
+#### `apps/cli/src/cmd/remove.ts` to `apps/cli-zig/src/cmd/remove.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `removeCommand` | `removeCommand` |  |
+| none | `IRemoveCommandOptions` | The TypeScript interface of the same name, as a struct. |
+
+#### `apps/cli/src/cmd/repair.ts` to `apps/cli-zig/src/cmd/repair.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `repairCommand` | `repairCommand` |  |
+| none | `IRepairCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `onProgress` | The progress arrow function passed to the node-api call. |
+| none | `configOrigin` | Replaces `config?.origin`. |
+| none | `count` | Replaces `pc.<colour>(count.toString())`. |
+| none | `listCount` | The count of a list, in a colour, repeated for each list. |
+| none | `showList` | The block repeated for each list of files. |
+
+#### `apps/cli/src/cmd/replicate.ts` to `apps/cli-zig/src/cmd/replicate.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `replicateCommand` | `replicateCommand` |  |
+| none | `IReplicateCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `isSet` | Replaces the truthiness of an option. |
+| none | `similarNamesList` | Replaces `similarKeyNames.map(...).join('\n')`. |
+| none | `onProgress` | The progress arrow function passed to the node-api call. |
+
+#### `apps/cli/src/cmd/root-hash.ts` to `apps/cli-zig/src/cmd/root-hash.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `rootHashCommand` | `rootHashCommand` |  |
+| none | `IRootHashCommandOptions` | The TypeScript interface of the same name, as a struct. |
+
+#### `apps/cli/src/cmd/secrets.ts` to `apps/cli-zig/src/cmd/secrets.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `checkVaultPrereqs` | `checkVaultPrereqs` |  |
+| `secretsCommand` | none | The `psi secrets` group is defined in index.zig (secretsCommand there), with the ported commander. |
+| `secretsAdd` | `secretsAdd` |  |
+| `secretsList` | `secretsList` |  |
+| `secretsView` | `secretsView` |  |
+| `secretsEdit` | `secretsEdit` |  |
+| `secretsRemove` | `secretsRemove` |  |
+| `secretsClear` | `secretsClear` |  |
+| `secretsImport` | `secretsImport` |  |
+| `secretsSend` | `secretsSend` |  |
+| `secretsReceive` | `secretsReceive` |  |
+| none | `trim` | Replaces `text.trim()`. |
+| none | `format` | Replaces a template string. |
+| none | `padEnd` | Replaces `text.padEnd(length)`. |
+| none | `isSecretType` | Replaces `SECRET_TYPES.includes(type)`. |
+| none | `ISecretsAddOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `ISecretsViewOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `ISecretsEditOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `ISecretsRemoveOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `ISecretsSendOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `ISecretsImportOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `ISecretsClearOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `ISecretsReceiveOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `validateName` | The `validate` arrow function of the name prompts. |
+| none | `validateValue` | The `validate` arrow function of the value prompts. |
+| none | `validateMultilineValue` | The `validate` arrow function of the multiline value prompt. |
+| none | `validatePrivateKeyPath` | The `validate` arrow function of the private key path prompt. |
+| none | `validatePairingCode` | The `validate` arrow function of the pairing code prompt (`/^\d{4}$/.test(val.trim())`). |
+| none | `logSimilarSecretNames` | The "Did you mean" hint repeated by view, edit, remove and send. |
+| none | `secretOptions` | Replaces `secrets.map(secret => ({ value, label }))`. |
+| none | `selectSecret` | The secret picker repeated by view, edit and remove. |
+| none | `logStringEntries` | Replaces `Object.entries(string)` in view. |
+| none | `keyNameFromPath` | Replaces `privatePath.split('/').pop()?.replace(/\.key$/, '')`. |
+| none | `payloadToJson` | Zig plumbing: the payload as the JSON value the sender sends. |
+| none | `cancelSender` | The SIGINT listener of send (`() => { sender.cancel(); }`). |
+| none | `cancelReceiver` | The SIGINT listener of receive (`() => { receiver.cancel(); }`). |
+| none | `networkRequirementNote` | The `note(...)` of the network requirement, repeated in send and receive. |
+| none | `payloadString` | Replaces `rawPayload as ISecretSharePayload`, reading each field as a string. |
+
+#### `apps/cli/src/cmd/set-origin.ts` to `apps/cli-zig/src/cmd/set-origin.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `setOriginCommand` | `setOriginCommand` |  |
+| none | `ISetOriginCommandOptions` | The TypeScript interface of the same name, as a struct. |
+
+#### `apps/cli/src/cmd/summary.ts` to `apps/cli-zig/src/cmd/summary.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `summaryCommand` | `summaryCommand` |  |
+| none | `ISummaryCommandOptions` | The TypeScript interface of the same name, as a struct. |
+
+#### `apps/cli/src/cmd/sync.ts` to `apps/cli-zig/src/cmd/sync.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `syncCommand` | `syncCommand` |  |
+| none | `ISyncCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `isSet` | Replaces the truthiness of an option. |
+| none | `configOrigin` | Replaces `config?.origin`. |
+| none | `similarNamesList` | Replaces `similarKeyNames.map(...).join('\n')`. |
+| none | `ISyncWatchState` | The variables the watch arrow functions close over. |
+| none | `ISyncWatchState.syncOnce` | The `syncOnce` arrow function. |
+| none | `ISyncWatchState.isStopped` | The `isStopped` arrow function. |
+| none | `ISyncWatchState.stop` | The termination arrow function that stops the watch. |
+
+#### `apps/cli/src/cmd/tools.ts` to `apps/cli-zig/src/cmd/tools.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `toolsCommand` | `toolsCommand` |  |
+| `listTools` | `listTools` |  |
+| none | `IToolsCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IToolEntry` | The TypeScript interface of the same name, as a struct. |
+| none | `text` | Replaces a template string. |
+
+#### `apps/cli/src/cmd/upgrade.ts` to `apps/cli-zig/src/cmd/upgrade.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `upgradeCommand` | `upgradeCommand` |  |
+| `copyStorageFile` | `copyStorageFile` |  |
+| `copyStorageDirRecursive` | none | Not reached by the CLI: upgradeCommand does not call it. |
+| `migrateBsonV5ToV6` | `migrateBsonV5ToV6` |  |
+| none | `IUpgradeCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `LoadTreeOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `SaveTreeOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `SaveTreeOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
+| none | `IFillLastModifiedContext` | The TypeScript interface of the same name, as a struct. |
+| none | `fillLastModified` | The traverseTreeAsync callback that fills in lastModified. |
+| none | `computeStorageHash` | Replaces `computeHash(await assetStorage.readStream(file))`. |
+| none | `upgradeLocked` | The body of upgradeCommand's try block, run while the write lock is held. |
+
+#### `apps/cli/src/cmd/verify.ts` to `apps/cli-zig/src/cmd/verify.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `verifyFoundProblems` | `verifyFoundProblems` |  |
+| `verifyCommand` | `verifyCommand` |  |
+| none | `IVerifyCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `isSet` | Replaces the truthiness of an option. |
+| none | `onProgress` | The progress arrow function passed to the node-api call. |
+| none | `countText` | Replaces `count.toString()`. |
+
+#### `apps/cli/src/cmd/version.ts` to `apps/cli-zig/src/cmd/version.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `versionCommand` | `versionCommand` |  |
+| none | `text` | Replaces a template string. |
+
+#### `apps/cli/src/examples.ts` to `apps/cli-zig/src/examples.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `formatExamplesForHelp` | `formatExamplesForHelp` |  |
+| `getCommandExamplesHelp` | `getCommandExamplesHelp` |  |
+| none | `ICommandExample` | The TypeScript interface of the same name, as a struct. |
+| none | `ICommandExamples` | The TypeScript interface of the same name, as a struct. |
+
+#### `apps/cli/src/lib/check-for-news.ts` to `apps/cli-zig/src/lib/check-for-news.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `checkForNews` | `checkForNews` |  |
+| `getAllNews` | `getAllNews` |  |
+| `markNewsAsShown` | `markNewsAsShown` |  |
+| none | `NEWS_URL` | The `NEWS_URL` constant, read when it is used. |
+| none | `checkForNewsUnsafe` | The body of checkForNews's try block. |
+| none | `INewsItemWithState` | The TypeScript interface of the same name, as a struct. |
+| none | `getAllNewsUnsafe` | The body of getAllNews's try block. |
+
+#### `apps/cli/src/lib/check-for-updates.ts` to `apps/cli-zig/src/lib/check-for-updates.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `checkForUpdates` | `checkForUpdates` |  |
+| `markUpdateAsShown` | `markUpdateAsShown` |  |
+| `getLatestVersion` | `getLatestVersion` |  |
+| none | `tagName` | `await response.json()` and the `data.tag_name` checks, shared by both functions. |
+| none | `checkForUpdatesUnsafe` | The body of checkForUpdates's try block. |
+| none | `getLatestVersionUnsafe` | The body of getLatestVersion's try block. |
+
+#### `apps/cli/src/lib/clack/core/index.ts` to `apps/cli-zig/src/lib/clack/core/index.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `apps/cli/src/lib/clack/core/prompts/autocomplete.ts` to no Zig file
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getCursorForValue` | none | Not reached by the CLI: no command uses this prompt. |
+| `defaultFilter` | none | Not reached by the CLI: no command uses this prompt. |
+| `normalisedValue` | none | Not reached by the CLI: no command uses this prompt. |
+| `AutocompletePrompt` | none | Not reached by the CLI: no command uses this prompt. |
+| `AutocompletePrompt.cursor` | none | Not reached by the CLI: no command uses this prompt. |
+| `AutocompletePrompt.userInputWithCursor` | none | Not reached by the CLI: no command uses this prompt. |
+| `AutocompletePrompt.options` | none | Not reached by the CLI: no command uses this prompt. |
+| `AutocompletePrompt.constructor` | none | Not reached by the CLI: no command uses this prompt. |
+| `AutocompletePrompt.deselectAll` | none | Not reached by the CLI: no command uses this prompt. |
+| `AutocompletePrompt.toggleSelected` | none | Not reached by the CLI: no command uses this prompt. |
+
+#### `apps/cli/src/lib/clack/core/prompts/confirm.ts` to `apps/cli-zig/src/lib/clack/core/prompts/confirm.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `ConfirmPrompt` | `ConfirmPrompt` |  |
+| `ConfirmPrompt.cursor` | `ConfirmPrompt.cursor` |  |
+| `ConfirmPrompt._value` | `ConfirmPrompt._value` |  |
+| `ConfirmPrompt.constructor` | `ConfirmPrompt.init` |  |
+| none | `ConfirmOptions` | The TypeScript interface of the same name. |
+| none | `ConfirmPrompt.onUserInput` | The `this.on('userInput', ...)` handler of the constructor. |
+| none | `ConfirmPrompt.onConfirm` | The `this.on('confirm', ...)` handler of the constructor. |
+| none | `ConfirmPrompt.onCursor` | The `this.on('cursor', ...)` handler of the constructor. |
+| none | `ConfirmPrompt.run` | Zig plumbing: runs the prompt (`prompt()`) with this subclass's handlers. |
+
+#### `apps/cli/src/lib/clack/core/prompts/group-multiselect.ts` to no Zig file
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `GroupMultiSelectPrompt` | none | Not reached by the CLI: no command uses this prompt. |
+| `GroupMultiSelectPrompt.getGroupItems` | none | Not reached by the CLI: no command uses this prompt. |
+| `GroupMultiSelectPrompt.isGroupSelected` | none | Not reached by the CLI: no command uses this prompt. |
+| `GroupMultiSelectPrompt.toggleValue` | none | Not reached by the CLI: no command uses this prompt. |
+| `GroupMultiSelectPrompt.constructor` | none | Not reached by the CLI: no command uses this prompt. |
+
+#### `apps/cli/src/lib/clack/core/prompts/multi-select.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `MultiSelectPrompt` | none | Not reached by the CLI: no command uses this prompt. |
+| `MultiSelectPrompt._value` | none | Not reached by the CLI: no command uses this prompt. |
+| `MultiSelectPrompt.toggleAll` | none | Not reached by the CLI: no command uses this prompt. |
+| `MultiSelectPrompt.toggleValue` | none | Not reached by the CLI: no command uses this prompt. |
+| `MultiSelectPrompt.constructor` | none | Not reached by the CLI: no command uses this prompt. |
+
+#### `apps/cli/src/lib/clack/core/prompts/multiline.ts` to `apps/cli-zig/src/lib/clack/core/prompts/multiline.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `MultilinePrompt` | `MultilinePrompt` |  |
+| `MultilinePrompt.constructor` | `MultilinePrompt.init` |  |
+| `MultilinePrompt.getValue` | `MultilinePrompt.getValue` |  |
+| `MultilinePrompt.onKeypress` | `MultilinePrompt.onKeypress` |  |
+| `MultilinePrompt.render` | `MultilinePrompt.render` |  |
+| `MultilinePrompt.close` | `MultilinePrompt.close` |  |
+| `MultilinePrompt.prompt` | `MultilinePrompt.prompt` |  |
+| none | `MultilineRenderFn` | The type of the `render` option. |
+| none | `MultilineValidateFn` | The type of the `validate` option. |
+| none | `MultilinePromptOptions` | The TypeScript interface of the same name. |
+
+#### `apps/cli/src/lib/clack/core/prompts/password.ts` to `apps/cli-zig/src/lib/clack/core/prompts/password.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `PasswordPrompt` | `PasswordPrompt` |  |
+| `PasswordPrompt.cursor` | `PasswordPrompt.cursor` |  |
+| `PasswordPrompt.masked` | `PasswordPrompt.masked` |  |
+| `PasswordPrompt.userInputWithCursor` | `PasswordPrompt.userInputWithCursor` |  |
+| `PasswordPrompt.constructor` | `PasswordPrompt.init` |  |
+| none | `PasswordOptions` | The TypeScript interface of the same name. |
+| none | `PasswordPrompt.maskedUnits` | Replaces `text.replaceAll(/./g, mask)`, one piece per UTF-16 code unit. |
+| none | `PasswordPrompt.onUserInput` | The `this.on('userInput', ...)` handler of the constructor. |
+| none | `PasswordPrompt.run` | Zig plumbing: runs the prompt (`prompt()`) with this subclass's handlers. |
+
+#### `apps/cli/src/lib/clack/core/prompts/prompt.ts` to `apps/cli-zig/src/lib/clack/core/prompts/prompt.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `Prompt` | `Prompt` |  |
+| `Prompt.constructor` | `Prompt.init` |  |
+| `Prompt.unsubscribe` | `Prompt.unsubscribe` |  |
+| `Prompt.prompt` | `Prompt.prompt` |  |
+| `Prompt._isActionKey` | `Prompt._isActionKey` |  |
+| `Prompt._setValue` | none | Zig prompts keep their value in the prompt kind's own state and set it directly. |
+| `Prompt._setUserInput` | `Prompt._setUserInput` |  |
+| `Prompt.onKeypress` | `Prompt.onKeypress` |  |
+| `Prompt.close` | `Prompt.close` |  |
+| `Prompt.restoreCursor` | `Prompt.restoreCursor` |  |
+| `Prompt.render` | `Prompt.render` |  |
+| none | `RenderFn` | The type of the `render` option. |
+| none | `ValidateFn` | The type of the `validate` option (the arrow function and what it closes over). |
+| none | `ValidateFn.call` | Calls the `validate` arrow function. |
+| none | `PromptOptions` | The TypeScript interface of the same name. |
+| none | `PromptKind` | Zig plumbing: the subclass a prompt is (TypeScript's `extends Prompt`). |
+| none | `PromptOutcome` | The value or the cancel symbol `prompt()` resolves with. |
+| none | `Prompt.emitUserInput` | `this.emit('userInput', ...)`, calling the subclass's handler directly. |
+| none | `Prompt.emitCursor` | `this.emit('cursor', ...)`, calling the subclass's handler directly. |
+| none | `Prompt.emitConfirm` | `this.emit('confirm', ...)`, calling the subclass's handler directly. |
+| none | `Prompt.emitFinalize` | `this.emit('finalize', ...)`, calling the subclass's handler directly. |
+| none | `Prompt.emitState` | `this.emit('state', ...)`, calling the subclass's handler directly. |
+| none | `Prompt.validationValue` | The value `validate` is called with in onKeypress. |
+
+#### `apps/cli/src/lib/clack/core/prompts/select-key.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `SelectKeyPrompt` | none | Not reached by the CLI: no command uses this prompt. |
+| `SelectKeyPrompt.constructor` | none | Not reached by the CLI: no command uses this prompt. |
+
+#### `apps/cli/src/lib/clack/core/prompts/select.ts` to `apps/cli-zig/src/lib/clack/core/prompts/select.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `SelectPrompt` | `SelectPrompt` |  |
+| `SelectPrompt._selectedValue` | `SelectPrompt._selectedValue` |  |
+| `SelectPrompt.changeValue` | `SelectPrompt.changeValue` |  |
+| `SelectPrompt.constructor` | `SelectPrompt.init` |  |
+| none | `SelectOption` | The `{ value: any }` an option extends. |
+| none | `SelectOptions` | The TypeScript interface of the same name. |
+| none | `SelectPrompt.onCursor` | The `this.on('cursor', ...)` handler of the constructor. |
+| none | `SelectPrompt.run` | Zig plumbing: runs the prompt (`prompt()`) with this subclass's handlers. |
+
+#### `apps/cli/src/lib/clack/core/prompts/text.ts` to `apps/cli-zig/src/lib/clack/core/prompts/text.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `TextPrompt` | `TextPrompt` |  |
+| `TextPrompt.userInputWithCursor` | `TextPrompt.userInputWithCursor` |  |
+| `TextPrompt.cursor` | `TextPrompt.cursor` |  |
+| `TextPrompt.constructor` | `TextPrompt.init` |  |
+| none | `TextOptions` | The TypeScript interface of the same name. |
+| none | `TextPrompt.onUserInput` | The `this.on('userInput', ...)` handler of the constructor. |
+| none | `TextPrompt.onFinalize` | The `this.on('finalize', ...)` handler of the constructor. |
+| none | `TextPrompt.run` | Zig plumbing: runs the prompt (`prompt()`) with this subclass's handlers. |
+
+#### `apps/cli/src/lib/clack/core/utils/index.ts` to `apps/cli-zig/src/lib/clack/core/utils/index.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `isCancel` | `isCancel` |  |
+| `setRawMode` | `setRawMode` |  |
+| `block` | `block` |  |
+| `getColumns` | `getColumns` |  |
+| none | `PromptResult` | The value or the cancel symbol a prompt resolves with (`isCancel` tells them apart). |
+| none | `BlockOptions` | The options of `block`. |
+| none | `IBlock` | The function `block` returns, with what it closes over. |
+| none | `IBlock.unblock` | The function `block` returns. |
+| none | `IBlock.swallowKeys` | The keypress listener of `block`. |
+| none | `stdoutColumns` | Replaces `process.stdout.columns`. |
+
+#### `apps/cli/src/lib/clack/core/utils/settings.ts` to `apps/cli-zig/src/lib/clack/core/utils/settings.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `updateSettings` | none | Not reached by the CLI. |
+| `isActionKey` | `isActionKey` |  |
+| none | `Action` | The TypeScript type of the same name. |
+| none | `Alias` | An entry of the `aliases` map. |
+| none | `InternalClackSettings` | The TypeScript interface of the same name. |
+| none | `aliasAction` | Replaces `settings.aliases.get(key)`. |
+| none | `actionNamed` | Replaces `settings.actions.has(key)`. |
+
+#### `apps/cli/src/lib/clack/core/utils/string.ts` to `apps/cli-zig/src/lib/clack/core/utils/string.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `diffLines` | `diffLines` |  |
+
+#### `apps/cli/src/lib/clack/prompts/autocomplete.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getLabel` | none | Not reached by the CLI: no command uses this prompt. |
+| `getFilteredOption` | none | Not reached by the CLI: no command uses this prompt. |
+| `getSelectedOptions` | none | Not reached by the CLI: no command uses this prompt. |
+
+#### `apps/cli/src/lib/clack/prompts/common.ts` to `apps/cli-zig/src/lib/clack/prompts/common.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `isCI` | `isCI` |  |
+| `unicodeOr` | `unicodeOr` |  |
+| `symbol` | `symbol` |  |
+| none | `isUnicodeSupported` | Replaces the third-party `is-unicode-supported` package. |
+| none | `S_STEP_ACTIVE` | The constant of the same name. |
+| none | `S_STEP_CANCEL` | The constant of the same name. |
+| none | `S_STEP_ERROR` | The constant of the same name. |
+| none | `S_STEP_SUBMIT` | The constant of the same name. |
+| none | `S_BAR_START` | The constant of the same name. |
+| none | `S_BAR` | The constant of the same name. |
+| none | `S_BAR_END` | The constant of the same name. |
+| none | `S_RADIO_ACTIVE` | The constant of the same name. |
+| none | `S_RADIO_INACTIVE` | The constant of the same name. |
+| none | `S_PASSWORD_MASK` | The constant of the same name. |
+| none | `CommonOptions` | The TypeScript interface of the same name. |
+| none | `resolveInput` | Replaces `opts.input ?? process.stdin`. |
+| none | `resolveOutput` | Replaces `opts.output ?? process.stdout`. |
+
+#### `apps/cli/src/lib/clack/prompts/confirm.ts` to `apps/cli-zig/src/lib/clack/prompts/confirm.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `confirm` | `confirm` |  |
+| none | `ConfirmOptions` | The TypeScript interface of the same name. |
+| none | `ConfirmRender` | The `render()` of the prompt's options, with what it closes over. |
+| none | `ConfirmRender.render` | The `render()` of the prompt's options. |
+
+#### `apps/cli/src/lib/clack/prompts/group-multi-select.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `apps/cli/src/lib/clack/prompts/group.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `apps/cli/src/lib/clack/prompts/index.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `apps/cli/src/lib/clack/prompts/limit-options.ts` to `apps/cli-zig/src/lib/clack/prompts/limit-options.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| none | `LimitOptionsParams` | The TypeScript interface of the same name. |
+| none | `stdoutRows` | Replaces `process.stdout.rows`. |
+| none | `limitOptions` | The `limitOptions` arrow function export. |
+
+#### `apps/cli/src/lib/clack/prompts/log.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `apps/cli/src/lib/clack/prompts/messages.ts` to `apps/cli-zig/src/lib/clack/prompts/messages.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `cancel` | `cancel` |  |
+| `intro` | `intro` |  |
+| `outro` | `outro` |  |
+
+#### `apps/cli/src/lib/clack/prompts/multi-select.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `apps/cli/src/lib/clack/prompts/multiline.ts` to `apps/cli-zig/src/lib/clack/prompts/multiline.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `multiline` | `multiline` |  |
+| none | `MultilineOptions` | The TypeScript interface of the same name. |
+| none | `MultilineRender` | The `render()` of the prompt's options, with what it closes over. |
+| none | `MultilineRender.render` | The `render()` of the prompt's options. |
+
+#### `apps/cli/src/lib/clack/prompts/note.ts` to `apps/cli-zig/src/lib/clack/prompts/note.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `defaultNoteFormatter` | `defaultNoteFormatter` |  |
+| `note` | `note` |  |
+| none | `NoteOptions` | The TypeScript interface of the same name. |
+| none | `strippedLength` | The `(line) => strip(line).length` measure, in UTF-16 code units. |
+
+#### `apps/cli/src/lib/clack/prompts/password.ts` to `apps/cli-zig/src/lib/clack/prompts/password.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `password` | `password` |  |
+| none | `PasswordOptions` | The TypeScript interface of the same name. |
+| none | `PasswordRender` | The `render()` of the prompt's options, with what it closes over. |
+| none | `PasswordRender.render` | The `render()` of the prompt's options. |
+
+#### `apps/cli/src/lib/clack/prompts/path.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `path` | none | Not reached by the CLI: no command uses this prompt. |
+
+#### `apps/cli/src/lib/clack/prompts/progress-bar.ts` to no Zig file
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `progress` | none | Not reached by the CLI: no command uses this prompt. |
+
+#### `apps/cli/src/lib/clack/prompts/select-key.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `apps/cli/src/lib/clack/prompts/select.ts` to `apps/cli-zig/src/lib/clack/prompts/select.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| none | `SelectOptions` | The TypeScript interface of the same name. |
+| none | `OptionState` | The state argument of the `opt` arrow function. |
+| none | `opt` | The `opt` arrow function of select. |
+| none | `styleOption` | The `style` callback limitOptions is given. |
+| none | `SelectRender` | The `render()` of the prompt's options, with what it closes over. |
+| none | `SelectRender.render` | The `render()` of the prompt's options. |
+| none | `select` | The `select` arrow function export. |
+
+#### `apps/cli/src/lib/clack/prompts/spinner.ts` to `apps/cli-zig/src/lib/clack/prompts/spinner.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| none | `SpinnerIndicator` | The TypeScript union `'dots' \| 'timer'`. |
+| none | `ICancelCallback` | The TypeScript interface of the same name, as a struct. |
+| none | `SpinnerOptions` | The TypeScript interface of the same name. |
+| none | `Spinner` | The variables the `spinner` arrow function's inner functions close over, and the object it returns. |
+| none | `Spinner.handleExit` | The inner function of the same name of the `spinner` arrow function. |
+| none | `Spinner.signalEventHandler` | The inner function of the same name of the `spinner` arrow function. |
+| none | `Spinner.signalListener` | Zig plumbing: `handleExit` registered as a signal listener. |
+| none | `Spinner.registerHooks` | The inner function of the same name of the `spinner` arrow function. |
+| none | `Spinner.clearHooks` | The inner function of the same name of the `spinner` arrow function. |
+| none | `Spinner.clearPrevMessage` | The inner function of the same name of the `spinner` arrow function. |
+| none | `Spinner.formatTimer` | The inner function of the same name of the `spinner` arrow function. |
+| none | `Spinner.drawFrame` | The inner function of the same name of the `spinner` arrow function. |
+| none | `Spinner.animate` | The inner function of the same name of the `spinner` arrow function. |
+| none | `Spinner.start` | The inner function of the same name of the `spinner` arrow function. |
+| none | `Spinner.stop` | The inner function of the same name of the `spinner` arrow function. |
+| none | `Spinner.message` | The inner function of the same name of the `spinner` arrow function. |
+| none | `Spinner.isCancelled` | The inner function of the same name of the `spinner` arrow function. |
+| none | `removeTrailingDots` | The inner function of the same name. |
+| none | `spinner` | The `spinner` arrow function export. |
+
+#### `apps/cli/src/lib/clack/prompts/stream.ts` to no Zig file
+
+
+#### `apps/cli/src/lib/clack/prompts/task-log.ts` to no Zig file
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `taskLog` | none | Not reached by the CLI: no command uses this prompt. |
+
+#### `apps/cli/src/lib/clack/prompts/task.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `tasks` | none | Not reached by the CLI: no command uses this prompt. |
+
+#### `apps/cli/src/lib/clack/prompts/text.ts` to `apps/cli-zig/src/lib/clack/prompts/text.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `text` | `text` |  |
+| none | `TextOptions` | The TypeScript interface of the same name. |
+| none | `placeholderWithFirstInverted` | Replaces `color.inverse(opts.placeholder[0]) + color.dim(opts.placeholder.slice(1))`. |
+| none | `TextRender` | The `render()` of the prompt's options, with what it closes over. |
+| none | `TextRender.render` | The `render()` of the prompt's options. |
+
+#### `apps/cli/src/lib/console-output.ts` to `apps/cli-zig/src/lib/console-output.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `writeAll` | none | Not needed: the Zig CLI's standard streams are blocking, and utils-zig's console writes every byte (see the file's comment). |
+| `writeOutputLine` | `writeOutputLine` |  |
+| `writeErrorLine` | `writeErrorLine` |  |
+
+#### `apps/cli/src/lib/directory-picker.ts` to `apps/cli-zig/src/lib/directory-picker.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `isMediaDatabase` | `isMediaDatabase` |  |
+| `isEmptyOrNonExistent` | `isEmptyOrNonExistent` |  |
+| `pickDirectory` | `pickDirectory` |  |
+| `validateInitDirectory` | `validateInitDirectory` |  |
+| `validateExistingDatabase` | `validateExistingDatabase` |  |
+| `getDirectoryForCommand` | `getDirectoryForCommand` |  |
+| none | `join` | Replaces `path.join`. |
+| none | `resolve` | Replaces `path.resolve`. |
+| none | `mkdirRecursive` | Replaces `fs.mkdir(path, { recursive: true })`, with Node's error messages. |
+| none | `isExistingFile` | Tells the EEXIST of Node's mkdir from its ENOTDIR. |
+| none | `SubdirectoryValidateContext` | The variables the subdirectory name's `validate` arrow function closes over. |
+| none | `validateSubdirectoryName` | The `validate` arrow function of the subdirectory name prompt. |
+| none | `validateFullPath` | The `validate` arrow function of the full path prompt. |
+| none | `CommandType` | The TypeScript union `'init' \| 'existing'`. |
+
+#### `apps/cli/src/lib/ensure-tools.ts` to `apps/cli-zig/src/lib/ensure-tools.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `ensureMediaProcessingTools` | `ensureMediaProcessingTools` |  |
+
+#### `apps/cli/src/lib/file-logger.ts` to `apps/cli-zig/src/lib/file-logger.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `FileLogger` | `FileLogger` |  |
+| `FileLogger.constructor` | `FileLogger.init` |  |
+| `FileLogger.create` | `FileLogger.create` |  |
+| `FileLogger.writeLogHeader` | `FileLogger.writeLogHeader` |  |
+| `FileLogger.writeErrorLogHeader` | `FileLogger.writeErrorLogHeader` |  |
+| `FileLogger.getImageMagickVersion` | `FileLogger.getImageMagickVersion` |  |
+| `FileLogger.getFFmpegVersion` | `FileLogger.getFFmpegVersion` |  |
+| `FileLogger.getFFprobeVersion` | `FileLogger.getFFprobeVersion` |  |
+| `FileLogger.writeToFile` | `FileLogger.writeToFile` |  |
+| `FileLogger.processWriteQueue` | none | Not needed: Zig appends each entry when it is logged (writeToFile), under a lock, in the same order. |
+| `FileLogger.writeToErrorFile` | `FileLogger.writeToErrorFile` |  |
+| `FileLogger.processErrorWriteQueue` | none | Not needed: Zig appends each entry when it is logged (writeToErrorFile), under a lock, in the same order. |
+| `FileLogger.verboseEnabled` | `FileLogger.verboseEnabled` |  |
+| `FileLogger.info` | `FileLogger.info` |  |
+| `FileLogger.verbose` | `FileLogger.verbose` |  |
+| `FileLogger.error` | `FileLogger.error` |  |
+| `FileLogger.exception` | `FileLogger.exception` |  |
+| `FileLogger.warn` | `FileLogger.warn` |  |
+| `FileLogger.debug` | `FileLogger.debug` |  |
+| `FileLogger.tool` | `FileLogger.tool` |  |
+| `FileLogger.event` | `FileLogger.event` |  |
+| `FileLogger.getLogDetails` | `FileLogger.getLogDetails` |  |
+| `FileLogger.readLogHeader` | `FileLogger.readLogHeader` |  |
+| `FileLogger.close` | `FileLogger.close` |  |
+| `FileLogger.getLogFilePath` | `FileLogger.getLogFilePath` |  |
+| `FileLogger.hasLoggedErrors` | `FileLogger.hasLoggedErrors` |  |
+| `FileLogger.getErrorLogFilePath` | `FileLogger.getErrorLogFilePath` |  |
+| none | `osPlatform` | Replaces `os.platform()`. |
+| none | `osArch` | Replaces `os.arch()`. |
+| none | `osRelease` | Replaces `os.release()`. |
+| none | `processVersion` | Replaces `process.version`: the Zig version the CLI was built with, where TypeScript shows the runtime's. |
+| none | `processCwd` | Replaces `process.cwd()`. |
+| none | `toFixed2` | Replaces `value.toFixed(2)`. |
+| none | `appendFile` | Replaces `fs.appendFile`. |
+| none | `FileLogger.closeCallback` | The termination callback the constructor registers. |
+| none | `FileLogger.writeCommonHeader` | The lines both headers share. |
+| none | `FileLogger.formatEntry` | The `logEntry` template string of writeToFile and writeToErrorFile. |
+| none | `FileLogger.ilog` | Zig plumbing: the ILog view of the struct. |
+| none | `FileLogger.infoErased` | Zig plumbing: the ILog vtable entry of `info`. |
+| none | `FileLogger.verboseErased` | Zig plumbing: the ILog vtable entry of `verbose`. |
+| none | `FileLogger.errorErased` | Zig plumbing: the ILog vtable entry of `error`. |
+| none | `FileLogger.exceptionErased` | Zig plumbing: the ILog vtable entry of `exception`. |
+| none | `FileLogger.warnErased` | Zig plumbing: the ILog vtable entry of `warn`. |
+| none | `FileLogger.debugErased` | Zig plumbing: the ILog vtable entry of `debug`. |
+| none | `FileLogger.toolErased` | Zig plumbing: the ILog vtable entry of `tool`. |
+| none | `FileLogger.eventErased` | Zig plumbing: the ILog vtable entry of `event`. |
+| none | `FileLogger.verboseEnabledErased` | Zig plumbing: the ILog vtable entry of `verboseEnabled`. |
+| none | `FileLogger.getLogDetailsErased` | Zig plumbing: the ILog vtable entry of `getLogDetails`. |
+
+#### `apps/cli/src/lib/find-orphans.ts` to `apps/cli-zig/src/lib/find-orphans.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `findOrphans` | `findOrphans` |  |
+| none | `withoutLeadingSlash` | The `^\/?` of the ignore patterns and the leading slash removed from each file name. |
+| none | `matchesDb` | The ignore pattern `/^\/?\.db/`. |
+| none | `matchesMetadata` | The ignore pattern `/^\/?metadata/`. |
+| none | `matchesDsStore` | The ignore pattern `/\.DS_Store/`. |
+| none | `IMerkleFileNames` | The `merkleFileNames` set the traverse callback adds to. |
+| none | `addNodeName` | The traverseTreeAsync callback. |
+
+#### `apps/cli/src/lib/format.ts` to `apps/cli-zig/src/lib/format.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `formatBytes` | `formatBytes` |  |
+| `formatDuration` | none | Not reached by the CLI. |
+| `formatBitrate` | none | Not reached by the CLI. |
+| none | `IFormatBytesOptions` | The options type of formatBytes (only the en-US locale, which the CLI always uses). |
+| none | `jsMathRound` | Replaces `Math.round`. |
+| none | `toLocaleString` | Replaces `value.toLocaleString('en-US', { maximumFractionDigits })` (Intl.NumberFormat). |
+
+#### `apps/cli/src/lib/init-cmd.ts` to `apps/cli-zig/src/lib/init-cmd.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `normaliseDatabaseId` | `normaliseDatabaseId` |  |
+| `getDefaultS3Config` | `getDefaultS3Config` |  |
+| `resolveGeocodingApiKey` | `resolveGeocodingApiKey` |  |
+| `configureS3IfNeeded` | `configureS3IfNeeded` |  |
+| `getAvailableKeys` | `getAvailableKeys` |  |
+| `selectEncryptionKey` | `selectEncryptionKey` |  |
+| `promptForEncryption` | `promptForEncryption` |  |
+| `resolveKeyPems` | `resolveKeyPems` |  |
+| `loadKeyPairFromVault` | `loadKeyPairFromVault` |  |
+| `buildAndStoreKeyPem` | `buildAndStoreKeyPem` |  |
+| `promptToAddKey` | `promptToAddKey` |  |
+| `promptToGenerateOrAddKey` | `promptToGenerateOrAddKey` |  |
+| `resolveKeyPemsWithPrompt` | `resolveKeyPemsWithPrompt` |  |
+| `resolveDatabaseEntry` | `resolveDatabaseEntry` |  |
+| `findSimilarDatabaseNames` | `findSimilarDatabaseNames` |  |
+| `findSimilarSecretNames` | `findSimilarSecretNames` |  |
+| `findSimilarKeyNames` | `findSimilarKeyNames` |  |
+| `resolveSecretsFromEntry` | `resolveSecretsFromEntry` |  |
+| `initContext` | `initContext` |  |
+| `loadDatabase` | `loadDatabase` |  |
+| `createDatabase` | `createDatabase` |  |
+| none | `cpuCount` | Replaces `os.cpus().length`: every CPU of the machine, not only the ones the process may run on. |
+| none | `jsonString` | Replaces `parsed.<name>` of the S3 credentials, as a string. |
+| none | `parseS3Credentials` | The `JSON.parse(secret.value)` and object literal repeated by getDefaultS3Config and resolveSecretsFromEntry. |
+| none | `isUuid` | Replaces the UUID regular expression of normaliseDatabaseId. |
+| none | `validateEndpoint` | The `validate` arrow function of the prompt. |
+| none | `validateRegion` | The `validate` arrow function of the prompt. |
+| none | `validateAccessKeyId` | The `validate` arrow function of the prompt. |
+| none | `validateSecretAccessKey` | The `validate` arrow function of the prompt. |
+| none | `IStoredS3Credentials` | The TypeScript interface of the same name, as a struct. |
+| none | `IEncryptionPromptResult` | The TypeScript interface of the same name, as a struct. |
+| none | `validateKeyName` | The `validate` arrow function of the prompt. |
+| none | `generatePrivateKeyPem` | Replaces `generateKeyPair().privateKey.export({ type: 'pkcs8', format: 'pem' })`. |
+| none | `readPemFile` | Replaces `fs.readFile(filePath, 'utf8')` of a key file. |
+| none | `IResolvedDatabaseSecrets` | The TypeScript interface of the same name, as a struct. |
+| none | `IBaseCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `ICreateCommandOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `ICommandContext` | The TypeScript interface of the same name, as a struct. |
+| none | `jsNumber` | Replaces `Number(text)` of the numeric options. |
+| none | `ICleanupContext` | The variables that termination callback closes over. |
+| none | `cleanupOnTermination` | The termination callback initContext registers. |
+| none | `IInitResult` | The TypeScript interface of the same name, as a struct. |
+| none | `didYouMeanList` | Replaces `similarNames.map(...).join('\n')`. |
+
+#### `apps/cli/src/lib/installation-instructions.ts` to `apps/cli-zig/src/lib/installation-instructions.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `showInstallationInstructions` | `showInstallationInstructions` |  |
+| `showWindowsInstructions` | `showWindowsInstructions` |  |
+| `showMacOSInstructions` | `showMacOSInstructions` |  |
+| `showLinuxInstructions` | `showLinuxInstructions` |  |
+| `showGenericInstructions` | `showGenericInstructions` |  |
+| none | `includes` | Replaces `missingTools.includes(tool)`. |
+
+#### `apps/cli/src/lib/log.ts` to `apps/cli-zig/src/lib/log.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `Log` | `Log` |  |
+| `Log.constructor` | `Log.init` |  |
+| `Log.verboseEnabled` | `Log.verboseEnabled` |  |
+| `Log.info` | `Log.info` |  |
+| `Log.verbose` | `Log.verbose` |  |
+| `Log.error` | `Log.error` |  |
+| `Log.exception` | `Log.exception` |  |
+| `Log.warn` | `Log.warn` |  |
+| `Log.debug` | `Log.debug` |  |
+| `Log.tool` | `Log.tool` |  |
+| `Log.event` | `Log.event` |  |
+| `Log.getLogDetails` | `Log.getLogDetails` |  |
+| `configureLog` | `configureLog` |  |
+| `getFileLogger` | `getFileLogger` |  |
+| none | `ILogOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `writeOutputLineFormat` | Replaces `writeOutputLine(template string)`. |
+| none | `Log.ilog` | Zig plumbing: the ILog view of the struct. |
+| none | `Log.infoErased` | Zig plumbing: the ILog vtable entry of `info`. |
+| none | `Log.verboseErased` | Zig plumbing: the ILog vtable entry of `verbose`. |
+| none | `Log.errorErased` | Zig plumbing: the ILog vtable entry of `error`. |
+| none | `Log.exceptionErased` | Zig plumbing: the ILog vtable entry of `exception`. |
+| none | `Log.warnErased` | Zig plumbing: the ILog vtable entry of `warn`. |
+| none | `Log.debugErased` | Zig plumbing: the ILog vtable entry of `debug`. |
+| none | `Log.toolErased` | Zig plumbing: the ILog vtable entry of `tool`. |
+| none | `Log.eventErased` | Zig plumbing: the ILog vtable entry of `event`. |
+| none | `Log.verboseEnabledErased` | Zig plumbing: the ILog vtable entry of `verboseEnabled`. |
+| none | `Log.getLogDetailsErased` | Zig plumbing: the ILog vtable entry of `getLogDetails`. |
+
+#### `apps/cli/src/lib/mcp/result.ts` to `apps/cli-zig/src/lib/mcp/result.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `textResult` | `textResult` |  |
+| `requireDatabase` | `requireDatabase` |  |
+| `toAssetSummary` | `toAssetSummary` |  |
+| none | `IDatabaseOrResult` | The TypeScript interface of the same name, as a struct. |
+| none | `toJsValue` | Zig plumbing: a Zig result as the JavaScript value the TypeScript result is. |
+
+#### `apps/cli/src/lib/mcp/tools/close-database.ts` to `apps/cli-zig/src/lib/mcp/tools/close-database.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `registerCloseDatabaseTool` | `registerCloseDatabaseTool` |  |
+| none | `closeDatabase` | The handler arrow function given to `server.registerTool`. |
+
+#### `apps/cli/src/lib/mcp/tools/get-database-summary.ts` to `apps/cli-zig/src/lib/mcp/tools/get-database-summary.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `registerGetDatabaseSummaryTool` | `registerGetDatabaseSummaryTool` |  |
+| none | `getDatabaseSummaryHandler` | The handler arrow function given to `server.registerTool`. |
+
+#### `apps/cli/src/lib/mcp/tools/get-media-file-info.ts` to `apps/cli-zig/src/lib/mcp/tools/get-media-file-info.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `registerGetMediaFileInfoTool` | `registerGetMediaFileInfoTool` |  |
+| none | `getMediaFileInfo` | The handler arrow function given to `server.registerTool`. |
+
+#### `apps/cli/src/lib/mcp/tools/import-media-files.ts` to `apps/cli-zig/src/lib/mcp/tools/import-media-files.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `registerImportMediaFilesTool` | `registerImportMediaFilesTool` |  |
+| none | `importMediaFiles` | The handler arrow function given to `server.registerTool`. |
+
+#### `apps/cli/src/lib/mcp/tools/index.ts` to `apps/cli-zig/src/lib/mcp/tools/index.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `registerAllMcpTools` | `registerAllMcpTools` |  |
+
+#### `apps/cli/src/lib/mcp/tools/list-databases.ts` to `apps/cli-zig/src/lib/mcp/tools/list-databases.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `registerListDatabasesTool` | `registerListDatabasesTool` |  |
+| none | `listDatabases` | The handler arrow function given to `server.registerTool`. |
+
+#### `apps/cli/src/lib/mcp/tools/list-media-files.ts` to `apps/cli-zig/src/lib/mcp/tools/list-media-files.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `registerListMediaFilesTool` | `registerListMediaFilesTool` |  |
+| none | `listMediaFiles` | The handler arrow function given to `server.registerTool`. |
+
+#### `apps/cli/src/lib/mcp/tools/open-database.ts` to `apps/cli-zig/src/lib/mcp/tools/open-database.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `registerOpenDatabaseTool` | `registerOpenDatabaseTool` |  |
+| none | `openDatabase` | The handler arrow function given to `server.registerTool`. |
+
+#### `apps/cli/src/lib/mcp/tools/save-media-file.ts` to `apps/cli-zig/src/lib/mcp/tools/save-media-file.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `registerSaveMediaFileTool` | `registerSaveMediaFileTool` |  |
+| none | `saveMediaFile` | The handler arrow function given to `server.registerTool`. |
+
+#### `apps/cli/src/lib/mcp/tools/search-media-files.ts` to `apps/cli-zig/src/lib/mcp/tools/search-media-files.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `registerSearchMediaFilesTool` | `registerSearchMediaFilesTool` |  |
+| none | `optionalString` | Replaces reading an optional string argument. |
+| none | `searchMediaFiles` | The handler arrow function given to `server.registerTool`. |
+
+#### `apps/cli/src/lib/mcp/tools/verify-database.ts` to `apps/cli-zig/src/lib/mcp/tools/verify-database.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `registerVerifyDatabaseTool` | `registerVerifyDatabaseTool` |  |
+| none | `verifyDatabase` | The handler arrow function given to `server.registerTool`. |
+
+#### `apps/cli/src/lib/print-notifications.ts` to `apps/cli-zig/src/lib/print-notifications.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `printNewsItem` | `printNewsItem` |  |
+| `printNotifications` | `printNotifications` |  |
+
+#### `apps/cli/src/lib/spinner.ts` to `apps/cli-zig/src/lib/spinner.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `spinner` | `spinner` |  |
+| none | `SpinnerResult` | The object spinner returns (the clack spinner, or the non-interactive one). |
+| none | `SpinnerResult.start` | The method of the same name of the object spinner returns. |
+| none | `SpinnerResult.stop` | The method of the same name of the object spinner returns. |
+| none | `SpinnerResult.message` | The method of the same name of the object spinner returns. |
+| none | `SpinnerResult.isCancelled` | The method of the same name of the object spinner returns. |
+
+#### `apps/cli/src/lib/storage-helper.ts` to `apps/cli-zig/src/lib/storage-helper.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `fetchS3CredentialsForPath` | `fetchS3CredentialsForPath` |  |
+| `createStorageForPath` | `createStorageForPath` |  |
+
+#### `apps/cli/src/lib/sync-watch.ts` to `apps/cli-zig/src/lib/sync-watch.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `parseWatchInterval` | `parseWatchInterval` |  |
+| `runSyncWatch` | `runSyncWatch` |  |
+| none | `ISyncWatchOptions` | The TypeScript interface of the same name, as a struct. |
+
+#### `apps/cli/src/lib/terminal-utils.ts` to `apps/cli-zig/src/lib/terminal-utils.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `clearLine` | `clearLine` |  |
+| `cursorTo` | `cursorTo` |  |
+| `clearProgressMessage` | `clearProgressMessage` |  |
+| `writeProgress` | `writeProgress` |  |
+| none | `stdoutIsTTY` | Replaces `process.stdout.isTTY`. |
+| none | `writeStdout` | Replaces `process.stdout.write`. |
+
+#### `apps/cli/src/lib/worker-log-bun.ts` to `apps/cli-zig/src/lib/worker-log-bun.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `WorkerLogBun` | `WorkerLogBun` |  |
+| `WorkerLogBun.constructor` | `WorkerLogBun.init` |  |
+| `WorkerLogBun.setTaskId` | `WorkerLogBun.setTaskId` |  |
+| `WorkerLogBun.prefixMessage` | `WorkerLogBun.prefixMessage` |  |
+| `WorkerLogBun.verbose` | `WorkerLogBun.verbose` |  |
+| `WorkerLogBun.info` | `WorkerLogBun.info` |  |
+| `WorkerLogBun.error` | `WorkerLogBun.error` |  |
+| `WorkerLogBun.exception` | `WorkerLogBun.exception` |  |
+| `WorkerLogBun.warn` | `WorkerLogBun.warn` |  |
+| `WorkerLogBun.debug` | `WorkerLogBun.debug` |  |
+| `WorkerLogBun.tool` | `WorkerLogBun.tool` |  |
+| `WorkerLogBun.event` | `WorkerLogBun.event` |  |
+| `WorkerLogBun.getLogDetails` | `WorkerLogBun.getLogDetails` |  |
+| `setWorkerTaskId` | `setWorkerTaskId` |  |
+| `createWorkerLog` | `createWorkerLog` |  |
+| none | `WorkerLogBun.writePrefixed` | The prefix and write repeated by each method. |
+| none | `clearWorkerLog` | Zig plumbing: forgets the worker log of a thread that ends. |
+| none | `installWorkerLogRouting` | Zig plumbing: TypeScript workers are processes of their own with their own log; Zig installs one log that sends each thread's messages to that thread's worker log, or to the main log. |
+| none | `mainLog` | Zig plumbing: the log installed before the routing log. |
+| none | `routeInfo` | The ILog `info` of the routing log (see installWorkerLogRouting). |
+| none | `routeVerbose` | The ILog `verbose` of the routing log (see installWorkerLogRouting). |
+| none | `routeError` | The ILog `error` of the routing log (see installWorkerLogRouting). |
+| none | `routeException` | The ILog `exception` of the routing log (see installWorkerLogRouting). |
+| none | `routeWarn` | The ILog `warn` of the routing log (see installWorkerLogRouting). |
+| none | `routeDebug` | The ILog `debug` of the routing log (see installWorkerLogRouting). |
+| none | `routeTool` | The ILog `tool` of the routing log (see installWorkerLogRouting). |
+| none | `routeEvent` | The ILog `event` of the routing log (see installWorkerLogRouting). |
+| none | `routeVerboseEnabled` | The ILog `verboseEnabled` of the routing log (see installWorkerLogRouting). |
+| none | `routeGetLogDetails` | The ILog `getLogDetails` of the routing log (see installWorkerLogRouting). |
+
+#### `apps/cli/src/lib/worker-pool-bun.ts` to `apps/cli-zig/src/lib/worker-pool.zig`
+
+Zig workers are threads of the CLI process, not Bun Workers: `worker-pool.zig` ports this file and `worker.ts` together (see the comment at its top). A task a handler queues goes to this pool directly, so the "queue-task" message is not needed; the CLI queues no task with a priority, so every task has the default priority either way.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `WorkerPoolBun` | `WorkerPoolBun` |  |
+| `WorkerPoolBun.constructor` | `WorkerPoolBun.init` |  |
+| `WorkerPoolBun.addTask` | `WorkerPoolBun.addTask` |  |
+| `WorkerPoolBun.addTaskWithParent` | `WorkerPoolBun.addTaskWithParent` |  |
+| `WorkerPoolBun.onTaskAdded` | `WorkerPoolBun.onTaskAdded` |  |
+| `WorkerPoolBun.priorityOfRunningTask` | none | Not needed: child tasks are added to this pool directly by the handler, not through a "queue-task" message. |
+| `WorkerPoolBun.tryDispatchPending` | `WorkerPoolBun.tryDispatchPending` |  |
+| `WorkerPoolBun.onTaskComplete` | `WorkerPoolBun.onTaskComplete` |  |
+| `WorkerPoolBun.onTaskMessage` | `WorkerPoolBun.onTaskMessage` |  |
+| `WorkerPoolBun.onAnyTaskMessage` | `WorkerPoolBun.onAnyTaskMessage` |  |
+| `WorkerPoolBun.notifyCompletionCallbacks` | `WorkerPoolBun.notifyCompletionCallbacks` |  |
+| `WorkerPoolBun.notifyMessageCallbacks` | `WorkerPoolBun.notifyMessageCallbacks` |  |
+| `WorkerPoolBun.createWorker` | `WorkerPoolBun.createWorker` |  |
+| `WorkerPoolBun.replaceWorker` | `WorkerPoolBun.replaceWorker` |  |
+| `WorkerPoolBun.handleWorkerMessage` | `WorkerPoolBun.handleTaskCompleted`, `WorkerPoolBun.sendMessageFn` | The "task-completed" and "task-message" messages, handled on the worker thread under the pool lock. |
+| `WorkerPoolBun.handleTaskTimeout` | `WorkerPoolBun.handleTaskTimeout` |  |
+| `WorkerPoolBun.handleWorkerCrash` | `WorkerPoolBun.handleWorkerCrash` |  |
+| `WorkerPoolBun.dispatchTask` | `WorkerPoolBun.dispatchTask` |  |
+| `WorkerPoolBun.cancelTasks` | `WorkerPoolBun.cancelTasks` |  |
+| `WorkerPoolBun.onTasksCancelled` | `WorkerPoolBun.onTasksCancelled` |  |
+| `WorkerPoolBun.shutdown` | `WorkerPoolBun.shutdown` |  |
+| none | `IWorkerOptions` | The TypeScript interface of the same name. |
+| none | `IWorkerPoolOptions` | The TypeScript interface of the same name. |
+| none | `IPoolTask` | A pending or running task with the arena that owns its data (the ITask of the TypeScript maps). |
+| none | `IWorkerState` | The TypeScript interface of the same name, with the worker's thread. |
+| none | `Registration` | Zig plumbing: a registered callback with the key its UnsubscribeFn removes it by. |
+| none | `formatNumber` | Replaces `${number}` in a template string. |
+| none | `WorkerPoolBun.deinit` | Zig plumbing: frees what the pool owns. |
+| none | `WorkerPoolBun.queueBackend` | Zig plumbing: the IQueueBackend view of the pool. |
+| none | `WorkerPoolBun.lock` | Zig plumbing: the pool lock (TypeScript has one thread). |
+| none | `WorkerPoolBun.unlock` | Zig plumbing: the pool lock (TypeScript has one thread). |
+| none | `WorkerPoolBun.nowMs` | Replaces `Date.now()`. |
+| none | `WorkerPoolBun.register` | The body shared by onTaskComplete, onTaskMessage and onAnyTaskMessage (push the callback, return its remover). |
+| none | `WorkerPoolBun.unregister` | The UnsubscribeFn those return. |
+| none | `WorkerPoolBun.removeKey` | The `splice` of the UnsubscribeFn. |
+| none | `WorkerPoolBun.startWorker` | The part of createWorker that starts the worker (`new Worker(...)`), shared with replaceWorker. |
+| none | `WorkerPoolBun.retireWorker` | Zig plumbing: `worker.terminate()`, which for a thread is asking it to stop and detaching it. |
+| none | `WorkerPoolBun.ensureMonitor` | Zig plumbing: starts the thread that fires the task timeouts (TypeScript's `setTimeout`s). |
+| none | `WorkerPoolBun.workerMain` | The worker's loop: worker.ts's `onmessage` and initWorker, on the worker thread. |
+| none | `WorkerPoolBun.handleWorkerError` | The worker's "error" event handler. |
+| none | `WorkerPoolBun.executeTask` | The worker's `executeTask` of worker.ts (see above). |
+| none | `WorkerPoolBun.monitorMain` | Zig plumbing: the timeout monitor thread, which fires handleTaskTimeout as the TypeScript timers do. |
+| none | `WorkerPoolBun.freeTask` | Zig plumbing: frees a finished task (garbage collected in TypeScript). |
+| none | `WorkerPoolBun.addTaskErased` | Zig plumbing: the IQueueBackend vtable entry of `addTask`. |
+| none | `WorkerPoolBun.onTaskAddedErased` | Zig plumbing: the IQueueBackend vtable entry of `onTaskAdded`. |
+| none | `WorkerPoolBun.onTaskCompleteErased` | Zig plumbing: the IQueueBackend vtable entry of `onTaskComplete`. |
+| none | `WorkerPoolBun.onTaskMessageErased` | Zig plumbing: the IQueueBackend vtable entry of `onTaskMessage`. |
+| none | `WorkerPoolBun.onAnyTaskMessageErased` | Zig plumbing: the IQueueBackend vtable entry of `onAnyTaskMessage`. |
+| none | `WorkerPoolBun.cancelTasksErased` | Zig plumbing: the IQueueBackend vtable entry of `cancelTasks`. |
+| none | `WorkerPoolBun.onTasksCancelledErased` | Zig plumbing: the IQueueBackend vtable entry of `onTasksCancelled`. |
+| none | `WorkerPoolBun.shutdownErased` | Zig plumbing: the IQueueBackend vtable entry of `shutdown`. |
+
+#### `apps/cli/worker.ts` to no Zig file
+
+The worker script: its work is done by `worker-pool.zig` (`WorkerPoolBun.workerMain` and `executeTask`) on the worker thread.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `executeTask` | `WorkerPoolBun.executeTask` |  |
+| `sendMessageFn` | `WorkerPoolBun.sendMessageFn` |  |
+| `initWorker` | `WorkerPoolBun.workerMain` | the set up of a worker thread (its log, task handlers and generators) at the start of its loop. |
+
+#### Zig files with no TypeScript file
+
+| Zig file | What it is |
+|---|---|
+| `apps/cli-zig/src/lib/clack/core/types.zig` | The types of `@clack/core`'s types.ts, which is types only (the prompt state). |
+| `apps/cli-zig/src/lib/clack/prompts.zig` | The barrel `src/lib/clack/prompts/index.ts`, which the bundle flattens away: the prompts the CLI uses. |
+| `apps/cli-zig/src/lib/clack/third-party/readline.zig` | Replaces the parts of `node:readline` the clack prompts use (emitKeypressEvents and the keypress decoding). |
+| `apps/cli-zig/src/lib/clack/third-party/sisteransi.zig` | Replaces the third-party `sisteransi` package (cursor and erase escape sequences). |
+| `apps/cli-zig/src/lib/clack/third-party/string-width-table.zig` | The East Asian width tables string-width reads. |
+| `apps/cli-zig/src/lib/clack/third-party/string-width.zig` | Replaces the third-party `string-width` package (fast-string-width) used through wrap-ansi. |
+| `apps/cli-zig/src/lib/clack/third-party/wrap-ansi.zig` | Replaces the third-party `wrap-ansi` package (fast-wrap-ansi) the prompts wrap their text with. |
+| `apps/cli-zig/src/lib/commander.zig` | Replaces the third-party `commander` package (the parts psi uses): commands, options, arguments, help and its errors. |
+| `apps/cli-zig/src/lib/config.zig` | The port of `packages/config` (the version and build metadata), which has no Zig package of its own. |
+| `apps/cli-zig/src/lib/mcp/input-schema.zig` | Replaces the zod schemas the MCP tools declare their input with, and the SDK's use of them. |
+| `apps/cli-zig/src/lib/mcp/protocol.zig` | Replaces the parts of `@modelcontextprotocol/sdk` that `psi mcp` uses (McpServer and StdioServerTransport). |
+| `apps/cli-zig/src/lib/mcp/types.zig` | The port of `apps/cli/src/lib/mcp/types.ts`, which is types only. |
+| `apps/cli-zig/src/lib/picocolors.zig` | Replaces the third-party `picocolors` package. |
+| `apps/cli-zig/src/lib/process-argv.zig` | Replaces `process.argv`. |
+| `apps/cli-zig/src/lib/process-signals.zig` | Replaces `process.on('SIGINT' \| 'SIGTERM', ...)` and `process.removeListener`. |
+| `apps/cli-zig/src/lib/third-party/open.zig` | Replaces the third-party `open` package (`open(target)`, as `psi bug` calls it). |
+| `apps/cli-zig/src/lib/tty.zig` | Replaces the parts of `node:tty` the CLI uses (isTTY, columns, rows, setRawMode, hasColors). |
+
+<!-- end tables -->
+
 ## Divergences fixed
 
 Each was found by reading the two side by side, pinned by a unit test that failed before the fix, and fixed in the Zig.
@@ -3867,3 +5324,20 @@ Each was found by reading the two side by side, pinned by a unit test that faile
 65. `psi bug` wrote a log file it could not read as the Zig error name (`Error reading log file: IsDir`), where
     `readFileSync` throws `EISDIR: illegal operation on a directory, read` (and `<code>: <description>, open
     '<path>'` for a file it cannot open). Test: `getLogHeader reports a directory as readFileSync does`.
+66. The CLI's direct `fs.readFile` and `fs.writeFile` calls (the input and output files of `psi debug
+    find-collisions`, `find-duplicates` and `remove-duplicates`, the PEM files of `init`, `secrets` and `dbs`, the
+    value file of `secrets edit`, the log header of `bug` and of the file logger) reported a failure with the Zig
+    error's name, or only a missing input file with Node's message, where Node throws `<code>: <description>, open
+    '<path>'`, and `EISDIR: illegal operation on a directory, read` for a directory read as a file. They go through
+    node-utils-zig's `node_fs` now. Tests: `readFile reads a file, and throws the messages Node's readFile throws`,
+    `writeFile writes a file, and throws the messages Node's writeFile throws` and `debug find-duplicates reports an
+    input that is a directory with the message Bun's readFile throws`.
+67. The text prompt drew an empty placeholder as an empty inverted and dimmed pair, where an empty placeholder is
+    left out like a missing one, and inverted the first byte of a placeholder, where it inverts the first UTF-16
+    code unit (a whole character of two or three UTF-8 bytes; half of one outside the Basic Multilingual Plane,
+    written as U+FFFD). The select prompt drew an empty hint as `()`, where it is left out. Test: `an empty
+    placeholder or hint is left out, and a placeholder's first character is its first UTF-16 code unit`.
+68. The password prompt masked each code point of the input and placed its cursor by code points, where
+    `replaceAll(/./g, mask)` masks each UTF-16 code unit (so a character outside the Basic Multilingual Plane shows
+    two masks) and keeps a line terminator, and the cursor counts code units. Test: `the password prompt masks each
+    UTF-16 code unit, as replaceAll(/./g, mask) does`.

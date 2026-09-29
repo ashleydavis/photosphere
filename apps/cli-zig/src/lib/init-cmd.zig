@@ -599,7 +599,7 @@ fn buildAndStoreKeyPem(allocator: std.mem.Allocator, io: std.Io, keyName: []cons
 // Reads a PEM file (`fs.readFile(path, 'utf-8')`).
 //
 fn readPemFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) ![]const u8 {
-    return std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+    return node_utils.node_fs.readFile(allocator, io, filePath);
 }
 
 //

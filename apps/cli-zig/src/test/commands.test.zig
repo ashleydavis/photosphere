@@ -4260,3 +4260,24 @@ test "bug is cancelled like the TypeScript CLI" {
     try std.testing.expect(std.mem.endsWith(u8, stepCancelled.stdout, "■  Step 1:\n \n\x1b[?25h\nBug report cancelled.\n"));
     try std.testing.expectEqual(@as(u8, 0), stepCancelled.exitCode);
 }
+
+test "debug find-duplicates reports an input that is a directory with the message Bun's readFile throws" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const root = try setup(allocator, "cmd-debug-duplicates-directory");
+    defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const inputPath = try node_path.join(allocator, &.{ db, "input-dir" });
+    try std.Io.Dir.cwd().createDirPath(io, inputPath);
+
+    const result = try runZig(allocator, environment, &.{ "debug", "find-duplicates", "--db", db, "--yes", "--input", "input-dir" });
+    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expectEqualStrings(
+        try std.fmt.allocPrint(allocator, "Error: Failed to read input file {s}: EISDIR: illegal operation on a directory, read\nTemporary files retained for inspection: <session dir>\n", .{inputPath}),
+        try maskRetainedSessionDir(allocator, result.stdout),
+    );
+}
