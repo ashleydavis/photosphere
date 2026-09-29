@@ -17,4 +17,4 @@ pub const block = utils.block;
 pub const BlockOptions = utils.BlockOptions;
 pub const IBlock = utils.IBlock;
 // Not ported: GroupMultiSelectPrompt, MultiSelectPrompt, SelectKeyPrompt, AutocompletePrompt,
-// updateSettings (not used by replicate or verify).
+// updateSettings (not reached by the CLI).

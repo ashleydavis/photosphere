@@ -959,7 +959,7 @@ pub fn NodeIterator(comptime NodeT: type) type {
     };
 }
 
-// Not ported: iterateNodes (not reached by psi replicate or psi verify)
+// Not ported: iterateNodes (not reached by the CLI)
 
 //
 // Iterates all leaves in the tree.
@@ -1145,7 +1145,7 @@ pub fn getItemInfo(merkleTree: *const IMerkleTree, name: []const u8) !?IHashedDa
     };
 }
 
-// Not ported: findItemNode (not reached by psi replicate or psi verify)
+// Not ported: findItemNode (not reached by the CLI)
 
 //
 // A 64-bit number split into 32-bit parts (TypeScript: `{ high: number, low: number }`).
@@ -2338,7 +2338,7 @@ pub fn pruneTree(
     return prunedFiles.items;
 }
 
-// Not ported: deleteItems (only used by tests, not by psi replicate or psi verify).
+// Not ported: deleteItems (only used by tests, not reached by the CLI).
 
 //
 // Checks a UUID string like the `uuid` package's `validate` (the regex in uuid/dist/cjs/regex.js).

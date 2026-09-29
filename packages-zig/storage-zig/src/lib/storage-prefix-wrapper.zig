@@ -197,5 +197,5 @@ pub const StoragePrefixWrapper = struct {
         return self.wrappedStorage.releaseWriteLock(allocator, io, try self.makeFullPath(allocator, filePath));
     }
 
-    // Not ported: refreshWriteLock (not reached by psi replicate or psi verify).
+    // Not ported: refreshWriteLock (not reached by the CLI).
 };

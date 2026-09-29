@@ -66,4 +66,4 @@ pub fn verifyTools(allocator: std.mem.Allocator, io: std.Io) !ToolsStatus {
     };
 }
 
-// Not ported: ensureToolsAvailable (not used by replicate or verify).
+// Not ported: ensureToolsAvailable (not reached by the CLI).

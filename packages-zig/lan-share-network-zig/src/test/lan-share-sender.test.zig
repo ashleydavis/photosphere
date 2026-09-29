@@ -1,6 +1,7 @@
 const std = @import("std");
 const lan_share = @import("lan-share-network-zig");
 const helpers = @import("test-helpers.zig");
+const utils = @import("utils-zig");
 
 const LanShareSender = lan_share.lan_share_sender.LanShareSender;
 const LanShareReceiver = lan_share.lan_share_receiver.LanShareReceiver;
@@ -193,4 +194,65 @@ test "send returns false when the receiver it is given has a different pairing c
 
     receiver.cancel();
     _ = try receiver.receive();
+}
+
+test "the pairing code hash response is read as JSON.parse reads it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const matches = lan_share.lan_share_sender.pairingCodeHashMatches;
+
+    try std.testing.expect(try matches(allocator, "{\"codeHash\":\"abc\"}", "abc"));
+
+    // JSON.parse keeps the last value of a repeated key.
+    try std.testing.expect(try matches(allocator, "{\"codeHash\":\"xyz\",\"codeHash\":\"abc\"}", "abc"));
+
+    // A codeHash that is missing or not a string, or a body that is not an object, is not the code hash.
+    try std.testing.expect(!try matches(allocator, "{}", "abc"));
+    try std.testing.expect(!try matches(allocator, "{\"codeHash\":1}", "abc"));
+    try std.testing.expect(!try matches(allocator, "[\"abc\"]", "abc"));
+    try std.testing.expect(!try matches(allocator, "\"abc\"", "abc"));
+
+    // `null.codeHash` throws.
+    try std.testing.expectError(error.Thrown, matches(allocator, "null", "abc"));
+    try std.testing.expectEqualStrings("TypeError", utils.errors.lastErrorName());
+    try std.testing.expectEqualStrings("null is not an object (evaluating 'hashBody.codeHash')", utils.errors.lastErrorMessage());
+}
+
+test "the announced port is read as parseInt(text, 10) reads it" {
+    const parsePort = lan_share.lan_share_sender.parseIntLikeJavaScript;
+    try std.testing.expectEqual(@as(?u16, 5000), parsePort("5000"));
+
+    // parseInt skips the whitespace String.prototype.trim removes, takes a sign and stops at the first non-digit.
+    try std.testing.expectEqual(@as(?u16, 5000), parsePort("\u{00A0}5000"));
+    try std.testing.expectEqual(@as(?u16, 5000), parsePort("+5000abc"));
+    try std.testing.expectEqual(@as(?u16, 0), parsePort("0x10"));
+
+    // NaN is not a port.
+    try std.testing.expectEqual(@as(?u16, null), parsePort("port"));
+    try std.testing.expectEqual(@as(?u16, null), parsePort(""));
+}
+
+//
+// Sends a payload from a sender to a receiver with the same pairing code and returns what the receiver received.
+//
+fn sendAndReceive(allocator: std.mem.Allocator, payload: std.json.Value) !?std.json.Value {
+    const code = try helpers.pairingCode();
+    var receiver = LanShareReceiver.init(std.testing.io, 15000);
+    defer receiver.deinit();
+    try receiver.start(code);
+    var sender = try LanShareSender.init(allocator, std.testing.io, payload, code);
+    const endpoint = try sender.waitForReceiver(std.testing.io, 10000);
+    try std.testing.expect(try sender.send(endpoint.?));
+    return receiver.receive();
+}
+
+test "a falsy payload is received as no payload, as the callers' `if (!rawPayload)` reads it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expect((try sendAndReceive(allocator, .{ .bool = false })) == null);
+    try std.testing.expect((try sendAndReceive(allocator, .{ .integer = 0 })) == null);
+    try std.testing.expect((try sendAndReceive(allocator, .{ .string = "" })) == null);
+    try std.testing.expectEqualStrings("x", (try sendAndReceive(allocator, .{ .string = "x" })).?.string);
 }

@@ -458,7 +458,7 @@ test "file permissions: vault directory is created with owner-only permissions (
     try std.testing.expectEqual(@as(u32, 0o700), try permissionBits(io, newVaultDir));
 }
 
-// Not ported: "exists" tests (PlaintextVault.exists is not ported: not used by psi replicate or psi verify).
+// Not ported: "exists" tests (PlaintextVault.exists is not ported: not reached by the CLI).
 
 test "getVaultFilePath is vault.json inside the vault directory" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

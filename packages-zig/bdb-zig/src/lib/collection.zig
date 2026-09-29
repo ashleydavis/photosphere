@@ -50,7 +50,7 @@ pub const DirtyCallback = struct {
 //
 const MAX_CACHED_SHARDS = 8;
 
-// Not ported: ISortIndexCreationOptions (not used by psi add, psi replicate or psi verify).
+// Not ported: ISortIndexCreationOptions (not reached by the CLI).
 
 //
 // A record: a document with an `_id`.
@@ -711,7 +711,7 @@ pub const BsonCollection = struct {
         return true;
     }
 
-    // Not ported: replaceOne (not used by psi add, psi replicate or psi verify).
+    // Not ported: replaceOne (not reached by the CLI).
 
     //
     // Sets an internal record directly, preserving all timestamps and metadata.
@@ -794,7 +794,7 @@ pub const BsonCollection = struct {
         return indexes.items;
     }
 
-    // Not ported: drop (not used by psi replicate or psi verify).
+    // Not ported: drop (not reached by the CLI).
 
     //
     // Flushes all pending writes to disk: dirty shards, merkle trees, and sort index pages.

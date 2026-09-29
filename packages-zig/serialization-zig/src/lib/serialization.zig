@@ -1457,7 +1457,8 @@ pub fn load(
         const calculatedChecksum = sha256(dataBuffer);
         const storedChecksum = buffer[buffer.len - 32 ..];
         if (std.mem.eql(u8, &calculatedChecksum, storedChecksum)) {
-            const typeCode = dataBuffer[4 .. 4 + TYPE_CODE_LENGTH];
+            var typeCodeBuffer: [TYPE_CODE_LENGTH]u8 = undefined;
+            const typeCode = asciiString(&typeCodeBuffer, dataBuffer[4 .. 4 + TYPE_CODE_LENGTH]);
             if (std.mem.eql(u8, typeCode, expectedTypeCode)) {
                 version = std.mem.readInt(u32, dataBuffer[0..4], .little);
                 payload = dataBuffer[4 + TYPE_CODE_LENGTH ..];
@@ -1513,6 +1514,17 @@ pub fn load(
     // Not ported: applyMigrations (no caller passes migrations).
 
     return data;
+}
+
+//
+// Decodes bytes like `buffer.toString("ascii")`, which drops the high bit of each byte. (No TypeScript counterpart:
+// Buffer's "ascii" decoding.)
+//
+fn asciiString(output: []u8, bytes: []const u8) []const u8 {
+    for (bytes, 0..) |byte, index| {
+        output[index] = byte & 0x7F;
+    }
+    return output[0..bytes.len];
 }
 
 //

@@ -631,7 +631,10 @@ pub const LanShareReceiver = struct {
             defer std.heap.smp_allocator.free(rawBody);
 
             self.arenaMutex.lockUncancelable(self.io);
-            const parsed = std.json.parseFromSliceLeaky(std.json.Value, self.allocator(), rawBody, .{});
+            // JSON.parse keeps the last value of a repeated key.
+            const parsed = std.json.parseFromSliceLeaky(std.json.Value, self.allocator(), rawBody, .{
+                .duplicate_field_behavior = .use_last,
+            });
             self.arenaMutex.unlock(self.io);
             const shareRequest = parsed catch {
                 try respondJson(request, .bad_request, "{\"error\":\"Invalid JSON\"}");
@@ -654,6 +657,21 @@ pub const LanShareReceiver = struct {
     }
 
     //
+    // JavaScript falsiness of a JSON value (`!value`).
+    //
+    fn isFalsy(value: std.json.Value) bool {
+        return switch (value) {
+            .null => true,
+            .bool => |boolean| !boolean,
+            .integer => |integer| integer == 0,
+            .float => |float| float == 0 or std.math.isNan(float),
+            .number_string => |text| (std.fmt.parseFloat(f64, text) catch 1) == 0,
+            .string => |text| text.len == 0,
+            .array, .object => false,
+        };
+    }
+
+    //
     // Completes the receive operation: records the payload and tells the threads and receive() to finish. Only the
     // first call counts.
     //
@@ -661,9 +679,11 @@ pub const LanShareReceiver = struct {
         if (self.isCompleting.swap(true, .acq_rel)) {
             return;
         }
-        // A JSON null payload is no payload, as `if (!rawPayload)` treats it.
-        if (payload != null and payload.? != .null) {
-            self.payload = payload;
+        // A falsy payload (null, false, 0 or "") is no payload, as the callers' `if (!rawPayload)` treats it.
+        if (payload) |value| {
+            if (!isFalsy(value)) {
+                self.payload = value;
+            }
         }
         self.isDone.store(true, .release);
     }

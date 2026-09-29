@@ -235,7 +235,7 @@ pub fn readYaml(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) 
     return parsed;
 }
 
-// Not ported: writeYaml (not used by replicate or verify).
+// Not ported: writeYaml (not reached by the CLI).
 
 //
 // The parse and serialize functions updateYaml hands to updateFileOptimistic (the arrow functions in
@@ -582,7 +582,7 @@ pub fn ensureDirSync(io: std.Io, dirPath: []const u8) !void {
     return ensureDir(io, dirPath);
 }
 
-// Not ported: removeSync, copySync (not used by replicate or verify).
+// Not ported: removeSync, copySync (not reached by the CLI).
 
 //
 // Equivalent of Node's `os.tmpdir()`.

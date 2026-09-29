@@ -82,7 +82,7 @@ pub fn acquireWriteLock(allocator: std.mem.Allocator, io: std.Io, rawStorage: IS
     return false;
 }
 
-// Not ported: refreshWriteLock (not used by psi replicate or psi verify).
+// Not ported: refreshWriteLock (not reached by the CLI).
 
 //
 // Releases the write lock for the database (the `() => rawStorage.releaseWriteLock(".db/write.lock")` of TypeScript).

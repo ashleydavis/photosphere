@@ -57,7 +57,7 @@ pub const state_file = @import("lib/state-file.zig");
 pub const lazy_origin_storage = @import("lib/lazy-origin-storage.zig");
 // Not ported: desktop-config, get-database-summary.worker, move-assets.worker,
 // hash-file.worker, save-asset.worker, save-assets-batch.worker, create-database.worker,
-// sync-database.worker (not used by psi replicate or psi verify).
+// sync-database.worker (not reached by the CLI).
 
 //
 // Files with no TypeScript counterpart (the arrow functions that are passed to retry, and the fetch stand-in).
