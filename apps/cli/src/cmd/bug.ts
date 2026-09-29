@@ -8,7 +8,6 @@ import { exit, getProcessTmpDir } from "node-utils";
 import { text, isCancel, intro, outro } from '../lib/clack/prompts';
 import { Image, Video } from "tools";
 import { version } from "config";
-import { waitForOpener } from "../lib/wait-for-opener";
 
 export interface IBugReportCommandOptions {
     //
@@ -200,12 +199,7 @@ export async function bugReportCommand(options: IBugReportCommandOptions): Promi
         outro(`${pc.green("✓ Bug report generated successfully!")}\n\n${summaryInfo}${logInfo}\n\n${pc.yellow("GitHub Issue URL:")}\n${githubUrl}\n\n${pc.dim("Copy and paste the URL above into your browser to create the issue.")}`);
     } else {
         try {
-            const opener = await open(githubUrl);
-
-            // On Windows the opener dies with this process unless it is waited for (see waitForOpener).
-            if (process.platform === "win32") {
-                await waitForOpener(opener);
-            }
+            await open(githubUrl);
             outro(`${pc.green("✓ Bug report opened in browser!")}\n\n${summaryInfo}${logInfo}`);
         } catch (error) {
             outro(`${pc.green("✓ Bug report generated successfully!")}\n\n${summaryInfo}${logInfo}\n\n${pc.red("Failed to open browser. Here's the URL:")}\n${githubUrl}\n\n${pc.yellow("Please copy the URL above to submit the bug report.")}`);
