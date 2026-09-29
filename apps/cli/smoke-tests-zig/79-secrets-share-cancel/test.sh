@@ -24,6 +24,10 @@ fi
 # Process group of the command started by start_share_command, signalled by cancel_share_command.
 SHARE_PGID=""
 
+# Output file of the command started by start_share_command, printed by cancel_share_command when
+# Ctrl+C does not stop that command, so a hang can be diagnosed from the log of the run.
+SHARE_LOG=""
+
 # LAN-share discovery is machine-wide: every receiver on this host broadcasts on the same UDP port and
 # a sender pairs with whichever one answers with a matching code. A fixed code would let this test
 # pair with the receiver belonging to another share test, or to another checkout's run, so the code is
@@ -43,6 +47,7 @@ start_share_command() {
     shift 2
 
     : > "$log_file"
+    SHARE_LOG="$log_file"
 
     # macOS has no setsid, so bash job control stands in for it: with monitor mode on, the shell makes
     # each background job the leader of a new process group whose PGID equals its PID. That group is
@@ -100,6 +105,12 @@ cancel_share_command() {
     done
 
     log_error "The share command was still running 20s after Ctrl+C"
+    log_info "Output of the share command ($SHARE_LOG):"
+    cat "$SHARE_LOG" 2>/dev/null || true
+
+    # Killed so it does not hold the discovery port for the rest of its wait: a sender left running
+    # takes the announcements meant for the share tests running beside this one and stalls them too.
+    kill -KILL -"$SHARE_PGID" 2>/dev/null || true
     return 1
 }
 

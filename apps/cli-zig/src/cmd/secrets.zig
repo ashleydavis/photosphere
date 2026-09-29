@@ -935,6 +935,9 @@ pub fn secretsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecre
     const spin = try spinner(allocator, io, !(cmdOptions.yes orelse false));
     try spin.start("Waiting for receiver on the local network... (Ctrl+C to cancel)");
 
+    // TODO: this mirrors a bug in the TypeScript (secrets.ts secretsSend) until both are fixed: the share-cancel hang
+    // explained at the TODO in dbs.zig dbsSend. Ctrl+C is taken over only after the pairing code is shown, so a
+    // SIGINT between the two is lost when SIGINT was inherited as ignored and the sender waits out 60 seconds.
     const sigintHandler: process_signals.ISignalListener = .{ .context = &sender, .function = cancelSender };
     try process_signals.on(.SIGINT, sigintHandler);
 
@@ -1027,6 +1030,9 @@ pub fn secretsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISe
     const spin = try spinner(allocator, io, !skipPrompts);
     try spin.start("Waiting for sender on the local network... (Ctrl+C to cancel)");
 
+    // TODO: this mirrors the TypeScript (secrets.ts secretsReceive) until both are fixed: the share-cancel hang
+    // explained at the TODO in dbs.zig dbsSend. Ctrl+C is taken over only after the waiting message is shown,
+    // as the TypeScript does, so a SIGINT between the two is lost when SIGINT was inherited as ignored.
     const sigintHandler: process_signals.ISignalListener = .{ .context = &receiver, .function = cancelReceiver };
     try process_signals.on(.SIGINT, sigintHandler);
 

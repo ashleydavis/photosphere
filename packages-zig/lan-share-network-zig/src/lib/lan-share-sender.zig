@@ -285,6 +285,12 @@ pub const LanShareSender = struct {
     // discovery timeout ran out.
     // Safe to call from a signal handler or another thread: it only sets flags.
     //
+    // TODO: this mirrors a bug in the TypeScript (lan-share-sender.ts) until both are fixed: a cancel() before
+    // waitForReceiver starts is not honoured, because waitForReceiver resets abandonWaitForReceiver and waits out its
+    // whole timeout. It is the second half of the share-cancel hang explained at the TODO in apps/cli-zig dbs.zig
+    // dbsSend: once the commands take over Ctrl+C before showing the pairing code, a Ctrl+C can come before the wait,
+    // so waitForReceiver must then return null at once.
+    //
     pub fn cancel(self: *LanShareSender) void {
         self.isCancelled.store(true, .release);
 
