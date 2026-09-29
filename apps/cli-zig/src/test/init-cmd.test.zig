@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -769,4 +770,39 @@ test "createDatabase writes the public key marker of an encrypted database" {
     const marker = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/.db/encryption.pub", .{dbDir}), allocator, .unlimited);
     try std.testing.expectEqualStrings(publicKeyPem, marker);
     try std.testing.expect(try created.assetStorage.fileExists(allocator, std.testing.io, ".db/files.dat"));
+}
+
+test "cpuCount counts every CPU, like os.cpus().length, even when the process may run on only one" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+
+    // Windows and macOS count every CPU already.
+    if (builtin.os.tag != .linux) {
+        try std.testing.expectEqual(try std.Thread.getCpuCount(), try init_cmd.cpuCount(allocator, io));
+        return;
+    }
+    const linux = std.os.linux;
+
+    const unpinned = try init_cmd.cpuCount(allocator, io);
+    try std.testing.expect(unpinned >= 1);
+
+    // Pin this thread to the first CPU it may run on, then put its CPUs back.
+    var allowed: linux.cpu_set_t = undefined;
+    try std.testing.expectEqual(@as(usize, 0), linux.sched_getaffinity(0, @sizeOf(linux.cpu_set_t), &allowed));
+    defer linux.sched_setaffinity(0, &allowed) catch |err| {
+        std.debug.panic("Restoring the CPU affinity failed: {s}", .{@errorName(err)});
+    };
+    var pinned: linux.cpu_set_t = std.mem.zeroes(linux.cpu_set_t);
+    for (allowed, 0..) |word, wordIndex| {
+        if (word != 0) {
+            pinned[wordIndex] = word & (~word +% 1);
+            break;
+        }
+    }
+    try linux.sched_setaffinity(0, &pinned);
+    try std.testing.expectEqual(@as(usize, 1), try std.Thread.getCpuCount());
+
+    try std.testing.expectEqual(unpinned, try init_cmd.cpuCount(allocator, io));
 }
