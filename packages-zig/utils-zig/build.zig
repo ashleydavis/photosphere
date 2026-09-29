@@ -70,10 +70,27 @@ pub fn build(b: *std.Build) !void {
     const run_test = if (coverage_dir) |directory| addCoverageRun(b, unit_test, directory) else b.addRunArtifact(unit_test);
     run_test.setCwd(b.path("."));
     test_step.dependOn(&run_test.step);
+
+    // The console writing to the real stdout, which a unit test cannot see: a program writes through it and the
+    // build checks what it printed.
+    const console_stdout_module = b.createModule(.{
+        .root_source_file = b.path("src/test/fixtures/console-stdout.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    console_stdout_module.addImport(module_name, module);
+    const console_stdout = b.addExecutable(.{
+        .name = "console-stdout",
+        .root_module = console_stdout_module,
+        .use_llvm = if (coverage_dir != null) true else null,
+    });
+    const run_console_stdout = if (coverage_dir) |directory| addCoverageRun(b, console_stdout, directory) else b.addRunArtifact(console_stdout);
+    run_console_stdout.expectStdOutEqual("logged to stdout\ndebugged to stdout\n");
+    test_step.dependOn(&run_console_stdout.step);
 }
 
 //
-// Runs the unit test program under kcov, which writes a line-coverage report of this package's own sources (not its
+// Runs a test program under kcov, which writes a line-coverage report of this package's own sources (not its
 // tests or dependencies) to the directory.
 //
 fn addCoverageRun(b: *std.Build, unit_test: *std.Build.Step.Compile, coverage_dir: []const u8) *std.Build.Step.Run {
