@@ -30,6 +30,11 @@ pub fn build(b: *std.Build) !void {
         module.addImport(dependency_name, dependency.module(dependency_name));
     }
 
+    // The directory to write a kcov line-coverage report of the unit tests to (see docs/zig-test-coverage.md).
+    // The tests are then compiled with the LLVM backend, whose debug info kcov reads, and run under kcov.
+    const coverage_option = b.option([]const u8, "coverage", "Write a kcov line-coverage report of the unit tests to this directory");
+    const coverage_dir: ?[]const u8 = if (coverage_option) |directory| b.pathFromRoot(directory) else null;
+
     // The process the termination tests send signals to; its path is handed to the tests as an option.
     const termination_child_module = b.createModule(.{
         .root_source_file = b.path("src/test/fixtures/termination-child.zig"),
@@ -44,13 +49,13 @@ pub fn build(b: *std.Build) !void {
     const termination_child = b.addExecutable(.{
         .name = "termination-child",
         .root_module = termination_child_module,
+        .use_llvm = if (coverage_dir != null) true else null,
     });
     const test_options = b.addOptions();
-    test_options.addOptionPath("termination_child_path", termination_child.getEmittedBin());
+    // For a coverage report the tests start a wrapper that runs the child under kcov, so the lines the child runs
+    // (the signal handlers above all) are counted too.
+    test_options.addOptionPath("termination_child_path", if (coverage_dir) |directory| coverageWrapper(b, termination_child, directory, target).getEmittedBin() else termination_child.getEmittedBin());
 
-    // The directory to write a kcov line-coverage report of the unit tests to (see docs/zig-test-coverage.md).
-    // The tests are then compiled with the LLVM backend, whose debug info kcov reads, and run under kcov.
-    const coverage_dir = b.option([]const u8, "coverage", "Write a kcov line-coverage report of the unit tests to this directory");
     const test_file = b.option([]const u8, "test-file", "Only run the tests of this file (e.g. path.test.zig)");
     const test_step = b.step("test", "Run unit tests");
     // Every test file but termination.test.zig is compiled into one test program, whose root imports each of them.
@@ -87,7 +92,9 @@ pub fn build(b: *std.Build) !void {
             });
             addTestImports(b, termination_module, module, test_options, target, optimize);
             const termination_test = b.addTest(.{ .name = "termination-test", .root_module = termination_module, .use_llvm = if (coverage_dir != null) true else null });
-            const run_termination_test = if (coverage_dir) |directory| addCoverageRun(b, termination_test, directory) else b.addRunArtifact(termination_test);
+            // (Not under kcov itself, even for a coverage report: kcov traces the children of what it runs, and a
+            // traced child cannot run under a kcov of its own. The child is where termination.zig is counted.)
+            const run_termination_test = b.addRunArtifact(termination_test);
             test_step.dependOn(&run_termination_test.step);
             continue;
         }
@@ -131,4 +138,27 @@ fn addCoverageRun(b: *std.Build, unit_test: *std.Build.Step.Compile, coverage_di
     });
     run.addArtifactArg(unit_test);
     return run;
+}
+
+//
+// Builds a program that replaces itself with kcov running the program, for a test that starts the program as a child
+// of its own (src/test/fixtures/coverage-wrapper.zig).
+//
+fn coverageWrapper(b: *std.Build, program: *std.Build.Step.Compile, coverage_dir: []const u8, target: std.Build.ResolvedTarget) *std.Build.Step.Compile {
+    const options = b.addOptions();
+    options.addOption([]const u8, "kcov_path", b.findProgram(&.{"kcov"}, &.{}) catch @panic("kcov is not installed"));
+    options.addOption([]const u8, "include_path", b.fmt("--include-path={s}", .{b.pathFromRoot("src")}));
+    options.addOption([]const u8, "exclude_path", b.fmt("--exclude-path={s}", .{b.pathFromRoot("src/test")}));
+    options.addOption([]const u8, "coverage_dir", coverage_dir);
+    options.addOptionPath("program_path", program.getEmittedBin());
+    const wrapper_module = b.createModule(.{
+        .root_source_file = b.path("src/test/fixtures/coverage-wrapper.zig"),
+        .target = target,
+        .optimize = .Debug,
+    });
+    wrapper_module.addOptions("coverage_options", options);
+    return b.addExecutable(.{
+        .name = b.fmt("{s}-under-kcov", .{program.name}),
+        .root_module = wrapper_module,
+    });
 }

@@ -519,3 +519,66 @@ test "dump writes the numbers JSON cannot hold like js-yaml" {
         try std.testing.expectEqualStrings(case.yaml, try yaml.dump(allocator, case.value));
     }
 }
+
+test "dump decides what looks like a number, a time or a timestamp, quotes apostrophes and folds lines, like js-yaml" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try expectDumps(allocator, &.{
+        .{ .json = "{\"a\":\"\"}", .yaml = "a: ''\n" },
+        .{ .json = "{\"a\":\"-\"}", .yaml = "a: '-'\n" },
+        .{ .json = "{\"a\":\"+\"}", .yaml = "a: +\n" },
+        .{ .json = "{\"a\":\"+12\"}", .yaml = "a: '+12'\n" },
+        .{ .json = "{\"a\":\"0\"}", .yaml = "a: '0'\n" },
+        .{ .json = "{\"a\":\"0b\"}", .yaml = "a: 0b\n" },
+        .{ .json = "{\"a\":\"0o\"}", .yaml = "a: 0o\n" },
+        .{ .json = "{\"a\":\"0b12\"}", .yaml = "a: 0b12\n" },
+        .{ .json = "{\"a\":\"0x1G\"}", .yaml = "a: 0x1G\n" },
+        .{ .json = "{\"a\":\"09\"}", .yaml = "a: '09'\n" },
+        .{ .json = "{\"a\":\"1__2\"}", .yaml = "a: '1__2'\n" },
+        .{ .json = "{\"a\":\"-_1\"}", .yaml = "a: '-_1'\n" },
+        .{ .json = "{\"a\":\"1e\"}", .yaml = "a: 1e\n" },
+        .{ .json = "{\"a\":\"1.5e+\"}", .yaml = "a: 1.5e+\n" },
+        .{ .json = "{\"a\":\"12:30:45\"}", .yaml = "a: '12:30:45'\n" },
+        .{ .json = "{\"a\":\"1:2:\"}", .yaml = "a: '1:2:'\n" },
+        .{ .json = "{\"a\":\"1:_\"}", .yaml = "a: '1:_'\n" },
+        .{ .json = "{\"a\":\"2001-12-14 21:59\"}", .yaml = "a: 2001-12-14 21:59\n" },
+        .{ .json = "{\"a\":\"2001-12-14 21:59:43 +5\"}", .yaml = "a: '2001-12-14 21:59:43 +5'\n" },
+        .{ .json = "{\"a\":\"2001-12-14 21:59:43 +05:3\"}", .yaml = "a: 2001-12-14 21:59:43 +05:3\n" },
+        .{ .json = "{\"a\":\"2001-12-14T21:59:43+05:30\"}", .yaml = "a: '2001-12-14T21:59:43+05:30'\n" },
+        .{ .json = "{\"a\":\"2001-12-14T21:59:43X\"}", .yaml = "a: 2001-12-14T21:59:43X\n" },
+        .{ .json = "{\"a\":\"2001-12-14T1:59:43\"}", .yaml = "a: '2001-12-14T1:59:43'\n" },
+        .{ .json = "{\"a\":\"it's: x\"}", .yaml = "a: 'it''s: x'\n" },
+        .{ .json = "{\"a\":\"one two three four five six seven eight nine ten eleven twelve thirteen\\n  indented line that is also long enough to need folding past eighty chars\\nlast\"}", .yaml = "a: |-\n  one two three four five six seven eight nine ten eleven twelve thirteen\n    indented line that is also long enough to need folding past eighty chars\n  last\n" },
+        .{ .json = "{\"a\":\"first line\\n\\nthird paragraph line that is long enough to fold past the eighty character width, yes\"}", .yaml = "a: >-\n  first line\n\n\n  third paragraph line that is long enough to fold past the eighty character\n  width, yes\n" },
+        .{ .json = "[{\"a\":[1]}]", .yaml = "- a:\n    - 1\n" },
+        .{ .json = "[\"x\\ny\"]", .yaml = "- |-\n  x\n  y\n" },
+        .{ .json = "[\" leading\"]", .yaml = "- ' leading'\n" },
+        .{ .json = "{\"4294967294\":3,\"01\":1,\"4294967295\":2,\"b\":4}", .yaml = "'4294967294': 3\n'01': 1\n'4294967295': 2\nb: 4\n" },
+    });
+
+    // A key longer than 1024 characters is written as an explicit pair.
+    const longKey = try allocator.alloc(u8, 1100);
+    @memset(longKey, 'k');
+    var object: std.json.ObjectMap = .empty;
+    try object.put(allocator, longKey, .{
+        .integer = 1,
+    });
+    try std.testing.expectEqualStrings(try std.mem.concat(allocator, u8, &.{ "? ", longKey, "\n: 1\n" }), try yaml.dump(allocator, .{
+        .object = object,
+    }));
+}
+
+test "load reads a flow collection that is the whole document, and refuses an escape cut short by the end, like js-yaml" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // js-yaml loads "[a, b]" as ["a","b"] and "{a: 1}" as {"a":1}.
+    try std.testing.expectEqualStrings("[\"a\",\"b\"]", try std.json.Stringify.valueAlloc(allocator, try yaml.load(allocator, "[a, b]\n"), .{}));
+    try std.testing.expectEqualStrings("{\"a\":1}", try std.json.Stringify.valueAlloc(allocator, try yaml.load(allocator, "{a: 1}\n"), .{}));
+
+    // "a: \"\\x4" ends before the second hexadecimal digit: "expected hexadecimal character".
+    try std.testing.expectError(error.Thrown, yaml.load(allocator, "a: \"\\x4"));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "expected hexadecimal character"));
+}

@@ -1351,3 +1351,55 @@ test "updateFileRawOptimistic gives up on an update lock another process holds" 
     try std.testing.expect(!mutator.called);
     try std.testing.expect(fs.pathExists(io, lockPath));
 }
+
+test "an update lock that has gone stale but is a directory cannot be broken, and the update fails" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-raw-directory-lock.bin");
+
+    // fs.rm(lockPath, { force: true }) refuses a directory (EISDIR), and so does the port.
+    const lockPath = try std.fmt.allocPrint(allocator, "{s}.lock", .{filePath});
+    try std.Io.Dir.cwd().createDirPath(io, lockPath);
+    // (Opened for iterating, so the handle is a real one that can take a timestamp.)
+    var lockDir = try std.Io.Dir.cwd().openDir(io, lockPath, .{
+        .iterate = true,
+    });
+    defer lockDir.close(io);
+    const lockHandle: std.Io.File = .{
+        .handle = lockDir.handle,
+        .flags = .{
+            .nonblocking = false,
+        },
+    };
+    const modified = std.Io.Timestamp.fromNanoseconds(@as(i96, std.Io.Timestamp.now(io, .real).toMilliseconds() - 60_000) * std.time.ns_per_ms);
+    try lockHandle.setTimestamps(io, .{
+        .modify_timestamp = .{
+            .new = modified,
+        },
+    });
+    var mutator: RawMutator = .{
+        .result = "published",
+        .suffix = "",
+        .external = .{
+            .suffix = "",
+            .externalWriteFile = null,
+            .injectOnce = true,
+            .io = io,
+        },
+    };
+
+    try std.testing.expectError(error.IsDir, fs.updateFileRawOptimistic(allocator, io, filePath, &mutator, 3));
+}
+
+test "readFileHead fails for a directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePathInOwnDir(allocator, io, "head-of-a-directory");
+    try std.Io.Dir.cwd().createDirPath(io, dirPath);
+
+    try std.testing.expectError(error.IsDir, fs.readFileHead(allocator, io, dirPath, 16));
+}
