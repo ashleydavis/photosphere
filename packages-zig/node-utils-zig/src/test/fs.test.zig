@@ -1352,6 +1352,96 @@ test "updateFileRawOptimistic gives up on an update lock another process holds" 
     try std.testing.expect(fs.pathExists(io, lockPath));
 }
 
+//
+// Sets the last modified time of a directory. std's openDir asks Windows only for read and
+// traverse access, so NtSetInformationFile refuses a timestamp through that handle with
+// ACCESS_DENIED. On Windows the directory is therefore opened here with FILE_WRITE_ATTRIBUTES too.
+//
+fn setDirectoryModified(io: std.Io, dirPath: []const u8, modified: std.Io.Timestamp) !void {
+    if (builtin.os.tag == .windows) {
+        const windows = std.os.windows;
+        const pathSpace = try std.Io.Threaded.sliceToPrefixedFileW(std.Io.Dir.cwd().handle, dirPath, .{});
+        const pathWide = pathSpace.span();
+        var ioStatusBlock: windows.IO_STATUS_BLOCK = undefined;
+        var dirHandle: windows.HANDLE = undefined;
+        const status = windows.ntdll.NtCreateFile(
+            &dirHandle,
+            .{
+                .SPECIFIC = .{ .FILE_DIRECTORY = .{
+                    .READ_ATTRIBUTES = true,
+                    .WRITE_ATTRIBUTES = true,
+                } },
+                .STANDARD = .{
+                    .SYNCHRONIZE = true,
+                },
+            },
+            &.{
+                .RootDirectory = if (std.fs.path.isAbsoluteWindowsWtf16(pathWide)) null else std.Io.Dir.cwd().handle,
+                .ObjectName = @constCast(&windows.UNICODE_STRING.init(pathWide)),
+            },
+            &ioStatusBlock,
+            null,
+            .{ .NORMAL = true },
+            .VALID_FLAGS,
+            .OPEN,
+            .{
+                .DIRECTORY_FILE = true,
+                .IO = .SYNCHRONOUS_NONALERT,
+                .OPEN_FOR_BACKUP_INTENT = true,
+            },
+            null,
+            0,
+        );
+        if (status != .SUCCESS) {
+            return windows.unexpectedStatus(status);
+        }
+        const dirFile: std.Io.File = .{
+            .handle = dirHandle,
+            .flags = .{
+                .nonblocking = false,
+            },
+        };
+        defer dirFile.close(io);
+        try dirFile.setTimestamps(io, .{
+            .modify_timestamp = .{
+                .new = modified,
+            },
+        });
+    }
+    else {
+        // (Opened for iterating, so the handle is a real one that can take a timestamp.)
+        var dir = try std.Io.Dir.cwd().openDir(io, dirPath, .{
+            .iterate = true,
+        });
+        defer dir.close(io);
+        const dirFile: std.Io.File = .{
+            .handle = dir.handle,
+            .flags = .{
+                .nonblocking = false,
+            },
+        };
+        try dirFile.setTimestamps(io, .{
+            .modify_timestamp = .{
+                .new = modified,
+            },
+        });
+    }
+}
+
+test "setDirectoryModified backdates a directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePathInOwnDir(allocator, io, "backdated-directory");
+    try std.Io.Dir.cwd().createDirPath(io, dirPath);
+    const modifiedMs = std.Io.Timestamp.now(io, .real).toMilliseconds() - 60_000;
+
+    try setDirectoryModified(io, dirPath, std.Io.Timestamp.fromNanoseconds(@as(i96, modifiedMs) * std.time.ns_per_ms));
+
+    try std.testing.expectEqual(modifiedMs, (try std.Io.Dir.cwd().statFile(io, dirPath, .{})).mtime.toMilliseconds());
+}
+
 test "an update lock that has gone stale but is a directory cannot be broken, and the update fails" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -1362,23 +1452,8 @@ test "an update lock that has gone stale but is a directory cannot be broken, an
     // fs.rm(lockPath, { force: true }) refuses a directory (EISDIR), and so does the port.
     const lockPath = try std.fmt.allocPrint(allocator, "{s}.lock", .{filePath});
     try std.Io.Dir.cwd().createDirPath(io, lockPath);
-    // (Opened for iterating, so the handle is a real one that can take a timestamp.)
-    var lockDir = try std.Io.Dir.cwd().openDir(io, lockPath, .{
-        .iterate = true,
-    });
-    defer lockDir.close(io);
-    const lockHandle: std.Io.File = .{
-        .handle = lockDir.handle,
-        .flags = .{
-            .nonblocking = false,
-        },
-    };
     const modified = std.Io.Timestamp.fromNanoseconds(@as(i96, std.Io.Timestamp.now(io, .real).toMilliseconds() - 60_000) * std.time.ns_per_ms);
-    try lockHandle.setTimestamps(io, .{
-        .modify_timestamp = .{
-            .new = modified,
-        },
-    });
+    try setDirectoryModified(io, lockPath, modified);
     var mutator: RawMutator = .{
         .result = "published",
         .suffix = "",
