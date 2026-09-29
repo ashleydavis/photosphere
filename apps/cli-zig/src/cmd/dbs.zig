@@ -1306,6 +1306,19 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOp
     const spin = try spinner(allocator, io, !skipPrompts);
     try spin.start("Waiting for other device on local network... (Ctrl+C to cancel)");
 
+    // TODO: this mirrors a bug in the TypeScript (dbs.ts dbsSend) until both are fixed. Ctrl+C is taken over only
+    // after the pairing code and the waiting message are shown. A SIGINT that lands in between is not the command's
+    // to handle: in a terminal it kills the process, but a process started as a background job of a shell without
+    // job control inherits SIGINT as ignored (the smoke test pool starts every test that way, and the `set -m` of
+    // the share-cancel tests does not reset an inherited ignore), so the signal is dropped and the sender waits out
+    // its full 60 second discovery timeout holding UDP port 54321. That is the share-cancel hang of smoke test 78 on
+    // macOS x64 in Release run 684 ("still running 20s after Ctrl+C"): the loaded runner stalled the sender between
+    // writing "Pairing code" and installing the listener, and test 79 beside it took 1m03s because the stranded
+    // sender took its receiver's loopback announcements until it exited. Reproduced on Linux by holding back the
+    // SIGINT rt_sigaction with strace (--inject=rt_sigaction:delay_enter=3s:when=13): the sender ran on for 63
+    // seconds after SIGINT, and exited in 0.1 seconds once the listener was registered before the code was logged.
+    // Fix both CLIs by registering this listener before the pairing code is logged (and see the TODO on
+    // LanShareSender.cancel for a cancel that comes before the wait).
     const sigintHandler: process_signals.ISignalListener = .{
         .context = &sender,
         .function = cancelSender,
@@ -1502,6 +1515,9 @@ pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsRec
     const spin = try spinner(allocator, io, !skipPrompts);
     try spin.start("Waiting for sender on the local network... (Ctrl+C to cancel)");
 
+    // TODO: this mirrors the TypeScript (dbs.ts dbsReceive) until both are fixed: the share-cancel hang explained at
+    // the TODO in dbsSend. Ctrl+C is taken over only after the waiting message is shown, as
+    // the TypeScript does, so a SIGINT between the two is lost when SIGINT was inherited as ignored.
     const sigintHandler: process_signals.ISignalListener = .{
         .context = &receiver,
         .function = cancelReceiver,
