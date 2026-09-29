@@ -444,6 +444,12 @@ test "origin and set-origin read and write the origin like the TypeScript CLI" {
     // The config file the TypeScript CLI writes.
     const config = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/.db/config.json", .{db}), allocator, .unlimited);
     try std.testing.expectEqualStrings("{\n  \"origin\": \"s3:bucket/x\"\n}", config);
+
+    // An origin that is not a string is logged as String() writes it.
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/.db/config.json", .{db}), .data = "{\"origin\":1e21}" });
+    try expectResult(try runZig(allocator, environment, &.{ "origin", "--db", db, "--yes" }), "1e+21\n", "", 0);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/.db/config.json", .{db}), .data = "{\"origin\":[0.0000001,null]}" });
+    try expectResult(try runZig(allocator, environment, &.{ "origin", "--db", db, "--yes" }), "1e-7,\n", "", 0);
 }
 
 //
@@ -2828,6 +2834,27 @@ test "secrets list, view and remove print the reports of the TypeScript CLI" {
 
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "clear", "--yes" }), "\n\u{2713} Deleted 1 secret(s).\n", "", 0);
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "list" }), "No secrets found.\n", "", 0);
+}
+
+test "secrets view shows S3 credentials as JSON.parse and Object.entries read them" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-secrets-entries");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const vaultDir = try std.fmt.allocPrint(allocator, "{s}/vault", .{root});
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{vaultDir}), .data = 
+        \\{"keys":{"name":"keys","type":"s3-credentials","value":"{\"b\":1,\"2\":1e21,\"b\":\"last\",\"1\":[1,null,2]}"},"null":{"name":"null","type":"s3-credentials","value":"null"},"text":{"name":"text","type":"s3-credentials","value":"\"h\u00e9\ud83d\ude00\""}}
+    });
+
+    // Index keys first, the last of a repeated key, numbers and arrays as String() writes them.
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--name", "keys", "--yes" }), "\nName: keys\nType: s3-credentials\nValue:\n  1: 1,,2\n  2: 1e+21\n  b: last\n\n", "", 0);
+    // Object.entries(null) throws after "Value:" is logged, and the catch logs the raw value.
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--name", "null", "--yes" }), "\nName: null\nType: s3-credentials\nValue:\nValue: null\n\n", "", 0);
+    // A string's entries are its UTF-16 code units; a lone surrogate is written as U+FFFD.
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--name", "text", "--yes" }), "\nName: text\nType: s3-credentials\nValue:\n  0: h\n  1: \u{E9}\n  2: \u{FFFD}\n  3: \u{FFFD}\n\n", "", 0);
 }
 
 // Ported from apps/cli/src/test/cmd/secrets.test.ts: "secretsView --raw writes only the bare value to stdout" and

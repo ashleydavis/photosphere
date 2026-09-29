@@ -204,6 +204,20 @@ test "returns undefined when the default:s3 secret does not exist" {
     try std.testing.expect(try init_cmd.getDefaultS3Config(environment.arena.allocator(), std.testing.io) == null);
 }
 
+test "the default:s3 secret is read as JSON.parse reads it: the last of a repeated key, and null throws" {
+    var environment: TestEnvironment = undefined;
+    try environment.init();
+    defer environment.deinit();
+    try environment.storeSecret("default:s3", "s3-credentials", "{\"accessKeyId\":\"first\",\"accessKeyId\":\"AKID123\",\"secretAccessKey\":\"secret123\"}");
+    const result = (try init_cmd.getDefaultS3Config(environment.arena.allocator(), std.testing.io)).?;
+    try std.testing.expectEqualStrings("AKID123", result.accessKeyId);
+
+    try environment.storeSecret("default:s3", "s3-credentials", "null");
+    try std.testing.expectError(error.Thrown, init_cmd.getDefaultS3Config(environment.arena.allocator(), std.testing.io));
+    try std.testing.expectEqualStrings("TypeError", utils.errors.lastErrorName());
+    try std.testing.expectEqualStrings("null is not an object (evaluating 'parsed.region')", utils.errors.lastErrorMessage());
+}
+
 test "returns credentials without endpoint when endpoint is not stored" {
     var environment: TestEnvironment = undefined;
     try environment.init();
@@ -473,6 +487,13 @@ test "jsNumber converts option text like Number()" {
 
     // Number() trims the whitespace String.prototype.trim removes, Unicode spaces included.
     try std.testing.expectEqual(@as(f64, 1000), init_cmd.jsNumber("\u{00A0}1000\u{3000}"));
+
+    // Number() reads 0b, 0o and 0x integers without a sign, Infinity but not Zig's inf, and no digit separators.
+    try std.testing.expectEqual(@as(f64, 5), init_cmd.jsNumber("0b101"));
+    try std.testing.expect(std.math.isNan(init_cmd.jsNumber("-0x10")));
+    try std.testing.expect(std.math.isNan(init_cmd.jsNumber("inf")));
+    try std.testing.expect(std.math.isNan(init_cmd.jsNumber("1_000")));
+    try std.testing.expect(std.math.isNan(init_cmd.jsNumber("0x1p3")));
 }
 
 test "initContext creates the session, the worker pool and the cleanup callback" {
@@ -546,6 +567,30 @@ test "initContext uses the given session ID and keeps the temporary files on fai
     try node_utils.termination.invokeTerminationCallbacks(io, 1);
     try std.testing.expect(node_utils.fs.pathExists(io, context.sessionTempDir));
     try std.testing.expect(std.mem.indexOf(u8, stdout_capture.written(), try std.fmt.allocPrint(allocator, "Temporary files retained for inspection: {s}\n", .{expectedDir})) != null);
+}
+
+test "initContext joins the session temporary directory as path.join does" {
+    var environment: TestEnvironment = undefined;
+    try environment.init();
+    defer environment.deinit();
+    const allocator = environment.arena.allocator();
+    const io = std.testing.io;
+    const tmpDir = try helpers.makeTempDir(allocator, "init-context-join");
+    defer std.Io.Dir.cwd().deleteTree(io, tmpDir) catch {};
+    try environment.environ_map.put("TMPDIR", tmpDir);
+    try environment.environ_map.put("TEMP", tmpDir);
+    const previous = utils.log.log;
+    defer utils.log.setLog(previous);
+    defer node_utils.termination.clearTerminationCallbacks();
+    defer task_queue.queue_backend.setQueueBackend(null);
+    var stdout_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(&stdout_capture.writer, &stdout_capture.writer);
+    defer utils.console.setCapture(null, null);
+
+    // path.join normalizes the ".." of a session ID given with --session-id.
+    const context = try init_cmd.initContext(allocator, io, .{ .sessionId = "other/../my-session" });
+    try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tmpDir, "photosphere", "my-session" }), context.sessionTempDir);
+    try node_utils.termination.invokeTerminationCallbacks(io, 0);
 }
 
 //

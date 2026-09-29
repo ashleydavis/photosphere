@@ -34,9 +34,9 @@ pub const ICheckCommandOptions = struct {
 //
 fn onProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, summary: *const IAddSummary) void {
     _ = context;
-    var buffer: [16 * 1024]u8 = undefined;
-    var bufferAllocator = std.heap.FixedBufferAllocator.init(&buffer);
-    const message = buildProgressMessage(bufferAllocator.allocator(), currentlyScanning, summary) catch |err| {
+    var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+    defer arena.deinit();
+    const message = buildProgressMessage(arena.allocator(), currentlyScanning, summary) catch |err| {
         log.exception("Failed to write the progress message", err);
         return;
     };

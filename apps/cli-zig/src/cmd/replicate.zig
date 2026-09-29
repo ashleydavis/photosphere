@@ -108,8 +108,9 @@ fn similarNamesList(allocator: std.mem.Allocator, similarKeyNames: []const []con
 //
 fn onProgress(context: ?*anyopaque, progress: []const u8) void {
     _ = context;
-    var buffer: [4096]u8 = undefined;
-    const message = std.fmt.bufPrint(&buffer, "\u{1F504} {s}", .{progress}) catch return;
+    var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+    defer arena.deinit();
+    const message = std.fmt.allocPrint(arena.allocator(), "\u{1F504} {s}", .{progress}) catch @panic("out of memory writing the progress line");
     writeProgress(message);
 }
 

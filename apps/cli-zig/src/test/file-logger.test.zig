@@ -148,3 +148,45 @@ test "the log files go under the process temporary directory when PHOTOSPHERE_TM
     // getProcessTmpDir is PHOTOSPHERE_TMP_DIR/tmp.
     try std.testing.expect(std.mem.startsWith(u8, logger.getLogFilePath(), try std.fs.path.join(allocator, &.{ tmpDir, "tmp", "photosphere", "logs", "psi-" })));
 }
+
+test "the log directory is joined as path.join joins it, and a long exception is logged whole" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tmpDir = try helpers.makeTempDir(allocator, "file-logger-join");
+    defer std.Io.Dir.cwd().deleteTree(io, tmpDir) catch {};
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(allocator, &.{ tmpDir, "sub" }));
+    var environ_map = std.process.Environ.Map.init(allocator);
+    const unnormalized = try std.mem.concat(allocator, u8, &.{ tmpDir, std.fs.path.sep_str, "sub", std.fs.path.sep_str, ".." });
+    try environ_map.put("TMPDIR", unnormalized);
+    try environ_map.put("TEMP", unnormalized);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    cli.process_argv.setArgv(&.{ "psi", "verify" });
+
+    var stdout_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(&stdout_capture.writer, &stdout_capture.writer);
+    defer utils.console.setCapture(null, null);
+
+    var consoleLog = cli.log.Log.init(.{});
+    const logger = try FileLogger.create(allocator, io, consoleLog.ilog(), "verify");
+    defer node_utils.termination.clearTerminationCallbacks();
+    try std.testing.expect(std.mem.startsWith(u8, logger.getLogFilePath(), try std.fs.path.join(allocator, &.{ tmpDir, "photosphere", "logs", "psi-" })));
+
+    const longMessage = try allocator.alloc(u8, 20000);
+    @memset(longMessage, 'm');
+    logger.exception(longMessage, error.OutOfMemory);
+    logger.close();
+    const errorContent = try std.Io.Dir.cwd().readFileAlloc(io, logger.getErrorLogFilePath(), allocator, .unlimited);
+    try std.testing.expect(std.mem.indexOf(u8, errorContent, try std.mem.concat(allocator, u8, &.{ longMessage, "\nStack trace: " })) != null);
+}
+
+test "toFixed2 writes a negative duration as toFixed(2) does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expectEqualStrings("-1.23", try cli.file_logger.toFixed2(allocator, -1.234));
+    try std.testing.expectEqualStrings("-0.00", try cli.file_logger.toFixed2(allocator, -0.001));
+    try std.testing.expectEqualStrings("0.00", try cli.file_logger.toFixed2(allocator, -0.0));
+}

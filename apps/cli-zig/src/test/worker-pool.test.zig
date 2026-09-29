@@ -396,6 +396,29 @@ test "times out a task, reports it failed and replaces the worker" {
     try std.testing.expectEqual(@as(u32, 1), pool.workers.items[0].workerId);
 }
 
+test "the timeout message writes the timeout as a template string writes a number" {
+    try registerHandlers();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var stdout_capture = std.Io.Writer.Allocating.init(allocator);
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
+    defer utils.console.setCapture(null, null);
+
+    // The pool installs the worker log routing in place of the global log; put the global log back after.
+    const previousLog = utils.log.log;
+    defer utils.log.setLog(previousLog);
+    // `--timeout 0.0000001`: setTimeout waits 1 ms, and the message writes the timeout as JavaScript writes it.
+    const pool = try WorkerPoolBun.init(std.testing.io, 1, 1e-7, .{});
+    defer pool.deinit();
+    var collector = Collector{};
+    _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
+    _ = try pool.addTask(allocator, std.testing.io, "slow", .null, "source", "slow-task", null);
+    try collector.waitForCompleted(1);
+    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "[Task Queue] Task slow-task timed out after 1e-7ms\n") != null);
+}
+
 test "cancelTasks drops pending tasks and signals running tasks" {
     try registerHandlers();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

@@ -316,3 +316,11 @@ test "jsonStringifyIndented writes every kind of value like JSON.stringify(value
     var emptyElements = [_]BsonValue{};
     try std.testing.expectEqualStrings("[]", try js_value.jsonStringifyIndented(allocator, .{ .array = &emptyElements }));
 }
+
+test "writeJsonString writes a lone surrogate held as WTF-8 as a \\u escape, as JSON.stringify does" {
+    var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer output.deinit();
+    // D83D alone (ED A0 BD) and DE00 alone (ED B8 80), around a character that is not a surrogate.
+    try js_value.writeJsonString(&output.writer, "a\xED\xA0\xBD\u{E9}\xED\xB8\x80");
+    try std.testing.expectEqualStrings("\"a\\ud83d\u{E9}\\ude00\"", output.written());
+}

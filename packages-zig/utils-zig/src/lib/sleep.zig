@@ -15,3 +15,14 @@ pub fn sleep(io: std.Io, timeMS: u64) !void {
         remaining = .{ .nanoseconds = duration.nanoseconds - elapsed.nanoseconds };
     }
 }
+
+//
+// The delay `setTimeout(callback, delay)` waits, in whole milliseconds: a delay that is not between 1 and
+// 2147483647 (NaN included) is 1.
+//
+pub fn setTimeoutDelay(delay: f64) u64 {
+    if (!(delay >= 1 and delay <= 2147483647)) {
+        return 1;
+    }
+    return @intFromFloat(@floor(delay));
+}

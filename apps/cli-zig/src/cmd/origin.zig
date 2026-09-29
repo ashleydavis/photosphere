@@ -44,8 +44,9 @@ fn isTruthy(value: std.json.Value) bool {
         .null => false,
         .bool => |flag| flag,
         .integer => |number| number != 0,
-        .float => |number| number != 0 and !std.math.isNan(number),
-        .number_string, .string => |text| text.len > 0,
+        .float => |number| isTruthyNumber(number),
+        .number_string => |text| isTruthyNumber(std.fmt.parseFloat(f64, text) catch std.math.nan(f64)),
+        .string => |text| text.len > 0,
         .array, .object => true,
     };
 }
@@ -57,9 +58,10 @@ fn jsString(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
     return switch (value) {
         .null => "null",
         .bool => |flag| if (flag) "true" else "false",
-        .integer => |number| std.fmt.allocPrint(allocator, "{d}", .{number}),
-        .float => |number| std.fmt.allocPrint(allocator, "{d}", .{number}),
-        .number_string, .string => |text| text,
+        .integer => |number| jsNumberString(allocator, @floatFromInt(number)),
+        .float => |number| jsNumberString(allocator, number),
+        .number_string => |text| jsNumberString(allocator, std.fmt.parseFloat(f64, text) catch std.math.nan(f64)),
+        .string => |text| text,
         .object => "[object Object]",
         .array => |array| blk: {
             var joined: std.ArrayList(u8) = .empty;
@@ -96,4 +98,20 @@ pub fn originCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
     }
 
     exit(io, 0);
+}
+
+//
+// `String(number)`: the number as JavaScript writes it.
+//
+fn jsNumberString(allocator: std.mem.Allocator, number: f64) ![]const u8 {
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    try utils.js_number.writeNumber(&output.writer, number);
+    return output.written();
+}
+
+//
+// JavaScript truthiness of a number.
+//
+fn isTruthyNumber(number: f64) bool {
+    return number != 0 and !std.math.isNan(number);
 }

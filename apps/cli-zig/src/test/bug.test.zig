@@ -270,3 +270,43 @@ test "on Windows the opener is started attached, so it ends when the CLI's job h
     std.os.windows.CloseHandle(process);
     std.os.windows.CloseHandle(child.thread_handle);
 }
+
+test "getLatestLogFile breaks a tie in modification time by the order readdirSync lists the names in" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const root = try helpers.makeTempDir(allocator, "bug-latest-log-tie");
+    defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
+    try useTmpDir(allocator, root);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    const logsDir = try std.fs.path.join(allocator, &.{ root, "tmp", "photosphere", "logs" });
+    try std.Io.Dir.cwd().createDirPath(io, logsDir);
+
+    // Written in an order that is not the order of their names, so the directory does not list them sorted.
+    var expected: []const u8 = "";
+    for ([_][]const u8{ "psi-m.log", "psi-z.log", "psi-c.log", "psi-x.log", "psi-a.log", "psi-q.log", "psi-f.log" }) |name| {
+        const filePath = try writeLogFile(allocator, logsDir, name, 1_700_000_000);
+        if (std.mem.eql(u8, name, "psi-a.log")) {
+            expected = filePath;
+        }
+    }
+
+    // Node lists a directory sorted by name (libuv's scandir), except on Windows, where the file system's own order
+    // is what both list, and the stable sort by time keeps that order among files modified at the same time.
+    if (builtin.os.tag != .windows) {
+        try std.testing.expectEqualStrings(expected, bug.getLatestLogFile(allocator, io).?);
+    }
+}
+
+test "getLogHeader reports a directory as readFileSync does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const root = try helpers.makeTempDir(allocator, "bug-log-header-dir");
+    defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
+
+    try std.testing.expectEqualStrings("Error reading log file: EISDIR: illegal operation on a directory, read", try bug.getLogHeader(allocator, io, root));
+}

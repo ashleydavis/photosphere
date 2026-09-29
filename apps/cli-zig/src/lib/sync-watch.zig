@@ -67,7 +67,9 @@ pub const ISyncWatchOptions = struct {
 // thirty seconds, and stopping would mean nothing syncs again until someone notices.
 //
 pub fn runSyncWatch(allocator: std.mem.Allocator, io: std.Io, options: ISyncWatchOptions) !void {
-    log.info(try pc.bold(allocator, try std.fmt.allocPrint(allocator, "Syncing every {d} second(s). Press Ctrl-C to stop.", .{options.intervalSeconds})));
+    var intervalText: std.Io.Writer.Allocating = .init(allocator);
+    try utils.js_number.writeNumber(&intervalText.writer, options.intervalSeconds);
+    log.info(try pc.bold(allocator, try std.fmt.allocPrint(allocator, "Syncing every {s} second(s). Press Ctrl-C to stop.", .{intervalText.written()})));
 
     while (!options.isStopped(options.context)) {
         if (options.syncOnce(options.context, io)) |synced| {
@@ -83,6 +85,6 @@ pub fn runSyncWatch(allocator: std.mem.Allocator, io: std.Io, options: ISyncWatc
             break;
         }
 
-        try sleep(io, @intFromFloat(options.intervalSeconds * 1000));
+        try sleep(io, utils.sleep.setTimeoutDelay(options.intervalSeconds * 1000));
     }
 }

@@ -27,6 +27,22 @@ test "the worker log prefixes messages with the worker and task IDs" {
     try std.testing.expectEqualStrings("[W3:task-1] careful\n[W3:task-1] bad\n[W3:task-1] failed\nError: Cause\n", stderr_capture.written());
 }
 
+test "the worker log writes a long event whole, as the template string does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var stdout_capture = std.Io.Writer.Allocating.init(allocator);
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
+    defer utils.console.setCapture(null, null);
+
+    const longMessage = try allocator.alloc(u8, 20000);
+    @memset(longMessage, 'e');
+    var workerLog = worker_log_bun.WorkerLogBun.init(2, false, false);
+    workerLog.event(longMessage);
+    try std.testing.expectEqualStrings(try std.mem.concat(allocator, u8, &.{ "[W2] [EVENT] ", longMessage, "\n" }), stdout_capture.written());
+}
+
 test "the routing log sends worker thread messages to the worker log" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

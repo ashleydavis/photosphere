@@ -29,7 +29,6 @@ const getFileInfo = tools.getFileInfo;
 const AssetInfo = tools.types.AssetInfo;
 const js_value = bdb.js_value;
 const BsonValue = serialization.bson.BsonValue;
-const formatErrorChain = utils.wrapped_error.formatErrorChain;
 
 //
 // An asset record from the metadata collection (TypeScript: IAsset).
@@ -332,7 +331,7 @@ fn analyzeFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, c
         fileAnalysis.hash = try std.fmt.allocPrint(allocator, "{x}", .{&hashBuffer});
     }
     else |err| {
-        log.verbose(try std.fmt.allocPrint(allocator, "Failed to calculate hash for {s}: {s}", .{ filePath, try formatErrorChain(allocator, err) }));
+        log.verbose(try std.fmt.allocPrint(allocator, "Failed to calculate hash for {s}: {s}", .{ filePath, try utils.errors.errorToString(allocator, err) }));
     }
 
     // Analyze file content using the unified getFileInfo function
@@ -343,7 +342,7 @@ fn analyzeFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, c
         }
     }
     else |err| {
-        fileAnalysis.@"error" = try std.fmt.allocPrint(allocator, "Failed to analyze file: {s}", .{try formatErrorChain(allocator, err)});
+        fileAnalysis.@"error" = try std.fmt.allocPrint(allocator, "Failed to analyze file: {s}", .{try utils.errors.errorToString(allocator, err)});
     }
 
     return fileAnalysis;

@@ -44,11 +44,12 @@ var fileLogger: ?*FileLogger = null;
 
 //
 // Prints a line of the CLI's output built from a format string (no TypeScript counterpart: TypeScript uses
-// template strings). Lines longer than the internal buffer are truncated.
+// template strings). The line is written whole, however long it is.
 //
 fn writeOutputLineFormat(comptime format: []const u8, args: anytype) void {
-    var buffer: [16 * 1024]u8 = undefined;
-    const message = std.fmt.bufPrint(&buffer, format, args) catch buffer[0..];
+    var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+    defer arena.deinit();
+    const message = std.fmt.allocPrint(arena.allocator(), format, args) catch @panic("out of memory writing a line of output");
     writeOutputLine(message);
 }
 
@@ -129,10 +130,10 @@ pub const Log = struct {
     pub fn exception(self: *Log, message: []const u8, err: anyerror) void {
         _ = self;
         writeErrorLine(message);
-        var buffer: [16 * 1024]u8 = undefined;
-        var fixed_writer = std.Io.Writer.fixed(&buffer);
-        utils.wrapped_error.writeErrorChain(&fixed_writer, err) catch {};
-        writeErrorLine(fixed_writer.buffered());
+        var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+        defer arena.deinit();
+        const chain = utils.wrapped_error.formatErrorChain(arena.allocator(), err) catch @panic("out of memory writing an error");
+        writeErrorLine(chain);
     }
 
     //

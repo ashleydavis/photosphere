@@ -82,17 +82,19 @@ pub fn processCwd(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 }
 
 //
-// Equivalent of JavaScript `value.toFixed(2)` for a non-negative value: picks the integer n for which
-// n / 100 is closest to value (the larger n on a tie), using the exact binary value of the double.
+// Equivalent of JavaScript `value.toFixed(2)`: a negative value is written with a minus sign (also when it rounds
+// to zero, `-0.00`), then the integer n for which n / 100 is closest to the magnitude (the larger n on a tie) is
+// picked, using the exact binary value of the double.
 //
 pub fn toFixed2(allocator: std.mem.Allocator, value: f64) ![]const u8 {
-    const scaled: f128 = @as(f128, value) * 100;
+    const sign: []const u8 = if (value < 0) "-" else "";
+    const scaled: f128 = @as(f128, @abs(value)) * 100;
     var hundredths: u128 = @intFromFloat(@floor(scaled));
     const fraction = scaled - @floor(scaled);
     if (fraction >= 0.5) {
         hundredths += 1;
     }
-    return std.fmt.allocPrint(allocator, "{d}.{d:0>2}", .{ hundredths / 100, hundredths % 100 });
+    return std.fmt.allocPrint(allocator, "{s}{d}.{d:0>2}", .{ sign, hundredths / 100, hundredths % 100 });
 }
 
 //
@@ -191,8 +193,8 @@ pub const FileLogger = struct {
         // outright, so with os.tmpdir every CLI process in the suite shared /tmp/photosphere/logs and one
         // process clearing the cache pulled the log directory out from under every other one. It now
         // deletes only the named database's cache directory, but the isolation is still worth having.
-        const photosphereTempDir = try std.fs.path.join(allocator, &.{ try node_utils.fs.getProcessTmpDir(allocator, io), "photosphere" });
-        const logsDir = try std.fs.path.join(allocator, &.{ photosphereTempDir, "logs" });
+        const photosphereTempDir = try node_utils.path.join(allocator, &.{ try node_utils.fs.getProcessTmpDir(allocator, io), "photosphere" });
+        const logsDir = try node_utils.path.join(allocator, &.{ photosphereTempDir, "logs" });
         try ensureDirSync(io, logsDir);
 
         // Create log file with timestamp
@@ -203,8 +205,8 @@ pub const FileLogger = struct {
                 character.* = '-';
             }
         }
-        const logFile = try std.fs.path.join(allocator, &.{ logsDir, try std.fmt.allocPrint(allocator, "psi-{s}.log", .{timestamp}) });
-        const errorLogFile = try std.fs.path.join(allocator, &.{ logsDir, try std.fmt.allocPrint(allocator, "psi-{s}-errors.log", .{timestamp}) });
+        const logFile = try node_utils.path.join(allocator, &.{ logsDir, try std.fmt.allocPrint(allocator, "psi-{s}.log", .{timestamp}) });
+        const errorLogFile = try node_utils.path.join(allocator, &.{ logsDir, try std.fmt.allocPrint(allocator, "psi-{s}-errors.log", .{timestamp}) });
 
         // Create the logger instance
         const logger = try allocator.create(FileLogger);
@@ -428,11 +430,12 @@ pub const FileLogger = struct {
     // Logs a message and an error with its cause chain.
     //
     pub fn exception(self: *FileLogger, message: []const u8, err: anyerror) void {
-        var buffer: [16 * 1024]u8 = undefined;
-        var fixed_writer = std.Io.Writer.fixed(&buffer);
-        fixed_writer.print("{s}\nStack trace: ", .{message}) catch {};
-        utils.wrapped_error.writeErrorChain(&fixed_writer, err) catch {};
-        const fullMessage = fixed_writer.buffered();
+        var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+        defer arena.deinit();
+        var allocating_writer = std.Io.Writer.Allocating.init(arena.allocator());
+        allocating_writer.writer.print("{s}\nStack trace: ", .{message}) catch {};
+        utils.wrapped_error.writeErrorChain(&allocating_writer.writer, err) catch {};
+        const fullMessage = allocating_writer.written();
         self.writeToFile("exception", fullMessage);
         self.writeToErrorFile("exception", fullMessage);
         self.consoleLogger.exception(message, err);

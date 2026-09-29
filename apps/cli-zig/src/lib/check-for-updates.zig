@@ -15,8 +15,11 @@ const LATEST_RELEASE_URL = "https://api.github.com/repos/ashleydavis/photosphere
 //
 // The tag_name of the release response, or null when it is missing or not a string.
 //
-fn tagName(allocator: std.mem.Allocator, body: []const u8) ?[]const u8 {
-    const data = std.json.parseFromSliceLeaky(std.json.Value, allocator, body, .{}) catch return null;
+pub fn tagName(allocator: std.mem.Allocator, body: []const u8) ?[]const u8 {
+    // JSON.parse keeps the last value of a repeated key.
+    const data = std.json.parseFromSliceLeaky(std.json.Value, allocator, body, .{
+        .duplicate_field_behavior = .use_last,
+    }) catch return null;
     if (data != .object) {
         return null;
     }

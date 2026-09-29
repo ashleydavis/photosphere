@@ -9,6 +9,8 @@ const prompts = @import("../lib/clack/prompts.zig");
 const spinner_module = @import("../lib/spinner.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const commander = @import("../lib/commander.zig");
+const jsonParse = @import("serialization-zig").json_parse.jsonParse;
+const js_value = @import("bdb-zig").js_value;
 const process_signals = @import("../lib/process-signals.zig");
 
 //
@@ -450,26 +452,26 @@ fn selectSecret(allocator: std.mem.Allocator, io: std.Io, message: []const u8) !
 }
 
 //
-// `String(value)` for a field of parsed JSON.
+// Logs the entries of `Object.entries(string)`: each UTF-16 code unit under its index. A character outside the
+// BMP is two code units, each a lone surrogate, which is written as U+FFFD.
 //
-fn jsString(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
-    return switch (value) {
-        .null => "null",
-        .bool => |flag| if (flag) "true" else "false",
-        .integer => |integer| format(allocator, "{d}", .{integer}),
-        .float => |float| format(allocator, "{d}", .{float}),
-        .number_string => |number| number,
-        .string => |string| string,
-        .array => |array| blk: {
-            var parts: std.ArrayList([]const u8) = .empty;
-            for (array.items) |item| {
-                // Array.prototype.join writes null elements as empty strings.
-                try parts.append(allocator, if (item == .null) "" else try jsString(allocator, item));
-            }
-            break :blk std.mem.join(allocator, ",", parts.items);
-        },
-        .object => "[object Object]",
-    };
+fn logStringEntries(allocator: std.mem.Allocator, string: []const u8) !void {
+    var byteIndex: usize = 0;
+    var unitIndex: usize = 0;
+    while (byteIndex < string.len) {
+        const width = std.unicode.utf8ByteSequenceLength(string[byteIndex]) catch 1;
+        const end = @min(byteIndex + width, string.len);
+        if (width == 4) {
+            log.info(try format(allocator, "  {d}: \u{FFFD}", .{unitIndex}));
+            unitIndex += 1;
+            log.info(try format(allocator, "  {d}: \u{FFFD}", .{unitIndex}));
+        }
+        else {
+            log.info(try format(allocator, "  {d}: {s}", .{ unitIndex, string[byteIndex..end] }));
+        }
+        unitIndex += 1;
+        byteIndex = end;
+    }
 }
 
 //
@@ -522,25 +524,26 @@ pub fn secretsView(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecre
     log.info(try std.mem.concat(allocator, u8, &.{ try pc.cyan(allocator, "Type: "), secret.type }));
 
     if (std.mem.eql(u8, secret.type, "s3-credentials")) {
-        if (std.json.parseFromSliceLeaky(std.json.Value, allocator, secret.value, .{})) |parsed| {
+        if (jsonParse(allocator, secret.value)) |parsed| {
             log.info(try pc.cyan(allocator, "Value:"));
-            // Object.entries: the keys of an object, the indexes of an array, the characters of a string.
+            // Object.entries: the keys of an object, the indexes of an array, the UTF-16 code units of a string.
             switch (parsed) {
-                .object => |object| {
-                    var iterator = object.iterator();
-                    while (iterator.next()) |entry| {
-                        log.info(try format(allocator, "  {s}: {s}", .{ entry.key_ptr.*, try jsString(allocator, entry.value_ptr.*) }));
+                .document => |document| {
+                    for (document.fields.items) |field| {
+                        log.info(try format(allocator, "  {s}: {s}", .{ field.key, try js_value.toString(allocator, field.value) }));
                     }
                 },
                 .array => |array| {
-                    for (array.items, 0..) |item, index| {
-                        log.info(try format(allocator, "  {d}: {s}", .{ index, try jsString(allocator, item) }));
+                    for (array, 0..) |item, index| {
+                        log.info(try format(allocator, "  {d}: {s}", .{ index, try js_value.toString(allocator, item) }));
                     }
                 },
                 .string => |string| {
-                    for (string, 0..) |character, index| {
-                        log.info(try format(allocator, "  {d}: {c}", .{ index, character }));
-                    }
+                    try logStringEntries(allocator, string);
+                },
+                // `Object.entries(null)` throws, and the catch logs the value.
+                .null => {
+                    log.info(try std.mem.concat(allocator, u8, &.{ try pc.cyan(allocator, "Value: "), secret.value }));
                 },
                 else => {},
             }

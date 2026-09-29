@@ -384,7 +384,8 @@ fn upgradeLocked(
             }
 
             next = assetsFiles.next;
-            if (next == null) {
+            // `while (next)`: an empty token ends the loop too.
+            if (next == null or next.?.len == 0) {
                 break;
             }
         }
@@ -444,7 +445,8 @@ fn upgradeLocked(
         const assetFiles = try assetStorage.listFiles(allocator, io, "asset", 1000, next);
         filesImported += assetFiles.names.len;
         next = assetFiles.next;
-        if (next == null) {
+        // `while (next)`: an empty token ends the loop too.
+        if (next == null or next.?.len == 0) {
             break;
         }
     }
@@ -565,7 +567,8 @@ fn migrateBsonV5ToV6(allocator: std.mem.Allocator, io: std.Io, storage: IStorage
             }
         }
         next = result.next;
-        if (next == null) {
+        // `while (next)`: an empty token ends the loop too.
+        if (next == null or next.?.len == 0) {
             break;
         }
     }
@@ -597,7 +600,8 @@ fn migrateBsonV5ToV6(allocator: std.mem.Allocator, io: std.Io, storage: IStorage
                 }
             }
             fileNext = fileResult.next;
-            if (fileNext == null) {
+            // `while (next)`: an empty token ends the loop too.
+            if (fileNext == null or fileNext.?.len == 0) {
                 break;
             }
         }

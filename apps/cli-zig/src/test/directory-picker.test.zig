@@ -118,3 +118,27 @@ test "pickDirectory creates a subdirectory" {
     })).?);
     try std.testing.expect(@import("node-utils-zig").fs.pathExists(io, try std.fs.path.join(allocator, &.{ parent, "photos" })));
 }
+
+test "pickDirectory reports a failed mkdir with the message Node gives" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const parent = try helpers.makeTempDir(allocator, "picker-mkdir");
+    defer std.Io.Dir.cwd().deleteTree(io, parent) catch {};
+    const filePath = try std.fs.path.join(allocator, &.{ parent, "afile" });
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = filePath, .data = "x" });
+
+    // A full path under an existing file: mkdir fails with ENOTDIR, naming the path it was given.
+    var environment = std.process.Environ.Map.init(allocator);
+    const failed = try helpers.runTestDriver(allocator, &.{ "pick-directory", "Pick:", parent, "false" }, &.{
+        .{ .waitFor = "Pick:", .keys = "\x1b[B\x1b[B\r" },
+        .{ .waitFor = "Enter full directory path:", .keys = try std.mem.concat(allocator, u8, &.{ filePath, "/x\r" }) },
+    }, &environment);
+    try std.testing.expect(try helpers.parseDriverResult(?[]const u8, allocator, failed) == null);
+    const expected = try std.fmt.allocPrint(allocator, "Failed to create directory: ENOTDIR: not a directory, mkdir '{s}'", .{try std.fs.path.join(allocator, &.{ filePath, "x" })});
+    if (std.mem.indexOf(u8, failed.stdout, expected) == null) {
+        std.debug.print("expected {s} in:\n{s}\n", .{ expected, failed.stdout });
+        return error.TestUnexpectedResult;
+    }
+}
