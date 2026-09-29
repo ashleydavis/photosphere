@@ -227,3 +227,46 @@ test "openCommand runs the opener of the platform like the open package" {
         try std.testing.expectEqualStrings(target, openerCommand.cliArguments[0]);
     }
 }
+
+//
+// Windows: says whether a process is in a job object (kernel32).
+//
+extern "kernel32" fn IsProcessInJob(ProcessHandle: std.os.windows.HANDLE, JobHandle: ?std.os.windows.HANDLE, Result: *std.os.windows.BOOL) callconv(.winapi) std.os.windows.BOOL;
+
+//
+// Windows: waits until a handle is signaled or the timeout elapses (kernel32).
+//
+extern "kernel32" fn WaitForSingleObject(hHandle: std.os.windows.HANDLE, dwMilliseconds: std.os.windows.DWORD) callconv(.winapi) std.os.windows.DWORD;
+
+test "on Windows the opener is started attached, so it ends when the CLI's job handle closes, as under Bun" {
+    if (builtin.os.tag != .windows) {
+        // Job objects exist only on Windows; elsewhere the opener is started detached.
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // `pause` waits for a key on its stdin, a pipe nothing is written to, so it runs until it is killed.
+    var child = try std.process.spawn(std.testing.io, .{
+        .argv = &.{ "cmd.exe", "/c", "pause" },
+        .stdin = .pipe,
+        .stdout = .ignore,
+        .stderr = .ignore,
+    });
+    const process = child.id.?;
+    const job = cli.open.startAttachedToThisProcess(allocator, process) orelse return error.OpenerNotPutInAJob;
+
+    var inJob: std.os.windows.BOOL = .FALSE;
+    try std.testing.expect(IsProcessInJob(process, job, &inJob).toBool());
+    try std.testing.expect(inJob.toBool());
+
+    // The handle closes when the CLI exits; closing it here ends the opener the same way.
+    const wait_object_0: std.os.windows.DWORD = 0;
+    try std.testing.expect(WaitForSingleObject(process, 0) != wait_object_0);
+    std.os.windows.CloseHandle(job);
+    try std.testing.expectEqual(wait_object_0, WaitForSingleObject(process, 10_000));
+    child.stdin.?.close(std.testing.io);
+    std.os.windows.CloseHandle(process);
+    std.os.windows.CloseHandle(child.thread_handle);
+}
