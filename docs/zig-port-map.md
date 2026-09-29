@@ -2618,8 +2618,8 @@ and case mapping of non-ASCII text) need the Unicode tables of ICU, which the Zi
     the cache is re-read when the file changes.
 13. `iterateLeaves` in sync.zig accepts a leaf with an empty name, where `!node.name` throws; merkle tree leaves are
     record, shard and collection names, which are never empty.
-14. js-yaml features psi never writes: anchors, aliases, tags and documents of more than one part. The Zig loader
-    throws a YAMLException for them where js-yaml reads them.
+14. js-yaml features psi never writes: anchors, aliases, tags, plain scalars that go on over several lines and
+    documents of more than one part. The Zig loader throws a YAMLException for them where js-yaml reads them.
 15. `exec` gives the command an empty stdin where Node gives it an open pipe that nothing writes to, so a command
     that reads stdin ends at once in the Zig and waits for ever in TypeScript. The commands psi runs (magick, ffprobe,
     ffmpeg) read no stdin.
