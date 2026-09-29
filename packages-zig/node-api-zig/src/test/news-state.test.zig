@@ -1,5 +1,6 @@
 const std = @import("std");
 const node_api = @import("node-api-zig");
+const node_utils = @import("node-utils-zig");
 const helpers = @import("test-helpers.zig");
 const news_state = node_api.news_state;
 const state_file = node_api.state_file;
@@ -45,7 +46,7 @@ test "is the state file, not a news.yaml of its own" {
     const configDir = try freshConfigDir(allocator, io, "news-path");
     const statePath = try state_file.getStatePath(allocator);
     try std.testing.expect(std.mem.endsWith(u8, statePath, "state.yaml"));
-    try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ configDir, "state.yaml" }), statePath);
+    try std.testing.expectEqualStrings(try node_utils.path.join(allocator, &.{ configDir, "state.yaml" }), statePath);
 }
 
 test "returns empty state when the file does not exist" {
