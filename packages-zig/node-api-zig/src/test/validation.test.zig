@@ -1,6 +1,5 @@
 const std = @import("std");
 const node_api = @import("node-api-zig");
-const utils = @import("utils-zig");
 const helpers = @import("test-helpers.zig");
 const validateFile = node_api.validation.validateFile;
 
@@ -101,8 +100,8 @@ const IValidationOutcome = struct {
 //
 fn validateCapturing(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: []const u8) !IValidationOutcome {
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    utils.console.setCapture(null, &stderr_capture.writer);
-    defer utils.console.setCapture(null, null);
+    helpers.captureStderr(&stderr_capture.writer);
+    defer helpers.endConsoleCapture();
     const valid = try validateFile(allocator, io, filePath, contentType, .{
         .length = 100,
         .lastModified = 0,

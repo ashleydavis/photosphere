@@ -236,8 +236,8 @@ test "reports what the source cannot restore: a file it does not have, or has wi
     try source.storage.write(allocator, io, thumbPath, "image/jpeg", "other corrupted bytes");
 
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    utils.console.setCapture(null, &stderr_capture.writer);
-    defer utils.console.setCapture(null, null);
+    helpers.captureStderr(&stderr_capture.writer);
+    defer helpers.endConsoleCapture();
 
     const result = try repair(allocator, io, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
         .source = source.dir,
@@ -280,8 +280,8 @@ test "a full repair hashes every file, and puts right the hash of a record" {
     thumbFile.close(io);
 
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    utils.console.setCapture(null, &stderr_capture.writer);
-    defer utils.console.setCapture(null, null);
+    helpers.captureStderr(&stderr_capture.writer);
+    defer helpers.endConsoleCapture();
 
     const result = try repair(allocator, io, target.storage, target.storage, target.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
         .source = target.dir,

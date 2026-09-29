@@ -452,8 +452,8 @@ test "getImageDetails turns a photo its Orientation says is on its side, and ign
     });
 
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    utils.console.setCapture(null, &stderr_capture.writer);
-    defer utils.console.setCapture(null, null);
+    test_helpers.captureStderr(&stderr_capture.writer);
+    defer test_helpers.endConsoleCapture();
     var generator: CountingUuidGenerator = .{};
     const details = try image.getImageDetails(allocator, io, filePath, tempDir, "image/jpeg", generator.uuidGenerator(), filePath);
 
@@ -479,8 +479,8 @@ test "getImageMetadata writes coordinates that are not numbers as null, and give
     defer test_helpers.removeTempDir(io, tempDir);
 
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    utils.console.setCapture(null, &stderr_capture.writer);
-    defer utils.console.setCapture(null, null);
+    test_helpers.captureStderr(&stderr_capture.writer);
+    defer test_helpers.endConsoleCapture();
 
     // 0/0 degrees is NaN, which JSON.stringify writes as null.
     const nanPath = try writeJpegWithExif(allocator, io, tempDir, 1, &.{
