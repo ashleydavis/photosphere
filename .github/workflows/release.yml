@@ -1697,7 +1697,8 @@ jobs:
   zig-smoke-tests:
     # Runs the unit tests of every Zig package and the Zig CLI smoke tests on each platform, because the
     # byte-identical output (gzip OS byte, paths, file times) differs between them.
-    timeout-minutes: 30
+    # Setup takes about 5 minutes, a cold unit test build up to 25 and the smoke suites about 15.
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
@@ -1774,8 +1775,7 @@ jobs:
 
       # Every run compiled the Zig CLI, every package and the AWS SDK for C from nothing, which took the
       # Windows unit test step past its timeout. Zig's cache is content addressed, so the one from an
-      # earlier run holds most of what this run compiles. It only grows, so it is saved at the end of the
-      # job only while it is under 6 GB.
+      # earlier run holds most of what this run compiles. It is saved at the end of every job.
       - name: Restore the Zig build cache
         uses: actions/cache/restore@v4
         with:
@@ -1784,8 +1784,29 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-build-
 
+      # Every commit adds a new generation of Zig artifacts and nothing removes the old ones, so the
+      # cache grew from 2.4 GB (run 674) to 6.1 GB (run 699). Saving only under 6 GB then stopped every
+      # save, runs kept restoring an ever staler cache, and once GitHub evicted that last entry run 700
+      # built everything cold and passed the step's timeout. A cache this big is moved out of the way
+      # instead, so this run builds and saves a fresh one.
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d apps/cli-zig/.zig-cache ]; then
+              megabytes="$(du -sm apps/cli-zig/.zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv apps/cli-zig/.zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
+      # With the C libraries cached, a change to a package the others import recompiles the Zig code of
+      # nearly every test program, which took 10 to 11 minutes on Windows (runs 685, 697, 699). A cold
+      # build also compiles aws-lc, zlib-ng and the rest of the AWS SDK for C first, which took longer
+      # than 12 minutes (run 700).
       - name: Run the Zig unit tests
-        timeout-minutes: 12
+        timeout-minutes: 25
         shell: bash
         run: |
           # The Zig CLI and every Zig package in one build, so each dependency, the AWS SDK for C among
@@ -1845,14 +1866,10 @@ jobs:
         shell: bash
         run: ./smoke-tests-lan-share-zig.sh
 
-      - name: Measure the Zig build cache
-        id: zig-build-cache-size
-        if: always()
-        shell: bash
-        run: echo "megabytes=$(du -sm apps/cli-zig/.zig-cache | cut -f1)" >> "$GITHUB_OUTPUT"
-
+      # Saved on every run, so the newest entry is always one this branch just wrote. It no longer grows
+      # without bound: the step after the restore starts a fresh cache once the restored one is too big.
       - name: Save the Zig build cache
-        if: always() && steps.zig-build-cache-size.outputs.megabytes < 6144
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: apps/cli-zig/.zig-cache
