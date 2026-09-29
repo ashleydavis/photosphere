@@ -774,7 +774,8 @@ fn isArrayOfTables(value: TomlValue) bool {
         return false;
     }
     for (value.array.items) |item| {
-        if (item != .object) {
+        // (typeof null is "object" too, so a null element does not stop an array being one of tables.)
+        if (item != .object and item != .null) {
             return false;
         }
     }
@@ -786,6 +787,13 @@ fn isArrayOfTables(value: TomlValue) bool {
 //
 fn failMaximumDepth() errors.ThrownError {
     return errors.throwError("Could not stringify the object: maximum object depth exceeded", .{});
+}
+
+//
+// Throws the TypeError JavaScript throws for `Object.keys(null)`, which smol-toml calls on a null it takes for a table.
+//
+fn failObjectKeysOfNull() errors.ThrownError {
+    return errors.throwError("Cannot convert undefined or null to object", .{});
 }
 
 //
@@ -803,7 +811,8 @@ fn stringifyValue(writer: *std.Io.Writer, value: TomlValue, depth: u32) anyerror
         .string => |string| try formatString(writer, string),
         .object => |object| try stringifyInlineTable(writer, object, depth),
         .array => |array| try stringifyArray(writer, array, depth),
-        .null => return errors.throwError("arrays cannot contain null or undefined values", .{}),
+        // (Only an inline table reaches here with a null, and stringifyInlineTable calls Object.keys on it.)
+        .null => return failObjectKeysOfNull(),
     }
 }
 
@@ -861,6 +870,10 @@ fn stringifyArrayTable(allocator: std.mem.Allocator, array: std.json.Array, key:
             try result.append(allocator, '\n');
         }
         try result.print(allocator, "[[{s}]]\n", .{key});
+        // (Object.keys of a null element throws.)
+        if (item == .null) {
+            return failObjectKeysOfNull();
+        }
         try result.appendSlice(allocator, try stringifyTable(allocator, null, item.object, key, depth));
     }
     return result.items;
