@@ -541,7 +541,7 @@ test "initContext uses the given session ID and keeps the temporary files on fai
     try std.testing.expectEqualStrings(expectedDir, context.sessionTempDir);
     const pool: *cli.worker_pool.WorkerPoolBun = @ptrCast(@alignCast(context.workerPool.ptr));
     try std.testing.expectEqual(@as(f64, 2400000), pool.taskTimeout);
-    try std.testing.expectEqual(@as(f64, @floatFromInt(try std.Thread.getCpuCount())), pool.maxWorkers);
+    try std.testing.expectEqual(@as(f64, @floatFromInt(try init_cmd.cpuCount(allocator, io))), pool.maxWorkers);
 
     try node_utils.termination.invokeTerminationCallbacks(io, 1);
     try std.testing.expect(node_utils.fs.pathExists(io, context.sessionTempDir));
