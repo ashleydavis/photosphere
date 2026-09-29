@@ -232,6 +232,33 @@ pub fn errorMessage(err: anyerror) []const u8 {
 }
 
 //
+// Gets the `name` JavaScript gives an error: the recorded name for thrown errors, where a WrappedError (which sets
+// no name of its own) and an error without a stack are "Error", and "Error" for errors raised by the runtime.
+//
+pub fn errorName(err: anyerror) []const u8 {
+    if (err != error.Thrown and err != error.FatalError) {
+        return "Error";
+    }
+    const name = lastErrorName();
+    if (name.len == 0 or std.mem.eql(u8, name, "WrappedError")) {
+        return "Error";
+    }
+    return name;
+}
+
+//
+// Equivalent of `String(error)` (Error.prototype.toString): "<name>: <message>", or the name alone when the message
+// is empty.
+//
+pub fn errorToString(allocator: std.mem.Allocator, err: anyerror) ![]const u8 {
+    const message = errorMessage(err);
+    if (message.len == 0) {
+        return allocator.dupe(u8, errorName(err));
+    }
+    return std.fmt.allocPrint(allocator, "{s}: {s}", .{ errorName(err), message });
+}
+
+//
 // Clears the most recent error (used by tests).
 //
 pub fn clearError() void {

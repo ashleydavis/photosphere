@@ -134,12 +134,14 @@ pub fn decryptBuffer(allocator: std.mem.Allocator, data: []const u8, privateKeyM
 }
 
 //
-// Removes NUL characters and surrounding whitespace from the encryption type field
-// (TypeScript: .replace(/\0/g, "").trim()).
+// Decodes the encryption type field and removes NUL characters and surrounding whitespace from it
+// (TypeScript: .toString("ascii").replace(/\0/g, "").trim()). Decoding as "ascii" drops the high bit of each byte,
+// so every character is ASCII and the whitespace trim() removes is the ASCII whitespace.
 //
 pub fn normalizeEncryptionType(buffer: []u8, field: []const u8) []const u8 {
     var length: usize = 0;
-    for (field) |character| {
+    for (field) |byte| {
+        const character = byte & 0x7F;
         if (character != 0) {
             buffer[length] = character;
             length += 1;

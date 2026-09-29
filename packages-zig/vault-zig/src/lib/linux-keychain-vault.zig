@@ -117,13 +117,13 @@ pub fn parseSearchOutput(allocator: std.mem.Allocator, output: []const u8) ![]IS
     const secret_type_prefix = "attribute.secrettype = ";
     var lines = std.mem.splitScalar(u8, output, '\n');
     while (lines.next()) |line| {
-        const trimmed = std.mem.trim(u8, line, keychain_types.whitespace);
+        const trimmed = utils.js_string.trim(line);
         if (std.mem.startsWith(u8, trimmed, account_prefix)) {
             try state.flushEntry(allocator);
-            state.currentAccount = std.mem.trim(u8, trimmed[account_prefix.len..], keychain_types.whitespace);
+            state.currentAccount = utils.js_string.trim(trimmed[account_prefix.len..]);
         }
         else if (std.mem.startsWith(u8, trimmed, secret_type_prefix)) {
-            state.currentSecretType = std.mem.trim(u8, trimmed[secret_type_prefix.len..], keychain_types.whitespace);
+            state.currentSecretType = utils.js_string.trim(trimmed[secret_type_prefix.len..]);
         }
         else if (trimmed.len == 0) {
             try state.flushEntry(allocator);
@@ -191,7 +191,7 @@ fn runSecretToolStore(allocator: std.mem.Allocator, io: std.Io, keychainName: []
             return;
         }
     }
-    const stderr = std.mem.trim(u8, result.stderr, keychain_types.whitespace);
+    const stderr = utils.js_string.trim(result.stderr);
     const code_text = if (result.code) |code| try std.fmt.allocPrint(allocator, "{d}", .{code}) else "null";
     return errors.throwError("secret-tool store exited with code {s}. stderr: {s}", .{ code_text, stderr });
 }

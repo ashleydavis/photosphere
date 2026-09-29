@@ -4,8 +4,9 @@ Every TypeScript source file the `psi` CLI bundles, the Zig file that ports it, 
 the Zig function that ports it. Use it to read the two side by side: the Zig files have the same names and the same
 function order as the TypeScript ones.
 
-**Progress of the side by side comparison:** storage, bdb, api, lan-share-core, node-api and node-utils done. Still to
-do: encryption, lan-share-network, utils, serialization and the other smaller packages, apps/cli.
+**Progress of the side by side comparison:** storage, bdb, api, lan-share-core, node-api, node-utils, utils,
+encryption, vault, fuzzy-match and config done. Still to do: lan-share-network, serialization, merkle-tree, task-queue,
+tools, apps/cli.
 
 ## Which files are listed
 
@@ -2411,6 +2412,531 @@ Used by init-cmd.ts and worker.ts when NODE_ENV is testing (the bundle metafile 
 
 <!-- end tables -->
 
+## utils
+
+`packages/utils` to `packages-zig/utils-zig`. Zig only: `console.zig`, `errors.zig`, `js-number.zig`, `js-string.zig` and `standard-streams.zig` (see the last table).
+
+<!-- tables: packages/utils utils.txt -->
+
+#### `packages/utils/src/index.ts` to `packages-zig/utils-zig/src/index.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `packages/utils/src/lib/batch-generator.ts` to `packages-zig/utils-zig/src/lib/batch-generator.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `batchGenerator` | `BatchGenerator` |  |
+| none | `batchGenerator` | The async generator batchGenerator returns, as an iterator (the function above it is BatchGenerator's constructor). |
+
+#### `packages/utils/src/lib/fatal-error.ts` to `packages-zig/utils-zig/src/lib/fatal-error.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `FatalError` | `FatalError` |  |
+| `FatalError.constructor` | `FatalError.throw` | `throw new FatalError(message)`, which records the message and returns error.FatalError. |
+| none | `FatalError.isInstance` | Replaces `error instanceof FatalError`. |
+
+#### `packages/utils/src/lib/format.ts` to `packages-zig/utils-zig/src/lib/format.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `formatFileSize` | `formatFileSize` |  |
+
+#### `packages/utils/src/lib/image.ts` to `packages-zig/utils-zig/src/lib/image.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getImageTransformation` | `getImageTransformation` |  |
+| `getVideoTransformation` | `getVideoTransformation` |  |
+| none | `IImageTransformation` | The TypeScript interface of the same name, as a struct. |
+| none | `IOrientation` | The TypeScript interface of the same name, as a struct. |
+| none | `toOrientation` | Reads a JavaScript value as the orientation the switch compares with `===`, or as String(value). |
+| none | `arrayToString` | Replaces `String(array)`. |
+| none | `isTruthy` | Replaces JavaScript truthiness. |
+
+#### `packages/utils/src/lib/log-exceptions.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `logExceptions` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+
+#### `packages/utils/src/lib/log.ts` to `packages-zig/utils-zig/src/lib/log.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `setLog` | `setLog` |  |
+| none | `ILogDetails` | The TypeScript interface of the same name, as a struct. |
+| none | `IToolOutput` | The TypeScript interface of the same name, as a struct. |
+| none | `ILog` | The TypeScript interface of the same name, as a struct. |
+| none | `ILog.info` | The dispatch of the ILog interface method of the same name. |
+| none | `ILog.verbose` | The dispatch of the ILog interface method of the same name. |
+| none | `ILog.exception` | The dispatch of the ILog interface method of the same name. |
+| none | `ILog.warn` | The dispatch of the ILog interface method of the same name. |
+| none | `ILog.debug` | The dispatch of the ILog interface method of the same name. |
+| none | `ILog.tool` | The dispatch of the ILog interface method of the same name. |
+| none | `ILog.event` | The dispatch of the ILog interface method of the same name. |
+| none | `ILog.verboseEnabled` | The dispatch of the ILog interface method of the same name. |
+| none | `ILog.getLogDetails` | The dispatch of the ILog interface method of the same name. |
+| none | `ConsoleLog` | The object literal assigned to `log`. |
+| none | `ConsoleLog.ilog` | The method of the same name of the object literal assigned to `log` (logError is `error`). |
+| none | `ConsoleLog.info` | The method of the same name of the object literal assigned to `log` (logError is `error`). |
+| none | `ConsoleLog.verbose` | The method of the same name of the object literal assigned to `log` (logError is `error`). |
+| none | `ConsoleLog.logError` | The method of the same name of the object literal assigned to `log` (logError is `error`). |
+| none | `ConsoleLog.exception` | The method of the same name of the object literal assigned to `log` (logError is `error`). |
+| none | `ConsoleLog.warn` | The method of the same name of the object literal assigned to `log` (logError is `error`). |
+| none | `ConsoleLog.debug` | The method of the same name of the object literal assigned to `log` (logError is `error`). |
+| none | `ConsoleLog.tool` | The method of the same name of the object literal assigned to `log` (logError is `error`). |
+| none | `ConsoleLog.event` | The method of the same name of the object literal assigned to `log` (logError is `error`). |
+| none | `ConsoleLog.verboseEnabled` | The method of the same name of the object literal assigned to `log` (logError is `error`). |
+| none | `ConsoleLog.getLogDetails` | The method of the same name of the object literal assigned to `log` (logError is `error`). |
+
+#### `packages/utils/src/lib/mock-timestamp-provider.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `MockTimestampProvider` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `MockTimestampProvider.constructor` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `MockTimestampProvider.now` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `MockTimestampProvider.dateNow` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `MockTimestampProvider.setTimestamp` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `MockTimestampProvider.advance` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+
+#### `packages/utils/src/lib/random-generator.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `RandomGenerator` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `RandomGenerator.random` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `RandomGenerator.randomInt` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+| `RandomGenerator.randomString` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+
+#### `packages/utils/src/lib/random-uuid-generator.ts` to `packages-zig/utils-zig/src/lib/random-uuid-generator.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `RandomUuidGenerator` | `RandomUuidGenerator` |  |
+| `RandomUuidGenerator.generate` | `RandomUuidGenerator.generate` |  |
+| none | `RandomUuidGenerator.uuidGenerator` | The IUuidGenerator interface of the generator. |
+| none | `RandomUuidGenerator.generateErased` | The vtable entry of generate. |
+
+#### `packages/utils/src/lib/retry-or-log.ts` to `packages-zig/utils-zig/src/lib/retry-or-log.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `retryOrLog` | `retryOrLog` |  |
+
+#### `packages/utils/src/lib/retry.ts` to `packages-zig/utils-zig/src/lib/retry.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `rejectAfter` | none | Not reached by the CLI. |
+| `retryOnce` | `retryOnce` |  |
+| `retry` | `retry` |  |
+| none | `OperationResult` | The ReturnT of an operation, which Zig reads from the operation's run method. |
+| none | `operationSourceOf` | Replaces `operation.toString().replace(/\s+/g, " ").slice(0, 200)`: the operation declares the text Bun gives for its arrow function. |
+| none | `OperationTask` | Runs the operation concurrently with the timer (the promise of `operation()`). |
+| none | `waitForTimeout` | The `setTimeout` of retryOnce. |
+| none | `logVerboseError` | `log.verbose(\`Error: ${JSON.stringify(serializeError(error), null, 2)}\`)`, without the stack a Zig error does not have. |
+| none | `logRetryWarning` | The `log.warn` of a failed attempt that is tried again. |
+
+#### `packages/utils/src/lib/reverse-geocode.ts` to `packages-zig/utils-zig/src/lib/reverse-geocode.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `convertNumber` | `convertNumber` |  |
+| `convertToDegrees` | `convertToDegrees` |  |
+| `isLocationInRange` | `isLocationInRange` |  |
+| `convertExifCoordinates` | `convertExifCoordinates` |  |
+| `checkCoordinateOk` | `checkCoordinateOk` |  |
+| `getFirstResultOfType` | `getFirstResultOfType` |  |
+| `parseReverseGeocodeResult` | `parseReverseGeocodeResult` |  |
+| `chooseBestResult` | `chooseBestResult` |  |
+| `reverseGeocode` | `reverseGeocode` |  |
+| none | `ILocation` | The TypeScript interface of the same name, as a struct. |
+| none | `numberOf` | Replaces the conversion of a value to a number that division does. |
+| none | `isString` | Replaces `value === text`. |
+| none | `formatCoordinate` | Replaces `${coordinate}` in a template string. |
+| none | `IReverseGeocodeResult` | The TypeScript interface of the same name, as a struct. |
+| none | `typesInclude` | Replaces `result.types.includes(type)`. |
+| none | `getJson` | Replaces `axios.get` with an Accept: application/json header. |
+| none | `axiosResponseData` | Replaces axios's transformResponse: JSON.parse of the body, or the body itself when it is not JSON. |
+
+#### `packages/utils/src/lib/sleep.ts` to `packages-zig/utils-zig/src/lib/sleep.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `sleep` | `sleep` |  |
+
+#### `packages/utils/src/lib/swallow-error.ts` to `packages-zig/utils-zig/src/lib/swallow-error.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `swallowError` | `swallowError` |  |
+
+#### `packages/utils/src/lib/test-uuid-generator.ts` to `packages-zig/utils-zig/src/lib/test-uuid-generator.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `TestUuidGenerator` | `TestUuidGenerator` |  |
+| `TestUuidGenerator.generate` | `TestUuidGenerator.generate` |  |
+| `TestUuidGenerator.reset` | `TestUuidGenerator.reset` |  |
+| `TestUuidGenerator.generateDeterministicUuid` | `TestUuidGenerator.generateDeterministicUuid` |  |
+| none | `jsToUint32` | Replaces JavaScript's ToUint32 (`>>> 0`). |
+| none | `jsToInt32` | Replaces JavaScript's ToInt32 (`^`, `&`, `\|`). |
+| none | `jsXor` | Replaces `left ^ right` on numbers. |
+| none | `jsUnsignedShiftRight` | Replaces `value >>> shift`. |
+| none | `TestUuidGenerator.uuidGenerator` | The IUuidGenerator interface of the generator. |
+| none | `TestUuidGenerator.generateErased` | The vtable entry of generate. |
+
+#### `packages/utils/src/lib/timestamp-provider.ts` to `packages-zig/utils-zig/src/lib/timestamp-provider.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `TimestampProvider` | `TimestampProvider` |  |
+| `TimestampProvider.now` | `TimestampProvider.now` |  |
+| `TimestampProvider.dateNow` | `TimestampProvider.dateNow` |  |
+| none | `Date` | Replaces JavaScript's Date, as milliseconds since the epoch. |
+| none | `Date.toISOString` | Replaces `Date.prototype.toISOString`. |
+| none | `CivilDate` | The calendar date toISOString writes. |
+| none | `civilFromDays` | Converts days since the epoch to a calendar date, as Date does. |
+| none | `ITimestampProvider` | The TypeScript interface of the same name, as a struct. |
+| none | `ITimestampProvider.now` | The dispatch of the ITimestampProvider interface method of the same name. |
+| none | `ITimestampProvider.dateNow` | The dispatch of the ITimestampProvider interface method of the same name. |
+| none | `TimestampProvider.timestampProvider` | The ITimestampProvider interface of the provider. |
+| none | `TimestampProvider.nowErased` | The vtable entry of now. |
+| none | `TimestampProvider.dateNowErased` | The vtable entry of dateNow. |
+
+#### `packages/utils/src/lib/try-or-log.ts` to no Zig file
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `tryOrLog` | none | Not reached by the CLI: tree-shaken out of the bundle. |
+
+#### `packages/utils/src/lib/uuid-generator.ts` to `packages-zig/utils-zig/src/lib/uuid-generator.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| none | `IUuidGenerator` | The TypeScript interface of the same name, as a struct. |
+| none | `IUuidGenerator.generate` | The dispatch of the IUuidGenerator interface method. |
+
+#### `packages/utils/src/lib/wrapped-error.ts` to `packages-zig/utils-zig/src/lib/wrapped-error.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `formatErrorChain` | `formatErrorChain` |  |
+| `WrappedError` | `WrappedError` |  |
+| `WrappedError.constructor` | `WrappedError.throw` | `throw new WrappedError(message, { cause })`, where the cause is the error last thrown on the thread. |
+| none | `writeErrorChain` | The body of formatErrorChain, writing to a writer so the default log need not allocate. |
+| none | `stackName` | The name the first line of an error's stack shows. |
+| none | `WrappedError.isInstance` | Replaces `error instanceof WrappedError`. |
+
+#### Zig files with no TypeScript file
+
+| Zig file | What it is |
+|---|---|
+| `packages-zig/utils-zig/src/lib/console.zig` | Replaces `console.log`, `console.error`, `console.warn` and `console.debug`. |
+| `packages-zig/utils-zig/src/lib/errors.zig` | Replaces the message, name and cause a JavaScript error carries, which a Zig error cannot: the error last thrown on the thread is recorded here. |
+| `packages-zig/utils-zig/src/lib/js-number.zig` | Replaces JavaScript's `parseInt`, `parseFloat` and `String(number)`. |
+| `packages-zig/utils-zig/src/lib/js-string.zig` | Replaces `String.prototype.trim`, `trimStart` and `trimEnd`. |
+| `packages-zig/utils-zig/src/lib/standard-streams.zig` | Replaces `process.stdout` and `process.stderr`. |
+
+<!-- end tables -->
+
+## encryption
+
+`packages/encryption` to `packages-zig/encryption-zig`. Zig only: `node-crypto.zig`, the node:crypto functions on OpenSSL's libcrypto.
+
+<!-- tables: packages/encryption encryption.txt -->
+
+#### `packages/encryption/src/index.ts` to `packages-zig/encryption-zig/src/index.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `packages/encryption/src/lib/encrypt-buffer.ts` to `packages-zig/encryption-zig/src/lib/encrypt-buffer.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `encryptBuffer` | `encryptBuffer` |  |
+| `requireWrappableKey` | `requireWrappableKey` |  |
+| `decryptBuffer` | `decryptBuffer` |  |
+| `decryptNewFormat` | `decryptNewFormat` |  |
+| `decryptLegacy` | `decryptLegacy` |  |
+| none | `normalizeEncryptionType` | Replaces `.toString("ascii").replace(/\0/g, "").trim()` of the type field. |
+| none | `includesString` | Replaces `Array.prototype.includes` for strings. |
+| none | `clampedSlice` | Replaces `Buffer.slice`, which clamps its bounds. |
+
+#### `packages/encryption/src/lib/encrypt-stream.ts` to `packages-zig/encryption-zig/src/lib/encrypt-stream.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `computeEncryptedLength` | `computeEncryptedLength` |  |
+| `createEncryptionStream` | `createEncryptionStream` |  |
+| `createDecryptionStream` | `createDecryptionStream` |  |
+| none | `TransformStream` | Replaces `new Transform({ transform, flush })` of node:stream, pulled by its reader. |
+| none | `TransformStream.init` | Replaces `new Transform({ transform, flush })` of node:stream (push is `this.push`). |
+| none | `TransformStream.push` | Replaces `new Transform({ transform, flush })` of node:stream (push is `this.push`). |
+| none | `TransformStream.pull` | Replaces `new Transform({ transform, flush })` of node:stream (push is `this.push`). |
+| none | `TransformStream.streamFunction` | Replaces `new Transform({ transform, flush })` of node:stream (push is `this.push`). |
+| none | `EncryptionStream` | The state createEncryptionStream's closures share. |
+| none | `EncryptionStream.reader` | Zig plumbing: the `std.Io.Reader` side of a Node stream. |
+| none | `EncryptionStream.sendHeader` | The nested function sendHeader. |
+| none | `EncryptionStream.transformChunk` | The `transform` option of the Transform. |
+| none | `EncryptionStream.flush` | The `flush` option of the Transform. |
+| none | `DecryptionStream` | The state createDecryptionStream's closures share. |
+| none | `DecryptionStream.reader` | Zig plumbing: the `std.Io.Reader` side of a Node stream. |
+| none | `DecryptionStream.transformChunk` | The `transform` option of the Transform. |
+| none | `DecryptionStream.flush` | The `flush` option of the Transform. |
+
+#### `packages/encryption/src/lib/encryption-constants.ts` to `packages-zig/encryption-zig/src/lib/encryption-constants.zig`
+
+
+#### `packages/encryption/src/lib/encryption-types.ts` to `packages-zig/encryption-zig/src/lib/encryption-types.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| none | `IStorageOptions` | The TypeScript interface of the same name, as a struct. |
+
+#### `packages/encryption/src/lib/key-utils.ts` to `packages-zig/encryption-zig/src/lib/key-utils.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `generateKeyPair` | `generateKeyPair` |  |
+| `saveKeyPair` | none | Not reached by the CLI. |
+| `loadPrivateKey` | none | Not reached by the CLI. |
+| `loadPublicKey` | none | Not reached by the CLI. |
+| `loadOrGenerateKeyPair` | none | Not reached by the CLI. |
+| `exportPublicKeyToPem` | `exportPublicKeyToPem` |  |
+| `hashPublicKey` | `hashPublicKey` |  |
+| `loadEncryptionKeysFromPem` | `loadEncryptionKeysFromPem` |  |
+| `loadEncryptionKeys` | none | Not reached by the CLI, which loads keys from the vault as PEM. |
+| none | `IKeyPair` | The TypeScript interface of the same name, as a struct. |
+| none | `IEncryptionKeyPem` | The TypeScript interface of the same name, as a struct. |
+| none | `ILoadedEncryptionKeys` | The TypeScript interface of the same name, as a struct. |
+
+#### Zig files with no TypeScript file
+
+| Zig file | What it is |
+|---|---|
+| `packages-zig/encryption-zig/src/lib/node-crypto.zig` | Replaces the node:crypto functions the encryption uses (RSA-OAEP, AES-256-CBC, key import and export, random bytes, signing), on OpenSSL's libcrypto. |
+
+<!-- end tables -->
+
+## vault
+
+`packages/vault` to `packages-zig/vault-zig`.
+
+<!-- tables: packages/vault vault.txt -->
+
+#### `packages/vault/src/index.ts` to `packages-zig/vault-zig/src/index.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `packages/vault/src/lib/get-vault.ts` to `packages-zig/vault-zig/src/lib/get-vault.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `getDefaultVaultType` | `getDefaultVaultType` |  |
+| `getVault` | `getVault` |  |
+| `instantiateVault` | `instantiateVault` |  |
+| none | `lockVaultInstances` | Guards the instance cache, which Zig worker threads share (TypeScript runs on one thread). |
+| none | `unlockVaultInstances` | Guards the instance cache, which Zig worker threads share (TypeScript runs on one thread). |
+| none | `processPlatform` | Replaces `process.platform`. |
+
+#### `packages/vault/src/lib/keychain-types.ts` to `packages-zig/vault-zig/src/lib/keychain-types.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `toKeychainName` | `toKeychainName` |  |
+| `fromKeychainName` | `fromKeychainName` |  |
+| `runCommand` | `runCommand` |  |
+| none | `IKeychainPayload` | The TypeScript interface of the same name, as a struct. |
+| none | `ISpawnResult` | The TypeScript interface of the same name, as a struct. |
+| none | `setSpawnFunction` | For the tests: replaces child_process.spawn (the TypeScript tests use jest.spyOn). Test-only scaffolding in the app code. |
+| none | `spawn` | Replaces `child_process.spawn` with piped stdio, collecting what the "data" and "close" events give. |
+| none | `spawnChildProcess` | Replaces `child_process.spawn` with piped stdio, collecting what the "data" and "close" events give. |
+
+#### `packages/vault/src/lib/linux-keychain-vault.ts` to `packages-zig/vault-zig/src/lib/linux-keychain-vault.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `checkPrereqsOnce` | `checkPrereqsOnce` |  |
+| `checkTool` | `checkTool` |  |
+| `parseSearchOutput` | `parseSearchOutput` |  |
+| `runSecretToolSearchAll` | `runSecretToolSearchAll` |  |
+| `runSecretToolSearchOne` | `runSecretToolSearchOne` |  |
+| `runSecretToolStore` | `runSecretToolStore` |  |
+| `LinuxKeychainVault` | `LinuxKeychainVault` |  |
+| `LinuxKeychainVault.get` | `LinuxKeychainVault.get` |  |
+| `LinuxKeychainVault.set` | `LinuxKeychainVault.set` |  |
+| `LinuxKeychainVault.list` | `LinuxKeychainVault.list` |  |
+| `LinuxKeychainVault.delete` | `LinuxKeychainVault.delete` |  |
+| `LinuxKeychainVault.checkPrereqs` | `LinuxKeychainVault.checkPrereqs` |  |
+| none | `resetToolChecked` | For the tests: forgets the tool check (a TypeScript test file gets a fresh module). Test-only scaffolding in the app code. |
+| none | `ISearchEntry` | The TypeScript interface of the same name, as a struct. |
+| none | `SearchParseState` | The variables flushEntry closes over in parseSearchOutput. |
+| none | `SearchParseState.flushEntry` | The nested function flushEntry. |
+| none | `LinuxKeychainVault.init` | The constructor. |
+| none | `LinuxKeychainVault.vault` | The IVault interface of the vault. |
+| none | `LinuxKeychainVault.deleteErased` | The vtable entry of delete. |
+| none | `LinuxKeychainVault.checkPrereqsErased` | The vtable entry of checkPrereqs. |
+| none | `LinuxKeychainVault.getErased` | The vtable entry of get. |
+| none | `LinuxKeychainVault.setErased` | The vtable entry of set. |
+| none | `LinuxKeychainVault.listErased` | The vtable entry of list. |
+
+#### `packages/vault/src/lib/macos-keychain-vault.ts` to `packages-zig/vault-zig/src/lib/macos-keychain-vault.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `parseKeychainDump` | `parseKeychainDump` |  |
+| `MacOSKeychainVault` | `MacOSKeychainVault` |  |
+| `MacOSKeychainVault.checkPrereqs` | `MacOSKeychainVault.checkPrereqs` |  |
+| `MacOSKeychainVault.checkTool` | `MacOSKeychainVault.checkTool` |  |
+| `MacOSKeychainVault.get` | `MacOSKeychainVault.get` |  |
+| `MacOSKeychainVault.set` | `MacOSKeychainVault.set` |  |
+| `MacOSKeychainVault.list` | `MacOSKeychainVault.list` |  |
+| `MacOSKeychainVault.delete` | `MacOSKeychainVault.delete` |  |
+| none | `matchBlobAttribute` | Replaces the regular expression `/"<tag>"<blob>="([^"]+)"/`. |
+| none | `MacOSKeychainVault.init` | The constructor. |
+| none | `MacOSKeychainVault.vault` | The IVault interface of the vault. |
+| none | `MacOSKeychainVault.deleteErased` | The vtable entry of delete. |
+| none | `MacOSKeychainVault.checkPrereqsErased` | The vtable entry of checkPrereqs. |
+| none | `MacOSKeychainVault.getErased` | The vtable entry of get. |
+| none | `MacOSKeychainVault.setErased` | The vtable entry of set. |
+| none | `MacOSKeychainVault.listErased` | The vtable entry of list. |
+
+#### `packages/vault/src/lib/plaintext-vault.ts` to `packages-zig/vault-zig/src/lib/plaintext-vault.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `ensureDir` | `ensureDir` |  |
+| `getVaultFilePath` | `getVaultFilePath` |  |
+| `applyFileMode` | `applyFileMode` |  |
+| `readVaultFile` | `readVaultFile` |  |
+| `updateVaultFile` | `updateVaultFile` |  |
+| `PlaintextVault` | `PlaintextVault` |  |
+| `PlaintextVault.constructor` | `PlaintextVault.init` |  |
+| `PlaintextVault.get` | `PlaintextVault.get` |  |
+| `PlaintextVault.set` | `PlaintextVault.set` |  |
+| `PlaintextVault.list` | `PlaintextVault.list` |  |
+| `PlaintextVault.delete` | `PlaintextVault.delete` |  |
+| `PlaintextVault.exists` | none | Not reached by the CLI. |
+| `PlaintextVault.checkPrereqs` | `PlaintextVault.checkPrereqs` |  |
+| none | `DEFAULT_VAULT_DIR` | The constant DEFAULT_VAULT_DIR, computed on demand because the environment is set by main. |
+| none | `modeToPermissions` | Replaces the numeric mode node:fs takes. |
+| none | `isArrayIndex` | Replaces the ordering of a JavaScript object's keys (array index names first). |
+| none | `orderLikeJavaScript` | Replaces the ordering of a JavaScript object's keys (array index names first). |
+| none | `parseVaultFile` | `JSON.parse(raw) as IVaultFile`. |
+| none | `VaultFileParse` | The parse arrow function updateVaultFile passes to updateFileOptimistic. |
+| none | `VaultFileParse.run` | The parse arrow function updateVaultFile passes to updateFileOptimistic. |
+| none | `VaultFileSerialize` | The serialize arrow function updateVaultFile passes to updateFileOptimistic. |
+| none | `VaultFileSerialize.run` | The serialize arrow function updateVaultFile passes to updateFileOptimistic. |
+| none | `VaultFileMutator` | The mutator arrow function updateVaultFile passes to updateFileOptimistic. |
+| none | `toSecret` | Reads a secret out of the parsed vault file as an ISecret. |
+| none | `fromSecret` | The object a secret is stored as. |
+| none | `SetSecretMutator` | The arrow function PlaintextVault.set passes to updateVaultFile. |
+| none | `SetSecretMutator.run` | The arrow function PlaintextVault.set passes to updateVaultFile. |
+| none | `DeleteSecretMutator` | The arrow function PlaintextVault.delete passes to updateVaultFile. |
+| none | `DeleteSecretMutator.run` | The arrow function PlaintextVault.delete passes to updateVaultFile. |
+| none | `PlaintextVault.vault` | The IVault interface of the vault. |
+| none | `PlaintextVault.deleteErased` | The vtable entry of delete. |
+| none | `PlaintextVault.checkPrereqsErased` | The vtable entry of checkPrereqs. |
+| none | `PlaintextVault.getErased` | The vtable entry of get. |
+| none | `PlaintextVault.setErased` | The vtable entry of set. |
+| none | `PlaintextVault.listErased` | The vtable entry of list. |
+
+#### `packages/vault/src/lib/vault.ts` to `packages-zig/vault-zig/src/lib/vault.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| none | `ISecret` | The TypeScript interface of the same name, as a struct. |
+| none | `IVault` | The TypeScript interface of the same name, as a struct. |
+| none | `IVault.get` | The dispatch of the IVault interface method of the same name. |
+| none | `IVault.set` | The dispatch of the IVault interface method of the same name. |
+| none | `IVault.list` | The dispatch of the IVault interface method of the same name. |
+| none | `IVault.delete` | The dispatch of the IVault interface method of the same name. |
+| none | `IVault.checkPrereqs` | The dispatch of the IVault interface method of the same name. |
+| none | `IPrereqCheckResult` | The TypeScript interface of the same name, as a struct. |
+
+#### `packages/vault/src/lib/windows-keychain-vault.ts` to `packages-zig/vault-zig/src/lib/windows-keychain-vault.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `checkPrereqsOnce` | `checkPrereqsOnce` |  |
+| `checkTool` | `checkTool` |  |
+| `runPowerShell` | `runPowerShell` |  |
+| `WindowsKeychainVault` | `WindowsKeychainVault` |  |
+| `WindowsKeychainVault.get` | `WindowsKeychainVault.get` |  |
+| none | `resetToolChecked` | For the tests: forgets the tool check (a TypeScript test file gets a fresh module). Test-only scaffolding in the app code. |
+| none | `escapeSingleQuotes` | Replaces `.replace(/'/g, "''")`. |
+| none | `WindowsKeychainVault.init` | The constructor. |
+| none | `WindowsKeychainVault.vault` | The IVault interface of the vault. |
+| none | `WindowsKeychainVault.set` | The TypeScript method of the same name (the table's reader of the TypeScript loses the class after the first multi-line PowerShell script). |
+| none | `WindowsKeychainVault.list` | The TypeScript method of the same name (see set). |
+| none | `WindowsKeychainVault.delete` | The TypeScript method of the same name (see set). |
+| none | `WindowsKeychainVault.checkPrereqs` | The TypeScript method of the same name (see set). |
+| none | `WindowsKeychainVault.deleteErased` | The vtable entry of delete. |
+| none | `WindowsKeychainVault.checkPrereqsErased` | The vtable entry of checkPrereqs. |
+| none | `WindowsKeychainVault.getErased` | The vtable entry of get. |
+| none | `WindowsKeychainVault.setErased` | The vtable entry of set. |
+| none | `WindowsKeychainVault.listErased` | The vtable entry of list. |
+
+<!-- end tables -->
+
+## fuzzy-match
+
+`packages/fuzzy-match` to `packages-zig/fuzzy-match-zig`.
+
+<!-- tables: packages/fuzzy-match fuzzy-match.txt -->
+
+#### `packages/fuzzy-match/src/index.ts` to `packages-zig/fuzzy-match-zig/src/index.zig`
+
+Types and re-exports only: nothing of it is left in the bundled CLI.
+
+
+#### `packages/fuzzy-match/src/lib/fuzzy-match.ts` to `packages-zig/fuzzy-match-zig/src/lib/fuzzy-match.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| `levenshteinDistance` | `levenshteinDistance` |  |
+| `fuzzyMatch` | `fuzzyMatch` |  |
+| none | `toCodeUnits` | Converts UTF-8 to the UTF-16 code units a JavaScript string is made of. |
+
+<!-- end tables -->
+
+## config
+
+`packages/config` has no Zig package: its two constants live in the CLI's `config.zig`.
+
+<!-- tables: packages/config config.txt -->
+
+#### `packages/config/src/index.ts` to `apps/cli-zig/src/lib/config.zig`
+
+| TypeScript | Zig | Notes |
+|---|---|---|
+| none | `IBuildMetadata` | The type of the buildMetadata object literal, named. |
+
+<!-- end tables -->
+
 ## Divergences fixed
 
 Each was found by reading the two side by side, pinned by a unit test that failed before the fix, and fixed in the Zig.
@@ -2548,6 +3074,41 @@ Each was found by reading the two side by side, pinned by a unit test that faile
     where the handler logs `new Error(reason)`, whose message is `String(reason)`: `Error: <message>`. Test: `the
     unhandled rejection of a failed signal shutdown logs the thrown error as new Error(reason) does`.
 
+### utils, encryption and vault
+
+34. `String(error)` in a template string (`Failed to get EXIF data: ${error}` and the other tools messages, and
+    getFileInfo's) and the first line of the stack in retry's last error log were written `Error: <message>` whatever
+    the error was, where JavaScript writes the error's own name (`RangeError`, `FatalError`). `errors.errorToString`
+    and `errors.errorName` give it now. Tests: `errorToString gives String(error): the name JavaScript gives the error
+    and its message` and `the last error is reported with its own name, as the first line of its stack shows it`.
+35. `Date.toISOString` crashed (`@intCast` of a negative year) for a time before the year 0 and wrote a year after
+    9999 in five digits, where JavaScript writes `-000001` and `+010000`; a time past 8.64e15 milliseconds is a
+    RangeError `Invalid Date`. It is reached with file modified times (`psi hash`, `psi hash-cache`, the check task).
+    Test: `Date.toISOString writes years outside 0 to 9999 in the expanded form and refuses an invalid time, as
+    JavaScript does`.
+36. Reverse geocoding wrote coordinates with Zig's number formatting (`1000000000000000000000` for `1e+21`) in its
+    error messages and request URL, refused a response that was not JSON where axios hands back the text (so no
+    location), refused a repeated key where JSON.parse keeps the last, and threw `TypeError: Cannot read properties
+    of null` as an Error where Bun throws the TypeError `null is not an object (evaluating 'data.status')`. Tests: `a
+    coordinate is written in the error message as a template string writes a number` and `the response body is read
+    as axios reads it: JSON.parse, or the text itself when it is not JSON`. The null response branch is not covered
+    by a unit test: reaching it needs a server answering `null`.
+37. `getImageTransformation` crashed (`@intFromFloat`) for an unknown orientation from 2 ** 63 up to 1e21 and wrote
+    small ones in fixed notation. Test: `getImageTransformation writes a large or small unknown orientation as
+    String(number) does`.
+38. The encryption type field of an encrypted file header was read byte for byte, where `toString("ascii")` drops
+    the high bit of each byte, so a header whose type bytes had the high bit set was refused where TypeScript reads
+    `A2CB`. Test: `normalizeEncryptionType decodes the field as Buffer.toString("ascii") does, dropping the high bit of
+    each byte`.
+39. The keychain vaults trimmed command output and `secret-tool` attribute lines of ASCII whitespace only, and the
+    macOS and Windows vaults refused a stored payload with a repeated key. Tests: `runCommand trims stdout and stderr
+    as String.prototype.trim does, Unicode spaces included`, `parseSearchOutput trims lines and values as
+    String.prototype.trim does, Unicode spaces included` and the repeated key tests of the macOS and Windows vaults.
+40. The plaintext vault's default directory read HOME alone, so with HOME unset the vault moved to
+    `.config/photosphere/vault` under the current directory, and its paths were joined without `path.join`'s
+    normalization. Tests: `DEFAULT_VAULT_DIR is under the home directory os.homedir gives, the passwd entry's when HOME
+    is unset` and `getVaultFilePath joins and normalizes the path as path.join does`.
+
 ## Divergences kept
 
 1. `FileStorage.acquireWriteLock` (storage): an empty lock file younger than the lock timeout is refused
@@ -2625,3 +3186,12 @@ and case mapping of non-ASCII text) need the Unicode tables of ICU, which the Zi
     ffmpeg) read no stdin.
 16. `os.homedir` on Windows reads USERPROFILE only, where Bun falls back to the profile directory Windows reports;
     Windows always sets USERPROFILE.
+17. `String(value)` of an orientation that is a Date: JavaScript writes the date (`Thu Jan 01 1970 ...`), the Zig
+    writes `date`. exif-parser gives numbers.
+18. `getVideoTransformation` with `streams` that is not an array: `for...of` throws a TypeError for a value that is
+    not iterable, the Zig returns no transformation. ffprobe's JSON always has an array.
+19. Keys that are not RSA: `createPrivateKey` and `createPublicKey` accept any key type, and encryption fails later
+    with OpenSSL's message; the Zig refuses the key when it is loaded (`error:1E08010C:DECODER routines::unsupported`).
+20. `runCommand` in the keychain vaults closes the child's stdin, where TypeScript leaves the pipe open; the security,
+    secret-tool and PowerShell commands psi runs read no stdin (secret-tool store gets its secret and then end of input
+    in both).

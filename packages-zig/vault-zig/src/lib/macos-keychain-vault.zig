@@ -166,6 +166,9 @@ pub const MacOSKeychainVault = struct {
         const payload = std.json.parseFromSliceLeaky(IKeychainPayload, allocator, raw, .{
             .ignore_unknown_fields = true,
             .allocate = .alloc_always,
+
+            // JSON.parse keeps the last value of a repeated key.
+            .duplicate_field_behavior = .use_last,
         }) catch |err| {
             return errors.throwError("JSON Parse error: {s}", .{@errorName(err)});
         };

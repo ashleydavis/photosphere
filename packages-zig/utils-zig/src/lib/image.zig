@@ -66,7 +66,7 @@ fn arrayToString(allocator: std.mem.Allocator, items: anytype) std.mem.Allocator
         switch (item) {
             .undefined, .null => {},
             else => switch (try toOrientation(allocator, item)) {
-                .number => |number| writeJsNumber(&output.writer, number) catch return error.OutOfMemory,
+                .number => |number| js_number.writeNumber(&output.writer, number) catch return error.OutOfMemory,
                 .other => |text| output.writer.writeAll(text) catch return error.OutOfMemory,
             },
         }
@@ -171,26 +171,8 @@ pub fn getImageTransformation(allocator: std.mem.Allocator, exif: anytype) !?IIm
     }
     var buffer: [64]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
-    writeJsNumber(&writer, number) catch {};
+    js_number.writeNumber(&writer, number) catch {};
     return errors.throwError("Unsupported orientation: {s}", .{writer.buffered()});
-}
-
-//
-// Writes a number like `String(number)` for the numbers an orientation holds (integers, and NaN or infinities).
-//
-fn writeJsNumber(writer: *std.Io.Writer, number: f64) !void {
-    if (std.math.isNan(number)) {
-        try writer.writeAll("NaN");
-    }
-    else if (std.math.isInf(number)) {
-        try writer.writeAll(if (number < 0) "-Infinity" else "Infinity");
-    }
-    else if (number == @trunc(number) and @abs(number) < 1e21) {
-        try writer.print("{d}", .{@as(i64, @intFromFloat(number))});
-    }
-    else {
-        try writer.print("{d}", .{number});
-    }
 }
 
 //
@@ -226,7 +208,7 @@ pub fn getVideoTransformation(allocator: std.mem.Allocator, metadata: anytype) !
                 rotation = switch (try toOrientation(allocator, value)) {
                     .number => |number| blk: {
                         var output: std.Io.Writer.Allocating = .init(allocator);
-                        try writeJsNumber(&output.writer, number);
+                        try js_number.writeNumber(&output.writer, number);
                         break :blk output.written();
                     },
                     .other => |text| text,

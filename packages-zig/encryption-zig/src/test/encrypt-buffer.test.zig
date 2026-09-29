@@ -313,3 +313,12 @@ test "decryptBuffer passes an allocation failure on for new-format and legacy da
     // The legacy format is the new format without its 44 byte header.
     try expectOutOfMemoryAtEveryAllocation(encrypted[44..], &keys.keyMap, "allocation failures");
 }
+
+test "normalizeEncryptionType decodes the field as Buffer.toString(\"ascii\") does, dropping the high bit of each byte" {
+    var buffer: [4]u8 = undefined;
+
+    // Values from Buffer.from([...]).toString("ascii").replace(/\0/g, "").trim() in Bun.
+    try std.testing.expectEqualStrings("A2CB", encrypt_buffer.normalizeEncryptionType(&buffer, &.{ 0xC1, 0xB2, 0xC3, 0xC2 }));
+    try std.testing.expectEqualStrings("A", encrypt_buffer.normalizeEncryptionType(&buffer, &.{ 0xA0, 0x41, 0x80, 0x00 }));
+    try std.testing.expectEqualStrings("AB\x05", encrypt_buffer.normalizeEncryptionType(&buffer, &.{ 0xA0, 0x41, 0x42, 0x85 }));
+}

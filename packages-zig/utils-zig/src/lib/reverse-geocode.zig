@@ -1,6 +1,7 @@
 const std = @import("std");
 const errors = @import("errors.zig");
 const console = @import("console.zig");
+const js_number = @import("js-number.zig");
 
 //
 // https://developers.google.com/maps/documentation/javascript
@@ -135,13 +136,9 @@ fn isString(value: anytype, text: []const u8) bool {
 // Writes a coordinate like a template string does (`${coordinate}`).
 //
 fn formatCoordinate(allocator: std.mem.Allocator, coordinate: f64) ![]const u8 {
-    if (std.math.isNan(coordinate)) {
-        return "NaN";
-    }
-    if (std.math.isInf(coordinate)) {
-        return if (coordinate < 0) "-Infinity" else "Infinity";
-    }
-    return std.fmt.allocPrint(allocator, "{d}", .{coordinate});
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    try js_number.writeNumber(&output.writer, coordinate);
+    return output.written();
 }
 
 //
@@ -342,7 +339,23 @@ fn getJson(allocator: std.mem.Allocator, io: std.Io, url: []const u8) !std.json.
     if (status < 200 or status > 299) {
         return errors.throwError("Request failed with status code {d}", .{status});
     }
-    return std.json.parseFromSliceLeaky(std.json.Value, allocator, body.written(), .{});
+    return axiosResponseData(allocator, body.written());
+}
+
+//
+// Reads a response body as axios does for a request that asks for no particular response type: JSON.parse of the
+// text (which keeps the last value of a repeated key), or the text itself when it is not JSON (axios parses
+// silently). (No TypeScript counterpart: axios's transformResponse.)
+//
+pub fn axiosResponseData(allocator: std.mem.Allocator, body: []const u8) !std.json.Value {
+    return std.json.parseFromSliceLeaky(std.json.Value, allocator, body, .{
+        .duplicate_field_behavior = .use_last,
+    }) catch |err| {
+        if (err == error.OutOfMemory) {
+            return err;
+        }
+        return .{ .string = body };
+    };
 }
 
 //
@@ -372,7 +385,10 @@ pub fn reverseGeocode(allocator: std.mem.Allocator, io: std.Io, location: ILocat
     const dataObject = switch (data) {
         .object => |object| object,
         // `response.data.status` of null throws.
-        .null => return errors.throwError("TypeError: Cannot read properties of null (reading 'status')", .{}),
+        .null => {
+            errors.recordError("TypeError", "null is not an object (evaluating 'data.status')", .{});
+            return error.Thrown;
+        },
         // Any other value has no status and no results.
         else => return null,
     };

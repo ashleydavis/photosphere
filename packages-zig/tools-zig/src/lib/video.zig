@@ -141,7 +141,7 @@ pub const Video = struct {
         }
 
         self._info = self.getVideoInfoInner(allocator, io) catch |err| {
-            return errors.throwError("Failed to get video info: Error: {s}", .{try allocator.dupe(u8, utils.errors.errorMessage(err))});
+            return errors.throwError("Failed to get video info: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
         return self._info.?;
     }
@@ -261,7 +261,7 @@ pub const Video = struct {
         try command.print(allocator, " -y \"{s}\"", .{outputPath});
 
         _ = exec(allocator, io, command.items) catch |err| {
-            return errors.throwError("Failed to extract screenshot: Error: {s}", .{try allocator.dupe(u8, utils.errors.errorMessage(err))});
+            return errors.throwError("Failed to extract screenshot: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
         return outputPath;
     }

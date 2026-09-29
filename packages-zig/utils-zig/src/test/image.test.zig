@@ -217,3 +217,15 @@ test "getVideoTransformation reads a rotation held as a string" {
     try std.testing.expectEqual(@as(?f64, 270), transformation.rotate);
     try std.testing.expectEqual(@as(?bool, true), transformation.changeOrientation);
 }
+
+test "getImageTransformation writes a large or small unknown orientation as String(number) does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expectError(error.Thrown, image.getImageTransformation(allocator, withOrientation(.{ .number = 1e20 })));
+    try std.testing.expectEqualStrings("Unsupported orientation: 100000000000000000000", utils.errors.lastErrorMessage());
+    try std.testing.expectError(error.Thrown, image.getImageTransformation(allocator, withOrientation(.{ .number = 1e21 })));
+    try std.testing.expectEqualStrings("Unsupported orientation: 1e+21", utils.errors.lastErrorMessage());
+    try std.testing.expectError(error.Thrown, image.getImageTransformation(allocator, withOrientation(.{ .number = 1.5e-7 })));
+    try std.testing.expectEqualStrings("Unsupported orientation: 1.5e-7", utils.errors.lastErrorMessage());
+}

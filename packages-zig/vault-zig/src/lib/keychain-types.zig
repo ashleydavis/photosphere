@@ -144,18 +144,13 @@ fn spawnChildProcess(allocator: std.mem.Allocator, io: std.Io, args: []const []c
 }
 
 //
-// The whitespace removed by JavaScript's String.prototype.trim (the ASCII subset).
-//
-pub const whitespace = " \t\n\r\x0b\x0c";
-
-//
 // Spawns a child process with the given arguments, resolves with trimmed
 // stdout on success, or rejects with an error including stderr on non-zero exit.
 //
 pub fn runCommand(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8) ![]const u8 {
     const result = try spawn(allocator, io, args, null);
-    const stdout = std.mem.trim(u8, result.stdout, whitespace);
-    const stderr = std.mem.trim(u8, result.stderr, whitespace);
+    const stdout = utils.js_string.trim(result.stdout);
+    const stderr = utils.js_string.trim(result.stderr);
     if (result.code) |code| {
         if (code == 0) {
             return stdout;

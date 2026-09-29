@@ -683,3 +683,15 @@ test "retryOnce collapses whitespace in the operation source and keeps its first
     try std.testing.expectEqual(@as(usize, 200), expected_source.len);
     try std.testing.expectEqualStrings("Operation timed out after 10ms: " ++ expected_source, errors.lastErrorMessage());
 }
+
+test "the last error is reported with its own name, as the first line of its stack shows it" {
+    const io = std.testing.io;
+    var capture: StderrCapture = undefined;
+    capture.begin();
+    defer capture.end();
+    var operation: MockOperation = .{ .alwaysFails = true, .failsWithFatalError = true };
+
+    try std.testing.expectError(error.FatalError, retry_module.retry(io, &operation, 1, 10, 2, 30_000, null));
+
+    try std.testing.expectEqualStrings("Operation failed, no more retries allowed. Last error: FatalError: Operation failed\n", capture.allocating.written());
+}

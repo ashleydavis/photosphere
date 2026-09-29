@@ -1,4 +1,5 @@
 const std = @import("std");
+const errors = @import("errors.zig");
 
 //
 // A JavaScript `Date` (milliseconds since the Unix epoch). Only the methods that are used are ported.
@@ -8,10 +9,15 @@ pub const Date = struct {
     epochMilliseconds: i64,
 
     //
-    // Equivalent of `date.toISOString()`: formats the date as YYYY-MM-DDTHH:mm:ss.sssZ in UTC.
-    // Years outside 0 to 9999 are not supported (JavaScript uses an expanded +YYYYYY format).
+    // Equivalent of `date.toISOString()`: formats the date as YYYY-MM-DDTHH:mm:ss.sssZ in UTC, with the expanded
+    // +YYYYYY or -YYYYYY year outside 0 to 9999, and throws the RangeError JavaScript throws for a time more than
+    // 8.64e15 milliseconds from the epoch (an Invalid Date).
     //
     pub fn toISOString(self: Date, allocator: std.mem.Allocator) ![]const u8 {
+        if (self.epochMilliseconds > 8_640_000_000_000_000 or self.epochMilliseconds < -8_640_000_000_000_000) {
+            errors.recordError("RangeError", "Invalid Date", .{});
+            return error.Thrown;
+        }
         const milliseconds_per_day: i64 = 24 * 60 * 60 * 1000;
         const days = @divFloor(self.epochMilliseconds, milliseconds_per_day);
         const millisecond_of_day = @mod(self.epochMilliseconds, milliseconds_per_day);
@@ -20,8 +26,14 @@ pub const Date = struct {
         const minutes = @mod(@divFloor(millisecond_of_day, 60 * 1000), 60);
         const seconds = @mod(@divFloor(millisecond_of_day, 1000), 60);
         const milliseconds = @mod(millisecond_of_day, 1000);
-        return std.fmt.allocPrint(allocator, "{d:0>4}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}.{d:0>3}Z", .{
-            @as(u64, @intCast(civil_date.year)),
+        const year = if (civil_date.year >= 0 and civil_date.year <= 9999)
+            try std.fmt.allocPrint(allocator, "{d:0>4}", .{@as(u64, @intCast(civil_date.year))})
+        else if (civil_date.year < 0)
+            try std.fmt.allocPrint(allocator, "-{d:0>6}", .{@as(u64, @intCast(-civil_date.year))})
+        else
+            try std.fmt.allocPrint(allocator, "+{d:0>6}", .{@as(u64, @intCast(civil_date.year))});
+        return std.fmt.allocPrint(allocator, "{s}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}.{d:0>3}Z", .{
+            year,
             civil_date.month,
             civil_date.day,
             @as(u64, @intCast(hours)),

@@ -169,7 +169,7 @@ pub fn retryOnce(io: std.Io, operation: anytype, timeoutMS: u64) anyerror!Operat
 fn logVerboseError(err: anyerror) void {
     var buffer: [16 * 1024]u8 = undefined;
     var fixed_writer = std.Io.Writer.fixed(&buffer);
-    fixed_writer.print("Error: {{\n  \"name\": \"Error\",\n  \"message\": {f}\n}}", .{std.json.fmt(errors.errorMessage(err), .{})}) catch {};
+    fixed_writer.print("Error: {{\n  \"name\": {f},\n  \"message\": {f}\n}}", .{ std.json.fmt(errors.errorName(err), .{}), std.json.fmt(errors.errorMessage(err), .{}) }) catch {};
     log_module.log.verbose(fixed_writer.buffered());
 }
 
@@ -214,7 +214,7 @@ pub fn retry(io: std.Io, operation: anytype, maxAttempts: u32, waitTimeMS: u64, 
                 wait_time_ms *= waitTimeScale;
             }
             else {
-                console.errorFormat("Operation failed, no more retries allowed. Last error: Error: {s}", .{errors.errorMessage(err)});
+                console.errorFormat("Operation failed, no more retries allowed. Last error: {s}: {s}", .{ errors.errorName(err), errors.errorMessage(err) });
 
                 if (errorContext) |context| {
                     if (err != error.Thrown and err != error.FatalError) {

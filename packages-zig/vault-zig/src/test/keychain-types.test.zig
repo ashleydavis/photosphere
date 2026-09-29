@@ -93,3 +93,17 @@ test "setSpawnFunction replaces and restores the spawn function" {
     keychain_types.setSpawnFunction(null);
     try std.testing.expectError(error.Thrown, keychain_types.runCommand(arena.allocator(), std.testing.io, &.{"photosphere-no-such-program"}));
 }
+
+test "runCommand trims stdout and stderr as String.prototype.trim does, Unicode spaces included" {
+    if (builtin.os.tag == .windows) {
+        return;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    // U+00A0 and U+3000 around the text.
+    const stdout = try keychain_types.runCommand(arena.allocator(), std.testing.io, &.{ "sh", "-c", "printf '\\302\\240hello\\343\\200\\200'" });
+    try std.testing.expectEqualStrings("hello", stdout);
+    try std.testing.expectError(error.Thrown, keychain_types.runCommand(arena.allocator(), std.testing.io, &.{ "sh", "-c", "printf '\\302\\240oops\\302\\240' >&2; exit 3" }));
+    try std.testing.expectEqualStrings("Command \"sh -c printf '\\302\\240oops\\302\\240' >&2; exit 3\" exited with code 3. stderr: oops", errors.lastErrorMessage());
+}
