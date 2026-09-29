@@ -1,6 +1,5 @@
 const std = @import("std");
 const utils = @import("utils-zig");
-const serialization = @import("serialization-zig");
 const uuid_generator = utils.uuid_generator;
 const process_env = @import("process-env.zig");
 const path = @import("path.zig");
@@ -75,7 +74,7 @@ pub const TestUuidGenerator = struct {
         }
         counter += 1;
         var counterText: std.Io.Writer.Allocating = .init(allocator);
-        try serialization.js_number.writeNumber(&counterText.writer, counter);
+        try utils.js_number.writeNumber(&counterText.writer, counter);
         try cwd.writeFile(io, .{ .sub_path = self.counterFilePath, .data = counterText.written() });
         return generateDeterministicUuid(allocator, counter);
     }

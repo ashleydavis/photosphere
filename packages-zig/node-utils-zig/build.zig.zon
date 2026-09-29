@@ -5,7 +5,6 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .@"utils-zig" = .{ .path = "../utils-zig" },
-        .@"serialization-zig" = .{ .path = "../serialization-zig" },
     },
     .paths = .{ "build.zig", "build.zig.zon", "src" },
 }
