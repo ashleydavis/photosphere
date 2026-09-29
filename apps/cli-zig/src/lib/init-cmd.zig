@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const process_env = node_utils.process_env;
@@ -63,6 +64,31 @@ const isCancel = prompts.isCancel;
 const outro = prompts.outro;
 const select = prompts.select;
 const multiline = prompts.multiline;
+
+//
+// The number of CPUs, counted as `os.cpus().length` counts them: on Linux, every CPU /proc/stat lists, whichever of
+// them this process may run on. (Zig: std.Thread.getCpuCount counts only the CPUs the process may run on, so a
+// process pinned to one CPU got a single worker.)
+//
+pub fn cpuCount(allocator: std.mem.Allocator, io: std.Io) !usize {
+    if (builtin.os.tag != .linux) {
+        return std.Thread.getCpuCount();
+    }
+    // (/proc/stat reports a size of 0, so it is read to its end rather than for its size.)
+    const file = try std.Io.Dir.cwd().openFile(io, "/proc/stat", .{});
+    defer file.close(io);
+    var buffer: [4096]u8 = undefined;
+    var reader = file.readerStreaming(io, &buffer);
+    const stat = try reader.interface.allocRemaining(allocator, .unlimited);
+    var count: usize = 0;
+    var lines = std.mem.splitScalar(u8, stat, '\n');
+    while (lines.next()) |line| {
+        if (line.len > 3 and std.mem.startsWith(u8, line, "cpu") and std.ascii.isDigit(line[3])) {
+            count += 1;
+        }
+    }
+    return count;
+}
 
 //
 // Gets a string field of a parsed JSON object, or null when it is missing or not a string.
@@ -995,7 +1021,11 @@ pub fn initContext(allocator: std.mem.Allocator, io: std.Io, options: IBaseComma
     log.verbose(try std.fmt.allocPrint(allocator, "Created temporary directory for command session: \"{s}\"", .{sessionTempDir}));
 
     // Worker pool defaults to number of CPUs if not specified
-    const workers: f64 = if (options.workers) |workersText| jsNumber(workersText) else @floatFromInt(std.Thread.getCpuCount() catch 1);
+    //
+    // TODO: the import-assets task waits for its child tasks in the same pool, so with one worker (--workers 1, or a
+    // machine with one CPU) the only worker waits on tasks nothing is left to run and the import never ends. The
+    // TypeScript CLI hangs the same way; the port keeps that behaviour until the TypeScript is fixed.
+    const workers: f64 = if (options.workers) |workersText| jsNumber(workersText) else @floatFromInt(try cpuCount(allocator, io));
     const timeout: f64 = if (options.timeout) |timeoutText| jsNumber(timeoutText) else 2400000;
     const workerPool = try WorkerPoolBun.init(io, workers, timeout, .{
         .verbose = options.verbose,
