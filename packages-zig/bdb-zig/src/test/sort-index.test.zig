@@ -2143,3 +2143,67 @@ test "updateRecord finds the records of a value that spans pages outside the lea
     try std.testing.expectEqual(pages.second.len, (try index.findByValue(io, .{ .number = 4 }, null)).len);
     try std.testing.expectEqual(pages.first.len, (try index.findByValue(io, .{ .number = 5 }, null)).len);
 }
+
+test "should throw when a Date is compared with a value that is neither a Date nor a string" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("dated", &.{
+        try makeValueRecord(allocator, 1, "value", .{
+            .boolean = true,
+        }),
+        try makeValueRecord(allocator, 2, "value", .{
+            .date = 1704067200000,
+        }),
+    });
+    const index = try fixture.sortIndex("dated", "value", .asc, null, null);
+    try std.testing.expectError(error.Thrown, index.build(io, collection));
+    try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "Type mismatch in compareValues: first value is Date, second value is boolean,"));
+}
+
+test "should throw when a string is compared with a value that is not a string" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("named", &.{
+        try makeValueRecord(allocator, 1, "value", .{
+            .boolean = false,
+        }),
+        try makeValueRecord(allocator, 2, "value", .{
+            .string = "text",
+        }),
+    });
+    const index = try fixture.sortIndex("named", "value", .asc, null, null);
+    try std.testing.expectError(error.Thrown, index.build(io, collection));
+    try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "Type mismatch in compareValues: first value is string, second value is boolean,"));
+}
+
+test "should put NaN before every number and keep NaNs together" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("scores", &.{
+        try makeValueRecord(allocator, 1, "score", .{
+            .number = 7,
+        }),
+        try makeValueRecord(allocator, 2, "score", .{
+            .number = std.math.nan(f64),
+        }),
+        try makeValueRecord(allocator, 3, "score", .{
+            .number = std.math.nan(f64),
+        }),
+        try makeValueRecord(allocator, 4, "score", .{
+            .number = 3,
+        }),
+    });
+    const index = try fixture.sortIndex("scores", "score", .asc, .number, null);
+    try index.build(io, collection);
+    const values = try scores(allocator, index, "score");
+    try std.testing.expect(std.math.isNan(values[0]));
+    try std.testing.expect(std.math.isNan(values[1]));
+    try std.testing.expectEqual(@as(f64, 3), values[2]);
+    try std.testing.expectEqual(@as(f64, 7), values[3]);
+}
