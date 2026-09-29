@@ -474,7 +474,7 @@ fn createSharedSecret(allocator: std.mem.Allocator, io: std.Io, secretType: []co
         }
         else {
             const privatePath = try promptRequired(allocator, io, "Path to private key (.key):");
-            privateKeyPem = try std.Io.Dir.cwd().readFileAlloc(io, privatePath, allocator, .unlimited);
+            privateKeyPem = try node_utils.node_fs.readFile(allocator, io, privatePath);
         }
 
         try vault.set(allocator, io, .{

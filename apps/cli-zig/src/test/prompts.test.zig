@@ -201,3 +201,107 @@ test "the end of a test input is reported as EndOfStream" {
     var output = std.Io.Writer.Allocating.init(allocator);
     try std.testing.expectError(error.EndOfStream, prompts.confirm(allocator, std.testing.io, .{ .common = .{ .input = input, .output = &output.writer }, .message = "Continue?" }));
 }
+
+//
+// What the TypeScript prompts write for a text prompt whose placeholder is empty, starts with a character of two
+// UTF-8 bytes, or starts with a character outside the Basic Multilingual Plane (split into two surrogates, which
+// are written as U+FFFD each), and for a select prompt whose hints are empty. Captured from the TypeScript prompts
+// the way fixtures/generate.ts captures prompts.json.
+//
+const empty_and_non_ascii_cases =
+    "[{\"prompt\":\"text\",\"options\":{\"message\":\"Name:\",\"placeholder\":\"\"},\"keys\":[\"a\",\"\\u" ++
+    "007f\",\"\\r\"],\"pending\":false,\"cancelled\":false,\"value\":\"\",\"output\":\"\\u001b[?25l\\u001" ++
+    "b[36m\\u25c6\\u001b[39m  Name:\\n\\u001b[36m \\u001b[39m  \\u001b[7m\\u001b[8m_\\u001b[28m\\u001b[27" ++
+    "m\\n\\u001b[36m \\u001b[39m\\n\\u001b[999D\\u001b[3A\\u001b[1B\\u001b[2K\\u001b[G\\u001b[36m \\u001b" ++
+    "[39m  a\\u2588\\u001b[2B\\u001b[999D\\u001b[3A\\u001b[1B\\u001b[2K\\u001b[G\\u001b[36m \\u001b[39m  " ++
+    "\\u001b[7m\\u001b[8m_\\u001b[28m\\u001b[27m\\u001b[2B\\u001b[999D\\u001b[3A\\u001b[J\\u001b[32m\\u25" ++
+    "c7\\u001b[39m  Name:\\n\\u001b[90m \\u001b[39m\\n\\u001b[?25h\"},{\"prompt\":\"text\",\"options\":{" ++
+    "\"message\":\"Name:\",\"placeholder\":\"\\u00e9-photos\"},\"keys\":[\"a\",\"\\u007f\",\"\\r\"],\"pen" ++
+    "ding\":false,\"cancelled\":false,\"value\":\"\",\"output\":\"\\u001b[?25l\\u001b[36m\\u25c6\\u001b[3" ++
+    "9m  Name:\\n\\u001b[36m \\u001b[39m  \\u001b[7m\\u00e9\\u001b[27m\\u001b[2m-photos\\u001b[22m\\n\\u0" ++
+    "01b[36m \\u001b[39m\\n\\u001b[999D\\u001b[3A\\u001b[1B\\u001b[2K\\u001b[G\\u001b[36m \\u001b[39m  a" ++
+    "\\u2588\\u001b[2B\\u001b[999D\\u001b[3A\\u001b[1B\\u001b[2K\\u001b[G\\u001b[36m \\u001b[39m  \\u001b" ++
+    "[7m\\u00e9\\u001b[27m\\u001b[2m-photos\\u001b[22m\\u001b[2B\\u001b[999D\\u001b[3A\\u001b[J\\u001b[32" ++
+    "m\\u25c7\\u001b[39m  Name:\\n\\u001b[90m \\u001b[39m\\n\\u001b[?25h\"},{\"prompt\":\"text\",\"option" ++
+    "s\":{\"message\":\"Name:\",\"placeholder\":\"\\ud83d\\ude00 photos\"},\"keys\":[\"a\",\"\\u007f\",\"" ++
+    "\\r\"],\"pending\":false,\"cancelled\":false,\"value\":\"\",\"output\":\"\\u001b[?25l\\u001b[36m\\u2" ++
+    "5c6\\u001b[39m  Name:\\n\\u001b[36m \\u001b[39m  \\u001b[7m\\ufffd\\u001b[27m\\u001b[2m\\ufffd photo" ++
+    "s\\u001b[22m\\n\\u001b[36m \\u001b[39m\\n\\u001b[999D\\u001b[3A\\u001b[1B\\u001b[2K\\u001b[G\\u001b[" ++
+    "36m \\u001b[39m  a\\u2588\\u001b[2B\\u001b[999D\\u001b[3A\\u001b[1B\\u001b[2K\\u001b[G\\u001b[36m " ++
+    "\\u001b[39m  \\u001b[7m\\ufffd\\u001b[27m\\u001b[2m\\ufffd photos\\u001b[22m\\u001b[2B\\u001b[999D" ++
+    "\\u001b[3A\\u001b[J\\u001b[32m\\u25c7\\u001b[39m  Name:\\n\\u001b[90m \\u001b[39m\\n\\u001b[?25h\"}," ++
+    "{\"prompt\":\"select\",\"options\":{\"message\":\"Pick one:\",\"options\":[{\"value\":\"first\",\"la" ++
+    "bel\":\"First\",\"hint\":\"\"},{\"value\":\"second\",\"label\":\"Second\",\"hint\":\"\"}]},\"keys\":" ++
+    "[\"\\u001b[B\",\"\\r\"],\"pending\":false,\"cancelled\":false,\"value\":\"second\",\"output\":\"\\u0" ++
+    "01b[?25l\\u001b[90m \\u001b[39m\\n\\u001b[36m\\u25c6\\u001b[39m  Pick one:\\n\\u001b[36m \\u001b[39m" ++
+    "  \\u001b[32m\\u25cf\\u001b[39m First\\n\\u001b[36m \\u001b[39m  \\u001b[2m\\u25cb\\u001b[22m \\u001" ++
+    "b[2mSecond\\u001b[22m\\n\\u001b[36m \\u001b[39m\\n\\u001b[999D\\u001b[5A\\u001b[2B\\u001b[J\\u001b[3" ++
+    "6m \\u001b[39m  \\u001b[2m\\u25cb\\u001b[22m \\u001b[2mFirst\\u001b[22m\\n\\u001b[36m \\u001b[39m  " ++
+    "\\u001b[32m\\u25cf\\u001b[39m Second\\n\\u001b[36m \\u001b[39m\\n\\u001b[999D\\u001b[5A\\u001b[1B\\u" ++
+    "001b[J\\u001b[32m\\u25c7\\u001b[39m  Pick one:\\n\\u001b[90m \\u001b[39m  \\u001b[2mSecond\\u001b[22" ++
+    "m\\n\\u001b[?25h\"}]";
+
+test "an empty placeholder or hint is left out, and a placeholder's first character is its first UTF-16 code unit" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    cli.picocolors.setColorSupportOverride(true);
+    defer cli.picocolors.setColorSupportOverride(null);
+    try std.testing.expect(cli.tty.columns(cli.tty.stdout_fd) == null);
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try environ_map.put("TERM", "xterm-256color");
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    const cases = try std.json.parseFromSliceLeaky(std.json.Value, allocator, empty_and_non_ascii_cases, .{});
+    for (cases.array.items) |promptCase| {
+        const keys = try helpers.stringArray(allocator, promptCase.object.get("keys").?);
+        const input = try helpers.chunkedInput(allocator, keys);
+        var output = std.Io.Writer.Allocating.init(allocator);
+        const run = try runCase(allocator, promptCase, input, &output.writer);
+        try std.testing.expectEqualStrings(helpers.stringField(promptCase, "output"), output.written());
+        try std.testing.expect(!run.cancelled);
+        try std.testing.expectEqualStrings(helpers.stringField(promptCase, "value"), run.value.?);
+    }
+}
+
+//
+// What the TypeScript password prompt writes when a character outside the Basic Multilingual Plane is typed: it is
+// two UTF-16 code units, so `userInput.replaceAll(/./g, mask)` masks it twice, and the cursor counts code units.
+// Captured from the TypeScript prompt the way fixtures/generate.ts captures prompts.json.
+//
+const astral_password_cases =
+    "[{\"prompt\":\"password\",\"options\":{\"message\":\"Secret:\"},\"keys\":[\"\\ud83d\\ude00\",\"a\"," ++
+    "\"\\u001b[D\",\"\\r\"],\"pending\":false,\"cancelled\":false,\"value\":\"\\ud83d\\ude00a\",\"output" ++
+    "\":\"\\u001b[?25l\\u001b[90m \\u001b[39m\\n\\u001b[36m\\u25c6\\u001b[39m  Secret:\\n\\u001b[36m \\u0" ++
+    "01b[39m  \\u001b[7m\\u001b[8m_\\u001b[28m\\u001b[27m\\n\\u001b[36m \\u001b[39m\\n\\u001b[999D\\u001b" ++
+    "[4A\\u001b[2B\\u001b[2K\\u001b[G\\u001b[36m \\u001b[39m  \\u25aa\\u25aa\\u001b[7m\\u001b[8m_\\u001b[" ++
+    "28m\\u001b[27m\\u001b[2B\\u001b[999D\\u001b[4A\\u001b[2B\\u001b[2K\\u001b[G\\u001b[36m \\u001b[39m  " ++
+    "\\u25aa\\u25aa\\u25aa\\u001b[7m\\u001b[8m_\\u001b[28m\\u001b[27m\\u001b[2B\\u001b[999D\\u001b[4A\\u0" ++
+    "01b[2B\\u001b[2K\\u001b[G\\u001b[36m \\u001b[39m  \\u25aa\\u25aa\\u001b[7m\\u25aa\\u001b[27m\\u001b[" ++
+    "2B\\u001b[999D\\u001b[4A\\u001b[1B\\u001b[J\\u001b[32m\\u25c7\\u001b[39m  Secret:\\n\\u001b[90m \\u0" ++
+    "01b[39m  \\u001b[2m\\u25aa\\u25aa\\u25aa\\u001b[22m\\n\\u001b[?25h\"}]";
+
+test "the password prompt masks each UTF-16 code unit, as replaceAll(/./g, mask) does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    cli.picocolors.setColorSupportOverride(true);
+    defer cli.picocolors.setColorSupportOverride(null);
+    try std.testing.expect(cli.tty.columns(cli.tty.stdout_fd) == null);
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try environ_map.put("TERM", "xterm-256color");
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    const cases = try std.json.parseFromSliceLeaky(std.json.Value, allocator, astral_password_cases, .{});
+    for (cases.array.items) |promptCase| {
+        const keys = try helpers.stringArray(allocator, promptCase.object.get("keys").?);
+        const input = try helpers.chunkedInput(allocator, keys);
+        var output = std.Io.Writer.Allocating.init(allocator);
+        const run = try runCase(allocator, promptCase, input, &output.writer);
+        try std.testing.expectEqualStrings(helpers.stringField(promptCase, "output"), output.written());
+        try std.testing.expect(!run.cancelled);
+        try std.testing.expectEqualStrings(helpers.stringField(promptCase, "value"), run.value.?);
+    }
+}

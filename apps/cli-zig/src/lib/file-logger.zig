@@ -502,7 +502,7 @@ pub const FileLogger = struct {
     // Reads the header section of the log file (everything up to "--- Log Start ---").
     //
     fn readLogHeader(self: *FileLogger, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
-        const logContent = try std.Io.Dir.cwd().readFileAlloc(io, self.logFile, allocator, .unlimited);
+        const logContent = try node_utils.node_fs.readFile(allocator, io, self.logFile);
         const logStartIndex = std.mem.indexOf(u8, logContent, log_start_marker) orelse {
             // No "--- Log Start ---" marker found, return the first 50 lines.
             var line_count: usize = 0;

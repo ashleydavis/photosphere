@@ -65,7 +65,7 @@ fn opt(allocator: std.mem.Allocator, option: Option, state: OptionState) ![]cons
     switch (state) {
         .selected => return color.dim(allocator, label),
         .active => {
-            const hint = if (option.hint) |hintText| try std.fmt.allocPrint(allocator, " {s}", .{try color.dim(allocator, try std.fmt.allocPrint(allocator, "({s})", .{hintText}))}) else "";
+            const hint = if (option.hint != null and option.hint.?.len > 0) try std.fmt.allocPrint(allocator, " {s}", .{try color.dim(allocator, try std.fmt.allocPrint(allocator, "({s})", .{option.hint.?}))}) else "";
             return std.fmt.allocPrint(allocator, "{s} {s}{s}", .{ try color.green(allocator, S_RADIO_ACTIVE()), label, hint });
         },
         .cancelled => return color.strikethrough(allocator, try color.dim(allocator, label)),

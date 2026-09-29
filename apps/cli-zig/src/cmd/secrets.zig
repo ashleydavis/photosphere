@@ -612,7 +612,7 @@ pub fn secretsEdit(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecre
                 exit(io, 1);
             }
 
-            updatedValue = try std.Io.Dir.cwd().readFileAlloc(io, cmdOptions.valueFile.?, allocator, .unlimited);
+            updatedValue = try node_utils.node_fs.readFile(allocator, io, cmdOptions.valueFile.?);
         }
         else if (hasValue) {
             updatedValue = cmdOptions.value.?;
@@ -805,7 +805,7 @@ pub fn secretsImport(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISec
 
         const importedName = keyNameFromPath(privatePath);
         const keyName = if (importedName.len > 0) importedName else "imported-key";
-        const privateKeyPem = try std.Io.Dir.cwd().readFileAlloc(io, privatePath, allocator, .unlimited);
+        const privateKeyPem = try node_utils.node_fs.readFile(allocator, io, privatePath);
         const vault = try getVault(getDefaultVaultType());
         try vault.set(allocator, io, .{ .name = keyName, .type = "encryption-key", .value = privateKeyPem });
         log.info(try pc.green(allocator, try format(allocator, "\u{2713} Key imported as \"{s}\".", .{keyName})));
@@ -826,7 +826,7 @@ pub fn secretsImport(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISec
 
     const privatePath = trim(privateKeyPath.value);
     const keyName = keyNameFromPath(privatePath);
-    const privateKeyPem = try std.Io.Dir.cwd().readFileAlloc(io, privatePath, allocator, .unlimited);
+    const privateKeyPem = try node_utils.node_fs.readFile(allocator, io, privatePath);
     const vault = try getVault(getDefaultVaultType());
     try vault.set(allocator, io, .{ .name = keyName, .type = "encryption-key", .value = privateKeyPem });
     try outro(io, try pc.green(allocator, try format(allocator, "\u{2713} Key imported as \"{s}\".", .{keyName})), .{});

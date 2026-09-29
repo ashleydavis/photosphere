@@ -38,33 +38,40 @@ pub const PasswordPrompt = struct {
     }
 
     //
-    // The number of characters (code points) in text.
+    // The text with each UTF-16 code unit replaced by the mask, one piece per code unit
+    // (`text.replaceAll(/./g, mask)`): a character outside the Basic Multilingual Plane is two code units, and `.`
+    // does not match a line terminator (\n, \r, U+2028, U+2029), which is kept.
     //
-    fn characterCount(text: []const u8) usize {
-        var count: usize = 0;
+    fn maskedUnits(self: *PasswordPrompt, allocator: std.mem.Allocator, text: []const u8) ![]const []const u8 {
+        var pieces: std.ArrayList([]const u8) = .empty;
         var index: usize = 0;
         while (index < text.len) {
-            index += string_width.decodeAt(text, index).length;
-            count += 1;
+            const decoded = string_width.decodeAt(text, index);
+            const codePoint = decoded.codePoint;
+            if (codePoint == '\n' or codePoint == '\r' or codePoint == 0x2028 or codePoint == 0x2029) {
+                try pieces.append(allocator, text[index .. index + decoded.length]);
+            }
+            else {
+                try pieces.append(allocator, self._mask);
+                if (codePoint > 0xFFFF) {
+                    try pieces.append(allocator, self._mask);
+                }
+            }
+            index += decoded.length;
         }
-        return count;
+        return pieces.items;
     }
 
     //
     // The user input with every character replaced by the mask.
     //
     pub fn masked(self: *PasswordPrompt, allocator: std.mem.Allocator) ![]const u8 {
-        var result: std.ArrayList(u8) = .empty;
-        var count = characterCount(self.prompt.userInput);
-        while (count > 0) {
-            try result.appendSlice(allocator, self._mask);
-            count -= 1;
-        }
-        return result.items;
+        return std.mem.concat(allocator, u8, try self.maskedUnits(allocator, self.prompt.userInput));
     }
 
     //
-    // The masked input with the cursor drawn.
+    // The masked input with the cursor drawn. The cursor counts the UTF-16 code units of the input before it, and
+    // `s2[0]` is the first code unit of the rest, which is one piece because both masks are one code unit.
     //
     pub fn userInputWithCursor(self: *PasswordPrompt, allocator: std.mem.Allocator) ![]const u8 {
         if (self.prompt.state == .submit or self.prompt.state == .cancel) {
@@ -74,11 +81,11 @@ pub const PasswordPrompt = struct {
         if (self.cursor() >= userInput.len) {
             return std.fmt.allocPrint(allocator, "{s}{s}", .{ try self.masked(allocator), try picocolors.inverse(allocator, try picocolors.hidden(allocator, "_")) });
         }
-        const maskedText = try self.masked(allocator);
-        const mask_offset = characterCount(userInput[0..self.cursor()]) * self._mask.len;
-        const s1 = maskedText[0..mask_offset];
-        const s2 = maskedText[mask_offset..];
-        return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ s1, try picocolors.inverse(allocator, s2[0..self._mask.len]), s2[self._mask.len..] });
+        const pieces = try self.maskedUnits(allocator, userInput);
+        const unitsBefore = (try self.maskedUnits(allocator, userInput[0..self.cursor()])).len;
+        const s1 = try std.mem.concat(allocator, u8, pieces[0..unitsBefore]);
+        const rest = try std.mem.concat(allocator, u8, pieces[unitsBefore + 1 ..]);
+        return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ s1, try picocolors.inverse(allocator, pieces[unitsBefore]), rest });
     }
 
     //

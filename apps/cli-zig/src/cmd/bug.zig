@@ -411,21 +411,6 @@ fn nameOrder(context: void, left: ILogFileEntry, right: ILogFileEntry) bool {
 }
 
 //
-// The message of the error `readFileSync(logFilePath, 'utf8')` throws: `EISDIR: illegal operation on a directory,
-// read` for a directory, and `<code>: <description>, open '<path>'` for a file that cannot be opened.
-//
-fn readFileErrorMessage(allocator: std.mem.Allocator, logFilePath: []const u8, err: anyerror) ![]const u8 {
-    const code: []const u8 = switch (err) {
-        error.IsDir => return "EISDIR: illegal operation on a directory, read",
-        error.FileNotFound => "ENOENT: no such file or directory",
-        error.AccessDenied, error.PermissionDenied => "EACCES: permission denied",
-        error.NameTooLong => "ENAMETOOLONG: name too long",
-        else => return utils.errors.errorMessage(err),
-    };
-    return std.fmt.allocPrint(allocator, "{s}, open '{s}'", .{ code, logFilePath });
-}
-
-//
 // The body of getLatestLogFile inside its try block (errors become null).
 //
 fn getLatestLogFileUnsafe(allocator: std.mem.Allocator, io: std.Io) !?[]const u8 {
@@ -477,8 +462,8 @@ pub fn getLogHeader(allocator: std.mem.Allocator, io: std.Io, logFilePath: ?[]co
         return "No log file available";
     }
 
-    const logContent = std.Io.Dir.cwd().readFileAlloc(io, logFilePath.?, allocator, .unlimited) catch |err| {
-        return std.fmt.allocPrint(allocator, "Error reading log file: {s}", .{try readFileErrorMessage(allocator, logFilePath.?, err)});
+    const logContent = node_utils.node_fs.readFile(allocator, io, logFilePath.?) catch |err| {
+        return std.fmt.allocPrint(allocator, "Error reading log file: {s}", .{utils.errors.errorMessage(err)});
     };
     const logStartIndex = std.mem.indexOf(u8, logContent, log_start_marker) orelse {
         // If no "--- Log Start ---" marker found, return first 50 lines
