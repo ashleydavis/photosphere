@@ -527,7 +527,9 @@ test "DEFAULT_VAULT_DIR is ~/.config/photosphere/vault" {
     process_env.setEnvironMap(&environ_map);
     defer process_env.setEnvironMap(null);
 
-    const expected = try std.fs.path.join(allocator, &.{ "/home/tester", ".config", "photosphere", "vault" });
+    // Node's path.join normalizes the result, and on Windows that turns every `/` into `\`, so the home directory's
+    // own separators change too (std.fs.path.join would leave them alone).
+    const expected = if (builtin.os.tag == .windows) "\\home\\tester\\.config\\photosphere\\vault" else "/home/tester/.config/photosphere/vault";
     try std.testing.expectEqualStrings(expected, try vault_zig.plaintext_vault.DEFAULT_VAULT_DIR(allocator));
 }
 

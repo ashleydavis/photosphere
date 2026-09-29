@@ -324,5 +324,15 @@ test "readStream passes on an error other than a missing file" {
 
     // A path under a file, which is not a directory.
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try fixture.path("a-file"), .data = "not a directory" });
-    try std.testing.expectError(error.NotDir, fixture.fileStorage.readStream(fixture.arena.allocator(), std.testing.io, try fixture.path("a-file/under.bin")));
+    const underFilePath = try fixture.path("a-file/under.bin");
+    if (builtin.os.tag == .windows) {
+        // Windows reports a path under a file as ERROR_PATH_NOT_FOUND, which libuv (and so Node) maps to ENOENT and
+        // Zig to FileNotFound, so there it fails like a missing file, with Node's ENOENT message.
+        try std.testing.expectError(error.Thrown, fixture.fileStorage.readStream(fixture.arena.allocator(), std.testing.io, underFilePath));
+        const expected = try std.fmt.allocPrint(fixture.arena.allocator(), "ENOENT: no such file or directory, open '{s}'", .{underFilePath});
+        try std.testing.expectEqualStrings(expected, utils.errors.lastErrorMessage());
+    }
+    else {
+        try std.testing.expectError(error.NotDir, fixture.fileStorage.readStream(fixture.arena.allocator(), std.testing.io, underFilePath));
+    }
 }
