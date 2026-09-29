@@ -786,6 +786,26 @@ test "CloudStorage Zig: a key with a leading slash is the key without it" {
     try std.testing.expect(!try shared_storage.dirExists(allocator, io, slashedDir));
 }
 
+test "CloudStorage Zig: a stream larger than one part goes up in parts, whole and in order" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const location = try setUp();
+    const filePath = try pathOf(allocator, &.{ location, "zig-multipart", "large.bin" });
+
+    // Two whole parts of 5MB and a short one, each byte telling where it is, so a part out of place shows.
+    const content = try allocator.alloc(u8, 11 * 1024 * 1024 + 123);
+    for (content, 0..) |*byte, index| {
+        byte.* = @truncate(index *% 7 +% index / 4096);
+    }
+    var input = std.Io.Reader.fixed(content);
+    try shared_storage.writeStream(allocator, io, filePath, "application/octet-stream", &input, null);
+
+    try std.testing.expectEqual(@as(u64, content.len), (try shared_storage.info(allocator, io, filePath)).?.length);
+    try std.testing.expect(std.mem.eql(u8, content, (try shared_storage.read(allocator, io, filePath)).?));
+}
+
 test "CloudStorage Zig: copyTo copies a file to another key" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

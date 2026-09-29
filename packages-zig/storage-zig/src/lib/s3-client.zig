@@ -286,7 +286,7 @@ pub const GetObjectOutput = struct {
 };
 
 //
-// S3 error codes that are thrown with their own name (error names must be static strings).
+// The S3 error codes most often met, named without taking the lock of interned_error_names.
 //
 const known_error_names = [_][]const u8{
     "NoSuchKey",
@@ -313,28 +313,56 @@ const known_error_names = [_][]const u8{
 };
 
 //
-// Maps an S3 error code to a static error name.
+// Guards interned_error_names.
 //
-pub fn staticErrorName(code: []const u8) []const u8 {
+var interned_error_names_mutex: std.Io.Mutex = .init;
+
+//
+// The error codes met that are not in known_error_names, kept for the life of the process, because an error name
+// must outlive the error.
+//
+var interned_error_names: std.ArrayList([]const u8) = .empty;
+
+//
+// The most codes interned_error_names keeps, so a server cannot grow it without end.
+//
+const max_interned_error_names = 256;
+
+//
+// Gets the error name of an S3 error code, the code itself as the SDK names its errors, as a string that lives as long
+// as the process. Past max_interned_error_names new codes it is the SDK's base class name, "S3ServiceException".
+//
+pub fn staticErrorName(io: std.Io, code: []const u8) ![]const u8 {
     for (known_error_names) |name| {
         if (std.mem.eql(u8, name, code)) {
             return name;
         }
     }
-    return "S3ServiceException";
+    interned_error_names_mutex.lockUncancelable(io);
+    defer interned_error_names_mutex.unlock(io);
+    for (interned_error_names.items) |name| {
+        if (std.mem.eql(u8, name, code)) {
+            return name;
+        }
+    }
+    if (interned_error_names.items.len >= max_interned_error_names) {
+        return "S3ServiceException";
+    }
+    const name = try std.heap.smp_allocator.dupe(u8, code);
+    errdefer std.heap.smp_allocator.free(name);
+    try interned_error_names.append(std.heap.smp_allocator, name);
+    return name;
 }
 
 //
-// The error name the JavaScript SDK uses for an error response without a body (for example a HEAD request).
+// The error name the JavaScript SDK gives an S3 error response whose body has no <Error><Code> (for example the
+// response to a HEAD request, which has no body): loadRestXmlErrorCode's "NotFound" for a 404, else "Unknown".
 //
 pub fn errorNameForStatus(status: u16) []const u8 {
-    return switch (status) {
-        400 => "BadRequest",
-        403 => "Forbidden",
-        404 => "NotFound",
-        412 => "PreconditionFailed",
-        else => "UnknownError",
-    };
+    if (status == 404) {
+        return "NotFound";
+    }
+    return "Unknown";
 }
 
 //
@@ -368,38 +396,209 @@ fn errorElementText(allocator: std.mem.Allocator, body: []const u8, name: [*:0]c
 }
 
 //
-// Removes the XML escapes of text with the SDK's aws_byte_buf_append_unescaped_xml.
+// Removes the XML escapes of the text of an element, as the SDK's XML parser (fast-xml-parser, configured by
+// @aws-sdk/xml-builder) does.
 //
 fn unescapeXml(allocator: std.mem.Allocator, text: aws.aws_byte_cursor) ![]const u8 {
-    var buffer: aws.aws_byte_buf = undefined;
-    if (aws.aws_byte_buf_init(&buffer, aws.aws_default_allocator(), text.len) != aws.AWS_OP_SUCCESS) {
-        return throwLastSdkError();
+    return decodeXmlEntities(allocator, sliceOf(text));
+}
+
+//
+// An entity with fixed spellings (the alternatives of one fast-xml-parser entity regex) and what it stands for.
+//
+const IXmlEntity = struct {
+    // The spellings between "&" and ";".
+    names: []const []const u8,
+
+    // The text it stands for.
+    value: []const u8,
+};
+
+//
+// fast-xml-parser's standard entities, replaced first, in this order (its lastEntities).
+//
+const xml_standard_entities = [_]IXmlEntity{
+    .{
+        .names = &.{ "apos", "#39", "#x27" },
+        .value = "'",
+    },
+    .{
+        .names = &.{ "gt", "#62", "#x3E" },
+        .value = ">",
+    },
+    .{
+        .names = &.{ "lt", "#60", "#x3C" },
+        .value = "<",
+    },
+    .{
+        .names = &.{ "quot", "#34", "#x22" },
+        .value = "\"",
+    },
+};
+
+//
+// fast-xml-parser's HTML entities (htmlEntities: true), replaced next, in this order, before the numeric references.
+//
+const xml_html_entities = [_]IXmlEntity{
+    .{
+        .names = &.{ "nbsp", "#160" },
+        .value = " ",
+    },
+    .{
+        .names = &.{ "cent", "#162" },
+        .value = "¢",
+    },
+    .{
+        .names = &.{ "pound", "#163" },
+        .value = "£",
+    },
+    .{
+        .names = &.{ "yen", "#165" },
+        .value = "¥",
+    },
+    .{
+        .names = &.{ "euro", "#8364" },
+        .value = "€",
+    },
+    .{
+        .names = &.{ "copy", "#169" },
+        .value = "©",
+    },
+    .{
+        .names = &.{ "reg", "#174" },
+        .value = "®",
+    },
+    .{
+        .names = &.{ "inr", "#8377" },
+        .value = "₹",
+    },
+};
+
+//
+// fast-xml-parser's ampersand entity, replaced last.
+//
+const xml_ampersand_entity: IXmlEntity = .{
+    .names = &.{ "amp", "#38", "#x26" },
+    .value = "&",
+};
+
+//
+// Decodes the entities of XML text as fast-xml-parser does: one pass over the text per entity (a pass does not look
+// again at what an earlier one wrote), so "&amp;lt;" is "&lt;". The numeric references it knows are 1 to 7 decimal or
+// 1 to 6 hexadecimal digits up to U+10FFFF. An entity it does not know is left as it is.
+//
+pub fn decodeXmlEntities(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
+    var decoded = text;
+    for (xml_standard_entities) |entity| {
+        decoded = try replaceXmlEntity(allocator, decoded, entity);
     }
-    defer aws.aws_byte_buf_clean_up(&buffer);
-    if (aws.aws_byte_buf_append_unescaped_xml(aws.aws_default_allocator(), text, &buffer) != aws.AWS_OP_SUCCESS) {
-        return throwLastSdkError();
+    if (std.mem.indexOfScalar(u8, decoded, '&') == null) {
+        return decoded;
     }
-    return allocator.dupe(u8, sliceOf(aws.aws_byte_cursor_from_buf(&buffer)));
+    for (xml_html_entities) |entity| {
+        decoded = try replaceXmlEntity(allocator, decoded, entity);
+    }
+    decoded = try replaceNumericReferences(allocator, decoded, 10, 7);
+    decoded = try replaceNumericReferences(allocator, decoded, 16, 6);
+    return replaceXmlEntity(allocator, decoded, xml_ampersand_entity);
+}
+
+//
+// Replaces every "&<name>;" of one entity, for any of its names.
+//
+fn replaceXmlEntity(allocator: std.mem.Allocator, text: []const u8, entity: IXmlEntity) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    var index: usize = 0;
+    while (index < text.len) {
+        if (xmlEntityLength(text[index..], entity)) |length| {
+            try output.appendSlice(allocator, entity.value);
+            index += length;
+        }
+        else {
+            try output.append(allocator, text[index]);
+            index += 1;
+        }
+    }
+    return output.items;
+}
+
+//
+// The length of the "&<name>;" of the entity that text starts with (null when it starts with none of them).
+//
+fn xmlEntityLength(text: []const u8, entity: IXmlEntity) ?usize {
+    if (text.len == 0 or text[0] != '&') {
+        return null;
+    }
+    for (entity.names) |name| {
+        const rest = text[1..];
+        if (rest.len > name.len and std.mem.startsWith(u8, rest, name) and rest[name.len] == ';') {
+            return name.len + 2;
+        }
+    }
+    return null;
+}
+
+//
+// Replaces every numeric character reference of one base ("&#65;", or "&#x41;" for base 16) with 1 to maxDigits
+// digits, as String.fromCodePoint, then UTF-8, has it: a surrogate is U+FFFD, and a code point past U+10FFFF is left as
+// it is.
+//
+fn replaceNumericReferences(allocator: std.mem.Allocator, text: []const u8, base: u8, maxDigits: usize) ![]const u8 {
+    const prefix = if (base == 16) "&#x" else "&#";
+    var output: std.ArrayList(u8) = .empty;
+    var index: usize = 0;
+    while (index < text.len) {
+        if (std.mem.startsWith(u8, text[index..], prefix)) {
+            const digitsStart = index + prefix.len;
+            var digitsEnd = digitsStart;
+            while (digitsEnd < text.len and std.fmt.charToDigit(text[digitsEnd], base) != error.InvalidCharacter) {
+                digitsEnd += 1;
+            }
+            const digitCount = digitsEnd - digitsStart;
+            if (digitCount >= 1 and digitCount <= maxDigits and digitsEnd < text.len and text[digitsEnd] == ';') {
+                const codePoint = try std.fmt.parseInt(u32, text[digitsStart..digitsEnd], base);
+                if (codePoint <= 0x10FFFF) {
+                    var encoded: [4]u8 = undefined;
+                    const length = std.unicode.utf8Encode(@intCast(codePoint), &encoded) catch std.unicode.utf8Encode(std.unicode.replacement_character, &encoded) catch unreachable;
+                    try output.appendSlice(allocator, encoded[0..length]);
+                    index = digitsEnd + 1;
+                    continue;
+                }
+            }
+        }
+        try output.append(allocator, text[index]);
+        index += 1;
+    }
+    return output.items;
 }
 
 //
 // Throws the error of a failed meta request: the S3 service exception of an S3 error response (name = Code,
-// message = Message, like the SDK), or the SDK's own error when there was no S3 response.
+// message = Message, and "UnknownError" for a missing Message, like the SDK), or the SDK's own error when there was
+// no S3 response.
 //
-fn throwResultError(allocator: std.mem.Allocator, result: *const MetaRequestCall) anyerror {
+// aws-c-s3 keeps the status and body only of responses it will not retry. A 500 or 503, or any response whose
+// <Error><Code> is one it retries (InternalError, SlowDown, RequestTimeout, ...), fails with its own error code,
+// response status 0 and no body (s3_meta_request.c, aws_s3_meta_request_set_fail_synced), so those are thrown as
+// the SDK's error ("Response code indicates internal server error") where the JavaScript SDK throws the Code and
+// Message of the body.
+//
+fn throwResultError(allocator: std.mem.Allocator, io: std.Io, result: *const MetaRequestCall) anyerror {
     if (result.responseStatus == 0) {
         return throwSdkError(result.errorCode);
     }
     last_http_status_code = @intCast(result.responseStatus);
+    var name = errorNameForStatus(last_http_status_code);
+    var message: []const u8 = "UnknownError";
     if (result.errorBody) |body| {
         if (try errorElementText(allocator, body, "Code")) |code| {
-            const message = (try errorElementText(allocator, body, "Message")) orelse code;
-            errors.recordError(staticErrorName(code), "{s}", .{message});
-            return error.Thrown;
+            name = try staticErrorName(io, code);
+        }
+        if (try errorElementText(allocator, body, "Message")) |text| {
+            message = text;
         }
     }
-    const name = errorNameForStatus(last_http_status_code);
-    errors.recordError(name, "{s}", .{name});
+    errors.recordError(name, "{s}", .{message});
     return error.Thrown;
 }
 
@@ -1071,6 +1270,9 @@ pub fn throwServiceException(name: []const u8, message: []const u8, httpStatusCo
 }
 
 pub const S3Client = struct {
+    // The io the client locks with.
+    io: std.Io,
+
     // The client configuration.
     config: IS3ClientConfig,
 
@@ -1089,6 +1291,7 @@ pub const S3Client = struct {
     pub fn init(io: std.Io, config: IS3ClientConfig) S3Client {
         initLibrary(io);
         var client: S3Client = .{
+            .io = io,
             .config = config,
             .send = null,
             .mutex = undefined,
@@ -1266,7 +1469,7 @@ pub const S3Client = struct {
             return throwLastSdkError();
         }
         if (self.config.endpoint) |endpoint| {
-            if (aws.aws_endpoints_request_context_add_string(sdkAllocator, context, cursorOf("Endpoint"), cursorOf(endpoint)) != aws.AWS_OP_SUCCESS) {
+            if (aws.aws_endpoints_request_context_add_string(sdkAllocator, context, cursorOf("Endpoint"), cursorOf(try endpointHref(allocator, endpoint))) != aws.AWS_OP_SUCCESS) {
                 return throwLastSdkError();
             }
         }
@@ -1307,7 +1510,7 @@ pub const S3Client = struct {
             call = try self.sendOnce(allocator, request);
         }
         if (call.errorCode != 0) {
-            return throwResultError(allocator, call);
+            return throwResultError(allocator, self.io, call);
         }
         return call;
     }
@@ -1727,6 +1930,33 @@ fn addHeader(message: *aws.aws_http_message, name: []const u8, value: []const u8
 }
 
 //
+// The schemes the WHATWG URL standard calls special, whose URLs always have a path.
+//
+const special_url_schemes = [_][]const u8{ "http", "https", "ftp", "ws", "wss", "file" };
+
+//
+// The endpoint as the JavaScript SDK hands it to the endpoint rules, `new URL(endpoint).href`: an endpoint that is
+// not a URL is a TypeError (with Bun's message), and the empty path of a URL with a special scheme is "/". (std.Uri
+// stands in for the WHATWG URL parser, so an endpoint that only one of them accepts is judged differently.)
+//
+pub fn endpointHref(allocator: std.mem.Allocator, endpoint: []const u8) ![]const u8 {
+    const uri = std.Uri.parse(endpoint) catch {
+        last_http_status_code = 0;
+        errors.recordError("TypeError", "\"{s}\" cannot be parsed as a URL.", .{endpoint});
+        return error.Thrown;
+    };
+    if (uri.host == null or !uri.path.isEmpty() or uri.query != null or uri.fragment != null) {
+        return endpoint;
+    }
+    for (special_url_schemes) |scheme| {
+        if (std.ascii.eqlIgnoreCase(uri.scheme, scheme)) {
+            return std.fmt.allocPrint(allocator, "{s}/", .{endpoint});
+        }
+    }
+    return endpoint;
+}
+
+//
 // Appends "&name=value" to a query string, with the name and value URI-encoded by the SDK.
 //
 fn appendQueryParameter(allocator: std.mem.Allocator, query: *std.ArrayList(u8), name: []const u8, value: []const u8) !void {
@@ -1744,19 +1974,34 @@ fn appendQueryParameter(allocator: std.mem.Allocator, query: *std.ArrayList(u8),
 }
 
 //
-// Appends text to an XML document with the five XML special characters escaped (what the SDK's XML serializer does
-// with the keys of DeleteObjects).
+// Appends text to an XML document escaped as the SDK's XML serializer escapes the text of an element (escapeElement
+// of @aws-sdk/xml-builder, used for the keys of DeleteObjects): the five XML special characters, and the line breaks
+// an XML parser would otherwise change (CR, LF, NEL and LINE SEPARATOR) as character references.
 //
 pub fn appendXmlEscaped(allocator: std.mem.Allocator, output: *std.ArrayList(u8), text: []const u8) !void {
-    for (text) |character| {
-        switch (character) {
+    var index: usize = 0;
+    while (index < text.len) {
+        if (std.mem.startsWith(u8, text[index..], "\u{85}")) {
+            try output.appendSlice(allocator, "&#x85;");
+            index += "\u{85}".len;
+            continue;
+        }
+        if (std.mem.startsWith(u8, text[index..], "\u{2028}")) {
+            try output.appendSlice(allocator, "&#x2028;");
+            index += "\u{2028}".len;
+            continue;
+        }
+        switch (text[index]) {
             '&' => try output.appendSlice(allocator, "&amp;"),
             '<' => try output.appendSlice(allocator, "&lt;"),
             '>' => try output.appendSlice(allocator, "&gt;"),
             '"' => try output.appendSlice(allocator, "&quot;"),
             '\'' => try output.appendSlice(allocator, "&apos;"),
-            else => try output.append(allocator, character),
+            '\r' => try output.appendSlice(allocator, "&#x0D;"),
+            '\n' => try output.appendSlice(allocator, "&#x0A;"),
+            else => try output.append(allocator, text[index]),
         }
+        index += 1;
     }
 }
 
