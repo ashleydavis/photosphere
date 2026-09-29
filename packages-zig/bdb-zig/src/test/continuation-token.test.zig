@@ -146,3 +146,73 @@ test "buildDatabaseMerkleTree stops listing collections on an empty continuation
     const tree = try bdb.merkle_tree.buildDatabaseMerkleTree(allocator, io, emptyTokenStorage(&memoryStorage), "", test_uuid_generator.uuidGenerator(), null, null, true);
     try std.testing.expect(tree.merkle != null or tree.sort != null);
 }
+
+//
+// MemoryStorage.listFiles, one name per page.
+//
+fn listFilesOneAtATime(ptr: *anyopaque, allocator: std.mem.Allocator, ioValue: std.Io, path: []const u8, max: u32, next: ?[]const u8) anyerror!IListResult {
+    _ = max;
+    const memoryStorage: *MemoryStorage = @ptrCast(@alignCast(ptr));
+    return memoryStorage.listFiles(allocator, ioValue, path, 1, next);
+}
+
+//
+// MemoryStorage.listDirs, one name per page.
+//
+fn listDirsOneAtATime(ptr: *anyopaque, allocator: std.mem.Allocator, ioValue: std.Io, path: []const u8, max: u32, next: ?[]const u8) anyerror!IListResult {
+    _ = max;
+    const memoryStorage: *MemoryStorage = @ptrCast(@alignCast(ptr));
+    return memoryStorage.listDirs(allocator, ioValue, path, 1, next);
+}
+
+//
+// The vtable of MemoryStorage with listings of one name per page.
+//
+var one_at_a_time_vtable: IStorage.VTable = undefined;
+
+//
+// Gets an IStorage over the memory storage whose listings answer one name per page, as a storage with more names than
+// fit in one page answers.
+//
+fn oneAtATimeStorage(memoryStorage: *MemoryStorage) IStorage {
+    one_at_a_time_vtable = storage_zig.storage.implement(MemoryStorage).*;
+    one_at_a_time_vtable.listFiles = listFilesOneAtATime;
+    one_at_a_time_vtable.listDirs = listDirsOneAtATime;
+    return .{
+        .ptr = memoryStorage,
+        .vtable = &one_at_a_time_vtable,
+        .location = "memory://mock",
+    };
+}
+
+test "listShards and buildDatabaseMerkleTree follow the continuation token through every page of a listing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var memoryStorage = MemoryStorage.init(allocator);
+    const database = try bdb.database.BsonDatabase.init(allocator, memoryStorage.asStorage(), "", test_uuid_generator.uuidGenerator(), helpers.timestamp_provider.timestampProvider());
+    for ([_][]const u8{ "users", "photos" }) |collectionName| {
+        const collection = try database.collection(collectionName);
+        for ([_][]const u8{ RECORD_ID, "22222222-2222-4222-a222-222222222222", "33333333-3333-4333-a333-333333333333", "44444444-4444-4444-a444-444444444444", "55555555-5555-4555-a555-555555555555" }) |recordId| {
+            try collection.setInternalRecord(io, .{
+                ._id = recordId,
+                .fields = try BsonDocument.fromFields(allocator, &.{.{ .key = "name", .value = .{ .string = "Ann" } }}),
+                .metadata = .empty,
+            });
+        }
+    }
+    try database.commit(io);
+    const wholeShards = try bdb.merkle_tree.listShards(allocator, io, memoryStorage.asStorage(), "", "users");
+    try std.testing.expect(wholeShards.len >= 2);
+
+    const pagedShards = try bdb.merkle_tree.listShards(allocator, io, oneAtATimeStorage(&memoryStorage), "", "users");
+    try std.testing.expectEqual(wholeShards.len, pagedShards.len);
+    for (wholeShards, pagedShards) |whole, paged| {
+        try std.testing.expectEqualStrings(whole, paged);
+    }
+    const wholeTree = try bdb.merkle_tree.buildDatabaseMerkleTree(allocator, io, memoryStorage.asStorage(), "", test_uuid_generator.uuidGenerator(), null, null, true);
+    const pagedTree = try bdb.merkle_tree.buildDatabaseMerkleTree(allocator, io, oneAtATimeStorage(&memoryStorage), "", test_uuid_generator.uuidGenerator(), null, null, true);
+    try std.testing.expectEqual(@as(u32, 2), pagedTree.sort.?.leafCount);
+    try std.testing.expectEqualSlices(u8, wholeTree.sort.?.left.?.contentHash.?, pagedTree.sort.?.left.?.contentHash.?);
+    try std.testing.expectEqualSlices(u8, wholeTree.sort.?.right.?.contentHash.?, pagedTree.sort.?.right.?.contentHash.?);
+}

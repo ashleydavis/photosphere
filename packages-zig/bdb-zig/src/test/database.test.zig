@@ -344,3 +344,24 @@ test "merkleTree should return a new instance after flush" {
     const ref2 = try database.merkleTree();
     try std.testing.expect(ref2 != ref1);
 }
+
+test "commit writes only the collections that changed" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const database = try newDatabase(allocator, &storage);
+    const users = try database.collection("users");
+    const products = try database.collection("products");
+    try users.setInternalRecord(io, try makeRecord(allocator, ID1, "name", "Alice"));
+    try products.setInternalRecord(io, try makeRecord(allocator, ID2, "title", "Widget"));
+    try database.commit(io);
+    const productsTree = storage.getFile("collections/products/collection.dat").?;
+
+    // Only users changes, so the products tree is left as it was.
+    try users.setInternalRecord(io, try makeRecord(allocator, ID1, "name", "Alicia"));
+    try std.testing.expect(!products.dirty());
+    try database.commit(io);
+    try std.testing.expectEqual(productsTree.ptr, storage.getFile("collections/products/collection.dat").?.ptr);
+    try std.testing.expect(!users.dirty());
+}

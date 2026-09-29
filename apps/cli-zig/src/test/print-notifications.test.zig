@@ -24,6 +24,26 @@ test "checkForUpdates returns nothing for the dev version" {
     try std.testing.expect(cli.check_for_updates.checkForUpdates(arena.allocator(), std.testing.io) == null);
 }
 
+test "getLatestVersion returns nothing for the dev version" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expect(cli.check_for_updates.getLatestVersion(arena.allocator(), std.testing.io) == null);
+}
+
+test "tagName reads the tag_name of a release response, and nothing from a response without one" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const tagName = cli.check_for_updates.tagName;
+
+    try std.testing.expectEqualStrings("v1.2.3", tagName(allocator, "{\"tag_name\":\"v1.2.3\"}").?);
+    try std.testing.expect(tagName(allocator, "{\"tag_name\":\"\"}") == null);
+    try std.testing.expect(tagName(allocator, "{\"tag_name\":3}") == null);
+    try std.testing.expect(tagName(allocator, "{\"name\":\"v1.2.3\"}") == null);
+    try std.testing.expect(tagName(allocator, "[\"v1.2.3\"]") == null);
+    try std.testing.expect(tagName(allocator, "not json") == null);
+}
+
 test "printNotifications prints the next unseen news item once" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

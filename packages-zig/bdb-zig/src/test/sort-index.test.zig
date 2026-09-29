@@ -2207,3 +2207,320 @@ test "should put NaN before every number and keep NaNs together" {
     try std.testing.expectEqual(@as(f64, 3), values[2]);
     try std.testing.expectEqual(@as(f64, 7), values[3]);
 }
+
+test "a record whose indexed field is undefined is left out of the index, as a missing field is" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("undefined_values", &.{
+        try makeValueRecord(allocator, 1, "score", .{
+            .number = 2,
+        }),
+        try makeValueRecord(allocator, 2, "score", .undefined),
+        try makeValueRecord(allocator, 3, "score", .{
+            .number = 1,
+        }),
+    });
+    const index = try fixture.sortIndex("undefined_values", "score", .asc, null, null);
+    try index.build(io, collection);
+    try std.testing.expectEqualSlices(f64, &.{ 1, 2 }, try scores(allocator, index, "score"));
+
+    try index.addRecord(io, try makeValueRecord(allocator, 4, "score", .undefined));
+    try std.testing.expectEqual(@as(i64, 2), index.totalEntries);
+}
+
+test "an index of several pages is loaded from disk with its internal keys, and a page whose file is gone reads as empty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const index = try multiPageIndex(&fixture, try multiPageRecords(allocator, false));
+    try index.commit(io);
+
+    const loaded = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try std.testing.expect(try loaded.load(io));
+    try std.testing.expectEqual(@as(usize, 1), loaded.treeNodes.get(loaded.rootPageId.?).?.keys.items.len);
+    try std.testing.expectEqual(@as(usize, MULTI_PAGE_RECORD_COUNT), (try getAllRecords(allocator, loaded)).len);
+
+    // The file of the second page is lost: the page is still in the tree, but has no records.
+    const secondPageId = (try loaded.getPage(io, null)).nextPageId.?;
+    _ = fixture.storage.files.orderedRemove(try std.fmt.allocPrint(allocator, "db/indexes/test_collection/score_asc/{s}", .{secondPageId}));
+    const reloaded = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try std.testing.expect(try reloaded.load(io));
+    const secondPage = try reloaded.getPage(io, secondPageId);
+    try std.testing.expectEqual(@as(usize, 0), secondPage.records.len);
+    try std.testing.expectEqual(@as(u32, MULTI_PAGE_RECORD_COUNT), secondPage.totalRecords);
+    try std.testing.expectEqual(@as(u32, 2), secondPage.totalPages);
+    try std.testing.expectEqualStrings(secondPageId, secondPage.currentPageId);
+}
+
+test "build starts afresh from a checkpoint that cannot be read" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try index.build(io, collection);
+    try fixture.storage.putFile("db/indexes/test_collection/score_asc/build.checkpoint", "not json");
+
+    // The checkpoint is ignored, so every shard is added to the loaded tree again (as the TypeScript does).
+    const resumed = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try resumed.build(io, collection);
+    try std.testing.expectEqual(@as(i64, 10), resumed.totalEntries);
+    try std.testing.expect(fixture.storage.getFile("db/indexes/test_collection/score_asc/build.checkpoint") == null);
+}
+
+test "build resumes a shard from the record the checkpoint stopped at" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try index.build(io, collection);
+    var shards = collection.iterateShards();
+    const firstShard = (try shards.next(io)).?;
+    try std.testing.expect(firstShard.len >= 1);
+    try fixture.storage.putFile("db/indexes/test_collection/score_asc/build.checkpoint", "{\"completedShards\":[],\"currentShard\":0,\"currentShardRecordIndex\":1,\"totalRecordsProcessed\":0,\"lastUpdated\":0}");
+
+    // The records of the first shard before the one the checkpoint names are not added again.
+    const resumed = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try resumed.build(io, collection);
+    try std.testing.expectEqual(@as(i64, 5 + 5 - 1), resumed.totalEntries);
+}
+
+test "NaN sorts before a number whichever side of the comparison it is on, in either direction" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("nan_values", &.{});
+    const ascending = try fixture.sortIndex("nan_values", "score", .asc, .number, null);
+    try ascending.build(io, collection);
+    const descending = try fixture.sortIndex("nan_values", "score", .desc, .number, null);
+    try descending.build(io, collection);
+    const values = [_]f64{ 3, std.math.nan(f64), 1, std.math.nan(f64), 2 };
+    for (values, 0..) |value, valueIndex| {
+        const record = try makeValueRecord(allocator, @intCast(valueIndex + 1), "score", .{
+            .number = value,
+        });
+        try ascending.addRecord(io, record);
+        try descending.addRecord(io, record);
+    }
+    const ascendingScores = try scores(allocator, ascending, "score");
+    try std.testing.expect(std.math.isNan(ascendingScores[0]) and std.math.isNan(ascendingScores[1]));
+    try std.testing.expectEqualSlices(f64, &.{ 1, 2, 3 }, ascendingScores[2..]);
+    const descendingScores = try scores(allocator, descending, "score");
+    try std.testing.expectEqualSlices(f64, &.{ 3, 2, 1 }, descendingScores[0..3]);
+    try std.testing.expect(std.math.isNan(descendingScores[3]) and std.math.isNan(descendingScores[4]));
+}
+
+test "values that are neither numbers, strings nor dates are compared as the < operator compares them" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("flags", &.{
+        try makeValueRecord(allocator, 1, "flag", .{
+            .boolean = true,
+        }),
+        try makeValueRecord(allocator, 2, "flag", .{
+            .boolean = false,
+        }),
+        try makeValueRecord(allocator, 3, "flag", .{
+            .boolean = true,
+        }),
+    });
+    const index = try fixture.sortIndex("flags", "flag", .asc, null, null);
+    try index.build(io, collection);
+    const values = try helpers.sortIndexValues(allocator, io, index);
+    try std.testing.expectEqual(@as(usize, 3), values.len);
+    try std.testing.expect(!values[0].boolean);
+    try std.testing.expect(values[1].boolean and values[2].boolean);
+}
+
+test "should no-op when calling addRecord without loading" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try index.addRecord(io, try makeTestRecord(allocator, 1, "Record 1", 85, "A"));
+    try std.testing.expect(!index.loaded);
+    try std.testing.expectEqual(@as(usize, 0), (try index.getPage(io, null)).records.len);
+}
+
+//
+// The number of records of an index of three pages or more.
+//
+const THREE_PAGE_RECORD_COUNT = 3600;
+
+//
+// Builds a sort index on score over THREE_PAGE_RECORD_COUNT records with the scores 1 to THREE_PAGE_RECORD_COUNT,
+// which comes out as three pages or more.
+//
+fn threePageIndex(fixture: *Fixture) !*SortIndex {
+    const records = try fixture.allocator.alloc(IInternalRecord, THREE_PAGE_RECORD_COUNT);
+    for (records, 0..) |*record, recordIndex| {
+        const number: u32 = @intCast(recordIndex + 1);
+        record.* = try makeTestRecord(fixture.allocator, number, "Record", @floatFromInt(number), "A");
+    }
+    const collection = try fixture.collection("test_collection", records);
+    const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try index.build(io, collection);
+    try std.testing.expect((try index.getPage(io, null)).totalPages >= 3);
+    return index;
+}
+
+//
+// Expects the pages of an index to link to each other both ways, and to hold every record.
+//
+fn expectLinkedPages(allocator: std.mem.Allocator, index: *SortIndex, recordCount: usize) !void {
+    var page = try index.getPage(io, null);
+    var pageCount: u32 = 1;
+    while (page.nextPageId) |nextPageId| {
+        const next = try index.getPage(io, nextPageId);
+        try std.testing.expectEqualStrings(page.currentPageId, next.previousPageId.?);
+        page = next;
+        pageCount += 1;
+    }
+    try std.testing.expectEqual(page.totalPages, pageCount);
+    try std.testing.expectEqual(recordCount, (try getAllRecords(allocator, index)).len);
+}
+
+test "updateRecord removes a page emptied in the middle of the page chain, linking its neighbours" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const index = try threePageIndex(&fixture);
+    const first = try index.getPage(io, null);
+    const middle = try index.getPage(io, first.nextPageId.?);
+
+    // Every record of the middle page moves to the value 0, at the start of the first page.
+    for (middle.records) |record| {
+        try index.updateRecord(io, try internalRecordOf(allocator, record, 0), try internalRecordOf(allocator, record, record.get("score").?.number));
+    }
+    const all = try getAllRecords(allocator, index);
+    try std.testing.expectEqual(@as(usize, THREE_PAGE_RECORD_COUNT), all.len);
+    try std.testing.expectEqual(@as(usize, 0), (try index.getPage(io, middle.currentPageId)).records.len);
+    try std.testing.expectEqual(middle.records.len, (try index.findByValue(io, .{ .number = 0 }, null)).len);
+    try expectLinkedPages(allocator, index, THREE_PAGE_RECORD_COUNT);
+}
+
+test "deleteRecord removes a page emptied in the middle of the page chain, linking its neighbours" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const index = try threePageIndex(&fixture);
+    const first = try index.getPage(io, null);
+    const middle = try index.getPage(io, first.nextPageId.?);
+
+    for (middle.records) |record| {
+        try index.deleteRecord(io, record.get("_id").?.string, try internalRecordOf(allocator, record, record.get("score").?.number));
+    }
+    try expectLinkedPages(allocator, index, THREE_PAGE_RECORD_COUNT - middle.records.len);
+}
+
+test "updateRecord and deleteRecord of a record the index does not hold look through every page and change nothing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const index = try threePageIndex(&fixture);
+    const stranger = try makeTestRecord(allocator, THREE_PAGE_RECORD_COUNT + 1, "Record", 5, "A");
+
+    try index.deleteRecord(io, stranger._id, stranger);
+    try std.testing.expectEqual(@as(i64, THREE_PAGE_RECORD_COUNT), index.totalEntries);
+
+    // The update adds the record at its new value, as the TypeScript does when the old one is not found.
+    try index.updateRecord(io, try makeTestRecord(allocator, THREE_PAGE_RECORD_COUNT + 1, "Record", 6, "A"), stranger);
+    try std.testing.expectEqual(@as(i64, THREE_PAGE_RECORD_COUNT + 1), index.totalEntries);
+}
+
+test "findByValue of a value on a later page looks back at the page before it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const index = try threePageIndex(&fixture);
+    const found = try index.findByValue(io, .{ .number = 3000 }, null);
+    try std.testing.expectEqual(@as(usize, 1), found.len);
+    try std.testing.expectEqual(@as(f64, 3000), found[0].get("score").?.number);
+}
+
+test "an internal node below the root splits too, once enough pages are added under it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("deep", &.{});
+    const index = try fixture.sortIndex("deep", "score", .asc, .number, null);
+    try index.build(io, collection);
+
+    // Records added in order fill the last page, which splits in half again and again, until the root has split
+    // and then the internal node on its right has split under it.
+    const recordCount = 150_000;
+    var number: u32 = 0;
+    while (number < recordCount) : (number += 1) {
+        try index.addRecord(io, .{
+            ._id = try std.fmt.allocPrint(allocator, "record-{d}", .{number}),
+            .fields = try BsonDocument.fromFields(allocator, &.{.{
+                .key = "score",
+                .value = .{ .number = @floatFromInt(number) },
+            }}),
+            .metadata = .empty,
+        });
+    }
+    const root = index.treeNodes.get(index.rootPageId.?).?;
+    try std.testing.expectEqual(@as(usize, 3), root.children.items.len);
+    for (root.children.items) |childId| {
+        const child = index.treeNodes.get(childId).?;
+        try std.testing.expect(child.children.items.len > 0);
+        try std.testing.expectEqualStrings(index.rootPageId.?, child.parentId.?);
+        for (child.children.items) |leafId| {
+            try std.testing.expectEqualStrings(childId, index.treeNodes.get(leafId).?.parentId.?);
+        }
+    }
+    try expectLinkedPages(allocator, index, recordCount);
+    const found = try index.findByValue(io, .{ .number = 140_000 }, null);
+    try std.testing.expectEqual(@as(usize, 1), found.len);
+}
+
+test "updateRecord removes a page in the middle of the page chain emptied from its last record to its first" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const index = try threePageIndex(&fixture);
+    const first = try index.getPage(io, null);
+    const middle = try index.getPage(io, first.nextPageId.?);
+
+    // The first record of the page, moved last, is found by walking the pages from the first.
+    var recordIndex = middle.records.len;
+    while (recordIndex > 0) {
+        recordIndex -= 1;
+        const record = middle.records[recordIndex];
+        try index.updateRecord(io, try internalRecordOf(allocator, record, 0), try internalRecordOf(allocator, record, record.get("score").?.number));
+    }
+    try std.testing.expectEqual(@as(usize, 0), (try index.getPage(io, middle.currentPageId)).records.len);
+    try expectLinkedPages(allocator, index, THREE_PAGE_RECORD_COUNT);
+}
+
+test "ensure does nothing for an index that is already loaded" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try index.ensure(io, collection, .number);
+    const rootPageId = index.rootPageId.?;
+    try index.ensure(io, collection, .string);
+    try std.testing.expectEqual(SortDataType.number, index.type.?);
+    try std.testing.expectEqualStrings(rootPageId, index.rootPageId.?);
+    try std.testing.expectEqual(@as(i64, 5), index.totalEntries);
+}
