@@ -10,7 +10,9 @@ const termination = node_utils.termination;
 // "fail-always" always throws. "fail-always-logged" always throws too and writes the exceptions the log is given to
 // stdout. "uncaught" and "uncaught-fail" (whose callback always throws) write the exceptions the log is given to stdout
 // and end at once in an uncaught exception, "Boom". "exit-verbose" writes verbose log messages to stdout and calls exit with 7 straight away instead of waiting
-// for a signal.
+// for a signal. "exit-fail" writes the exceptions to stdout and calls exit with 7 with a callback that always throws.
+// "uncaught-uninitialized" ends at once in an uncaught exception before registering anything. "register-twice" registers
+// the callback twice (initializing the handlers once).
 //
 
 //
@@ -70,7 +72,7 @@ fn reportExitCode(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void 
     var buffer: [32]u8 = undefined;
     const line = try std.fmt.bufPrint(&buffer, "callback {d}\n", .{exitCode});
     try std.Io.File.stdout().writeStreamingAll(io, line);
-    const failsAlways = std.mem.eql(u8, callbackMode, "fail-always") or std.mem.eql(u8, callbackMode, "fail-always-logged") or std.mem.eql(u8, callbackMode, "uncaught-fail");
+    const failsAlways = std.mem.eql(u8, callbackMode, "fail-always") or std.mem.eql(u8, callbackMode, "fail-always-logged") or std.mem.eql(u8, callbackMode, "uncaught-fail") or std.mem.eql(u8, callbackMode, "exit-fail");
     if (failsAlways or (std.mem.eql(u8, callbackMode, "fail-once") and callbackCalls == 1)) {
         return utils.errors.throwError("Callback failed", .{});
     }
@@ -86,7 +88,16 @@ pub fn main(init: std.process.Init) !void {
         return error.ExpectedOneArgument;
     }
     callbackMode = arguments[1];
+    if (std.mem.eql(u8, callbackMode, "uncaught-uninitialized")) {
+        termination.shutdownOnUncaughtException(io, utils.errors.throwError("Boom", .{}));
+    }
     try termination.registerTerminationCallback(io, .{ .context = null, .function = reportExitCode });
+    if (std.mem.eql(u8, callbackMode, "register-twice")) {
+        try termination.registerTerminationCallback(io, .{
+            .context = null,
+            .function = reportExitCode,
+        });
+    }
     if (std.mem.eql(u8, callbackMode, "exit-verbose")) {
         stdoutIo = io;
         verboseVtable = utils.log.log.vtable.*;
@@ -97,7 +108,7 @@ pub fn main(init: std.process.Init) !void {
         };
         termination.exit(io, 7);
     }
-    const logsExceptions = std.mem.eql(u8, callbackMode, "fail-always-logged") or std.mem.eql(u8, callbackMode, "uncaught") or std.mem.eql(u8, callbackMode, "uncaught-fail");
+    const logsExceptions = std.mem.eql(u8, callbackMode, "fail-always-logged") or std.mem.eql(u8, callbackMode, "uncaught") or std.mem.eql(u8, callbackMode, "uncaught-fail") or std.mem.eql(u8, callbackMode, "exit-fail");
     if (logsExceptions) {
         stdoutIo = io;
         verboseVtable = utils.log.log.vtable.*;
@@ -106,6 +117,9 @@ pub fn main(init: std.process.Init) !void {
             .ptr = utils.log.log.ptr,
             .vtable = &verboseVtable,
         };
+    }
+    if (std.mem.eql(u8, callbackMode, "exit-fail")) {
+        termination.exit(io, 7);
     }
     if (std.mem.eql(u8, callbackMode, "uncaught") or std.mem.eql(u8, callbackMode, "uncaught-fail")) {
         termination.shutdownOnUncaughtException(io, utils.errors.throwError("Boom", .{}));

@@ -241,3 +241,37 @@ test "an uncaught exception whose callbacks throw exits with EXIT_UNCAUGHT_EXCEP
     try std.testing.expectEqualStrings("exception Uncaught exception. Boom\ncallback 64\nexception Error during uncaught exception shutdown. Callback failed\n", outcome.output);
     try std.testing.expectEqual(node_utils.exit_codes.EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED, outcome.exitCode);
 }
+
+test "exit whose callbacks throw logs the error and exits with EXIT_TERMINATION_CALLBACKS_THREW" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const outcome = try runChild(arena.allocator(), "exit-fail");
+
+    try std.testing.expectEqualStrings("callback 7\nexception Error during exit termination callbacks. Callback failed\n", outcome.output);
+    try std.testing.expectEqual(node_utils.exit_codes.EXIT_TERMINATION_CALLBACKS_THREW, outcome.exitCode);
+}
+
+test "an uncaught exception before the termination handlers are set up exits with 1, as Bun does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const outcome = try runChild(arena.allocator(), "uncaught-uninitialized");
+
+    try std.testing.expectEqualStrings("", outcome.output);
+    try std.testing.expectEqual(@as(u8, 1), outcome.exitCode);
+}
+
+test "registering a second callback keeps the handlers set up once, and both callbacks run on SIGTERM" {
+    if (builtin.os.tag == .windows) {
+        // Windows has no signals: Ctrl+C reaches a console process through its console control handler.
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const outcome = try terminateChild(arena.allocator(), "register-twice", .TERM);
+
+    try std.testing.expectEqualStrings("callback 0\ncallback 0\n", outcome.output);
+    try std.testing.expectEqual(node_utils.exit_codes.EXIT_SUCCESS, outcome.exitCode);
+}

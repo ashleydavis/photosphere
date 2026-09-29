@@ -759,6 +759,9 @@ pub fn readFileHead(allocator: std.mem.Allocator, io: std.Io, filePath: []const 
     var head: std.ArrayList(u8) = .empty;
     reader.interface.appendRemaining(allocator, &head, .limited(byteCount)) catch |err| switch (err) {
         error.StreamTooLong => {},
+        // The reader says only that the read failed; the file reader kept the error that made it fail (EISDIR for a
+        // directory, as fs.read reports it).
+        error.ReadFailed => return reader.err orelse err,
         else => return err,
     };
     return head.items;
