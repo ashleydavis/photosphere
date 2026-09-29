@@ -695,3 +695,21 @@ test "the last error is reported with its own name, as the first line of its sta
 
     try std.testing.expectEqualStrings("Operation failed, no more retries allowed. Last error: FatalError: Operation failed\n", capture.allocating.written());
 }
+
+//
+// Runs retryOnce on an operation that never finishes, for a test that cancels the task running it.
+//
+fn retryNeverResolving(io: std.Io) anyerror![]const u8 {
+    var operation: MockOperation = .{
+        .neverResolves = true,
+    };
+    return retry_module.retryOnce(io, &operation, 3_600_000);
+}
+
+test "retryOnce stops waiting, and cancels the operation and its timer, when the task running it is canceled" {
+    const io = std.testing.io;
+    var future = try io.concurrent(retryNeverResolving, .{io});
+    try io.sleep(.fromMilliseconds(50), .awake);
+
+    try std.testing.expectError(error.Canceled, future.cancel(io));
+}

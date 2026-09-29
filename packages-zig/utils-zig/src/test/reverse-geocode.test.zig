@@ -286,3 +286,48 @@ test "the response body is read as axios reads it: JSON.parse, or the text itsel
 
     try std.testing.expect((try reverse_geocode.axiosResponseData(allocator, "null")) == .null);
 }
+
+test "convert exif coordinates - a fraction array of int32 values is divided like numbers" {
+    const location = try reverse_geocode.convertExifCoordinates(TestDocument{
+        .keys = &.{
+            "GPSLatitude",
+            "GPSLongitude",
+        },
+        .values = &.{
+            .{
+                .array = &.{
+                    .{
+                        .array = &.{
+                            .{
+                                .int32 = 3,
+                            },
+                            .{
+                                .int32 = 2,
+                            },
+                        },
+                    },
+                    .{
+                        .number = 0,
+                    },
+                    .{
+                        .number = 0,
+                    },
+                },
+            },
+            .{
+                .array = &.{
+                    .{
+                        .number = 1,
+                    },
+                    .{
+                        .number = 0,
+                    },
+                    .{
+                        .number = 0,
+                    },
+                },
+            },
+        },
+    });
+    try std.testing.expectEqual(@as(f64, 1.5), location.lat);
+}

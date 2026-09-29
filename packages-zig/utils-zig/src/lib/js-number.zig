@@ -157,9 +157,8 @@ pub fn writeNumber(writer: *std.Io.Writer, value: f64) !void {
             digitCount += 1;
         }
     }
-    while (digitCount > 1 and digitBuffer[digitCount - 1] == '0') {
-        digitCount -= 1;
-    }
+
+    // (The shortest digits Zig renders never end in a zero, so they need no trimming.)
     const digits = digitBuffer[0..digitCount];
     const exponent = std.fmt.parseInt(i32, scientific[exponentIndex + 1 ..], 10) catch unreachable;
 
