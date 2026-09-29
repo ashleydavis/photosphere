@@ -57,14 +57,6 @@ fn checkTool(allocator: std.mem.Allocator, io: std.Io) !void {
 }
 
 //
-// Forgets that the tool availability check has been performed (tests only; TypeScript tests get a
-// fresh module per test file instead).
-//
-pub fn resetToolChecked() void {
-    toolChecked.store(false, .release);
-}
-
-//
 // A parsed entry from `secret-tool search` stderr output.
 //
 pub const ISearchEntry = struct {

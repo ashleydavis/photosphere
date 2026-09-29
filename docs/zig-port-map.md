@@ -2770,7 +2770,7 @@ Types and re-exports only: nothing of it is left in the bundled CLI.
 | `runCommand` | `runCommand` |  |
 | none | `IKeychainPayload` | The TypeScript interface of the same name, as a struct. |
 | none | `ISpawnResult` | The TypeScript interface of the same name, as a struct. |
-| none | `setSpawnFunction` | For the tests: replaces child_process.spawn (the TypeScript tests use jest.spyOn). Test-only scaffolding in the app code. |
+| none | `setSpawnFunction` | For the macOS vault tests only: replaces child_process.spawn (the TypeScript tests use jest.spyOn), because the macOS vault runs /usr/bin/security by absolute path, where no stand-in on PATH can take its place. Test-only scaffolding in the app code, pending the user's approval; a compile error outside a test program. |
 | none | `spawn` | Replaces `child_process.spawn` with piped stdio, collecting what the "data" and "close" events give. |
 | none | `spawnChildProcess` | Replaces `child_process.spawn` with piped stdio, collecting what the "data" and "close" events give. |
 
@@ -2790,7 +2790,6 @@ Types and re-exports only: nothing of it is left in the bundled CLI.
 | `LinuxKeychainVault.list` | `LinuxKeychainVault.list` |  |
 | `LinuxKeychainVault.delete` | `LinuxKeychainVault.delete` |  |
 | `LinuxKeychainVault.checkPrereqs` | `LinuxKeychainVault.checkPrereqs` |  |
-| none | `resetToolChecked` | For the tests: forgets the tool check (a TypeScript test file gets a fresh module). Test-only scaffolding in the app code. |
 | none | `ISearchEntry` | The TypeScript interface of the same name, as a struct. |
 | none | `SearchParseState` | The variables flushEntry closes over in parseSearchOutput. |
 | none | `SearchParseState.flushEntry` | The nested function flushEntry. |
@@ -2887,7 +2886,6 @@ Types and re-exports only: nothing of it is left in the bundled CLI.
 | `runPowerShell` | `runPowerShell` |  |
 | `WindowsKeychainVault` | `WindowsKeychainVault` |  |
 | `WindowsKeychainVault.get` | `WindowsKeychainVault.get` |  |
-| none | `resetToolChecked` | For the tests: forgets the tool check (a TypeScript test file gets a fresh module). Test-only scaffolding in the app code. |
 | none | `escapeSingleQuotes` | Replaces `.replace(/'/g, "''")`. |
 | none | `WindowsKeychainVault.init` | The constructor. |
 | none | `WindowsKeychainVault.vault` | The IVault interface of the vault. |

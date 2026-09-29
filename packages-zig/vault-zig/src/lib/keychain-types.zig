@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const errors = utils.errors;
@@ -65,20 +66,31 @@ pub const ISpawnResult = struct {
 //
 // A function that spawns a child process with piped stdio, writes `stdinData` (if any) to its stdin,
 // closes stdin and waits for the process to exit.
-// This type has no TypeScript counterpart: it stands in for child_process.spawn so that tests can replace
-// it (the TypeScript tests use jest.spyOn on runCommand and child_process.spawn).
+// This type has no TypeScript counterpart: it is the type of the spawn function the macOS vault tests replace
+// through setSpawnFunction (the TypeScript tests use jest.spyOn on runCommand for the same reason).
 //
 pub const SpawnFunction = *const fn (allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, stdinData: ?[]const u8) anyerror!ISpawnResult;
 
 //
-// The function used by spawn (replaced by tests through setSpawnFunction).
+// The function used by spawn in a test program (replaced by the macOS vault tests through setSpawnFunction).
+// Outside a test program spawn always runs spawnChildProcess.
 //
 var spawn_function: SpawnFunction = spawnChildProcess;
 
 //
-// Replaces the function used to spawn child processes (tests only). Pass null to restore the default.
+// TEST-ONLY HOOK, pending the user's approval under CLAUDE.md (which bans test-only scaffolding in app code without
+// it). It exists only because the macOS vault runs its tool by the absolute path /usr/bin/security (as the
+// TypeScript vault does), so the macOS vault tests cannot put a stand-in in its place on PATH the way the Linux and
+// Windows vault tests do, and on a Mac the real tool would touch the real keychain. It is used only by
+// src/test/macos-keychain-vault.test.zig, and it is not reachable from a program that is not a test program: referring
+// to it there is a compile error, and spawn ignores spawn_function there.
+//
+// Replaces the function used to spawn child processes. Pass null to restore the default.
 //
 pub fn setSpawnFunction(function: ?SpawnFunction) void {
+    if (!builtin.is_test) {
+        @compileError("setSpawnFunction is only for the macOS vault tests");
+    }
     spawn_function = function orelse spawnChildProcess;
 }
 
@@ -88,7 +100,10 @@ pub fn setSpawnFunction(function: ?SpawnFunction) void {
 // stdin is then closed.
 //
 pub fn spawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, stdinData: ?[]const u8) anyerror!ISpawnResult {
-    return spawn_function(allocator, io, args, stdinData);
+    if (builtin.is_test) {
+        return spawn_function(allocator, io, args, stdinData);
+    }
+    return spawnChildProcess(allocator, io, args, stdinData);
 }
 
 //
