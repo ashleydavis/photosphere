@@ -737,3 +737,16 @@ test "helpInformation and outputHelp render the help of a command" {
     const helper = Help{};
     try std.testing.expectEqualStrings("bare ", try helper.commandUsage(allocator, bare));
 }
+
+test "arguments trims the names as String.prototype.trim does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const program = Command.init(allocator, "");
+
+    // `names.trim().split(/ +/)`: a no-break space and an em space are whitespace to trim.
+    _ = program.arguments("\u{A0}<source>  [destination]\u{2003}");
+    try std.testing.expectEqual(@as(usize, 2), program.registeredArguments.items.len);
+    try std.testing.expectEqualStrings("source", program.registeredArguments.items[0].name());
+    try std.testing.expectEqualStrings("destination", program.registeredArguments.items[1].name());
+}

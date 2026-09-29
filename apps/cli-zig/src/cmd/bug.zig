@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const tools = @import("tools-zig");
@@ -402,6 +403,29 @@ fn newerFirst(context: void, left: ILogFileEntry, right: ILogFileEntry) bool {
 }
 
 //
+// Orders log files by the bytes of their paths, as strcmp orders the names (they share the directory).
+//
+fn nameOrder(context: void, left: ILogFileEntry, right: ILogFileEntry) bool {
+    _ = context;
+    return std.mem.order(u8, left.path, right.path) == .lt;
+}
+
+//
+// The message of the error `readFileSync(logFilePath, 'utf8')` throws: `EISDIR: illegal operation on a directory,
+// read` for a directory, and `<code>: <description>, open '<path>'` for a file that cannot be opened.
+//
+fn readFileErrorMessage(allocator: std.mem.Allocator, logFilePath: []const u8, err: anyerror) ![]const u8 {
+    const code: []const u8 = switch (err) {
+        error.IsDir => return "EISDIR: illegal operation on a directory, read",
+        error.FileNotFound => "ENOENT: no such file or directory",
+        error.AccessDenied, error.PermissionDenied => "EACCES: permission denied",
+        error.NameTooLong => "ENAMETOOLONG: name too long",
+        else => return utils.errors.errorMessage(err),
+    };
+    return std.fmt.allocPrint(allocator, "{s}, open '{s}'", .{ code, logFilePath });
+}
+
+//
 // The body of getLatestLogFile inside its try block (errors become null).
 //
 fn getLatestLogFileUnsafe(allocator: std.mem.Allocator, io: std.Io) !?[]const u8 {
@@ -420,6 +444,12 @@ fn getLatestLogFileUnsafe(allocator: std.mem.Allocator, io: std.Io) !?[]const u8
             const stat = try std.Io.Dir.cwd().statFile(io, filePath, .{});
             try logFiles.append(allocator, .{ .path = filePath, .mtime = stat.mtime.toMilliseconds() });
         }
+    }
+    // readdirSync lists the names sorted (libuv's scandir sorts them with strcmp), except on Windows, where it lists
+    // them in the file system's order, as the iterator does. The stable sort by time keeps that order among files
+    // modified at the same time.
+    if (builtin.os.tag != .windows) {
+        std.sort.block(ILogFileEntry, logFiles.items, {}, nameOrder);
     }
     std.sort.block(ILogFileEntry, logFiles.items, {}, newerFirst);
 
@@ -448,7 +478,7 @@ pub fn getLogHeader(allocator: std.mem.Allocator, io: std.Io, logFilePath: ?[]co
     }
 
     const logContent = std.Io.Dir.cwd().readFileAlloc(io, logFilePath.?, allocator, .unlimited) catch |err| {
-        return std.fmt.allocPrint(allocator, "Error reading log file: {s}", .{utils.errors.errorMessage(err)});
+        return std.fmt.allocPrint(allocator, "Error reading log file: {s}", .{try readFileErrorMessage(allocator, logFilePath.?, err)});
     };
     const logStartIndex = std.mem.indexOf(u8, logContent, log_start_marker) orelse {
         // If no "--- Log Start ---" marker found, return first 50 lines

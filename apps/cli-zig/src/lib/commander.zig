@@ -28,6 +28,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const node_utils = @import("node-utils-zig");
+const js_string = @import("utils-zig").js_string;
 const standard_streams = @import("utils-zig").standard_streams;
 const storage_zig = @import("storage-zig");
 const tty = @import("tty.zig");
@@ -770,7 +771,7 @@ pub const Command = struct {
     // e.g. `.arguments("<path> <hash> <length>")`.
     //
     pub fn arguments(self: *Command, names: []const u8) *Command {
-        var iterator = std.mem.tokenizeScalar(u8, std.mem.trim(u8, names, " \t\r\n"), ' ');
+        var iterator = std.mem.tokenizeScalar(u8, js_string.trim(names), ' ');
         while (iterator.next()) |detail| {
             _ = self.argument(detail, "");
         }

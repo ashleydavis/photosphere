@@ -66,7 +66,7 @@ fn truncateLongStrings(allocator: std.mem.Allocator, obj: BsonValue, maxLength: 
     if (obj == .string) {
         if (js_value.utf16Length(obj.string) > maxLength) {
             return .{
-                .string = try std.mem.concat(allocator, u8, &.{ try utf16Substring(obj.string, maxLength), "..." }),
+                .string = try std.mem.concat(allocator, u8, &.{ try utf16Substring(allocator, obj.string, maxLength), "..." }),
             };
         }
         return obj;
@@ -110,9 +110,10 @@ fn truncateLongStrings(allocator: std.mem.Allocator, obj: BsonValue, maxLength: 
 
 //
 // Returns the first `length` UTF-16 code units of a string, like `text.substring(0, length)`.
-// (No TypeScript counterpart: JavaScript strings are UTF-16. Cutting a surrogate pair in half is not ported.)
+// (No TypeScript counterpart: JavaScript strings are UTF-16. Cut in the middle of a surrogate pair, the string ends
+// with the lone high surrogate, held as WTF-8, which JSON.stringify writes as a `\u` escape.)
 //
-fn utf16Substring(text: []const u8, length: usize) ![]const u8 {
+pub fn utf16Substring(allocator: std.mem.Allocator, text: []const u8, length: usize) ![]const u8 {
     var units: usize = 0;
     const view = try std.unicode.Utf8View.init(text);
     var iterator = view.iterator();
@@ -122,7 +123,9 @@ fn utf16Substring(text: []const u8, length: usize) ![]const u8 {
         };
         const codePointUnits: usize = if (codePoint >= 0x10000) 2 else 1;
         if (units + codePointUnits > length) {
-            return throwError("Cutting a string in the middle of a surrogate pair is not ported.", .{});
+            const highSurrogate: u16 = @intCast(0xD800 + ((codePoint - 0x10000) >> 10));
+            const start = iterator.i - 4;
+            return std.mem.concat(allocator, u8, &.{ text[0..start], &.{ 0xED, 0xA0 | @as(u8, @intCast((highSurrogate >> 6) & 0x0F)), 0x80 | @as(u8, @intCast(highSurrogate & 0x3F)) } });
         }
         units += codePointUnits;
     }

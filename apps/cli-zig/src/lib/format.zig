@@ -52,8 +52,8 @@ pub fn formatBytes(allocator: std.mem.Allocator, bytes: f64, options: IFormatByt
         formatted = try toLocaleString(allocator, value, decimals);
     }
 
-    const index: usize = @intFromFloat(exponent);
-    const unit = if (index < sizes.len) sizes[index] else "undefined";
+    // `sizes[i]`: undefined when i is NaN (a negative or NaN size), negative (a size under a byte) or past the end.
+    const unit = if (!std.math.isNan(exponent) and exponent >= 0 and exponent < @as(f64, @floatFromInt(sizes.len))) sizes[@intFromFloat(exponent)] else "undefined";
     return std.fmt.allocPrint(allocator, "{s} {s}", .{ formatted, unit });
 }
 
@@ -73,6 +73,10 @@ fn jsMathRound(value: f64) f64 {
 // with commas. This function has no TypeScript counterpart (Intl.NumberFormat stand-in).
 //
 pub fn toLocaleString(allocator: std.mem.Allocator, value: f64, maximumFractionDigits: u32) ![]const u8 {
+    // Intl.NumberFormat writes NaN as "NaN".
+    if (std.math.isNan(value)) {
+        return allocator.dupe(u8, "NaN");
+    }
     var shortest_buffer: [64]u8 = undefined;
     const shortest = try std.fmt.bufPrint(&shortest_buffer, "{d}", .{value});
 

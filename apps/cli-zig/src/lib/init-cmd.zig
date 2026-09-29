@@ -106,9 +106,20 @@ fn jsonString(object: std.json.ObjectMap, name: []const u8) ?[]const u8 {
 // (TypeScript: `{ region: parsed.region, accessKeyId: parsed.accessKeyId, ... }`).
 //
 fn parseS3Credentials(allocator: std.mem.Allocator, json: []const u8) !IS3Credentials {
-    const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, json, .{});
+    // JSON.parse keeps the last value of a repeated key.
+    const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, json, .{
+        .duplicate_field_behavior = .use_last,
+    }) catch |err| {
+        utils.errors.recordError("SyntaxError", "JSON Parse error: {s}", .{@errorName(err)});
+        return error.Thrown;
+    };
     const object = switch (parsed) {
         .object => |object| object,
+        // `parsed.region` of null throws.
+        .null => {
+            utils.errors.recordError("TypeError", "null is not an object (evaluating 'parsed.region')", .{});
+            return error.Thrown;
+        },
         else => return .{ .region = null, .accessKeyId = "", .secretAccessKey = "", .endpoint = null },
     };
     return .{
@@ -936,11 +947,7 @@ pub const ICommandContext = struct {
 // Equivalent of JavaScript `Number(text)` for the numeric options (NaN when the text is not a number).
 //
 pub fn jsNumber(textValue: []const u8) f64 {
-    const trimmed = utils.js_string.trim(textValue);
-    if (trimmed.len == 0) {
-        return 0;
-    }
-    return std.fmt.parseFloat(f64, trimmed) catch std.math.nan(f64);
+    return utils.js_number.stringToNumber(textValue);
 }
 
 //
@@ -961,18 +968,20 @@ const ICleanupContext = struct {
 fn cleanupOnTermination(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void {
     const cleanup: *ICleanupContext = @ptrCast(@alignCast(context.?));
     cleanup.workerPool.shutdown();
-    var buffer: [4096]u8 = undefined;
+    var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
     if (exitCode == 0) {
         // Successful exit - clean up temp directory
         std.Io.Dir.cwd().deleteTree(io, cleanup.sessionTempDir) catch |err| {
-            log.exception(std.fmt.bufPrint(&buffer, "Failed to clean up temporary directory {s}", .{cleanup.sessionTempDir}) catch "Failed to clean up temporary directory", err);
+            log.exception(try std.fmt.allocPrint(allocator, "Failed to clean up temporary directory {s}", .{cleanup.sessionTempDir}), err);
             return;
         };
-        log.verbose(std.fmt.bufPrint(&buffer, "Cleaned up temporary directory \"{s}\"", .{cleanup.sessionTempDir}) catch "Cleaned up temporary directory");
+        log.verbose(try std.fmt.allocPrint(allocator, "Cleaned up temporary directory \"{s}\"", .{cleanup.sessionTempDir}));
     }
     else {
         // Error exit - retain temp directory for inspection
-        log.info(std.fmt.bufPrint(&buffer, "Temporary files retained for inspection: {s}", .{cleanup.sessionTempDir}) catch "Temporary files retained for inspection");
+        log.info(try std.fmt.allocPrint(allocator, "Temporary files retained for inspection: {s}", .{cleanup.sessionTempDir}));
     }
 }
 
@@ -1016,7 +1025,7 @@ pub fn initContext(allocator: std.mem.Allocator, io: std.Io, options: IBaseComma
     const sessionId = if (options.sessionId != null and options.sessionId.?.len > 0) options.sessionId.? else try uuidGenerator.generate(allocator, io);
 
     // Create a session temporary directory for this command execution
-    const sessionTempDir = try std.fs.path.join(allocator, &.{ try getProcessTmpDir(allocator, io), "photosphere", sessionId });
+    const sessionTempDir = try node_utils.path.join(allocator, &.{ try getProcessTmpDir(allocator, io), "photosphere", sessionId });
     try std.Io.Dir.cwd().createDirPath(io, sessionTempDir);
     log.verbose(try std.fmt.allocPrint(allocator, "Created temporary directory for command session: \"{s}\"", .{sessionTempDir}));
 

@@ -84,9 +84,9 @@ pub const ProgressState = struct {
     //
     fn onProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, summary: *const IAddSummary) void {
         const self: *ProgressState = @ptrCast(@alignCast(context.?));
-        var buffer: [16 * 1024]u8 = undefined;
-        var bufferAllocator = std.heap.FixedBufferAllocator.init(&buffer);
-        const message = self.buildProgressMessage(bufferAllocator.allocator(), currentlyScanning, summary) catch |err| {
+        var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+        defer arena.deinit();
+        const message = self.buildProgressMessage(arena.allocator(), currentlyScanning, summary) catch |err| {
             log.exception("Failed to write the progress message", err);
             return;
         };
@@ -214,6 +214,8 @@ pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCon
         // a system prompt in front of it.
         log.info(try pc.dim(allocator, "Looking for source files the database already holds..."));
         _ = try cleanUpImportedSources(allocator, io, uuidGenerator, storageDescriptor, try watchSettings(allocator, io, paths), sessionId);
+        // TODO: this mirrors a bug in the TypeScript (add.ts addCommand) until both are fixed: the number of
+        // source files deleted is not written after "Source files deleted: ".
         log.info("Source files deleted: ");
     }
 

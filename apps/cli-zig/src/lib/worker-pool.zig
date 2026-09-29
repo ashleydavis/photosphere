@@ -184,25 +184,18 @@ fn Registration(comptime CallbackT: type) type {
 }
 
 //
-// Converts a JavaScript number to its string form for integral values (`${number}`).
+// Converts a JavaScript number to its string form (`${number}`).
 //
 fn formatNumber(allocator: std.mem.Allocator, value: f64) ![]const u8 {
-    if (value == @floor(value) and @abs(value) < 1e21) {
-        return std.fmt.allocPrint(allocator, "{d}", .{@as(i128, @intFromFloat(value))});
-    }
-    return std.fmt.allocPrint(allocator, "{d}", .{value});
+    var output: std.Io.Writer.Allocating = .init(allocator);
+    try utils.js_number.writeNumber(&output.writer, value);
+    return output.written();
 }
 
 //
-// The delay setTimeout uses for a requested delay: values that are not between 1 and 2147483647
-// (including NaN) become 1.
+// The delay setTimeout uses for a requested delay (utils-zig's sleep.zig).
 //
-fn setTimeoutDelay(delay: f64) i64 {
-    if (!(delay >= 1 and delay <= 2147483647)) {
-        return 1;
-    }
-    return @intFromFloat(@floor(delay));
-}
+const setTimeoutDelay = utils.sleep.setTimeoutDelay;
 
 //
 // Manages workers.
@@ -1033,7 +1026,7 @@ pub const WorkerPoolBun = struct {
         selectedWorker.taskStartTime = std.Io.Clock.real.now(self.io).toMilliseconds();
 
         // Set up timeout for this task
-        poolTask.deadline = self.nowMs() + setTimeoutDelay(self.taskTimeout);
+        poolTask.deadline = self.nowMs() + @as(i64, @intCast(setTimeoutDelay(self.taskTimeout)));
         self.monitorCondition.broadcast(self.io);
 
         // Send task to worker

@@ -47,8 +47,9 @@ pub const IRepairCommandOptions = struct {
 //
 fn onProgress(context: ?*anyopaque, progress: ?[]const u8) void {
     _ = context;
-    var buffer: [4096]u8 = undefined;
-    const message = std.fmt.bufPrint(&buffer, "\u{1F527} {s}", .{progress orelse "undefined"}) catch return;
+    var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+    defer arena.deinit();
+    const message = std.fmt.allocPrint(arena.allocator(), "\u{1F527} {s}", .{progress orelse "undefined"}) catch @panic("out of memory writing the progress line");
     writeProgress(message);
 }
 
@@ -123,6 +124,9 @@ pub fn repairCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
             exit(io, 1);
         }
     }
+    // TODO: this mirrors a bug in the TypeScript (repair.ts repairCommand) until both are fixed: the source database is
+    // loaded from options.source, not sourcePath, so when the source is the origin from the config, the database in
+    // the current directory (or the one picked from the prompt) is loaded as the source instead.
     var sourceOptions: IBaseCommandOptions = .{
         .db = options.source,
         .key = options.sourceKey,

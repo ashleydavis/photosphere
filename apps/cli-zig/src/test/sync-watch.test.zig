@@ -134,3 +134,31 @@ test "runSyncWatch does not sync at all when it is stopped before it starts" {
 
     try std.testing.expectEqual(@as(u32, 0), counter.syncs);
 }
+
+test "runSyncWatch writes the interval as a template string writes a number and waits as setTimeout does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var capture = Capture{ .stdout = .init(arena.allocator()), .stderr = .init(arena.allocator()) };
+    utils.console.setCapture(&capture.stdout.writer, &capture.stderr.writer);
+    defer utils.console.setCapture(null, null);
+
+    // setTimeout waits 1 ms for a delay under 1 ms or past 2147483647 ms.
+    var tiny: ISyncCounter = .{ .stopAfter = 2 };
+    try runSyncWatch(arena.allocator(), std.testing.io, .{
+        .intervalSeconds = 1e-7,
+        .context = &tiny,
+        .syncOnce = countSync,
+        .isStopped = stoppedAfterEnough,
+    });
+    var huge: ISyncCounter = .{ .stopAfter = 2 };
+    try runSyncWatch(arena.allocator(), std.testing.io, .{
+        .intervalSeconds = 1e21,
+        .context = &huge,
+        .syncOnce = countSync,
+        .isStopped = stoppedAfterEnough,
+    });
+
+    try std.testing.expectEqual(@as(u32, 2), huge.syncs);
+    try std.testing.expect(std.mem.indexOf(u8, capture.stdout.written(), "Syncing every 1e-7 second(s). Press Ctrl-C to stop.\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, capture.stdout.written(), "Syncing every 1e+21 second(s). Press Ctrl-C to stop.\n") != null);
+}

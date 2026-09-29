@@ -152,8 +152,9 @@ pub const WorkerLogBun = struct {
     // Logs an event.
     //
     pub fn event(self: *WorkerLogBun, message: []const u8) void {
-        var buffer: [16 * 1024]u8 = undefined;
-        const text = std.fmt.bufPrint(&buffer, "[EVENT] {s}", .{message}) catch message;
+        var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+        defer arena.deinit();
+        const text = std.fmt.allocPrint(arena.allocator(), "[EVENT] {s}", .{message}) catch @panic("out of memory writing an event");
         self.writePrefixed(text, writeOutputLine);
     }
 

@@ -160,3 +160,17 @@ test "toLocaleString rounds half away from zero and groups thousands" {
     try std.testing.expectEqualStrings("10", try cli.format.toLocaleString(allocator, 9.999, 2));
     try std.testing.expectEqualStrings("0", try cli.format.toLocaleString(allocator, 0, 2));
 }
+
+test "formatBytes of a size that is negative, NaN, infinite or under a byte gives what the TypeScript gives" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Math.log of a negative number or NaN is NaN, and `sizes[NaN]` is undefined.
+    try std.testing.expectEqualStrings("NaN undefined", try format(allocator, -5));
+    try std.testing.expectEqualStrings("NaN undefined", try format(allocator, std.math.nan(f64)));
+    try std.testing.expectEqualStrings("NaN undefined", try format(allocator, std.math.inf(f64)));
+
+    // Under a byte the unit index is -1: the value is scaled up by 1024 and `sizes[-1]` is undefined.
+    try std.testing.expectEqualStrings("512 undefined", try format(allocator, 0.5));
+}

@@ -15,7 +15,7 @@ const log = &utils.log.log;
 // Joins path segments (`path.join`).
 //
 fn join(allocator: std.mem.Allocator, left: []const u8, right: []const u8) ![]const u8 {
-    return std.fs.path.join(allocator, &.{ left, right });
+    return node_utils.path.join(allocator, &.{ left, right });
 }
 
 //
@@ -27,10 +27,34 @@ fn resolve(allocator: std.mem.Allocator, io: std.Io, pathToResolve: []const u8) 
 }
 
 //
-// Creates a directory and its parents (`fs.mkdir(path, { recursive: true })`).
+// Creates a directory and its parents (`fs.mkdir(path, { recursive: true })`). A failure throws the error Node
+// throws, whose message is `<code>: <description>, mkdir '<path>'`.
 //
 fn mkdirRecursive(io: std.Io, dirPath: []const u8) !void {
-    try std.Io.Dir.cwd().createDirPath(io, dirPath);
+    std.Io.Dir.cwd().createDirPath(io, dirPath) catch |err| {
+        const code: []const u8 = switch (err) {
+            // Zig reports a path that exists as a file as NotDir, where Node reports EEXIST for the path itself.
+            error.NotDir => if (isExistingFile(io, dirPath)) "EEXIST: file already exists" else "ENOTDIR: not a directory",
+            error.PathAlreadyExists => "EEXIST: file already exists",
+            error.FileNotFound => "ENOENT: no such file or directory",
+            error.AccessDenied, error.PermissionDenied => "EACCES: permission denied",
+            error.NameTooLong => "ENAMETOOLONG: name too long",
+            error.NoSpaceLeft => "ENOSPC: no space left on device",
+            error.ReadOnlyFileSystem => "EROFS: read-only file system",
+            else => return err,
+        };
+        return utils.errors.throwError("{s}, mkdir '{s}'", .{ code, dirPath });
+    };
+}
+
+//
+// True when the path is there and is not a directory.
+//
+fn isExistingFile(io: std.Io, filePath: []const u8) bool {
+    const stat = std.Io.Dir.cwd().statFile(io, filePath, .{}) catch {
+        return false;
+    };
+    return stat.kind != .directory;
 }
 
 //

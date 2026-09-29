@@ -138,103 +138,10 @@ fn writeUuid(writer: *std.Io.Writer, bytes: []const u8) std.Io.Writer.Error!void
 }
 
 //
-// Converts a string to a number like JavaScript's StringToNumber (`Number(string)`).
+// Converts a string to a number like JavaScript's StringToNumber (`Number(string)`). (Moved to utils-zig's js-number.zig so
+// the packages below this one, tools-zig among them, can use it.)
 //
-pub fn stringToNumber(textValue: []const u8) f64 {
-    var start: usize = 0;
-    var end: usize = textValue.len;
-    while (start < end) {
-        const width = js_string.whitespaceWidthAt(textValue, start);
-        if (width == 0) {
-            break;
-        }
-        start += width;
-    }
-    while (end > start) {
-        var trimmed = false;
-        var back: usize = 1;
-        while (back <= 3 and back <= end - start) : (back += 1) {
-            if (js_string.whitespaceWidthAt(textValue, end - back) == back) {
-                end -= back;
-                trimmed = true;
-                break;
-            }
-        }
-        if (!trimmed) {
-            break;
-        }
-    }
-    const text = textValue[start..end];
-    if (text.len == 0) {
-        return 0;
-    }
-    if (text.len > 2 and text[0] == '0') {
-        const radix: u8 = switch (text[1]) {
-            'x', 'X' => 16,
-            'o', 'O' => 8,
-            'b', 'B' => 2,
-            else => 0,
-        };
-        if (radix != 0) {
-            var result: f64 = 0;
-            for (text[2..]) |character| {
-                const digit = std.fmt.charToDigit(character, radix) catch {
-                    return std.math.nan(f64);
-                };
-                result = result * @as(f64, @floatFromInt(radix)) + @as(f64, @floatFromInt(digit));
-            }
-            return result;
-        }
-    }
-    var body = text;
-    var negative = false;
-    if (body[0] == '+' or body[0] == '-') {
-        negative = body[0] == '-';
-        body = body[1..];
-    }
-    if (std.mem.eql(u8, body, "Infinity")) {
-        return if (negative) -std.math.inf(f64) else std.math.inf(f64);
-    }
-    // StrUnsignedDecimalLiteral: digits [. digits] [e[+-]digits], or . digits [exponent].
-    var index: usize = 0;
-    var integerDigits: usize = 0;
-    while (index < body.len and std.ascii.isDigit(body[index])) {
-        index += 1;
-        integerDigits += 1;
-    }
-    var fractionDigits: usize = 0;
-    if (index < body.len and body[index] == '.') {
-        index += 1;
-        while (index < body.len and std.ascii.isDigit(body[index])) {
-            index += 1;
-            fractionDigits += 1;
-        }
-    }
-    if (integerDigits == 0 and fractionDigits == 0) {
-        return std.math.nan(f64);
-    }
-    if (index < body.len and (body[index] == 'e' or body[index] == 'E')) {
-        index += 1;
-        if (index < body.len and (body[index] == '+' or body[index] == '-')) {
-            index += 1;
-        }
-        var exponentDigits: usize = 0;
-        while (index < body.len and std.ascii.isDigit(body[index])) {
-            index += 1;
-            exponentDigits += 1;
-        }
-        if (exponentDigits == 0) {
-            return std.math.nan(f64);
-        }
-    }
-    if (index != body.len) {
-        return std.math.nan(f64);
-    }
-    const magnitude = std.fmt.parseFloat(f64, body) catch {
-        return std.math.nan(f64);
-    };
-    return if (negative) -magnitude else magnitude;
-}
+pub const stringToNumber = @import("utils-zig").js_number.stringToNumber;
 
 //
 // Converts a value like `ToPrimitive(value, hint number)`: dates give their time value (NaN when invalid), wrapper
@@ -405,7 +312,16 @@ pub fn strictEquals(left: BsonValue, right: BsonValue) bool {
 //
 pub fn writeJsonString(writer: *std.Io.Writer, text: []const u8) std.Io.Writer.Error!void {
     try writer.writeAll("\"");
-    for (text) |character| {
+    var index: usize = 0;
+    while (index < text.len) : (index += 1) {
+        const character = text[index];
+        // A lone surrogate, held as WTF-8 (ED A0..BF xx), is written as \uXXXX, as well-formed JSON.stringify does.
+        if (character == 0xED and index + 2 < text.len and text[index + 1] >= 0xA0 and text[index + 1] <= 0xBF) {
+            const unit: u16 = (@as(u16, 0xD) << 12) | (@as(u16, text[index + 1] & 0x3F) << 6) | @as(u16, text[index + 2] & 0x3F);
+            try writer.print("\\u{x:0>4}", .{unit});
+            index += 2;
+            continue;
+        }
         switch (character) {
             '"' => try writer.writeAll("\\\""),
             '\\' => try writer.writeAll("\\\\"),

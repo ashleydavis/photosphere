@@ -6,7 +6,8 @@ function order as the TypeScript ones.
 
 **Progress of the side by side comparison:** storage, bdb, api, lan-share-core, node-api, node-utils, utils,
 encryption, vault, fuzzy-match, config, lan-share-network, serialization, merkle-tree, task-queue and tools done.
-apps/cli: its trims compared and fixed; its tables and the rest of the comparison are still to do.
+apps/cli: its trims and most of its lib files and commands compared and fixed; its tables, the rest of its
+lib files and commands, its MCP tools and its ports of third party packages are still to do.
 
 ## Which files are listed
 
@@ -3812,3 +3813,57 @@ Each was found by reading the two side by side, pinned by a unit test that faile
 50. The `\S` of `/ffprobe version (\S+)/` and `/ffmpeg version (\S+)/` stopped only at ASCII whitespace, where it
     stops at every JavaScript whitespace character. Test: `matchAfter ends \S at a Unicode space as the regular
     expression does`.
+51. The directory picker reported a failed `mkdir` with the Zig error's name, where Node's message is `<code>:
+    <description>, mkdir '<path>'` (EEXIST for a path that is a file, ENOTDIR under one). Test: `pickDirectory
+    reports a failed mkdir with the message Node gives`.
+52. The file logger joined its paths without `path.join`'s normalization, cut an exception's message and error chain
+    at 16 KB, and crashed (`@intFromFloat` of a negative number) writing a negative duration, which `toFixed(2)`
+    writes with a minus sign. Tests: `the log directory is joined as path.join joins it, and a long exception is
+    logged whole` and `toFixed2 writes a negative duration as toFixed(2) does`. The session temporary directory of
+    initContext was joined the same way. Test: `initContext joins the session temporary directory as path.join
+    does`.
+53. The console log cut the output of a tool, an event and an error chain at 16 KB (`psi --tools` prints ffprobe's
+    whole JSON). Test: `Log writes a long tool output, event and error chain whole, as the template strings do`.
+54. `formatBytes` crashed (`@intFromFloat`) for a size that was negative, NaN, infinite or under a byte, where the
+    TypeScript writes `NaN undefined` or `512 undefined`, and wrote NaN as `nan`. Test: `formatBytes of a size that is
+    negative, NaN, infinite or under a byte gives what the TypeScript gives`.
+55. `psi secrets view` read S3 credentials with Zig's JSON parser: a repeated key was an error (so the raw value was
+    shown), array index keys were not listed first, numbers were written with Zig's formatting, a value of `null`
+    showed only `Value:` where `Object.entries(null)` throws after it and the catch shows the raw value, and a
+    string's entries were its bytes where they are its UTF-16 code units. Test: `secrets view shows S3 credentials as
+    JSON.parse and Object.entries read them`.
+56. `psi origin` wrote an origin that was a number with Zig's formatting, where `log.info` gets `String(value)`.
+    Test: the number cases of `origin and set-origin read and write the origin like the TypeScript CLI`.
+57. The `default:s3` secret and the S3 secret of a database entry were refused when a key was repeated, where
+    JSON.parse keeps the last, and a value of `null` gave empty credentials where `parsed.region` throws. The numeric
+    options (`--workers`, `--timeout`, `--max`, the watch interval) were read with Zig's float parsing, where
+    `Number()` takes `0b` and `0o`, refuses a sign before `0x`, `inf`, hex floats and `_`. Tests: `the default:s3 secret
+    is read as JSON.parse reads it: the last of a repeated key, and null throws` and `jsNumber converts option text
+    like Number()`.
+58. The GitHub release response was refused when a key was repeated, so no update was reported. Test: `tagName reads
+    the release response as response.json() and the tag_name checks do`.
+59. `psi upgrade`'s listing loops went on past an empty continuation token, which ends TypeScript's `while (next)`
+    (not covered by a unit test: no storage returns an empty token), and commander's `.arguments()` trimmed ASCII
+    whitespace only. Test: `arguments trims the names as String.prototype.trim does`.
+60. The progress lines of `psi add`, `check`, `compare`, `repair`, `replicate` and `verify` were built in a fixed
+    buffer and dropped when longer (a long path being scanned), a worker's event line lost its `[EVENT]` prefix past
+    16 KB, and the session cleanup messages fell back to shorter text past 4 KB. They are built whole now. Test: `the
+    worker log writes a long event whole, as the template string does`; the progress lines are written only to a
+    terminal, so they are not covered by unit tests.
+61. `psi sync --watch` wrote its interval with Zig's formatting and crashed (`@intFromFloat`) on an interval past
+    what a u64 of milliseconds holds, where setTimeout waits 1 ms for a delay under 1 ms or past 2147483647 ms.
+    `setTimeoutDelay` is in utils-zig's sleep.zig now, shared with the worker pool. Tests: `runSyncWatch writes the
+    interval as a template string writes a number and waits as setTimeout does` and `setTimeoutDelay gives the delay
+    setTimeout waits: 1 for a delay under 1, past 2147483647 or NaN`.
+62. The worker pool wrote a timeout that was not a whole number with Zig's formatting in `timed out after <n>ms`.
+    Test: `the timeout message writes the timeout as a template string writes a number`.
+63. `psi debug merkle-tree --records` refused a long string whose 100th UTF-16 code unit ends in the middle of a
+    surrogate pair, where `substring` keeps the lone high surrogate and JSON.stringify writes it as `\ud83d`. Tests:
+    `utf16Substring cuts a surrogate pair as substring does, leaving the lone high surrogate` and `writeJsonString
+    writes a lone surrogate held as WTF-8 as a \u escape, as JSON.stringify does`.
+64. `psi bug` picked the log file first in the directory's own order among log files modified in the same
+    millisecond, where `readdirSync` lists names sorted (except on Windows) and the stable sort keeps that order.
+    Test: `getLatestLogFile breaks a tie in modification time by the order readdirSync lists the names in`.
+65. `psi bug` wrote a log file it could not read as the Zig error name (`Error reading log file: IsDir`), where
+    `readFileSync` throws `EISDIR: illegal operation on a directory, read` (and `<code>: <description>, open
+    '<path>'` for a file it cannot open). Test: `getLogHeader reports a directory as readFileSync does`.

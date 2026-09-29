@@ -50,6 +50,27 @@ test "Log writes each kind of message to the right stream" {
     try std.testing.expect(details.logFilePath == null);
 }
 
+test "Log writes a long tool output, event and error chain whole, as the template strings do" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var capture = Capture{ .stdout = .init(allocator), .stderr = .init(allocator) };
+    utils.console.setCapture(&capture.stdout.writer, &capture.stderr.writer);
+    defer utils.console.setCapture(null, null);
+
+    const longText = try allocator.alloc(u8, 20000);
+    @memset(longText, 'x');
+    var loud = Log.init(.{ .tools = true });
+    loud.tool("ffprobe", .{ .stdout = longText, .stderr = null });
+    loud.event(longText);
+    try std.testing.expectEqualStrings(try std.mem.concat(allocator, u8, &.{ "== ffprobe stdout ==\n", longText, "\n[EVENT] ", longText, "\n" }), capture.stdout.written());
+
+    // An error whose message and cause together run past 16 KB.
+    utils.errors.recordError("Error", "{s}", .{longText[0..12000]});
+    loud.exception("Something failed", utils.errors.throwErrorWithCause("{s}", .{longText[0..12000]}));
+    try std.testing.expectEqualStrings(try std.mem.concat(allocator, u8, &.{ "Something failed\nError: ", longText[0..12000], "\nCaused by:\nError: ", longText[0..12000], "\n" }), capture.stderr.written());
+}
+
 test "configureLog installs the file logger unless file logging is disabled" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

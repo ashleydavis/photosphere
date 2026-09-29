@@ -8,3 +8,11 @@ test "sleep waits for at least the requested time" {
     const elapsed = start.durationTo(std.Io.Clock.awake.now(io));
     try std.testing.expect(elapsed.toMilliseconds() >= 20);
 }
+
+test "setTimeoutDelay gives the delay setTimeout waits: 1 for a delay under 1, past 2147483647 or NaN" {
+    try std.testing.expectEqual(@as(u64, 250), utils.sleep.setTimeoutDelay(250.9));
+    try std.testing.expectEqual(@as(u64, 1), utils.sleep.setTimeoutDelay(0.0001));
+    try std.testing.expectEqual(@as(u64, 1), utils.sleep.setTimeoutDelay(2147483648));
+    try std.testing.expectEqual(@as(u64, 1), utils.sleep.setTimeoutDelay(std.math.nan(f64)));
+    try std.testing.expectEqual(@as(u64, 2147483647), utils.sleep.setTimeoutDelay(2147483647));
+}
