@@ -81,7 +81,7 @@ test_debug() {
     ts_verify "$db_dir"
     invoke_command "Add the same PNG to the replica" "$(get_zig_cli_command) add --db \"$replica_dir\" \"$TEST_FILES_DIR/test.png\" --yes"
     ts_verify "$replica_dir"
-    # No TypeScript verify after this sync, on either side. Both databases now hold the same PNG under
+    # TODO: restore the TypeScript verify here once the sync same-content bug is fixed in both ports. No TypeScript verify after this sync, on either side. Both databases now hold the same PNG under
     # two asset ids, and with the fixed timestamps of NODE_ENV=testing the two records hash the same.
     # Sync matches records by hash, so neither side takes the other's record and each is left with an
     # asset file no record names. The TypeScript CLI leaves exactly the same state (its verify fails

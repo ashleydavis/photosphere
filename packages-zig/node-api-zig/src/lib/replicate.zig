@@ -622,6 +622,7 @@ pub fn iterateShardDifferences(
     }
 
     // Find records in tree1 that differ from tree2
+    // TODO: fix together with the TypeScript. Records with the same content hash the same (the id is not hashed), so this diff can miss one of them. Mirrors replicate.ts on purpose; see syncDatabases in sync.zig.
     const differingNodes = try findDifferingNodes(allocator, tree1.?.merkle.?, tree2.?.merkle.?);
     return .{ .collectionName = collectionName, .recordIds = iterateLeaves(allocator, differingNodes) };
 }
@@ -692,6 +693,7 @@ pub fn iterateCollectionDifferences(
     }
 
     // Find shards in tree1 that differ from tree2
+    // TODO: fix together with the TypeScript. Records with the same content hash the same (the id is not hashed), so this diff can miss one of them. Mirrors replicate.ts on purpose; see syncDatabases in sync.zig.
     const differingShards = try findDifferingNodes(allocator, tree1.?.merkle.?, tree2.?.merkle.?);
     iterator.shardIds = iterateLeaves(allocator, differingShards);
     return iterator;
@@ -777,6 +779,7 @@ pub fn iterateDatabaseDifferences(allocator: std.mem.Allocator, io: std.Io, tree
     }
 
     // Find collections in tree1 that differ from tree2
+    // TODO: fix together with the TypeScript. Records with the same content hash the same (the id is not hashed), so this diff can miss one of them. Mirrors replicate.ts on purpose; see syncDatabases in sync.zig.
     const differingCollections = try findDifferingNodes(allocator, tree1.?.merkle.?, tree2.?.merkle.?);
     iterator.collectionNames = iterateLeaves(allocator, differingCollections);
     return iterator;

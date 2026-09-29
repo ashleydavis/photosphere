@@ -44,7 +44,9 @@ One command at a time, never in parallel. The time goes on builds, so build less
 ## Rules
 
 - The Zig code is a faithful port of the TypeScript: same file and function names, same order, readable side
-  by side. No additions, no embellishments, no overreach. TypeScript quirks are reproduced.
+  by side. No additions, no embellishments, no overreach. TypeScript quirks are reproduced. A TypeScript bug is
+  reproduced too, with a `// TODO:` at each place in the Zig code saying it mirrors the TypeScript until both are
+  fixed.
 - Port the minimum code needed for the command being ported, nothing for later commands.
 - Banned from changing TypeScript code and TypeScript tests.
 - DO NOT USE BUN. No Zig code, Zig test or Zig build step runs bun or any TypeScript. The Zig CLI never hands a

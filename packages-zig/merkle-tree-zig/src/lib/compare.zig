@@ -61,6 +61,7 @@ pub fn compareTrees(allocator: std.mem.Allocator, treeA: *const IMerkleTree, tre
     var onlyInB: std.ArrayList([]const u8) = .empty;
     var modified: std.ArrayList([]const u8) = .empty;
 
+    // TODO: fix together with the TypeScript. Equal roots are treated as identical trees even when the leaf names differ, because a leaf hash does not cover its name. Mirrors compare.ts on purpose.
     if (treeA.merkle != null and treeB.merkle != null and std.mem.eql(u8, treeA.merkle.?.hash, treeB.merkle.?.hash)) {
         return .{
             .onlyInA = onlyInA.items,
