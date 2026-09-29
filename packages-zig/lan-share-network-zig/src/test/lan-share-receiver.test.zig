@@ -222,3 +222,82 @@ test "a payload with a repeated key is read with its last value, as JSON.parse r
     const result = try receiver.receive();
     try std.testing.expectEqualStrings("second", result.?.object.get("message").?.string);
 }
+
+test "answers a body that is not JSON with 400 and a path it does not serve with 404, and keeps waiting" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const code = try helpers.pairingCode();
+    var receiver = LanShareReceiver.init(std.testing.io, 10000);
+    defer receiver.deinit();
+    try receiver.start(code);
+
+    const invalid = try requestReceiver(allocator, &receiver, "POST", "/share-payload", "{not json");
+    try std.testing.expectEqual(@as(u16, 400), invalid.statusCode);
+    try std.testing.expectEqualStrings("{\"error\":\"Invalid JSON\"}", invalid.body);
+    const missing = try requestReceiver(allocator, &receiver, "GET", "/elsewhere", null);
+    try std.testing.expectEqual(@as(u16, 404), missing.statusCode);
+    try std.testing.expectEqualStrings("{\"error\":\"Not found\"}", missing.body);
+
+    // The receiver still takes the payload that follows.
+    const codeHash = sha256Hex(code);
+    const body = try std.fmt.allocPrint(allocator, "{{\"codeHash\":\"{s}\",\"payload\":\"after\"}}", .{&codeHash});
+    try std.testing.expectEqual(@as(u16, 200), (try requestReceiver(allocator, &receiver, "POST", "/share-payload", body)).statusCode);
+    try std.testing.expectEqualStrings("after", (try receiver.receive()).?.string);
+}
+
+//
+// Posts a payload written as JSON text with the right code hash, and returns what the receiver received.
+//
+fn receivePayloadText(allocator: std.mem.Allocator, payloadText: []const u8) !?std.json.Value {
+    const code = try helpers.pairingCode();
+    var receiver = LanShareReceiver.init(std.testing.io, 10000);
+    defer receiver.deinit();
+    try receiver.start(code);
+    const codeHash = sha256Hex(code);
+    const body = try std.fmt.allocPrint(allocator, "{{\"codeHash\":\"{s}\",\"payload\":{s}}}", .{ &codeHash, payloadText });
+    try std.testing.expectEqual(@as(u16, 200), (try requestReceiver(allocator, &receiver, "POST", "/share-payload", body)).statusCode);
+    return receiver.receive();
+}
+
+test "a payload that is zero written as a fraction is falsy, and a number too long for an integer is not" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expect((try receivePayloadText(allocator, "0.0")) == null);
+    try std.testing.expectEqual(@as(f64, 1.5), (try receivePayloadText(allocator, "1.5")).?.float);
+    try std.testing.expectEqualStrings("123456789012345678901234567890", (try receivePayloadText(allocator, "123456789012345678901234567890")).?.number_string);
+}
+
+test "a connection kept alive is served request after request, those sent together too, until it sits idle" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const code = try helpers.pairingCode();
+    var receiver = LanShareReceiver.init(std.testing.io, 30000);
+    defer receiver.deinit();
+    try receiver.start(code);
+
+    const connection = try https.Connection.connect(allocator, .{ .address = .{ 127, 0, 0, 1 }, .port = receiver.httpsPort });
+    defer connection.close();
+
+    // Two requests in one write: the second is already read when the first has been answered.
+    try connection.writer.writeAll("GET /pairing-code-hash HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\nGET /pairing-code-hash HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+    try connection.writer.flush();
+    const expected = sha256Hex(code);
+    var received: std.ArrayList(u8) = .empty;
+    while (std.mem.count(u8, received.items, &expected) < 2) {
+        try connection.reader.fillMore();
+        try received.appendSlice(allocator, connection.reader.buffered());
+        connection.reader.tossBuffered();
+    }
+    try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, received.items, "HTTP/1.1 200 OK"));
+
+    // Left idle, the connection is closed by the receiver after five seconds.
+    const idleSince = std.Io.Clock.awake.now(std.testing.io).toMilliseconds();
+    try std.testing.expectError(error.EndOfStream, connection.reader.fillMore());
+    try std.testing.expect(std.Io.Clock.awake.now(std.testing.io).toMilliseconds() - idleSince >= 4000);
+
+    receiver.cancel();
+    _ = try receiver.receive();
+}
