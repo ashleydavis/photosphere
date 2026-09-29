@@ -45,9 +45,16 @@ pub fn build(b: *std.Build) !void {
         module.addImport(dependency_name, dependency.module(dependency_name));
     }
 
+    // The directory to write a kcov line-coverage report of the unit tests to (see docs/zig-test-coverage.md).
+    // The tests, and psi and the test driver they run, are then compiled with the LLVM backend, whose debug info kcov
+    // reads, and run under kcov.
+    const coverage_option = b.option([]const u8, "coverage", "Write a kcov line-coverage report of the unit tests to this directory");
+    const coverage_dir: ?[]const u8 = if (coverage_option) |directory| b.pathFromRoot(directory) else null;
+
     const executable = b.addExecutable(.{
         .name = "psi",
         .root_module = module,
+        .use_llvm = if (coverage_dir != null) true else null,
     });
     b.installArtifact(executable);
 
@@ -91,9 +98,6 @@ pub fn build(b: *std.Build) !void {
         const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = optimize });
         test_module.addImport(dependency_name, dependency.module(dependency_name));
     }
-    // The directory to write a kcov line-coverage report of the unit tests to (see docs/zig-test-coverage.md).
-    // The tests are then compiled with the LLVM backend, whose debug info kcov reads, and run under kcov.
-    const coverage_dir = b.option([]const u8, "coverage", "Write a kcov line-coverage report of the unit tests to this directory");
     const unit_test = b.addTest(.{ .root_module = test_module, .use_llvm = if (coverage_dir != null) true else null });
     const run_test = if (coverage_dir) |directory| addCoverageRun(b, unit_test, directory) else b.addRunArtifact(unit_test);
     run_test.setCwd(b.path("."));
@@ -114,10 +118,21 @@ pub fn build(b: *std.Build) !void {
     const test_driver = b.addExecutable(.{
         .name = "test-driver",
         .root_module = test_driver_module,
+        .use_llvm = if (coverage_dir != null) true else null,
     });
     const install_test_driver = b.addInstallArtifact(test_driver, .{ .dest_dir = .{ .override = .{ .custom = "test-bin" } } });
     run_test.step.dependOn(&install_test_driver.step);
     test_step.dependOn(&run_test.step);
+    if (coverage_dir) |directory| {
+        // kcov cannot trace the programs the tests start while it is tracing the tests, so for a coverage report the
+        // tests run a second time, untraced, once psi and the test driver have been replaced by wrappers that run them
+        // under kcov.
+        const run_programs = b.addRunArtifact(unit_test);
+        run_programs.setCwd(b.path("."));
+        run_programs.step.dependOn(installCoverageWrapper(b, executable, .bin, directory, target, &run_test.step));
+        run_programs.step.dependOn(installCoverageWrapper(b, test_driver, .{ .custom = "test-bin" }, directory, target, &run_test.step));
+        test_step.dependOn(&run_programs.step);
+    }
 
     // The tests of this CLI and of every Zig package, in this one build. The packages' dependencies are
     // then built once and shared, so the AWS SDK for C compiles once instead of once in each package that
@@ -149,4 +164,35 @@ fn addCoverageRun(b: *std.Build, unit_test: *std.Build.Step.Compile, coverage_di
     });
     run.addArtifactArg(unit_test);
     return run;
+}
+
+//
+// For the second pass of a coverage report: once the first pass has run, installs the program to zig-out/coverage-bin
+// and a wrapper (src/test/drivers/coverage-wrapper.zig) in its place in the directory, which runs it under kcov, so
+// the lines the tests reach through the program are counted with the rest.
+//
+fn installCoverageWrapper(b: *std.Build, program: *std.Build.Step.Compile, dest_dir: std.Build.InstallDir, coverage_dir: []const u8, target: std.Build.ResolvedTarget, first_pass: *std.Build.Step) *std.Build.Step {
+    const program_dir: std.Build.InstallDir = .{ .custom = "coverage-bin" };
+    const install_program = b.addInstallArtifact(program, .{ .dest_dir = .{ .override = program_dir } });
+    const options = b.addOptions();
+    // The tests run programs with environments of their own, which may not have a PATH to find kcov on.
+    options.addOption([]const u8, "kcov_path", b.findProgram(&.{"kcov"}, &.{}) catch @panic("kcov is not installed"));
+    options.addOption([]const u8, "include_path", b.fmt("--include-path={s}", .{b.pathFromRoot("src")}));
+    options.addOption([]const u8, "exclude_path", b.fmt("--exclude-path={s}", .{b.pathFromRoot("src/test")}));
+    options.addOption([]const u8, "coverage_dir", coverage_dir);
+    options.addOption([]const u8, "program_path", b.getInstallPath(program_dir, program.out_filename));
+    const wrapper_module = b.createModule(.{
+        .root_source_file = b.path("src/test/drivers/coverage-wrapper.zig"),
+        .target = target,
+        .optimize = .Debug,
+    });
+    wrapper_module.addOptions("coverage_options", options);
+    const wrapper = b.addExecutable(.{
+        .name = program.name,
+        .root_module = wrapper_module,
+    });
+    const install_wrapper = b.addInstallArtifact(wrapper, .{ .dest_dir = .{ .override = dest_dir } });
+    install_wrapper.step.dependOn(&install_program.step);
+    install_wrapper.step.dependOn(first_pass);
+    return &install_wrapper.step;
 }
