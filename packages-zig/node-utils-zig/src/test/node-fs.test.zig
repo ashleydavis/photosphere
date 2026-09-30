@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const node_utils = @import("node-utils-zig");
 const utils = @import("utils-zig");
 const node_fs = node_utils.node_fs;
@@ -44,7 +45,15 @@ test "readFile reads a file, and throws the messages Node's readFile throws" {
     try expectThrown(try std.fmt.allocPrint(allocator, "ENOENT: no such file or directory, open '{s}'", .{missing}), node_fs.readFile(allocator, io, missing));
     try expectThrown("EISDIR: illegal operation on a directory, read", node_fs.readFile(allocator, io, root));
     const underFile = try std.fs.path.join(allocator, &.{ filePath, "x" });
-    try expectThrown(try std.fmt.allocPrint(allocator, "ENOTDIR: not a directory, open '{s}'", .{underFile}), node_fs.readFile(allocator, io, underFile));
+    if (builtin.os.tag == .windows) {
+        // Windows reports a path under a file as ERROR_PATH_NOT_FOUND, which libuv (and so Node, and Bun, whose own
+        // tests accept either message there) maps to ENOENT, and Zig to FileNotFound, so there it fails like a missing
+        // file, with Node's ENOENT message. Every other platform reports ENOTDIR, a file where a directory was expected.
+        try expectThrown(try std.fmt.allocPrint(allocator, "ENOENT: no such file or directory, open '{s}'", .{underFile}), node_fs.readFile(allocator, io, underFile));
+    }
+    else {
+        try expectThrown(try std.fmt.allocPrint(allocator, "ENOTDIR: not a directory, open '{s}'", .{underFile}), node_fs.readFile(allocator, io, underFile));
+    }
 }
 
 test "writeFile writes a file, and throws the messages Node's writeFile throws" {
