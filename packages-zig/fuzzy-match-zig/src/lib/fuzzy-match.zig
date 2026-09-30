@@ -68,8 +68,10 @@ pub fn levenshteinDistance(allocator: std.mem.Allocator, left: []const u8, right
 // The returned slice refers to the candidate strings and is allocated with `allocator`.
 //
 pub fn fuzzyMatch(allocator: std.mem.Allocator, query: []const u8, candidates: []const []const u8) ![]const []const u8 {
-    // TODO: lowercases ASCII letters only, where `toLowerCase` lowercases every letter that has a lowercase form, so
-    // "Straße" and "STRASSE" match in TypeScript and not here. Matching it needs a Unicode case-folding table.
+    // TODO: lowercases ASCII letters only, where `toLowerCase` lowercases every letter that has a lowercase form, so a
+    // query and a candidate that differ only in the case of a non-ASCII letter are the same string in TypeScript (which
+    // then skips them, because the distance has to be above zero) and differ here, which returns them. Matching it
+    // needs a Unicode case-folding table.
     const lowerQuery = try std.ascii.allocLowerString(allocator, query);
     defer allocator.free(lowerQuery);
     const queryCodeUnits = try toCodeUnits(allocator, lowerQuery);
