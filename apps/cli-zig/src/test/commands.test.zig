@@ -2405,33 +2405,13 @@ test "check scans a directory like the TypeScript CLI" {
     try expectResult(result, expected, "", 0);
 }
 
-//
-// The captured result of one `check` run over the deliberately unhashable file, shared by the four split tests below.
-//
-const CheckFailedRun = struct {
-    // The test root the CLI ran against (the caller deletes it).
-    root: []const u8,
-
-    // The path of the file that cannot be hashed.
-    broken: []const u8,
-
-    // The CLI's standard output, with the database path normalized and the error log line removed.
-    stdout: []const u8,
-
-    // The CLI's standard error.
-    stderr: []const u8,
-
-    // The exit code the CLI returned.
-    exitCode: u8,
-};
-
-//
-// Runs `check` over a file that cannot be hashed, so each of the four split tests below asserts against exactly the
-// same CLI output.
-//
-fn runCheckFailed(allocator: std.mem.Allocator) !CheckFailedRun {
+test "check reports a file it cannot hash like the TypeScript CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
     const environment = try setupCheck(allocator, "cmd-check-failed");
     const root = std.fs.path.dirname(environment.get("PHOTOSPHERE_CACHE_DIR").?).?;
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
     // The scanner resolves the path it is given (path.resolve in TypeScript), which gives it the separator of the
     // platform, so the path is joined with that separator to be the one the CLI reports.
@@ -2443,54 +2423,18 @@ fn runCheckFailed(allocator: std.mem.Allocator) !CheckFailedRun {
 
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "check", "--db", db, broken, "../../test/test.jpg", "--yes" }), db, "<db>");
     result.stdout = try withoutErrorLogLine(allocator, result.stdout);
-    return .{
-        .root = root,
-        .broken = broken,
-        .stdout = result.stdout,
-        .stderr = result.stderr,
-        .exitCode = result.exitCode,
-    };
-}
-
-//
-// Finds where the log file path starts and ends on the CLI's standard output.
-//
-fn findLogFilePath(allocator: std.mem.Allocator, stdout: []const u8) ![]const u8 {
-    _ = allocator;
-    const logLabel = "Check the log file for details:\n    ";
-    const logStart = (std.mem.indexOf(u8, stdout, logLabel) orelse {
-        return error.LogFileLineMissing;
-    }) + logLabel.len;
-    const logEnd = std.mem.indexOfScalarPos(u8, stdout, logStart, '\n').?;
-    return stdout[logStart..logEnd];
-}
-
-test "check reports a file it cannot hash: the log file line names the platform log directory" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const run = try runCheckFailed(allocator);
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, run.root) catch {};
 
     // The log file is named after the time it was created, so only its directory is checked.
-    const logFilePath = try findLogFilePath(allocator, run.stdout);
-    // The CLI environment sets the temp directory to <root>/tmp, and the CLI joins the rest on with the separator
-    // of the platform.
-    const logDir = try std.fs.path.join(allocator, &.{ try std.fmt.allocPrint(allocator, "{s}/tmp", .{run.root}), "photosphere", "logs" });
-    try std.testing.expect(std.mem.startsWith(u8, logFilePath, logDir));
-}
-
-test "check reports a file it cannot hash: the full stdout" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const run = try runCheckFailed(allocator);
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, run.root) catch {};
-
-    const logFilePath = try findLogFilePath(allocator, run.stdout);
-    const logStart = std.mem.indexOf(u8, run.stdout, logFilePath).?;
-    const logEnd = logStart + logFilePath.len;
-    const stdout = try std.mem.concat(allocator, u8, &.{ run.stdout[0..logStart], "<log file>", run.stdout[logEnd..] });
+    const logLabel = "Check the log file for details:\n    ";
+    const logStart = (std.mem.indexOf(u8, result.stdout, logLabel) orelse {
+        return error.LogFileLineMissing;
+    }) + logLabel.len;
+    const logEnd = std.mem.indexOfScalarPos(u8, result.stdout, logStart, '\n').?;
+    // The CLI environment sets the temp directory to <root>/tmp, and the CLI joins the rest on with path.join, which
+    // on Windows also normalizes the separators of the segments it is given, so the expectation is built the same way.
+    const logDir = try node_path.join(allocator, &.{ try std.fmt.allocPrint(allocator, "{s}/tmp", .{root}), "photosphere", "logs" });
+    try std.testing.expect(std.mem.startsWith(u8, result.stdout[logStart..logEnd], logDir));
+    const stdout = try std.mem.concat(allocator, u8, &.{ result.stdout[0..logStart], "<log file>", result.stdout[logEnd..] });
 
     const expected = try std.mem.concat(allocator, u8, &.{
         \\Checked 1 files.
@@ -2511,29 +2455,12 @@ test "check reports a file it cannot hash: the full stdout" {
         "\n",
     });
     try std.testing.expectEqualStrings(expected, stdout);
-}
-
-test "check reports a file it cannot hash: the exit code" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const run = try runCheckFailed(allocator);
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, run.root) catch {};
-
-    try std.testing.expectEqual(@as(u8, 0), run.exitCode);
-}
-
-test "check reports a file it cannot hash: the stderr hash line ends with the broken path" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const run = try runCheckFailed(allocator);
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, run.root) catch {};
+    try std.testing.expectEqual(@as(u8, 0), result.exitCode);
 
     // What the image tools say about the file differs between platforms, so only the line checkPaths
     // (packages/node-api/src/lib/check.ts) writes is checked.
-    const failedLine = try std.fmt.allocPrint(allocator, "Failed to get hash for file {s}\n", .{run.broken});
-    try std.testing.expect(std.mem.endsWith(u8, run.stderr, failedLine));
+    const failedLine = try std.fmt.allocPrint(allocator, "Failed to get hash for file {s}\n", .{broken});
+    try std.testing.expect(std.mem.endsWith(u8, result.stderr, failedLine));
 }
 
 test "check reports a missing database like the TypeScript CLI" {
