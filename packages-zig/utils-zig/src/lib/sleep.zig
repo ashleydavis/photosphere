@@ -1,12 +1,14 @@
 const std = @import("std");
 
 //
-// Sleeps for the specified millseconds.
-// (Zig: like setTimeout, it never returns early. A Windows sleep can wake a little before the time it was given,
-// by the resolution of the system timer, so it sleeps again for whatever is left.)
+// Sleeps for the given number of milliseconds.
+// (Zig: the delay goes through setTimeoutDelay, so a delay under a millisecond waits the same millisecond a delay of 1
+// does, where Node's setTimeout waits at least a millisecond. A Windows sleep can wake a little before the time it was
+// given, by the resolution of the system timer, so it sleeps again for whatever is left.)
 //
 pub fn sleep(io: std.Io, timeMS: u64) !void {
-    const duration: std.Io.Duration = .fromMilliseconds(@intCast(timeMS));
+    const milliseconds = setTimeoutDelay(@floatFromInt(timeMS));
+    const duration: std.Io.Duration = .fromMilliseconds(@intCast(milliseconds));
     const start = std.Io.Clock.awake.now(io);
     var remaining = duration;
     while (remaining.nanoseconds > 0) {
