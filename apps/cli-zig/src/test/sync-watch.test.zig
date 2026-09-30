@@ -141,6 +141,9 @@ test "runSyncWatch writes the interval as a template string writes a number and 
     var capture = Capture{ .stdout = .init(arena.allocator()), .stderr = .init(arena.allocator()) };
     utils.console.setCapture(&capture.stdout.writer, &capture.stderr.writer);
     defer utils.console.setCapture(null, null);
+    // picocolors turns colour on for every process on Windows, and the expected line here has none.
+    cli.picocolors.setColorSupportOverride(false);
+    defer cli.picocolors.setColorSupportOverride(null);
 
     // setTimeout waits 1 ms for a delay under 1 ms or past 2147483647 ms.
     var tiny: ISyncCounter = .{ .stopAfter = 2 };
