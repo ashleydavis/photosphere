@@ -3,6 +3,8 @@ const std = @import("std");
 //
 // Converts UTF-8 text to the UTF-16 code units JavaScript strings are made of, so lengths and
 // indexes match TypeScript. Invalid UTF-8 falls back to one code unit per byte.
+// (Zig: a byte sequence that is not UTF-8 is compared a byte at a time, where a JavaScript string is always
+// well-formed and holds code units, so it has nothing to compare against.)
 //
 fn toCodeUnits(allocator: std.mem.Allocator, text: []const u8) ![]const u16 {
     return std.unicode.utf8ToUtf16LeAlloc(allocator, text) catch |err| {
@@ -66,6 +68,8 @@ pub fn levenshteinDistance(allocator: std.mem.Allocator, left: []const u8, right
 // The returned slice refers to the candidate strings and is allocated with `allocator`.
 //
 pub fn fuzzyMatch(allocator: std.mem.Allocator, query: []const u8, candidates: []const []const u8) ![]const []const u8 {
+    // TODO: lowercases ASCII letters only, where `toLowerCase` lowercases every letter that has a lowercase form, so
+    // "Straße" and "STRASSE" match in TypeScript and not here. Matching it needs a Unicode case-folding table.
     const lowerQuery = try std.ascii.allocLowerString(allocator, query);
     defer allocator.free(lowerQuery);
     const queryCodeUnits = try toCodeUnits(allocator, lowerQuery);
@@ -75,6 +79,7 @@ pub fn fuzzyMatch(allocator: std.mem.Allocator, query: []const u8, candidates: [
     var matches: std.ArrayList([]const u8) = .empty;
     errdefer matches.deinit(allocator);
     for (candidates) |candidate| {
+        // TODO: lowercases ASCII letters only, as for the query above.
         const lowerCandidate = try std.ascii.allocLowerString(allocator, candidate);
         defer allocator.free(lowerCandidate);
         const distance = try levenshteinDistance(allocator, lowerQuery, lowerCandidate);
