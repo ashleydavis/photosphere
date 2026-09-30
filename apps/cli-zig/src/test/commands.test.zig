@@ -2430,9 +2430,9 @@ test "check reports a file it cannot hash like the TypeScript CLI" {
         return error.LogFileLineMissing;
     }) + logLabel.len;
     const logEnd = std.mem.indexOfScalarPos(u8, result.stdout, logStart, '\n').?;
-    // The CLI environment sets the temp directory to <root>/tmp, and the CLI joins the rest on with the separator
-    // of the platform.
-    const logDir = try std.fs.path.join(allocator, &.{ try std.fmt.allocPrint(allocator, "{s}/tmp", .{root}), "photosphere", "logs" });
+    // The CLI environment sets the temp directory to <root>/tmp, and the CLI joins the rest on with path.join, which
+    // on Windows also normalizes the separators of the segments it is given, so the expectation is built the same way.
+    const logDir = try node_path.join(allocator, &.{ try std.fmt.allocPrint(allocator, "{s}/tmp", .{root}), "photosphere", "logs" });
     try std.testing.expect(std.mem.startsWith(u8, result.stdout[logStart..logEnd], logDir));
     const stdout = try std.mem.concat(allocator, u8, &.{ result.stdout[0..logStart], "<log file>", result.stdout[logEnd..] });
 

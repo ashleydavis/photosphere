@@ -65,6 +65,7 @@ const FakeImageMagickDirectory = struct {
         self.environMap = std.process.Environ.Map.init(allocator);
         try self.environMap.put("PATH", absolutePath);
         node_utils.process_env.setEnvironMap(&self.environMap);
+        tools.Image.resetInitialization();
     }
 
     //
@@ -80,6 +81,12 @@ const FakeImageMagickDirectory = struct {
     //
     fn destroy(self: *FakeImageMagickDirectory, io: std.Io) void {
         node_utils.process_env.setEnvironMap(null);
+
+        // Image detects the installation once and remembers the commands it found, so the fake tools would otherwise
+        // be the ones every later test runs against the real PATH, and where only the legacy `convert` and
+        // `identify` are installed that is a `magick` command nothing can run. This is what
+        // tool-verification.test.zig's FakeToolsDirectory does.
+        tools.Image.resetInitialization();
         std.Io.Dir.cwd().deleteTree(io, self.path) catch {};
     }
 };
@@ -99,9 +106,25 @@ test "resize and transform write their numbers as a template string writes a num
     var uuids: FixedUuidGenerator = .{};
     var image = Image.init("build.zig");
 
+    // The command quotes both paths, as the TypeScript does (`magick "<file>" -resize <geometry> -strip "<output>"`),
+    // and the output path is joined with node-utils' path.join, the port of Node's path.join, which normalizes
+    // every `/` to a `\` on Windows. /bin/sh takes the quotes apart before the fake command sees the arguments, and
+    // cmd.exe hands the command line to the fake .cmd exactly as it is, so on Windows the quotes and every space the
+    // template string leaves are recorded too. transform adds one of those spaces: the TypeScript's transformCommand
+    // starts with a space (` -rotate 1e+21`) and the template puts another one in front of it, which /bin/sh eats as
+    // an argument separator and cmd.exe does not.
+    const resizeArguments = if (builtin.os.tag == .windows)
+        "\"build.zig\" -resize 1e+21x -strip -quality 1e-7 \"out\\temp_resize_fixed.jpg\""
+    else
+        "build.zig -resize 1e+21x -strip -quality 1e-7 out/temp_resize_fixed.jpg";
+    const transformArguments = if (builtin.os.tag == .windows)
+        "\"build.zig\"  -rotate 1e+21 \"out\\temp_transform_output_fixed.jpg\""
+    else
+        "build.zig -rotate 1e+21 out/temp_transform_output_fixed.jpg";
+
     try std.testing.expectError(error.Thrown, image.resize(allocator, io, .{ .width = 1e21, .height = 0, .quality = 1e-7, .format = null, .ext = "jpg" }, "out", uuids.uuidGenerator()));
-    try std.testing.expectEqualStrings("build.zig -resize 1e+21x -strip -quality 1e-7 out/temp_resize_fixed.jpg", try directory.arguments(allocator, io));
+    try std.testing.expectEqualStrings(resizeArguments, try directory.arguments(allocator, io));
 
     try std.testing.expectError(error.Thrown, image.transform(allocator, io, .{ .rotate = 1e21 }, "out", uuids.uuidGenerator()));
-    try std.testing.expectEqualStrings("build.zig -rotate 1e+21 out/temp_transform_output_fixed.jpg", try directory.arguments(allocator, io));
+    try std.testing.expectEqualStrings(transformArguments, try directory.arguments(allocator, io));
 }
