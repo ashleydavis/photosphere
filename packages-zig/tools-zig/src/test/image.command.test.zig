@@ -109,13 +109,16 @@ test "resize and transform write their numbers as a template string writes a num
     // The command quotes both paths, as the TypeScript does (`magick "<file>" -resize <geometry> -strip "<output>"`),
     // and the output path is joined with node-utils' path.join, the port of Node's path.join, which normalizes
     // every `/` to a `\` on Windows. /bin/sh takes the quotes apart before the fake command sees the arguments, and
-    // cmd.exe hands the command line to the fake .cmd exactly as it is, so on Windows the quotes are recorded too.
+    // cmd.exe hands the command line to the fake .cmd exactly as it is, so on Windows the quotes and every space the
+    // template string leaves are recorded too. transform adds one of those spaces: the TypeScript's transformCommand
+    // starts with a space (` -rotate 1e+21`) and the template puts another one in front of it, which /bin/sh eats as
+    // an argument separator and cmd.exe does not.
     const resizeArguments = if (builtin.os.tag == .windows)
         "\"build.zig\" -resize 1e+21x -strip -quality 1e-7 \"out\\temp_resize_fixed.jpg\""
     else
         "build.zig -resize 1e+21x -strip -quality 1e-7 out/temp_resize_fixed.jpg";
     const transformArguments = if (builtin.os.tag == .windows)
-        "\"build.zig\" -rotate 1e+21 \"out\\temp_transform_output_fixed.jpg\""
+        "\"build.zig\"  -rotate 1e+21 \"out\\temp_transform_output_fixed.jpg\""
     else
         "build.zig -rotate 1e+21 out/temp_transform_output_fixed.jpg";
 
