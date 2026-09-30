@@ -87,6 +87,38 @@ test "is case-insensitive" {
     try std.testing.expect(contains(matches, "MyDB2"));
 }
 
+test "is case-insensitive on the query" {
+    // Without lowering the query, the distance from "MYDB" to "mydb2" is 4, past the threshold of 3.
+    const matches = try fuzzyMatch(std.testing.allocator, "MYDB", &.{"mydb2"});
+    defer std.testing.allocator.free(matches);
+    try std.testing.expectEqual(@as(usize, 1), matches.len);
+    try std.testing.expectEqualStrings("mydb2", matches[0]);
+}
+
+test "includes a candidate at exactly the threshold and skips one past it" {
+    // An 8 character query gives a threshold of max(3, floor(8/4)) = 3, so distance 3 is in and 4 is out.
+    const matches = try fuzzyMatch(std.testing.allocator, "abcdefgh", &.{ "abcXXXgh", "abcXXXXgh" });
+    defer std.testing.allocator.free(matches);
+    try std.testing.expectEqual(@as(usize, 1), matches.len);
+    try std.testing.expectEqualStrings("abcXXXgh", matches[0]);
+}
+
+test "an empty query takes the distance threshold of 3" {
+    const matches = try fuzzyMatch(std.testing.allocator, "", &.{ "abc", "abcd" });
+    defer std.testing.allocator.free(matches);
+    try std.testing.expectEqual(@as(usize, 1), matches.len);
+    try std.testing.expectEqualStrings("abc", matches[0]);
+}
+
+test "keeps the candidates' own order and every match" {
+    const matches = try fuzzyMatch(std.testing.allocator, "mydb", &.{ "mydb2", "other", "mydb1", "mydb1" });
+    defer std.testing.allocator.free(matches);
+    try std.testing.expectEqual(@as(usize, 3), matches.len);
+    try std.testing.expectEqualStrings("mydb2", matches[0]);
+    try std.testing.expectEqualStrings("mydb1", matches[1]);
+    try std.testing.expectEqualStrings("mydb1", matches[2]);
+}
+
 test "returns multiple matches when several candidates qualify" {
     const matches = try fuzzyMatch(std.testing.allocator, "mydb", &.{ "mydb1", "mydb2", "totallydifferent" });
     defer std.testing.allocator.free(matches);
