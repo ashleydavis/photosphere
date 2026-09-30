@@ -977,6 +977,9 @@ pub const CompressedBinaryDeserializer = struct {
 // Implementation of IDeserializer for reading binary data
 // (Zig: strings, buffers and bytes are returned as slices of the input buffer; BSON documents are allocated).
 //
+// TODO: a readString whose bytes are not valid UTF-8 returns them as they are, where `toString("utf8")` replaces every
+// invalid byte with U+FFFD. Matching it needs an allocation to build the replacement string.
+//
 pub const BinaryDeserializer = struct {
     // Allocates decoded BSON documents.
     allocator: std.mem.Allocator,
@@ -1291,6 +1294,9 @@ const TYPE_CODE_LENGTH = 4;
 
 //
 // Checks that a type code is exactly 4 characters and returns its bytes
+//
+// TODO: the bytes are passed through, where `Buffer.from(typeCode, "ascii")` encodes a JavaScript string as latin1, so
+// a character above U+00FF has no single byte to become. Every type code in this repo is four ASCII letters.
 //
 fn typeCodeToBuffer(typeCode: []const u8) errors.ThrownError![]const u8 {
     if (typeCode.len != TYPE_CODE_LENGTH) {

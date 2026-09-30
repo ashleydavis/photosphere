@@ -1387,3 +1387,60 @@ test "the type code is read as toString(\"ascii\") reads it, which drops the hig
     const loaded = try serialization.load(TestData, allocator, io, &storage, "data.bin", "TEST", {}, &deserializers);
     try expectTestData(.{ .name = "test", .value = 42 }, loaded);
 }
+
+test "load reports the checksum mismatch when a legacy file's deserializer fails, like the TypeScript try/catch" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+
+    const Functions = struct {
+        fn writeString(_: std.mem.Allocator, data: []const u8, serializer: ISerializer) anyerror!void {
+            try serializer.writeString(data);
+        }
+        fn failToRead(_: std.mem.Allocator, _: void, _: IDeserializer) anyerror![]const u8 {
+            return errors.throwError("Cannot read this", .{});
+        }
+    };
+
+    // A file long enough for the legacy layout, with 32 bytes at the end that are not its checksum. Version 1 has a
+    // deserializer, and that deserializer throws, so the TypeScript catches it and reports the checksum mismatch.
+    var legacy = try BinarySerializer.init(allocator, 1024);
+    try legacy.writeUInt32(1);
+    try legacy.writeString("payload");
+    const file = try std.mem.concat(allocator, u8, &.{ legacy.getBuffer(), &([_]u8{0xab} ** 32) });
+    try storage.write(allocator, io, "legacy-fail.bin", null, file);
+
+    const deserializers = [_]serialization.DeserializerEntry([]const u8, void){
+        .{ .version = 1, .deserializer = Functions.failToRead },
+    };
+    try expectThrownContaining(serialization.load([]const u8, allocator, io, &storage, "legacy-fail.bin", "TEST", {}, &deserializers), "Checksum mismatch");
+    var calculated: [Sha256.digest_length]u8 = undefined;
+    Sha256.hash(legacy.getBuffer(), &calculated, .{});
+    try expectString(try std.fmt.allocPrint(allocator, "Checksum mismatch: expected {x}, got {x}", .{ &([_]u8{0xab} ** 32), &calculated }), errors.lastErrorMessage());
+}
+
+test "readString and readBuffer throw when the length prefix runs past the end of the buffer" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var stringDeserializer = BinaryDeserializer.init(allocator, &.{ 100, 0, 0, 0 });
+    try expectThrownContaining(stringDeserializer.readString(), "Cannot read 100 bytes at position 4. Buffer length: 4");
+    try expectString("Cannot read 100 bytes at position 4. Buffer length: 4", errors.lastErrorMessage());
+
+    var bufferDeserializer = BinaryDeserializer.init(allocator, &.{ 7, 0, 0, 0, 'x' });
+    try expectThrownContaining(bufferDeserializer.readBuffer(), "Cannot read 7 bytes at position 4. Buffer length: 5");
+    try expectString("Cannot read 7 bytes at position 4. Buffer length: 5", errors.lastErrorMessage());
+}
+
+test "readBoolean reads any byte that is not zero as true" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var deserializer = BinaryDeserializer.init(allocator, &.{ 2, 0, 255 });
+    try std.testing.expect(try deserializer.readBoolean());
+    try std.testing.expect(!(try deserializer.readBoolean()));
+    try std.testing.expect(try deserializer.readBoolean());
+}
