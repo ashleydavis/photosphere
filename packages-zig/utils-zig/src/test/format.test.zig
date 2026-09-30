@@ -30,3 +30,13 @@ test "formatFileSize names the unit undefined from a petabyte up, like TypeScrip
     try std.testing.expectEqualStrings("1 undefined", try utils.format.formatFileSize(allocator, 1024 * 1024 * 1024 * 1024 * 1024));
     try std.testing.expectEqualStrings("3 undefined", try utils.format.formatFileSize(allocator, 3 * 1024 * 1024 * 1024 * 1024 * 1024));
 }
+
+test "formatFileSize keeps the unit of the size it divided, when rounding reaches the next one" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // A byte short of a terabyte divides to 1023.999..., which rounds to 1024, so the answer reads
+    // "1024 GB" rather than the "1 TB" it is one byte short of.
+    try std.testing.expectEqualStrings("1024 GB", try utils.format.formatFileSize(allocator, 1024 * 1024 * 1024 * 1024 - 1));
+}

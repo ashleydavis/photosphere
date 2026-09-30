@@ -117,6 +117,18 @@ test "should use custom error message" {
     try std.testing.expectEqualStrings("Custom error message", log.lastMessage);
 }
 
+test "an empty error message is the same as none, which is how TypeScript reads it" {
+    var log: ExceptionLog = .{};
+    log.install();
+    defer log.uninstall();
+    var operation: MockOperation([]const u8) = .{ .value = "", .alwaysFails = true };
+
+    const result = try retryOrLog(io, &operation, "", 1, 100, 2);
+
+    try std.testing.expect(result == null);
+    try std.testing.expectEqualStrings("Operation failed after all retries", log.lastMessage);
+}
+
 test "should use default maxAttempts of 3" {
     var log: ExceptionLog = .{};
     log.install();
