@@ -848,6 +848,25 @@ test "an empty file reads as undefined rather than as an empty object" {
     try std.Io.Dir.cwd().deleteFile(io, filePath);
 }
 
+test "a read that fails for a reason other than a missing file is not reported as not configured" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+
+    // Only ENOENT means "not configured". The error a directory gives is the platform's own (EISDIR on
+    // Unix, a refusal on Windows), so this asserts that a failure is a failure and not a null result.
+    const dirPath = try tempFilePath(allocator, io, "a-directory");
+    try fs.ensureDir(io, dirPath);
+
+    if (fs.readYaml(allocator, io, dirPath)) |document| {
+        std.debug.print("readYaml of a directory returned {any}\n", .{document});
+        return error.TestExpectedError;
+    }
+    else |_| {}
+    try std.Io.Dir.cwd().deleteTree(io, dirPath);
+}
+
 test "text that is not YAML throws rather than reading as nothing" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -1255,6 +1274,40 @@ test "getCacheDir uses PHOTOSPHERE_CACHE_DIR when it is set, on every platform" 
     try environ_map.put("PHOTOSPHERE_CACHE_DIR", "/chosen-cache");
 
     try std.testing.expectEqualStrings("/chosen-cache", try fs.getCacheDir(allocator));
+}
+
+test "an empty override is the same as an unset one, which is how the TypeScript reads process.env" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    // An empty PHOTOSPHERE_CONFIG_DIR falls back to the home directory rather than naming the empty path.
+    try environ_map.put("PHOTOSPHERE_CONFIG_DIR", "");
+    const expected_config = try node_utils.path.join(allocator, &.{ "/some-home", ".config", "photosphere" });
+    try std.testing.expectEqualStrings(expected_config, try fs.getConfigDir(allocator));
+
+    // An empty PHOTOSPHERE_TMP_DIR falls back to the system temp directory rather than resolving to cwd/tmp.
+    try environ_map.put("PHOTOSPHERE_TMP_DIR", "");
+    const currentPath = try std.process.currentPathAlloc(io, allocator);
+    const expected_tmp = if (builtin.os.tag == .windows)
+        try node_utils.path.join(allocator, &.{ currentPath, "tmp" })
+    else
+        try fs.osTmpDir(allocator);
+    try std.testing.expectEqualStrings(expected_tmp, try fs.getProcessTmpDir(allocator, io));
+
+    // An empty PHOTOSPHERE_CACHE_DIR falls back to the platform's own cache location, not to the empty path.
+    try environ_map.put("PHOTOSPHERE_CACHE_DIR", "");
+    const expected_cache = if (builtin.os.tag == .macos)
+        try node_utils.path.join(allocator, &.{ "/some-home", "Library", "Caches", "photosphere" })
+    else if (builtin.os.tag == .windows)
+        try node_utils.path.join(allocator, &.{ "/some-home", "AppData", "Local", "photosphere", "cache" })
+    else
+        try node_utils.path.join(allocator, &.{ "/some-home", ".cache", "photosphere" });
+    try std.testing.expectEqualStrings(expected_cache, try fs.getCacheDir(allocator));
 }
 
 test "getCacheDir is not the config directory, because nothing in it is a setting" {
