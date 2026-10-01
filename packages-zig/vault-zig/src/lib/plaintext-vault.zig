@@ -279,7 +279,9 @@ fn toSecret(allocator: std.mem.Allocator, value: std.json.Value) !ISecret {
     return std.json.parseFromValueLeaky(ISecret, allocator, value, .{
         .ignore_unknown_fields = true,
         .allocate = .alloc_always,
-    });
+    }) catch |err| {
+        return errors.throwError("The vault file holds an entry that is not a secret: {s}", .{@errorName(err)});
+    };
 }
 
 //
