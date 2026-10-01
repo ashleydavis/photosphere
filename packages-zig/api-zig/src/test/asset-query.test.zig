@@ -286,6 +286,38 @@ test "streamAssetToFile maps type 'display' to the display/ storage prefix" {
 }
 
 //
+// mapAssetTypeToStorageKey has a `default` arm, so "original" and every type it does not name both read the original
+// asset/ prefix. Only an asset stored under that prefix is found.
+//
+test "streamAssetToFile maps 'original' and an unrecognised type to the asset/ storage prefix" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tempDir = std.testing.tmpDir(.{});
+    defer tempDir.cleanup();
+    var storage = MemoryStorage.init(allocator);
+    const originalBytes = "original-bytes";
+    const displayBytes = "display-bytes";
+    try storage.asStorage().write(allocator, io, "asset/shared-asset-id", "application/octet-stream", originalBytes);
+    try storage.asStorage().write(allocator, io, "display/shared-asset-id", "image/jpeg", displayBytes);
+
+    const unknownPath = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path, "unknown.bin" });
+    const unknownBytes = try streamAssetToFile(allocator, io, storage.asStorage(), "shared-asset-id", unknownPath, "not-a-type");
+    try std.testing.expectEqual(@as(u64, originalBytes.len), unknownBytes);
+    try std.testing.expectEqualStrings(originalBytes, try std.Io.Dir.cwd().readFileAlloc(io, unknownPath, allocator, .unlimited));
+
+    // The type name is matched exactly, so a different case of "display" reads the asset/ prefix too.
+    const upperCasePath = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path, "upper-case.bin" });
+    const upperCaseBytes = try streamAssetToFile(allocator, io, storage.asStorage(), "shared-asset-id", upperCasePath, "DISPLAY");
+    try std.testing.expectEqual(@as(u64, originalBytes.len), upperCaseBytes);
+
+    // And the exact name does read the display/ prefix, so the two above are not reading the only copy there is.
+    const displayPath = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path, "display.bin" });
+    const displayBytesWritten = try streamAssetToFile(allocator, io, storage.asStorage(), "shared-asset-id", displayPath, "display");
+    try std.testing.expectEqual(@as(u64, displayBytes.len), displayBytesWritten);
+}
+
+//
 // In TypeScript a file storage's read stream opens its file lazily, after `createWriteStream(outputPath)` has
 // created the output file, so exporting an asset that is not there fails and leaves an empty output file behind.
 //
