@@ -4,6 +4,7 @@ const node_utils = @import("node-utils-zig");
 const utils = @import("utils-zig");
 const helpers = @import("test-helpers.zig");
 const databases_config = node_api.databases_config;
+const databases_config_format = node_api.databases_config_format;
 
 //
 // Points PHOTOSPHERE_CONFIG_DIR at a new empty directory and returns it.
@@ -692,4 +693,100 @@ test "addDatabaseEntry writes databases.toml as TypeScript writes it" {
         \\geocoding_key = "geo"
         \\
     , try readToml(allocator, io, configDir));
+}
+
+//
+// tomlEntryToDatabaseEntry reads a TOML entry object into the in-memory entry type. The three keys it always copies
+// read as "" when they are absent or are not text (TypeScript copies whatever is there, so a hand-edited entry that
+// omits one leaves it undefined), and each optional key is carried over only when it is text.
+//
+test "tomlEntryToDatabaseEntry carries the three required keys and the optional ones that are there" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const full = databases_config_format.tomlEntryToDatabaseEntry(try std.json.parseFromSliceLeaky(std.json.Value, allocator,
+        \\{"name":"Photos","description":"My photos","path":"/a","origin":"s3:bucket:/x","s3_key":"s3","encryption_key":"enc","geocoding_key":"geo"}
+    , .{}));
+    try std.testing.expectEqualStrings("Photos", full.name);
+    try std.testing.expectEqualStrings("My photos", full.description);
+    try std.testing.expectEqualStrings("/a", full.path);
+    try std.testing.expectEqualStrings("s3:bucket:/x", full.origin.?);
+    try std.testing.expectEqualStrings("s3", full.s3Key.?);
+    try std.testing.expectEqualStrings("enc", full.encryptionKey.?);
+    try std.testing.expectEqualStrings("geo", full.geocodingKey.?);
+
+    const bare = databases_config_format.tomlEntryToDatabaseEntry(try std.json.parseFromSliceLeaky(std.json.Value, allocator,
+        \\{"name":"Photos","description":"","path":"/a"}
+    , .{}));
+    try std.testing.expectEqualStrings("Photos", bare.name);
+    try std.testing.expectEqualStrings("", bare.description);
+    try std.testing.expect(bare.origin == null);
+    try std.testing.expect(bare.s3Key == null);
+    try std.testing.expect(bare.encryptionKey == null);
+    try std.testing.expect(bare.geocodingKey == null);
+}
+
+//
+// The optional keys are carried only when they are text, and an entry that is not an object at all reads as one with
+// every key empty. In TypeScript an optional key holding a number would be carried as that number, and an entry that
+// is not an object would have its properties read as undefined.
+//
+test "tomlEntryToDatabaseEntry drops an optional key that is not text, and reads a non-object entry as all empty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const withNumber = databases_config_format.tomlEntryToDatabaseEntry(try std.json.parseFromSliceLeaky(std.json.Value, allocator,
+        \\{"name":"Photos","description":"","path":"/a","origin":7}
+    , .{}));
+    try std.testing.expect(withNumber.origin == null);
+
+    const notAnObject = databases_config_format.tomlEntryToDatabaseEntry(.null);
+    try std.testing.expectEqualStrings("", notAnObject.name);
+    try std.testing.expectEqualStrings("", notAnObject.description);
+    try std.testing.expectEqualStrings("", notAnObject.path);
+    try std.testing.expect(notAnObject.origin == null);
+}
+
+//
+// databaseEntryToToml writes the three keys it always has and each optional key only when the entry has one, in the
+// order tomlEntryToDatabaseEntry reads them back.
+//
+test "databaseEntryToToml leaves out every optional key the entry does not have" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const bare = try databases_config_format.databaseEntryToToml(allocator, .{
+        .name = "Photos",
+        .description = "",
+        .path = "/a",
+    });
+    try std.testing.expectEqualStrings(
+        \\{"name":"Photos","description":"","path":"/a"}
+    , try std.json.Stringify.valueAlloc(allocator, bare, .{}));
+
+    const full = try databases_config_format.databaseEntryToToml(allocator, .{
+        .name = "Photos",
+        .description = "My photos",
+        .path = "/a",
+        .origin = "s3:bucket:/x",
+        .s3Key = "s3",
+        .encryptionKey = "enc",
+        .geocodingKey = "geo",
+    });
+    try std.testing.expectEqualStrings(
+        \\{"name":"Photos","description":"My photos","path":"/a","origin":"s3:bucket:/x","s3_key":"s3","encryption_key":"enc","geocoding_key":"geo"}
+    , try std.json.Stringify.valueAlloc(allocator, full, .{}));
+
+    // Reading it back gives the same entry, so the two conversions are inverses.
+    const roundTripped = databases_config_format.tomlEntryToDatabaseEntry(full);
+    try std.testing.expectEqualStrings("Photos", roundTripped.name);
+    try std.testing.expectEqualStrings("My photos", roundTripped.description);
+    try std.testing.expectEqualStrings("/a", roundTripped.path);
+    try std.testing.expectEqualStrings("s3:bucket:/x", roundTripped.origin.?);
+    try std.testing.expectEqualStrings("s3", roundTripped.s3Key.?);
+    try std.testing.expectEqualStrings("enc", roundTripped.encryptionKey.?);
+    try std.testing.expectEqualStrings("geo", roundTripped.geocodingKey.?);
 }
