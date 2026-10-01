@@ -270,6 +270,11 @@ pub fn updateVaultFile(allocator: std.mem.Allocator, io: std.Io, vaultDir: []con
 //
 // Converts a secret held in the vault file to an ISecret.
 //
+// TODO: TypeScript does not do this: `get` returns `contents[name]` as it stands and `list` returns
+// `Object.values(contents)`, so a vault file holding something that is not a secret (a number, an object without
+// the fields) hands that value back typed as an ISecret, and the caller reads whatever fields it finds. This throws
+// instead, because Zig cannot return a JSON value as an ISecret. Fix the TypeScript to check the shape too.
+//
 fn toSecret(allocator: std.mem.Allocator, value: std.json.Value) !ISecret {
     return std.json.parseFromValueLeaky(ISecret, allocator, value, .{
         .ignore_unknown_fields = true,

@@ -221,3 +221,121 @@ test "get: a payload with a repeated key is read with its last value, as JSON.pa
     const secret = try vault.get(allocator, std.testing.io, "repeated");
     try std.testing.expectEqualStrings("second", secret.?.value);
 }
+
+//
+// The stand-in answers a get with exit code 0 and no output when the mode is "empty-password", which is what
+// a credential stored with an empty password looks like: TypeScript's get treats an empty stdout as a missing
+// secret and returns undefined.
+//
+test "get: returns undefined when the tool succeeds but writes nothing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
+    defer standIns.tearDown();
+    try standIns.writeStore(try emptyPasswordStore(allocator, "psi-empty"));
+    try standIns.setMode("empty-password");
+    var vault = WindowsKeychainVault.init();
+
+    try std.testing.expect((try vault.get(allocator, std.testing.io, "empty")) == null);
+}
+
+//
+// A store holding one account whose password is the empty string.
+//
+fn emptyPasswordStore(allocator: std.mem.Allocator, keychainName: []const u8) !std.json.ObjectMap {
+    var store: std.json.ObjectMap = .empty;
+    try store.put(allocator, keychainName, .{ .string = "" });
+    return store;
+}
+
+//
+// A get whose payload is not JSON at all. TypeScript's JSON.parse throws and the error is not caught, so get
+// rejects rather than returning a secret with nothing in it.
+//
+test "get: a payload that is not JSON fails with the decoder error" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
+    defer standIns.tearDown();
+    var store: std.json.ObjectMap = .empty;
+    try store.put(allocator, "psi-broken", .{ .string = "this is not json" });
+    try standIns.writeStore(store);
+    var vault = WindowsKeychainVault.init();
+
+    try std.testing.expectError(error.Thrown, vault.get(allocator, std.testing.io, "broken"));
+    try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "JSON Parse error"));
+}
+
+//
+// set stores the payload as compact JSON with the single quotes doubled, so a value holding one comes back
+// out of the keychain the way it went in.
+//
+test "set: a value holding a single quote round-trips, escaped as PowerShell needs it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
+    defer standIns.tearDown();
+    var vault = WindowsKeychainVault.init();
+
+    const secret: ISecret = .{ .name = "quoted", .type = "api-key", .value = "it's a ''secret''" };
+    try vault.set(allocator, std.testing.io, secret);
+    try expectSecretEqual(secret, try vault.get(allocator, std.testing.io, "quoted"));
+}
+
+//
+// list takes each line that names a photosphere entry, so an account belonging to another program in the same
+// vault is left out even when stripping its first four characters would name a secret this vault holds. That is
+// the whole of what the check is for: "wxyzours" is not a photosphere account, and reading it as one would find
+// "psi-ours" and put that secret in the list a second time.
+//
+test "list: leaves out an account that is not a photosphere entry" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
+    defer standIns.tearDown();
+    var store: std.json.ObjectMap = .empty;
+    try store.put(allocator, "psi-ours", .{ .string = "{\"type\":\"api-key\",\"value\":\"ours\"}" });
+    try store.put(allocator, "psi-theirs", .{ .string = "{\"type\":\"api-key\",\"value\":\"theirs\"}" });
+    try store.put(allocator, "wxyzours", .{ .string = "{\"type\":\"api-key\",\"value\":\"not ours\"}" });
+    try standIns.writeStore(store);
+    var vault = WindowsKeychainVault.init();
+
+    const secrets = try vault.list(allocator, std.testing.io);
+    std.mem.sort(ISecret, secrets, {}, secretNameLessThan);
+    try std.testing.expectEqual(@as(usize, 2), secrets.len);
+    try std.testing.expectEqualStrings("ours", secrets[0].name);
+    try std.testing.expectEqualStrings("theirs", secrets[1].name);
+}
+
+//
+// checkPrereqs asks PowerShell for its version and reports ok when the answer comes back.
+//
+test "checkPrereqs is true when PowerShell answers with its version" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
+    defer standIns.tearDown();
+    var vault = WindowsKeychainVault.init();
+
+    const result = vault.checkPrereqs(arena.allocator(), std.testing.io);
+    try std.testing.expect(result.ok);
+    try std.testing.expect(result.message == null);
+}
+
+//
+// delete asks PowerShell to remove the entry, and says nothing when it fails, because a secret that is not
+// there is the outcome delete wanted.
+//
+test "delete: says nothing when the entry is not there" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
+    defer standIns.tearDown();
+    var vault = WindowsKeychainVault.init();
+
+    try vault.delete(arena.allocator(), std.testing.io, "never-existed");
+}
