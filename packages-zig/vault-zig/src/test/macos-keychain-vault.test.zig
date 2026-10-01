@@ -405,3 +405,92 @@ test "get: a payload with a repeated key is read with its last value, as JSON.pa
     const secret = try vault.get(allocator, std.testing.io, "repeated");
     try std.testing.expectEqualStrings("second", secret.?.value);
 }
+
+//
+// A payload that is not JSON at all. TypeScript's JSON.parse throws and the error is not caught, so get
+// rejects rather than returning a secret with nothing in it.
+//
+test "get: a payload that is not JSON fails with the decoder error" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    resetStore();
+    defer restoreSpawn();
+    try store.put(store_arena.allocator(), "psi-broken", "this is not json");
+    var vault = MacOSKeychainVault.init();
+
+    try std.testing.expectError(error.Thrown, vault.get(allocator, std.testing.io, "broken"));
+    try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "JSON Parse error"));
+}
+
+//
+// checkPrereqs runs the security tool and reports ok when it answers.
+//
+test "checkPrereqs is true when the security tool answers with its version" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    resetStore();
+    defer restoreSpawn();
+    var vault = MacOSKeychainVault.init();
+
+    const result = vault.checkPrereqs(arena.allocator(), std.testing.io);
+    try std.testing.expect(result.ok);
+    try std.testing.expect(result.message == null);
+}
+
+
+//
+// delete says nothing when the secret is not there, because a secret that is not there is the outcome delete
+// wanted.
+//
+test "delete: says nothing when the secret is not there" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    resetStore();
+    defer restoreSpawn();
+    var vault = MacOSKeychainVault.init();
+
+    try vault.delete(arena.allocator(), std.testing.io, "never-existed");
+}
+
+//
+// parseKeychainDump splits the dump on "keychain:" at the start of a line, so the same text in the middle of a
+// line is part of that line's block and its attributes are read from there.
+//
+test "parseKeychainDump only splits on a keychain: that starts a line" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    // The service attribute sits after a "keychain:" in the middle of a line. Splitting there would make
+    // the block holding it start after the account, and the account would then be left in a block of its
+    // own with no service, so the entry would be missed. Not splitting keeps them together and the entry
+    // is read, under the first account of the block.
+    const output =
+        \\keychain: "/login.keychain-db"
+        \\    "acct"<blob>="psi-split"
+        \\middle keychain: text
+        \\    "acct"<blob>="psi-other"
+        \\    "svce"<blob>="photosphere"
+    ;
+    const names = try macos_keychain_vault.parseKeychainDump(arena.allocator(), output);
+    try std.testing.expectEqual(@as(usize, 1), names.len);
+    try std.testing.expectEqualStrings("psi-split", names[0]);
+}
+
+//
+// parseKeychainDump reads the first attribute of each kind in a block, so a block that repeats one takes the
+// first, which is what String.prototype.match does.
+//
+test "parseKeychainDump takes the first account and the first service of a block" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const output =
+        \\keychain: "/login.keychain-db"
+        \\    "acct"<blob>="psi-first"
+        \\    "acct"<blob>="psi-second"
+        \\    "svce"<blob>="photosphere"
+    ;
+    const names = try macos_keychain_vault.parseKeychainDump(arena.allocator(), output);
+    try std.testing.expectEqual(@as(usize, 1), names.len);
+    try std.testing.expectEqualStrings("psi-first", names[0]);
+}
