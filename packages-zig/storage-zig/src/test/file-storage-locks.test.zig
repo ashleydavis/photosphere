@@ -686,3 +686,29 @@ test "a refused lock is logged with the age and the owner of the lock in the way
     try std.testing.expect(std.mem.indexOf(u8, messages, "owner:first-owner") != null);
     try std.testing.expect(std.mem.indexOf(u8, messages, "age:") != null);
 }
+
+//
+// A lock file that is valid JSON but whose acquiredAt is not a date `new Date` can read. TypeScript carries
+// the Invalid Date forward and answers with a lock whose acquiredAt is Invalid Date; the Zig refuses to read it
+// (see the TODO on parseLockContent), so the file reads as corrupt and the lock is broken.
+//
+test "a lock whose acquiredAt is not a date reads as corrupt and the lock is taken" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tempDir = try helpers.makeTempDir(allocator, io, "temp-test-lock-bad-date");
+    defer helpers.removeTempDir(io, tempDir);
+    var storage = FileStorage.init(tempDir);
+
+    const lockFilePath = try std.fmt.allocPrint(allocator, "{s}/bad-date.lock", .{tempDir});
+    try helpers.writeFile(io, lockFilePath, "{\"owner\":\"old-owner\",\"acquiredAt\":\"not a date\",\"timestamp\":1}");
+
+    // The lock cannot be read as one.
+    try std.testing.expect((try storage.checkWriteLock(allocator, io, lockFilePath)) == null);
+
+    // So it is broken as corrupt and the lock is taken.
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, lockFilePath, "new-owner"));
+    const lockInfo = (try storage.checkWriteLock(allocator, io, lockFilePath)).?;
+    try std.testing.expectEqualStrings("new-owner", lockInfo.owner);
+}
