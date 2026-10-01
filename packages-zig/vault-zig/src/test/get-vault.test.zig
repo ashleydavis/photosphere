@@ -95,3 +95,36 @@ test "getVault(\"keychain\"): returns the correct platform vault instance" {
         try std.testing.expectError(error.Thrown, getVault("keychain"));
     }
 }
+
+//
+// The two vault types are separate instances: the cache is keyed by type, so asking for one after the other
+// gives each of them.
+//
+test "getVault: a keychain vault and a plaintext vault are separate instances" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var environ_map = std.process.Environ.Map.init(arena.allocator());
+    try environ_map.put("PHOTOSPHERE_VAULT_DIR", "src/test/fixtures/ts-vault");
+    process_env.setEnvironMap(&environ_map);
+    defer process_env.setEnvironMap(null);
+
+    const plaintext = try getVault("plaintext");
+    const keychain = try getVault("keychain");
+    try std.testing.expect(plaintext.vtable == &PlaintextVault.vtable);
+    try std.testing.expect(plaintext.ptr != keychain.ptr);
+}
+
+//
+// getDefaultVaultType reads the environment variable whatever its value, including an empty one, because
+// `??` only replaces undefined.
+//
+test "getDefaultVaultType: returns an empty variable verbatim" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var environ_map = std.process.Environ.Map.init(arena.allocator());
+    try environ_map.put("PHOTOSPHERE_VAULT_TYPE", "");
+    process_env.setEnvironMap(&environ_map);
+    defer process_env.setEnvironMap(null);
+
+    try std.testing.expectEqualStrings("", getDefaultVaultType());
+}
