@@ -51,6 +51,12 @@ const FakeFfmpegDirectory = struct {
         self.environMap = std.process.Environ.Map.init(allocator);
         try self.environMap.put("PATH", self.absolutePath);
         node_utils.process_env.setEnvironMap(&self.environMap);
+
+        // Image detects its installation once and remembers the commands it found, so the state of the real PATH
+        // (or of an earlier fake one) must not decide what a later call in this directory finds. This is what
+        // FakeImageMagickDirectory in image.command.test.zig and FakeToolsDirectory in
+        // tool-verification.test.zig do.
+        tools.Image.resetInitialization();
     }
 
     //
@@ -66,6 +72,7 @@ const FakeFfmpegDirectory = struct {
     //
     fn destroy(self: *FakeFfmpegDirectory, io: std.Io) void {
         node_utils.process_env.setEnvironMap(null);
+        tools.Image.resetInitialization();
         std.Io.Dir.cwd().deleteTree(io, self.path) catch {};
     }
 };
@@ -124,6 +131,90 @@ test "ffprobe output is read as the TypeScript reads it: new Date, Number, parse
 
     const booleanDate = try probe(allocator, "{\"format\":{\"tags\":{\"creation_time\":true}},\"streams\":[{\"codec_type\":\"video\"}]}");
     try std.testing.expectEqual(@as(?f64, 1), booleanDate.createdAt);
+}
+
+test "ffprobe output that is not an object, and a streams value that is not an array, throw Bun's TypeErrors" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // `probeData.format` of null throws; of any other value that is not an object it is undefined, and it is
+    // `probeData.streams.find` of that undefined that throws.
+    try expectProbeError(allocator, "null", "Failed to get video info: TypeError: null is not an object (evaluating 'probeData.format')");
+    try expectProbeError(allocator, "5", "Failed to get video info: TypeError: undefined is not an object (evaluating 'probeData.streams.find')");
+    try expectProbeError(allocator, "[]", "Failed to get video info: TypeError: undefined is not an object (evaluating 'probeData.streams.find')");
+    try expectProbeError(allocator, "{}", "Failed to get video info: TypeError: undefined is not an object (evaluating 'probeData.streams.find')");
+    try expectProbeError(allocator, "{\"format\":{},\"streams\":null}", "Failed to get video info: TypeError: null is not an object (evaluating 'probeData.streams.find')");
+    try expectProbeError(allocator, "{\"format\":{},\"streams\":\"x\"}", "Failed to get video info: TypeError: probeData.streams.find is not a function. (In 'probeData.streams.find((s) => s.codec_type === \"video\")', 'probeData.streams.find' is undefined)");
+}
+
+test "ffprobe values of every JSON type are read the way TypeScript reads them" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // A stream that is not an object has no codec_type, so the video stream is the one after it. A tag list spreads
+    // into the metadata under its index, a null duration and an object bit rate are neither parseFloat nor parseInt
+    // of a number, a creation time of 0 is falsy and a frame rate of 0 is too.
+    const values = try probe(allocator, "{\"format\":{\"duration\":null,\"bit_rate\":{},\"tags\":[1,2],\"creation_time\":0},\"streams\":[1,{\"codec_type\":\"video\",\"r_frame_rate\":0}]}");
+    try std.testing.expect(std.math.isNan(values.duration.?));
+    try std.testing.expect(std.math.isNan(values.bitrate.?));
+    try std.testing.expect(values.createdAt == null);
+    try std.testing.expect(values.fps == null);
+    try std.testing.expectEqual(@as(?bool, false), values.hasAudio);
+    const spread = values.metadata.?.document.fields.items;
+    try std.testing.expectEqual(@as(usize, 5), spread.len);
+    try std.testing.expectEqualStrings("0", spread[0].key);
+    try std.testing.expectEqual(@as(f64, 1), spread[0].value.number);
+    try std.testing.expectEqualStrings("1", spread[1].key);
+    try std.testing.expectEqual(@as(f64, 2), spread[1].value.number);
+    try std.testing.expectEqualStrings("videoCodec", spread[2].key);
+    try std.testing.expect(spread[2].value == .undefined);
+    try std.testing.expectEqualStrings("audioCodec", spread[3].key);
+    try std.testing.expect(spread[3].value == .undefined);
+    try std.testing.expectEqualStrings("pixelFormat", spread[4].key);
+    try std.testing.expect(spread[4].value == .undefined);
+
+    // A whole number is a number to String() and to parseFloat, a bit rate given as a string is read as one, a frame
+    // rate with no denominator is num / NaN, and a creation time past the largest Date (8.64e15 ms) is an Invalid
+    // Date, whose time value is NaN.
+    const numbers = try probe(allocator, "{\"format\":{\"duration\":12,\"bit_rate\":\"8000\",\"tags\":{\"creation_time\":1e21}},\"streams\":[{\"codec_type\":\"video\",\"r_frame_rate\":\"30\"}]}");
+    try std.testing.expectEqual(@as(?f64, 12), numbers.duration);
+    try std.testing.expectEqual(@as(?f64, 8000), numbers.bitrate);
+    try std.testing.expect(std.math.isNan(numbers.createdAt.?));
+    try std.testing.expect(std.math.isNan(numbers.fps.?));
+
+    // A creation time that is not a string is read from its String(): an array of one element is that element, and
+    // an object is "[object Object]", which is not a date.
+    const arrayDate = try probe(allocator, "{\"format\":{\"tags\":{\"creation_time\":[\"2024-01-02T03:04:05.000000Z\"]}},\"streams\":[{\"codec_type\":\"video\"}]}");
+    try std.testing.expectEqual(@as(?f64, 1704164645000), arrayDate.createdAt);
+    const objectDate = try probe(allocator, "{\"format\":{\"tags\":{\"creation_time\":{}}},\"streams\":[{\"codec_type\":\"video\"}]}");
+    try std.testing.expect(std.math.isNan(objectDate.createdAt.?));
+}
+
+test "the fake tools directory does not leave the detected ImageMagick installation behind" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+
+    // The real PATH, which every later test runs against.
+    if (!(try tools.Image.verifyImageMagick(allocator, io)).available) {
+        std.debug.print("This test needs ImageMagick installed.\n", .{});
+        return error.RequiredToolsMissing;
+    }
+
+    // A PATH with no ImageMagick in it, so a detection run now finds nothing.
+    var directory: FakeFfmpegDirectory = undefined;
+    try directory.create(allocator, io, "{}");
+    defer directory.destroy(io);
+    try std.testing.expect(!(try tools.Image.verifyImageMagick(allocator, io)).available);
+    try std.testing.expectEqual(tools.image.ImageMagickType.none, tools.Image.getImageMagickType());
+    directory.destroy(io);
+
+    // The fake PATH is gone, so the installation is detected again, against the real one.
+    try std.testing.expect((try tools.Image.verifyImageMagick(allocator, io)).available);
+    try std.testing.expect(tools.Image.getImageMagickType() != .none);
 }
 
 test "extractScreenshot writes the time as a template string writes a number" {
