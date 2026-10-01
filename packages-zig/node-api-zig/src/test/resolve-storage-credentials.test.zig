@@ -360,6 +360,27 @@ test "s3Config has undefined endpoint when not provided in vault value" {
     try std.testing.expect(result.s3Config.?.endpoint == null);
 }
 
+//
+// IS3Credentials types accessKeyId and secretAccessKey as required, so a secret that does not hold them resolves to the
+// empty string where `parsed.accessKeyId` is undefined in TypeScript. Both are credentials that cannot work either way,
+// so the secret is still resolved rather than refused.
+//
+test "an S3 secret without an access key resolves to the empty string, as the required field types force" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const configDir = try setup(allocator, io, "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = \"s3:my-bucket:/photos\"\ns3_key = \"s3secret-no-key\"\n");
+    defer helpers.removeTempDir(io, configDir);
+    try setSecret(allocator, io, "s3secret-no-key", "s3-credentials", "{\"region\":\"us-east-1\"}");
+
+    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null);
+
+    try std.testing.expectEqualStrings("", result.s3Config.?.accessKeyId);
+    try std.testing.expectEqualStrings("", result.s3Config.?.secretAccessKey);
+    try std.testing.expectEqualStrings("us-east-1", result.s3Config.?.region.?);
+}
+
 test "resolves comma-separated encryptionKey param as multiple vault secrets" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
