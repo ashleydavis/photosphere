@@ -123,10 +123,13 @@ const FakeOutputTools = struct {
             else
                 try std.fmt.allocPrint(allocator, "{s}/{s}", .{ self.path, name });
             if (builtin.os.tag == .windows) {
+                // `echo(` is what prints an empty line in cmd.exe, where a bare `echo` with no text after it prints
+                // "ECHO is off." instead. The marker is checked with `if exist` on a line of its own, so `exit /b 1`
+                // ends the script whichever way cmd.exe reads the block.
                 const script = if (failAfterFirstCall)
-                    try std.fmt.allocPrint(allocator, "@if exist \"{s}\" (exit /b 1) else (type nul > \"{s}\")\r\n@echo {s}\r\n", .{ markerPath, markerPath, output })
+                    try std.fmt.allocPrint(allocator, "@echo off\r\n@if exist \"{s}\" exit /b 1\r\n@type nul > \"{s}\"\r\n@echo({s}\r\n", .{ markerPath, markerPath, output })
                 else
-                    try std.fmt.allocPrint(allocator, "@echo {s}\r\n", .{output});
+                    try std.fmt.allocPrint(allocator, "@echo off\r\n@echo({s}\r\n", .{output});
                 try cwd.writeFile(io, .{ .sub_path = subPath, .data = script });
             }
             else {
