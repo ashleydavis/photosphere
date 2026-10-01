@@ -148,6 +148,9 @@ pub fn saveDatabaseState(allocator: std.mem.Allocator, io: std.Io, rawStorage: I
 //
 // Merges partial into the existing state (or an empty state when absent) and saves it.
 // Lock-free primitive: the caller must already hold the database write lock.
+// (Zig: a `Partial<IDatabaseState>` is the same type as an `IDatabaseState`, with every field optional, so a field
+// partial leaves null is absent from the merge. In TypeScript a key present with the value undefined overwrites the
+// existing one, clearing it, so a caller there can blank a field and a caller here cannot. No caller does.)
 //
 pub fn mergeDatabaseState(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, partial: IDatabaseState) !void {
     const existing = try loadDatabaseState(allocator, io, rawStorage);

@@ -112,6 +112,9 @@ pub fn saveDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: 
 
 //
 // Updates the database config by merging partial into the existing config (or empty object).
+// (Zig: a `Partial<IDatabaseConfig>` is the same type as an `IDatabaseConfig`, with the one field optional, so an
+// `origin` partial leaves null is absent from the merge. In TypeScript a key present with the value undefined overwrites
+// the existing one, clearing it, so a caller there can blank the origin and a caller here cannot. No caller does.)
 //
 pub fn updateDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, partial: IDatabaseConfig) !void {
     const existing = try loadDatabaseConfig(allocator, io, rawStorage);
