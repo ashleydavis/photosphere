@@ -1291,22 +1291,24 @@ test "an empty override is the same as an unset one, which is how the TypeScript
     try std.testing.expectEqualStrings(expected_config, try fs.getConfigDir(allocator));
 
     // An empty PHOTOSPHERE_TMP_DIR falls back to the system temp directory rather than resolving to cwd/tmp.
+    // os.tmpdir() reads TEMP then TMP, and falls back to %SystemRoot%\temp when neither is set, so the
+    // expected value is named here rather than left to whatever the runner's own environment holds.
     try environ_map.put("PHOTOSPHERE_TMP_DIR", "");
-    const currentPath = try std.process.currentPathAlloc(io, allocator);
-    const expected_tmp = if (builtin.os.tag == .windows)
-        try node_utils.path.join(allocator, &.{ currentPath, "tmp" })
-    else
+    const expected_tmp = if (builtin.os.tag == .windows) blk: {
+        try environ_map.put("SystemRoot", "C:\\Windows");
+        break :blk "C:\\Windows\\temp";
+    } else
         try fs.osTmpDir(allocator);
     try std.testing.expectEqualStrings(expected_tmp, try fs.getProcessTmpDir(allocator, io));
 
     // An empty PHOTOSPHERE_CACHE_DIR falls back to the platform's own cache location, not to the empty path.
     try environ_map.put("PHOTOSPHERE_CACHE_DIR", "");
     const expected_cache = if (builtin.os.tag == .macos)
-        try node_utils.path.join(allocator, &.{ "/some-home", "Library", "Caches", "photosphere" })
+        "/some-home/Library/Caches/photosphere"
     else if (builtin.os.tag == .windows)
-        try node_utils.path.join(allocator, &.{ "/some-home", "AppData", "Local", "photosphere", "cache" })
+        "\\some-home\\AppData\\Local\\photosphere\\cache"
     else
-        try node_utils.path.join(allocator, &.{ "/some-home", ".cache", "photosphere" });
+        "/some-home/.cache/photosphere";
     try std.testing.expectEqualStrings(expected_cache, try fs.getCacheDir(allocator));
 }
 
