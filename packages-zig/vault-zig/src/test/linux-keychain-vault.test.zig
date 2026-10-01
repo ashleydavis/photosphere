@@ -320,3 +320,142 @@ test "parseSearchOutput trims lines and values as String.prototype.trim does, Un
     try std.testing.expectEqualStrings("psi-one", entries[0].account);
     try std.testing.expectEqualStrings("api-key", entries[0].secretType);
 }
+
+//
+// The search output the stand-in does not produce, run through the parser directly: an entry whose account
+// carries no psi- prefix is dropped, and an entry whose account is set with no secrettype line after it gets
+// the default type.
+//
+test "parseSearchOutput drops an account of another program and defaults the type of one with none" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const output =
+        \\attribute.account = theirs
+        \\attribute.secrettype = api-key
+        \\attribute.account = psi-untyped
+        \\attribute.account = psi-typed
+        \\attribute.secrettype = password
+    ;
+    const entries = try linux_keychain_vault.parseSearchOutput(arena.allocator(), output);
+    try std.testing.expectEqual(@as(usize, 2), entries.len);
+    try std.testing.expectEqualStrings("psi-untyped", entries[0].account);
+    try std.testing.expectEqualStrings("plain", entries[0].secretType);
+    try std.testing.expectEqualStrings("psi-typed", entries[1].account);
+    try std.testing.expectEqualStrings("password", entries[1].secretType);
+}
+
+//
+// A search that writes nothing at all parses to no entries, so a list built from it is empty rather than an
+// error.
+//
+test "parseSearchOutput of empty output is no entries" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const entries = try linux_keychain_vault.parseSearchOutput(arena.allocator(), "");
+    try std.testing.expectEqual(@as(usize, 0), entries.len);
+}
+
+//
+// get reports the type the keychain holds rather than the one the caller wrote, which is what the search
+// entry carries.
+//
+test "get: reads back the type stored as the secrettype attribute" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var standIns = try IStandIns.setUp(arena.allocator(), io);
+    defer standIns.tearDown();
+    var vault = LinuxKeychainVault.init();
+
+    try vault.set(allocator, io, .{ .name = "typed", .type = "s3-credentials", .value = "v" });
+    try expectSecretEqual(.{ .name = "typed", .type = "s3-credentials", .value = "v" }, try vault.get(allocator, io, "typed"));
+}
+
+//
+// The stored stdin is the secret value the vault passed, and nothing else: the type travels as an argument.
+//
+test "set: pipes the value to secret-tool on stdin and passes the type as an argument" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var standIns = try IStandIns.setUp(arena.allocator(), io);
+    defer standIns.tearDown();
+    var vault = LinuxKeychainVault.init();
+
+    try vault.set(allocator, io, .{ .name = "k", .type = "api-key", .value = "line one\nline two" });
+
+    try std.testing.expectEqualStrings("line one\nline two", (try standIns.readStateFile("last-store-stdin")).?);
+    const args = (try standIns.readRecordedArgs("last-store-args")).?;
+    try std.testing.expectEqualStrings("secret-tool", args[0]);
+    try std.testing.expectEqualStrings("store", args[1]);
+    try std.testing.expectEqualStrings("--label=psi-k", args[2]);
+    try std.testing.expectEqualStrings("service", args[3]);
+    try std.testing.expectEqualStrings("photosphere", args[4]);
+    try std.testing.expectEqualStrings("account", args[5]);
+    try std.testing.expectEqualStrings("psi-k", args[6]);
+    try std.testing.expectEqualStrings("secrettype", args[7]);
+    try std.testing.expectEqualStrings("api-key", args[8]);
+}
+
+//
+// list is empty for a keychain with nothing in it, and says so rather than failing.
+//
+test "list: is empty when the search finds no entry" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
+    defer standIns.tearDown();
+    var vault = LinuxKeychainVault.init();
+
+    const secrets = try vault.list(arena.allocator(), std.testing.io);
+    try std.testing.expectEqual(@as(usize, 0), secrets.len);
+}
+
+//
+// checkPrereqs runs `which secret-tool` and reports ok when it finds one.
+//
+test "checkPrereqs is true when secret-tool is on PATH" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
+    defer standIns.tearDown();
+    var vault = LinuxKeychainVault.init();
+
+    const result = vault.checkPrereqs(arena.allocator(), std.testing.io);
+    try std.testing.expect(result.ok);
+    try std.testing.expect(result.message == null);
+}
+
+//
+// delete says nothing when there is no such secret, because a secret that is not there is what delete wanted.
+//
+test "delete: says nothing when the secret is not there" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
+    defer standIns.tearDown();
+    var vault = LinuxKeychainVault.init();
+
+    try vault.delete(arena.allocator(), std.testing.io, "never-existed");
+}
+
+//
+// A `secret-tool search` that exits 1 has found nothing, which is not a failure, so list is empty and get still
+// reads the value it looked up. TypeScript accepts exit codes 0 and 1 here for the same reason.
+//
+test "a search that exits 1 has found nothing, which is not a failure" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var standIns = try IStandIns.setUp(arena.allocator(), io);
+    defer standIns.tearDown();
+    var vault = LinuxKeychainVault.init();
+    try vault.set(allocator, io, .{ .name = "k", .type = "t", .value = "v" });
+
+    try standIns.setMode("failing-search:1");
+    try expectSecretEqual(.{ .name = "k", .type = "plain", .value = "v" }, try vault.get(allocator, io, "k"));
+    try std.testing.expectEqual(@as(usize, 0), (try vault.list(allocator, io)).len);
+}
