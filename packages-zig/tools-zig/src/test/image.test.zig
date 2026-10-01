@@ -156,6 +156,48 @@ test "getInfo reads the dimensions and the date of an image like TypeScript" {
     }
 }
 
+test "resize refuses when the second output path is already taken" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try requireImageMagick(allocator);
+    const tempDir = try makeTempDir(allocator, "resize-second-output");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch {};
+    var generator: FixedUuidGenerator = .{ .id = "second" };
+    var image = Image.init("../../test/test.png");
+
+    // The second output path Image.resize checks is <base>-0.<ext>, the one a multi-frame image is written to.
+    const secondOutputPath = try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_second-0.png" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = secondOutputPath, .data = "already here" });
+
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png" }, tempDir, generator.uuidGenerator()));
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Output file already exists: {s}", .{secondOutputPath}), utils.errors.lastErrorMessage());
+}
+
+test "getExifData reads the tags of a real image" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try requireImageMagick(allocator);
+
+    var image = Image.init("../../test/test.jpg");
+    const exifData = try image.getExifData(allocator, std.testing.io);
+    try std.testing.expectEqualStrings("Google", exifData.get("Make").?);
+    try std.testing.expectEqualStrings("Pixel 6", exifData.get("Model").?);
+    try std.testing.expectEqualStrings("2025:05:27 09:54:16", exifData.get("DateTimeOriginal").?);
+
+    // The DateTimeOriginal is what getInfo turns into createdAt, with the colons of the date replaced by dashes.
+    // TODO: the TypeScript reads a real date out of that: `new Date("2025-05-27 09:54:16")` is the local time, which
+    // the Date Time String Format of ECMA-262 allows with a space where the ISO form has a "T". The Zig reads an
+    // Invalid Date, because js_date.parseDate in serialization-zig only reads the "T" form, so createdAt is NaN
+    // here for every image that has an EXIF DateTimeOriginal. The fix belongs to serialization-zig, not to this
+    // package, and this assertion is what goes red when it is made.
+    var withDate = Image.init("../../test/test.jpg");
+    const info = try withDate.getInfo(allocator, std.testing.io);
+    try std.testing.expect(std.math.isNan(info.createdAt.?));
+    try std.testing.expectEqualStrings("2025-05-27 09:54:16", try tools.image.exifDateToDashes(allocator, exifData.get("DateTimeOriginal").?));
+}
+
 test "getInfo fails for a file that does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
