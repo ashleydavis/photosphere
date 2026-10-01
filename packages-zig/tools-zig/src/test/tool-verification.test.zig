@@ -64,6 +64,29 @@ const FakeToolsDirectory = struct {
     }
 };
 
+test "verifyFfprobe and verifyFfmpeg report unknown when their output has no version in it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var directory: FakeToolsDirectory = undefined;
+    try directory.create(allocator, io, &.{
+        .{ .name = "ffprobe", .output = "Something else" },
+        .{ .name = "ffmpeg", .output = "Something else" },
+    });
+    defer directory.destroy(io);
+
+    const ffprobeStatus = tools.Video.verifyFfprobe(allocator, io);
+    try std.testing.expect(ffprobeStatus.available);
+    try std.testing.expectEqualStrings("unknown", ffprobeStatus.version.?);
+    try std.testing.expect(ffprobeStatus.@"error" == null);
+
+    const ffmpegStatus = tools.Video.verifyFfmpeg(allocator, io);
+    try std.testing.expect(ffmpegStatus.available);
+    try std.testing.expectEqualStrings("unknown", ffmpegStatus.version.?);
+    try std.testing.expect(ffmpegStatus.@"error" == null);
+}
+
 test "verifyTools reports every tool with its version when modern ImageMagick, ffprobe and ffmpeg are installed" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
