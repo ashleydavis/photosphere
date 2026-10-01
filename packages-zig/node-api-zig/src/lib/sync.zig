@@ -1078,10 +1078,10 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: I
 }
 
 //
-// TODO: accepts a leaf with an empty name, where `!node.name` throws in the TypeScript.
-//
 // Extracts leaf node names from MerkleNode arrays.
 // (Zig: collects the names into a list in place of the TypeScript generator yielding them.)
+//
+// `!node.name` in TypeScript is a test for a falsy name, so an empty one throws there and it throws here.
 //
 fn iterateLeaves(allocator: std.mem.Allocator, leaves: *std.ArrayList([]const u8), nodes: []const *MerkleNode) !void { //todo: This could be a shared function in the merkle-tree package.
     for (nodes) |node| {
@@ -1089,6 +1089,9 @@ fn iterateLeaves(allocator: std.mem.Allocator, leaves: *std.ArrayList([]const u8
             const name = node.name orelse {
                 return errors.throwError("Leaf node has no name", .{});
             };
+            if (name.len == 0) {
+                return errors.throwError("Leaf node has no name", .{});
+            }
             try leaves.append(allocator, name);
         }
         else {

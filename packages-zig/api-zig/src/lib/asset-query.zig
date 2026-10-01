@@ -117,6 +117,9 @@ fn isTruthy(value: ?[]const u8) bool {
 // The value of a string field of an asset, or "" when it is missing or not a string
 // (TypeScript: `asset.field || ""`).
 //
+// TODO: a field that is there but is not text reads as "" here, where `asset.field || ""` carries the value through and
+// `.toLowerCase()` of a number throws in TypeScript. The fields this filters on are text, so nothing produces one.
+//
 fn stringField(asset: IAsset, name: []const u8) []const u8 {
     const value = asset.get(name) orelse {
         return "";
