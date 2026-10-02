@@ -1659,22 +1659,11 @@ jobs:
           path: out
 
   build-zig-macos:
-    # Builds the Zig CLI for macOS natively on a Mac of each architecture: the AWS SDK for C needs the macOS SDK's
-    # framework headers, which Zig only uses for a native build (see packages-zig/storage-zig/docs/aws-sdk.md).
+    # Builds the Zig CLI for macOS natively: the AWS SDK for C needs the macOS SDK's framework headers, which
+    # Zig only uses for a native build (see packages-zig/storage-zig/docs/aws-sdk.md). The runner is an arm64
+    # Mac, so this is the arm64 build.
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            script: build-mac-arm64
-            binary: bin/arm64/mac/psi
-            arch: arm64
-          - os: macos-15-intel
-            script: build-mac-x64
-            binary: bin/x64/mac/psi
-            arch: x86_64
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -1703,14 +1692,14 @@ jobs:
 
       - name: Build the Zig CLI natively for macOS
         working-directory: ./apps/cli-zig
-        run: bun run ${{ matrix.script }}
+        run: bun run build-mac-arm64
 
       - name: Check the binary was produced for the right architecture
         working-directory: ./apps/cli-zig
         run: |
-          ls -la ${{ matrix.binary }}
-          file ${{ matrix.binary }}
-          file ${{ matrix.binary }} | grep "Mach-O 64-bit executable ${{ matrix.arch }}"
+          ls -la bin/arm64/mac/psi
+          file bin/arm64/mac/psi
+          file bin/arm64/mac/psi | grep "Mach-O 64-bit executable arm64"
 
       # The binary is renamed to say which CLI it is, because the TypeScript CLI is also called psi and
       # unpacking both releases into one directory would otherwise leave one of the two overwritten.
@@ -1718,13 +1707,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          cp apps/cli-zig/${{ matrix.binary }} out/photosphere-cli-zig-macos-${{ matrix.arch }}
+          cp apps/cli-zig/bin/arm64/mac/psi out/photosphere-cli-zig-macos-arm64
           ls -la out
 
       - name: Upload the Zig CLI binary
         uses: actions/upload-artifact@v4
         with:
-          name: photosphere-cli-zig-macos-${{ matrix.arch }}
+          name: photosphere-cli-zig-macos-arm64
           path: out
 
   zig-unit-tests:
@@ -2103,10 +2092,9 @@ jobs:
           cd ./artifacts/macos-arm64 && chmod +x psi && tar -czf ../photosphere-cli-macos-arm64.tar.gz psi && cd ../..
           # The Zig CLI, one archive per platform, with the binary named after the platform it is for.
           cd ./artifacts/zig
-          chmod +x photosphere-cli-zig-linux-x64 photosphere-cli-zig-linux-arm64 photosphere-cli-zig-macos-x86_64 photosphere-cli-zig-macos-arm64
+          chmod +x photosphere-cli-zig-linux-x64 photosphere-cli-zig-linux-arm64 photosphere-cli-zig-macos-arm64
           tar -czf ../photosphere-cli-zig-linux-x64.tar.gz photosphere-cli-zig-linux-x64
           tar -czf ../photosphere-cli-zig-linux-arm64.tar.gz photosphere-cli-zig-linux-arm64
-          tar -czf ../photosphere-cli-zig-macos-x64.tar.gz photosphere-cli-zig-macos-x86_64
           tar -czf ../photosphere-cli-zig-macos-arm64.tar.gz photosphere-cli-zig-macos-arm64
           zip ../photosphere-cli-zig-windows-x64.zip photosphere-cli-zig-windows-x64.exe
           cd ../..
@@ -2154,7 +2142,6 @@ jobs:
             ./artifacts/photosphere-cli-zig-linux-x64.tar.gz
             ./artifacts/photosphere-cli-zig-linux-arm64.tar.gz
             ./artifacts/photosphere-cli-zig-windows-x64.zip
-            ./artifacts/photosphere-cli-zig-macos-x64.tar.gz
             ./artifacts/photosphere-cli-zig-macos-arm64.tar.gz
             ./artifacts/desktop/**/*
           body: |
