@@ -9,6 +9,10 @@ test "ensureMediaProcessingTools returns when every tool is available" {
     const allocator = arena.allocator();
 
     // Without the tools ensureMediaProcessingTools exits the process: fail instead, saying what is missing.
+    // The detection is forgotten first, because Image looks its commands up on PATH once and remembers the
+    // answer for the rest of the process, so a test that ran before this one and replaced the environment can
+    // leave it believing no ImageMagick is installed when one is.
+    tools.Image.resetInitialization();
     const status = try tools.verifyTools(allocator, std.testing.io);
     if (!status.allAvailable) {
         std.debug.print("This test needs ImageMagick and ffmpeg installed. Missing: {s}\n", .{try std.mem.join(allocator, ", ", status.missingTools)});

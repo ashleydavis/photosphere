@@ -792,6 +792,9 @@ test "getVaultFilePath puts vault.json inside the vault directory" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const expected = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{try std.fs.path.join(allocator, &.{ "home", "vaults", "photosphere" })});
+    // The path is joined with node-utils' path.join, the port of Node's path.join, which normalises every
+    // separator of the segments it is given to a `\` on Windows, so the expectation is built the same way. A `/`
+    // written into the format string here would survive the join and match nothing but a POSIX build.
+    const expected = try node_utils.path.join(allocator, &.{ try std.fs.path.join(allocator, &.{ "home", "vaults", "photosphere" }), "vault.json" });
     try std.testing.expectEqualStrings(expected, try vault_zig.plaintext_vault.getVaultFilePath(allocator, "home/vaults/photosphere"));
 }

@@ -1,6 +1,8 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const cli = @import("cli-zig");
 const helpers = @import("test-helpers.zig");
+const node_utils = @import("node-utils-zig");
 
 //
 // The failure paths of the database, secrets, upgrade and info commands that no other test file covers: a subcommand
@@ -268,9 +270,12 @@ test "debug remove-duplicates names the input file it cannot read" {
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", db);
 
     // With no --input the duplicates report is read from <db>/duplicates.json, which this database does not have.
+    // The path is joined with the separator of the platform, which is a `\` on Windows, so it is joined here too
+    // rather than written with a `/` into a format string.
+    const inputFile = try node_utils.path.join(allocator, &.{ db, "duplicates.json" });
     const result = try runZig(allocator, environment, &.{ "debug", "remove-duplicates", "--db", db, "--yes" });
     try std.testing.expectEqual(@as(u8, 1), result.exitCode);
-    try expectContains(result.stdout, try std.fmt.allocPrint(allocator, "Error: Failed to read input file {s}/duplicates.json: ENOENT: no such file or directory, open ", .{db}));
+    try expectContains(result.stdout, try std.fmt.allocPrint(allocator, "Error: Failed to read input file {s}: ENOENT: no such file or directory, open ", .{inputFile}));
 }
 
 test "dbs view prints the entry of a database and (none) for every field it does not have" {
@@ -365,8 +370,14 @@ test "upgrade takes a v5 database all the way to the current version" {
     const result = try runZig(allocator, environment, &.{ "upgrade", "--db", db, "--yes" });
     try std.testing.expectEqual(@as(u8, 0), result.exitCode);
 
-    // The backup instructions are the only warnings, and they name the directory this run was given.
-    try expectContains(result.stderr, try std.fmt.allocPrint(allocator, "cp -r \"{s}\" \"{s}-backup\"\n", .{ db, db }));
+    // The backup instructions are the only warnings, and they name the directory this run was given. The command
+    // it suggests is `xcopy` on Windows and `cp -r` everywhere else, and it joins the path with the separator of
+    // the platform, which is a `\` on Windows.
+    const backupCommand = if (builtin.os.tag == .windows)
+        try std.fmt.allocPrint(allocator, "xcopy \"{s}\" \"{s}-backup\" /E /I\n", .{ db, db })
+    else
+        try std.fmt.allocPrint(allocator, "cp -r \"{s}\" \"{s}-backup\"\n", .{ db, db });
+    try expectContains(result.stderr, backupCommand);
 
     // The version is read before anything is changed, the old metadata/ directory is migrated and removed, and the
     // tree is written to .db/files.dat. The error log line that follows names a file of its own, so the output is
