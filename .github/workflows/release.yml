@@ -1601,8 +1601,13 @@ jobs:
           if-no-files-found: warn
           retention-days: 2
 
-  build-zig:
-    timeout-minutes: 30
+  build-zig-linux-x64:
+    # Builds the Zig CLI for Linux x64 on a runner of that platform, and publishes the binary. Nothing here
+    # cross-compiles, so a build that works is a build that runs on the platform it names.
+    #
+    # This is the only job that builds the Zig CLI: zig-smoke-tests downloads the binary this uploads
+    # and create-release publishes it, so the binary is built once and used by both.
+    timeout-minutes: 40
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -1625,45 +1630,79 @@ jobs:
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
         with:
-          path: ~/.cache/zig/p
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
           key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-
 
-      - name: Cross-compile the Zig CLI for Linux and Windows
-        working-directory: ./apps/cli-zig
-        run: bun run build-all
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
 
-      - name: Check every platform binary was produced
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/cli-zig/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-
+
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d apps/cli-zig/.zig-cache ]; then
+              megabytes="$(du -sm apps/cli-zig/.zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv apps/cli-zig/.zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
+      - name: Build the Zig CLI natively for Linux x64
+        working-directory: ./apps/cli-zig
+        run: zig build -Dcpu=baseline --prefix bin/x64/linux --prefix-exe-dir .
+
+      - name: Check the binary was produced
         working-directory: ./apps/cli-zig
         run: |
-          ls -la bin/x64/linux/psi bin/arm64/linux/psi bin/x64/win/psi.exe
-          file bin/x64/linux/psi bin/arm64/linux/psi bin/x64/win/psi.exe
+          ls -la bin/x64/linux/psi
+          file bin/x64/linux/psi
 
-      # Uploaded so create-release can publish the Zig CLI. The binary is renamed here rather than in the
-      # archive, so the name says which CLI it is: the TypeScript CLI is also called psi, and unpacking both
-      # releases into one directory would otherwise leave one of the two binaries overwritten.
-      - name: Collect the Zig CLI binaries
+      # The binary is renamed to say which CLI it is, because the TypeScript CLI is also called psi and
+      # unpacking both releases into one directory would otherwise overwrite one with the other.
+      - name: Collect the Zig CLI binary
         shell: bash
         run: |
           mkdir -p out
           cp apps/cli-zig/bin/x64/linux/psi out/photosphere-cli-zig-linux-x64
-          cp apps/cli-zig/bin/arm64/linux/psi out/photosphere-cli-zig-linux-arm64
-          cp apps/cli-zig/bin/x64/win/psi.exe out/photosphere-cli-zig-windows-x64.exe
           ls -la out
 
-      - name: Upload the Zig CLI binaries
+      - name: Upload the Zig CLI binary
         uses: actions/upload-artifact@v4
         with:
-          name: photosphere-cli-zig-linux-windows
+          name: photosphere-cli-zig-linux-x64
           path: out
 
-  build-zig-macos:
-    # Builds the Zig CLI for macOS natively: the AWS SDK for C needs the macOS SDK's framework headers, which
-    # Zig only uses for a native build (see packages-zig/storage-zig/docs/aws-sdk.md). The runner is an arm64
-    # Mac, so this is the arm64 build.
-    timeout-minutes: 30
-    runs-on: macos-latest
+      - name: Save the Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: apps/cli-zig/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+
+  build-zig-windows-x64:
+    # Builds the Zig CLI for Windows x64 on a runner of that platform, and publishes the binary. Nothing here
+    # cross-compiles, so a build that works is a build that runs on the platform it names.
+    #
+    # This is the only job that builds the Zig CLI: zig-smoke-tests downloads the binary this uploads
+    # and create-release publishes it, so the binary is built once and used by both.
+    timeout-minutes: 40
+    runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -1685,42 +1724,77 @@ jobs:
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
         with:
-          path: ~/.cache/zig/p
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
           key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-
 
-      - name: Build the Zig CLI natively for macOS
-        working-directory: ./apps/cli-zig
-        run: bun run build-mac-arm64
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
 
-      - name: Check the binary was produced for the right architecture
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/cli-zig/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-
+
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d apps/cli-zig/.zig-cache ]; then
+              megabytes="$(du -sm apps/cli-zig/.zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv apps/cli-zig/.zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
+      - name: Build the Zig CLI natively for Windows x64
+        working-directory: ./apps/cli-zig
+        run: zig build -Dcpu=baseline --prefix bin/x64/win --prefix-exe-dir .
+
+      - name: Check the binary was produced
         working-directory: ./apps/cli-zig
         run: |
-          ls -la bin/arm64/mac/psi
-          file bin/arm64/mac/psi
-          file bin/arm64/mac/psi | grep "Mach-O 64-bit executable arm64"
+          ls -la bin/x64/win/psi.exe
 
       # The binary is renamed to say which CLI it is, because the TypeScript CLI is also called psi and
-      # unpacking both releases into one directory would otherwise leave one of the two overwritten.
+      # unpacking both releases into one directory would otherwise overwrite one with the other.
       - name: Collect the Zig CLI binary
         shell: bash
         run: |
           mkdir -p out
-          cp apps/cli-zig/bin/arm64/mac/psi out/photosphere-cli-zig-macos-arm64
+          cp apps/cli-zig/bin/x64/win/psi.exe out/photosphere-cli-zig-windows-x64
           ls -la out
 
       - name: Upload the Zig CLI binary
         uses: actions/upload-artifact@v4
         with:
-          name: photosphere-cli-zig-macos-arm64
+          name: photosphere-cli-zig-windows-x64
           path: out
 
+      - name: Save the Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: apps/cli-zig/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+
   build-zig-macos-x64:
-    # Builds the Zig CLI for macOS natively: the AWS SDK for C needs the macOS SDK's framework headers, which
-    # Zig only uses for a native build (see packages-zig/storage-zig/docs/aws-sdk.md). The runner is an x64
-    # Mac, so this is the x64 build.
-    timeout-minutes: 30
+    # Builds the Zig CLI for macOS x64 on a runner of that platform, and publishes the binary. Nothing here
+    # cross-compiles, so a build that works is a build that runs on the platform it names.
+    #
+    # This is the only job that builds the Zig CLI: zig-smoke-tests downloads the binary this uploads
+    # and create-release publishes it, so the binary is built once and used by both.
+    timeout-minutes: 40
     runs-on: macos-15-intel
     steps:
       - name: Checkout code
@@ -1748,19 +1822,46 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-
 
-      - name: Build the Zig CLI natively for macOS
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/cli-zig/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-
+
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d apps/cli-zig/.zig-cache ]; then
+              megabytes="$(du -sm apps/cli-zig/.zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv apps/cli-zig/.zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
+      - name: Build the Zig CLI natively for macOS x64
         working-directory: ./apps/cli-zig
         run: bun run build-mac-x64
 
-      - name: Check the binary was produced for the right architecture
+      - name: Check the binary was produced
         working-directory: ./apps/cli-zig
         run: |
           ls -la bin/x64/mac/psi
           file bin/x64/mac/psi
-          file bin/x64/mac/psi | grep "Mach-O 64-bit executable x86_64"
 
       # The binary is renamed to say which CLI it is, because the TypeScript CLI is also called psi and
-      # unpacking both releases into one directory would otherwise leave one of the two overwritten.
+      # unpacking both releases into one directory would otherwise overwrite one with the other.
       - name: Collect the Zig CLI binary
         shell: bash
         run: |
@@ -1773,6 +1874,107 @@ jobs:
         with:
           name: photosphere-cli-zig-macos-x64
           path: out
+
+      - name: Save the Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: apps/cli-zig/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+
+  build-zig-macos-arm64:
+    # Builds the Zig CLI for macOS arm64 on a runner of that platform, and publishes the binary. Nothing here
+    # cross-compiles, so a build that works is a build that runs on the platform it names.
+    #
+    # This is the only job that builds the Zig CLI: zig-smoke-tests downloads the binary this uploads
+    # and create-release publishes it, so the binary is built once and used by both.
+    timeout-minutes: 40
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Fetch the Zig package dependencies (one at a time)
+        shell: bash
+        run: bun run --cwd packages-zig/storage-zig fetch-deps
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/cli-zig/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-
+
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d apps/cli-zig/.zig-cache ]; then
+              megabytes="$(du -sm apps/cli-zig/.zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv apps/cli-zig/.zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
+      - name: Build the Zig CLI natively for macOS arm64
+        working-directory: ./apps/cli-zig
+        run: bun run build-mac-arm64
+
+      - name: Check the binary was produced
+        working-directory: ./apps/cli-zig
+        run: |
+          ls -la bin/arm64/mac/psi
+          file bin/arm64/mac/psi
+
+      # The binary is renamed to say which CLI it is, because the TypeScript CLI is also called psi and
+      # unpacking both releases into one directory would otherwise overwrite one with the other.
+      - name: Collect the Zig CLI binary
+        shell: bash
+        run: |
+          mkdir -p out
+          cp apps/cli-zig/bin/arm64/mac/psi out/photosphere-cli-zig-macos-arm64
+          ls -la out
+
+      - name: Upload the Zig CLI binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-cli-zig-macos-arm64
+          path: out
+
+      - name: Save the Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: apps/cli-zig/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
 
   zig-unit-tests:
     # The unit tests of the Zig CLI and of every Zig package, on each platform, because the
@@ -1910,36 +2112,43 @@ jobs:
     # The Zig CLI smoke suites on each platform, because the byte-identical output (gzip OS byte, paths, file
     # times) differs between them. The unit tests are the zig-unit-tests job above, so a failure in one is not
     # reported as a failure of the other.
+    # The binary is not built here: each build-zig job builds the one for its own platform and this job
+    # downloads it, so the Zig CLI is compiled once per platform and both this job and the release use it.
     # Setup takes about 5 minutes and the smoke suites about 15.
     timeout-minutes: 50
+    needs: [build-zig-linux-x64, build-zig-macos-arm64, build-zig-windows-x64]
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            artifact: photosphere-cli-zig-linux-x64
+            binary: psi
+          - os: macos-latest
+            artifact: photosphere-cli-zig-macos-arm64
+            binary: psi
+          - os: windows-latest
+            artifact: photosphere-cli-zig-windows-x64
+            binary: psi.exe
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-
       - name: Setup Zig (version from mise.toml)
         uses: jdx/mise-action@v2
         with:
           install_args: zig
-
       - name: Fetch the Zig package dependencies (one at a time)
         shell: bash
         run: bun run --cwd packages-zig/storage-zig fetch-deps
-
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
         with:
@@ -1947,7 +2156,6 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-
-
       - name: Cache Bun dependencies
         uses: actions/cache@v4
         with:
@@ -1955,119 +2163,84 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-
-
       - name: Install dependencies
         uses: ./.github/actions/retry-install
         with:
           run: bun install
-
       - name: Install media processing tools (Linux)
         if: runner.os == 'Linux'
         uses: ./.github/actions/install-apt-packages
         with:
           packages: imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
-
       - name: Install media processing tools (macOS)
         if: runner.os == 'macOS'
         uses: ./.github/actions/retry-install
         with:
           run: brew install imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
-
       - name: Install ffmpeg (Windows)
         if: runner.os == 'Windows'
         uses: ./.github/actions/install-ffmpeg-windows
-
       - name: Install media processing tools (Windows)
         if: runner.os == 'Windows'
         uses: ./.github/actions/retry-install
         with:
           run: choco install imagemagick -y
           verify: magick|convert
-
       # Every run compiled the Zig CLI, every package and the AWS SDK for C from nothing, which took the
       # Windows unit test step past its timeout. Zig's cache is content addressed, so the one from an
       # earlier run holds most of what this run compiles. It is saved at the end of every job.
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
-        with:
-          path: apps/cli-zig/.zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-
-
-      # Every commit adds a new generation of Zig artifacts and nothing removes the old ones, so the
-      # cache grew from 2.4 GB (run 674) to 6.1 GB (run 699). Saving only under 6 GB then stopped every
-      # save, runs kept restoring an ever staler cache, and once GitHub evicted that last entry run 700
-      # built everything cold and passed the step's timeout. A cache this big is moved out of the way
-      # instead, so this run builds and saves a fresh one.
-      - name: Start a fresh Zig build cache when the restored one has grown too big
-        shell: bash
-        run: |
-          if [ -d apps/cli-zig/.zig-cache ]; then
-              megabytes="$(du -sm apps/cli-zig/.zig-cache | cut -f1)"
-              echo "Restored Zig build cache: ${megabytes} MB"
-              if [ "$megabytes" -ge 5120 ]; then
-                  mv apps/cli-zig/.zig-cache "$RUNNER_TEMP/stale-zig-cache"
-                  echo "Moved it aside to start a fresh one"
-              fi
-          fi
-
-
       - name: Show the disk space the Zig builds use (each package that builds the AWS SDK for C has its own zig-pkg and .zig-cache)
         if: always()
         shell: bash
         run: |
           df -h .
           du -sh packages/*/zig-pkg packages/*/.zig-cache apps/*/zig-pkg apps/*/.zig-cache 2>/dev/null || true
-
-      # The smoke suites run the built binary rather than `bun run start`, so this job builds it. It used to rely
-      # on the unit test step of the job it used to share, which compiled the CLI but did not install it.
-      - name: Build the Zig CLI for the smoke suites
-        timeout-minutes: 20
+      # The smoke suites run the built binary rather than `bun run start`, at the path their common.sh reads
+      # (../cli-zig/zig-out/bin/psi from apps/cli). The binary is the one the build job for this platform built.
+      - name: Download the Zig CLI built for this platform
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ./zig-binary
+      - name: Put the Zig CLI where the smoke suites look for it
         shell: bash
         run: |
-          cd apps/cli-zig
-          zig build
-
+          mkdir -p apps/cli-zig/zig-out/bin
+          cp zig-binary/${{ matrix.artifact }} apps/cli-zig/zig-out/bin/${{ matrix.binary }}
+          ls -la apps/cli-zig/zig-out/bin
       - name: Run the Zig CLI smoke tests
         timeout-minutes: 14
         working-directory: ./apps/cli
         shell: bash
         run: ./smoke-tests-zig.sh --binary
-
       - name: Test the Zig version command
         working-directory: ./apps/cli
         shell: bash
         run: |
           echo "Testing version command after building..."
           ../cli-zig/zig-out/bin/psi version
-
       - name: Run the Zig CLI encrypted smoke tests
         timeout-minutes: 12
         working-directory: ./apps/cli
         shell: bash
         run: ./smoke-tests-encrypted-zig.sh all
-
       - name: Run the Zig CLI write lock smoke tests
         timeout-minutes: 12
         working-directory: ./apps/cli
         shell: bash
         run: ./write-lock-smoke-test-zig.sh
-
       - name: Run the Zig CLI sync smoke tests
         timeout-minutes: 12
         working-directory: ./apps/cli
         shell: bash
         run: ./sync-smoke-test-zig.sh
-
       - name: Run the Zig CLI hash cache smoke tests
         timeout-minutes: 12
         working-directory: ./apps/cli
         shell: bash
         run: ./hash-cache-smoke-test-zig.sh
-
       # Linux only, like the TypeScript lan-share-smoke-test job it mirrors.
       - name: Run the Zig CLI LAN share smoke tests
         if: runner.os == 'Linux'
@@ -2075,19 +2248,11 @@ jobs:
         working-directory: ./apps/cli
         shell: bash
         run: ./smoke-tests-lan-share-zig.sh
-
       # Saved on every run, so the newest entry is always one this branch just wrote. It no longer grows
       # without bound: the step after the restore starts a fresh cache once the restored one is too big.
-      - name: Save the Zig build cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: apps/cli-zig/.zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
-
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, compile, build-zig, build-zig-macos, build-zig-macos-x64, zig-unit-tests, zig-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
+    needs: [prepare-tag, compile, build-zig-linux-x64, build-zig-windows-x64, build-zig-macos-arm64, build-zig-macos-x64, zig-unit-tests, zig-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write
