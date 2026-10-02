@@ -2120,7 +2120,7 @@ jobs:
     # The binary is not built here: each build-zig job builds the one for its own platform and this job
     # downloads it, so the Zig CLI is compiled once per platform and both this job and the release use it.
     # Setup takes about 5 minutes and the smoke suites about 15.
-    timeout-minutes: 50
+    timeout-minutes: 75
     needs: [build-zig-linux-x64, build-zig-macos-arm64, build-zig-windows-x64]
     strategy:
       fail-fast: false
@@ -2219,7 +2219,9 @@ jobs:
           chmod +x apps/cli-zig/zig-out/bin/${{ matrix.binary }}
           ls -la apps/cli-zig/zig-out/bin
       - name: Run the Zig CLI smoke tests
-        timeout-minutes: 14
+        # 101 tests, and the Windows runner is the slowest: it reached test 100 in 14 minutes, so the
+        # old 14-minute limit killed the step with every test passing.
+        timeout-minutes: 30
         working-directory: ./apps/cli
         shell: bash
         run: ./smoke-tests-zig.sh --binary
