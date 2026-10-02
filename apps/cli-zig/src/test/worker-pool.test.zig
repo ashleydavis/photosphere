@@ -10,7 +10,7 @@ const types = task_queue.types;
 //
 // The results collected by the completion callback of a test.
 //
-const Collector = struct {
+pub const Collector = struct {
     // Guards the fields.
     mutex: std.Io.Mutex = .init,
 
@@ -53,7 +53,7 @@ const Collector = struct {
     //
     // The completion callback.
     //
-    fn onComplete(context: ?*anyopaque, result: types.ITaskResult) anyerror!void {
+    pub fn onComplete(context: ?*anyopaque, result: types.ITaskResult) anyerror!void {
         const self: *Collector = @ptrCast(@alignCast(context.?));
         self.mutex.lockUncancelable(std.testing.io);
         defer self.mutex.unlock(std.testing.io);
@@ -119,7 +119,7 @@ const Collector = struct {
     //
     // Waits until the number of completed tasks reaches the count (fails after 10 seconds).
     //
-    fn waitForCompleted(self: *Collector, count: usize) !void {
+    pub fn waitForCompleted(self: *Collector, count: usize) !void {
         var waited: usize = 0;
         while (waited < 2000) {
             self.mutex.lockUncancelable(std.testing.io);
