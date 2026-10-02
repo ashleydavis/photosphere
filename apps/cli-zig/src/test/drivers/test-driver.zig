@@ -2,6 +2,7 @@ const std = @import("std");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
+const lan_share_network = @import("lan-share-network-zig");
 
 //
 // A program for the unit tests (it is not shipped): it runs one CLI function against the real process streams,
@@ -118,7 +119,193 @@ pub fn main(init: std.process.Init) !void {
         const validator: ?cli.directory_picker.Validator = if (try parseBool(scenarioArguments[2])) cli.directory_picker.validateExistingDatabase else null;
         try writeResult(allocator, io, resultPath, try cli.directory_picker.pickDirectory(allocator, io, scenarioArguments[0], scenarioArguments[1], validator));
     }
+    else if (std.mem.eql(u8, scenario, "dbs-receive-timeout")) {
+        // dbs-receive-timeout <pairing code> <discovery timeout in ms>
+        try expectArgumentCount(scenarioArguments, 2);
+        try writeResult(allocator, io, resultPath, null);
+        var options: cli.dbs.IDbsReceiveOptions = .{
+            .yes = true,
+            .code = scenarioArguments[0],
+            .discoveryTimeoutMs = parseMilliseconds(scenarioArguments[1]),
+        };
+        try cli.dbs.dbsReceive(allocator, io, &options);
+    }
+    else if (std.mem.eql(u8, scenario, "dbs-send-timeout")) {
+        // dbs-send-timeout <database name> <pairing code> <discovery timeout in ms>
+        try expectArgumentCount(scenarioArguments, 3);
+        try writeResult(allocator, io, resultPath, null);
+        var options: cli.dbs.IDbsSendOptions = .{
+            .yes = true,
+            .name = scenarioArguments[0],
+            .code = scenarioArguments[1],
+            .discoveryTimeoutMs = parseMilliseconds(scenarioArguments[2]),
+        };
+        try cli.dbs.dbsSend(allocator, io, &options);
+    }
+    else if (std.mem.eql(u8, scenario, "dbs-send-to-mismatched-receiver")) {
+        // dbs-send-to-mismatched-receiver <database name> <pairing code> <the other device's code>
+        // <discovery timeout in ms>
+        try expectArgumentCount(scenarioArguments, 4);
+        try writeResult(allocator, io, resultPath, null);
+        try withMismatchedReceiver(io, scenarioArguments[2], parseMilliseconds(scenarioArguments[3]), ISendContext{
+            .allocator = allocator,
+            .io = io,
+            .name = scenarioArguments[0],
+            .code = scenarioArguments[1],
+            .discoveryTimeoutMs = parseMilliseconds(scenarioArguments[3]),
+        }, runDbsSend);
+    }
+    else if (std.mem.eql(u8, scenario, "secrets-receive-timeout")) {
+        // secrets-receive-timeout <pairing code> <discovery timeout in ms>
+        try expectArgumentCount(scenarioArguments, 2);
+        try writeResult(allocator, io, resultPath, null);
+        var options: cli.secrets.ISecretsReceiveOptions = .{
+            .yes = true,
+            .code = scenarioArguments[0],
+            .discoveryTimeoutMs = parseMilliseconds(scenarioArguments[1]),
+        };
+        try cli.secrets.secretsReceive(allocator, io, &options);
+    }
+    else if (std.mem.eql(u8, scenario, "secrets-send-timeout")) {
+        // secrets-send-timeout <secret name> <pairing code> <discovery timeout in ms>
+        try expectArgumentCount(scenarioArguments, 3);
+        try writeResult(allocator, io, resultPath, null);
+        var options: cli.secrets.ISecretsSendOptions = .{
+            .yes = true,
+            .name = scenarioArguments[0],
+            .code = scenarioArguments[1],
+            .discoveryTimeoutMs = parseMilliseconds(scenarioArguments[2]),
+        };
+        try cli.secrets.secretsSend(allocator, io, &options);
+    }
+    else if (std.mem.eql(u8, scenario, "secrets-send-to-mismatched-receiver")) {
+        // secrets-send-to-mismatched-receiver <secret name> <pairing code> <the other device's code>
+        // <discovery timeout in ms>
+        try expectArgumentCount(scenarioArguments, 4);
+        try writeResult(allocator, io, resultPath, null);
+        try withMismatchedReceiver(io, scenarioArguments[2], parseMilliseconds(scenarioArguments[3]), ISendContext{
+            .allocator = allocator,
+            .io = io,
+            .name = scenarioArguments[0],
+            .code = scenarioArguments[1],
+            .discoveryTimeoutMs = parseMilliseconds(scenarioArguments[3]),
+        }, runSecretsSend);
+    }
     else {
         return error.UnknownScenario;
     }
+}
+
+//
+// What a send scenario needs to run its command with.
+//
+const ISendContext = struct {
+    // Allocates what the command allocates.
+    allocator: std.mem.Allocator,
+
+    // The Io the command prompts and logs with.
+    io: std.Io,
+
+    // The name of the database or secret to send.
+    name: []const u8,
+
+    // The pairing code the sender uses.
+    code: []const u8,
+
+    // How long the sender waits for a receiver, in milliseconds.
+    discoveryTimeoutMs: i64,
+};
+
+//
+// A LAN share receiver kept broadcasting for the sender of a scenario, on a thread of its own.
+//
+const IHeldReceiver = struct {
+    // The receiver. It announces the hash of the pairing code it was given, which is deliberately
+    // not the sender's: that is what a user who mistyped the pairing code has on the other device,
+    // and it is what makes the sender report a rejected code rather than an absent device.
+    receiver: lan_share_network.lan_share_receiver.LanShareReceiver,
+
+    // The pairing code the receiver announces.
+    code: []const u8,
+
+    // The Io the receiver's threads sleep with.
+    io: std.Io,
+
+    // Set once the receiver is broadcasting, so the sender does not start before the first
+    // announcement has gone out.
+    isBroadcasting: std.atomic.Value(bool),
+};
+
+//
+// Runs a LAN share receiver on a thread until it is cancelled.
+//
+fn holdReceiver(context: *IHeldReceiver) void {
+    context.receiver.start(context.code) catch |err| {
+        std.debug.panic("Starting the LAN share receiver failed: {t}", .{err});
+    };
+    context.isBroadcasting.store(true, .release);
+    while (!context.receiver.isDone.load(.acquire)) {
+        context.io.sleep(.fromMilliseconds(20), .awake) catch {
+            return;
+        };
+    }
+}
+
+//
+// Starts a receiver announcing a pairing code of its own, runs what the scenario names while it
+// broadcasts, then stops it. What the scenario names is passed in as a function so the receiver is
+// released in the same place either way.
+//
+fn withMismatchedReceiver(io: std.Io, code: []const u8, timeoutMs: i64, context: ISendContext, run: *const fn (ISendContext) anyerror!void) !void {
+    var held = IHeldReceiver{
+        .receiver = lan_share_network.lan_share_receiver.LanShareReceiver.init(io, timeoutMs),
+        .code = code,
+        .io = io,
+        .isBroadcasting = .init(false),
+    };
+    defer held.receiver.deinit();
+    const thread = try std.Thread.spawn(.{}, holdReceiver, .{&held});
+    while (!held.isBroadcasting.load(.acquire)) {
+        try io.sleep(.fromMilliseconds(20), .awake);
+    }
+    try run(context);
+    held.receiver.cancel();
+    thread.join();
+}
+
+//
+// The discovery timeout a scenario argument carries, in milliseconds.
+//
+fn parseMilliseconds(text: []const u8) i64 {
+    return std.fmt.parseInt(i64, text, 10) catch |err| {
+        std.debug.panic("Parsing the discovery timeout \"{s}\" failed: {t}", .{ text, err });
+    };
+}
+
+//
+// Runs `psi dbs send` with the pairing code and discovery timeout a scenario carried, as the closure
+// withMismatchedReceiver runs.
+//
+fn runDbsSend(context: ISendContext) !void {
+    var options: cli.dbs.IDbsSendOptions = .{
+        .yes = true,
+        .name = context.name,
+        .code = context.code,
+        .discoveryTimeoutMs = context.discoveryTimeoutMs,
+    };
+    try cli.dbs.dbsSend(context.allocator, context.io, &options);
+}
+
+//
+// Runs `psi secrets send` with the pairing code and discovery timeout a scenario carried, as the
+// closure withMismatchedReceiver runs.
+//
+fn runSecretsSend(context: ISendContext) !void {
+    var options: cli.secrets.ISecretsSendOptions = .{
+        .yes = true,
+        .name = context.name,
+        .code = context.code,
+        .discoveryTimeoutMs = context.discoveryTimeoutMs,
+    };
+    try cli.secrets.secretsSend(context.allocator, context.io, &options);
 }

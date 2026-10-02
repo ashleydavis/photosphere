@@ -171,6 +171,13 @@ pub const ISecretsSendOptions = struct {
 
     // Pairing code to use instead of generating one.
     code: ?[]const u8 = null,
+
+    // How long to wait for a receiver on the network, in milliseconds. The CLI never sets this, so a
+    // real user always gets the 60 seconds the TypeScript waits. It is a field rather than a literal
+    // in secretsSend so a test can drive the "no receiver" branch in milliseconds instead of waiting
+    // out the minute: the branch is the same code either way, only how long it waits before giving up
+    // differs. See ISecretsReceiveOptions.discoveryTimeoutMs, which is its twin.
+    discoveryTimeoutMs: i64 = 60000,
 };
 
 //
@@ -201,6 +208,13 @@ pub const ISecretsReceiveOptions = struct {
 
     // Pairing code shown on the sender (required with --yes).
     code: ?[]const u8 = null,
+
+    // How long to wait for a sender on the network, in milliseconds. The CLI never sets this, so a
+    // real user always gets the 60 seconds the TypeScript waits. It is a field rather than a literal
+    // in secretsReceive so a test can drive the "no sender" branch in milliseconds instead of waiting
+    // out the minute: the branch is the same code either way, only how long it waits before giving up
+    // differs. See ISecretsSendOptions.discoveryTimeoutMs, which is its twin.
+    discoveryTimeoutMs: i64 = 60000,
 };
 
 // Not ported: secretsCommand (the command group is registered in index.zig with the Zig commander, like every
@@ -944,7 +958,7 @@ pub fn secretsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecre
     const sigintHandler: process_signals.ISignalListener = .{ .context = &sender, .function = cancelSender };
     try process_signals.on(.SIGINT, sigintHandler);
 
-    const endpoint = try sender.waitForReceiver(io, 60000);
+    const endpoint = try sender.waitForReceiver(io, cmdOptions.discoveryTimeoutMs);
     try process_signals.removeListener(.SIGINT, sigintHandler);
 
     if (endpoint == null) {
@@ -1026,7 +1040,7 @@ pub fn secretsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISe
         code = trim(codeInput.value);
     }
 
-    var receiver = LanShareReceiver.init(io, 60000);
+    var receiver = LanShareReceiver.init(io, cmdOptions.discoveryTimeoutMs);
     defer receiver.deinit();
     try receiver.start(code);
 
