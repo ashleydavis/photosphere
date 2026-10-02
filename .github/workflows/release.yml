@@ -1679,6 +1679,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
+          chmod +x apps/cli-zig/bin/x64/linux/psi
           cp apps/cli-zig/bin/x64/linux/psi out/photosphere-cli-zig-linux-x64
           ls -la out
 
@@ -1773,6 +1774,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
+          chmod +x apps/cli-zig/bin/x64/win/psi.exe
           cp apps/cli-zig/bin/x64/win/psi.exe out/photosphere-cli-zig-windows-x64
           ls -la out
 
@@ -1867,6 +1869,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
+          chmod +x apps/cli-zig/bin/x64/mac/psi
           cp apps/cli-zig/bin/x64/mac/psi out/photosphere-cli-zig-macos-x64
           ls -la out
 
@@ -1961,6 +1964,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
+          chmod +x apps/cli-zig/bin/arm64/mac/psi
           cp apps/cli-zig/bin/arm64/mac/psi out/photosphere-cli-zig-macos-arm64
           ls -la out
 
@@ -2210,6 +2214,9 @@ jobs:
         run: |
           mkdir -p apps/cli-zig/zig-out/bin
           cp zig-binary/${{ matrix.artifact }} apps/cli-zig/zig-out/bin/${{ matrix.binary }}
+          # The artifact is downloaded without the executable bit, and the smoke suites fail with exit 126
+          # (found but not executable) without it.
+          chmod +x apps/cli-zig/zig-out/bin/${{ matrix.binary }}
           ls -la apps/cli-zig/zig-out/bin
       - name: Run the Zig CLI smoke tests
         timeout-minutes: 14
