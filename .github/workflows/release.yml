@@ -1640,6 +1640,24 @@ jobs:
           ls -la bin/x64/linux/psi bin/arm64/linux/psi bin/x64/win/psi.exe
           file bin/x64/linux/psi bin/arm64/linux/psi bin/x64/win/psi.exe
 
+      # Uploaded so create-release can publish the Zig CLI. The binary is renamed here rather than in the
+      # archive, so the name says which CLI it is: the TypeScript CLI is also called psi, and unpacking both
+      # releases into one directory would otherwise leave one of the two binaries overwritten.
+      - name: Collect the Zig CLI binaries
+        shell: bash
+        run: |
+          mkdir -p out
+          cp apps/cli-zig/bin/x64/linux/psi out/photosphere-cli-zig-linux-x64
+          cp apps/cli-zig/bin/arm64/linux/psi out/photosphere-cli-zig-linux-arm64
+          cp apps/cli-zig/bin/x64/win/psi.exe out/photosphere-cli-zig-windows-x64.exe
+          ls -la out
+
+      - name: Upload the Zig CLI binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-cli-zig-linux-windows
+          path: out
+
   build-zig-macos:
     # Builds the Zig CLI for macOS natively on a Mac of each architecture: the AWS SDK for C needs the macOS SDK's
     # framework headers, which Zig only uses for a native build (see packages-zig/storage-zig/docs/aws-sdk.md).
@@ -1694,10 +1712,28 @@ jobs:
           file ${{ matrix.binary }}
           file ${{ matrix.binary }} | grep "Mach-O 64-bit executable ${{ matrix.arch }}"
 
-  zig-smoke-tests:
-    # Runs the unit tests of every Zig package and the Zig CLI smoke tests on each platform, because the
-    # byte-identical output (gzip OS byte, paths, file times) differs between them.
-    # Setup takes about 5 minutes, a cold unit test build up to 25 and the smoke suites about 15.
+      # The binary is renamed to say which CLI it is, because the TypeScript CLI is also called psi and
+      # unpacking both releases into one directory would otherwise leave one of the two overwritten.
+      - name: Collect the Zig CLI binary
+        shell: bash
+        run: |
+          mkdir -p out
+          cp apps/cli-zig/${{ matrix.binary }} out/photosphere-cli-zig-macos-${{ matrix.arch }}
+          ls -la out
+
+      - name: Upload the Zig CLI binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-cli-zig-macos-${{ matrix.arch }}
+          path: out
+
+  zig-unit-tests:
+    # The unit tests of the Zig CLI and of every Zig package, on each platform, because the
+    # behaviour of a test that runs an external tool differs between them. This is a job of its own so
+    # a failure in a test is not reported as a failure of a smoke suite, which is what happens when
+    # the two share a job: the job is named after the smoke tests and a red unit test looks like a
+    # red smoke test.
+    # Setup takes about 5 minutes and a cold unit test build up to 25.
     timeout-minutes: 50
     strategy:
       fail-fast: false
@@ -1814,12 +1850,139 @@ jobs:
           cd apps/cli-zig
           zig build test-all --summary all --test-timeout 20m
 
+      # A key of its own, because the smoke job saves under the plain one and actions/cache/save fails
+      # when the key already exists.
+      - name: Save the Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: apps/cli-zig/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-unit-${{ github.sha }}
+
+  zig-smoke-tests:
+    # The Zig CLI smoke suites on each platform, because the byte-identical output (gzip OS byte, paths, file
+    # times) differs between them. The unit tests are the zig-unit-tests job above, so a failure in one is not
+    # reported as a failure of the other.
+    # Setup takes about 5 minutes and the smoke suites about 15.
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Fetch the Zig package dependencies (one at a time)
+        shell: bash
+        run: bun run --cwd packages-zig/storage-zig fetch-deps
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install media processing tools (Linux)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Install media processing tools (macOS)
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/install-ffmpeg-windows
+
+      - name: Install media processing tools (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/retry-install
+        with:
+          run: choco install imagemagick -y
+          verify: magick|convert
+
+      # Every run compiled the Zig CLI, every package and the AWS SDK for C from nothing, which took the
+      # Windows unit test step past its timeout. Zig's cache is content addressed, so the one from an
+      # earlier run holds most of what this run compiles. It is saved at the end of every job.
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/cli-zig/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-
+
+      # Every commit adds a new generation of Zig artifacts and nothing removes the old ones, so the
+      # cache grew from 2.4 GB (run 674) to 6.1 GB (run 699). Saving only under 6 GB then stopped every
+      # save, runs kept restoring an ever staler cache, and once GitHub evicted that last entry run 700
+      # built everything cold and passed the step's timeout. A cache this big is moved out of the way
+      # instead, so this run builds and saves a fresh one.
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d apps/cli-zig/.zig-cache ]; then
+              megabytes="$(du -sm apps/cli-zig/.zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv apps/cli-zig/.zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
+
       - name: Show the disk space the Zig builds use (each package that builds the AWS SDK for C has its own zig-pkg and .zig-cache)
         if: always()
         shell: bash
         run: |
           df -h .
           du -sh packages/*/zig-pkg packages/*/.zig-cache apps/*/zig-pkg apps/*/.zig-cache 2>/dev/null || true
+
+      # The smoke suites run the built binary rather than `bun run start`, so this job builds it. It used to rely
+      # on the unit test step of the job it used to share, which compiled the CLI but did not install it.
+      - name: Build the Zig CLI for the smoke suites
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          cd apps/cli-zig
+          zig build
 
       - name: Run the Zig CLI smoke tests
         timeout-minutes: 14
@@ -1877,7 +2040,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, compile, build-zig, build-zig-macos, zig-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
+    needs: [prepare-tag, compile, build-zig, build-zig-macos, zig-unit-tests, zig-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -1924,6 +2087,13 @@ jobs:
           path: ./artifacts/desktop
           merge-multiple: true
 
+      - name: Download the Zig CLI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: photosphere-cli-zig-*
+          path: ./artifacts/zig
+          merge-multiple: true
+
       - name: Create compressed archives
         run: |
           cd ./artifacts/linux && chmod +x psi && tar -czf ../photosphere-cli-linux-x64.tar.gz psi && cd ../..
@@ -1931,6 +2101,15 @@ jobs:
           cd ./artifacts/windows-baseline && zip ../photosphere-cli-windows-x64-baseline.zip psi.exe && cd ../..
           cd ./artifacts/macos-x64 && chmod +x psi && tar -czf ../photosphere-cli-macos-x64.tar.gz psi && cd ../..
           cd ./artifacts/macos-arm64 && chmod +x psi && tar -czf ../photosphere-cli-macos-arm64.tar.gz psi && cd ../..
+          # The Zig CLI, one archive per platform, with the binary named after the platform it is for.
+          cd ./artifacts/zig
+          chmod +x photosphere-cli-zig-linux-x64 photosphere-cli-zig-linux-arm64 photosphere-cli-zig-macos-x86_64 photosphere-cli-zig-macos-arm64
+          tar -czf ../photosphere-cli-zig-linux-x64.tar.gz photosphere-cli-zig-linux-x64
+          tar -czf ../photosphere-cli-zig-linux-arm64.tar.gz photosphere-cli-zig-linux-arm64
+          tar -czf ../photosphere-cli-zig-macos-x64.tar.gz photosphere-cli-zig-macos-x86_64
+          tar -czf ../photosphere-cli-zig-macos-arm64.tar.gz photosphere-cli-zig-macos-arm64
+          zip ../photosphere-cli-zig-windows-x64.zip photosphere-cli-zig-windows-x64.exe
+          cd ../..
 
       - name: Generate release notes
         id: release-notes
@@ -1972,6 +2151,11 @@ jobs:
             ./artifacts/photosphere-cli-windows-x64-baseline.zip
             ./artifacts/photosphere-cli-macos-x64.tar.gz
             ./artifacts/photosphere-cli-macos-arm64.tar.gz
+            ./artifacts/photosphere-cli-zig-linux-x64.tar.gz
+            ./artifacts/photosphere-cli-zig-linux-arm64.tar.gz
+            ./artifacts/photosphere-cli-zig-windows-x64.zip
+            ./artifacts/photosphere-cli-zig-macos-x64.tar.gz
+            ./artifacts/photosphere-cli-zig-macos-arm64.tar.gz
             ./artifacts/desktop/**/*
           body: |
             ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere release {0}', needs.prepare-tag.outputs.tag) || format('Photosphere nightly build - {0}', github.sha) }}
