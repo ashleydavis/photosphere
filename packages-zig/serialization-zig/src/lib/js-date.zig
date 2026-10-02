@@ -190,6 +190,10 @@ fn consume(text: []const u8, index: *usize, expected: u8) bool {
 // Accepts the ECMAScript date time string format: YYYY, YYYY-MM, YYYY-MM-DD, each optionally followed by
 // THH:mm, THH:mm:ss or THH:mm:ss.sss (any number of fraction digits) and Z or +HH:mm / -HH:mm, with the expanded
 // +YYYYYY / -YYYYYY year. A date-only form is UTC; a date-time without an offset is local time, assumed to be UTC.
+// The separator may be a single space as well as `T` or `t`: Node and Bun read a date-time that ISO 8601 writes
+// with a space as a date (and the TypeScript packages/tools/src/lib/image.ts depends on it, handing
+// `new Date("2025-05-27 09:54:16")`, an EXIF DateTimeOriginal with its date colons rewritten as dashes, to
+// `new Date`), so refusing it gave NaN and silently lost the date.
 //
 pub fn parseDate(text: []const u8) f64 {
     var index: usize = 0;
@@ -227,7 +231,7 @@ pub fn parseDate(text: []const u8) f64 {
             };
         }
     }
-    if (consume(text, &index, 'T') or consume(text, &index, 't')) {
+    if (consume(text, &index, 'T') or consume(text, &index, 't') or consume(text, &index, ' ')) {
         hours = readDigits(text, &index, 2) orelse {
             return std.math.nan(f64);
         };
