@@ -1,5 +1,6 @@
 const std = @import("std");
 const storage_zig = @import("storage-zig");
+const utils = @import("utils-zig");
 const helpers = @import("test-helpers.zig");
 
 const FileStorage = storage_zig.file_storage.FileStorage;
@@ -129,4 +130,153 @@ test "walkDirectory stops listing on an empty continuation token" {
     try std.testing.expectEqual(@as(usize, 1), fileNames.len);
     try std.testing.expectEqualStrings("dir/only-file", fileNames[0]);
     try std.testing.expectEqual(@as(usize, 1), emptyTokenListingCount);
+}
+
+//
+// How many listings have been answered, so a second page can be told from the first.
+//
+var pageListingsAnswered: usize = 0;
+
+//
+// A listFiles that answers one file per page, with a continuation token until the last page, and a listDirs that
+// answers nothing.
+//
+fn pagedListFiles(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, path: []const u8, max: u32, next: ?[]const u8) anyerror!storage_zig.storage.IListResult {
+    _ = ptr;
+    _ = allocator;
+    _ = io;
+    _ = path;
+    _ = max;
+    pageListingsAnswered += 1;
+    if (next) |token| {
+        try std.testing.expectEqualStrings("page-2", token);
+        return .{
+            .names = &.{"second-page"},
+            .next = null,
+        };
+    }
+    return .{
+        .names = &.{"first-page"},
+        .next = "page-2",
+    };
+}
+
+//
+// A listDirs that answers no directories.
+//
+fn noDirsListDirs(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, path: []const u8, max: u32, next: ?[]const u8) anyerror!storage_zig.storage.IListResult {
+    _ = ptr;
+    _ = allocator;
+    _ = io;
+    _ = path;
+    _ = max;
+    _ = next;
+    return .{
+        .names = &.{},
+        .next = null,
+    };
+}
+
+//
+// A listing that runs over more than one page is followed to the end, because TypeScript's `while (next)` asks
+// for the next batch until it answers with no token.
+//
+test "walkDirectory follows a listing across pages" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var recording = @import("recording-storage.zig").RecordingStorage.init(allocator);
+    var vtable = storage_zig.storage.implement(@import("recording-storage.zig").RecordingStorage).*;
+    vtable.listFiles = pagedListFiles;
+    vtable.listDirs = noDirsListDirs;
+    const storage: storage_zig.storage.IStorage = .{
+        .ptr = &recording,
+        .vtable = &vtable,
+        .location = "rec:",
+    };
+    pageListingsAnswered = 0;
+    const fileNames = try walkAll(allocator, storage, "dir", &.{});
+    try std.testing.expectEqual(@as(usize, 2), fileNames.len);
+    try std.testing.expectEqualStrings("dir/first-page", fileNames[0]);
+    try std.testing.expectEqualStrings("dir/second-page", fileNames[1]);
+    try std.testing.expectEqual(@as(usize, 2), pageListingsAnswered);
+}
+
+//
+// A page of names that all match an ignore pattern is skipped without being yielded, and the walk goes on to the
+// next page rather than ending.
+//
+test "walkDirectory skips an ignored name and carries on to the next page" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var recording = @import("recording-storage.zig").RecordingStorage.init(allocator);
+    var vtable = storage_zig.storage.implement(@import("recording-storage.zig").RecordingStorage).*;
+    vtable.listFiles = struct {
+        fn listFiles(ptr: *anyopaque, list_allocator: std.mem.Allocator, io: std.Io, path: []const u8, max: u32, next: ?[]const u8) anyerror!storage_zig.storage.IListResult {
+            _ = ptr;
+            _ = list_allocator;
+            _ = io;
+            _ = path;
+            _ = max;
+            if (next) |token| {
+                try std.testing.expectEqualStrings("page-2", token);
+                return .{
+                    .names = &.{"kept"},
+                    .next = null,
+                };
+            }
+            return .{
+                .names = &.{"node_modules"},
+                .next = "page-2",
+            };
+        }
+    }.listFiles;
+    vtable.listDirs = noDirsListDirs;
+    const storage: storage_zig.storage.IStorage = .{
+        .ptr = &recording,
+        .vtable = &vtable,
+        .location = "rec:",
+    };
+    const fileNames = try walkAll(allocator, storage, "dir", &walk_directory.default_ignore_patterns);
+    try std.testing.expectEqual(@as(usize, 1), fileNames.len);
+    try std.testing.expectEqualStrings("dir/kept", fileNames[0]);
+}
+
+//
+// A listing that keeps failing is retried and then given up on, rather than walking on as if it were empty.
+//
+test "walkDirectory gives up when the listing keeps failing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var recording = @import("recording-storage.zig").RecordingStorage.init(allocator);
+    var vtable = storage_zig.storage.implement(@import("recording-storage.zig").RecordingStorage).*;
+    vtable.listFiles = struct {
+        fn listFiles(ptr: *anyopaque, list_allocator: std.mem.Allocator, io: std.Io, path: []const u8, max: u32, next: ?[]const u8) anyerror!storage_zig.storage.IListResult {
+            _ = ptr;
+            _ = list_allocator;
+            _ = io;
+            _ = path;
+            _ = max;
+            _ = next;
+            return error.ListingFailed;
+        }
+    }.listFiles;
+    const storage: storage_zig.storage.IStorage = .{
+        .ptr = &recording,
+        .vtable = &vtable,
+        .location = "rec:",
+    };
+
+    // Keep retry's warnings and the final error out of the test output.
+    var captured: std.Io.Writer.Allocating = .init(allocator);
+    utils.console.setCapture(null, &captured.writer);
+    defer utils.console.setCapture(null, null);
+
+    // The retry gives up on the third attempt and throws a WrappedError naming what it was listing, as
+    // retry's errorContext asks it to.
+    try std.testing.expectError(error.Thrown, walkAll(allocator, storage, "dir", &.{}));
+    try std.testing.expectEqualStrings("WrappedError", utils.errors.lastErrorName());
+    try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "Failed to list the files in dir") != null);
 }

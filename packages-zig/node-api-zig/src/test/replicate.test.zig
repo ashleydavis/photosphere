@@ -188,6 +188,23 @@ test "throws if leaf has no name" {
     try std.testing.expectEqualStrings("Leaf node has no name", errors.lastErrorMessage());
 }
 
+//
+// `!node.name` in TypeScript is a test for a falsy name, so an empty one is refused the same way a missing one is, rather
+// than being yielded as a name nothing can look up.
+//
+test "throws if leaf has an empty name, as the falsy test of the TypeScript does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const emptyName = try makeNode(allocator, "a", 1, "", null, null);
+    try std.testing.expectError(error.Thrown, collectLeaves(allocator, &.{emptyName}));
+    try std.testing.expectEqualStrings("Leaf node has no name", errors.lastErrorMessage());
+
+    // The same check applies to a leaf nested under an internal node, which is where a diff walks it.
+    const parent = try makeNode(allocator, "b", 3, null, emptyName, null);
+    try std.testing.expectError(error.Thrown, collectLeaves(allocator, &.{parent}));
+}
+
 test "yields names from multiple leaf nodes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

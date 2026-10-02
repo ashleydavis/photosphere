@@ -346,7 +346,9 @@ fn quotedArgsAfter(allocator: std.mem.Allocator, script: []const u8, prefix: []c
 
 //
 // `powershell -NoProfile -Command <script>`: simulates the PasswordVault scripts of the Windows vault with the store
-// file. With the mode "broken-powershell" every script fails, as on a machine where PowerShell cannot run.
+// file. With the mode "broken-powershell" every script fails, as on a machine where PowerShell cannot run, and with
+// the mode "empty-password" a script that reads a password succeeds and writes nothing, as one holding a credential
+// stored with an empty password does.
 //
 fn runPowerShell(standIn: *const IStandIn, args: []const []const u8) !IOutcome {
     const allocator = standIn.allocator;
@@ -364,6 +366,9 @@ fn runPowerShell(standIn: *const IStandIn, args: []const []const u8) !IOutcome {
         // get
         try standIn.recordArgs("last-get-args", args);
         const quotedArgs = try quotedArgsAfter(allocator, script, "Retrieve(");
+        if (std.mem.eql(u8, standIn.mode, "empty-password")) {
+            return outcome("", "", 0);
+        }
         if (store.get(quotedArgs[1])) |raw| {
             return outcome(raw.string, "", 0);
         }

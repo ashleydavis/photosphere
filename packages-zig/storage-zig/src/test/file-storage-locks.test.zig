@@ -567,3 +567,148 @@ test "every step of taking a lock is written to the verbose log, and a lock that
     try helpers.writeFile(io, try fixture.path("a-file"), "not a directory");
     try std.testing.expect(std.meta.isError(fixture.storage.acquireWriteLock(allocator, io, try fixture.path("a-file/under.lock"), "new")));
 }
+
+//
+// A log that keeps every verbose message, so a test can read what the lock code said.
+//
+const RecordingLog = struct {
+    // The verbose messages written.
+    messages: std.Io.Writer.Allocating,
+
+    // Whether verbose logging is on.
+    verbose_enabled: bool,
+
+    //
+    // Gets the ILog interface for this log.
+    //
+    fn ilog(self: *RecordingLog) utils.log.ILog {
+        return .{ .ptr = self, .vtable = &vtable };
+    }
+
+    //
+    // Keeps a verbose message.
+    //
+    fn verbose(ptr: *anyopaque, message: []const u8) void {
+        const self: *RecordingLog = @ptrCast(@alignCast(ptr));
+        self.messages.writer.writeAll(message) catch {};
+        self.messages.writer.writeByte('\n') catch {};
+    }
+
+    //
+    // Ignores a message.
+    //
+    fn ignoreMessage(ptr: *anyopaque, message: []const u8) void {
+        _ = ptr;
+        _ = message;
+    }
+
+    //
+    // Ignores an exception.
+    //
+    fn ignoreException(ptr: *anyopaque, message: []const u8, err: anyerror) void {
+        _ = ptr;
+        _ = message;
+        _ = @errorName(err);
+    }
+
+    //
+    // Ignores tool output.
+    //
+    fn ignoreTool(ptr: *anyopaque, toolName: []const u8, data: utils.log.IToolOutput) void {
+        _ = ptr;
+        _ = toolName;
+        _ = data;
+    }
+
+    //
+    // Returns whether verbose logging is enabled.
+    //
+    fn verboseEnabled(ptr: *anyopaque) bool {
+        const self: *RecordingLog = @ptrCast(@alignCast(ptr));
+        return self.verbose_enabled;
+    }
+
+    //
+    // Returns no log details.
+    //
+    fn getLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!utils.log.ILogDetails {
+        _ = ptr;
+        _ = allocator;
+        _ = io;
+        return utils.log.noLogDetails;
+    }
+
+    //
+    // The vtable that forwards to this log.
+    //
+    const vtable: utils.log.ILog.VTable = .{
+        .info = ignoreMessage,
+        .verbose = verbose,
+        .@"error" = ignoreMessage,
+        .exception = ignoreException,
+        .warn = ignoreMessage,
+        .debug = ignoreMessage,
+        .tool = ignoreTool,
+        .event = ignoreMessage,
+        .verboseEnabled = verboseEnabled,
+        .getLogDetails = getLogDetails,
+    };
+};
+
+//
+// The verbose log of a refused lock names the age of the lock and the owner holding it, so a caller can see who
+// is in the way and for how long.
+//
+test "a refused lock is logged with the age and the owner of the lock in the way" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tempDir = try helpers.makeTempDir(allocator, io, "temp-test-lock-log");
+    defer helpers.removeTempDir(io, tempDir);
+    var storage = FileStorage.init(tempDir);
+
+    var recordingLog: RecordingLog = .{
+        .messages = std.Io.Writer.Allocating.init(allocator),
+        .verbose_enabled = true,
+    };
+    const previousLog = utils.log.log;
+    utils.log.setLog(recordingLog.ilog());
+    defer utils.log.setLog(previousLog);
+
+    const lockFilePath = try std.fmt.allocPrint(allocator, "{s}/logged.lock", .{tempDir});
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, lockFilePath, "first-owner"));
+    try std.testing.expect(!try storage.acquireWriteLock(allocator, io, lockFilePath, "second-owner"));
+
+    const messages = recordingLog.messages.written();
+    try std.testing.expect(std.mem.indexOf(u8, messages, "ACQUIRE_ATTEMPT") != null);
+    try std.testing.expect(std.mem.indexOf(u8, messages, "ACQUIRE_FAILED_EXISTS") != null);
+    try std.testing.expect(std.mem.indexOf(u8, messages, "owner:first-owner") != null);
+    try std.testing.expect(std.mem.indexOf(u8, messages, "age:") != null);
+}
+
+//
+// A lock file that is valid JSON but whose acquiredAt is not a date `new Date` can read. TypeScript carries
+// the Invalid Date forward and answers with a lock whose acquiredAt is Invalid Date; the Zig refuses to read it
+// (see the TODO on parseLockContent), so the file reads as corrupt and the lock is broken.
+//
+test "a lock whose acquiredAt is not a date reads as corrupt and the lock is taken" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tempDir = try helpers.makeTempDir(allocator, io, "temp-test-lock-bad-date");
+    defer helpers.removeTempDir(io, tempDir);
+    var storage = FileStorage.init(tempDir);
+
+    const lockFilePath = try std.fmt.allocPrint(allocator, "{s}/bad-date.lock", .{tempDir});
+    try helpers.writeFile(io, lockFilePath, "{\"owner\":\"old-owner\",\"acquiredAt\":\"not a date\",\"timestamp\":1}");
+
+    // The lock cannot be read as one.
+    try std.testing.expect((try storage.checkWriteLock(allocator, io, lockFilePath)) == null);
+
+    // So it is broken as corrupt and the lock is taken.
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, lockFilePath, "new-owner"));
+    const lockInfo = (try storage.checkWriteLock(allocator, io, lockFilePath)).?;
+    try std.testing.expectEqualStrings("new-owner", lockInfo.owner);
+}

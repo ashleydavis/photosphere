@@ -91,6 +91,181 @@ const FakeImageMagickDirectory = struct {
     }
 };
 
+//
+// A directory holding fake ImageMagick commands that print the same text whatever they are asked, and that can be
+// made to fail from the second call on. It is the only entry of PATH while the test runs, so every command the
+// ImageMagick code runs is the fake one.
+//
+const FakeOutputTools = struct {
+    // Path of the directory, relative to the current directory.
+    path: []const u8,
+
+    // The environment passed to the tools (PATH points at the directory).
+    environMap: std.process.Environ.Map,
+
+    //
+    // Creates the directory with a fake command of each of the given names, each printing `output`, and makes PATH
+    // point at it. With `failAfterFirstCall` set, a command answers the first call and exits non-zero from the
+    // second on, which is what a tool that works when it is found and then stops working does.
+    //
+    fn create(self: *FakeOutputTools, allocator: std.mem.Allocator, io: std.Io, names: []const []const u8, output: []const u8, failAfterFirstCall: bool) !void {
+        var random_bytes: [8]u8 = undefined;
+        io.random(&random_bytes);
+        self.path = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/fake-magick-output-{x}", .{std.mem.readInt(u64, &random_bytes, .little)});
+        const cwd = std.Io.Dir.cwd();
+        try cwd.createDirPath(io, self.path);
+        const absolutePath = try cwd.realPathFileAlloc(io, self.path, allocator);
+        for (names) |name| {
+            // The marker that remembers the command has been run, so the second call can tell it from the first.
+            const markerPath = try std.fmt.allocPrint(allocator, "{s}/called-{s}", .{ absolutePath, name });
+            const subPath = if (builtin.os.tag == .windows)
+                try std.fmt.allocPrint(allocator, "{s}/{s}.cmd", .{ self.path, name })
+            else
+                try std.fmt.allocPrint(allocator, "{s}/{s}", .{ self.path, name });
+            if (builtin.os.tag == .windows) {
+                // `echo(` is what prints an empty line in cmd.exe, where a bare `echo` with no text after it prints
+                // "ECHO is off." instead. The marker is checked with `if exist` on a line of its own, so `exit /b 1`
+                // ends the script whichever way cmd.exe reads the block.
+                const script = if (failAfterFirstCall)
+                    try std.fmt.allocPrint(allocator, "@echo off\r\n@if exist \"{s}\" exit /b 1\r\n@type nul > \"{s}\"\r\n@echo({s}\r\n", .{ markerPath, markerPath, output })
+                else
+                    try std.fmt.allocPrint(allocator, "@echo off\r\n@echo({s}\r\n", .{output});
+                try cwd.writeFile(io, .{ .sub_path = subPath, .data = script });
+            }
+            else {
+                const script = if (failAfterFirstCall)
+                    try std.fmt.allocPrint(allocator, "#!/bin/sh\nif [ -e '{s}' ]; then exit 1; fi\n: > '{s}'\nprintf '%s\\n' '{s}'\n", .{ markerPath, markerPath, output })
+                else
+                    try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s\\n' '{s}'\n", .{output});
+                try cwd.writeFile(io, .{ .sub_path = subPath, .data = script });
+                _ = try node_utils.exec.exec(allocator, io, try std.fmt.allocPrint(allocator, "chmod +x {s}", .{subPath}));
+            }
+        }
+        self.environMap = std.process.Environ.Map.init(allocator);
+        try self.environMap.put("PATH", absolutePath);
+        node_utils.process_env.setEnvironMap(&self.environMap);
+        tools.Image.resetInitialization();
+    }
+
+    //
+    // Restores the environment and deletes the directory.
+    //
+    fn destroy(self: *FakeOutputTools, io: std.Io) void {
+        node_utils.process_env.setEnvironMap(null);
+        tools.Image.resetInitialization();
+        std.Io.Dir.cwd().deleteTree(io, self.path) catch {};
+    }
+};
+
+//
+// The commands of a modern ImageMagick installation.
+//
+const modern_command_names = [_][]const u8{ "magick" };
+
+//
+// The commands of a legacy ImageMagick installation.
+//
+const legacy_command_names = [_][]const u8{ "convert", "identify" };
+
+//
+// Expects getDominantColor to refuse what the fake commands print, as the TypeScript does with a value that is not
+// three numbers between 0 and 255.
+//
+fn expectDominantColorRefusal(allocator: std.mem.Allocator, io: std.Io, fakeOutput: []const u8) !void {
+    var directory: FakeOutputTools = undefined;
+    try directory.create(allocator, io, &modern_command_names, fakeOutput, false);
+    defer directory.destroy(io);
+    var image = Image.init("build.zig");
+    try std.testing.expectError(error.Thrown, image.getDominantColor(allocator, io));
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Failed to extract dominant color: Error: Invalid RGB values: {s}", .{fakeOutput}), utils.errors.lastErrorMessage());
+}
+
+test "getInfo reads a width and a height of NaN from output ImageMagick did not write" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var directory: FakeOutputTools = undefined;
+
+    // The fake identify prints "100" with no height, so parseInt reads the width and finds nothing for the height.
+    try directory.create(allocator, io, &modern_command_names, "100", false);
+    defer directory.destroy(io);
+    var image = Image.init("build.zig");
+    const info = try image.getInfo(allocator, io);
+    try std.testing.expectEqual(tools.image.ImageMagickType.modern, tools.Image.getImageMagickType());
+    try std.testing.expectEqual(@as(f64, 100), info.dimensions.width);
+    try std.testing.expect(std.math.isNan(info.dimensions.height));
+
+    // Output with no width at all is NaN for both.
+    directory.destroy(io);
+    try directory.create(allocator, io, &modern_command_names, "", false);
+    var blank = Image.init("build.zig");
+    const blankInfo = try blank.getInfo(allocator, io);
+    try std.testing.expect(std.math.isNan(blankInfo.dimensions.width));
+    try std.testing.expect(std.math.isNan(blankInfo.dimensions.height));
+    try std.testing.expect(blankInfo.createdAt == null);
+}
+
+test "getDominantColor refuses output that is not three values between 0 and 255" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+
+    // Two values where three are needed.
+    try expectDominantColorRefusal(allocator, io, "1,2");
+
+    // A value past 255.
+    try expectDominantColorRefusal(allocator, io, "256,0,0");
+
+    // A value that is not a number at all.
+    try expectDominantColorRefusal(allocator, io, "a,b,c");
+}
+
+test "verifyImageMagick reports the magick command failing after the installation was found" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var directory: FakeOutputTools = undefined;
+
+    // The fake magick answers the `magick -version` that finds the installation and fails the one
+    // verifyImageMagick runs next.
+    try directory.create(allocator, io, &modern_command_names, "Version: ImageMagick 7.1.1-29", true);
+    defer directory.destroy(io);
+
+    const status = try tools.Image.verifyImageMagick(allocator, io);
+
+    try std.testing.expect(!status.available);
+    try std.testing.expectEqualStrings("Modern ImageMagick 'magick' command failed: Error: Command failed: magick -version\n", status.@"error".?);
+    try std.testing.expect(status.version == null);
+    try std.testing.expect(status.@"type" == null);
+
+    // The installation is still the one that was detected, so the next call runs the command again.
+    try std.testing.expectEqual(tools.image.ImageMagickType.modern, tools.Image.getImageMagickType());
+}
+
+test "verifyImageMagick reports the convert command failing after the installation was found" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var directory: FakeOutputTools = undefined;
+
+    // Both legacy commands answer the calls that find the installation, and convert fails the one
+    // verifyImageMagick runs next.
+    try directory.create(allocator, io, &legacy_command_names, "Version: ImageMagick 6.9.11-60", true);
+    defer directory.destroy(io);
+
+    const status = try tools.Image.verifyImageMagick(allocator, io);
+
+    try std.testing.expect(!status.available);
+    try std.testing.expectEqualStrings("Legacy ImageMagick 'convert' command failed: Error: Command failed: convert -version\n", status.@"error".?);
+    try std.testing.expect(status.version == null);
+    try std.testing.expect(status.@"type" == null);
+    try std.testing.expectEqual(tools.image.ImageMagickType.legacy, tools.Image.getImageMagickType());
+}
+
 test "resize and transform write their numbers as a template string writes a number" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

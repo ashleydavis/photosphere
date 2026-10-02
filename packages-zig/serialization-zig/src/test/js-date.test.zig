@@ -91,3 +91,23 @@ test "parseDate reads a time zone offset like Date.parse" {
     try std.testing.expect(std.math.isNan(js_date.parseDate("2020-01-01T10:00+5")));
     try std.testing.expect(std.math.isNan(js_date.parseDate("2020-0a")));
 }
+
+test "parseDate reads a date-time separated by a space, as Date.parse and new Date do" {
+    // Node and Bun read a date-time with no zone offset as local time, so `new Date("2025-05-27 09:54:16")`
+    // measured 1748303656000 on a machine at UTC+10:00, which is 10 hours (36000000 ms) before the UTC reading
+    // below. This module assumes local time is UTC (see the deviations in js-date.zig), so it reads the UTC
+    // reading. What matters here is that the text is a date at all rather than NaN: the TypeScript
+    // packages/tools/src/lib/image.ts hands exactly this text (an EXIF DateTimeOriginal of "2025:05:27
+    // 09:54:16" with its date colons rewritten as dashes) to `new Date`.
+    try std.testing.expectEqual(@as(f64, 1748339656000), js_date.parseDate("2025-05-27 09:54:16"));
+    try std.testing.expectEqual(@as(f64, 1748339656000), js_date.parseDate("2025-05-27T09:54:16"));
+    try std.testing.expectEqual(@as(f64, 1748339640000), js_date.parseDate("2025-05-27 09:54"));
+    try std.testing.expectEqual(@as(f64, 1748339656123), js_date.parseDate("2025-05-27 09:54:16.123"));
+    try std.testing.expectEqual(@as(f64, 1748339656000), js_date.parseDate("2025-05-27 09:54:16Z"));
+
+    // The space stands in for the `T` only: what follows it still has to be a time.
+    try std.testing.expect(std.math.isNan(js_date.parseDate("2025-05-27 ")));
+    try std.testing.expect(std.math.isNan(js_date.parseDate("2025-05-27  09:54:16")));
+    try std.testing.expect(std.math.isNan(js_date.parseDate("2025-05-27 9:54:16")));
+    try std.testing.expect(std.math.isNan(js_date.parseDate("2025-05-27 09:54:16 ")));
+}

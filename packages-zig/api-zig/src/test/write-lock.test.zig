@@ -84,3 +84,28 @@ test "acquireWriteLock returns false and says the lock looks free when it was le
     try std.testing.expect(!try write_lock.acquireWriteLock(allocator, io, refusingStorage, "session-1", 1));
     try std.testing.expectEqualStrings("Failed to acquire write lock after 1 attempts. Lock appears to be available but acquisition failed.\n", stderr_capture.written());
 }
+
+//
+// A lock held for a minute or more is reported in minutes rather than seconds, and the ISO timestamp in the warning is
+// the moment the lock was taken, not the moment the warning was written.
+//
+test "acquireWriteLock reports a lock held for more than a minute in minutes, with the time it was taken" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const heldSinceMs = std.Io.Clock.real.now(io).toMilliseconds() - 90 * 60 * 1000;
+    try storage.locks.put(allocator, LOCK_PATH, .{
+        .owner = "other-owner",
+        .acquiredAt = .{ .epochMilliseconds = heldSinceMs },
+        .timestamp = heldSinceMs,
+    });
+
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(null, &stderr_capture.writer);
+    defer utils.console.setCapture(null, null);
+
+    try std.testing.expect(!try write_lock.acquireWriteLock(allocator, io, storage.asStorage(), "session-1", 1));
+
+    try std.testing.expect(std.mem.startsWith(u8, stderr_capture.written(), "Failed to acquire write lock after 1 attempts. Lock is currently held by \"other-owner\" since 90m ago (acquired at "));
+}

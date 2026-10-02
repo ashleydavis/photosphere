@@ -390,3 +390,44 @@ test "handles missing Body in response gracefully" {
     const result = try streamToBuffer(arena.allocator(), rangeStream);
     try std.testing.expectEqual(@as(usize, 0), result.len);
 }
+
+//
+// A stream that failed fails again on every later read, rather than being read as if it had ended.
+//
+test "a stream that failed keeps failing when read again" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mock: MockS3 = undefined;
+    mock.init(arena.allocator(), &.{}, unavailableAnswer);
+    defer mock.deinit();
+    _ = captureStderr(arena.allocator());
+    defer utils.console.setCapture(null, null);
+    const rangeStream = try mock.stream();
+    defer rangeStream.destroy(std.testing.io);
+
+    try std.testing.expectError(error.ReadFailed, streamToBuffer(arena.allocator(), rangeStream));
+
+    const callsAfterFailure = mock.callCount();
+    try std.testing.expectError(error.ReadFailed, streamToBuffer(arena.allocator(), rangeStream));
+    try std.testing.expectEqual(callsAfterFailure, mock.callCount());
+}
+
+//
+// A response that reports a total size of the bytes already read ends the stream before it asks again, because
+// there is nothing left to ask for.
+//
+test "ends the stream when the reported size is already read" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mock: MockS3 = undefined;
+    mock.init(arena.allocator(), try arena.allocator().dupe(u8, "hello world"), sliceAnswer);
+    defer mock.deinit();
+    const rangeStream = try mock.stream();
+    defer rangeStream.destroy(std.testing.io);
+    try std.testing.expectEqualStrings("hello world", try streamToBuffer(arena.allocator(), rangeStream));
+    try std.testing.expectEqual(@as(usize, 1), mock.callCount());
+
+    // Reading again past the end gives nothing and asks for nothing more.
+    try std.testing.expectEqual(@as(usize, 0), (try streamToBuffer(arena.allocator(), rangeStream)).len);
+    try std.testing.expectEqual(@as(usize, 1), mock.callCount());
+}
