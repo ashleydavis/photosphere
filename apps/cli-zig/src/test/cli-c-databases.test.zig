@@ -627,3 +627,200 @@ test "upgrade reports a merkle tree it cannot read and changes nothing" {
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "Found database version") == null);
     try std.testing.expectEqualStrings(contents[0..12], try std.Io.Dir.cwd().readFileAlloc(std.testing.io, filesDat, allocator, .unlimited));
 }
+
+//
+// The discovery timeout the share commands wait for a peer, in milliseconds. A real user waits the
+// 60000 the TypeScript waits; these tests pass their own so the branch where nobody ever turns up
+// is taken at once rather than after a minute. It runs the same command with the same options a user
+// gets, so the code under it is the code the CLI runs.
+//
+const share_discovery_timeout = "1";
+
+//
+// How long the sender of the pairing-code-rejected tests waits, in milliseconds. Unlike the
+// no-peer tests this one has to be long enough for the held receiver's announcements to reach the
+// sender, since the sender only knows the code was rejected once it has read one that does not
+// match. The receiver announces every second, so this covers several of them.
+//
+const mismatched_receiver_timeout = "4000";
+
+//
+// Runs a test-driver scenario and expects it to write exactly the output. The share scenarios write
+// their result before running their command (the command ends the program), so nothing is read back
+// from the result file.
+//
+fn expectScenario(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, scenarioArguments: []const []const u8, expectedStdout: []const u8) !void {
+    const result = try helpers.runTestDriver(allocator, scenarioArguments, &.{}, environment);
+    try std.testing.expectEqualStrings(expectedStdout, result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expectEqual(@as(u8, 0), result.exitCode);
+}
+
+test "dbs receive says no device connected when no sender turns up before the discovery timeout" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "clic-dbs-receive-none");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try setup(allocator, root, seed_config);
+
+    try expectScenario(allocator, environment, &.{
+        "dbs-receive-timeout",
+        "1234",
+        share_discovery_timeout,
+    }, "\nReceive Database\n" ++ network_note ++
+        "Hint: Run `psi dbs send` on another device to send a database.\n" ++
+        "Waiting for sender on the local network... (Ctrl+C to cancel)\n" ++
+        "No device connected within 60 seconds.\n");
+}
+
+test "secrets receive says no sender connected when no sender turns up before the discovery timeout" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "clic-secrets-receive-none");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try setup(allocator, root, seed_config);
+
+    try expectScenario(allocator, environment, &.{
+        "secrets-receive-timeout",
+        "1234",
+        share_discovery_timeout,
+    }, "\nReceive Secret\n" ++ network_note ++
+        "Hint: Run `psi secrets send` on another device to send a secret.\n" ++
+        "Waiting for sender on the local network... (Ctrl+C to cancel)\n" ++
+        "No sender connected within 60 seconds.\n");
+}
+
+test "dbs send says no device found when no receiver turns up before the discovery timeout" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "clic-dbs-send-none");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try setup(allocator, root, seed_config);
+
+    try expectScenario(allocator, environment, &.{
+        "dbs-send-timeout",
+        "my-db",
+        "1234",
+        share_discovery_timeout,
+    }, "\nSend Database\n" ++ network_note ++
+        "\nDatabase to send:\n" ++
+        "  Name:        my-db\n" ++
+        "  Description: (none)\n" ++
+        "  Path:        s3:bucket/db\n" ++
+        "\n" ++
+        "\n" ++
+        "  Pairing code: 1234\n" ++
+        "  Enter this code on the other device, then wait.\n" ++
+        "\n" ++
+        "Waiting for other device on local network... (Ctrl+C to cancel)\n" ++
+        "No device found within 60 seconds.\n");
+}
+
+test "secrets send says no receiver found when no receiver turns up before the discovery timeout" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "clic-secrets-send-none");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try setup(allocator, root, seed_config);
+
+    try expectScenario(allocator, environment, &.{
+        "secrets-send-timeout",
+        "s3a",
+        "1234",
+        share_discovery_timeout,
+    }, "\nSend Secret\n" ++ network_note ++
+        "Hint: Run `psi secrets receive` on another device to receive this secret.\n" ++
+        "\n" ++
+        "Secret to send:\n" ++
+        "  Name: s3a\n" ++
+        "  Type: s3-credentials\n" ++
+        "\n" ++
+        "  Pairing code: 1234\n" ++
+        "  Enter this code on the receiver device, then wait.\n" ++
+        "\n" ++
+        "Waiting for receiver on the local network... (Ctrl+C to cancel)\n" ++
+        "No receiver found within 60 seconds.\n");
+}
+
+//
+// Draws a 4-digit pairing code. Discovery is machine-wide, so the codes are drawn per run: two fixed
+// ones could pair a sender in one run with a receiver in another.
+//
+fn randomPairingCode(allocator: std.mem.Allocator) ![]const u8 {
+    var randomBytes: [4]u8 = undefined;
+    std.testing.io.random(&randomBytes);
+    return std.fmt.allocPrint(allocator, "{d}", .{1000 + std.mem.readInt(u32, &randomBytes, .little) % 9000});
+}
+
+test "dbs send tells a mistyped pairing code from an absent device" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "clic-dbs-send-mismatch");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try setup(allocator, root, seed_config);
+    const code = try randomPairingCode(allocator);
+    const otherCode = try randomPairingCode(allocator);
+
+    // The receiver announces a code that is not the sender's, which is the mistyped case: a device
+    // was found, and it is not waiting for this share. Saying "no device found" here would send the
+    // user looking for a device that is sitting right there.
+    try expectScenario(allocator, environment, &.{
+        "dbs-send-to-mismatched-receiver",
+        "my-db",
+        code,
+        otherCode,
+        mismatched_receiver_timeout,
+    }, try std.mem.concat(allocator, u8, &.{
+        "\nSend Database\n",
+        network_note,
+        "\nDatabase to send:\n",
+        "  Name:        my-db\n",
+        "  Description: (none)\n",
+        "  Path:        s3:bucket/db\n",
+        "\n",
+        "\n",
+        try std.fmt.allocPrint(allocator, "  Pairing code: {s}\n", .{code}),
+        "  Enter this code on the other device, then wait.\n",
+        "\n",
+        "Waiting for other device on local network... (Ctrl+C to cancel)\n",
+        "Pairing code rejected: a device was found but it is using a different code.\n",
+    }));
+}
+
+test "secrets send tells a mistyped pairing code from an absent device" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "clic-secrets-send-mismatch");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try setup(allocator, root, seed_config);
+    const code = try randomPairingCode(allocator);
+    const otherCode = try randomPairingCode(allocator);
+
+    try expectScenario(allocator, environment, &.{
+        "secrets-send-to-mismatched-receiver",
+        "s3a",
+        code,
+        otherCode,
+        mismatched_receiver_timeout,
+    }, try std.mem.concat(allocator, u8, &.{
+        "\nSend Secret\n",
+        network_note,
+        "Hint: Run `psi secrets receive` on another device to receive this secret.\n",
+        "\n",
+        "Secret to send:\n",
+        "  Name: s3a\n",
+        "  Type: s3-credentials\n",
+        "\n",
+        try std.fmt.allocPrint(allocator, "  Pairing code: {s}\n", .{code}),
+        "  Enter this code on the receiver device, then wait.\n",
+        "\n",
+        "Waiting for receiver on the local network... (Ctrl+C to cancel)\n",
+        "Pairing code rejected: a device was found but it is using a different code.\n",
+    }));
+}
