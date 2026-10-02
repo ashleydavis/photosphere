@@ -2119,9 +2119,11 @@ jobs:
     # reported as a failure of the other.
     # The binary is not built here: each build-zig job builds the one for its own platform and this job
     # downloads it, so the Zig CLI is compiled once per platform and both this job and the release use it.
+    # Every platform the release ships a Zig binary for is in the matrix, so a shipped binary is one the
+    # suites have run against.
     # Setup takes about 5 minutes and the smoke suites about 15.
     timeout-minutes: 75
-    needs: [build-zig-linux-x64, build-zig-macos-arm64, build-zig-windows-x64]
+    needs: [build-zig-linux-x64, build-zig-macos-arm64, build-zig-macos-x64, build-zig-windows-x64]
     strategy:
       fail-fast: false
       matrix:
@@ -2135,6 +2137,9 @@ jobs:
           - os: windows-latest
             artifact: photosphere-cli-zig-windows-x64
             binary: psi.exe
+          - os: macos-15-intel
+            artifact: photosphere-cli-zig-macos-x64
+            binary: psi
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
