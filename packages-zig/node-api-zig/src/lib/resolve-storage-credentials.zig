@@ -121,6 +121,10 @@ pub fn resolveStorageCredentials(
                     .object => |object| object,
                     else => std.json.ObjectMap.empty,
                 };
+
+                // TODO: accessKeyId and secretAccessKey read as "" when the secret does not hold them, where
+                // `parsed.accessKeyId` is undefined in TypeScript. IS3Credentials types them as required, so there is no
+                // way to carry an absent one; both are credentials that cannot work either way.
                 s3Config = .{
                     .region = jsonString(parsedObject, "region"),
                     .accessKeyId = jsonString(parsedObject, "accessKeyId") orelse "",

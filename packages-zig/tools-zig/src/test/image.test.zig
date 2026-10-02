@@ -105,8 +105,9 @@ const IExpectedImageInfo = struct {
     // The height, in pixels.
     height: f64,
 
-    // True when the file has an EXIF DateTimeOriginal, so TypeScript sets createdAt.
-    hasCreatedAt: bool,
+    // The time value TypeScript's `new Date(...)` gives for the file's EXIF DateTimeOriginal, or null when the
+    // file has none, so TypeScript leaves createdAt undefined.
+    createdAt: ?f64,
 };
 
 test "getInfo reads the dimensions and the date of an image like TypeScript" {
@@ -116,26 +117,30 @@ test "getInfo reads the dimensions and the date of an image like TypeScript" {
     try requireImageMagick(allocator);
 
     // The sizes are those in the files' headers (the JPEG frame header, the PNG IHDR chunk and the WebP VP8 frame).
-    // test.jpg has an EXIF DateTimeOriginal ("2025:05:27 09:54:16"), so TypeScript sets createdAt to
-    // `new Date("2025-05-27 09:54:16")`; the PNG and WebP have no EXIF, so createdAt stays undefined.
+    // test.jpg has an EXIF DateTimeOriginal of "2025:05:27 09:54:16", so TypeScript sets createdAt to
+    // `new Date("2025-05-27 09:54:16")` (image.ts rewrites the date colons as dashes and hands the rest to
+    // `new Date`). Node and Bun read that date-time with no zone offset as local time, which measured
+    // 1748303656000 on a machine at UTC+10:00; js-date.zig assumes local time is UTC (a documented deviation
+    // from JavaScript), so the value read here is the UTC reading, ten hours later. The PNG and WebP have no
+    // EXIF, so createdAt stays undefined.
     const cases = [_]IExpectedImageInfo{
         .{
             .filePath = "../../test/test.jpg",
             .width = 2560,
             .height = 1920,
-            .hasCreatedAt = true,
+            .createdAt = 1748339656000,
         },
         .{
             .filePath = "../../test/test.png",
             .width = 100,
             .height = 90,
-            .hasCreatedAt = false,
+            .createdAt = null,
         },
         .{
             .filePath = "../../test/test.webp",
             .width = 100,
             .height = 80,
-            .hasCreatedAt = false,
+            .createdAt = null,
         },
     };
     for (cases) |expected| {
@@ -144,7 +149,7 @@ test "getInfo reads the dimensions and the date of an image like TypeScript" {
         const info = try image.getInfo(allocator, std.testing.io);
         try std.testing.expectEqual(expected.width, info.dimensions.width);
         try std.testing.expectEqual(expected.height, info.dimensions.height);
-        try std.testing.expectEqual(expected.hasCreatedAt, info.createdAt != null);
+        try std.testing.expectEqual(expected.createdAt, info.createdAt);
         try std.testing.expectEqualStrings(expected.filePath, info.filePath);
         try std.testing.expectEqual(@as(?bool, false), info.hasAudio);
         try std.testing.expect(info.duration == null);
@@ -154,6 +159,48 @@ test "getInfo reads the dimensions and the date of an image like TypeScript" {
         // The information is read once.
         try std.testing.expectEqual(info.dimensions, (try image.getDimensions(allocator, std.testing.io)));
     }
+}
+
+test "resize refuses when the second output path is already taken" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try requireImageMagick(allocator);
+    const tempDir = try makeTempDir(allocator, "resize-second-output");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch {};
+    var generator: FixedUuidGenerator = .{ .id = "second" };
+    var image = Image.init("../../test/test.png");
+
+    // The second output path Image.resize checks is <base>-0.<ext>, the one a multi-frame image is written to.
+    const secondOutputPath = try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_second-0.png" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = secondOutputPath, .data = "already here" });
+
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png" }, tempDir, generator.uuidGenerator()));
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Output file already exists: {s}", .{secondOutputPath}), utils.errors.lastErrorMessage());
+}
+
+test "getExifData reads the tags of a real image" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try requireImageMagick(allocator);
+
+    var image = Image.init("../../test/test.jpg");
+    const exifData = try image.getExifData(allocator, std.testing.io);
+    try std.testing.expectEqualStrings("Google", exifData.get("Make").?);
+    try std.testing.expectEqualStrings("Pixel 6", exifData.get("Model").?);
+    try std.testing.expectEqualStrings("2025:05:27 09:54:16", exifData.get("DateTimeOriginal").?);
+
+    // The DateTimeOriginal is what getInfo turns into createdAt, with the colons of the date replaced by dashes.
+    // TODO: the TypeScript reads a real date out of that: `new Date("2025-05-27 09:54:16")` is the local time, which
+    // the Date Time String Format of ECMA-262 allows with a space where the ISO form has a "T". The Zig reads an
+    // Invalid Date, because js_date.parseDate in serialization-zig only reads the "T" form, so createdAt is NaN
+    // here for every image that has an EXIF DateTimeOriginal. The fix belongs to serialization-zig, not to this
+    // package, and this assertion is what goes red when it is made.
+    var withDate = Image.init("../../test/test.jpg");
+    const info = try withDate.getInfo(allocator, std.testing.io);
+    try std.testing.expect(std.math.isNan(info.createdAt.?));
+    try std.testing.expectEqualStrings("2025-05-27 09:54:16", try tools.image.exifDateToDashes(allocator, exifData.get("DateTimeOriginal").?));
 }
 
 test "getInfo fails for a file that does not exist" {

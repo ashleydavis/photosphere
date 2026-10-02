@@ -211,6 +211,12 @@ pub const Image = struct {
         const height = parseInt(parts.next() orelse "undefined", null);
 
         // Get EXIF data for created date
+        //
+        // TODO: createdAt is NaN for every image that has an EXIF DateTimeOriginal, where TypeScript reads a real
+        // date. An EXIF date and time is "2023:12:25 14:30:00", which becomes "2023-12-25 14:30:00", and
+        // TypeScript's `new Date` reads the space where the ISO 8601 form has a "T" (the Date Time String Format of
+        // ECMA-262 allows both) as local time. js_date.parseDate in serialization-zig reads only the "T" form, so it
+        // returns NaN, an Invalid Date. The fix belongs to serialization-zig.
         var createdAt: ?f64 = null;
         if (self.getExifData(allocator, io)) |exifData| {
             if (exifData.get("DateTimeOriginal")) |dateTimeOriginal| {

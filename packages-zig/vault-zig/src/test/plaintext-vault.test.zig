@@ -669,3 +669,129 @@ test "DEFAULT_VAULT_DIR is under the home directory os.homedir gives, the passwd
     try std.testing.expect(node_utils.fs.osHomedir().len > 0 or builtin.os.tag == .windows);
     try std.testing.expectEqualStrings(expected, try vault_zig.plaintext_vault.DEFAULT_VAULT_DIR(allocator));
 }
+
+//
+// A vault file whose entry is not a secret. TypeScript's get hands the value back unchecked (see the TODO on
+// toSecret), so this is where the two differ: the Zig throws, naming the entry it could not read.
+//
+test "get: a vault file entry that is not a secret makes get throw" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try temp_dir.tmp_dir.dir.writeFile(io, .{ .sub_path = "vault.json", .data = "{\"broken\": 42}" });
+    try std.testing.expectError(error.Thrown, vault.get(allocator, io, "broken"));
+}
+
+test "list: a vault file entry that is not a secret makes list throw" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try temp_dir.tmp_dir.dir.writeFile(io, .{ .sub_path = "vault.json", .data = "{\"broken\": {\"name\": \"broken\"}}" });
+    try std.testing.expectError(error.Thrown, vault.list(allocator, io));
+}
+
+//
+// readVaultFile gives an empty set for a vault that has no file yet, and reads one that is there.
+//
+test "readVaultFile reads the secrets of a vault file that is there" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "one", .type = "t", .value = "v" });
+    try vault.set(allocator, io, .{ .name = "two", .type = "t", .value = "v" });
+
+    const contents = try vault_zig.plaintext_vault.readVaultFile(allocator, io, temp_dir.path);
+    try std.testing.expectEqual(@as(usize, 2), contents.count());
+    try std.testing.expect(contents.get("one") != null);
+    try std.testing.expect(contents.get("two") != null);
+}
+
+//
+// readVaultFile reports an error that is not the file being missing, rather than an empty vault, so a vault file
+// that cannot be read is not silently treated as a fresh one and then overwritten.
+//
+test "readVaultFile reports an error other than the file being missing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+
+    // A directory where the vault file goes cannot be read as one.
+    try temp_dir.tmp_dir.dir.createDir(io, "vault.json", .default_dir);
+    try std.testing.expect(std.meta.isError(vault_zig.plaintext_vault.readVaultFile(allocator, io, temp_dir.path)));
+}
+
+//
+// set writes the three fields of the secret under its name, in that order, so the file is what JSON.stringify
+// of the object the caller passed would be.
+//
+test "set: writes the name, type and value in that order under the name as the key" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "k", .type = "api-key", .value = "v" });
+    const raw = try temp_dir.tmp_dir.dir.readFileAlloc(io, "vault.json", allocator, .unlimited);
+    try std.testing.expectEqualStrings(
+        \\{
+        \\  "k": {
+        \\    "name": "k",
+        \\    "type": "api-key",
+        \\    "value": "v"
+        \\  }
+        \\}
+    , raw);
+}
+
+//
+// delete removes one secret and leaves the file readable, with the others still in it.
+//
+test "delete: leaves the other secrets in place" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "keep", .type = "t", .value = "v" });
+    try vault.set(allocator, io, .{ .name = "gone", .type = "t", .value = "v" });
+    try vault.delete(allocator, io, "gone");
+
+    const secrets = try vault.list(allocator, io);
+    try std.testing.expectEqual(@as(usize, 1), secrets.len);
+    try std.testing.expectEqualStrings("keep", secrets[0].name);
+}
+
+//
+// getVaultFilePath joins the vault directory and the file name, normalising as path.join does.
+//
+test "getVaultFilePath puts vault.json inside the vault directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const expected = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{try std.fs.path.join(allocator, &.{ "home", "vaults", "photosphere" })});
+    try std.testing.expectEqualStrings(expected, try vault_zig.plaintext_vault.getVaultFilePath(allocator, "home/vaults/photosphere"));
+}

@@ -10,9 +10,17 @@ const types = task_queue.types;
 //
 // The results collected by the completion callback of a test.
 //
-const Collector = struct {
+pub const Collector = struct {
     // Guards the fields.
     mutex: std.Io.Mutex = .init,
+
+    // The allocator the text of each result is copied into (the arena of the test, which outlives the
+    // collector). The text is copied because it belongs to the result, which the worker frees as soon as
+    // it has sent it, and it is not kept in a fixed buffer because its length is not known here: the error
+    // the worker reports for an unregistered task type lists every handler registered in the process, so it
+    // grows with every handler registered anywhere, and a fixed buffer overflowed and took the whole test
+    // binary down.
+    allocator: std.mem.Allocator,
 
     // Number of completed tasks.
     completed: usize = 0,
@@ -21,22 +29,13 @@ const Collector = struct {
     failed: usize = 0,
 
     // The error message of the last failed task.
-    lastErrorMessage: [256]u8 = undefined,
-
-    // The length of lastErrorMessage.
-    lastErrorMessageLength: usize = 0,
+    lastErrorMessage: []const u8 = &.{},
 
     // The error name of the last failed task.
-    lastErrorName: [64]u8 = undefined,
-
-    // The length of lastErrorName.
-    lastErrorNameLength: usize = 0,
+    lastErrorName: []const u8 = &.{},
 
     // The string output of the last successful task.
-    lastOutput: [256]u8 = undefined,
-
-    // The length of lastOutput.
-    lastOutputLength: usize = 0,
+    lastOutput: []const u8 = &.{},
 
     // Number of messages received by the typed message callback.
     typedMessages: usize = 0,
@@ -51,9 +50,18 @@ const Collector = struct {
     cancellations: usize = 0,
 
     //
+    // Creates a collector that copies the text of each result into the allocator.
+    //
+    pub fn init(allocator: std.mem.Allocator) Collector {
+        return .{
+            .allocator = allocator,
+        };
+    }
+
+    //
     // The completion callback.
     //
-    fn onComplete(context: ?*anyopaque, result: types.ITaskResult) anyerror!void {
+    pub fn onComplete(context: ?*anyopaque, result: types.ITaskResult) anyerror!void {
         const self: *Collector = @ptrCast(@alignCast(context.?));
         self.mutex.lockUncancelable(std.testing.io);
         defer self.mutex.unlock(std.testing.io);
@@ -61,17 +69,14 @@ const Collector = struct {
         if (result.status == .Failed) {
             self.failed += 1;
             const message = result.errorMessage orelse "";
-            @memcpy(self.lastErrorMessage[0..message.len], message);
-            self.lastErrorMessageLength = message.len;
+            self.lastErrorMessage = try self.allocator.dupe(u8, message);
             const name = result.@"error".?.name;
-            @memcpy(self.lastErrorName[0..name.len], name);
-            self.lastErrorNameLength = name.len;
+            self.lastErrorName = try self.allocator.dupe(u8, name);
         }
         else {
             if (result.outputs) |outputs| {
                 if (outputs == .string) {
-                    @memcpy(self.lastOutput[0..outputs.string.len], outputs.string);
-                    self.lastOutputLength = outputs.string.len;
+                    self.lastOutput = try self.allocator.dupe(u8, outputs.string);
                 }
             }
         }
@@ -119,7 +124,7 @@ const Collector = struct {
     //
     // Waits until the number of completed tasks reaches the count (fails after 10 seconds).
     //
-    fn waitForCompleted(self: *Collector, count: usize) !void {
+    pub fn waitForCompleted(self: *Collector, count: usize) !void {
         var waited: usize = 0;
         while (waited < 2000) {
             self.mutex.lockUncancelable(std.testing.io);
@@ -232,13 +237,13 @@ test "runs a task on a worker and reports its outputs" {
     const pool = try WorkerPoolBun.init(std.testing.io, 2, 10000, .{ .sessionId = "session" });
     defer pool.deinit();
     const backend = pool.queueBackend();
-    var collector = Collector{};
+    var collector = Collector.init(arena.allocator());
     _ = try backend.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
     const taskId = try backend.addTask(arena.allocator(), std.testing.io, "echo", .{ .string = "hi" }, "source", "task-1", null);
     try std.testing.expectEqualStrings("task-1", taskId);
     try collector.waitForCompleted(1);
     try std.testing.expectEqual(@as(usize, 0), collector.failed);
-    try std.testing.expectEqualStrings("echo hi", collector.lastOutput[0..collector.lastOutputLength]);
+    try std.testing.expectEqualStrings("echo hi", collector.lastOutput);
 }
 
 test "a worker that fails to start is logged and replaced, and its task waits" {
@@ -268,7 +273,7 @@ test "a worker that fails to start is logged and replaced, and its task waits" {
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
-    var collector = Collector{};
+    var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
     _ = try pool.addTask(allocator, std.testing.io, "echo", .{ .string = "x" }, "source", null, null);
     std.testing.io.sleep(.fromMilliseconds(100), .awake) catch {};
@@ -287,7 +292,7 @@ test "generates a task ID when none is given" {
     defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
     defer pool.deinit();
-    var collector = Collector{};
+    var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
     const taskId = try pool.addTask(arena.allocator(), std.testing.io, "echo", .{ .string = "x" }, "source", null, null);
     try std.testing.expectEqual(@as(usize, 36), taskId.len);
@@ -303,14 +308,14 @@ test "reports a failed task with the error name and message" {
     defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
     defer pool.deinit();
-    var collector = Collector{};
+    var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
     _ = try pool.addTask(arena.allocator(), std.testing.io, "fail", .null, "source", null, null);
     _ = try pool.addTask(arena.allocator(), std.testing.io, "no-such-type", .null, "source", null, null);
     try collector.waitForCompleted(2);
     try std.testing.expectEqual(@as(usize, 2), collector.failed);
-    try std.testing.expectEqualStrings("Error", collector.lastErrorName[0..collector.lastErrorNameLength]);
-    try std.testing.expect(std.mem.startsWith(u8, collector.lastErrorMessage[0..collector.lastErrorMessageLength], "No handler registered for task type: no-such-type."));
+    try std.testing.expectEqualStrings("Error", collector.lastErrorName);
+    try std.testing.expect(std.mem.startsWith(u8, collector.lastErrorMessage, "No handler registered for task type: no-such-type."));
 }
 
 test "forwards task messages to the message callbacks" {
@@ -322,7 +327,7 @@ test "forwards task messages to the message callbacks" {
     defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
     defer pool.deinit();
-    var collector = Collector{};
+    var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
     _ = try pool.onTaskMessage("progress", .{ .context = &collector, .function = Collector.onTypedMessage });
     const unsubscribe = try pool.onAnyTaskMessage(.{ .context = &collector, .function = Collector.onAnyMessage });
@@ -350,7 +355,7 @@ test "creates workers lazily up to maxWorkers" {
     defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 2, 10000, .{});
     defer pool.deinit();
-    var collector = Collector{};
+    var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
     var index: usize = 0;
     while (index < 4) {
@@ -384,13 +389,13 @@ test "times out a task, reports it failed and replaces the worker" {
     defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 1, 50, .{});
     defer pool.deinit();
-    var collector = Collector{};
+    var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
     _ = try pool.addTask(allocator, std.testing.io, "slow", .null, "source", "slow-task", null);
     _ = try pool.addTask(allocator, std.testing.io, "echo", .{ .string = "after" }, "source", "echo-task", null);
     try collector.waitForCompleted(2);
     try std.testing.expectEqual(@as(usize, 1), collector.failed);
-    try std.testing.expectEqualStrings("echo after", collector.lastOutput[0..collector.lastOutputLength]);
+    try std.testing.expectEqualStrings("echo after", collector.lastOutput);
     try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "[Task Queue] Task slow-task timed out after 50ms\n") != null);
     try std.testing.expectEqual(@as(usize, 1), pool.workers.items.len);
     try std.testing.expectEqual(@as(u32, 1), pool.workers.items[0].workerId);
@@ -412,7 +417,7 @@ test "the timeout message writes the timeout as a template string writes a numbe
     // `--timeout 0.0000001`: setTimeout waits 1 ms, and the message writes the timeout as JavaScript writes it.
     const pool = try WorkerPoolBun.init(std.testing.io, 1, 1e-7, .{});
     defer pool.deinit();
-    var collector = Collector{};
+    var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
     _ = try pool.addTask(allocator, std.testing.io, "slow", .null, "source", "slow-task", null);
     try collector.waitForCompleted(1);
@@ -431,7 +436,7 @@ test "cancelTasks drops pending tasks and signals running tasks" {
     defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
     defer pool.deinit();
-    var collector = Collector{};
+    var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
     _ = try pool.onTaskAdded("db", .{ .context = &collector, .function = Collector.onAdded });
     _ = try pool.onTasksCancelled("db", .{ .context = &collector, .function = Collector.onCancelled });
@@ -449,7 +454,7 @@ test "cancelTasks drops pending tasks and signals running tasks" {
     try collector.waitForCompleted(2);
     std.testing.io.sleep(.fromMilliseconds(50), .awake) catch {};
     try std.testing.expectEqual(@as(usize, 2), collector.completed);
-    try std.testing.expectEqualStrings("echo other", collector.lastOutput[0..collector.lastOutputLength]);
+    try std.testing.expectEqualStrings("echo other", collector.lastOutput);
 }
 
 test "shutdown terminates the workers" {
@@ -461,7 +466,7 @@ test "shutdown terminates the workers" {
     defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 2, 10000, .{});
     defer pool.deinit();
-    var collector = Collector{};
+    var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
     _ = try pool.addTask(arena.allocator(), std.testing.io, "echo", .{ .string = "x" }, "source", null, null);
     try collector.waitForCompleted(1);

@@ -100,6 +100,42 @@ test "getRecordKey lowercases and truncates at invalid hex like Buffer.from" {
     try std.testing.expectEqualStrings("Invalid record ID 123e4567-e89b-12d3-a456-4266141740zz with length 15", errors.lastErrorMessage());
 }
 
+//
+// Buffer.from(id.replace(/-/g, ""), "hex") decodes whole pairs of hex digits, so a trailing odd digit is dropped rather
+// than refused. An id of 33 hex digits is therefore the same 16 bytes as the 32 digit one it starts with.
+//
+test "getRecordKey drops a trailing odd hex digit the way Buffer.from does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expectEqualStrings("123e4567e89b12d3a456426614174000", try getRecordKey(arena.allocator(), "123e4567-e89b-12d3-a456-426614174000a"));
+    try std.testing.expectEqualStrings("123e4567e89b12d3a456426614174000", try getRecordKey(arena.allocator(), "123e4567e89b12d3a456426614174000a"));
+}
+
+//
+// The other side of the same rule: an id whose hex digits run out at an odd count decodes to fewer than 16 bytes and is
+// refused, and the length in the message is the number of whole pairs that did decode, not the digit count.
+//
+test "getRecordKey refuses an odd run of hex digits, reporting the whole pairs it decoded" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expectError(error.Thrown, getRecordKey(arena.allocator(), "123e4567-e89b-12d3-a456-4266141740a"));
+    try std.testing.expectEqualStrings("Invalid record ID 123e4567-e89b-12d3-a456-4266141740a with length 15", errors.lastErrorMessage());
+    try std.testing.expectError(error.Thrown, getRecordKey(arena.allocator(), "123456"));
+    try std.testing.expectEqualStrings("Invalid record ID 123456 with length 3", errors.lastErrorMessage());
+}
+
+//
+// Dashes are removed before the decoding, so an id that is nothing but dashes decodes to nothing, and an id whose dashes
+// only pad an odd digit count still decodes the whole pairs.
+//
+test "getRecordKey removes every dash before decoding, so a run of them decodes to nothing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expectError(error.Thrown, getRecordKey(arena.allocator(), "----"));
+    try std.testing.expectEqualStrings("Invalid record ID ---- with length 0", errors.lastErrorMessage());
+    try std.testing.expectEqualStrings("123e4567e89b12d3a456426614174000", try getRecordKey(arena.allocator(), "--1--2--3--e--4--5--6--7--e--8--9--b--1--2--d--3--a--4--5--6--4--2--6--6--1--4--1--7--4--0--0--0--"));
+}
+
 test "BsonShard markDirty sets dirty flag" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

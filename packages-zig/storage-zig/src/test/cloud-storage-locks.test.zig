@@ -105,6 +105,90 @@ fn createStorage(allocator: std.mem.Allocator, sender: *Sender, handler: Handler
     return storage;
 }
 
+const RecordingLog = struct {
+    // The verbose messages written.
+    messages: std.Io.Writer.Allocating,
+
+    // Whether verbose logging is on.
+    verbose_enabled: bool,
+
+    //
+    // Gets the ILog interface for this log.
+    //
+    fn ilog(self: *RecordingLog) utils.log.ILog {
+        return .{ .ptr = self, .vtable = &vtable };
+    }
+
+    //
+    // Keeps a verbose message.
+    //
+    fn verbose(ptr: *anyopaque, message: []const u8) void {
+        const self: *RecordingLog = @ptrCast(@alignCast(ptr));
+        self.messages.writer.writeAll(message) catch {};
+        self.messages.writer.writeByte('\n') catch {};
+    }
+
+    //
+    // Ignores a message.
+    //
+    fn ignoreMessage(ptr: *anyopaque, message: []const u8) void {
+        _ = ptr;
+        _ = message;
+    }
+
+    //
+    // Ignores an exception.
+    //
+    fn ignoreException(ptr: *anyopaque, message: []const u8, err: anyerror) void {
+        _ = ptr;
+        _ = message;
+        _ = @errorName(err);
+    }
+
+    //
+    // Ignores tool output.
+    //
+    fn ignoreTool(ptr: *anyopaque, toolName: []const u8, data: utils.log.IToolOutput) void {
+        _ = ptr;
+        _ = toolName;
+        _ = data;
+    }
+
+    //
+    // Returns whether verbose logging is enabled.
+    //
+    fn verboseEnabled(ptr: *anyopaque) bool {
+        const self: *RecordingLog = @ptrCast(@alignCast(ptr));
+        return self.verbose_enabled;
+    }
+
+    //
+    // Returns no log details.
+    //
+    fn getLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!utils.log.ILogDetails {
+        _ = ptr;
+        _ = allocator;
+        _ = io;
+        return utils.log.noLogDetails;
+    }
+
+    //
+    // The vtable that forwards to this log.
+    //
+    const vtable: utils.log.ILog.VTable = .{
+        .info = ignoreMessage,
+        .verbose = verbose,
+        .@"error" = ignoreMessage,
+        .exception = ignoreException,
+        .warn = ignoreMessage,
+        .debug = ignoreMessage,
+        .tool = ignoreTool,
+        .event = ignoreMessage,
+        .verboseEnabled = verboseEnabled,
+        .getLogDetails = getLogDetails,
+    };
+};
+
 //
 // The lock the tests acquire.
 //
@@ -205,4 +289,54 @@ test "readableLength is the length in the info, because an object hands out what
         .length = 1234,
         .lastModified = 0,
     }));
+}
+
+//
+// The verbose log of a lock taken after a stale one was broken, and of one refused while a live one is held,
+// says what happened at each step.
+//
+test "a lock taken after breaking a stale one is logged as taken after the timeout" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var sender: Sender = undefined;
+    var storage = createStorage(arena.allocator(), &sender, staleLockHandler);
+    defer storage.s3.deinit();
+
+    var recordingLog: RecordingLog = .{
+        .messages = std.Io.Writer.Allocating.init(arena.allocator()),
+        .verbose_enabled = true,
+    };
+    const previousLog = utils.log.log;
+    utils.log.setLog(recordingLog.ilog());
+    defer utils.log.setLog(previousLog);
+
+    try std.testing.expectEqual(true, try storage.acquireWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-b"));
+
+    const messages = recordingLog.messages.written();
+    try std.testing.expect(std.mem.indexOf(u8, messages, "ACQUIRE_ATTEMPT") != null);
+    try std.testing.expect(std.mem.indexOf(u8, messages, "ACQUIRE_TIMEOUT_BREAK") != null);
+    try std.testing.expect(std.mem.indexOf(u8, messages, "ACQUIRE_SUCCESS_AFTER_TIMEOUT") != null);
+}
+
+test "a lock refused while a live one is held is logged with its age and owner" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var sender: Sender = undefined;
+    var storage = createStorage(arena.allocator(), &sender, liveLockHandler);
+    defer storage.s3.deinit();
+
+    var recordingLog: RecordingLog = .{
+        .messages = std.Io.Writer.Allocating.init(arena.allocator()),
+        .verbose_enabled = true,
+    };
+    const previousLog = utils.log.log;
+    utils.log.setLog(recordingLog.ilog());
+    defer utils.log.setLog(previousLog);
+
+    try std.testing.expectEqual(false, try storage.acquireWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-b"));
+
+    const messages = recordingLog.messages.written();
+    try std.testing.expect(std.mem.indexOf(u8, messages, "ACQUIRE_FAILED_EXISTS") != null);
+    try std.testing.expect(std.mem.indexOf(u8, messages, "age:") != null);
+    try std.testing.expect(std.mem.indexOf(u8, messages, "owner:owner-a") != null);
 }

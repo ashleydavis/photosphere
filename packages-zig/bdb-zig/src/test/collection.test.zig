@@ -147,6 +147,54 @@ test "should list and delete sort indexes" {
     }
 }
 
+//
+// sortIndexes parses each directory name with `/^(.+)_(asc|desc)$/`, whose `.+` is greedy, so the field name is
+// everything before the LAST "_asc" or "_desc". A name that is exactly "_asc" has nothing in front of the direction and so
+// does not match, and a name with no direction at all does not match either.
+//
+test "sortIndexes takes the field name from before the last _asc or _desc" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    try storage.putFile("/indexes/users/photo_date_asc/tree.dat", "x");
+    try storage.putFile("/indexes/users/name_desc/tree.dat", "x");
+    try storage.putFile("/indexes/users/x_desc_asc/tree.dat", "x");
+    try storage.putFile("/indexes/users/_asc/tree.dat", "x");
+    try storage.putFile("/indexes/users/_desc/tree.dat", "x");
+    try storage.putFile("/indexes/users/plain/tree.dat", "x");
+    try storage.putFile("/indexes/users/ascending/tree.dat", "x");
+
+    const indexes = try collection.sortIndexes(io);
+
+    // listDirs sorts the directory names, so the three that matched come back as name_desc, photo_date_asc, x_desc_asc.
+    try std.testing.expectEqual(@as(usize, 3), indexes.len);
+    try std.testing.expectEqualStrings("name", indexes[0].fieldName);
+    try std.testing.expectEqual(bdb.sort_index.SortDirection.desc, indexes[0].direction);
+    try std.testing.expectEqualStrings("photo_date", indexes[1].fieldName);
+    try std.testing.expectEqual(bdb.sort_index.SortDirection.asc, indexes[1].direction);
+    try std.testing.expectEqualStrings("x_desc", indexes[2].fieldName);
+    try std.testing.expectEqual(bdb.sort_index.SortDirection.asc, indexes[2].direction);
+}
+
+//
+// sortIndexes returns nothing at all when the collection has no index directory, so a collection that has never been
+// indexed reports no indexes rather than throwing.
+//
+test "sortIndexes reports no indexes when the collection has no index directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    try std.testing.expectEqual(@as(usize, 0), (try collection.sortIndexes(io)).len);
+
+    // A directory that holds no index at all is reported as no indexes too.
+    try storage.putFile("/indexes/users/notes/readme.txt", "not a sort index");
+    try std.testing.expectEqual(@as(usize, 0), (try collection.sortIndexes(io)).len);
+}
+
 test "should update sort index when record is updated" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -989,6 +1037,26 @@ test "getAll reads its continuation token like parseInt" {
     const fromNothing = try collection.getAll(io, "abc");
     try std.testing.expectEqual(@as(usize, 0), fromNothing.records.len);
     try std.testing.expect(fromNothing.next == null);
+}
+
+//
+// getAll reads its token with `next ? parseInt(next) : 0`, and an empty string is falsy, so an empty token means the
+// listing starts at the first shard rather than at shard zero of a parse of nothing.
+//
+test "getAll treats an empty continuation token as no token" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+    var user = try makeExternalUser(allocator, "", "Jane Doe", 25, "admin");
+    try collection.insertOne(io, &user, null);
+
+    const fromNothing = try collection.getAll(io, null);
+    const fromEmpty = try collection.getAll(io, "");
+    try std.testing.expectEqual(fromNothing.records.len, fromEmpty.records.len);
+    try std.testing.expectEqual(@as(usize, 1), fromEmpty.records.len);
+    try std.testing.expectEqualStrings(fromNothing.next.?, fromEmpty.next.?);
 }
 
 test "insertOne adds the record to every sort index the collection has, and sortIndexes skips directories that are not sort indexes" {
