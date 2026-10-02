@@ -2327,17 +2327,18 @@ jobs:
           cd ./artifacts/zig
           # Every binary the build jobs upload, listed here: a name that is missing or misspelled fails
           # the step with this message rather than with chmod's, which says nothing about what is wrong.
-          for binary in photosphere-cli-zig-linux-x64 photosphere-cli-zig-windows-x64.exe \
+          for binary in photosphere-cli-zig-linux-x64 photosphere-cli-zig-windows-x64 \
                        photosphere-cli-zig-macos-x64 photosphere-cli-zig-macos-arm64; do
               if [ ! -f "$binary" ]; then
                   echo "::error::The Zig build jobs did not produce $binary. Uploaded: $(ls)"
                   exit 1
               fi
           done
-          chmod +x photosphere-cli-zig-linux-x64 photosphere-cli-zig-macos-x64 photosphere-cli-zig-macos-arm64
+          chmod +x photosphere-cli-zig-linux-x64 photosphere-cli-zig-windows-x64 photosphere-cli-zig-macos-x64 photosphere-cli-zig-macos-arm64
           tar -czf ../photosphere-cli-zig-linux-x64.tar.gz photosphere-cli-zig-linux-x64
           tar -czf ../photosphere-cli-zig-macos-x64.tar.gz photosphere-cli-zig-macos-x64
           tar -czf ../photosphere-cli-zig-macos-arm64.tar.gz photosphere-cli-zig-macos-arm64
+          cp photosphere-cli-zig-windows-x64 photosphere-cli-zig-windows-x64.exe
           zip ../photosphere-cli-zig-windows-x64.zip photosphere-cli-zig-windows-x64.exe
           cd ../..
 
