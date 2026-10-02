@@ -40,17 +40,16 @@ test "an error message longer than the collector's buffer is recorded whole" {
     defer utils.log.setLog(previousLog);
     const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
     defer pool.deinit();
-    var collector = Collector{};
+    var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
     _ = try pool.addTask(arena.allocator(), std.testing.io, unregistered_task_type, .null, "source", null, null);
     try collector.waitForCompleted(1);
 
     // The message the worker builds is longer than the 256 bytes the collector used to copy it into.
     try std.testing.expectEqual(@as(usize, 1), collector.failed);
-    try std.testing.expectEqualStrings("Error", collector.lastErrorName[0..collector.lastErrorNameLength]);
-    const message = collector.lastErrorMessage[0..collector.lastErrorMessageLength];
-    try std.testing.expect(message.len > 256);
-    try std.testing.expect(std.mem.startsWith(u8, message, "No handler registered for task type: "));
-    try std.testing.expect(std.mem.indexOf(u8, message, unregistered_task_type) != null);
-    try std.testing.expect(std.mem.indexOf(u8, message, long_handler_type_name) != null);
+    try std.testing.expectEqualStrings("Error", collector.lastErrorName);
+    try std.testing.expect(collector.lastErrorMessage.len > 256);
+    try std.testing.expect(std.mem.startsWith(u8, collector.lastErrorMessage, "No handler registered for task type: "));
+    try std.testing.expect(std.mem.indexOf(u8, collector.lastErrorMessage, unregistered_task_type) != null);
+    try std.testing.expect(std.mem.indexOf(u8, collector.lastErrorMessage, long_handler_type_name) != null);
 }
