@@ -105,8 +105,9 @@ const IExpectedImageInfo = struct {
     // The height, in pixels.
     height: f64,
 
-    // True when the file has an EXIF DateTimeOriginal, so TypeScript sets createdAt.
-    hasCreatedAt: bool,
+    // The time value TypeScript's `new Date(...)` gives for the file's EXIF DateTimeOriginal, or null when the
+    // file has none, so TypeScript leaves createdAt undefined.
+    createdAt: ?f64,
 };
 
 test "getInfo reads the dimensions and the date of an image like TypeScript" {
@@ -116,26 +117,30 @@ test "getInfo reads the dimensions and the date of an image like TypeScript" {
     try requireImageMagick(allocator);
 
     // The sizes are those in the files' headers (the JPEG frame header, the PNG IHDR chunk and the WebP VP8 frame).
-    // test.jpg has an EXIF DateTimeOriginal ("2025:05:27 09:54:16"), so TypeScript sets createdAt to
-    // `new Date("2025-05-27 09:54:16")`; the PNG and WebP have no EXIF, so createdAt stays undefined.
+    // test.jpg has an EXIF DateTimeOriginal of "2025:05:27 09:54:16", so TypeScript sets createdAt to
+    // `new Date("2025-05-27 09:54:16")` (image.ts rewrites the date colons as dashes and hands the rest to
+    // `new Date`). Node and Bun read that date-time with no zone offset as local time, which measured
+    // 1748303656000 on a machine at UTC+10:00; js-date.zig assumes local time is UTC (a documented deviation
+    // from JavaScript), so the value read here is the UTC reading, ten hours later. The PNG and WebP have no
+    // EXIF, so createdAt stays undefined.
     const cases = [_]IExpectedImageInfo{
         .{
             .filePath = "../../test/test.jpg",
             .width = 2560,
             .height = 1920,
-            .hasCreatedAt = true,
+            .createdAt = 1748339656000,
         },
         .{
             .filePath = "../../test/test.png",
             .width = 100,
             .height = 90,
-            .hasCreatedAt = false,
+            .createdAt = null,
         },
         .{
             .filePath = "../../test/test.webp",
             .width = 100,
             .height = 80,
-            .hasCreatedAt = false,
+            .createdAt = null,
         },
     };
     for (cases) |expected| {
@@ -144,7 +149,7 @@ test "getInfo reads the dimensions and the date of an image like TypeScript" {
         const info = try image.getInfo(allocator, std.testing.io);
         try std.testing.expectEqual(expected.width, info.dimensions.width);
         try std.testing.expectEqual(expected.height, info.dimensions.height);
-        try std.testing.expectEqual(expected.hasCreatedAt, info.createdAt != null);
+        try std.testing.expectEqual(expected.createdAt, info.createdAt);
         try std.testing.expectEqualStrings(expected.filePath, info.filePath);
         try std.testing.expectEqual(@as(?bool, false), info.hasAudio);
         try std.testing.expect(info.duration == null);
