@@ -1762,6 +1762,7 @@ jobs:
         run: zig build -Dcpu=baseline --prefix bin/x64/win --prefix-exe-dir .
 
       - name: Check the binary was produced
+        shell: bash
         working-directory: ./apps/cli-zig
         run: |
           ls -la bin/x64/win/psi.exe
