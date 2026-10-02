@@ -192,14 +192,12 @@ test "getExifData reads the tags of a real image" {
     try std.testing.expectEqualStrings("2025:05:27 09:54:16", exifData.get("DateTimeOriginal").?);
 
     // The DateTimeOriginal is what getInfo turns into createdAt, with the colons of the date replaced by dashes.
-    // TODO: the TypeScript reads a real date out of that: `new Date("2025-05-27 09:54:16")` is the local time, which
-    // the Date Time String Format of ECMA-262 allows with a space where the ISO form has a "T". The Zig reads an
-    // Invalid Date, because js_date.parseDate in serialization-zig only reads the "T" form, so createdAt is NaN
-    // here for every image that has an EXIF DateTimeOriginal. The fix belongs to serialization-zig, not to this
-    // package, and this assertion is what goes red when it is made.
+    // TypeScript reads a real date out of that: `new Date("2025-05-27 09:54:16")` is the local time, which the Date
+    // Time String Format of ECMA-262 allows with a space where the ISO form has a "T". js_date.parseDate reads that
+    // form too, so the Zig reads the UTC reading, which is the same value the getInfo test above asserts.
     var withDate = Image.init("../../test/test.jpg");
     const info = try withDate.getInfo(allocator, std.testing.io);
-    try std.testing.expect(std.math.isNan(info.createdAt.?));
+    try std.testing.expectEqual(@as(f64, 1748339656000), info.createdAt.?);
     try std.testing.expectEqualStrings("2025-05-27 09:54:16", try tools.image.exifDateToDashes(allocator, exifData.get("DateTimeOriginal").?));
 }
 
