@@ -986,11 +986,19 @@ test "symbol gives each prompt state its own colour and symbol" {
     cli.picocolors.setColorSupportOverride(true);
     defer cli.picocolors.setColorSupportOverride(null);
 
-    try std.testing.expectEqualStrings("\x1b[36m\u{25C6}\x1b[39m", try common.symbol(allocator, .initial));
-    try std.testing.expectEqualStrings("\x1b[36m\u{25C6}\x1b[39m", try common.symbol(allocator, .active));
-    try std.testing.expectEqualStrings("\x1b[31m\u{25A0}\x1b[39m", try common.symbol(allocator, .cancel));
-    try std.testing.expectEqualStrings("\x1b[33m\u{25B2}\x1b[39m", try common.symbol(allocator, .@"error"));
-    try std.testing.expectEqualStrings("\x1b[32m\u{25C7}\x1b[39m", try common.symbol(allocator, .submit));
+    // A terminal without unicode support gets the ASCII fallbacks, which is what the TypeScript does too
+    // (`is-unicode-supported` is false there). The build runner's TERM decides it, so the symbols are read from
+    // the same `unicodeOr` the library uses rather than hardcoded to the Unicode ones.
+    const stepActive = common.unicodeOr("\u{25C6}", "*");
+    const stepCancel = common.unicodeOr("\u{25A0}", "x");
+    const stepError = common.unicodeOr("\u{25B2}", "x");
+    const stepSubmit = common.unicodeOr("\u{25C7}", "o");
+
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "\x1b[36m{s}\x1b[39m", .{stepActive}), try common.symbol(allocator, .initial));
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "\x1b[36m{s}\x1b[39m", .{stepActive}), try common.symbol(allocator, .active));
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "\x1b[31m{s}\x1b[39m", .{stepCancel}), try common.symbol(allocator, .cancel));
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "\x1b[33m{s}\x1b[39m", .{stepError}), try common.symbol(allocator, .@"error"));
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "\x1b[32m{s}\x1b[39m", .{stepSubmit}), try common.symbol(allocator, .submit));
 }
 
 test "getColumns is 80 when stdout is not a terminal, and stdoutColumns is then null" {

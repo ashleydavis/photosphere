@@ -12,6 +12,7 @@
 //
 
 const std = @import("std");
+const builtin = @import("builtin");
 const helpers = @import("test-helpers.zig");
 const cli = @import("cli-zig");
 
@@ -237,6 +238,18 @@ const compare_max_zero_report =
 ;
 
 //
+// Rewrites the `/` of an expected report into the separator of the platform, because the paths in a report are
+// joined with node-utils' path.join (the port of Node's path.join), which writes a `\` on Windows. Only the paths
+// of these reports contain a `/`, so replacing every one of them changes nothing else.
+//
+fn withPlatformSeparators(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
+    if (builtin.os.tag == .windows) {
+        return std.mem.replaceOwned(u8, allocator, text, "/", "\\");
+    }
+    return text;
+}
+
+//
 // The report of compareCommand (apps/cli/src/cmd/compare.ts) for test/dbs/1-asset against test/dbs/1-asset-2 with
 // --full: every file of every category is listed and the "... and N more" line is not.
 //
@@ -269,7 +282,7 @@ test "compare lists nothing for a maximum that is not a number and everything fo
     try helpers.copyDirectory(allocator, "../../test/dbs/1-asset-2", destination);
 
     const notANumber = try normalize(allocator, try runZig(allocator, environment, &.{ "compare", "--db", source, "--dest", destination, "--max", "abc", "--yes" }), root, "<root>");
-    try expectResult(notANumber, compare_max_not_a_number_report, "", 0);
+    try expectResult(notANumber, try withPlatformSeparators(allocator, compare_max_not_a_number_report), "", 0);
 
     const full = try normalize(allocator, try runZig(allocator, environment, &.{ "compare", "--db", source, "--dest", destination, "--full", "--yes" }), root, "<root>");
     try expectWhat(full, std.mem.indexOf(u8, full.stdout, compare_full_report_tail) != null, allocator, "--full did not list every file of every category");
@@ -280,7 +293,7 @@ test "compare lists nothing for a maximum that is not a number and everything fo
     // A maximum of 0 shows nothing, and every category says how many it did not show, because 0 is a number
     // that any number of files is more than (TypeScript: `length > 0`, `length - 0`).
     const zeroMax = try normalize(allocator, try runZig(allocator, environment, &.{ "compare", "--db", source, "--dest", destination, "--max", "0", "--yes" }), root, "<root>");
-    try expectResult(zeroMax, compare_max_zero_report, "", 0);
+    try expectResult(zeroMax, try withPlatformSeparators(allocator, compare_max_zero_report), "", 0);
 }
 
 //
@@ -379,9 +392,11 @@ test "hash-cache show names the asset id of an entry added by add, like the Type
 
     // The entry is keyed by the path of the file add was given, and holds the hash add computed. The key is
     // written exactly as add recorded it (without its leading separator, as addFiles records it), so the test
-    // matches the end of the path and the line under it rather than the whole path.
-    const separator = std.fs.path.sep;
-    const keySuffix = try std.fmt.allocPrint(allocator, "test{c}test.png\n    Keyed by: file path\n", .{separator});
+    // matches the end of the path and the line under it rather than the whole path. The key keeps the forward
+    // slashes of the path it was given, not the separator of the platform: add was given `../../test/test.png`,
+    // and the key is that path resolved without changing its separators, so it ends in `test/test.png`
+    // everywhere.
+    const keySuffix = "test/test.png\n    Keyed by: file path\n";
     try expectWhat(shown, std.mem.indexOf(u8, shown.stdout, keySuffix) != null, allocator, "the hash cache entry is not keyed by the path add hashed");
     try expectWhat(shown, std.mem.indexOf(u8, shown.stdout, try std.fmt.allocPrint(allocator, "\n    Hash: {s}\n", .{test_png_hash})) != null, allocator, "the hash cache entry does not hold the hash of the file");
 

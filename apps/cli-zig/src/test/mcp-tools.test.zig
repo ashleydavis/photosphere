@@ -53,6 +53,10 @@ const IToolsTestEnvironment = struct {
     fn init(self: *IToolsTestEnvironment, name: []const u8) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
+        // The detection is forgotten first, because Image looks its commands up on PATH once and remembers the
+        // answer for the rest of the process, so a test that ran before this one and replaced the environment can
+        // leave it believing no ImageMagick is installed when one is.
+        tools.Image.resetInitialization();
         const status = try tools.verifyTools(allocator, io);
         if (!status.allAvailable) {
             std.debug.print("This test needs ImageMagick and ffmpeg installed. Missing: {s}\n", .{try std.mem.join(allocator, ", ", status.missingTools)});
