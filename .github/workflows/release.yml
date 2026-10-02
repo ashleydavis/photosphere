@@ -1716,6 +1716,64 @@ jobs:
           name: photosphere-cli-zig-macos-arm64
           path: out
 
+  build-zig-macos-x64:
+    # Builds the Zig CLI for macOS natively: the AWS SDK for C needs the macOS SDK's framework headers, which
+    # Zig only uses for a native build (see packages-zig/storage-zig/docs/aws-sdk.md). The runner is an x64
+    # Mac, so this is the x64 build.
+    timeout-minutes: 30
+    runs-on: macos-15-intel
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Fetch the Zig package dependencies (one at a time)
+        shell: bash
+        run: bun run --cwd packages-zig/storage-zig fetch-deps
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Build the Zig CLI natively for macOS
+        working-directory: ./apps/cli-zig
+        run: bun run build-mac-x64
+
+      - name: Check the binary was produced for the right architecture
+        working-directory: ./apps/cli-zig
+        run: |
+          ls -la bin/x64/mac/psi
+          file bin/x64/mac/psi
+          file bin/x64/mac/psi | grep "Mach-O 64-bit executable x86_64"
+
+      # The binary is renamed to say which CLI it is, because the TypeScript CLI is also called psi and
+      # unpacking both releases into one directory would otherwise leave one of the two overwritten.
+      - name: Collect the Zig CLI binary
+        shell: bash
+        run: |
+          mkdir -p out
+          cp apps/cli-zig/bin/x64/mac/psi out/photosphere-cli-zig-macos-x64
+          ls -la out
+
+      - name: Upload the Zig CLI binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-cli-zig-macos-x64
+          path: out
+
   zig-unit-tests:
     # The unit tests of the Zig CLI and of every Zig package, on each platform, because the
     # behaviour of a test that runs an external tool differs between them. This is a job of its own so
@@ -2029,7 +2087,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, compile, build-zig, build-zig-macos, zig-unit-tests, zig-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
+    needs: [prepare-tag, compile, build-zig, build-zig-macos, build-zig-macos-x64, zig-unit-tests, zig-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -2092,9 +2150,10 @@ jobs:
           cd ./artifacts/macos-arm64 && chmod +x psi && tar -czf ../photosphere-cli-macos-arm64.tar.gz psi && cd ../..
           # The Zig CLI, one archive per platform, with the binary named after the platform it is for.
           cd ./artifacts/zig
-          chmod +x photosphere-cli-zig-linux-x64 photosphere-cli-zig-linux-arm64 photosphere-cli-zig-macos-arm64
+          chmod +x photosphere-cli-zig-linux-x64 photosphere-cli-zig-linux-arm64 photosphere-cli-zig-macos-x64 photosphere-cli-zig-macos-arm64
           tar -czf ../photosphere-cli-zig-linux-x64.tar.gz photosphere-cli-zig-linux-x64
           tar -czf ../photosphere-cli-zig-linux-arm64.tar.gz photosphere-cli-zig-linux-arm64
+          tar -czf ../photosphere-cli-zig-macos-x64.tar.gz photosphere-cli-zig-macos-x64
           tar -czf ../photosphere-cli-zig-macos-arm64.tar.gz photosphere-cli-zig-macos-arm64
           zip ../photosphere-cli-zig-windows-x64.zip photosphere-cli-zig-windows-x64.exe
           cd ../..
@@ -2142,6 +2201,7 @@ jobs:
             ./artifacts/photosphere-cli-zig-linux-x64.tar.gz
             ./artifacts/photosphere-cli-zig-linux-arm64.tar.gz
             ./artifacts/photosphere-cli-zig-windows-x64.zip
+            ./artifacts/photosphere-cli-zig-macos-x64.tar.gz
             ./artifacts/photosphere-cli-zig-macos-arm64.tar.gz
             ./artifacts/desktop/**/*
           body: |
