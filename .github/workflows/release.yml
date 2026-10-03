@@ -1981,6 +1981,57 @@ jobs:
           path: apps/cli-zig/.zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
 
+  build-aws-sdk:
+    # Compiles the AWS SDK for C on each platform and caches the result, because several jobs build Zig and
+    # every one of them would otherwise compile it from cold: it is the longest single build in this
+    # workflow. One job owns it, so the compile happens once per platform per commit and the others
+    # restore what this wrote.
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Fetch the Zig package dependencies (one at a time)
+        shell: bash
+        run: bun run --cwd packages-zig/storage-zig fetch-deps
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      # A Debug build, which is the mode every job that needs the AWS SDK wants: the Zig cache is keyed by
+      # optimisation mode, so a ReleaseSafe compile does not serve a Debug one. Building the CLI in Debug
+      # compiles the AWS SDK for C and runs nothing, so the unit tests stay in the zig-unit-tests job.
+      - name: Build the Zig CLI in Debug, which compiles the AWS SDK
+        working-directory: ./apps/cli-zig
+        run: zig build -Doptimize=Debug
+
+      - name: Save the Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: apps/cli-zig/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
+
   zig-unit-tests:
     # The unit tests of the Zig CLI and of every Zig package, on each platform, because the
     # behaviour of a test that runs an external tool differs between them. This is a job of its own so
@@ -1989,6 +2040,7 @@ jobs:
     # red smoke test.
     # Setup takes about 5 minutes and a cold unit test build up to 25.
     timeout-minutes: 50
+    needs: [build-aws-sdk]
     strategy:
       fail-fast: false
       matrix:
@@ -2106,12 +2158,6 @@ jobs:
 
       # A key of its own, because the smoke job saves under the plain one and actions/cache/save fails
       # when the key already exists.
-      - name: Save the Zig build cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: apps/cli-zig/.zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-unit-${{ github.sha }}
 
   zig-smoke-tests:
     # The Zig CLI smoke suites on each platform, because the byte-identical output (gzip OS byte, paths, file
@@ -2123,7 +2169,7 @@ jobs:
     # suites have run against.
     # Setup takes about 5 minutes and the smoke suites about 15.
     timeout-minutes: 75
-    needs: [build-zig-linux-x64, build-zig-macos-arm64, build-zig-macos-x64, build-zig-windows-x64]
+    needs: [build-aws-sdk, build-zig-linux-x64, build-zig-macos-arm64, build-zig-macos-x64, build-zig-windows-x64]
     strategy:
       fail-fast: false
       matrix:
@@ -2216,9 +2262,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: apps/cli-zig/.zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-unit-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-unit-
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
 
       - name: Download the Zig CLI built for this platform
         uses: actions/download-artifact@v4
@@ -2278,7 +2324,7 @@ jobs:
       # without bound: the step after the restore starts a fresh cache once the restored one is too big.
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, compile, build-zig-linux-x64, build-zig-windows-x64, build-zig-macos-arm64, build-zig-macos-x64, zig-unit-tests, zig-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
+    needs: [prepare-tag, compile, build-aws-sdk, build-zig-linux-x64, build-zig-windows-x64, build-zig-macos-arm64, build-zig-macos-x64, zig-unit-tests, zig-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write
