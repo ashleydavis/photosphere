@@ -136,18 +136,21 @@ pub fn build(b: *std.Build) !void {
 
     // The tests of this CLI and of every Zig package, in this one build. The packages' dependencies are
     // then built once and shared, so the AWS SDK for C compiles once instead of once in each package that
-    // uses it. The packages' tests build in Debug, as they do when each package is tested on its own.
+    // uses it. The packages' tests build in the same mode the CLI does, so that one build of the AWS SDK
+    // serves these tests, the storage integration tests below and the jobs that build the CLI itself: the
+    // Zig cache is keyed by optimisation mode, so a test built in a mode nothing else uses compiles the AWS
+    // SDK again for every one of them.
     const test_all_step = b.step("test-all", "Run the unit tests of the Zig CLI and of every Zig package");
     test_all_step.dependOn(test_step);
     for (dependency_names) |dependency_name| {
-        const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = .Debug });
+        const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = optimize });
         test_all_step.dependOn(&dependency.builder.top_level_steps.get("test").?.step);
     }
 
     // The storage package's integration tests against a real S3 server, built as test-all builds that package, so
     // they reuse what test-all compiled (the AWS SDK for C above all) instead of compiling it again.
     const storage_integration_step = b.step("test-storage-integration", "Run the storage package's integration tests against the S3 server the environment names");
-    const storage = b.dependency("storage-zig", .{ .target = target, .optimize = .Debug });
+    const storage = b.dependency("storage-zig", .{ .target = target, .optimize = optimize });
     storage_integration_step.dependOn(&storage.builder.top_level_steps.get("test-integration").?.step);
 }
 
