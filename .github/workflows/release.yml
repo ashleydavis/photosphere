@@ -2018,12 +2018,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-
 
-      # A Debug build, which is the mode every job that needs the AWS SDK wants: the Zig cache is keyed by
-      # optimisation mode, so a ReleaseSafe compile does not serve a Debug one. Building the CLI in Debug
-      # compiles the AWS SDK for C and runs nothing, so the unit tests stay in the zig-unit-tests job.
-      - name: Build the Zig CLI in Debug, which compiles the AWS SDK
+      # The CLI's own build, which compiles the AWS SDK for C and runs nothing. Every job that needs the AWS
+      # SDK builds in this same mode, so one cache serves all of them: the Zig cache is keyed by optimisation
+      # mode, and the unit tests and the storage integration tests build in this mode too.
+      - name: Build the Zig CLI, which compiles the AWS SDK
         working-directory: ./apps/cli-zig
-        run: zig build -Doptimize=Debug
+        run: zig build
 
       - name: Save the Zig build cache
         if: always()
