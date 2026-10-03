@@ -147,6 +147,52 @@ Release workflow is green. Each point is ticked off as it is confirmed:
   the Zig logic can be verified to be the same as the TypeScript logic.
 - [x] The Zig smoke tests complete more quickly than the TypeScript smoke tests. If necessary, exclude the cost
   of the TypeScript verify calls from the comparison.
+- [ ] The Zig smoke tests are shown, test by test, to match the TypeScript smoke tests, in a written comparison.
+- [ ] The Zig CLI is shown not to be faked: it never calls, embeds or links the TypeScript CLI or a JavaScript runtime, holds no canned output, no test-only branches and no stub that reports success.
+- [ ] The Zig CLI writes databases byte-identical to the TypeScript CLI for the same commands.
+- [ ] Every Zig test is shown able to fail: breaking the Zig code it covers turns it red.
+
+### What the audit has done so far
+
+- Side by side comparison of every package and of `apps/cli`, recorded in `docs/zig-port-map.md` with its "Divergences fixed" section.
+- Coverage pass recorded in `docs/zig-test-coverage.md`, then further coverage branches (`audit/audit-*`, `audit/cli-a` to `audit/cli-d`) merged in `90158286`.
+- Smoke timings recorded in `docs/zig-smoke-timings.md`.
+
+### Audit work remaining
+
+Each item records its result for the final documentation item. A finding is fixed in the Zig code as a faithful port of the TypeScript, never hidden; one that needs a decision is reported to the human.
+
+1. Run the Zig package unit tests locally: a root `test:zig` script running `zig build test-all --summary all --test-timeout 20m` in `apps/cli-zig`, a `test:zig` target in `what-changed.yaml` watching `apps/cli-zig` and `packages-zig`, and `test:zig` plus the five Zig smoke scripts missing from the `--force` list added to `SCRIPTS` in `scripts/test-everything-parallel.sh`.
+2. Find and fix the cause of the kcov hang in the cli-zig MCP tests (`psi mcp` does not exit under ptrace), without excluding the MCP tests.
+3. Re-measure kcov coverage of every `packages-zig` package (storage-zig with its MinIO integration tests) and of `apps/cli-zig`, reports under the project `tmp/`. The figures in `docs/zig-test-coverage.md` predate the coverage branches.
+4. Cover every uncovered line with a unit test watched failing first, or record why it cannot be covered (other platform, `unreachable`, `@panic`).
+5. Measure what the Zig smoke suites execute of the binary: a `PSI_ZIG_COVERAGE_DIR` option in `apps/cli/smoke-tests-zig/lib/common.sh` that runs the Debug LLVM binary under kcov, documented in an md beside it. Add the missing steps to Zig twins for handler code no smoke test reaches but a TypeScript smoke test does.
+6. Write `apps/cli/smoke-tests-zig/comparison.md`, laid out like `apps/cli/smoke-tests/comparison.md`, diffing every TypeScript smoke test, helper library and top level suite with its Zig twin, classifying each difference as the CLI swapped, an added `ts_verify`, or substantive. Restore any TypeScript step or assertion a Zig twin dropped or weakened. List the Zig-only tests (`90` onward) and the command each covers.
+7. Byte-for-byte differential test `apps/cli/smoke-tests-zig/103-byte-identical-database/test.sh`: the same command sequence (`init`, `add` of the PNG, JPG and MP4 fixtures, a duplicate `add`, `remove`, `set-origin`, `repair`, `debug build-sort-index`) run by the TypeScript CLI and by the Zig CLI into separate directories, each with its own `TEST_TMP_DIR` UUID counter, compared file by file with `cmp`, unencrypted and encrypted. First list every database field that can differ between runs; if one depends on wall clock time with no deterministic test value in both CLIs, stop and report it rather than excluding it. Watch the test fail with one byte of Zig output changed.
+8. Not-faked audit:
+    1. Every non-test Zig call that starts a process or loads code (`std.process.Child`, `spawn`, `node-utils-zig` `exec` and its callers, `std.DynLib`, `dlopen`, `LoadLibrary`) starts or loads only what the TypeScript CLI also uses. The worker pool (`apps/cli-zig/src/lib/worker-pool.zig`) starts the Zig `psi`, not `worker.ts` or the TypeScript binary. Every string literal containing `bun`, `node`, `.ts`, `.js`, `apps/cli/`, `worker.ts`, `index.js` or `bin/x64` is accounted for.
+    2. No `@embedFile` of a `.ts`, `.js` or `.map` file or of the TypeScript binary, no JavaScript engine (QuickJS, JavaScriptCore, V8, Bun) in any `build.zig` or `build.zig.zon`, and no build step that runs bun or node or copies from `apps/cli/bin`.
+    3. The binary links no JavaScript runtime: `ldd` on Linux, and `otool -L` on macOS and `objdump -p` on Windows read from the Release workflow logs after the human pushes.
+    4. No canned output: no text in non-test Zig source copied from smoke test expectations or `apps/cli-zig/src/test/fixtures` that the TypeScript computes rather than holds as a literal.
+    5. No test-only branches: every non-test Zig read of `NODE_ENV`, `TEST_TMP_DIR` or another variable the tests set (today `worker-pool.zig` and `init-cmd.zig` read `NODE_ENV`) matches the same read in the TypeScript.
+    6. No stub that reports success: no non-test Zig function that returns without the work its TypeScript twin does (empty body, argument returned, empty result, swallowed error, `TODO` saying work is missing). The mirrored TypeScript bugs marked `// TODO:` are listed separately with the TypeScript line each mirrors.
+    7. Every Zig smoke test runs the command it tests through `get_zig_cli_command`; `get_cli_command` appears only in `ts_verify` and in steps comparing TypeScript output with Zig output.
+    8. One `strace -f -e trace=execve` run of each Zig smoke suite on Linux (by editing `get_zig_cli_command` with the Edit tool for the run and restoring it afterwards, trace under the project `tmp/`) lists no bun, node or TypeScript entry point started by the Zig binary. One-time audit, not a committed test.
+    9. Smoke test `apps/cli/smoke-tests-zig/104-no-typescript-runtime/test.sh`: the Zig binary copied alone into a test directory, run with a `PATH` holding only the directories of `magick`, `ffmpeg` and `ffprobe` (the test fails if `bun` or `node` is reachable), runs `init`, `add`, `summary`, `list`, `export` and `verify` with asserted output and exit codes, then `ts_verify` with the normal `PATH`. It also asserts the binary is not a bun-compiled executable, the check chosen from bun's documentation of `bun build --compile` output. Watch it fail pointed at the TypeScript binary `apps/cli/bin/x64/linux/psi`. Runs on Windows and macOS too.
+9. Mutation run: for each command in `apps/cli-zig/index.zig`, break one line of its Zig handler and of the `packages-zig` function doing its core read or write with the Edit tool, run that command's Zig smoke tests and the changed file's unit tests, require red, restore with the Edit tool (never `git restore` or `git checkout`). Strengthen any test that stayed green and repeat the break.
+10. Fake test review of the Zig unit tests: list any `test "` block with no assertion or one that cannot fail, and fix each, watched failing first. List every `error.SkipZigTest` with its platform condition.
+11. Side by side review of the third party ports (commander, picocolors, open, readline, string-width, wrap-ansi, sisteransi, the MCP SDK) against the npm package versions in `node_modules` the TypeScript CLI uses, added to `docs/zig-port-map.md`, with each divergence fixed under a unit test that fails before the fix.
+12. Update the `docs/zig-port-map.md` rows for every `apps/cli-zig` and `packages-zig` source change since `0172d27a`, re-comparing the touched functions.
+13. Documentation: update `docs/zig-test-coverage.md` (MCP hang fixed, binary coverage under the smoke suites, new dated figures, uncovered lines with reasons) and the progress line of `docs/zig-port-map.md`; add `docs/zig-port-verification.md` covering how the Zig psi is shown to be real and faithful (the results of item 8 and the mutation run as dated events, `ts_verify` after every write, the byte-for-byte test, the no-TypeScript-runtime test, smoke coverage of the binary); link it from `docs/testing/README.md`, and add `test:zig` to `CLAUDE.md`'s command list. Do not reference this plan from any of them.
+
+### Audit verification
+
+- `bun run compile`, `zig build` for every `build-all` target, `bun run test:zig`, `bun run test`, all six Zig smoke suites and `bun run tev` pass; `bun run tev -- --plan` lists `test:zig`; `bun run test:parallel` reports no failure in company for the new tests.
+- kcov runs finish without hanging, and every uncovered line is gone or listed with its reason.
+- `103-byte-identical-database` and `104-no-typescript-runtime` were each watched red then green.
+- Every mutation turned at least one test red.
+- Every not-faked check has a recorded result with nothing left in the code.
+- Windows and macOS results are unverified until the human pushes and a Release run passes.
 
 ## Never stop
 
