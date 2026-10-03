@@ -1992,7 +1992,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest, macos-15-intel]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -2209,6 +2209,17 @@ jobs:
           du -sh packages/*/zig-pkg packages/*/.zig-cache apps/*/zig-pkg apps/*/.zig-cache 2>/dev/null || true
       # The smoke suites run the built binary rather than `bun run start`, at the path their common.sh reads
       # (../cli-zig/zig-out/bin/psi from apps/cli). The binary is the one the build job for this platform built.
+      # The Zig CLI is built by the build-zig jobs, but this job still builds Zig itself, and the AWS SDK
+      # for C it needs is compiled once per platform by the zig-unit-tests job and cached under the key
+      # below. Restoring it is what keeps this job from compiling the AWS SDK from cold.
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: apps/cli-zig/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-unit-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-unit-
+
       - name: Download the Zig CLI built for this platform
         uses: actions/download-artifact@v4
         with:
