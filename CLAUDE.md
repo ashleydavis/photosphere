@@ -168,6 +168,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - Never use IIFE async generator pattern (`(async function* () { ... })()`). Extract to a named `async function*` instead.
 - Never use `ReturnType<typeof ...>`. Use the actual type directly (e.g. `NodeJS.Timeout` instead of `ReturnType<typeof setTimeout>`).
 - Never use the `unknown` type. Use the actual type directly.
+- Global variables are generally frowned on. Do not add one (a module-level mutable variable, a Zig top-level or struct-level `var`, or a `threadlocal`) unless the human explicitly asks for it. Pass the value down from whoever owns it instead.
 
 ## Restrictions
 - TypeScript code should always compile after making changes.
