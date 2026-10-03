@@ -1150,7 +1150,7 @@ jobs:
   # simulator smoke job.
   ios-unit-tests:
     timeout-minutes: 30
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -1325,7 +1325,7 @@ jobs:
     # with the tests never reached. A warm cache does the whole job in 15 to 27 minutes and is
     # untouched by this.
     timeout-minutes: 125
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
