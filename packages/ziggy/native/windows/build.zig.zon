@@ -1,10 +1,10 @@
 .{
-    .name = .ziggy_shell_linux,
+    .name = .ziggy_shell_windows,
     .version = "1.0.0",
-    .fingerprint = 0xe95192474bc39ac5,
+    .fingerprint = 0xdd875288cea75a69,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .@"ziggy-core" = .{ .path = "../ziggy-core" },
+        .@"ziggy-core" = .{ .path = "../../core" },
     },
     .paths = .{ "build.zig", "build.zig.zon", "src" },
 }

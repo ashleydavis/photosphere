@@ -172,31 +172,19 @@ targets:
   - name: test:ziggy-example
     paths:
       - apps/ziggy-example
-      - packages-zig/ziggy-core
-      - packages-zig/ziggy-example-core
-      - packages-zig/ziggy-shell-linux
-      - packages-zig/ziggy-shell-windows
-      - packages-swift
-      - packages-android
-      - packages/ziggy-bridge
+      - packages/ziggy
 
   - name: test:ziggy-example:and
     paths:
       - apps/ziggy-example
-      - packages-zig/ziggy-core
-      - packages-zig/ziggy-example-core
-      - packages-android
-      - packages/ziggy-bridge
+      - packages/ziggy
     platforms:
       - linux
 
   - name: test:ziggy-example:ios
     paths:
       - apps/ziggy-example
-      - packages-zig/ziggy-core
-      - packages-zig/ziggy-example-core
-      - packages-swift
-      - packages/ziggy-bridge
+      - packages/ziggy
     platforms:
       - darwin
 
@@ -205,15 +193,9 @@ targets:
   - name: compile:zig
     paths:
       - apps/ziggy-example
-      - packages-zig/ziggy-core
-      - packages-zig/ziggy-example-core
-      - packages-zig/ziggy-shell-linux
-      - packages-zig/ziggy-shell-windows
+      - packages/ziggy
 
   - name: test:zig
     paths:
       - apps/ziggy-example
-      - packages-zig/ziggy-core
-      - packages-zig/ziggy-example-core
-      - packages-zig/ziggy-shell-linux
-      - packages-zig/ziggy-shell-windows
+      - packages/ziggy

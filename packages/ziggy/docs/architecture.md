@@ -161,11 +161,11 @@ The shells read two environment variables, and only in a test build: `ZIGGY_TEST
 
 Ziggy lives here:
 
-- `packages-zig/ziggy-core`: the core library (the C interface, dispatcher, task runner, origin check, host callback plumbing and test hooks).
-- `packages/ziggy-bridge`: the `window.ziggy` script and its types.
-- `packages-zig/ziggy-shell-linux`, `packages-zig/ziggy-shell-windows`, `packages-swift/ziggy-shell-apple` and `packages-android/ziggy-shell-android`: the framework half of each shell.
+- `packages/ziggy/core`: the core library (the C interface, dispatcher, task runner, origin check, host callback plumbing and test hooks).
+- `packages/ziggy/bridge`: the `window.ziggy` script and its types.
+- `packages/ziggy/native/<platform>`: the framework half of each shell: `linux`, `windows`, `apple` (MacOS and iOS share it) and `android`.
 
-The Ziggy example, a small complete app built on Ziggy and kept as the reference for building an app on it, lives in `apps/ziggy-example` (its page, native projects, scripts and smoke tests) and `packages-zig/ziggy-example-core` (its handlers). See its [README](../apps/ziggy-example/README.md). It is also a standing test that Ziggy has not become tangled with Photosphere: its smoke tests run in every full test run, and Ziggy never names an app.
+The Ziggy example, a small complete app built on Ziggy and kept as the reference for building an app on it, lives in `apps/ziggy-example` (its page, Zig core, native projects, scripts and smoke tests). See its [README](../../../apps/ziggy-example/README.md). It is also a standing test that Ziggy has not become tangled with Photosphere: its smoke tests run in every full test run, and Ziggy never names an app.
 
 Photosphere lives here:
 
@@ -191,4 +191,4 @@ Photosphere lives here:
 
 **Test hooks:** the test mode switch is `PHOTOSPHERE_TEST_MODE=1`. The shared `packages/user-interface/src/lib/test-driver.ts` performs `click`, `type`, `get-value` and the other DOM actions by `data-id` in the page. `PHOTOSPHERE_TEST_PICK_FILE_PATH` and `PHOTOSPHERE_TEST_DOWNLOAD_FOLDER` answer the file and folder dialogs. In test mode the update check and news check are skipped, and the MCP server binds a free port. The test task types `hello-short`, `hello-long`, `hello-child` and `hello-fail` finish quickly, run for a chosen time, queue children and fail on demand, and no real task does all of these.
 
-**Stories:** the stories browser in `packages/user-interface` runs unchanged on every platform. On desktop it opens from the Developer menu, whose content the core defines, and on Android and iOS from the hidden Developer screen. The story player (`stories:ziggy`, `stories:ziggy:and`, `stories:ziggy:ios`) launches the app in test mode, navigates it to the stories cycle and takes a screenshot of each story through the test control connection. The Android and iOS runs render every page at phone resolution, which is how pages that do not fit a small screen are found. See the [stories README](../packages/user-interface/src/stories/README.md).
+**Stories:** the stories browser in `packages/user-interface` runs unchanged on every platform. On desktop it opens from the Developer menu, whose content the core defines, and on Android and iOS from the hidden Developer screen. The story player (`stories:ziggy`, `stories:ziggy:and`, `stories:ziggy:ios`) launches the app in test mode, navigates it to the stories cycle and takes a screenshot of each story through the test control connection. The Android and iOS runs render every page at phone resolution, which is how pages that do not fit a small screen are found. See the [stories README](../../user-interface/src/stories/README.md).

@@ -27,7 +27,7 @@ pub fn build(b: *std.Build) !void {
     });
     module.addImport("ziggy-shell-linux", shell.module("ziggy-shell-linux"));
     module.addAnonymousImport("ziggy-inject", .{
-        .root_source_file = b.path("../../../../packages/ziggy-bridge/inject/ziggy-inject.js"),
+        .root_source_file = b.path("../../../../packages/ziggy/bridge/inject/ziggy-inject.js"),
     });
     module.linkLibrary(core.artifact("ziggy_example"));
 

@@ -3,4 +3,4 @@ rootProject.name = 'ziggy-example-android'
 
 include ':app'
 include ':ziggy-shell-android'
-project(':ziggy-shell-android').projectDir = file('../../../../packages-android/ziggy-shell-android')
+project(':ziggy-shell-android').projectDir = file('../../../../packages/ziggy/native/android')

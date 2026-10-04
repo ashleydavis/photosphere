@@ -142,7 +142,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - [UI stories](packages/user-interface/src/stories/README.md) - The stories browser (every page/modal/dialog/component in isolation) and the cross-platform story player. Run the stories on Android/iOS to check pages fit on a phone screen
 - [Testing](docs/testing/README.md) - How to run the automated tests, the manual e2e scripts, and the UI stories
 - [Background tasks](docs/background-tasks.md) - How to add a new background task type (worker handler, registration, frontend consumption)
-- [Ziggy architecture](docs/ziggy-architecture.md) - The Zig and system web view application shell: parts, message protocol, adding a channel or a task type, test hooks, and edits made to existing UI code
+- [Ziggy architecture](packages/ziggy/docs/architecture.md) - The Zig and system web view application shell: parts, message protocol, adding a channel or a task type, test hooks, and edits made to existing UI code
 - [Delivering the Android app to testers](docs/android-tester-distribution.md) - Getting a build to Android testers through Firebase App Distribution
 - [Mobile native media tools](docs/mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired and activated (iOS/Android)
 - [Updating mobile ImageMagick/ffmpeg](docs/updating-mobile-imagemagick-ffmpeg.md) - How to update the bundled versions (see also `scripts/update-mobile-media-tools.sh`)

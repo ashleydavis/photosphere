@@ -1,6 +1,6 @@
 # Ziggy example, MacOS shell
 
-An AppKit app: a window holding Ziggy's `WKWebView`, and a main menu with Quit. All the Ziggy behaviour is in the `ZiggyShellApple` Swift package (`packages-swift/ziggy-shell-apple`), which the project references as a local package. The window accepts `-geometry=WxH` (the position is ignored).
+An AppKit app: a window holding Ziggy's `WKWebView`, and a main menu with Quit. All the Ziggy behaviour is in the `ZiggyShellApple` Swift package (`packages/ziggy/native/apple`), which the project references as a local package. The window accepts `-geometry=WxH` (the position is ignored).
 
 ## Web view API used
 

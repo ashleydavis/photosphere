@@ -88,6 +88,6 @@ apps/ziggy-example/shells/windows/package/
 
 # What the Ziggy example's package scripts produce
 apps/ziggy-example/out/
-packages-android/*/build/
-packages-android/*/.gradle/
+packages/ziggy/native/android/build/
+packages/ziggy/native/android/.gradle/
 apps/ziggy-example/release/

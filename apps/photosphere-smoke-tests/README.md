@@ -1,6 +1,6 @@
 # Ziggy smoke tests
 
-One set of smoke tests for Ziggy on every platform. See [Ziggy architecture](../../docs/ziggy-architecture.md) for the test hooks the suites are allowed to use.
+One set of smoke tests for Ziggy on every platform. See [Ziggy architecture](../../packages/ziggy/docs/architecture.md) for the test hooks the suites are allowed to use.
 
 ## Running
 

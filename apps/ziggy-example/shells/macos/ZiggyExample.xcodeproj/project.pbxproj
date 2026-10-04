@@ -17,7 +17,7 @@
 		A20000000000000000000001 /* AppMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMain.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A20000000000000000000004 /* ziggy-inject.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "ziggy-inject.js"; path = "../../../../packages/ziggy-bridge/inject/ziggy-inject.js"; sourceTree = "<group>"; };
+		A20000000000000000000004 /* ziggy-inject.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "ziggy-inject.js"; path = "../../../../packages/ziggy/bridge/inject/ziggy-inject.js"; sourceTree = "<group>"; };
 		A20000000000000000000005 /* ZiggyExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ZiggyExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -111,7 +111,7 @@
 			);
 			mainGroup = A40000000000000000000001;
 			packageReferences = (
-				A60000000000000000000002 /* XCLocalSwiftPackageReference "../../../../packages-swift/ziggy-shell-apple" */,
+				A60000000000000000000002 /* XCLocalSwiftPackageReference "../../../../packages/ziggy/native/apple" */,
 			);
 			productRefGroup = A40000000000000000000004 /* Products */;
 			projectDirPath = "";
@@ -274,9 +274,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		A60000000000000000000002 /* XCLocalSwiftPackageReference "../../../../packages-swift/ziggy-shell-apple" */ = {
+		A60000000000000000000002 /* XCLocalSwiftPackageReference "../../../../packages/ziggy/native/apple" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = "../../../../packages-swift/ziggy-shell-apple";
+			relativePath = "../../../../packages/ziggy/native/apple";
 		};
 /* End XCLocalSwiftPackageReference section */
 

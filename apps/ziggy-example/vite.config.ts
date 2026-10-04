@@ -16,9 +16,10 @@ function classicScript(): Plugin {
 
 export default defineConfig({
     plugins: [classicScript()],
+    root: 'page',
     base: './',
     build: {
-        outDir: 'dist',
+        outDir: '../dist',
         emptyOutDir: true,
         minify: false,
         rollupOptions: {

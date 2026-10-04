@@ -41,7 +41,7 @@ fi
 ziggy_android_require_commands zig bun
 
 generated_dir="$ZIGGY_ANDROID_PROJECT_DIR/app/build/ziggy"
-core_dir="$ZIGGY_REPO_ROOT/packages-zig/ziggy-example-core"
+core_dir="$ZIGGY_REPO_ROOT/apps/ziggy-example/core"
 ndk_version="$(ziggy_android_ndk_version)"
 min_sdk="$(ziggy_android_min_sdk)"
 sysroot="$ANDROID_HOME/ndk/$ndk_version/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
@@ -122,5 +122,5 @@ fi
 # file at a time, so a renamed script never lingers in the APK.
 find "$generated_dir/assets/ui" -type f -delete
 cp -R "$ZIGGY_EXAMPLE_DIR/dist/." "$generated_dir/assets/ui/"
-cp "$ZIGGY_REPO_ROOT/packages/ziggy-bridge/inject/ziggy-inject.js" "$generated_dir/assets/ziggy-inject.js"
+cp "$ZIGGY_REPO_ROOT/packages/ziggy/bridge/inject/ziggy-inject.js" "$generated_dir/assets/ziggy-inject.js"
 echo "Synced into $generated_dir"

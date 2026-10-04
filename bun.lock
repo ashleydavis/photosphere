@@ -719,7 +719,7 @@
         "typescript": "^5.6.3",
       },
     },
-    "packages/ziggy-bridge": {
+    "packages/ziggy/bridge": {
       "name": "ziggy-bridge",
       "version": "1.0.0",
       "devDependencies": {
@@ -2952,7 +2952,7 @@
 
     "yocto-queue": ["yocto-queue@0.1.0", "", {}, "sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q=="],
 
-    "ziggy-bridge": ["ziggy-bridge@workspace:packages/ziggy-bridge"],
+    "ziggy-bridge": ["ziggy-bridge@workspace:packages/ziggy/bridge"],
 
     "ziggy-example": ["ziggy-example@workspace:apps/ziggy-example"],
 
