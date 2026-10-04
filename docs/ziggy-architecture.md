@@ -35,7 +35,7 @@ Ziggy and the app built on it are kept in separate places. Ziggy's code never na
 
 | Platform | Shell | Web view |
 |---|---|---|
-| Linux | Zig executable | WebKitGTK |
+| Linux | Zig executable | WebKitGTK 4.1 with GTK 3 |
 | Windows | Zig executable | WebView2 |
 | MacOS | Swift | WKWebView |
 | Android | Java activity, JNI entry points written in Zig | Android WebView |
@@ -122,6 +122,26 @@ To add a native host callback:
 2. Implement it in every shell that supports it, on the shell's UI thread.
 3. Call it from the core's handler and write the unit test with a test implementation of the callback.
 
+### The file and folder dialogs
+
+The `pick_paths` callback shows a native dialog: it is given what to show (open files, save a file, or choose a folder), a title and a suggested file name for a save, and a buffer it writes the answer into as a JSON array of paths, `[]` when the user cancelled. The shell shows the dialog on its UI thread and the calling worker thread waits, so the window stays responsive. A task asks for it with `pickPaths` on its task context.
+
+A request channel can be answered by a task, so a slow answer such as a dialog never holds up the thread that handles page messages: an app lists it in `task_channels` with the task type that answers it, and the core queues the page's request as that task and sends the reply when it ends. A task that fails or is cancelled gives an error reply, and a request without an id is an error.
+
+The Ziggy example answers `pick-files`, `pick-folder` and `pick-file` this way, with the same names, data and replies as the Electron app: `pick-files` takes a title and replies with the paths or null, `pick-folder` takes an options object that may carry a `title` and replies with a path or null, and `pick-file` is a save dialog that takes a suggested file name and replies with a path or null. Null is a cancelled dialog, which Electron gives as undefined. A phone has no save dialog of this kind, so `pick-file` replies with an error on iOS.
+
+## Menus
+
+A desktop app has a menu, written once in Zig and drawn natively by the shell of each desktop platform: a menu bar in the window on Linux and Windows, and the main menu on MacOS. A phone's shell never draws it.
+
+The app gives the core its menu as JSON text in `menu_json` of its handlers. It is an array of menus, each `{"label", "items"}`, where an item is `{"label", "action", "accelerator"}`, or `{"separator": true}`, and may hold its own `"items"` for a submenu. A shell reads the text with `ziggy_menu_json` and reads each shortcut with `ziggy_parse_accelerator`, which gives modifier bits and a key name so no shell parses shortcut text itself. A shortcut is modifiers and a key joined by plus signs, in Electron's form: `CmdOrCtrl+Shift+I`, `F12`, `CmdOrCtrl+Plus`. `CmdOrCtrl` is Command on MacOS and Control elsewhere.
+
+Every shell does these actions itself, because only the shell can: `quit`, `reload`, `toggle-devtools`, `toggle-fullscreen`, `zoom-in`, `zoom-out`, `zoom-reset`, `undo`, `redo`, `cut`, `copy`, `paste` and `select-all`. Any other action is the app's. The shell sends `{"channel": "menu-action", "data": {"action": "<action>"}}` to the core, and the core hands it to the page as a `menu-action` event. The page decides what it means, and the example's page presses the same button the item stands for.
+
+Shortcuts are registered with the window, so they work wherever the focus is, including inside the web view.
+
+The developer tools open with `toggle-devtools` in every build, release included, and are not a test hook.
+
 ## Test hooks
 
 A test hook is a feature that exists in the shipped app only so that automated tests can control it or look inside it. Smoke tests drive the real app from outside, and some things cannot be reached that way. A script cannot click a native file dialog, cannot read what the web view shows, and cannot wait for the page to finish loading, so the app has to offer a way in.
@@ -131,9 +151,11 @@ Test hooks are also a way into the app that a normal run must not have, so they 
 | Hook | Why the tests need it |
 |---|---|
 | A test mode switch read at start-up and passed to the page as the `testMode` query parameter, present only in a test build | Switches on the other hooks, and nothing below is reachable without it |
-| A host-side control connection, present only in a test build, bound to loopback on an operating-system chosen port written to a file under the log directory, and accepting commands only with a token the test runner supplies for that run | Lets the smoke test scripts and the story player send commands to the running app: ready, navigate, menu, click, type, drop, get-value, screenshot, cycle-advance and quit |
-| Environment variables that answer the native file and folder dialogs, read only in a test build | A native dialog cannot be driven from a script |
+| A host-side control connection, present only in a test build, bound to loopback on an operating-system chosen port written to a file under the log directory | Lets the smoke test scripts and the story player send commands to the running app: ready, navigate, menu, click, type, drop, get-value, screenshot, cycle-advance and quit |
+| The control connection's `pick-answer` command, `{"command": "pick-answer", "paths": [...]}`, in a test build | A native dialog cannot be driven from a script. The answer is used for the next dialog only, and no dialog is shown |
 | In a test build in test mode, anything the app does by itself over the network is skipped, the single-instance rule is skipped, and any fixed network port is replaced by a free one | Stops tests depending on the network, on each other and on a fixed port |
+
+The shells read two environment variables, and only in a test build: `ZIGGY_TEST_MODE` switches the hooks on and `ZIGGY_TEST_PORT_FILE` is the file the core writes the control connection's port to (on Android the same two arrive as Intent extras, and on the iOS simulator as `SIMCTL_CHILD_`-prefixed variables). A command is one line holding a JSON object with a `command` field. The core answers `quit` itself, through the shell's quit callback, and forwards every other command to the page as a `test-command` event. The page answers on the `test-result` channel, and the answer is written back as one line. The Ziggy example's page performs `ready`, `click`, `type`, `get-value`, `get-text`, and `exists`, by `data-id`. The page tells the core it is listening with `test-page-ready`, and the core holds commands until then. The control connection serves each connection on a thread of its own and handles one command at a time. The control connection's `menu` command, `{"command": "menu", "action": "..."}`, chooses a menu item as a user would: the core calls the shell's `menu_action` host callback, which runs the same function a menu click runs, so the shell's own actions (reload, zoom, developer tools, the editing commands, quit) really happen and any other action reaches the page. Choosing reload makes commands wait until the page says it is listening again. The example's page also answers `viewport` (the size of the area it is drawn in) and `insert` (type text so the browser can undo it).
 
 ## Photosphere on Ziggy
 
@@ -141,7 +163,9 @@ Ziggy lives here:
 
 - `packages-zig/ziggy-core`: the core library (the C interface, dispatcher, task runner, origin check, host callback plumbing and test hooks).
 - `packages/ziggy-bridge`: the `window.ziggy` script and its types.
-- `apps/photosphere/shells/<platform>/ziggy`: the framework half of each shell.
+- `packages-zig/ziggy-shell-linux`, `packages-zig/ziggy-shell-windows`, `packages-swift/ziggy-shell-apple` and `packages-android/ziggy-shell-android`: the framework half of each shell.
+
+The Ziggy example, a small complete app built on Ziggy and kept as the reference for building an app on it, lives in `apps/ziggy-example` (its page, native projects, scripts and smoke tests) and `packages-zig/ziggy-example-core` (its handlers). See its [README](../apps/ziggy-example/README.md). It is also a standing test that Ziggy has not become tangled with Photosphere: its smoke tests run in every full test run, and Ziggy never names an app.
 
 Photosphere lives here:
 

@@ -81,3 +81,13 @@ zig-out/
 zig-pkg/
 apps/cli-zig/bin/
 apps/cli/test/tmp-zig/
+
+# The WebView2 SDK fetched by the Ziggy example's setup-windows script, and what its package-windows script produces
+apps/ziggy-example/webview2-sdk/
+apps/ziggy-example/shells/windows/package/
+
+# What the Ziggy example's package scripts produce
+apps/ziggy-example/out/
+packages-android/*/build/
+packages-android/*/.gradle/
+apps/ziggy-example/release/

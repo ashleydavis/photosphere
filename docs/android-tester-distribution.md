@@ -2,7 +2,7 @@
 
 Tester builds of the Android app go out through [Firebase App Distribution](https://firebase.google.com/docs/app-distribution). It takes an APK, emails the testers you have added, and installs onto their phones through the Firebase App Tester app. There is no store listing and no review, so a tester has the build a couple of minutes after the upload finishes. It is free on Firebase's Spark plan.
 
-This covers Android only. iOS distribution is not set up.
+This covers Android only. iOS distribution is not set up. The Ziggy example is distributed the same way, from the same Firebase project, with `bun run distribute:ziggy-example:android` (see `apps/ziggy-example/scripts/distribute-android.md`).
 
 ## One-time setup
 

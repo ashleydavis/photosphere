@@ -1,0 +1,289 @@
+name: Ziggy example
+
+# Builds, tests and packages the Ziggy example on every platform. It is a workflow of its own and has nothing to do with the
+# release: it creates no tag and no release, and uploads its packages as artifacts of the run.
+
+env:
+  BUN_VERSION: "1.3.14"
+  NODE_VERSION: "24.15.0"
+  WHAT_CHANGED_VERSION: "v0.0.5"
+
+on:
+  push:
+    branches:
+      - "*"
+    paths:
+      - "apps/ziggy-example/**"
+      - "packages-zig/ziggy-*/**"
+      - "packages-swift/**"
+      - "packages-android/**"
+      - "packages/ziggy-bridge/**"
+      - ".github/workflows/ziggy-example.yml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "apps/ziggy-example/**"
+      - "packages-zig/ziggy-*/**"
+      - "packages-swift/**"
+      - "packages-android/**"
+      - "packages/ziggy-bridge/**"
+      - ".github/workflows/ziggy-example.yml"
+
+  workflow_dispatch:
+
+jobs:
+  ziggy-example-zig:
+    # Ziggy's Zig code and the example's: built, cross-built for every other platform and unit tested, on each platform, so
+    # that a change to Ziggy cannot reach one platform without the example being built for all of them.
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build and cross-build the Zig code
+        shell: bash
+        run: bun run compile:zig
+
+      - name: Run the Zig unit tests
+        shell: bash
+        run: bun run test:zig
+
+  ziggy-example-linux:
+    # The example's smoke tests on Linux, on a virtual display, then its zip and deb.
+    timeout-minutes: 40
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Install the web view's runtime libraries and the display tools
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: libgtk-3-0 libwebkit2gtk-4.1-0 xvfb x11-utils zip
+          verify: xvfb-run xwininfo zip
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run the smoke tests
+        run: bun run test:ziggy-example
+
+      - name: Package
+        run: bun run package:ziggy-example:linux
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ziggy-example-linux
+          path: apps/ziggy-example/out/linux/*
+
+  ziggy-example-windows:
+    # The example's smoke tests on Windows, then its zip and installer.
+    timeout-minutes: 40
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Install the installer builder
+        run: choco install nsis -y
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Fetch the WebView2 SDK
+        shell: bash
+        run: bun run setup:ziggy-example:windows
+
+      - name: Run the smoke tests
+        shell: bash
+        run: bun run test:ziggy-example
+
+      - name: Package
+        shell: bash
+        run: bun run package:ziggy-example:windows
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ziggy-example-windows
+          path: apps/ziggy-example/shells/windows/package/*
+
+  ziggy-example-macos:
+    # The example's smoke tests on MacOS, then its dmg and zip.
+    timeout-minutes: 60
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run the smoke tests
+        run: bun run test:ziggy-example
+
+      - name: Package
+        run: bun run package:ziggy-example:macos
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ziggy-example-macos
+          path: apps/ziggy-example/shells/macos/zig-out/package/*
+
+  ziggy-example-ios:
+    # The example's iOS archive, built without signing. It is built and not run: the iOS smoke tests need a simulator.
+    timeout-minutes: 60
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Package
+        run: bun run package:ziggy-example:ios
+
+      - name: Upload the archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ziggy-example-ios
+          path: apps/ziggy-example/shells/ios/zig-out/package/*
+
+  ziggy-example-android:
+    # The example's APKs, built with the Android SDK and NDK. They are built and not run here: the Android smoke tests need
+    # an emulator, which the Android smoke test job above provides for the Photosphere app.
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Set up the Android SDK and NDK
+        run: bun run setup:ziggy-example:android
+
+      - name: Package
+        run: bun run package:ziggy-example:android
+
+      - name: Upload the APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ziggy-example-android
+          path: apps/ziggy-example/release/*

@@ -1,0 +1,6 @@
+// Exposes the Ziggy core's C interface to Swift. ziggy.h is a link to the one copy beside the core, so there is a single
+// declaration of the interface.
+module CZiggy [system] {
+    header "ziggy.h"
+    export *
+}
