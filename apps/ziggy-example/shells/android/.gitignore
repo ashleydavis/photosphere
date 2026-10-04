@@ -1,0 +1,7 @@
+# Gradle and Android Studio state, and everything the scripts generate into the app's build directory.
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml

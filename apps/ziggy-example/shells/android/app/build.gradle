@@ -1,0 +1,65 @@
+// The Ziggy example's Android app. The Zig library per ABI and the built page are generated into build/ziggy by
+// scripts/sync-android.sh before Gradle runs, so Gradle never runs zig.
+
+apply plugin: 'com.android.application'
+
+android {
+    namespace "dev.ziggy.example"
+    compileSdkVersion rootProject.ext.compileSdkVersion
+    ndkVersion rootProject.ext.ndkVersion
+
+    defaultConfig {
+        applicationId "dev.ziggy.example"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode project.hasProperty('ziggyVersionCode') ? ziggyVersionCode.toInteger() : 1
+        versionName project.hasProperty('ziggyVersionName') ? ziggyVersionName : "1.0.0"
+        ndk {
+            abiFilters 'x86_64', 'arm64-v8a'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['build/ziggy/jniLibs']
+            assets.srcDirs = ['build/ziggy/assets']
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Signed with the debug key so the APK installs, as the package script documents.
+            signingConfig signingConfigs.debug
+        }
+    }
+}
+
+dependencies {
+    implementation project(':ziggy-shell-android')
+}
+
+// A build run without scripts/sync-android.sh would package an app with no library and no page, which fails only when
+// it runs on a device. Fail the build instead, with the command that fixes it.
+tasks.register('checkZiggySync') {
+    doLast {
+        def requiredFiles = [
+            file('build/ziggy/assets/ui/index.html'),
+            file('build/ziggy/assets/ziggy-inject.js'),
+        ]
+        requiredFiles.each { requiredFile ->
+            if (!requiredFile.exists()) {
+                throw new GradleException("Missing generated file: ${requiredFile}\nRun scripts/sync-android.sh (bun run sync:android) from apps/ziggy-example first.")
+            }
+        }
+        if (!fileTree('build/ziggy/jniLibs').matching { include '**/libziggy_example.so' }.any()) {
+            throw new GradleException("No libziggy_example.so under build/ziggy/jniLibs.\nRun scripts/sync-android.sh (bun run sync:android) from apps/ziggy-example first.")
+        }
+    }
+}
+preBuild.dependsOn checkZiggySync

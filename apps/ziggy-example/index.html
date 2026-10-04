@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ziggy example</title>
+    <style>
+        :root { color-scheme: light dark; }
+        body { font-family: sans-serif; margin: 0 auto; padding: 16px; max-width: 900px; }
+        h1 { margin-top: 0; }
+        section { margin-bottom: 16px; }
+        button { margin: 2px; padding: 6px 10px; }
+        pre { border: 1px solid #8888; padding: 8px; min-height: 3em; max-height: 14em; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+        ul { margin: 0; padding-left: 20px; }
+        label { margin-left: 8px; }
+        input[type=number] { width: 4em; }
+    </style>
+</head>
+<body>
+    <h1 data-id="heading">Ziggy example</h1>
+    <section>
+        <div data-id="reply">Waiting for the Zig reply...</div>
+    </section>
+    <section>
+        <button data-id="start-short">Start short task</button>
+        <button data-id="start-long">Start long task</button>
+        <label>children <input data-id="child-count" type="number" min="0" value="3" /></label>
+        <button data-id="start-many">Start three long tasks</button>
+        <button data-id="cancel-source">Cancel the long task source</button>
+        <button data-id="cancel-many-first">Cancel the first of the three</button>
+        <button data-id="start-fail">Start failing task</button>
+    </section>
+    <section>
+        <button data-id="send-large">Send large payload</button>
+        <button data-id="send-unicode">Send text with quotes and non-ASCII</button>
+        <button data-id="file-roundtrip">Write and read a file</button>
+        <button data-id="os-version">Ask the operating system its version</button>
+        <button data-id="invoke-fail">Invoke a failing channel</button>
+        <div data-id="edge-result"></div>
+    </section>
+    <section>
+        <h2>Edit menu</h2>
+        <textarea data-id="notes" rows="3" cols="50" placeholder="Type here, then try the Edit menu"></textarea>
+    </section>
+    <section>
+        <h2>File and folder pickers</h2>
+        <button data-id="pick-files">Pick files...</button>
+        <button data-id="pick-folder">Pick a folder...</button>
+        <button data-id="pick-file">Pick where to save a file...</button>
+        <pre data-id="picked"></pre>
+    </section>
+    <section>
+        <h2>Output</h2>
+        <pre data-id="output"></pre>
+    </section>
+    <section>
+        <h2>Jobs</h2>
+        <ul data-id="jobs"></ul>
+    </section>
+    <section>
+        <h2>Events</h2>
+        <pre data-id="event-log"></pre>
+    </section>
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

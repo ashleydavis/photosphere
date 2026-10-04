@@ -1,0 +1,17 @@
+{
+    "include": ["src/**/*", "vite.config.ts"],
+    "exclude": ["node_modules", "build", "dist"],
+    "compilerOptions": {
+        "composite": true,
+        "target": "ES2020",
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "module": "ESNext",
+        "rootDir": ".",
+        "moduleResolution": "bundler",
+        "outDir": "./build",
+        "noEmit": true,
+        "esModuleInterop": true,
+        "strict": true,
+        "skipLibCheck": true
+    }
+}

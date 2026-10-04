@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Only in the debug build. The test control connection, which a test hooks build opens, is a TCP socket on the loopback
+         address, and Android refuses an app a socket without this permission. The release build does not have it. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>

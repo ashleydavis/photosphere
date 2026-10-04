@@ -11,7 +11,7 @@ The Linux desktop shell hosts the system web view and passes messages between th
 
 ## Web view API
 
-A Zig executable linking WebKitGTK and GTK through their C headers. Page to native goes through a `WebKitUserContentManager` script message handler, and native to page through `webkit_web_view_evaluate_javascript`.
+A Zig executable using GTK 3 and WebKitGTK 4.1 through declarations of the functions it calls, linked against the runtime libraries (GTK 4 is not used: it fails on some X11 setups). Page to native goes through a `WebKitUserContentManager` script message handler, and native to page through `webkit_web_view_evaluate_javascript`.
 
 ## Project and build
 

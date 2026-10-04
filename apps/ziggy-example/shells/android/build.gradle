@@ -1,0 +1,31 @@
+// The root build file. The SDK levels and library versions come from the Photosphere Android app's variables.gradle, so this
+// project can never drift from the versions that app is built and tested with, and the NDK version is read from that app's
+// build file for the same reason.
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // The same plugin version as the Photosphere Android app (it needs Gradle 8.7, see the wrapper, and JDK 17).
+        classpath 'com.android.tools.build:gradle:8.6.0'
+    }
+}
+
+apply from: "../../../android-frontend/android/variables.gradle"
+
+// The NDK the Zig library is linked against and Gradle strips it with: the one the Photosphere Android app pins.
+def photosphereAppBuildFile = file('../../../android-frontend/android/app/build.gradle')
+def ndkVersionMatch = photosphereAppBuildFile.text =~ /ndkVersion "([^"]+)"/
+if (!ndkVersionMatch.find()) {
+    throw new GradleException("No ndkVersion found in ${photosphereAppBuildFile}")
+}
+ext.ndkVersion = ndkVersionMatch.group(1)
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}

@@ -49,10 +49,10 @@ cd "$REPO_DIR"
 # the iOS ones need a simulator, and neither toolchain exists on the other platform.
 case "$(uname -s)" in
     Darwin)
-        PLATFORM_SCRIPTS=(test:ios test:ios:unit)
+        PLATFORM_SCRIPTS=(test:ios test:ios:unit test:ziggy-example:ios)
         ;;
     *)
-        PLATFORM_SCRIPTS=(test:and test:and:unit)
+        PLATFORM_SCRIPTS=(test:and test:and:unit test:ziggy-example:and)
         ;;
 esac
 
@@ -84,7 +84,9 @@ if [ "${#NAMED_SCRIPTS[@]}" -gt 0 ]; then
 elif [ "$FORCE" = true ]; then
     SCRIPTS=(
         compile
+        compile:zig
         test
+        test:zig
         test:cli
         test:cli:encrypted
         test:cli:lan-share
@@ -95,6 +97,7 @@ elif [ "$FORCE" = true ]; then
         test:electron
         test:lan-share:cli-desktop
         test:harness
+        test:ziggy-example
         "${PLATFORM_SCRIPTS[@]}"
     )
 else

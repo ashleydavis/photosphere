@@ -1,0 +1,25 @@
+// Ziggy's Android shell: the Java framework code that hosts a WebView, injects window.ziggy and moves messages between
+// the page and the core. It is a module of the app's Gradle project, which defines the shared versions (compileSdkVersion,
+// minSdkVersion and androidxWebkitVersion) in rootProject.ext, so the app and this module can never disagree on them.
+// See README.md.
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace "dev.ziggy.shell"
+    compileSdkVersion rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        minSdkVersion rootProject.ext.minSdkVersion
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    // WebViewCompat.addDocumentStartJavaScript, which runs the injected script before the page's own scripts.
+    implementation "androidx.webkit:webkit:${rootProject.ext.androidxWebkitVersion}"
+}

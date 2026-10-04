@@ -166,3 +166,54 @@ targets:
       - packages
     platforms:
       - darwin
+
+  # The Ziggy example: a small app built on Ziggy, run on the host and on each phone platform. A change anywhere in
+  # Ziggy or the example runs these, so Ziggy can never change without the example's suite seeing it.
+  - name: test:ziggy-example
+    paths:
+      - apps/ziggy-example
+      - packages-zig/ziggy-core
+      - packages-zig/ziggy-example-core
+      - packages-zig/ziggy-shell-linux
+      - packages-zig/ziggy-shell-windows
+      - packages-swift
+      - packages-android
+      - packages/ziggy-bridge
+
+  - name: test:ziggy-example:and
+    paths:
+      - apps/ziggy-example
+      - packages-zig/ziggy-core
+      - packages-zig/ziggy-example-core
+      - packages-android
+      - packages/ziggy-bridge
+    platforms:
+      - linux
+
+  - name: test:ziggy-example:ios
+    paths:
+      - apps/ziggy-example
+      - packages-zig/ziggy-core
+      - packages-zig/ziggy-example-core
+      - packages-swift
+      - packages/ziggy-bridge
+    platforms:
+      - darwin
+
+  # The Zig side of the Ziggy example, kept apart from the TypeScript so that a change to one does not wait on the other:
+  # building Ziggy's core and the example's core, and cross-building them for every other platform, and the Zig unit tests.
+  - name: compile:zig
+    paths:
+      - apps/ziggy-example
+      - packages-zig/ziggy-core
+      - packages-zig/ziggy-example-core
+      - packages-zig/ziggy-shell-linux
+      - packages-zig/ziggy-shell-windows
+
+  - name: test:zig
+    paths:
+      - apps/ziggy-example
+      - packages-zig/ziggy-core
+      - packages-zig/ziggy-example-core
+      - packages-zig/ziggy-shell-linux
+      - packages-zig/ziggy-shell-windows
