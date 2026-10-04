@@ -544,7 +544,7 @@ test_wrong_pairing_code() {
     run_cli_tracked "$sender_log" env \
         PHOTOSPHERE_VAULT_DIR="$SENDER_VAULT_DIR" \
         PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
-        $SENDER_CLI_CMD secrets send --name "apikey01" --yes --code "$wrong_code" || true
+        $SENDER_CLI_CMD secrets send --name "apikey01" --yes --code "$wrong_code" --timeout 5 || true
 
     if grep -q "Pairing code rejected" "$sender_log" 2>/dev/null; then
         log_success "Wrong code: sender reports rejection"

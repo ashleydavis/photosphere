@@ -139,63 +139,20 @@ fn restoreWrite(dir_path: []const u8) void {
 }
 
 //
-// What a test driver scenario wrote: what it printed, and what it returned (null when it returned nothing, which
-// it does when it ended in an exit).
+// Runs `psi summary --cwd <current directory>`: a command that needs an existing database, started from a directory
+// that is not one, so it shows the directory picker ("Select an existing media database directory:") with the choices
+// subdirectory, full path and cancel, typing the keys of the prompts it shows.
 //
-const IDriverRun = struct {
-    // The exit code of the driver (255 when it was killed by a signal).
-    exitCode: u8,
-
-    // What the driver wrote to stdout (the prompts render there).
-    stdout: []const u8,
-
-    // What the driver wrote to stderr.
-    stderr: []const u8,
-
-    // The JSON of the value the scenario returned, or null when it returned none.
-    resultJson: ?[]const u8,
-};
-
-//
-// Runs a test driver scenario with the environment and the prompts, returning what it wrote whatever it exited
-// with, so a scenario that ends in an exit can still be read.
-//
-fn driveScenario(
-    allocator: std.mem.Allocator,
-    scenarioArguments: []const []const u8,
-    promptKeys: []const helpers.IPromptKeys,
-    environment: *const std.process.Environ.Map,
-) !IDriverRun {
-    const result_dir = try helpers.makeTempDir(allocator, "cli-b-driver");
-    defer std.Io.Dir.cwd().deleteTree(io, result_dir) catch {};
-    const result_path = try std.fs.path.join(allocator, &.{ result_dir, "result.json" });
-    var argv: std.ArrayList([]const u8) = .empty;
-    try argv.appendSlice(allocator, &.{ helpers.test_driver_path, result_path });
-    try argv.appendSlice(allocator, scenarioArguments);
-    const result = try helpers.runWithPrompts(allocator, argv.items, promptKeys, environment);
-    const result_json = std.Io.Dir.cwd().readFileAlloc(io, result_path, allocator, .unlimited) catch null;
-    return .{
-        .exitCode = result.exitCode,
-        .stdout = result.stdout,
-        .stderr = result.stderr,
-        .resultJson = result_json,
-    };
+fn runPickerOnSummary(allocator: std.mem.Allocator, current_directory: []const u8, promptKeys: []const helpers.IPromptKeys) !helpers.CliResult {
+    return helpers.runPsiWithPromptsIn(allocator, .inherit, &.{ "summary", "--cwd", current_directory }, promptKeys);
 }
 
 //
-// The directory a pickDirectory scenario picked, or fails saying what it wrote instead.
+// Runs `psi init` from a directory that is not empty, so it shows the directory picker ("Select an empty directory for
+// new media database:") with the choices subdirectory, full path and cancel, typing the keys of the prompts it shows.
 //
-fn pickedDirectory(allocator: std.mem.Allocator, run: IDriverRun) !?[]const u8 {
-    const result_json = run.resultJson orelse {
-        std.debug.print("the scenario returned nothing; it wrote:\n{s}\n{s}\n", .{ run.stdout, run.stderr });
-        return error.NoResultReturned;
-    };
-    return helpers.parseDriverResult(?[]const u8, allocator, .{
-        .exitCode = run.exitCode,
-        .stdout = run.stdout,
-        .stderr = run.stderr,
-        .resultJson = result_json,
-    });
+fn runPickerOnInit(allocator: std.mem.Allocator, working_directory: []const u8, promptKeys: []const helpers.IPromptKeys) !helpers.CliResult {
+    return helpers.runPsiWithPromptsIn(allocator, .{ .path = working_directory }, &.{"init"}, promptKeys);
 }
 
 //
@@ -383,15 +340,20 @@ test "a full path that does not exist yet is created by pickDirectory" {
     defer std.Io.Dir.cwd().deleteTree(io, parent) catch {};
     const new_dir = try std.fs.path.join(allocator, &.{ parent, "made", "up" });
 
-    var environment = std.process.Environ.Map.init(allocator);
-    // No validator, so the current directory is offered too; answer with the full path option.
-    const result = try driveScenario(allocator, &.{ "pick-directory", "Pick:", parent, "false" }, &.{
-        .{ .waitFor = "Pick:", .keys = "\x1b[B\x1b[B\r" },
-        .{ .waitFor = "Enter full directory path:", .keys = try std.mem.concat(allocator, u8, &.{ new_dir, "\r" }) },
-    }, &environment);
+    // `psi init` only shows the picker when its directory is not empty.
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = try std.fs.path.join(allocator, &.{ parent, "occupied" }), .data = "x" });
 
-    try std.testing.expectEqualStrings(new_dir, (try pickedDirectory(allocator, result)).?);
-    try std.testing.expect(node_utils.fs.pathExists(io, new_dir));
+    // Answer with the full path option (subdirectory, full path, cancel), then decline encryption.
+    const result = try runPickerOnInit(allocator, parent, &.{
+        .{ .waitFor = "Select an empty directory for new media database:", .keys = "\x1b[B\r" },
+        .{ .waitFor = "Enter full directory path:", .keys = try std.mem.concat(allocator, u8, &.{ new_dir, "\r" }) },
+        .{ .waitFor = "Would you like to encrypt your database?", .keys = "n" },
+    });
+
+    // The directory was created and the database is in it, at the path that was typed.
+    try std.testing.expectEqual(@as(u8, 0), result.exitCode);
+    try std.testing.expect(node_utils.fs.pathExists(io, try std.fs.path.join(allocator, &.{ new_dir, ".db", "files.dat" })));
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, try std.fmt.allocPrint(allocator, "Created new media file database in {s}", .{new_dir})) != null);
 }
 
 test "pickDirectory returns nothing when the Cancel option is chosen" {
@@ -401,13 +363,13 @@ test "pickDirectory returns nothing when the Cancel option is chosen" {
     const parent = try makePlainDir(allocator, "picker-cancel-option");
     defer std.Io.Dir.cwd().deleteTree(io, parent) catch {};
 
-    var environment = std.process.Environ.Map.init(allocator);
-    // Current directory, subdirectory, full path, cancel: three downs is Cancel.
-    const result = try driveScenario(allocator, &.{ "pick-directory", "Pick:", parent, "false" }, &.{
-        .{ .waitFor = "Pick:", .keys = "\x1b[B\x1b[B\x1b[B\r" },
-    }, &environment);
-    // Cancel returns null, which the driver writes as JSON null.
-    try std.testing.expect(try pickedDirectory(allocator, result) == null);
+    // Subdirectory, full path, cancel: two downs is Cancel.
+    const result = try runPickerOnSummary(allocator, parent, &.{
+        .{ .waitFor = "Select an existing media database directory:", .keys = "\x1b[B\x1b[B\r" },
+    });
+    // Cancel picks no directory, which ends the command.
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "No directory selected") != null);
+    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
 }
 
 test "pickDirectory says why the validator refused a full path, and a subdirectory it created" {
@@ -418,21 +380,19 @@ test "pickDirectory says why the validator refused a full path, and a subdirecto
     defer std.Io.Dir.cwd().deleteTree(io, parent) catch {};
     const not_a_database = try std.fs.path.join(allocator, &.{ parent, "not-a-database" });
 
-    var environment = std.process.Environ.Map.init(allocator);
-
     // validateExistingDatabase: a directory with no .db in it is not a database. The current directory is not one
     // either, so the options are subdirectory, full path, cancel.
-    const full_path = try driveScenario(allocator, &.{ "pick-directory", "Pick:", parent, "true" }, &.{
-        .{ .waitFor = "Pick:", .keys = "\x1b[B\r" },
+    const full_path = try runPickerOnSummary(allocator, parent, &.{
+        .{ .waitFor = "Select an existing media database directory:", .keys = "\x1b[B\r" },
         .{ .waitFor = "Enter full directory path:", .keys = try std.mem.concat(allocator, u8, &.{ not_a_database, "\r" }) },
-    }, &environment);
+    });
     try std.testing.expect(std.mem.indexOf(u8, full_path.stdout, "Directory is not a valid Photosphere media database") != null);
 
     // The subdirectory is the first of the three options and is created before the validator is asked about it.
-    const subdirectory = try driveScenario(allocator, &.{ "pick-directory", "Pick:", parent, "true" }, &.{
-        .{ .waitFor = "Pick:", .keys = "\r" },
+    const subdirectory = try runPickerOnSummary(allocator, parent, &.{
+        .{ .waitFor = "Select an existing media database directory:", .keys = "\r" },
         .{ .waitFor = "Enter name for subdirectory:", .keys = "fresh\r" },
-    }, &environment);
+    });
     try std.testing.expect(std.mem.indexOf(u8, subdirectory.stdout, "Directory is not a valid Photosphere media database") != null);
     try std.testing.expect(node_utils.fs.pathExists(io, try std.fs.path.join(allocator, &.{ parent, "fresh" })));
 }
@@ -446,11 +406,10 @@ test "a path that is a file is not empty, so the init validator refuses it" {
     const existing_file = try std.fs.path.join(allocator, &.{ parent, "a-file" });
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = existing_file, .data = "x" });
 
-    var environment = std.process.Environ.Map.init(allocator);
-    const result = try driveScenario(allocator, &.{ "get-directory-for-command", "init", parent }, &.{
+    const result = try runPickerOnInit(allocator, parent, &.{
         .{ .waitFor = "Select an empty directory for new media database:", .keys = "\x1b[B\r" },
         .{ .waitFor = "Enter full directory path:", .keys = try std.mem.concat(allocator, u8, &.{ existing_file, "\r" }) },
-    }, &environment);
+    });
 
     // Reading a file as a directory fails, so isEmptyOrNonExistent says it is not empty and the validator refuses.
     // A refused pick exits 1; had the file been taken for an empty directory, it would have been returned.
@@ -469,11 +428,10 @@ test "a directory with a child in it is not empty either" {
     try std.Io.Dir.cwd().createDirPath(io, full_dir);
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = try std.fs.path.join(allocator, &.{ full_dir, "child" }), .data = "x" });
 
-    var environment = std.process.Environ.Map.init(allocator);
-    const result = try driveScenario(allocator, &.{ "get-directory-for-command", "init", parent }, &.{
+    const result = try runPickerOnInit(allocator, parent, &.{
         .{ .waitFor = "Select an empty directory for new media database:", .keys = "\x1b[B\r" },
         .{ .waitFor = "Enter full directory path:", .keys = try std.mem.concat(allocator, u8, &.{ full_dir, "\r" }) },
-    }, &environment);
+    });
 
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "can't use this directory because it's not empty") != null);
     try std.testing.expect(result.exitCode != 0);
@@ -486,20 +444,19 @@ test "a subdirectory name that is blank or has a forbidden character is refused,
     const parent = try makePlainDir(allocator, "picker-blank-name");
     defer std.Io.Dir.cwd().deleteTree(io, parent) catch {};
 
-    var environment = std.process.Environ.Map.init(allocator);
-
-    // \x15 is readline's kill-line, which clears the refused value so a valid one can be typed after it.
-    const blank = try driveScenario(allocator, &.{ "pick-directory", "Pick:", parent, "false" }, &.{
-        .{ .waitFor = "Pick:", .keys = "\x1b[B\r" },
+    // \x15 is readline's kill-line, which clears the refused value so a valid one can be typed after it. The subdirectory
+    // is the first of the choices (subdirectory, full path, cancel).
+    const blank = try runPickerOnSummary(allocator, parent, &.{
+        .{ .waitFor = "Select an existing media database directory:", .keys = "\r" },
         .{ .waitFor = "Enter name for subdirectory:", .keys = "   \r\x15photos\r" },
-    }, &environment);
+    });
     try std.testing.expect(std.mem.indexOf(u8, blank.stdout, "Directory name is required") != null);
     try std.testing.expect(node_utils.fs.pathExists(io, try std.fs.path.join(allocator, &.{ parent, "photos" })));
 
-    const forbidden = try driveScenario(allocator, &.{ "pick-directory", "Pick:", parent, "false" }, &.{
-        .{ .waitFor = "Pick:", .keys = "\x1b[B\r" },
+    const forbidden = try runPickerOnSummary(allocator, parent, &.{
+        .{ .waitFor = "Select an existing media database directory:", .keys = "\r" },
         .{ .waitFor = "Enter name for subdirectory:", .keys = "a|b\r\x15pictures\r" },
-    }, &environment);
+    });
     try std.testing.expect(std.mem.indexOf(u8, forbidden.stdout, "Directory name contains invalid characters") != null);
     try std.testing.expect(node_utils.fs.pathExists(io, try std.fs.path.join(allocator, &.{ parent, "pictures" })));
 }
@@ -512,11 +469,10 @@ test "a subdirectory name that is already a directory is refused" {
     defer std.Io.Dir.cwd().deleteTree(io, parent) catch {};
     try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(allocator, &.{ parent, "taken" }));
 
-    var environment = std.process.Environ.Map.init(allocator);
-    const result = try driveScenario(allocator, &.{ "pick-directory", "Pick:", parent, "false" }, &.{
-        .{ .waitFor = "Pick:", .keys = "\x1b[B\r" },
+    const result = try runPickerOnSummary(allocator, parent, &.{
+        .{ .waitFor = "Select an existing media database directory:", .keys = "\r" },
         .{ .waitFor = "Enter name for subdirectory:", .keys = "taken\r\x15free\r" },
-    }, &environment);
+    });
 
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "Directory already exists") != null);
     try std.testing.expect(node_utils.fs.pathExists(io, try std.fs.path.join(allocator, &.{ parent, "free" })));
@@ -530,11 +486,10 @@ test "a full path of only whitespace is refused as a path that was not given" {
     defer std.Io.Dir.cwd().deleteTree(io, parent) catch {};
     const wanted = try std.fs.path.join(allocator, &.{ parent, "wanted" });
 
-    var environment = std.process.Environ.Map.init(allocator);
-    const result = try driveScenario(allocator, &.{ "pick-directory", "Pick:", parent, "false" }, &.{
-        .{ .waitFor = "Pick:", .keys = "\x1b[B\x1b[B\r" },
+    const result = try runPickerOnSummary(allocator, parent, &.{
+        .{ .waitFor = "Select an existing media database directory:", .keys = "\x1b[B\r" },
         .{ .waitFor = "Enter full directory path:", .keys = try std.mem.concat(allocator, u8, &.{ "  \r\x15", wanted, "\r" }) },
-    }, &environment);
+    });
 
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "Path is required") != null);
     try std.testing.expect(node_utils.fs.pathExists(io, wanted));
@@ -548,13 +503,12 @@ test "pickDirectory reports the failure to create a subdirectory in a directory 
     defer restoreWrite(read_only);
     defer std.Io.Dir.cwd().deleteTree(io, read_only) catch {};
 
-    var environment = std.process.Environ.Map.init(allocator);
     _ = try makeReadOnlyDir(read_only);
     const created = try std.fs.path.join(allocator, &.{ read_only, "photos" });
-    const result = try driveScenario(allocator, &.{ "pick-directory", "Pick:", read_only, "false" }, &.{
-        .{ .waitFor = "Pick:", .keys = "\x1b[B\r" },
+    const result = try runPickerOnSummary(allocator, read_only, &.{
+        .{ .waitFor = "Select an existing media database directory:", .keys = "\r" },
         .{ .waitFor = "Enter name for subdirectory:", .keys = "photos\r" },
-    }, &environment);
+    });
 
     // The name passes validation because nothing is there yet, and it is the mkdir that fails.
     const expected = try std.fmt.allocPrint(allocator, "Failed to create directory: EACCES: permission denied, mkdir '{s}'", .{created});
@@ -572,13 +526,12 @@ test "a full path under a directory that cannot be written to fails with the mes
     defer restoreWrite(read_only);
     defer std.Io.Dir.cwd().deleteTree(io, read_only) catch {};
 
-    var environment = std.process.Environ.Map.init(allocator);
     _ = try makeReadOnlyDir(read_only);
     const created = try std.fs.path.join(allocator, &.{ read_only, "photos" });
-    const result = try driveScenario(allocator, &.{ "pick-directory", "Pick:", read_only, "false" }, &.{
-        .{ .waitFor = "Pick:", .keys = "\x1b[B\x1b[B\r" },
+    const result = try runPickerOnSummary(allocator, read_only, &.{
+        .{ .waitFor = "Select an existing media database directory:", .keys = "\x1b[B\r" },
         .{ .waitFor = "Enter full directory path:", .keys = try std.mem.concat(allocator, u8, &.{ created, "\r" }) },
-    }, &environment);
+    });
 
     if (builtin.os.tag != .windows) {
         const expected = try std.fmt.allocPrint(allocator, "Failed to create directory: EACCES: permission denied, mkdir '{s}'", .{created});
@@ -601,11 +554,10 @@ test "a subdirectory under a path that is a file fails to be created" {
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = file_path, .data = "x" });
     const under_the_file = try std.fs.path.join(allocator, &.{ file_path, "photos" });
 
-    var environment = std.process.Environ.Map.init(allocator);
-    const result = try driveScenario(allocator, &.{ "pick-directory", "Pick:", under_the_file, "false" }, &.{
-        .{ .waitFor = "Pick:", .keys = "\x1b[B\r" },
+    const result = try runPickerOnSummary(allocator, under_the_file, &.{
+        .{ .waitFor = "Select an existing media database directory:", .keys = "\r" },
         .{ .waitFor = "Enter name for subdirectory:", .keys = "photos\r" },
-    }, &environment);
+    });
 
     const expected = try std.fmt.allocPrint(allocator, "Failed to create directory: ENOTDIR: not a directory, mkdir '{s}'", .{try std.fs.path.join(allocator, &.{ under_the_file, "photos" })});
     if (std.mem.indexOf(u8, result.stdout, expected) == null) {

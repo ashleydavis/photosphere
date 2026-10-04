@@ -2188,6 +2188,7 @@ fn secretsSendAction(state: *IProgramState, args: []const ArgumentValue, options
             .yes = flagValue(options, "yes"),
             .name = textValue(options, "name"),
             .code = textValue(options, "code"),
+            .timeout = textValue(options, "timeout"),
         },
     };
 }
@@ -2202,6 +2203,7 @@ fn secretsReceiveAction(state: *IProgramState, args: []const ArgumentValue, opti
         .secretsReceive = .{
             .yes = flagValue(options, "yes"),
             .code = textValue(options, "code"),
+            .timeout = textValue(options, "timeout"),
         },
     };
 }
@@ -2277,6 +2279,7 @@ fn secretsCommand(allocator: std.mem.Allocator, state: *IProgramState) *Command 
         .option("--yes", "Skip confirmation prompts", null)
         .option("--name <name>", "Secret name to send", null)
         .option("--code <code>", "Use a specific pairing code instead of generating one (useful for scripted use)", null)
+        .option("--timeout <seconds>", "How long to wait for the other device, in seconds (default 60)", null)
         .action(state, secretsSendAction);
 
     // psi secrets receive
@@ -2284,6 +2287,7 @@ fn secretsCommand(allocator: std.mem.Allocator, state: *IProgramState) *Command 
         .description("Receive a secret from another device over the local network.")
         .option("--yes", "Skip confirmation prompts and field editing", null)
         .option("--code <code>", "Pairing code shown on the sender (required with --yes)", null)
+        .option("--timeout <seconds>", "How long to wait for the other device, in seconds (default 60)", null)
         .action(state, secretsReceiveAction);
 
     return cmd;
@@ -2393,6 +2397,7 @@ fn dbsSendAction(state: *IProgramState, args: []const ArgumentValue, options: *c
             .name = textValue(options, "name"),
             .path = textValue(options, "path"),
             .code = textValue(options, "code"),
+            .timeout = textValue(options, "timeout"),
         },
     };
 }
@@ -2407,6 +2412,7 @@ fn dbsReceiveAction(state: *IProgramState, args: []const ArgumentValue, options:
         .dbsReceive = .{
             .yes = flagValue(options, "yes"),
             .code = textValue(options, "code"),
+            .timeout = textValue(options, "timeout"),
         },
     };
 }
@@ -2482,6 +2488,7 @@ fn dbsCommand(allocator: std.mem.Allocator, state: *IProgramState) *Command {
         .option("--name <name>", "Database name", null)
         .option("--path <path>", "Database path", null)
         .option("--code <code>", "Use a specific pairing code instead of generating one (useful for scripted use)", null)
+        .option("--timeout <seconds>", "How long to wait for the other device, in seconds (default 60)", null)
         .action(state, dbsSendAction);
 
     // psi dbs receive
@@ -2489,6 +2496,7 @@ fn dbsCommand(allocator: std.mem.Allocator, state: *IProgramState) *Command {
         .description("Receive a database config (with secrets) from another device over the local network.")
         .option("--yes", "Skip confirmation prompts and field editing", null)
         .option("--code <code>", "Pairing code shown on the other device (required with --yes)", null)
+        .option("--timeout <seconds>", "How long to wait for the other device, in seconds (default 60)", null)
         .action(state, dbsReceiveAction);
 
     return cmd;

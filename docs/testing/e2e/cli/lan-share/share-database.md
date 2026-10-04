@@ -59,7 +59,7 @@ bun run start -- dbs send --name test-db
 ```
 
 Expected:
-- The command prints a 4-digit pairing code and waits for the receiver.
+- The command prints a 4-digit pairing code and waits for the receiver, for 60 seconds unless `--timeout <seconds>` says otherwise.
 
 Record the pairing code as `<code>` for the next step.
 

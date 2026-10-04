@@ -640,32 +640,23 @@ test "upgrade reports a merkle tree it cannot read and changes nothing" {
 }
 
 //
-// The discovery timeout the share commands wait for a peer, in milliseconds. A real user waits the
-// 60000 the TypeScript waits; these tests pass their own so the branch where nobody ever turns up
-// is taken at once rather than after a minute. It runs the same command with the same options a user
-// gets, so the code under it is the code the CLI runs.
+// How many seconds the share commands wait for a peer in the tests where nobody ever turns up, given to `--timeout` so
+// the branch is taken after a second rather than after the default minute.
 //
 const share_discovery_timeout = "1";
 
 //
-// How long the sender of the pairing-code-rejected tests waits, in milliseconds. Unlike the
-// no-peer tests this one has to be long enough for the held receiver's announcements to reach the
-// sender, since the sender only knows the code was rejected once it has read one that does not
-// match. The receiver announces every second, so this covers several of them.
+// How many seconds the sender of the pairing-code-rejected tests waits. Unlike the no-peer tests this one has to be
+// long enough for the receiver's announcements to reach the sender, since the sender only knows the code was rejected
+// once it has read one that does not match. The receiver announces every second, so this covers several of them.
 //
-const mismatched_receiver_timeout = "4000";
+const mismatched_receiver_timeout = "4";
 
 //
-// Runs a test-driver scenario and expects it to write exactly the output. The share scenarios write
-// their result before running their command (the command ends the program), so nothing is read back
-// from the result file.
+// How many seconds the receiving `psi` of the pairing-code-rejected tests waits. It outlives the sender, and the test
+// kills it when it is done, so it never decides how long the test takes.
 //
-fn expectScenario(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, scenarioArguments: []const []const u8, expectedStdout: []const u8) !void {
-    const result = try helpers.runTestDriver(allocator, scenarioArguments, &.{}, environment);
-    try std.testing.expectEqualStrings(expectedStdout, result.stdout);
-    try std.testing.expectEqualStrings("", result.stderr);
-    try std.testing.expectEqual(@as(u8, 0), result.exitCode);
-}
+const held_receiver_timeout = "60";
 
 test "dbs receive says no device connected when no sender turns up before the discovery timeout" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -675,14 +666,11 @@ test "dbs receive says no device connected when no sender turns up before the di
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try setup(allocator, root, seed_config);
 
-    try expectScenario(allocator, environment, &.{
-        "dbs-receive-timeout",
-        "1234",
-        share_discovery_timeout,
-    }, "\nReceive Database\n" ++ network_note ++
-        "Hint: Run `psi dbs send` on another device to send a database.\n" ++
-        "Waiting for sender on the local network... (Ctrl+C to cancel)\n" ++
-        "No device connected within 60 seconds.\n");
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "receive", "--yes", "--code", "1234", "--timeout", share_discovery_timeout }),
+        "\nReceive Database\n" ++ network_note ++
+            "Hint: Run `psi dbs send` on another device to send a database.\n" ++
+            "Waiting for sender on the local network... (Ctrl+C to cancel)\n" ++
+            "No device connected within 1 seconds.\n", "", 0);
 }
 
 test "secrets receive says no sender connected when no sender turns up before the discovery timeout" {
@@ -693,14 +681,11 @@ test "secrets receive says no sender connected when no sender turns up before th
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try setup(allocator, root, seed_config);
 
-    try expectScenario(allocator, environment, &.{
-        "secrets-receive-timeout",
-        "1234",
-        share_discovery_timeout,
-    }, "\nReceive Secret\n" ++ network_note ++
-        "Hint: Run `psi secrets send` on another device to send a secret.\n" ++
-        "Waiting for sender on the local network... (Ctrl+C to cancel)\n" ++
-        "No sender connected within 60 seconds.\n");
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "receive", "--yes", "--code", "1234", "--timeout", share_discovery_timeout }),
+        "\nReceive Secret\n" ++ network_note ++
+            "Hint: Run `psi secrets send` on another device to send a secret.\n" ++
+            "Waiting for sender on the local network... (Ctrl+C to cancel)\n" ++
+            "No sender connected within 1 seconds.\n", "", 0);
 }
 
 test "dbs send says no device found when no receiver turns up before the discovery timeout" {
@@ -711,23 +696,19 @@ test "dbs send says no device found when no receiver turns up before the discove
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try setup(allocator, root, seed_config);
 
-    try expectScenario(allocator, environment, &.{
-        "dbs-send-timeout",
-        "my-db",
-        "1234",
-        share_discovery_timeout,
-    }, "\nSend Database\n" ++ network_note ++
-        "\nDatabase to send:\n" ++
-        "  Name:        my-db\n" ++
-        "  Description: (none)\n" ++
-        "  Path:        s3:bucket/db\n" ++
-        "\n" ++
-        "\n" ++
-        "  Pairing code: 1234\n" ++
-        "  Enter this code on the other device, then wait.\n" ++
-        "\n" ++
-        "Waiting for other device on local network... (Ctrl+C to cancel)\n" ++
-        "No device found within 60 seconds.\n");
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "send", "--yes", "--name", "my-db", "--code", "1234", "--timeout", share_discovery_timeout }),
+        "\nSend Database\n" ++ network_note ++
+            "\nDatabase to send:\n" ++
+            "  Name:        my-db\n" ++
+            "  Description: (none)\n" ++
+            "  Path:        s3:bucket/db\n" ++
+            "\n" ++
+            "\n" ++
+            "  Pairing code: 1234\n" ++
+            "  Enter this code on the other device, then wait.\n" ++
+            "\n" ++
+            "Waiting for other device on local network... (Ctrl+C to cancel)\n" ++
+            "No device found within 1 seconds.\n", "", 0);
 }
 
 test "secrets send says no receiver found when no receiver turns up before the discovery timeout" {
@@ -738,23 +719,19 @@ test "secrets send says no receiver found when no receiver turns up before the d
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try setup(allocator, root, seed_config);
 
-    try expectScenario(allocator, environment, &.{
-        "secrets-send-timeout",
-        "s3a",
-        "1234",
-        share_discovery_timeout,
-    }, "\nSend Secret\n" ++ network_note ++
-        "Hint: Run `psi secrets receive` on another device to receive this secret.\n" ++
-        "\n" ++
-        "Secret to send:\n" ++
-        "  Name: s3a\n" ++
-        "  Type: s3-credentials\n" ++
-        "\n" ++
-        "  Pairing code: 1234\n" ++
-        "  Enter this code on the receiver device, then wait.\n" ++
-        "\n" ++
-        "Waiting for receiver on the local network... (Ctrl+C to cancel)\n" ++
-        "No receiver found within 60 seconds.\n");
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "send", "--yes", "--name", "s3a", "--code", "1234", "--timeout", share_discovery_timeout }),
+        "\nSend Secret\n" ++ network_note ++
+            "Hint: Run `psi secrets receive` on another device to receive this secret.\n" ++
+            "\n" ++
+            "Secret to send:\n" ++
+            "  Name: s3a\n" ++
+            "  Type: s3-credentials\n" ++
+            "\n" ++
+            "  Pairing code: 1234\n" ++
+            "  Enter this code on the receiver device, then wait.\n" ++
+            "\n" ++
+            "Waiting for receiver on the local network... (Ctrl+C to cancel)\n" ++
+            "No receiver found within 1 seconds.\n", "", 0);
 }
 
 //
@@ -780,13 +757,10 @@ test "dbs send tells a mistyped pairing code from an absent device" {
     // The receiver announces a code that is not the sender's, which is the mistyped case: a device
     // was found, and it is not waiting for this share. Saying "no device found" here would send the
     // user looking for a device that is sitting right there.
-    try expectScenario(allocator, environment, &.{
-        "dbs-send-to-mismatched-receiver",
-        "my-db",
-        code,
-        otherCode,
-        mismatched_receiver_timeout,
-    }, try std.mem.concat(allocator, u8, &.{
+    var receiver = try helpers.startCliAndWaitFor(allocator, &.{ try zigCliPath(allocator), "dbs", "receive", "--yes", "--code", otherCode, "--timeout", held_receiver_timeout }, environment, "Waiting for sender on the local network...");
+    defer receiver.kill(std.testing.io);
+
+    try expectResult(try runZig(allocator, environment, &.{ "dbs", "send", "--yes", "--name", "my-db", "--code", code, "--timeout", mismatched_receiver_timeout }), try std.mem.concat(allocator, u8, &.{
         "\nSend Database\n",
         network_note,
         "\nDatabase to send:\n",
@@ -800,7 +774,7 @@ test "dbs send tells a mistyped pairing code from an absent device" {
         "\n",
         "Waiting for other device on local network... (Ctrl+C to cancel)\n",
         "Pairing code rejected: a device was found but it is using a different code.\n",
-    }));
+    }), "", 0);
 }
 
 test "secrets send tells a mistyped pairing code from an absent device" {
@@ -813,13 +787,10 @@ test "secrets send tells a mistyped pairing code from an absent device" {
     const code = try randomPairingCode(allocator);
     const otherCode = try randomPairingCode(allocator);
 
-    try expectScenario(allocator, environment, &.{
-        "secrets-send-to-mismatched-receiver",
-        "s3a",
-        code,
-        otherCode,
-        mismatched_receiver_timeout,
-    }, try std.mem.concat(allocator, u8, &.{
+    var receiver = try helpers.startCliAndWaitFor(allocator, &.{ try zigCliPath(allocator), "secrets", "receive", "--yes", "--code", otherCode, "--timeout", held_receiver_timeout }, environment, "Waiting for sender on the local network...");
+    defer receiver.kill(std.testing.io);
+
+    try expectResult(try runZig(allocator, environment, &.{ "secrets", "send", "--yes", "--name", "s3a", "--code", code, "--timeout", mismatched_receiver_timeout }), try std.mem.concat(allocator, u8, &.{
         "\nSend Secret\n",
         network_note,
         "Hint: Run `psi secrets receive` on another device to receive this secret.\n",
@@ -833,5 +804,5 @@ test "secrets send tells a mistyped pairing code from an absent device" {
         "\n",
         "Waiting for receiver on the local network... (Ctrl+C to cancel)\n",
         "Pairing code rejected: a device was found but it is using a different code.\n",
-    }));
+    }), "", 0);
 }

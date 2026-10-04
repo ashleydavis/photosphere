@@ -147,12 +147,8 @@ pub const IDbsSendOptions = struct {
     // Pairing code to use instead of generating one.
     code: ?[]const u8 = null,
 
-    // How long to wait for a receiver on the network, in milliseconds. The CLI never sets this, so a
-    // real user always gets the 60 seconds the TypeScript waits. It is a field rather than a literal
-    // in dbsSend so a test can drive the "no receiver" branch in milliseconds instead of waiting out
-    // the minute: the branch is the same code either way, only how long it waits before giving up
-    // differs. See IDbsReceiveOptions.discoveryTimeoutMs, which is its twin.
-    discoveryTimeoutMs: i64 = 60000,
+    // How long to wait for the other device, in seconds, as typed (default 60).
+    timeout: ?[]const u8 = null,
 };
 
 //
@@ -173,12 +169,8 @@ pub const IDbsReceiveOptions = struct {
     // Pairing code shown on the other device (required with --yes).
     code: ?[]const u8 = null,
 
-    // How long to wait for a sender on the network, in milliseconds. The CLI never sets this, so a
-    // real user always gets the 60 seconds the TypeScript waits. It is a field rather than a literal
-    // in dbsReceive so a test can drive the "no sender" branch in milliseconds instead of waiting
-    // out the minute: the branch is the same code either way, only how long it waits before giving
-    // up differs. See IDbsSendOptions.discoveryTimeoutMs, which is its twin.
-    discoveryTimeoutMs: i64 = 60000,
+    // How long to wait for the other device, in seconds, as typed (default 60).
+    timeout: ?[]const u8 = null,
 };
 
 //
@@ -1219,6 +1211,11 @@ fn cancelReceiver(context: *anyopaque) void {
 // psi dbs send [name]: share a database config with secrets over the LAN.
 //
 pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOptions) !void {
+    const timeoutSeconds = init_cmd.parseShareTimeoutSeconds(cmdOptions.timeout) catch |err| {
+        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {s}", .{utils.errors.errorMessage(err)})));
+        exit(io, 1);
+    };
+
     try intro(io, try pc.cyan(allocator, "Send Database"), .{});
 
     const skipPrompts = cmdOptions.yes orelse false;
@@ -1339,7 +1336,7 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOp
     };
     try process_signals.on(.SIGINT, sigintHandler);
 
-    const endpoint = try sender.waitForReceiver(io, cmdOptions.discoveryTimeoutMs);
+    const endpoint = try sender.waitForReceiver(io, timeoutSeconds * 1000);
     try process_signals.removeListener(.SIGINT, sigintHandler);
 
     if (endpoint == null) {
@@ -1353,7 +1350,7 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOp
             try spin.stop(try pc.yellow(allocator, "Pairing code rejected: a device was found but it is using a different code."));
         }
         else {
-            try spin.stop(try pc.yellow(allocator, "No device found within 60 seconds."));
+            try spin.stop(try pc.yellow(allocator, try std.fmt.allocPrint(allocator, "No device found within {d} seconds.", .{timeoutSeconds})));
         }
         return;
     }
@@ -1488,6 +1485,11 @@ fn toDatabaseSharePayload(allocator: std.mem.Allocator, rawPayload: std.json.Val
 // psi dbs receive: receive a database config with secrets from another device.
 //
 pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsReceiveOptions) !void {
+    const timeoutSeconds = init_cmd.parseShareTimeoutSeconds(cmdOptions.timeout) catch |err| {
+        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {s}", .{utils.errors.errorMessage(err)})));
+        exit(io, 1);
+    };
+
     try intro(io, try pc.cyan(allocator, "Receive Database"), .{});
 
     const skipPrompts = cmdOptions.yes orelse false;
@@ -1522,7 +1524,7 @@ pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsRec
         code = trim(codeInput.value);
     }
 
-    var receiver = LanShareReceiver.init(io, cmdOptions.discoveryTimeoutMs);
+    var receiver = LanShareReceiver.init(io, timeoutSeconds * 1000);
     defer receiver.deinit();
     try receiver.start(code);
 
@@ -1542,7 +1544,7 @@ pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsRec
     try process_signals.removeListener(.SIGINT, sigintHandler);
 
     if (rawPayload == null) {
-        try spin.stop(try pc.yellow(allocator, "No device connected within 60 seconds."));
+        try spin.stop(try pc.yellow(allocator, try std.fmt.allocPrint(allocator, "No device connected within {d} seconds.", .{timeoutSeconds})));
         return;
     }
 

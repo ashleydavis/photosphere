@@ -79,19 +79,60 @@ fn openPseudoTerminalWithLibc(io: std.Io) !PseudoTerminal {
 }
 
 //
-// Runs the write-progress scenario of the test driver (writeProgress then clearProgressMessage) with a
-// pseudo-terminal as stdout, and returns what reached the terminal.
+// The directories `psi check` is run on: a database made by `psi init`, an empty directory to search for files in, and
+// the environment variables that keep psi's configuration and temporary files in a directory of the test's own.
 //
-fn writeProgressOnTerminal(allocator: std.mem.Allocator, message: []const u8, verbose: []const u8) ![]const u8 {
+const ICheckSetup = struct {
+    // The directory that holds everything, deleted by the test.
+    root: []const u8,
+
+    // The arguments of `psi check` on the database and the empty directory.
+    arguments: []const []const u8,
+
+    // The environment variables psi runs with.
+    environment: *const std.process.Environ.Map,
+
+    // The absolute path of psi.
+    psiPath: []const u8,
+};
+
+//
+// Makes a database and an empty directory for `psi check`. The first thing `psi check` writes is the progress message
+// "Searching for files...", and with nothing in the directory it writes no other until it clears the line.
+//
+fn setUpCheck(allocator: std.mem.Allocator, verbose: bool) !ICheckSetup {
+    const io = std.testing.io;
+    const root = try helpers.makeTempDir(allocator, "terminal-utils");
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const psiPath = try helpers.absolutePsiPath(allocator);
+    const database = try std.fs.path.join(allocator, &.{ root, "db" });
+    const searched = try std.fs.path.join(allocator, &.{ root, "empty" });
+    try std.Io.Dir.cwd().createDirPath(io, searched);
+    const created = try helpers.runCli(allocator, &.{ psiPath, "init", "--db", database, "--yes" }, environment);
+    try std.testing.expectEqual(@as(u8, 0), created.exitCode);
+    var arguments: std.ArrayList([]const u8) = .empty;
+    try arguments.appendSlice(allocator, &.{ "check", "--db", database, searched, "--yes" });
+    if (verbose) {
+        try arguments.append(allocator, "--verbose");
+    }
+    return .{ .root = root, .arguments = arguments.items, .environment = environment, .psiPath = psiPath };
+}
+
+//
+// Runs `psi check` (see setUpCheck) with a pseudo-terminal as stdout, and returns what reached the terminal.
+//
+fn checkOnTerminal(allocator: std.mem.Allocator, verbose: bool) ![]const u8 {
     const io = std.testing.io;
     const terminal = try openPseudoTerminal(allocator);
     defer terminal.master.close(io);
-    const resultDir = try helpers.makeTempDir(allocator, "terminal-utils");
-    defer std.Io.Dir.cwd().deleteTree(io, resultDir) catch {};
-    var environment = std.process.Environ.Map.init(allocator);
+    const setup = try setUpCheck(allocator, verbose);
+    defer std.Io.Dir.cwd().deleteTree(io, setup.root) catch {};
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.append(allocator, setup.psiPath);
+    try argv.appendSlice(allocator, setup.arguments);
     var child = std.process.spawn(io, .{
-        .argv = &.{ helpers.test_driver_path, try std.fs.path.join(allocator, &.{ resultDir, "result.json" }), "write-progress", message, verbose },
-        .environ_map = &environment,
+        .argv = argv.items,
+        .environ_map = setup.environment,
         .stdin = .ignore,
         .stdout = .{ .file = terminal.slave },
         .stderr = .inherit,
@@ -135,20 +176,27 @@ test "writeProgress clears the line and writes the message on a TTY" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
-    const output = try writeProgressOnTerminal(arena.allocator(), "Copying files...", "false");
+    const output = try checkOnTerminal(arena.allocator(), false);
 
-    try std.testing.expectEqualStrings("\x1b[2K\x1b[1GCopying files...\x1b[2K\x1b[1G", output);
+    // The line is cleared, the message written, and the line cleared again.
+    try std.testing.expect(std.mem.indexOf(u8, output, "\x1b[2K\x1b[1GSearching for files...\x1b[2K\x1b[1G") != null);
 }
 
 test "writeProgress writes nothing when stdout is not a TTY" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    var environment = std.process.Environ.Map.init(allocator);
+    const setup = try setUpCheck(allocator, false);
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, setup.root) catch {};
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.append(allocator, setup.psiPath);
+    try argv.appendSlice(allocator, setup.arguments);
 
-    const result = try helpers.runTestDriver(allocator, &.{ "write-progress", "Copying files...", "false" }, &.{}, &environment);
+    const result = try helpers.runCli(allocator, argv.items, setup.environment);
 
-    try std.testing.expectEqualStrings("", result.stdout);
+    try std.testing.expectEqual(@as(u8, 0), result.exitCode);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "Searching for files...") == null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "\x1b[2K") == null);
 }
 
 test "writeProgress writes nothing when verbose logging is enabled" {
@@ -159,7 +207,8 @@ test "writeProgress writes nothing when verbose logging is enabled" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
-    const output = try writeProgressOnTerminal(arena.allocator(), "Copying files...", "true");
+    const output = try checkOnTerminal(arena.allocator(), true);
 
-    try std.testing.expectEqualStrings("", output);
+    try std.testing.expect(std.mem.indexOf(u8, output, "Searching for files...") == null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "\x1b[2K") == null);
 }

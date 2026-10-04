@@ -2,10 +2,10 @@ const std = @import("std");
 const coverage_options = @import("coverage_options");
 
 //
-// Stands in for a program the unit tests run (psi or the test driver) in the second pass of a coverage report: it
-// replaces itself with kcov running the real program, so the lines the tests reach through the program count too.
-// A program started by a program kcov is already tracing (the test driver psi starts as a browser opener) cannot be
-// traced by a kcov of its own, so it is run as it is. (Only built with -Dcoverage; see docs/zig-test-coverage.md.)
+// Stands in for a program the unit tests run (psi) in the second pass of a coverage report: it replaces itself with
+// kcov running the real program, so the lines the tests reach through the program count too. A program started by a
+// program kcov is already tracing cannot be traced by a kcov of its own, so it is run as it is. (Only built with
+// -Dcoverage; see docs/zig-test-coverage.md.)
 //
 pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();

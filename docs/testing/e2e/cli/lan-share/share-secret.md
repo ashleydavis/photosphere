@@ -59,7 +59,7 @@ bun run start -- secrets send --name test-secret
 ```
 
 Expected:
-- The command prints a 4-digit pairing code and waits for the receiver to connect.
+- The command prints a 4-digit pairing code and waits for the receiver to connect, for 60 seconds unless `--timeout <seconds>` says otherwise.
 
 Record that 4-digit code as `<code>` in the next step.
 

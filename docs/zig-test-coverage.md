@@ -38,7 +38,7 @@ and stop the server afterwards with `bun run s3-emulator stop <state-dir>`.
 ## What kcov cannot see
 
 - **Programs the tests start.** kcov counts the lines of the program it runs. A separate program a test starts (the
-  `psi` binary and the test driver of `apps/cli-zig`, the termination child of node-utils-zig) is traced but not
+  `psi` binary of `apps/cli-zig`, the termination child of node-utils-zig) is traced but not
   counted, so code reached only that way shows as uncovered. Running those programs under a kcov of their own does not
   work either: they are children of a traced process, and `psi mcp` did not exit when traced in the runs made for the audit (its
   threads were left waiting; the cause under ptrace was not pinned down), so a run can hang in the MCP tests.

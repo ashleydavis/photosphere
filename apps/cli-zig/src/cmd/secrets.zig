@@ -172,12 +172,8 @@ pub const ISecretsSendOptions = struct {
     // Pairing code to use instead of generating one.
     code: ?[]const u8 = null,
 
-    // How long to wait for a receiver on the network, in milliseconds. The CLI never sets this, so a
-    // real user always gets the 60 seconds the TypeScript waits. It is a field rather than a literal
-    // in secretsSend so a test can drive the "no receiver" branch in milliseconds instead of waiting
-    // out the minute: the branch is the same code either way, only how long it waits before giving up
-    // differs. See ISecretsReceiveOptions.discoveryTimeoutMs, which is its twin.
-    discoveryTimeoutMs: i64 = 60000,
+    // How long to wait for the other device, in seconds, as typed (default 60).
+    timeout: ?[]const u8 = null,
 };
 
 //
@@ -209,12 +205,8 @@ pub const ISecretsReceiveOptions = struct {
     // Pairing code shown on the sender (required with --yes).
     code: ?[]const u8 = null,
 
-    // How long to wait for a sender on the network, in milliseconds. The CLI never sets this, so a
-    // real user always gets the 60 seconds the TypeScript waits. It is a field rather than a literal
-    // in secretsReceive so a test can drive the "no sender" branch in milliseconds instead of waiting
-    // out the minute: the branch is the same code either way, only how long it waits before giving up
-    // differs. See ISecretsSendOptions.discoveryTimeoutMs, which is its twin.
-    discoveryTimeoutMs: i64 = 60000,
+    // How long to wait for the other device, in seconds, as typed (default 60).
+    timeout: ?[]const u8 = null,
 };
 
 // Not ported: secretsCommand (the command group is registered in index.zig with the Zig commander, like every
@@ -892,6 +884,11 @@ fn networkRequirementNote(allocator: std.mem.Allocator, io: std.Io) !void {
 // psi secrets send [name]: share a secret with another device over the LAN.
 //
 pub fn secretsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecretsSendOptions) !void {
+    const timeoutSeconds = init_cmd.parseShareTimeoutSeconds(cmdOptions.timeout) catch |err| {
+        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {s}", .{utils.errors.errorMessage(err)})));
+        exit(io, 1);
+    };
+
     try checkVaultPrereqs(allocator, io);
     try intro(io, try pc.cyan(allocator, "Send Secret"), .{});
 
@@ -958,7 +955,7 @@ pub fn secretsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecre
     const sigintHandler: process_signals.ISignalListener = .{ .context = &sender, .function = cancelSender };
     try process_signals.on(.SIGINT, sigintHandler);
 
-    const endpoint = try sender.waitForReceiver(io, cmdOptions.discoveryTimeoutMs);
+    const endpoint = try sender.waitForReceiver(io, timeoutSeconds * 1000);
     try process_signals.removeListener(.SIGINT, sigintHandler);
 
     if (endpoint == null) {
@@ -972,7 +969,7 @@ pub fn secretsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecre
             try spin.stop(try pc.yellow(allocator, "Pairing code rejected: a device was found but it is using a different code."));
         }
         else {
-            try spin.stop(try pc.yellow(allocator, "No receiver found within 60 seconds."));
+            try spin.stop(try pc.yellow(allocator, try std.fmt.allocPrint(allocator, "No receiver found within {d} seconds.", .{timeoutSeconds})));
         }
         return;
     }
@@ -1008,6 +1005,11 @@ fn payloadString(payload: std.json.Value, field: []const u8) ![]const u8 {
 // psi secrets receive: receive a secret from another device over the LAN.
 //
 pub fn secretsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecretsReceiveOptions) !void {
+    const timeoutSeconds = init_cmd.parseShareTimeoutSeconds(cmdOptions.timeout) catch |err| {
+        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {s}", .{utils.errors.errorMessage(err)})));
+        exit(io, 1);
+    };
+
     try checkVaultPrereqs(allocator, io);
     try intro(io, try pc.cyan(allocator, "Receive Secret"), .{});
 
@@ -1040,7 +1042,7 @@ pub fn secretsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISe
         code = trim(codeInput.value);
     }
 
-    var receiver = LanShareReceiver.init(io, cmdOptions.discoveryTimeoutMs);
+    var receiver = LanShareReceiver.init(io, timeoutSeconds * 1000);
     defer receiver.deinit();
     try receiver.start(code);
 
@@ -1057,7 +1059,7 @@ pub fn secretsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISe
     try process_signals.removeListener(.SIGINT, sigintHandler);
 
     if (rawPayload == null) {
-        try spin.stop(try pc.yellow(allocator, "No sender connected within 60 seconds."));
+        try spin.stop(try pc.yellow(allocator, try std.fmt.allocPrint(allocator, "No sender connected within {d} seconds.", .{timeoutSeconds})));
         return;
     }
 

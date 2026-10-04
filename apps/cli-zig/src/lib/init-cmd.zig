@@ -177,6 +177,31 @@ pub fn normaliseDatabaseId(databaseId: ?[]const u8) !?[]const u8 {
 }
 
 //
+// How many seconds a share command (`dbs send`, `dbs receive`, `secrets send`, `secrets receive`) waits
+// for the other device, from the text given to `--timeout`. Nothing given means 60 seconds. Anything that
+// is not a whole number of at least 1 throws, naming the option and the value, so a typo never turns into
+// an instant timeout or a wait with no end.
+//
+pub fn parseShareTimeoutSeconds(timeoutText: ?[]const u8) !i64 {
+    const value = timeoutText orelse return 60;
+
+    // Only digits are a whole number here: parseInt would also take a sign, and "-1" and "+5" are not accepted.
+    var allDigits = value.len > 0;
+    for (value) |character| {
+        if (character < '0' or character > '9') {
+            allDigits = false;
+        }
+    }
+
+    const seconds = if (allDigits) std.fmt.parseInt(i64, value, 10) catch 0 else 0;
+    if (seconds < 1) {
+        return utils.errors.throwError("--timeout must be a whole number of seconds, at least 1, but \"{s}\" was given.", .{value});
+    }
+
+    return seconds;
+}
+
+//
 // Reads the S3 credentials to use for a path the database list says nothing about: the `AWS_*`
 // environment variables first, and the vault's `default:s3` secret when they are not set.
 //

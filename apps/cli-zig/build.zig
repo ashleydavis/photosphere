@@ -46,8 +46,8 @@ pub fn build(b: *std.Build) !void {
     }
 
     // The directory to write a kcov line-coverage report of the unit tests to (see docs/zig-test-coverage.md).
-    // The tests, and psi and the test driver they run, are then compiled with the LLVM backend, whose debug info kcov
-    // reads, and run under kcov.
+    // The tests, and the psi they run, are then compiled with the LLVM backend, whose debug info kcov reads, and run
+    // under kcov.
     const coverage_option = b.option([]const u8, "coverage", "Write a kcov line-coverage report of the unit tests to this directory");
     const coverage_dir: ?[]const u8 = if (coverage_option) |directory| b.pathFromRoot(directory) else null;
 
@@ -103,34 +103,26 @@ pub fn build(b: *std.Build) !void {
     run_test.setCwd(b.path("."));
     run_test.step.dependOn(b.getInstallStep());
 
-    // The program the tests run CLI functions in, against the real process streams (installed to
-    // zig-out/test-bin, not zig-out/bin: it is not shipped).
-    const test_driver_module = b.createModule(.{
-        .root_source_file = b.path("src/test/drivers/test-driver.zig"),
-        .target = target,
-        .optimize = optimize,
+    // The program the Windows `psi bug` tests put where `psi bug` looks for PowerShell, so that no browser is opened
+    // (installed to zig-out/test-bin, not zig-out/bin: it is not shipped). It imports nothing from the CLI and runs no CLI
+    // code, so there is nothing for a coverage report to cover in it.
+    const opener_recorder = b.addExecutable(.{
+        .name = "opener-recorder",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/test/drivers/opener-recorder.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
-    test_driver_module.addImport(module_name, module);
-    for (dependency_names) |dependency_name| {
-        const dependency = b.dependency(dependency_name, .{ .target = target, .optimize = optimize });
-        test_driver_module.addImport(dependency_name, dependency.module(dependency_name));
-    }
-    const test_driver = b.addExecutable(.{
-        .name = "test-driver",
-        .root_module = test_driver_module,
-        .use_llvm = if (coverage_dir != null) true else null,
-    });
-    const install_test_driver = b.addInstallArtifact(test_driver, .{ .dest_dir = .{ .override = .{ .custom = "test-bin" } } });
-    run_test.step.dependOn(&install_test_driver.step);
+    const install_opener_recorder = b.addInstallArtifact(opener_recorder, .{ .dest_dir = .{ .override = .{ .custom = "test-bin" } } });
+    run_test.step.dependOn(&install_opener_recorder.step);
     test_step.dependOn(&run_test.step);
     if (coverage_dir) |directory| {
         // kcov cannot trace the programs the tests start while it is tracing the tests, so for a coverage report the
-        // tests run a second time, untraced, once psi and the test driver have been replaced by wrappers that run them
-        // under kcov.
+        // tests run a second time, untraced, once psi has been replaced by a wrapper that runs it under kcov.
         const run_programs = b.addRunArtifact(unit_test);
         run_programs.setCwd(b.path("."));
         run_programs.step.dependOn(installCoverageWrapper(b, executable, .bin, directory, target, &run_test.step));
-        run_programs.step.dependOn(installCoverageWrapper(b, test_driver, .{ .custom = "test-bin" }, directory, target, &run_test.step));
         test_step.dependOn(&run_programs.step);
     }
 

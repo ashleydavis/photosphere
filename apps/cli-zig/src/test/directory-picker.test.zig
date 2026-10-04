@@ -14,15 +14,6 @@ fn makeDatabase(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
     return dir;
 }
 
-//
-// Runs a directory picker scenario of the test driver, typing the keys, and returns the directory it returned.
-//
-fn drive(allocator: std.mem.Allocator, scenarioArguments: []const []const u8, prompts: []const helpers.IPromptKeys) !?[]const u8 {
-    var environment = std.process.Environ.Map.init(allocator);
-    const result = try helpers.runTestDriver(allocator, scenarioArguments, prompts, &environment);
-    return helpers.parseDriverResult(?[]const u8, allocator, result);
-}
-
 test "isMediaDatabase detects files.dat or tree.dat under .db" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -76,31 +67,22 @@ test "getDirectoryForCommand lets the user enter the path of a database" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const database = try makeDatabase(allocator, "picker-full-path");
-    defer std.Io.Dir.cwd().deleteTree(io, database) catch {};
+    const root = try helpers.makeTempDir(allocator, "picker-full-path");
+    defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
+    const database = try std.fs.path.join(allocator, &.{ root, "db" });
     const plain = try helpers.makeTempDir(allocator, "picker-cwd");
     defer std.Io.Dir.cwd().deleteTree(io, plain) catch {};
+    const created = try helpers.runPsiWithPromptsIn(allocator, .inherit, &.{ "init", "--db", database, "--yes" }, &.{});
+    try std.testing.expectEqual(@as(u8, 0), created.exitCode);
 
-    // The current directory is not a database, so the options are: subdirectory, full path, cancel.
-    try std.testing.expectEqualStrings(database, (try drive(allocator, &.{ "get-directory-for-command", "existing", plain }, &.{
+    // The current directory is not a database, so the options are: subdirectory, full path, cancel. The path typed is the
+    // database the command goes on to open, which a command given the wrong path would not find.
+    const result = try helpers.runPsiWithPromptsIn(allocator, .inherit, &.{ "summary", "--cwd", plain }, &.{
         .{ .waitFor = "Select an existing media database directory:", .keys = "\x1b[B\r" },
         .{ .waitFor = "Enter full directory path:", .keys = try std.mem.concat(allocator, u8, &.{ database, "\r" }) },
-    })).?);
-}
-
-test "pickDirectory returns null when cancelled and '.' for the current directory" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const io = std.testing.io;
-    const database = try makeDatabase(allocator, "picker-pick");
-    defer std.Io.Dir.cwd().deleteTree(io, database) catch {};
-
-    try std.testing.expectEqualStrings(".", (try drive(allocator, &.{ "pick-directory", "Pick:", database, "true" }, &.{.{ .waitFor = "Pick:", .keys = "\r" }})).?);
-
-    try std.testing.expect(try drive(allocator, &.{ "pick-directory", "Pick:", database, "true" }, &.{.{ .waitFor = "Pick:", .keys = "\x03" }}) == null);
-
-    try std.testing.expect(try drive(allocator, &.{ "pick-directory", "Pick:", database, "false" }, &.{.{ .waitFor = "Pick:", .keys = "\x1b[A\r" }}) == null);
+    });
+    try std.testing.expectEqual(@as(u8, 0), result.exitCode);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "Database Summary") != null);
 }
 
 test "pickDirectory creates a subdirectory" {
@@ -111,12 +93,38 @@ test "pickDirectory creates a subdirectory" {
     const parent = try helpers.makeTempDir(allocator, "picker-subdirectory");
     defer std.Io.Dir.cwd().deleteTree(io, parent) catch {};
 
-    // Current directory, subdirectory, full path, cancel (no validator). An invalid name is rejected first.
-    try std.testing.expectEqualStrings("./photos", (try drive(allocator, &.{ "pick-directory", "Pick:", parent, "false" }, &.{
-        .{ .waitFor = "Pick:", .keys = "\x1b[B\r" },
+    // `psi init` only shows the picker when its directory is not empty. The choices are subdirectory, full path, cancel.
+    // An invalid name is rejected first, then the encryption question is declined.
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = try std.fs.path.join(allocator, &.{ parent, "occupied" }), .data = "x" });
+    const result = try helpers.runPsiWithPromptsIn(allocator, .{ .path = parent }, &.{"init"}, &.{
+        .{ .waitFor = "Select an empty directory for new media database:", .keys = "\r" },
         .{ .waitFor = "Enter name for subdirectory:", .keys = "a/b\r\x15photos\r" },
-    })).?);
-    try std.testing.expect(@import("node-utils-zig").fs.pathExists(io, try std.fs.path.join(allocator, &.{ parent, "photos" })));
+        .{ .waitFor = "Would you like to encrypt your database?", .keys = "n" },
+    });
+    try std.testing.expectEqual(@as(u8, 0), result.exitCode);
+
+    // The path the picker gave back is the relative one, which is where the database was created.
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "Created new media file database in ./photos\n") != null);
+    try std.testing.expect(@import("node-utils-zig").fs.pathExists(io, try std.fs.path.join(allocator, &.{ parent, "photos", ".db", "files.dat" })));
+}
+
+test "a command cancelled in the picker with Ctrl+C or by arrowing up to Cancel selects no directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const plain = try helpers.makeTempDir(allocator, "picker-psi-cancel");
+    defer std.Io.Dir.cwd().deleteTree(io, plain) catch {};
+
+    // Ctrl+C at the prompt.
+    const interrupted = try helpers.runPsiWithPromptsIn(allocator, .inherit, &.{ "summary", "--cwd", plain }, &.{.{ .waitFor = "Select an existing media database directory:", .keys = "\x03" }});
+    try std.testing.expect(std.mem.indexOf(u8, interrupted.stdout, "No directory selected") != null);
+    try std.testing.expectEqual(@as(u8, 1), interrupted.exitCode);
+
+    // Up from the first choice wraps round to the last, which is Cancel.
+    const wrapped = try helpers.runPsiWithPromptsIn(allocator, .inherit, &.{ "summary", "--cwd", plain }, &.{.{ .waitFor = "Select an existing media database directory:", .keys = "\x1b[A\r" }});
+    try std.testing.expect(std.mem.indexOf(u8, wrapped.stdout, "No directory selected") != null);
+    try std.testing.expectEqual(@as(u8, 1), wrapped.exitCode);
 }
 
 test "pickDirectory reports a failed mkdir with the message Node gives" {
@@ -129,13 +137,14 @@ test "pickDirectory reports a failed mkdir with the message Node gives" {
     const filePath = try std.fs.path.join(allocator, &.{ parent, "afile" });
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = filePath, .data = "x" });
 
-    // A full path under an existing file: mkdir fails with ENOTDIR, naming the path it was given.
-    var environment = std.process.Environ.Map.init(allocator);
-    const failed = try helpers.runTestDriver(allocator, &.{ "pick-directory", "Pick:", parent, "false" }, &.{
-        .{ .waitFor = "Pick:", .keys = "\x1b[B\x1b[B\r" },
+    // A full path under an existing file: mkdir fails with ENOTDIR, naming the path it was given, and no directory is
+    // picked.
+    const failed = try helpers.runPsiWithPromptsIn(allocator, .inherit, &.{ "summary", "--cwd", parent }, &.{
+        .{ .waitFor = "Select an existing media database directory:", .keys = "\x1b[B\r" },
         .{ .waitFor = "Enter full directory path:", .keys = try std.mem.concat(allocator, u8, &.{ filePath, "/x\r" }) },
-    }, &environment);
-    try std.testing.expect(try helpers.parseDriverResult(?[]const u8, allocator, failed) == null);
+    });
+    try std.testing.expect(std.mem.indexOf(u8, failed.stdout, "No directory selected") != null);
+    try std.testing.expectEqual(@as(u8, 1), failed.exitCode);
     const expected = try std.fmt.allocPrint(allocator, "Failed to create directory: ENOTDIR: not a directory, mkdir '{s}'", .{try std.fs.path.join(allocator, &.{ filePath, "x" })});
     if (std.mem.indexOf(u8, failed.stdout, expected) == null) {
         std.debug.print("expected {s} in:\n{s}\n", .{ expected, failed.stdout });

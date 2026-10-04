@@ -904,14 +904,16 @@ test "secrets command lines parse like commander" {
     try std.testing.expect(import.outcome == .secretsImport);
     try std.testing.expectEqualStrings("a.key", import.outcome.secretsImport.privateKey.?);
 
-    const send = try parse(allocator, &.{ "secrets", "send", "--name", "k", "--code", "1234", "--yes" });
+    const send = try parse(allocator, &.{ "secrets", "send", "--name", "k", "--code", "1234", "--timeout", "5", "--yes" });
     try std.testing.expect(send.outcome == .secretsSend);
     try std.testing.expectEqualStrings("k", send.outcome.secretsSend.name.?);
     try std.testing.expectEqualStrings("1234", send.outcome.secretsSend.code.?);
+    try std.testing.expectEqualStrings("5", send.outcome.secretsSend.timeout.?);
 
-    const receive = try parse(allocator, &.{ "secrets", "receive", "--code", "1234", "--yes" });
+    const receive = try parse(allocator, &.{ "secrets", "receive", "--code", "1234", "--timeout", "5", "--yes" });
     try std.testing.expect(receive.outcome == .secretsReceive);
     try std.testing.expectEqualStrings("1234", receive.outcome.secretsReceive.code.?);
+    try std.testing.expectEqualStrings("5", receive.outcome.secretsReceive.timeout.?);
     try std.testing.expectEqual(@as(?bool, true), receive.outcome.secretsReceive.yes);
 
     // Errors end the process with code 1, as commander does for a command without the program's exitOverride.
@@ -1211,16 +1213,18 @@ test "dbs command lines parse like commander" {
     try std.testing.expect(clear.outcome == .dbsClear);
     try std.testing.expectEqual(@as(?bool, true), clear.outcome.dbsClear.yes);
 
-    const send = try parse(allocator, &.{ "dbs", "send", "--name", "a", "--path", "/p", "--code", "1234", "--yes" });
+    const send = try parse(allocator, &.{ "dbs", "send", "--name", "a", "--path", "/p", "--code", "1234", "--timeout", "5", "--yes" });
     try std.testing.expect(send.outcome == .dbsSend);
     try std.testing.expectEqualStrings("a", send.outcome.dbsSend.name.?);
     try std.testing.expectEqualStrings("/p", send.outcome.dbsSend.path.?);
     try std.testing.expectEqualStrings("1234", send.outcome.dbsSend.code.?);
+    try std.testing.expectEqualStrings("5", send.outcome.dbsSend.timeout.?);
     try std.testing.expectEqual(@as(?bool, true), send.outcome.dbsSend.yes);
 
-    const receive = try parse(allocator, &.{ "d", "receive", "--code", "1234", "--yes" });
+    const receive = try parse(allocator, &.{ "d", "receive", "--code", "1234", "--timeout", "5", "--yes" });
     try std.testing.expect(receive.outcome == .dbsReceive);
     try std.testing.expectEqualStrings("1234", receive.outcome.dbsReceive.code.?);
+    try std.testing.expectEqualStrings("5", receive.outcome.dbsReceive.timeout.?);
     try std.testing.expectEqual(@as(?bool, true), receive.outcome.dbsReceive.yes);
 
     // Errors end the process with code 1, as commander does for a command without the program's exitOverride.

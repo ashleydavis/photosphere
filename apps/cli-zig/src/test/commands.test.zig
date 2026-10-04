@@ -4015,30 +4015,61 @@ test "news prints the whole feed, newest first, marking the new items, like the 
 }
 
 //
+// The path of the program `psi bug` opens a URL with in the environment of bugEnvironment: xdg-open on the PATH (open on
+// macOS), or on Windows the PowerShell under SystemRoot.
+//
+fn openerPath(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map) ![]const u8 {
+    if (builtin.os.tag == .windows) {
+        return std.fs.path.join(allocator, &.{ environment.get("SystemRoot").?, "System32", "WindowsPowerShell", "v1.0", "powershell.exe" });
+    }
+    return std.fs.path.join(allocator, &.{ environment.get("PATH").?, if (builtin.os.tag == .macos) "open" else "xdg-open" });
+}
+
+//
+// The program that stands in for the opener outside Windows: it writes the arguments it was started with, joined by new
+// lines, to "<its own path>.opened.txt". The record is written under another name and renamed into place, so a test
+// waiting for it never reads half of it. Its path comes from where it was run from ($0), not from an environment
+// variable. The PATH of the bug tests holds only an empty directory, so the rename is /bin/mv by full path and the rest
+// is shell builtins.
+//
+const opener_script =
+    \\#!/bin/sh
+    \\record="$0.opened.txt"
+    \\separator=""
+    \\: > "$record.partial"
+    \\for argument in "$@"; do
+    \\    printf '%s%s' "$separator" "$argument" >> "$record.partial"
+    \\    separator="
+    \\"
+    \\done
+    \\/bin/mv "$record.partial" "$record"
+    \\
+;
+
+//
 // Sets up the environment of the bug tests: no tools on the PATH (so every tool version is "Not available"), and
-// either no program to open a URL with, or a copy of the test driver as that program, which records the arguments
-// it is started with to <root>/opened.txt (see expectOpened). The opener is xdg-open on the PATH (open on macOS),
-// or on Windows the PowerShell under SystemRoot. Windows always has PowerShell (Wine too, which sets SystemRoot
-// itself whatever the environment says), so on Windows the copy is always put there, so that no real browser is
-// opened; without an opener it records nothing.
+// either no program to open a URL with, or a program that records the arguments it is started with beside itself (see
+// openerPath and expectOpened). Outside Windows it is a shell script the test writes. Windows always has PowerShell (Wine
+// too, which sets SystemRoot itself whatever the environment says), and `psi bug` starts it by full path, which a script
+// cannot stand in for, so on Windows opener-recorder is always put there, so that no real browser is opened; without an
+// opener it records nothing.
 //
 fn bugEnvironment(allocator: std.mem.Allocator, root: []const u8, withOpener: bool) !*std.process.Environ.Map {
     const environment = try helpers.cliEnvironment(allocator, root);
-    const binDir = try usePathOfEmptyDirectory(allocator, environment, root);
-    const systemRoot = try std.fs.path.join(allocator, &.{ root, "windows" });
+    _ = try usePathOfEmptyDirectory(allocator, environment, root);
     if (builtin.os.tag == .windows) {
-        try environment.put("SystemRoot", systemRoot);
-    }
-    if (withOpener) {
-        try environment.put("PHOTOSPHERE_TEST_OPENER_RECORD", try std.fs.path.join(allocator, &.{ root, "opened.txt" }));
+        try environment.put("SystemRoot", try std.fs.path.join(allocator, &.{ root, "windows" }));
     }
     if (withOpener or builtin.os.tag == .windows) {
-        const openerPath = if (builtin.os.tag == .windows)
-            try std.fs.path.join(allocator, &.{ systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe" })
-        else
-            try std.fs.path.join(allocator, &.{ binDir, if (builtin.os.tag == .macos) "open" else "xdg-open" });
-        try std.Io.Dir.cwd().createDirPath(std.testing.io, std.fs.path.dirname(openerPath).?);
-        try std.Io.Dir.cwd().copyFile(helpers.test_driver_path, std.Io.Dir.cwd(), openerPath, std.testing.io, .{});
+        const path = try openerPath(allocator, environment);
+        try std.Io.Dir.cwd().createDirPath(std.testing.io, std.fs.path.dirname(path).?);
+        if (builtin.os.tag == .windows) {
+            try std.Io.Dir.cwd().copyFile(helpers.opener_recorder_path, std.Io.Dir.cwd(), path, std.testing.io, .{});
+        }
+        else {
+            try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = path, .data = opener_script });
+            try std.Io.Dir.cwd().setFilePermissions(std.testing.io, path, std.Io.File.Permissions.fromMode(0o755), .{});
+        }
     }
     return environment;
 }
@@ -4048,9 +4079,9 @@ fn bugEnvironment(allocator: std.mem.Allocator, root: []const u8, withOpener: bo
 // finish after psi has exited), and expects them to be what the `open` package gives the platform's opener for the
 // URL. The record is then deleted, so that the next run's is waited for rather than this one read again.
 //
-fn expectOpened(allocator: std.mem.Allocator, root: []const u8, url: []const u8) !void {
+fn expectOpened(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, url: []const u8) !void {
     const io = std.testing.io;
-    const recordPath = try std.fs.path.join(allocator, &.{ root, "opened.txt" });
+    const recordPath = try std.fmt.allocPrint(allocator, "{s}.opened.txt", .{try openerPath(allocator, environment)});
 
     // TODO: on Windows the opener is killed when psi exits, mirroring the TypeScript `psi bug`, which exits straight
     // after starting PowerShell without `detached` (see startAttachedToThisProcess in open.zig). Whether it recorded
@@ -4153,9 +4184,9 @@ test "bug --yes reports the bug like the TypeScript CLI" {
     const url = try bugUrl(allocator, "Bug Report", bug_template_details, "No log file available", "No log file available");
     const expected = try std.mem.concat(allocator, u8, &.{ bug_header, outro });
     try expectResult(try runZig(allocator, environment, &.{ "bug", "--yes" }), expected, "", 0);
-    try expectOpened(allocator, root, url);
+    try expectOpened(allocator, environment,url);
     try expectResult(try runZig(allocator, environment, &.{ "bug", "-y", "--no-browser" }), expected, "", 0);
-    try expectOpened(allocator, root, url);
+    try expectOpened(allocator, environment,url);
 }
 
 test "bug --yes includes the header of the newest log file, like the TypeScript CLI" {
@@ -4175,7 +4206,7 @@ test "bug --yes includes the header of the newest log file, like the TypeScript 
     });
     const expected = try std.mem.concat(allocator, u8, &.{ bug_header, try bugOutro(allocator, report) });
     try expectResult(try runZig(allocator, environment, &.{ "bug", "--yes" }), expected, "", 0);
-    try expectOpened(allocator, root, try bugUrl(allocator, "Bug Report", bug_template_details, "Header line\n--- Log Start ---", logFile));
+    try expectOpened(allocator, environment,try bugUrl(allocator, "Bug Report", bug_template_details, "Header line\n--- Log Start ---", logFile));
 }
 
 test "bug --yes says the report was opened even when no opener can be started, like the TypeScript CLI" {
@@ -4230,7 +4261,7 @@ test "bug asks for the details of the bug like the TypeScript CLI" {
     const outro = try bugOutro(allocator, try bugSummary(allocator, "Crash on add", "None available"));
     const expected = try std.mem.concat(allocator, u8, &.{ prompts, "\n", outro });
     try expectResult(result, expected, "", 0);
-    try expectOpened(allocator, root, try bugUrl(allocator, "Crash on add", details, "No log file available", "No log file available"));
+    try expectOpened(allocator, environment,try bugUrl(allocator, "Crash on add", details, "No log file available", "No log file available"));
 }
 
 test "bug is cancelled like the TypeScript CLI" {
