@@ -783,7 +783,11 @@ pub const Sign = struct {
         }
         const signature = try allocator.alloc(u8, signatureLength);
         if (c.EVP_DigestSign(context, signature.ptr, &signatureLength, self.data.items.ptr, self.data.items.len) != 1) {
-            return throwLibraryError("EVP_DigestSign");
+            const packedError = takeLibraryError();
+            if (isLibraryError(packedError, c.ERR_LIB_RSA, c.RSA_R_DIGEST_TOO_BIG_FOR_RSA_KEY)) {
+                return errors.throwError("error:02000070:rsa routines::digest too big for rsa key", .{});
+            }
+            return throwPackedError(packedError, "EVP_DigestSign");
         }
         return signature[0..signatureLength];
     }

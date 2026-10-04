@@ -284,6 +284,16 @@ pub const Prompt = struct {
             try self.output.flush();
             const keypress = try self.input.nextKeypress();
             try self.onKeypress(keypress.char, keypress.key);
+
+            // Ctrl+D on an empty line closes the readline interface (`rl.close()`), which pauses the input and
+            // leaves the prompt unresolved for good, as the end of the input does.
+            if (self.outcome == null) {
+                if (self.rl) |interface| {
+                    if (interface.closed) {
+                        try self.input.endInput();
+                    }
+                }
+            }
         }
         // The keys left in the chunk that finished the prompt are lost (nothing listens for them any more).
         self.input.discardChunk();

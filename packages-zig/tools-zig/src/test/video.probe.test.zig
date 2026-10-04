@@ -192,6 +192,37 @@ test "ffprobe values of every JSON type are read the way TypeScript reads them" 
     try std.testing.expect(std.math.isNan(objectDate.createdAt.?));
 }
 
+//
+// A boolean is the text "true" or "false" to String() and so is not a number to parseFloat, an array puts a comma
+// between its elements (so a leading null gives ",7.5", which parseFloat cannot read), and a tag list that is a string
+// spreads into one entry per UTF-16 code unit, so that a character outside the BMP gives two entries, each a U+FFFD
+// when written as UTF-8. Checked against Node: parseFloat(String(true)) and parseFloat(String([null, 7.5])) are NaN,
+// and Object.entries({ ..."a😀b" }) give the keys "0" to "3".
+//
+test "ffprobe values that are booleans, arrays with a null and strings with characters outside the BMP are read like TypeScript" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const booleanDuration = try probe(allocator, "{\"format\":{\"duration\":true},\"streams\":[{\"codec_type\":\"video\"}]}");
+    try std.testing.expect(std.math.isNan(booleanDuration.duration.?));
+
+    const nullFirst = try probe(allocator, "{\"format\":{\"duration\":[null,7.5]},\"streams\":[{\"codec_type\":\"video\"}]}");
+    try std.testing.expect(std.math.isNan(nullFirst.duration.?));
+
+    const emoji = try probe(allocator, "{\"format\":{\"tags\":\"a\u{1F600}b\"},\"streams\":[{\"codec_type\":\"video\"}]}");
+    const fields = emoji.metadata.?.document.fields.items;
+    try std.testing.expectEqualStrings("0", fields[0].key);
+    try std.testing.expectEqualStrings("a", fields[0].value.string);
+    try std.testing.expectEqualStrings("1", fields[1].key);
+    try std.testing.expectEqualStrings("\u{FFFD}", fields[1].value.string);
+    try std.testing.expectEqualStrings("2", fields[2].key);
+    try std.testing.expectEqualStrings("\u{FFFD}", fields[2].value.string);
+    try std.testing.expectEqualStrings("3", fields[3].key);
+    try std.testing.expectEqualStrings("b", fields[3].value.string);
+    try std.testing.expectEqualStrings("videoCodec", fields[4].key);
+}
+
 test "the fake tools directory does not leave the detected ImageMagick installation behind" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

@@ -312,6 +312,33 @@ test "discovery skips announcements it cannot read, and reads a fingerprint that
 }
 
 //
+// A sender that has been cancelled does not act on what it hears, as the message handler of the TypeScript sender
+// returns at once when `this.isCancelled` is set. A cancel before the wait starts does not end the wait (a mirrored
+// bug, see cancel), so the wait runs to its timeout and finds nobody.
+//
+test "a sender that was cancelled before it started waiting ignores the receiver it hears" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const code = try helpers.pairingCode();
+    const codeHash = lan_share.lan_share_sender.sha256Hex(code);
+    var announcer: IAnnouncer = .{
+        .datagrams = &.{
+            try std.fmt.allocPrint(allocator, "PSIE_RECV:4321:{s}:aa", .{&codeHash}),
+        },
+        .stop = .init(false),
+    };
+    const thread = try std.Thread.spawn(.{}, announceUntilStopped, .{&announcer});
+    defer thread.join();
+    defer announcer.stop.store(true, .release);
+
+    var sender = try LanShareSender.init(allocator, std.testing.io, .null, code);
+    sender.cancel();
+    try std.testing.expect((try sender.waitForReceiver(std.testing.io, 700)) == null);
+    try std.testing.expect(!sender.sawMismatchedReceiver);
+}
+
+//
 // Starts a receiver and finds it with a sender holding its code, without sending any request to it.
 //
 fn discoverReceiver(allocator: std.mem.Allocator, receiver: *LanShareReceiver, code: []const u8) !IReceiverEndpoint {
@@ -375,6 +402,95 @@ test "send gives up when the receiver refuses its first request, and fails on a 
     try std.testing.expectError(error.Thrown, otherSender.send(otherEndpoint));
     try std.testing.expectEqualStrings("Unexpected status code: 429", utils.errors.lastErrorMessage());
     try std.testing.expect((try otherReceiver.receive()) == null);
+}
+
+//
+// A receiver that answers the check of the pairing code with the hash the sender expects and then refuses the payload
+// with 403, as the real receiver does for a payload whose code hash is not its own. The real receiver cannot be made to
+// do this to a sender that passed its check, because both requests carry the sender's own code hash, so this is a
+// server of the same protocol made from the package's own TLS server and std.http.
+//
+const IRefusingReceiver = struct {
+    // The TLS settings of the server.
+    context: *const lan_share.https.ServerContext,
+
+    // The listening socket.
+    listener: lan_share.socket.Handle,
+
+    // The hash of the pairing code that GET /pairing-code-hash answers with.
+    codeHash: []const u8,
+
+    // The error that stopped the server, if any.
+    failure: ?anyerror,
+};
+
+//
+// Serves the two requests of a send with an IRefusingReceiver and records the error that stopped it.
+//
+fn serveRefusing(server: *IRefusingReceiver) void {
+    serveRefusingOrFail(server) catch |err| {
+        server.failure = err;
+    };
+}
+
+//
+// The body of serveRefusing: one connection for the check of the code and one for the payload, as the sender makes one
+// connection for each request.
+//
+fn serveRefusingOrFail(server: *IRefusingReceiver) !void {
+    for (0..2) |_| {
+        if (!try lan_share.socket.waitReadable(server.listener, 10_000)) {
+            return error.TimedOutWaitingForTheSender;
+        }
+        const accepted = try lan_share.socket.accept(server.listener);
+        const connection = try lan_share.https.Connection.accept(std.heap.smp_allocator, server.context, accepted);
+        defer connection.close();
+        var httpServer = std.http.Server.init(&connection.reader, &connection.writer);
+        var request = try httpServer.receiveHead();
+        if (request.head.method == .GET) {
+            const body = try std.fmt.allocPrint(std.heap.smp_allocator, "{{\"codeHash\":\"{s}\"}}", .{server.codeHash});
+            defer std.heap.smp_allocator.free(body);
+            try request.respond(body, .{ .status = .ok });
+            continue;
+        }
+        var readBuffer: [4096]u8 = undefined;
+        const bodyReader = try request.readerExpectContinue(&readBuffer);
+        const rawBody = try bodyReader.allocRemaining(std.heap.smp_allocator, .unlimited);
+        defer std.heap.smp_allocator.free(rawBody);
+        try request.respond("{\"error\":\"Invalid pairing code\"}", .{ .status = .forbidden });
+    }
+}
+
+test "send returns false when the receiver refuses the payload with 403" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const code = try helpers.pairingCode();
+    const selfSigned = try lan_share.lan_share_receiver.generateSelfSignedCert(allocator, std.testing.io);
+    var context = try lan_share.https.ServerContext.init(selfSigned.cert, selfSigned.key);
+    defer context.deinit();
+    const listener = try lan_share.socket.createTcp();
+    defer lan_share.socket.close(listener);
+    try lan_share.socket.bind(listener, try lan_share.socket.parseAddress("127.0.0.1", 0));
+    try lan_share.socket.listen(listener);
+    const codeHash = lan_share.lan_share_sender.sha256Hex(code);
+    var server: IRefusingReceiver = .{
+        .context = &context,
+        .listener = listener,
+        .codeHash = &codeHash,
+        .failure = null,
+    };
+    const thread = try std.Thread.spawn(.{}, serveRefusing, .{&server});
+
+    var sender = try LanShareSender.init(allocator, std.testing.io, .{ .string = "x" }, code);
+    const success = try sender.send(.{
+        .address = "127.0.0.1",
+        .port = try lan_share.socket.localPort(listener),
+        .certFingerprint = selfSigned.fingerprint,
+    });
+    thread.join();
+    try std.testing.expect(server.failure == null);
+    try std.testing.expect(!success);
 }
 
 test "pairingCodeHashMatches fails for a response that is not JSON, as JSON.parse does" {

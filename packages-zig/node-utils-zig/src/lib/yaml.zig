@@ -636,6 +636,10 @@ fn splitFlowItems(allocator: std.mem.Allocator, inner: []const u8) ![]const []co
 // Parses a value written on one line: a flow collection, a quoted scalar or a plain scalar.
 //
 fn parseInlineValue(allocator: std.mem.Allocator, text: []const u8, lineNumber: usize) anyerror!std.json.Value {
+    // An empty item between two commas of a flow collection.
+    if (text.len == 0) {
+        return yamlError("expected the node content, but found ','", lineNumber);
+    }
     if (text[0] == '[') {
         if (text[text.len - 1] != ']') {
             return yamlError("unexpected end of the stream within a flow collection", lineNumber);
@@ -652,6 +656,9 @@ fn parseInlineValue(allocator: std.mem.Allocator, text: []const u8, lineNumber: 
         }
         var object: std.json.ObjectMap = .empty;
         for (try splitFlowItems(allocator, text[1 .. text.len - 1])) |item| {
+            if (item.len == 0) {
+                return yamlError("expected the node content, but found ','", lineNumber);
+            }
             const colon = findMappingColon(item) orelse {
                 try object.put(allocator, try parseKey(allocator, item, lineNumber), .null);
                 continue;
@@ -679,7 +686,9 @@ fn parseInlineValue(allocator: std.mem.Allocator, text: []const u8, lineNumber: 
 // Parses a YAML document (`yaml.load(source)`). An empty document is null.
 // Values are allocated with the allocator (strings may point into source).
 //
-pub fn load(allocator: std.mem.Allocator, source: []const u8) !std.json.Value {
+pub fn load(allocator: std.mem.Allocator, documentWithBom: []const u8) !std.json.Value {
+    // js-yaml drops a byte order mark at the start of the document.
+    const source = if (std.mem.startsWith(u8, documentWithBom, "\xEF\xBB\xBF")) documentWithBom[3..] else documentWithBom;
     const lines = try splitLines(allocator, source);
     var rawLines: std.ArrayList([]const u8) = .empty;
     var rawIterator = std.mem.splitScalar(u8, source, '\n');

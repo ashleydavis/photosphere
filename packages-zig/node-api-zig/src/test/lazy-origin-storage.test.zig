@@ -44,6 +44,51 @@ const MemoryReadStream = struct {
 };
 
 //
+// A readable stream whose every read fails (TypeScript: a Readable that emits an error).
+//
+const FailingReadStream = struct {
+    // The reader, which fails when it is read.
+    reader: std.Io.Reader = .{
+        .vtable = &.{ .stream = streamFunction },
+        .buffer = &.{},
+        .seek = 0,
+        .end = 0,
+    },
+
+    //
+    // Fails the read.
+    //
+    fn streamFunction(reader: *std.Io.Reader, writer: *std.Io.Writer, limit: std.Io.Limit) std.Io.Reader.StreamError!usize {
+        _ = reader;
+        _ = writer;
+        _ = limit;
+        return error.ReadFailed;
+    }
+
+    //
+    // Gets the reader.
+    //
+    fn readerFunction(ptr: *anyopaque) *std.Io.Reader {
+        const self: *FailingReadStream = @ptrCast(@alignCast(ptr));
+        return &self.reader;
+    }
+
+    //
+    // Nothing to release.
+    //
+    fn destroyFunction(ptr: *anyopaque, streamIo: std.Io) void {
+        _ = ptr;
+        _ = streamIo;
+    }
+
+    // The IReadStream functions.
+    const vtable: IReadStream.VTable = .{
+        .reader = readerFunction,
+        .destroy = destroyFunction,
+    };
+};
+
+//
 // A minimal mock IStorage (TypeScript: makeMockStorage). Only the methods used by LazyOriginStorage tests have
 // real implementations; the rest throw so accidental calls are obvious. Its files are shared with the concurrent
 // cache write, so they are guarded and allocated with a thread safe allocator.
@@ -72,6 +117,9 @@ const MockStorage = struct {
 
     // Makes readStream fail (TypeScript: an origin.readStream that throws "should not be called").
     readStreamFails: bool = false,
+
+    // Makes the stream readStream returns fail when it is read (TypeScript: a Readable that emits an error).
+    streamReadFails: bool = false,
 
     //
     // Gets the IStorage interface.
@@ -191,6 +239,11 @@ const MockStorage = struct {
             return error.ShouldNotBeCalled;
         }
         const data = self.get(filePath) orelse return error.FileNotFound;
+        if (self.streamReadFails) {
+            const failingStream = try allocator.create(FailingReadStream);
+            failingStream.* = .{};
+            return .{ .ptr = failingStream, .vtable = &FailingReadStream.vtable };
+        }
         const stream = try allocator.create(MemoryReadStream);
         stream.* = .{ .reader = .fixed(data) };
         return .{ .ptr = stream, .vtable = &MemoryReadStream.vtable };
@@ -390,6 +443,27 @@ test "readStream() streams a file larger than the cache queue in full when the l
     const data = try readAll(allocator, try lazy.storage().readStream(allocator, io, "big.bin"));
 
     try std.testing.expectEqualSlices(u8, big, data);
+}
+
+// TypeScript: the callerStream emits the origin's error, and the cacheStream is destroyed with it, so nothing partial
+// is cached.
+test "readStream() fails the caller's read and caches nothing when the origin stream fails" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var local: MockStorage = .{};
+    defer local.deinit();
+    var origin: MockStorage = .{};
+    defer origin.deinit();
+    try origin.put("broken.bin", "somedata");
+    origin.streamReadFails = true;
+
+    var lazy = LazyOriginStorage.init(local.storage(), origin.storage());
+    const stream = try lazy.storage().readStream(arena.allocator(), io, "broken.bin");
+    try std.testing.expectError(error.ReadFailed, stream.reader().allocRemaining(arena.allocator(), .unlimited));
+
+    // Destroying the stream waits for the cache write, which ended with the failure.
+    stream.destroy(io);
+    try std.testing.expect(local.get("broken.bin") == null);
 }
 
 test "write() writes to local only and never touches origin" {

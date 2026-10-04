@@ -65,6 +65,12 @@ targets:
       - apps/cli
       - packages
 
+  # The unit tests of the Zig port of psi: the Zig CLI and every package under packages-zig.
+  - name: test:zig
+    paths:
+      - apps/cli-zig
+      - packages-zig
+
   # The smoke tests of the Zig port of psi (apps/cli-zig and the packages-zig ports): copies of the
   # TypeScript smoke suites with the ported commands run in the Zig CLI.
   - name: test:cli:zig

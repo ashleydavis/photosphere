@@ -508,3 +508,65 @@ pub fn runWithPromptsIn(allocator: std.mem.Allocator, workingDirectory: std.proc
     };
     return .{ .exitCode = exitCode, .stdout = stdout, .stderr = stderr };
 }
+
+//
+// Runs the built psi with the arguments, typing the keys of each prompt on its stdin once that prompt has appeared on
+// its stdout (see runWithPrompts), in a terminal that draws the Unicode symbols of the prompts.
+//
+pub fn runPsiWithPrompts(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, args: []const []const u8, prompts: []const IPromptKeys) !CliResult {
+    const terminalEnvironment = try allocator.create(std.process.Environ.Map);
+    terminalEnvironment.* = try environment.clone(allocator);
+    try terminalEnvironment.put("TERM", "xterm-256color");
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.append(allocator, try std.Io.Dir.cwd().realPathFileAlloc(std.testing.io, psi_path, allocator));
+    try argv.appendSlice(allocator, args);
+    return runWithPrompts(allocator, argv.items, prompts, terminalEnvironment);
+}
+
+//
+// Runs the built psi with the arguments from the apps/cli directory, as runCli does.
+//
+pub fn runPsi(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, args: []const []const u8) !CliResult {
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.append(allocator, try std.Io.Dir.cwd().realPathFileAlloc(std.testing.io, psi_path, allocator));
+    try argv.appendSlice(allocator, args);
+    return runCli(allocator, argv.items, environment);
+}
+
+//
+// Creates a test root whose config holds the databases.toml given (none when it is null) and whose plaintext vault
+// holds the vault.json given, and returns its environment.
+//
+pub fn setupConfigAndVault(allocator: std.mem.Allocator, root: []const u8, databasesToml: ?[]const u8, vaultJson: []const u8) !*std.process.Environ.Map {
+    const environment = try cliEnvironment(allocator, root);
+    if (databasesToml) |toml| {
+        try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+            .sub_path = try std.fmt.allocPrint(allocator, "{s}/config/databases.toml", .{root}),
+            .data = toml,
+        });
+    }
+    const vaultDir = try std.fmt.allocPrint(allocator, "{s}/vault", .{root});
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{vaultDir}),
+        .data = vaultJson,
+    });
+    return environment;
+}
+
+//
+// Reads a file below a test root.
+//
+pub fn readRootFile(allocator: std.mem.Allocator, root: []const u8, relative: []const u8) ![]const u8 {
+    return std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ root, relative }), allocator, .unlimited);
+}
+
+//
+// Fails, printing the output, unless the text appears in it.
+//
+pub fn expectContains(haystack: []const u8, needle: []const u8) !void {
+    if (std.mem.indexOf(u8, haystack, needle) == null) {
+        std.debug.print("the output does not hold the expected text \"{s}\":\n{s}\n", .{ needle, haystack });
+        return error.TestExpectedEqual;
+    }
+}

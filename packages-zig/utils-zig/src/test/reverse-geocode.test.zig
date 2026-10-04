@@ -287,6 +287,15 @@ test "the response body is read as axios reads it: JSON.parse, or the text itsel
     try std.testing.expect((try reverse_geocode.axiosResponseData(allocator, "null")) == .null);
 }
 
+//
+// A body that cannot be parsed because memory ran out is an error, not text that is not JSON (axios has no such case,
+// as JavaScript has no out-of-memory error to catch here).
+//
+test "the response body is not read as text when memory runs out while it is parsed" {
+    var failing_allocator = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+    try std.testing.expectError(error.OutOfMemory, reverse_geocode.axiosResponseData(failing_allocator.allocator(), "{\"status\":\"OK\"}"));
+}
+
 test "convert exif coordinates - a fraction array of int32 values is divided like numbers" {
     const location = try reverse_geocode.convertExifCoordinates(TestDocument{
         .keys = &.{

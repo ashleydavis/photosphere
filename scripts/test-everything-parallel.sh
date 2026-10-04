@@ -91,7 +91,13 @@ elif [ "$FORCE" = true ]; then
         test:cli:sync
         test:cli:write-lock
         test:cli:hash-cache
+        test:zig
         test:cli:zig
+        test:cli:encrypted:zig
+        test:cli:sync:zig
+        test:cli:write-lock:zig
+        test:cli:lan-share:zig
+        test:cli:hash-cache:zig
         test:electron
         test:lan-share:cli-desktop
         test:harness

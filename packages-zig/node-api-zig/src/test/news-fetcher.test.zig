@@ -289,3 +289,16 @@ test "writes the label and url of a link as a template string would" {
     try std.testing.expect(items[4].link == null);
     try std.testing.expect(items[4].action == null);
 }
+
+// The URL parser drops tabs, newlines and carriage returns before it reads the path.
+test "fileURLToPath drops tabs, newlines and carriage returns from the URL" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // (The path's own separators are those of the platform, so this runs where they are slashes.)
+    if (builtin.os.tag == .windows) {
+        return;
+    }
+    try std.testing.expectEqualStrings("/ab/cd", try node_api.news_fetcher.fileURLToPath(allocator, "file:///a\tb/c\nd\r"));
+}

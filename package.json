@@ -46,6 +46,7 @@
     "tce": "bun run test:cli:encrypted",
     "test:cli:lan-share": "cd ./apps/cli/ && bash ./smoke-tests-lan-share.sh && cd ../.. && what-changed baseline capture test:cli:lan-share",
     "tcl": "bun run test:cli:lan-share",
+    "test:zig": "cd ./apps/cli-zig && zig build test-all --summary all --test-timeout 20m && cd ../.. && what-changed baseline capture test:zig",
     "test:cli:zig": "cd ./apps/cli && bash ./smoke-tests-zig.sh && cd ../.. && what-changed baseline capture test:cli:zig",
     "test:cli:encrypted:zig": "cd ./apps/cli/ && bash ./smoke-tests-encrypted-zig.sh && cd ../.. && what-changed baseline capture test:cli:encrypted:zig",
     "test:cli:sync:zig": "cd ./apps/cli/ && bash ./sync-smoke-test-zig.sh && cd ../.. && what-changed baseline capture test:cli:sync:zig",

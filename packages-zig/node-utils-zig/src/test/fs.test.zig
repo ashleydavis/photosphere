@@ -1533,3 +1533,65 @@ test "readFileHead fails for a directory" {
 
     try std.testing.expectError(error.IsDir, fs.readFileHead(allocator, io, dirPath, 16));
 }
+
+test "readFileHead reports running out of memory, and not as a failed read" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "head-without-memory.txt");
+    try fs.outputFile(allocator, io, filePath, "0123456789");
+
+    // The first allocation readFileHead makes, the room for the bytes it reads, is refused.
+    var failingAllocator = std.testing.FailingAllocator.init(allocator, .{
+        .fail_index = 0,
+    });
+    try std.testing.expectError(error.OutOfMemory, fs.readFileHead(failingAllocator.allocator(), io, filePath, 4));
+}
+
+test "outputFile retries a rename that is refused as busy, then gives up with the refusal" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "busy-rename");
+    try fs.ensureDir(io, dirPath);
+
+    // A rename onto "." of the directory fails with EBUSY on Linux, which is the refusal a Windows rename
+    // gets while something has the target open, so it is retried with a growing wait before it is thrown.
+    // The waits add up to far more than a rename that was tried only once could take.
+    const targetPath = try std.fmt.allocPrint(allocator, "{s}/.", .{dirPath});
+    const startedAt = std.Io.Timestamp.now(io, .awake).toMilliseconds();
+    try std.testing.expectError(error.FileBusy, fs.outputFile(allocator, io, targetPath, "data"));
+    try std.testing.expect(std.Io.Timestamp.now(io, .awake).toMilliseconds() - startedAt >= 500);
+
+    try fs.remove(io, dirPath);
+}
+
+test "remove throws when a file that exists cannot be deleted, rather than treating it as gone" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    if (builtin.os.tag == .windows) {
+        // Windows has no directory permission that stops a file in it being deleted.
+        return error.SkipZigTest;
+    }
+    const filePath = try tempFilePathInOwnDir(allocator, io, "undeletable.txt");
+    try fs.outputFile(allocator, io, filePath, "stays");
+    const dirPath = std.fs.path.dirname(filePath).?;
+
+    // A directory that cannot be written to refuses to give up its files.
+    const dir = try std.Io.Dir.cwd().openDir(io, dirPath, .{
+        .iterate = true,
+    });
+    defer dir.close(io);
+    try dir.setPermissions(io, std.Io.File.Permissions.fromMode(0o500));
+    defer dir.setPermissions(io, std.Io.File.Permissions.fromMode(0o700)) catch {};
+
+    try std.testing.expectError(error.AccessDenied, fs.remove(io, filePath));
+    try std.testing.expect(fs.pathExists(io, filePath));
+
+    try dir.setPermissions(io, std.Io.File.Permissions.fromMode(0o700));
+    try fs.remove(io, dirPath);
+}

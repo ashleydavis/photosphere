@@ -112,3 +112,50 @@ test "PromptInput reads keypresses until the end of the input" {
     try std.testing.expectEqualStrings("escape", (try input.nextKeypress()).key.name.?);
     try std.testing.expectError(error.EndOfStream, input.nextKeypress());
 }
+
+// A modifier digit of 0 is the number -1 to emitKeys (the string "0" is truthy, so `(match[3] || 1) - 1` is -1),
+// which sets every modifier. The colour reset of pasted coloured text, ESC [ 0 m, is one such sequence.
+test "parseKeypress reads a modifier digit of 0 as -1, as emitKeys does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const colour_reset = try parse(allocator, "\x1b[0m");
+    try std.testing.expectEqualStrings("undefined", colour_reset.key.name.?);
+    try std.testing.expect(colour_reset.key.ctrl);
+    try std.testing.expect(colour_reset.key.meta);
+    try std.testing.expect(colour_reset.key.shift);
+    try std.testing.expectEqualStrings("\x1b[0m", colour_reset.key.sequence);
+
+    const with_modifier = try parse(allocator, "\x1b[1;0A");
+    try std.testing.expect(with_modifier.key.ctrl);
+    try std.testing.expect(with_modifier.key.meta);
+    try std.testing.expect(with_modifier.key.shift);
+
+    const tilde = try parse(allocator, "\x1b[3;0~");
+    try std.testing.expect(tilde.key.ctrl);
+    try std.testing.expect(tilde.key.meta);
+    try std.testing.expect(tilde.key.shift);
+}
+
+// Ctrl+D on an empty line closes the interface, as readline does (`if (this.cursor === 0 && this.line.length === 0)
+// this.close()`); anywhere else it deletes the character to the right of the cursor.
+test "the interface closes on ctrl-d with an empty line, as readline does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var interface = readline.Interface.init(allocator);
+
+    const ctrl_d = try parse(allocator, "\x04");
+    try interface.ttyWrite(ctrl_d.char, ctrl_d.key);
+    try std.testing.expect(interface.closed);
+
+    var typed = readline.Interface.init(allocator);
+    for ([_][]const u8{ "a", "b", "c", "\x1b[H" }) |key| {
+        const keypress = try parse(allocator, key);
+        try typed.ttyWrite(keypress.char, keypress.key);
+    }
+    try typed.ttyWrite(ctrl_d.char, ctrl_d.key);
+    try std.testing.expect(!typed.closed);
+    try std.testing.expectEqualStrings("bc", typed.line.items);
+}

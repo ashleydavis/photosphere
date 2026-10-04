@@ -169,6 +169,59 @@ test "a connection writes every slice of a splat and reads to the end of what th
     try std.testing.expectEqual(@as(usize, 4 * large.len), std.mem.count(u8, side.received.items, "b"));
 }
 
+//
+// Accepts one TLS connection, completes the handshake and hangs up at once, recording the error that stopped it.
+//
+fn serveAndHangUp(side: *IServerSide) void {
+    serveAndHangUpOrFail(side) catch |err| {
+        side.failure = err;
+    };
+}
+
+//
+// The body of serveAndHangUp.
+//
+fn serveAndHangUpOrFail(side: *IServerSide) !void {
+    const accepted = try socket.accept(side.listener);
+    const connection = try https.Connection.accept(std.testing.allocator, side.context, accepted);
+    connection.close();
+}
+
+test "a connection fails to write to a peer that has hung up" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const selfSigned = try receiver_module.generateSelfSignedCert(allocator, std.testing.io);
+    var context = try https.ServerContext.init(selfSigned.cert, selfSigned.key);
+    defer context.deinit();
+    const listener = try listenLocally();
+    defer socket.close(listener.handle);
+    var side: IServerSide = .{ .context = &context, .listener = listener.handle, .received = .empty, .failure = null };
+    const server = try std.Thread.spawn(.{}, serveAndHangUp, .{&side});
+
+    const connection = try https.Connection.connect(allocator, listener.address);
+    defer connection.close();
+    server.join();
+    try std.testing.expect(side.failure == null);
+
+    // The first writes after the hang-up can still be accepted by the system, until the peer's reset reaches it.
+    const chunk = try allocator.alloc(u8, 64 * 1024);
+    @memset(chunk, 'x');
+    var attempts: usize = 0;
+    while (attempts < 500) : (attempts += 1) {
+        connection.writer.writeAll(chunk) catch |err| {
+            try std.testing.expectEqual(error.WriteFailed, err);
+            return;
+        };
+        connection.writer.flush() catch |err| {
+            try std.testing.expectEqual(error.WriteFailed, err);
+            return;
+        };
+        try std.testing.io.sleep(.fromMilliseconds(10), .awake);
+    }
+    return error.WriteToAHungUpPeerNeverFailed;
+}
+
 test "socket calls report the system error of what failed" {
     // Nothing listens on the port of a listener that has been closed.
     const listener = try listenLocally();

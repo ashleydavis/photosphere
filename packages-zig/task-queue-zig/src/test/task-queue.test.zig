@@ -872,6 +872,9 @@ const RecordingBackend = struct {
     // Set when the onAnyTaskMessage subscription is removed.
     onAnyTaskMessageUnsubscribeCalled: bool,
 
+    // When set, onTasksCancelled fails (a backend that cannot register its last subscription).
+    failOnTasksCancelled: bool,
+
     //
     // Gets the IQueueBackend interface for this backend.
     //
@@ -970,6 +973,10 @@ const RecordingBackend = struct {
     fn onTasksCancelled(ptr: *anyopaque, source: []const u8, callback: types.TasksCancelledCallback) anyerror!types.UnsubscribeFn {
         _ = source;
         _ = callback;
+        const self: *RecordingBackend = @ptrCast(@alignCast(ptr));
+        if (self.failOnTasksCancelled) {
+            return errors.throwError("Cannot register onTasksCancelled", .{});
+        }
         return .{ .context = ptr, .key = 0, .function = unsubscribe };
     }
 
@@ -998,6 +1005,22 @@ test "shutdown: should unsubscribe from all backend events on shutdown" {
     try std.testing.expect(mockTestBackend.onAnyTaskMessageUnsubscribeCalled);
     try std.testing.expect(mockTestBackend.onTaskAddedUnsubscribeCalled);
     testQueue.deinit();
+}
+
+test "TaskQueue.init fails and removes the subscriptions it already made when the backend cannot register the last one" {
+    var fixture: Fixture = undefined;
+    try fixture.init(2);
+    defer fixture.deinit();
+
+    var failingBackend: RecordingBackend = std.mem.zeroes(RecordingBackend);
+    failingBackend.failOnTasksCancelled = true;
+    setQueueBackend(failingBackend.queueBackend());
+    try std.testing.expectError(error.Thrown, TaskQueue.init(fixture.allocator(), std.testing.io, fixture.uuidGenerator.uuidGenerator(), "test-init-fails"));
+
+    // The subscriptions made before the failure are removed again, not left pointing at the freed queue.
+    try std.testing.expect(failingBackend.onTaskAddedUnsubscribeCalled);
+    try std.testing.expect(failingBackend.onTaskCompleteUnsubscribeCalled);
+    try std.testing.expect(failingBackend.onAnyTaskMessageUnsubscribeCalled);
 }
 
 test "source isolation: tasks from source A do not trigger completion callbacks of source B" {
@@ -1406,4 +1429,66 @@ test "awaitTask: callers awaiting different tasks each resolve when their own ta
     secondThread.join();
     try std.testing.expect(returned[0].load(.acquire));
     try std.testing.expect(returned[1].load(.acquire));
+}
+
+//
+// A handler whose output is a number that is not a number: it serializes to text that is not JSON,
+// so the queue cannot read the completion event back.
+//
+fn malformedOutputHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
+    _ = allocator;
+    _ = io;
+    _ = data;
+    _ = context;
+    return .{ .number_string = "not-a-number" };
+}
+
+test "awaitAllTasks: fails when a completion event cannot be read back, and leaves no waiter registered" {
+    var fixture: Fixture = undefined;
+    try fixture.init(2);
+    defer fixture.deinit();
+    try registerHandler("malformed-task", malformedOutputHandler);
+
+    _ = try fixture.queue.addTask("malformed-task", .null, null, null);
+    try std.testing.expectError(error.SyntaxError, fixture.queue.awaitAllTasks());
+    try std.testing.expectEqual(@as(usize, 0), fixture.queue.awaitAllResolvers.items.len);
+}
+
+test "awaitTask: fails when a completion event cannot be read back, and leaves no waiter registered" {
+    var fixture: Fixture = undefined;
+    try fixture.init(2);
+    defer fixture.deinit();
+    try registerHandler("malformed-task", malformedOutputHandler);
+
+    const taskId = try fixture.queue.addTask("malformed-task", .null, null, null);
+    try std.testing.expectError(error.SyntaxError, fixture.queue.awaitTask(taskId));
+    try std.testing.expectEqual(@as(usize, 0), fixture.queue.awaitTaskResolvers.items.len);
+}
+
+//
+// Releases the blocked task once an awaitTask caller is waiting (runs on a helper thread).
+//
+fn unblockWhenTaskAwaited(queue: *TaskQueue) void {
+    waitForWaiters(queue, 0, 1);
+    task_unblocked.set(std.testing.io);
+}
+
+test "awaitTask: fails with the allocation error when the result cannot be copied for the caller" {
+    var fixture: Fixture = undefined;
+    try fixture.init(2);
+    defer fixture.deinit();
+    try registerHandler("slow-task", slowBlockedHandler);
+    task_unblocked.reset();
+
+    // A queue whose allocator can be made to fail (the awaitTask result is copied with the queue's allocator).
+    var failingAllocator = std.testing.FailingAllocator.init(fixture.allocator(), .{});
+    const queue = try TaskQueue.init(failingAllocator.allocator(), std.testing.io, fixture.uuidGenerator.uuidGenerator(), "test-copy-fails");
+    defer queue.deinit();
+
+    const taskId = try queue.addTask("slow-task", .null, null, null);
+    failingAllocator.fail_index = failingAllocator.alloc_index;
+    const helper = try std.Thread.spawn(.{}, unblockWhenTaskAwaited, .{queue});
+    const result = queue.awaitTask(taskId);
+    helper.join();
+    try std.testing.expectError(error.OutOfMemory, result);
 }

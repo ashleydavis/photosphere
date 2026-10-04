@@ -161,11 +161,21 @@ wait_for_log "$TMP_DIR" "Open database dialog opened"
 # Assert which entry index 0 is before clicking it, rather than trusting the list order. The button's
 # text is the entry name followed by its path.
 wait_for_value "$APP_PORT" "database-list-item-0" "$DB_NAME"
+OPEN_LOG_CURSOR="$(cat "$TMP_DIR/.log-cursor")"
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
 
 wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded"
 send_command "$APP_PORT" navigate '{"page":"/"}' || exit 1
 wait_for_log "$TMP_DIR" "Gallery loaded: 1 assets"
+
+# The app logs "Database opened" once it has finished recording the opening in the recents, which can
+# land before or after the gallery lines above, so it is searched for from before the open. Closing the
+# database before it lands makes the late recording undo itself and refresh the databases page, which
+# tears down the actions menu opened further on (the replicate button is then not found, seen under load).
+GALLERY_LOG_CURSOR="$(cat "$TMP_DIR/.log-cursor")"
+echo "$OPEN_LOG_CURSOR" > "$TMP_DIR/.log-cursor"
+wait_for_log "$TMP_DIR" "Database opened: $(basename "$S3_DB_PATH")"
+echo "$GALLERY_LOG_CURSOR" > "$TMP_DIR/.log-cursor"
 log_success "The shared S3 credentials and encryption key both work from inside the embedded JS engine"
 
 # --- 4. Close the database through the app's own UI. ---

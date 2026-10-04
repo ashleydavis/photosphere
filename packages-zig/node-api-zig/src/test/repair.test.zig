@@ -294,3 +294,34 @@ test "a full repair hashes every file, and puts right the hash of a record" {
     const record = (try target.database.metadataCollection.getOne(io, V6_ASSET_ID)).?;
     try std.testing.expect(!std.mem.eql(u8, "0000", record.get("hash").?.string));
 }
+
+// The error of a copy that fails is logged and the file is reported as unrepaired (TypeScript: the catch of
+// repairFile).
+test "reports a file as unrepaired when it cannot be copied into the database" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const target = try copyV6(allocator, io);
+    defer helpers.removeTempDir(io, std.fs.path.dirname(target.dir).?);
+    const source = try copyV6(allocator, io);
+    defer helpers.removeTempDir(io, std.fs.path.dirname(source.dir).?);
+
+    // The asset is missing from the target, and a directory sits where the copy would be written.
+    const assetPath = "asset/" ++ V6_ASSET_ID;
+    try target.storage.deleteFile(allocator, io, assetPath);
+    try std.Io.Dir.cwd().createDirPath(io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ target.dir, assetPath }));
+
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    helpers.captureStderr(&stderr_capture.writer);
+    defer helpers.endConsoleCapture();
+
+    const result = try repair(allocator, io, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
+        .source = source.dir,
+    }, null);
+
+    try std.testing.expect(containsName(result.removed, assetPath));
+    try std.testing.expect(containsName(result.unrepaired, assetPath));
+    try std.testing.expectEqual(@as(usize, 0), result.repaired.len);
+    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Error repairing file " ++ assetPath) != null);
+}

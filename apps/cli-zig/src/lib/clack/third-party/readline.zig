@@ -220,7 +220,8 @@ fn parseCsiCommand(cmd: []const u8, code: *std.ArrayList(u8), allocator: std.mem
         if (rest.len == 1 and (rest[0] == '~' or rest[0] == '^' or rest[0] == '$')) {
             try code.appendSlice(allocator, number);
             try code.append(allocator, rest[0]);
-            modifier.* = if (modifier_digit) |digit| digit - '0' - 1 else 0;
+            // A digit of 0 is -1 in emitKeys (every modifier bit set), so the subtraction wraps.
+            modifier.* = if (modifier_digit) |digit| @as(u32, digit - '0') -% 1 else 0;
             return true;
         }
     }
@@ -243,7 +244,7 @@ fn parseCsiCommand(cmd: []const u8, code: *std.ArrayList(u8), allocator: std.mem
         }
         if (matched) {
             try code.append(allocator, cmd[cmd.len - 1]);
-            modifier.* = if (modifier_text) |digit| digit - '0' - 1 else 0;
+            modifier.* = if (modifier_text) |digit| @as(u32, digit - '0') -% 1 else 0;
             return true;
         }
     }
@@ -626,7 +627,10 @@ pub const Interface = struct {
                 self.deleteLeft();
             }
             else if (std.mem.eql(u8, name, "d")) {
-                if (self.cursor < self.line.items.len) {
+                if (self.cursor == 0 and self.line.items.len == 0) {
+                    self.close();
+                }
+                else if (self.cursor < self.line.items.len) {
                     self.deleteRight();
                 }
             }
@@ -858,15 +862,22 @@ pub const PromptInput = struct {
                 continue;
             }
             self.reader.fillMore() catch |err| switch (err) {
-                error.EndOfStream => {
-                    if (self.exitAtEnd) {
-                        try self.setRawMode(false);
-                        std.process.exit(0);
-                    }
-                    return error.EndOfStream;
-                },
+                error.EndOfStream => try self.endInput(),
                 else => return err,
             };
         }
+    }
+
+    //
+    // Ends the input for good: the end of the stream, or the readline interface closed (Ctrl+D on an empty
+    // line pauses the input). For process.stdin nothing then keeps the process alive, so it exits with 0;
+    // other inputs return error.EndOfStream.
+    //
+    pub fn endInput(self: *PromptInput) !noreturn {
+        if (self.exitAtEnd) {
+            try self.setRawMode(false);
+            std.process.exit(0);
+        }
+        return error.EndOfStream;
     }
 };

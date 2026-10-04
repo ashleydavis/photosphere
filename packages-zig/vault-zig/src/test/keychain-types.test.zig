@@ -75,6 +75,47 @@ test "spawn fails when the child exits without reading its input" {
 }
 
 //
+// Runs spawn, for the test below to run it as a task that can be cancelled.
+//
+fn spawnTask(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8) anyerror!keychain_types.ISpawnResult {
+    return keychain_types.spawn(allocator, io, args, null);
+}
+
+//
+// A task that is cancelled while spawn waits for the output of a child that is still running stops waiting and fails
+// with the cancellation, and does not return the output it has read so far. The child tells the test it is running by
+// creating a file, so the cancellation comes while spawn is waiting, not before it has started the child.
+//
+test "spawn stops waiting for the child's output when its task is cancelled" {
+    if (builtin.os.tag == .windows) {
+        return;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var tmpDir = std.testing.tmpDir(.{});
+    defer tmpDir.cleanup();
+    const currentPath = try std.process.currentPathAlloc(io, allocator);
+    const readyPath = try std.fs.path.join(allocator, &.{ currentPath, ".zig-cache", "tmp", &tmpDir.sub_path, "ready" });
+    const args: []const []const u8 = &.{ "sh", "-c", try std.fmt.allocPrint(allocator, "echo started; touch '{s}'; exec sleep 60", .{readyPath}) };
+
+    var future = try io.concurrent(spawnTask, .{ allocator, io, args });
+    var waitedMilliseconds: i64 = 0;
+    while (true) {
+        tmpDir.dir.access(io, "ready", .{}) catch |err| {
+            try std.testing.expectEqual(error.FileNotFound, err);
+            try std.testing.expect(waitedMilliseconds < 30_000);
+            try io.sleep(.fromMilliseconds(10), .awake);
+            waitedMilliseconds += 10;
+            continue;
+        };
+        break;
+    }
+    try std.testing.expectError(error.Canceled, future.cancel(io));
+}
+
+//
 // A fake spawn function that always succeeds with a fixed stdout.
 //
 fn fixedSpawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, stdinData: ?[]const u8) anyerror!keychain_types.ISpawnResult {

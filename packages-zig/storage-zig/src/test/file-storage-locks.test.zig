@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const builtin = @import("builtin");
 const storage_zig = @import("storage-zig");
 const node_utils = @import("node-utils-zig");
 const utils = @import("utils-zig");
@@ -711,4 +712,109 @@ test "a lock whose acquiredAt is not a date reads as corrupt and the lock is tak
     try std.testing.expect(try storage.acquireWriteLock(allocator, io, lockFilePath, "new-owner"));
     const lockInfo = (try storage.checkWriteLock(allocator, io, lockFilePath)).?;
     try std.testing.expectEqualStrings("new-owner", lockInfo.owner);
+}
+
+//
+// Refuses its first allocation and serves every later one from the parent. (std.testing.FailingAllocator refuses
+// every allocation from its fail index on, so it cannot make one read fail and the next succeed.)
+//
+const FailFirstAllocator = struct {
+    // Serves the allocations after the first.
+    parent: std.mem.Allocator,
+
+    // True once the first allocation has been refused.
+    refused: bool,
+
+    fn allocator(self: *FailFirstAllocator) std.mem.Allocator {
+        return .{
+            .ptr = self,
+            .vtable = &.{
+                .alloc = alloc,
+                .resize = resize,
+                .remap = remap,
+                .free = free,
+            },
+        };
+    }
+
+    fn alloc(context: *anyopaque, length: usize, alignment: std.mem.Alignment, return_address: usize) ?[*]u8 {
+        const self: *FailFirstAllocator = @ptrCast(@alignCast(context));
+        if (!self.refused) {
+            self.refused = true;
+            return null;
+        }
+        return self.parent.rawAlloc(length, alignment, return_address);
+    }
+
+    fn resize(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_length: usize, return_address: usize) bool {
+        const self: *FailFirstAllocator = @ptrCast(@alignCast(context));
+        return self.parent.rawResize(memory, alignment, new_length, return_address);
+    }
+
+    fn remap(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_length: usize, return_address: usize) ?[*]u8 {
+        const self: *FailFirstAllocator = @ptrCast(@alignCast(context));
+        return self.parent.rawRemap(memory, alignment, new_length, return_address);
+    }
+
+    fn free(context: *anyopaque, memory: []u8, alignment: std.mem.Alignment, return_address: usize) void {
+        const self: *FailFirstAllocator = @ptrCast(@alignCast(context));
+        self.parent.rawFree(memory, alignment, return_address);
+    }
+};
+
+//
+// A lock that cannot be read the first time but can the second is a lock somebody holds, not a corrupt one,
+// and must be left alone. Running out of memory while reading the lock is how a test makes the first read fail
+// with nothing wrong with the file, and it is a real way for that read to fail.
+//
+test "a lock that is refused to be read once, and then reads fine, is held and not broken as corrupt" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tempDir = try helpers.makeTempDir(allocator, io, "temp-test-lock-read-twice");
+    defer helpers.removeTempDir(io, tempDir);
+    var storage = FileStorage.init(tempDir);
+
+    const lockFilePath = try std.fmt.allocPrint(allocator, "{s}/held.lock", .{tempDir});
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, lockFilePath, "first-owner"));
+
+    // The first allocation acquireWriteLock makes is the room to read the lock file into, and it is refused.
+    var failFirstAllocator: FailFirstAllocator = .{
+        .parent = allocator,
+        .refused = false,
+    };
+    try std.testing.expect(!try storage.acquireWriteLock(failFirstAllocator.allocator(), io, lockFilePath, "second-owner"));
+    try std.testing.expect(failFirstAllocator.refused);
+
+    const lockInfo = (try storage.checkWriteLock(allocator, io, lockFilePath)).?;
+    try std.testing.expectEqualStrings("first-owner", lockInfo.owner);
+}
+
+//
+// createFile with the exclusive flag refuses a path that is a symbolic link, even one that points at nothing, so
+// a lock path holding a dangling link looks absent to the check for an existing lock and is then refused by the
+// exclusive create, which is the same refusal two processes racing to create the lock file get.
+//
+test "a lock path that is a dangling symbolic link is refused as taken, and the link is left alone" {
+    if (builtin.os.tag == .windows) {
+        // Creating a symbolic link on Windows needs a privilege a test run does not have.
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tempDir = try helpers.makeTempDir(allocator, io, "temp-test-lock-dangling-link");
+    defer helpers.removeTempDir(io, tempDir);
+    var storage = FileStorage.init(tempDir);
+
+    const lockFilePath = try std.fmt.allocPrint(allocator, "{s}/linked.lock", .{tempDir});
+    try std.Io.Dir.cwd().symLink(io, "nothing-is-here", lockFilePath, .{});
+
+    try std.testing.expect(!try storage.acquireWriteLock(allocator, io, lockFilePath, "new-owner"));
+
+    var linkTarget: [64]u8 = undefined;
+    const targetLength = try std.Io.Dir.cwd().readLink(io, lockFilePath, &linkTarget);
+    try std.testing.expectEqualStrings("nothing-is-here", linkTarget[0..targetLength]);
 }

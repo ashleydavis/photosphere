@@ -9,6 +9,7 @@ const encryption = @import("encryption-zig");
 const node_api = @import("node-api-zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const sync_helpers = @import("sync-test-helpers.zig");
+const helpers = @import("test-helpers.zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const errors = utils.errors;
 const HashedItem = merkle_tree.HashedItem;
@@ -396,4 +397,30 @@ test "encrypt tree entries for tree-tracked files use logical hash, length, last
     try std.testing.expectEqualSlices(u8, &contentHash, itemInfo.?.hash);
     try std.testing.expectEqual(@as(u64, logicalContent.len), itemInfo.?.length);
     try std.testing.expect(itemInfo.?.lastModified > 0);
+}
+
+// The error of a file that cannot be written is the error of the whole encrypt (TypeScript: the rejection of
+// Promise.all).
+test "encrypt fails with the error of a file that cannot be written" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var capture: sync_helpers.Capture = undefined;
+    capture.start(allocator);
+    defer capture.stop();
+    const keyPair = try getEncryptKeyPair();
+    var readStore = MemoryStorage.init(allocator);
+    const readStorage = readStore.asStorage();
+    const tree = try buildMinimalFilesTree(allocator, &.{"some/file.dat"});
+    try merkle_tree.saveTree(allocator, io, FILES_TREE_PATH, &tree, readStorage, "FTRE");
+    try readStorage.write(allocator, io, "some/file.dat", "application/octet-stream", "file content");
+
+    // A directory sits where the encrypted file would be written.
+    const writeDir = try helpers.makeTempDir(allocator, io, "encrypt-write-failure");
+    defer helpers.removeTempDir(io, writeDir);
+    try std.Io.Dir.cwd().createDirPath(io, try std.fmt.allocPrint(allocator, "{s}/some/file.dat", .{writeDir}));
+    const writeStorage = try helpers.directoryStorage(allocator, io, writeDir);
+
+    try std.testing.expectError(error.IsDir, encrypt(allocator, io, readStorage, writeStorage, noProgress, keyPair.publicKey, readStorage));
 }

@@ -427,6 +427,31 @@ test "load throws a YAMLException for what js-yaml refuses, and for the construc
     }
 }
 
+// js-yaml drops a UTF-8 byte order mark at the start of the document (`if (input.charCodeAt(0) === 0xFEFF) input =
+// input.slice(1)`), so a file an editor saved with one reads as it would without.
+test "load skips a byte order mark at the start of the document, as js-yaml does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const value = try yaml.load(allocator, "\xEF\xBB\xBFa: 1\n");
+    try std.testing.expectEqual(@as(usize, 1), value.object.count());
+    try std.testing.expectEqual(@as(i64, 1), value.object.get("a").?.integer);
+}
+
+// js-yaml refuses an empty item between commas in a flow collection ("expected the node content, but found ','").
+test "load refuses an empty item in a flow collection, as js-yaml does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    for ([_][]const u8{ "a: [a,,b]\n", "a: [,]\n", "a: {a: 1,, b: 2}\n" }) |source| {
+        errdefer std.debug.print("case: {s}\n", .{source});
+        try std.testing.expectError(error.Thrown, yaml.load(allocator, source));
+        try std.testing.expectEqualStrings("YAMLException", utils.errors.lastErrorName());
+    }
+}
+
 test "dump quotes, escapes and folds strings, and orders keys, like js-yaml" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -581,4 +606,33 @@ test "load reads a flow collection that is the whole document, and refuses an es
     // "a: \"\\x4" ends before the second hexadecimal digit: "expected hexadecimal character".
     try std.testing.expectError(error.Thrown, yaml.load(allocator, "a: \"\\x4"));
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "expected hexadecimal character"));
+}
+
+// A word of fifty "a", so that two or three of them on a line are longer than the folding width.
+const WORD_A = "a" ** 50;
+
+// A word of fifty "b".
+const WORD_B = "b" ** 50;
+
+test "dump folds a last word that makes the line too long, and leaves empty and more-indented lines unfolded, like js-yaml" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // The break is inserted before the last word: nothing in the line is over the width until its end.
+    // An empty first line and a more-indented line are each kept as they are, not folded.
+    try expectDumps(allocator, &.{
+        .{
+            .json = "{\"a\":\"" ++ WORD_A ++ " " ++ WORD_B ++ "\"}",
+            .yaml = "a: >-\n  " ++ WORD_A ++ "\n  " ++ WORD_B ++ "\n",
+        },
+        .{
+            .json = "{\"a\":\"\\n\\n" ++ WORD_A ++ " " ++ WORD_B ++ " " ++ WORD_A ++ "\\n\"}",
+            .yaml = "a: >\n\n\n  " ++ WORD_A ++ "\n  " ++ WORD_B ++ "\n  " ++ WORD_A ++ "\n",
+        },
+        .{
+            .json = "{\"a\":\"" ++ WORD_A ++ " " ++ WORD_B ++ " " ++ WORD_A ++ "\\n  " ++ WORD_A ++ " " ++ WORD_B ++ "\\nlast\"}",
+            .yaml = "a: >-\n  " ++ WORD_A ++ "\n  " ++ WORD_B ++ "\n  " ++ WORD_A ++ "\n    " ++ WORD_A ++ " " ++ WORD_B ++ "\n  last\n",
+        },
+    });
 }

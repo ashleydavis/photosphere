@@ -814,7 +814,7 @@ test "sits under the platform cache directory, not the process temp directory" {
     try helpers.setEnv("PHOTOSPHERE_CACHE_DIR", try path.join(allocator, &.{ runRoot, "cache" }));
     defer helpers.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
     try helpers.setEnv("PHOTOSPHERE_TMP_DIR", try path.join(allocator, &.{ runRoot, "scratch" }));
-    defer helpers.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
+    defer helpers.restoreTmpDir() catch {};
 
     const cacheDir = try getHashCacheDir(allocator, "/photos/one");
 
@@ -843,8 +843,8 @@ test "is still found once the process temp directory has been taken away" {
     try helpers.setEnv("PHOTOSPHERE_CACHE_DIR", try path.join(allocator, &.{ runRoot, "cache" }));
     defer helpers.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
     try helpers.setEnv("PHOTOSPHERE_TMP_DIR", try path.join(allocator, &.{ runRoot, "scratch" }));
-    defer helpers.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
-    try std.Io.Dir.cwd().createDirPath(io, try getProcessTmpDir(allocator, io));
+    defer helpers.restoreTmpDir() catch {};
+try std.Io.Dir.cwd().createDirPath(io, try getProcessTmpDir(allocator, io));
 
     var writer = try HashCache.init(try getHashCacheDir(allocator, "/photos/one"), false);
     defer writer.deinit();

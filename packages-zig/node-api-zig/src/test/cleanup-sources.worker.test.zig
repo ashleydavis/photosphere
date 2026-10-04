@@ -95,7 +95,7 @@ const CleanupTest = struct {
     // Puts the environment back and removes the directory.
     //
     fn deinit(self: *CleanupTest) void {
-        helpers.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
+        helpers.restoreTmpDir() catch {};
         helpers.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
         helpers.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();

@@ -511,6 +511,21 @@ test "Sign.sign refuses keys that cannot sign with SHA-256, with the errors Node
 }
 
 //
+// Signing with an RSA key whose modulus is too short to hold a SHA-256 PKCS#1 v1.5 signature block fails with the
+// error Node reports (checked against Node 24 with the same key).
+//
+test "Sign.sign reports the Node error for an RSA key that is too small to sign with SHA-256" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const keyPair = try crypto.generateKeyPairSync(allocator, std.testing.io, 384);
+    var signer = try crypto.createSign(allocator, "SHA256");
+    try signer.update("x");
+    try std.testing.expectError(error.Thrown, signer.sign(allocator, keyPair.privateKey));
+    try std.testing.expectEqualStrings("error:02000070:rsa routines::digest too big for rsa key", utils.errors.lastErrorMessage());
+}
+
+//
 // Decodes the base64 body of a PEM text.
 //
 fn pemBody(allocator: std.mem.Allocator, pem: []const u8) ![]u8 {

@@ -56,7 +56,7 @@ pub fn build(b: *std.Build) !void {
     // (the signal handlers above all) are counted too.
     test_options.addOptionPath("termination_child_path", if (coverage_dir) |directory| coverageWrapper(b, termination_child, directory, target).getEmittedBin() else termination_child.getEmittedBin());
 
-    const test_file = b.option([]const u8, "test-file", "Only run the tests of this file (e.g. path.test.zig)");
+    const test_file = b.option([]const []const u8, "test-file", "Only run the tests of this file (e.g. path.test.zig); pass it more than once for several files");
     const test_step = b.step("test", "Run unit tests");
     // Every test file but termination.test.zig is compiled into one test program, whose root imports each of them.
     // Compiled one program per file, each linked the package and everything it depends on again, which was most of
@@ -65,6 +65,7 @@ pub fn build(b: *std.Build) !void {
     const test_files = b.addWriteFiles();
     _ = test_files.addCopyDirectory(b.path("src"), "src", .{});
     var test_root_source: std.ArrayList(u8) = .empty;
+    var termination_test_run: ?*std.Build.Step.Run = null;
     try test_root_source.appendSlice(b.allocator, "test {\n");
     var test_dir = try b.build_root.handle.openDir(b.graph.io, "src/test", .{ .iterate = true });
     defer test_dir.close(b.graph.io);
@@ -74,8 +75,14 @@ pub fn build(b: *std.Build) !void {
         if (entry.kind != .file or !std.mem.endsWith(u8, entry.path, ".test.zig")) {
             continue;
         }
-        if (test_file) |only_file| {
-            if (!std.mem.eql(u8, entry.path, only_file)) {
+        if (test_file) |only_files| {
+            var is_wanted = false;
+            for (only_files) |only_file| {
+                if (std.mem.eql(u8, entry.path, only_file)) {
+                    is_wanted = true;
+                }
+            }
+            if (!is_wanted) {
                 continue;
             }
         }
@@ -96,6 +103,7 @@ pub fn build(b: *std.Build) !void {
             // traced child cannot run under a kcov of its own. The child is where termination.zig is counted.)
             const run_termination_test = b.addRunArtifact(termination_test);
             test_step.dependOn(&run_termination_test.step);
+            termination_test_run = run_termination_test;
             continue;
         }
         try test_root_source.appendSlice(b.allocator, b.fmt("    _ = @import(\"{s}\");\n", .{entry.path}));
@@ -111,6 +119,14 @@ pub fn build(b: *std.Build) !void {
     const run_test = if (coverage_dir) |directory| addCoverageRun(b, unit_test, directory) else b.addRunArtifact(unit_test);
     run_test.setCwd(b.path("."));
     test_step.dependOn(&run_test.step);
+    if (coverage_dir != null) {
+        // The termination tests start the termination child under a kcov of its own, which writes to the coverage
+        // directory the kcov of the unit tests is writing to. Run at the same time, the two ended the unit test
+        // program with a segmentation fault in _dl_fini, so the termination tests wait for the unit tests.
+        if (termination_test_run) |run_termination_test| {
+            run_termination_test.step.dependOn(&run_test.step);
+        }
+    }
 }
 
 //

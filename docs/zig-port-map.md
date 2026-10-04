@@ -686,7 +686,7 @@ The Zig file is under lib/. See "Divergences fixed" for credentials without a re
 | none | `IListAssetsResult` | The TypeScript interface of the same name, as a struct. |
 | none | `AssetExportType` | The string union type, as an enum. |
 | none | `isTruthy` | The truthiness tests of optional strings. |
-| none | `stringField` | `asset.field \|\| ""`. |
+| none | `stringField` | `asset.field \|\| ""`. Divergence (rank C, noted in the Zig as a TODO): a field that is present but is not text reads as `""`, where `asset.field \|\| ""` carries the value through and `.toLowerCase()` of a number throws. The fields this filters on are text. |
 | none | `photoDateMs` | `!asset.photoDate` and `Date.parse(asset.photoDate)`. |
 
 #### `packages/api/src/lib/asset.ts` to no Zig file
@@ -740,7 +740,7 @@ Not reached by the CLI: only the mobile app and the desktop's config and default
 |---|---|---|
 | `loadDatabaseConfig` | `loadDatabaseConfig` |  |
 | `saveDatabaseConfig` | `saveDatabaseConfig` |  |
-| `updateDatabaseConfig` | `updateDatabaseConfig` |  |
+| `updateDatabaseConfig` | `updateDatabaseConfig` | Divergence (rank C, noted in the Zig): a `Partial<IDatabaseConfig>` is an `IDatabaseConfig` with `origin` optional, so a null `origin` is absent from the merge. In TypeScript a key present with the value undefined overwrites the existing one and clears it. No caller clears the origin. |
 | none | `IDatabaseConfig` | The TypeScript interface of the same name, as a struct. |
 | none | `ReadConfigOperation` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
 | none | `ReadConfigOperation.run` | Zig plumbing: the arrow function TypeScript passes to `retry`, as a struct with `run`. |
@@ -774,7 +774,7 @@ Types only; the database operations are not reached by the CLI.
 | `deserializeAnyDatabaseState` | `deserializeAnyDatabaseState` |  |
 | `loadDatabaseState` | `loadDatabaseState` |  |
 | `saveDatabaseState` | `saveDatabaseState` |  |
-| `mergeDatabaseState` | `mergeDatabaseState` |  |
+| `mergeDatabaseState` | `mergeDatabaseState` | Divergence (rank C, noted in the Zig): as for `updateDatabaseConfig`, a field the partial leaves null is absent from the merge, where TypeScript's undefined overwrites and clears the existing value. No caller clears a field. |
 | `updateDatabaseStateLocked` | `updateDatabaseStateLocked` |  |
 | none | `IDatabaseState` | The TypeScript interface of the same name, as a struct. |
 
@@ -1913,7 +1913,7 @@ Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` regi
 | TypeScript | Zig | Notes |
 |---|---|---|
 | `parseEncryptionKeyFromVaultValue` | `parseEncryptionKeyFromVaultValue` |  |
-| `resolveStorageCredentials` | `resolveStorageCredentials` |  |
+| `resolveStorageCredentials` | `resolveStorageCredentials` | Divergence (rank B, noted in the Zig as a TODO): `accessKeyId` and `secretAccessKey` read as `""` when the stored S3 secret does not hold them, where `parsed.accessKeyId` is undefined in TypeScript (`IS3Credentials` types them as required, so the Zig has no way to carry an absent one). |
 | `resolveEncryptionKeyValue` | `resolveEncryptionKeyValue` |  |
 | none | `IResolvedStorageCredentials` | The TypeScript interface of the same name, as a struct. |
 | none | `isTruthy` | JavaScript truthiness of an optional string. |
@@ -2008,7 +2008,7 @@ Not reached by the CLI: a desktop or mobile worker task. `initTaskHandlers` regi
 | `throughTheDatabases` | `throughTheDatabases` |  |
 | `chooseHowToPushBytes` | `chooseHowToPushBytes` |  |
 | `pushFiles` | `pushFiles` |  |
-| `iterateLeaves` | `iterateLeaves` |  |
+| `iterateLeaves` | `iterateLeaves` | Re-compared: a leaf with an empty name now throws `Leaf node has no name`, as `!node.name` does (the earlier TODO is gone). Matches. |
 | `iterateShardDifferences` | `iterateShardDifferences` |  |
 | `iterateCollectionDifferences` | `iterateCollectionDifferences` |  |
 | `iterateDatabaseDifferences` | `iterateDatabaseDifferences` |  |
@@ -2445,7 +2445,7 @@ Types and re-exports only: nothing of it is left in the bundled CLI.
 
 | TypeScript | Zig | Notes |
 |---|---|---|
-| `formatFileSize` | `formatFileSize` |  |
+| `formatFileSize` | `formatFileSize` | Re-compared: from a petabyte up `sizes[i]` is undefined and the unit is written as `undefined`, in both (the Zig comment that called this a divergence was reworded). Matches. |
 
 #### `packages/utils/src/lib/image.ts` to `packages-zig/utils-zig/src/lib/image.zig`
 
@@ -2576,7 +2576,7 @@ Types and re-exports only: nothing of it is left in the bundled CLI.
 
 | TypeScript | Zig | Notes |
 |---|---|---|
-| `sleep` | `sleep` |  |
+| `sleep` | `sleep` | Re-compared: the delay goes through `setTimeoutDelay`, so a delay under 1 ms (and NaN, and past 2147483647 ms) waits 1 ms, as `setTimeout` does. A Windows sleep that wakes early sleeps again for the rest. Matches. |
 
 #### `packages/utils/src/lib/swallow-error.ts` to `packages-zig/utils-zig/src/lib/swallow-error.zig`
 
@@ -2676,7 +2676,7 @@ Types and re-exports only: nothing of it is left in the bundled CLI.
 |---|---|---|
 | `encryptBuffer` | `encryptBuffer` |  |
 | `requireWrappableKey` | `requireWrappableKey` |  |
-| `decryptBuffer` | `decryptBuffer` |  |
+| `decryptBuffer` | `decryptBuffer` | Re-compared: when the data carries the tag, the thrown message is `Could not decrypt data that says it is encrypted: <cause message>` with the cause attached, in both. Every error `decryptNewFormat` can give except `OutOfMemory` is a thrown one with a recorded message (the Zig `switch` stops compiling if it gains another kind), so the message of the cause is always the TypeScript one. Matches. |
 | `decryptNewFormat` | `decryptNewFormat` |  |
 | `decryptLegacy` | `decryptLegacy` |  |
 | none | `normalizeEncryptionType` | Replaces `.toString("ascii").replace(/\0/g, "").trim()` of the type field. |
@@ -2737,7 +2737,7 @@ Types and re-exports only: nothing of it is left in the bundled CLI.
 
 | Zig file | What it is |
 |---|---|
-| `packages-zig/encryption-zig/src/lib/node-crypto.zig` | Replaces the node:crypto functions the encryption uses (RSA-OAEP, AES-256-CBC, key import and export, random bytes, signing), on OpenSSL's libcrypto. |
+| `packages-zig/encryption-zig/src/lib/node-crypto.zig` | Replaces the node:crypto functions the encryption uses (RSA-OAEP, AES-256-CBC, key import and export, random bytes, signing), on OpenSSL's libcrypto. Since the audit, `Sign.sign` throws Node's OpenSSL 3 messages for an Ed25519 key (`Unsupported crypto operation`), an X25519 key (`error:03000096:digital envelope routines::operation not supported for this keytype`) and a digest too big for an RSA key (`error:02000070:rsa routines::digest too big for rsa key`). The TypeScript CLI runs on Bun, which says `error:06000065:public key routines:OPENSSL_internal:COMMAND_NOT_SUPPORTED`, `error:0600007d:public key routines:OPENSSL_internal:OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE` and `Failed to create signature` for the same three keys (run in Bun here). Divergence, rank C: the only signer is the LAN share receiver's self-signed certificate, which always uses an RSA key it generated. |
 
 <!-- end tables -->
 
@@ -2851,7 +2851,7 @@ Types and re-exports only: nothing of it is left in the bundled CLI.
 | none | `VaultFileSerialize` | The serialize arrow function updateVaultFile passes to updateFileOptimistic. |
 | none | `VaultFileSerialize.run` | The serialize arrow function updateVaultFile passes to updateFileOptimistic. |
 | none | `VaultFileMutator` | The mutator arrow function updateVaultFile passes to updateFileOptimistic. |
-| none | `toSecret` | Reads a secret out of the parsed vault file as an ISecret. |
+| none | `toSecret` | Reads a secret out of the parsed vault file as an ISecret. Divergence (rank B, noted in the Zig as a TODO): `get` and `list` of the TypeScript vault hand back `contents[name]` and `Object.values(contents)` as they are, so a vault file entry that is not a secret (a number, an object without the fields) is returned and the caller reads whatever fields it finds. The Zig throws `The vault file holds an entry that is not a secret: <error name>`. |
 | none | `fromSecret` | The object a secret is stored as. |
 | none | `SetSecretMutator` | The arrow function PlaintextVault.set passes to updateVaultFile. |
 | none | `SetSecretMutator.run` | The arrow function PlaintextVault.set passes to updateVaultFile. |
@@ -2919,8 +2919,8 @@ Types and re-exports only: nothing of it is left in the bundled CLI.
 | TypeScript | Zig | Notes |
 |---|---|---|
 | `levenshteinDistance` | `levenshteinDistance` |  |
-| `fuzzyMatch` | `fuzzyMatch` |  |
-| none | `toCodeUnits` | Converts UTF-8 to the UTF-16 code units a JavaScript string is made of. |
+| `fuzzyMatch` | `fuzzyMatch` | Divergence (rank B, noted in the Zig as TODOs): the query and each candidate are lowercased for ASCII letters only, where `toLowerCase` lowercases every letter with a lowercase form. A query and a candidate that differ only in the case of a non-ASCII letter are one string in TypeScript (distance 0, so skipped) and two here (returned), and the threshold `floor(lowerQuery.length / 4)` is taken from the lowercased length, which `toLowerCase` can change for a few letters. Reached by the "did you mean" suggestions of `psi init`. |
+| none | `toCodeUnits` | Converts UTF-8 to the UTF-16 code units a JavaScript string is made of. Divergence (rank C, noted in the Zig): bytes that are not UTF-8 are compared a byte at a time, where a JavaScript string is always well-formed. |
 
 <!-- end tables -->
 
@@ -3090,14 +3090,14 @@ Types and re-exports only: nothing of it is left in the bundled CLI.
 | `BinaryDeserializer.readDouble` | `BinaryDeserializer.readDouble` |  |
 | `BinaryDeserializer.readBoolean` | `BinaryDeserializer.readBoolean` |  |
 | `BinaryDeserializer.readUInt8` | `BinaryDeserializer.readUInt8` |  |
-| `BinaryDeserializer.readString` | `BinaryDeserializer.readString` |  |
+| `BinaryDeserializer.readString` | `BinaryDeserializer.readString` | Divergence (rank B, noted in the Zig as a TODO): bytes that are not valid UTF-8 are returned as they are, where `toString("utf8")` replaces each invalid sequence with U+FFFD. Only a corrupt or hand-edited file reaches it. |
 | `BinaryDeserializer.readBuffer` | `BinaryDeserializer.readBuffer` |  |
 | `BinaryDeserializer.readBytes` | `BinaryDeserializer.readBytes` |  |
 | `BinaryDeserializer.readBSON` | `BinaryDeserializer.readBSON` |  |
 | `BinaryDeserializer.checkBounds` | `BinaryDeserializer.checkBounds` |  |
 | `UnsupportedVersionError` | `UnsupportedVersionError` |  |
 | `UnsupportedVersionError.constructor` | `UnsupportedVersionError.throw` | `throw new UnsupportedVersionError(...)`. |
-| `typeCodeToBuffer` | `typeCodeToBuffer` |  |
+| `typeCodeToBuffer` | `typeCodeToBuffer` | Divergence (rank C, noted in the Zig as a TODO): the bytes pass through, where `Buffer.from(typeCode, "ascii")` encodes a character above U+00FF as one latin1 byte. Every type code in the repository is four ASCII letters. |
 | `save` | `save` |  |
 | `load` | `load` |  |
 | `loadVersion` | `loadVersion` |  |
@@ -3158,7 +3158,7 @@ Types and re-exports only: nothing of it is left in the bundled CLI.
 | Zig file | What it is |
 |---|---|
 | `packages-zig/serialization-zig/src/lib/bson.zig` | Replaces the npm `bson` package (serialize and deserialize with default options). |
-| `packages-zig/serialization-zig/src/lib/js-date.zig` | Replaces JavaScript's Date parsing and formatting. |
+| `packages-zig/serialization-zig/src/lib/js-date.zig` | Replaces JavaScript's Date parsing and formatting. Since the audit: `parseDate` reads a single space as the date and time separator, as Bun's `new Date` does. Its comment says a date-time with no offset is local time "assumed to be UTC", which is a divergence wherever the time zone is not UTC (see `Image.getInfo`, rank A). |
 | `packages-zig/serialization-zig/src/lib/js-number.zig` | Re-exports utils-zig's `String(number)`. |
 | `packages-zig/serialization-zig/src/lib/json-parse.zig` | Replaces `JSON.parse`, producing a JavaScript value. |
 
@@ -3516,7 +3516,7 @@ Barrel file. `index.zig` re-exports the same modules, and also `types.zig` and `
 | `Image.getImageMagickType` | `Image.getImageMagickType` |  |
 | `Image.getImageInfo` | `Image.getImageInfo` |  |
 | `Image.getDimensions` | `Image.getDimensions` |  |
-| `Image.getInfo` | `Image.getInfo` |  |
+| `Image.getInfo` | `Image.getInfo` | Divergence (rank A): `createdAt` is `new Date("2023-12-25 14:30:00")`, which JavaScript reads as local time, and `js_date.parseDate` reads a date-time with no offset as UTC. With a time zone other than UTC the stored creation date of every image with an EXIF `DateTimeOriginal` is out by the zone's offset (Bun with `TZ=Australia/Sydney`: `new Date("2025-05-27 09:54:16").toISOString()` is `2025-05-26T23:54:16.000Z`). The TODO in `image.zig` that says `createdAt` is NaN is stale: `parseDate` has read the space separator since the serialization fix, and the unit test asserts the real date. |
 | `Image.getExifData` | `Image.getExifData` | The loop over the output lines is `parseExifOutput`. |
 | `Image.resize` | `Image.resize` |  |
 | `Image.saveAs` | none | Not reached by the CLI. |
@@ -3805,17 +3805,17 @@ The command line is defined in `createProgram` (main's `program...` calls, with 
 | `dbsEdit` | `dbsEdit` |  |
 | `dbsRemove` | `dbsRemove` |  |
 | `dbsClear` | `dbsClear` |  |
-| `dbsSend` | `dbsSend` |  |
+| `dbsSend` | `dbsSend` | Re-compared: waits `sender.waitForReceiver(60000)` by default, as TypeScript does. The wait is now `IDbsSendOptions.discoveryTimeoutMs`, a field only tests set (see that row). |
 | `buildConflictResolver` | `buildConflictResolver` |  |
-| `dbsReceive` | `dbsReceive` |  |
+| `dbsReceive` | `dbsReceive` | Re-compared: waits `new LanShareReceiver(60000)` by default, as TypeScript does. The wait is now `IDbsReceiveOptions.discoveryTimeoutMs`, a field only tests set (see that row). |
 | `resolveDatabaseNameConflict` | `resolveDatabaseNameConflict` |  |
 | none | `IDbsAddOptions` | The TypeScript interface of the same name, as a struct. |
 | none | `IDbsViewOptions` | The TypeScript interface of the same name, as a struct. |
 | none | `IDbsEditOptions` | The TypeScript interface of the same name, as a struct. |
 | none | `IDbsRemoveOptions` | The TypeScript interface of the same name, as a struct. |
-| none | `IDbsSendOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IDbsSendOptions` | The TypeScript interface of the same name, as a struct. Rule breach to resolve: its new field `discoveryTimeoutMs` exists only so a test can reach the "no receiver" branch in milliseconds. The CLI never sets it, so output is unchanged, but it is test only scaffolding in the app code, which needs the human's approval. |
 | none | `IDbsClearOptions` | The TypeScript interface of the same name, as a struct. |
-| none | `IDbsReceiveOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `IDbsReceiveOptions` | The TypeScript interface of the same name, as a struct. Rule breach to resolve: the same test only `discoveryTimeoutMs` field as `IDbsSendOptions`. |
 | none | `trim` | Replaces `text.trim()`. |
 | none | `format` | Replaces a template string. |
 | none | `padEnd` | Replaces `text.padEnd(length)`. |
@@ -4082,8 +4082,8 @@ The command line is defined in `createProgram` (main's `program...` calls, with 
 | `secretsRemove` | `secretsRemove` |  |
 | `secretsClear` | `secretsClear` |  |
 | `secretsImport` | `secretsImport` |  |
-| `secretsSend` | `secretsSend` |  |
-| `secretsReceive` | `secretsReceive` |  |
+| `secretsSend` | `secretsSend` | Re-compared: waits `sender.waitForReceiver(60000)` by default, as TypeScript does. The wait is now `ISecretsSendOptions.discoveryTimeoutMs`, a field only tests set. |
+| `secretsReceive` | `secretsReceive` | Re-compared: waits `new LanShareReceiver(60000)` by default, as TypeScript does. The wait is now `ISecretsReceiveOptions.discoveryTimeoutMs`, a field only tests set. |
 | none | `trim` | Replaces `text.trim()`. |
 | none | `format` | Replaces a template string. |
 | none | `padEnd` | Replaces `text.padEnd(length)`. |
@@ -4092,10 +4092,10 @@ The command line is defined in `createProgram` (main's `program...` calls, with 
 | none | `ISecretsViewOptions` | The TypeScript interface of the same name, as a struct. |
 | none | `ISecretsEditOptions` | The TypeScript interface of the same name, as a struct. |
 | none | `ISecretsRemoveOptions` | The TypeScript interface of the same name, as a struct. |
-| none | `ISecretsSendOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `ISecretsSendOptions` | The TypeScript interface of the same name, as a struct. Rule breach to resolve: its new field `discoveryTimeoutMs` exists only so a test can reach the "no receiver" branch in milliseconds (test only scaffolding in the app code, which needs the human's approval). |
 | none | `ISecretsImportOptions` | The TypeScript interface of the same name, as a struct. |
 | none | `ISecretsClearOptions` | The TypeScript interface of the same name, as a struct. |
-| none | `ISecretsReceiveOptions` | The TypeScript interface of the same name, as a struct. |
+| none | `ISecretsReceiveOptions` | The TypeScript interface of the same name, as a struct. Rule breach to resolve: the same test only `discoveryTimeoutMs` field as `ISecretsSendOptions`. |
 | none | `validateName` | The `validate` arrow function of the name prompts. |
 | none | `validateValue` | The `validate` arrow function of the value prompts. |
 | none | `validateMultilineValue` | The `validate` arrow function of the multiline value prompt. |

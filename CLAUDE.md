@@ -106,7 +106,8 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run test:cli:sync` - CLI sync smoke tests, several processes syncing at once
 - `bun run test:cli:write-lock` - CLI write lock smoke tests, several processes writing at once
 - `bun run test:cli:hash-cache` - CLI hash cache concurrency smoke tests
-- `bun run test:cli:zig` - Zig CLI smoke tests (apps/cli/smoke-tests-zig): the Zig port of `replicate` and `verify`, and TypeScript/Zig interop
+- `bun run test:zig` - Unit tests of the Zig CLI and of every Zig package (`zig build test-all` in `apps/cli-zig`)
+- `bun run test:cli:zig` - Zig CLI smoke tests (apps/cli/smoke-tests-zig): the TypeScript CLI smoke suites with the commands run by the Zig CLI, and a TypeScript `psi verify` of every database it writes
 - `bun run test:lan-share:cli-desktop` (alias `tlcd`) - CLI to desktop LAN share smoke tests, both directions
 - `bun run test:harness` - The mobile test harness's own tests (run lock, work queue and worker pool, timeout helper). Needs no device
 - `bun run test:electron` - Build and run Electron smoke tests

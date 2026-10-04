@@ -336,3 +336,38 @@ test "readStream passes on an error other than a missing file" {
         try std.testing.expectError(error.NotDir, fixture.fileStorage.readStream(fixture.arena.allocator(), std.testing.io, underFilePath));
     }
 }
+
+//
+// The handle a file gets when it is opened now. On a POSIX system that is the lowest number not in use,
+// so it changes when a handle has been left open since the last time it was asked.
+//
+fn nextHandle(io: std.Io, filePath: []const u8) !std.Io.File.Handle {
+    const file = try std.Io.Dir.cwd().openFile(io, filePath, .{});
+    defer file.close(io);
+    return file.handle;
+}
+
+test "readStream closes the file and frees what it made when it runs out of memory setting the stream up" {
+    var fixture: Fixture = undefined;
+    try fixture.init("file-storage-read-stream-no-memory");
+    defer fixture.deinit();
+    const io = std.testing.io;
+    const filePath = try fixture.path("a.bin");
+    try helpers.writeFile(io, filePath, "data");
+    const handleBefore = try nextHandle(io, filePath);
+
+    // The first allocation makes the stream and the second its buffer, so each is refused in turn. The
+    // testing allocator reports anything a refusal leaves allocated as a leak, and a file left open
+    // shows as the next file opened getting a higher handle than it did before.
+    var refuseStream = std.testing.FailingAllocator.init(std.testing.allocator, .{
+        .fail_index = 0,
+    });
+    try std.testing.expectError(error.OutOfMemory, fixture.fileStorage.readStream(refuseStream.allocator(), io, filePath));
+    var refuseBuffer = std.testing.FailingAllocator.init(std.testing.allocator, .{
+        .fail_index = 1,
+    });
+    try std.testing.expectError(error.OutOfMemory, fixture.fileStorage.readStream(refuseBuffer.allocator(), io, filePath));
+    if (builtin.os.tag != .windows) {
+        try std.testing.expectEqual(handleBefore, try nextHandle(io, filePath));
+    }
+}

@@ -101,6 +101,11 @@ pub fn setupEnvironment(io: std.Io) ![]const u8 {
     try map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
     try map.put("PHOTOSPHERE_VAULT_DIR", try std.fmt.allocPrint(process_allocator, "{s}/vault", .{process_dir}));
     try map.put("TEST_TMP_DIR", try std.fmt.allocPrint(process_allocator, "{s}/test-tmp", .{process_dir}));
+    // Without this the upload worker's scratch directory is /tmp/photosphere/assets/<uuid>. The test uuid counter
+    // is per process and starts at one, so two test processes at once (another worktree, a coverage run beside a
+    // plain run) would pick the same directory and the same temp_resize_<uuid> file names, and one's resize fails
+    // with "Output file already exists" (or its cleanup deletes the other's files).
+    try map.put("PHOTOSPHERE_TMP_DIR", process_dir);
     _ = map.orderedRemove("PSI_ENCRYPTION_KEY");
     _ = map.orderedRemove("GOOGLE_API_KEY");
     _ = map.orderedRemove("AWS_ACCESS_KEY_ID");
@@ -166,6 +171,14 @@ pub fn setEnv(name: []const u8, value: ?[]const u8) !void {
     else {
         _ = map.orderedRemove(name);
     }
+}
+
+//
+// Puts PHOTOSPHERE_TMP_DIR back to the per process directory, for a test that pointed it elsewhere. Removing it
+// instead would send later tests to the shared system temp directory.
+//
+pub fn restoreTmpDir() !void {
+    try setEnv("PHOTOSPHERE_TMP_DIR", process_dir);
 }
 
 //

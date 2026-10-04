@@ -202,6 +202,18 @@ test "the end of a test input is reported as EndOfStream" {
     try std.testing.expectError(error.EndOfStream, prompts.confirm(allocator, std.testing.io, .{ .common = .{ .input = input, .output = &output.writer }, .message = "Continue?" }));
 }
 
+// Ctrl+D as the first key of a prompt closes its readline interface, which pauses the input and leaves the prompt
+// unresolved for good in TypeScript, so it ends the input as the end of a test input does.
+test "a text prompt ends its input on ctrl-d with an empty line" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    // The "x" and the return after the Ctrl+D would answer the prompt if it carried on reading.
+    const input = try helpers.chunkedInput(allocator, &.{ "\x04", "x", "\r" });
+    var output = std.Io.Writer.Allocating.init(allocator);
+    try std.testing.expectError(error.EndOfStream, prompts.text(allocator, std.testing.io, .{ .common = .{ .input = input, .output = &output.writer }, .message = "Title?" }));
+}
+
 //
 // What the TypeScript prompts write for a text prompt whose placeholder is empty, starts with a character of two
 // UTF-8 bytes, or starts with a character outside the Basic Multilingual Plane (split into two surrogates, which
