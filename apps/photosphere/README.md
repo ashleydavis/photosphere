@@ -1,6 +1,6 @@
 # Photosphere App
 
-This is the Photosphere app for Windows, MacOS, Linux, Android and iOS, built on Ziggy. Ziggy is the application shell: it shows the shared user interface (`packages/user-interface`) in the web view that each platform provides, and everything else is Zig. See [Ziggy architecture](../../docs/ziggy-architecture.md) for how the parts fit together, the rules for adding a channel, a task type or a native host callback, and the protocol.
+This is the Photosphere app for Windows, MacOS, Linux, Android and iOS, built on Ziggy. Ziggy is the application shell: it shows the shared user interface (`packages/user-interface`) in the web view that each platform provides, and everything else is Zig. See [Ziggy architecture](../../packages/ziggy/docs/architecture.md) for how the parts fit together, the rules for adding a channel, a task type or a native host callback, and the protocol.
 
 ## Build tools
 

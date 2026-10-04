@@ -146,6 +146,7 @@
   "workspaces": [
     "apps/*",
     "packages/*",
+    "packages/ziggy/bridge",
     "aux/*"
   ]
 }

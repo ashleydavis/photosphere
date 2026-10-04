@@ -85,9 +85,9 @@ apple_sync_native() {
     (cd "$APPLE_EXAMPLE_DIR" && bun run bundle:ui) || apple_fail "bundling the page failed."
     echo "Building the Zig library for $zig_target (optimize $optimize, test hooks $test_hooks)..."
     if [ "$test_hooks" = "yes" ]; then
-        (cd "$APPLE_REPO_ROOT/packages-zig/ziggy-example-core" && zig build -Dtarget="$zig_target" -Doptimize="$optimize" -Dtest-hooks=true -p "$native_dir") || apple_fail "the Zig build failed."
+        (cd "$APPLE_REPO_ROOT/apps/ziggy-example/core" && zig build -Dtarget="$zig_target" -Doptimize="$optimize" -Dtest-hooks=true -p "$native_dir") || apple_fail "the Zig build failed."
     else
-        (cd "$APPLE_REPO_ROOT/packages-zig/ziggy-example-core" && zig build -Dtarget="$zig_target" -Doptimize="$optimize" -p "$native_dir") || apple_fail "the Zig build failed."
+        (cd "$APPLE_REPO_ROOT/apps/ziggy-example/core" && zig build -Dtarget="$zig_target" -Doptimize="$optimize" -p "$native_dir") || apple_fail "the Zig build failed."
     fi
     mkdir -p "$native_dir/ui"
     rsync -a --delete "$APPLE_EXAMPLE_DIR/dist/" "$native_dir/ui/" || apple_fail "copying the page failed."

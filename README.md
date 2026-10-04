@@ -57,7 +57,7 @@ The desktop and CLI builds use ImageMagick and ffmpeg installed on the host syst
 After `bun install`, run `bun run setup` for the one-time, per-platform environment setup. It fans out to each package's own `setup` script (`bun --filter '*' setup`): the Android SDK toolchain on Linux/macOS and the iOS CocoaPods on macOS, each skipping cleanly where it does not apply. Install the git hooks (`bash scripts/install-hooks.sh`) and the pinned toolchain (`mise install`) separately. See [Development](docs/development.md) for the full walkthrough.
 
 - [Development](docs/development.md) - Setup, the common commands, and how to run each app.
-- [Ziggy architecture](docs/ziggy-architecture.md) - How the Photosphere App on Windows, macOS, Linux, Android and iOS is put together.
+- [Ziggy architecture](packages/ziggy/docs/architecture.md) - How the Photosphere App on Windows, macOS, Linux, Android and iOS is put together.
 - [Ziggy example](apps/ziggy-example/README.md) - The small complete app built on Ziggy, kept as the reference for building an app on it.
 - [Testing](docs/testing/README.md) - Unit tests, CLI and Photosphere App smoke tests, and the manual end-to-end scripts.
 - [UI stories](packages/user-interface/src/stories/README.md) - Every page, modal, dialog, and component in isolation, and the story player that cycles them on desktop, Android, and iOS.

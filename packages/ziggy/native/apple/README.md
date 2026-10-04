@@ -2,7 +2,7 @@
 
 Ziggy's shell code for MacOS and iOS, as a Swift package (swift-tools-version 5.7, macOS 11 and iOS 14). One class, `ZiggyBridge`, serves both platforms.
 
-- `CZiggy` is a system library target whose `ziggy.h` is a link to the core's own header (`packages-zig/ziggy-core/src/lib/ziggy.h`).
+- `CZiggy` is a system library target whose `ziggy.h` is a link to the core's own header (`packages/ziggy/core/src/lib/ziggy.h`).
 - `ZiggyShellApple` owns the `WKWebView`, injects `ziggy-inject.js` at document start, forwards page messages to `ziggy_post_message`, delivers core messages on the main thread in order (`window.__ziggyReceive(<json>)`), decides every navigation with `ziggy_check_url`, and creates and destroys the core.
 
 The static library with the core (`libziggy_example.a` for the example) is not part of the package. The app project links it.
@@ -17,7 +17,7 @@ bridge.start()                          // creates the core and loads ui/index.h
 bridge.shutdown()                       // ziggy_destroy, once
 ```
 
-The app bundle must contain `ziggy-inject.js` (from `packages/ziggy-bridge/inject`) and the built page in a `ui` directory of its resources. The bundle identifier names the data directory under Application Support.
+The app bundle must contain `ziggy-inject.js` (from `packages/ziggy/bridge/inject`) and the built page in a `ui` directory of its resources. The bundle identifier names the data directory under Application Support.
 
 ## Test hooks
 

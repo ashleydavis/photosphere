@@ -87,7 +87,7 @@ Run the CLI to desktop LAN share suite, which shares secrets and databases in bo
 bun run test:lan-share:cli-desktop
 ```
 
-Run the Ziggy smoke tests, which drive the Ziggy application shell (see [Ziggy architecture](../ziggy-architecture.md) and [Ziggy smoke tests](../../apps/photosphere-smoke-tests/README.md)). The desktop suite runs on the host operating system, the mobile suites on the Android emulator pool or device and on the iOS simulator:
+Run the Ziggy smoke tests, which drive the Ziggy application shell (see [Ziggy architecture](../../packages/ziggy/docs/architecture.md) and [Ziggy smoke tests](../../apps/photosphere-smoke-tests/README.md)). The desktop suite runs on the host operating system, the mobile suites on the Android emulator pool or device and on the iOS simulator:
 
 ```bash
 bun run test:ziggy       # desktop, on the host operating system

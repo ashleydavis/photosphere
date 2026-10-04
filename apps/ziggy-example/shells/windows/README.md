@@ -1,6 +1,6 @@
 # Ziggy example, Windows shell
 
-The Windows executable of the Ziggy example. `src/main.zig` names the app and hands it to `ziggy-shell-windows` (`packages-zig/ziggy-shell-windows`), which does everything else.
+The Windows executable of the Ziggy example. `src/main.zig` names the app and hands it to `ziggy-shell-windows` (`packages/ziggy/native/windows`), which does everything else.
 
 ## What the shell does
 

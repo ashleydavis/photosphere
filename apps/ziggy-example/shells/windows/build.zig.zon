@@ -4,8 +4,8 @@
     .fingerprint = 0x7366d5017d3e16b,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .@"ziggy-shell-windows" = .{ .path = "../../../../packages-zig/ziggy-shell-windows" },
-        .@"ziggy-example-core" = .{ .path = "../../../../packages-zig/ziggy-example-core" },
+        .@"ziggy-shell-windows" = .{ .path = "../../../../packages/ziggy/native/windows" },
+        .@"ziggy-example-core" = .{ .path = "../../core" },
     },
     .paths = .{ "build.zig", "build.zig.zon", "src" },
 }

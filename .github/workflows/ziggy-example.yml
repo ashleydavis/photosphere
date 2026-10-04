@@ -14,10 +14,7 @@ on:
       - "*"
     paths:
       - "apps/ziggy-example/**"
-      - "packages-zig/ziggy-*/**"
-      - "packages-swift/**"
-      - "packages-android/**"
-      - "packages/ziggy-bridge/**"
+      - "packages/ziggy/**"
       - ".github/workflows/ziggy-example.yml"
 
   pull_request:
@@ -25,10 +22,7 @@ on:
       - main
     paths:
       - "apps/ziggy-example/**"
-      - "packages-zig/ziggy-*/**"
-      - "packages-swift/**"
-      - "packages-android/**"
-      - "packages/ziggy-bridge/**"
+      - "packages/ziggy/**"
       - ".github/workflows/ziggy-example.yml"
 
   workflow_dispatch:

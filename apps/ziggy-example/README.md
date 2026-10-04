@@ -1,6 +1,6 @@
 # Ziggy example
 
-A small complete app built on Ziggy, kept as the reference for building an app on it. It has a page (TypeScript and HTML), a Zig core with its own channel handlers and task handlers, a native shell for each platform and smoke tests. It uses nothing of Photosphere's, and nothing in Ziggy knows about it, which is what keeps Ziggy usable for an app that is not Photosphere. See [Ziggy architecture](../../docs/ziggy-architecture.md) for how the parts fit.
+A small complete app built on Ziggy, kept as the reference for building an app on it. It has a page (TypeScript and HTML), a Zig core with its own channel handlers and task handlers, a native shell for each platform and smoke tests. It uses nothing of Photosphere's, and nothing in Ziggy knows about it, which is what keeps Ziggy usable for an app that is not Photosphere. See [Ziggy architecture](../../packages/ziggy/docs/architecture.md) for how the parts fit.
 
 ## What it shows
 
@@ -13,10 +13,11 @@ A small complete app built on Ziggy, kept as the reference for building an app o
 
 ## Where things are
 
-- `src`: the page. `src/lib` holds the plain functions that have unit tests.
-- `index.html` and `vite.config.ts`: the page and its build, which writes `dist` with relative paths and a classic script so it loads from a file address in every web view.
-- `shells/<platform>`: the example's native project for each platform. Ziggy's framework half of each shell is in `packages-zig/ziggy-shell-linux`, `packages-zig/ziggy-shell-windows`, `packages-swift/ziggy-shell-apple` and `packages-android/ziggy-shell-android`.
-- `../../packages-zig/ziggy-example-core`: the example's Zig library, which adds its handlers to Ziggy's core (`packages-zig/ziggy-core`).
+Everything here is the example's own. Ziggy, the framework it is built on, is all in `packages/ziggy` (see its [README](../../packages/ziggy/README.md)), and nothing in this folder is shared with another app.
+
+- `page/`: the page. `page/index.html` is the page and `page/src/lib` holds the plain functions that have unit tests. `vite.config.ts` is its build, which writes `dist` with relative paths and a classic script so it loads from a file address in every web view.
+- `core/`: the example's Zig library, which adds its channel handlers and task handlers to Ziggy's core (`packages/ziggy/core`).
+- `shells/<platform>/`: the example's native project for each platform: its name, window, icon and the app's core and page packaged together. Each one builds on Ziggy's framework half for that platform in `packages/ziggy/native/<platform>` (MacOS and iOS share `packages/ziggy/native/apple`).
 - `scripts`: the build, run and packaging scripts, each with a markdown file beside it.
 - `smoke-tests`: the smoke test scenarios and a library for each platform. See `smoke-tests/run.md`.
 

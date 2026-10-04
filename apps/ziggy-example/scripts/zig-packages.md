@@ -1,6 +1,6 @@
 # zig-packages.sh
 
-Builds, cross-builds or tests the Zig packages of the Ziggy example: Ziggy's core (`packages-zig/ziggy-core`), the example's core (`packages-zig/ziggy-example-core`, which depends on it) and the Windows shell package.
+Builds, cross-builds or tests the Zig packages of the Ziggy example: Ziggy's core (`packages/ziggy/core`), the example's core (`apps/ziggy-example/core`, which depends on it) and the Windows shell package.
 
 ## Usage
 

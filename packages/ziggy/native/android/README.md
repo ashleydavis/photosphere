@@ -13,7 +13,7 @@ Ziggy's Android framework code: a Java library module (no Kotlin) that an app's 
 
 The activity calls `start` in `onCreate` and `destroy` in `onDestroy`. `destroy` calls the core's destroy once and nothing is delivered after it.
 
-The native methods (`ZiggyNative`) are implemented in Zig, in `packages-zig/ziggy-core/src/lib/jni.zig`, which the app's core library exports with `ziggy.jni.exportJni(...)` for an Android target. The Java side is the web view and the lifecycle, and everything that crosses to the core goes through that file. Messages cross as UTF-8 byte arrays.
+The native methods (`ZiggyNative`) are implemented in Zig, in `packages/ziggy/core/src/lib/jni.zig`, which the app's core library exports with `ziggy.jni.exportJni(...)` for an Android target. The Java side is the web view and the lifecycle, and everything that crosses to the core goes through that file. Messages cross as UTF-8 byte arrays.
 
 The module is built by the app's Gradle project, not on its own.
 

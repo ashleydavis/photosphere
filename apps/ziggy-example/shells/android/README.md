@@ -1,6 +1,6 @@
 # Ziggy example, Android shell
 
-The example's Android project: one activity (`MainActivity`) that hosts a web view run by Ziggy's Android shell (`packages-android/ziggy-shell-android`). Package `dev.ziggy.example`. The SDK levels, library versions, plugin version and NDK are the Photosphere Android app's (`apps/android-frontend/android`), read from its files, so they cannot drift.
+The example's Android project: one activity (`MainActivity`) that hosts a web view run by Ziggy's Android shell (`packages/ziggy/native/android`). Package `dev.ziggy.example`. The SDK levels, library versions, plugin version and NDK are the Photosphere Android app's (`apps/android-frontend/android`), read from its files, so they cannot drift.
 
 What is packaged:
 

@@ -6,12 +6,12 @@ set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXAMPLE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-PACKAGES_DIR="$(cd "$SCRIPT_DIR/../../../packages-zig" && pwd)"
+ZIGGY_DIR="$(cd "$SCRIPT_DIR/../../../packages/ziggy" && pwd)"
 
 ACTION="${1:-}"
 case "$ACTION" in
     build)
-        (cd "$PACKAGES_DIR/ziggy-example-core" && zig build)
+        (cd "$EXAMPLE_DIR/core" && zig build)
         ;;
     cross)
         # The example's core library for every platform that is not this one, with and without the test hooks. The
@@ -19,7 +19,7 @@ case "$ACTION" in
         for target in aarch64-macos.11.0 x86_64-macos.11.0 aarch64-ios.14.0 aarch64-ios.14.0-simulator x86_64-ios.14.0-simulator x86_64-windows-gnu aarch64-windows-gnu x86_64-linux-gnu aarch64-linux-gnu; do
             for hooks in false true; do
                 echo "Cross-building the example core for $target (test hooks: $hooks)"
-                (cd "$PACKAGES_DIR/ziggy-example-core" && zig build -Dtarget="$target" -Dtest-hooks="$hooks" -p "zig-out/cross/$target-$hooks")
+                (cd "$EXAMPLE_DIR/core" && zig build -Dtarget="$target" -Dtest-hooks="$hooks" -p "zig-out/cross/$target-$hooks")
             done
         done
         # The Windows shell, which needs the WebView2 SDK, fetched once and then reused.
@@ -30,10 +30,10 @@ case "$ACTION" in
         done
         ;;
     test)
-        (cd "$PACKAGES_DIR/ziggy-core" && zig build test --summary all --test-timeout 20m)
-        (cd "$PACKAGES_DIR/ziggy-example-core" && zig build test --summary all --test-timeout 20m)
-        (cd "$PACKAGES_DIR/ziggy-shell-windows" && zig build test --summary all --test-timeout 20m)
-        (cd "$PACKAGES_DIR/ziggy-shell-linux" && zig build test --summary all --test-timeout 20m)
+        (cd "$ZIGGY_DIR/core" && zig build test --summary all --test-timeout 20m)
+        (cd "$EXAMPLE_DIR/core" && zig build test --summary all --test-timeout 20m)
+        (cd "$ZIGGY_DIR/native/windows" && zig build test --summary all --test-timeout 20m)
+        (cd "$ZIGGY_DIR/native/linux" && zig build test --summary all --test-timeout 20m)
         ;;
     *)
         echo "Usage: zig-packages.sh <build|cross|test>" >&2

@@ -4,7 +4,7 @@ How to set up, run, and work on Photosphere, and where to find the detailed guid
 
 Photosphere is a Bun-workspaces monorepo with web, desktop (Electron), mobile (iOS/Android), and CLI frontends over a shared React UI (`packages/user-interface`).
 
-The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, Android and iOS. It is built on Ziggy, an application shell that shows the shared UI in each platform's web view and runs everything else in Zig. It replaces the Electron and Capacitor apps, and the TypeScript CLI and packages that have a Zig port are replaced by the Zig ones. Everything that is replaced is marked "(deprecated)" in the project layout below. Start with [Ziggy architecture](ziggy-architecture.md) and the [Photosphere App README](../apps/photosphere/README.md).
+The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, Android and iOS. It is built on Ziggy, an application shell that shows the shared UI in each platform's web view and runs everything else in Zig. It replaces the Electron and Capacitor apps, and the TypeScript CLI and packages that have a Zig port are replaced by the Zig ones. Everything that is replaced is marked "(deprecated)" in the project layout below. Start with [Ziggy architecture](../packages/ziggy/docs/architecture.md) and the [Photosphere App README](../apps/photosphere/README.md).
 
 ## Project layout
 
@@ -23,7 +23,7 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - photosphere - Photosphere App: the Ziggy shells for each platform and the scripts that build and run them
         - photosphere-frontend - The web view UI of the Photosphere App
         - photosphere-smoke-tests - Smoke tests for the Photosphere App on every platform
-        - ziggy-example - The Ziggy example: a small complete app built on Ziggy, kept as the reference for building an app on it, with its page, native projects, scripts and smoke tests
+        - ziggy-example - The Ziggy example: a small complete app built on Ziggy, kept as the reference for building an app on it, with its page, Zig core, native projects, scripts and smoke tests
         - smoke-tests (deprecated) - Host-driven UI smoke tests for the mobile apps
     - packages/
         - api (deprecated) - Core API for database operations
@@ -46,7 +46,11 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - user-interface - Shared React UI components
         - utils (deprecated) - General utility functions
         - vault (deprecated) - Cross-platform secrets management with multiple vault backends
-        - ziggy-bridge - Ziggy's page side: the `window.ziggy` script every shell injects, and its types
+        - ziggy/ - Ziggy, the application shell, all in one place. Nothing in it names an app. See its [README](../packages/ziggy/README.md)
+            - core - The Zig library: the C interface, message dispatcher, task runner and test hooks
+            - bridge - The page side: the `window.ziggy` script every shell injects, and its types
+            - native/ - The framework half of each shell: `linux` (GTK 3 and WebKitGTK), `windows` (WebView2), `apple` (MacOS and iOS, Swift, WKWebView) and `android` (Java, Android WebView)
+            - docs - The architecture guide
     - packages-zig/
         - api-zig - Zig port of api
         - bdb-zig - Zig port of bdb
@@ -63,15 +67,7 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - tools-zig - Zig port of tools
         - utils-zig - Zig port of utils
         - vault-zig - Zig port of vault
-        - photosphere-core - The Zig library the Photosphere App shells link: Photosphere's channel handlers, task handlers and asset server, built on ziggy-core
-        - ziggy-core - Ziggy's Zig library: the C interface, message dispatcher, task runner and test hooks, with no Photosphere code
-        - ziggy-example-core - The Ziggy example's Zig library: its channel handlers and task handlers, built on ziggy-core
-        - ziggy-shell-linux - Ziggy's Linux shell (GTK 4 and WebKitGTK)
-        - ziggy-shell-windows - Ziggy's Windows shell (WebView2)
-    - packages-swift/
-        - ziggy-shell-apple - Ziggy's MacOS and iOS shell (Swift, WKWebView), shared by both
-    - packages-android/
-        - ziggy-shell-android - Ziggy's Android shell (Java, Android WebView)
+        - photosphere-core - The Zig library the Photosphere App shells link: Photosphere's channel handlers, task handlers and asset server, built on Ziggy's core (`packages/ziggy/core`)
     - test - Data for testing.
 
 "(deprecated)" marks an app or package that is going to be superseded by the Zig port (the Zig packages in `packages-zig`, the Zig CLI, and the Photosphere App on Ziggy) and removed once the port fully replaces it.
@@ -178,7 +174,7 @@ The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why t
 
 ## Guides
 
-- [Ziggy architecture](ziggy-architecture.md) - The Photosphere App's parts, message protocol, how to add a channel or a task type, and the test hooks.
+- [Ziggy architecture](../packages/ziggy/docs/architecture.md) - The Photosphere App's parts, message protocol, how to add a channel or a task type, and the test hooks.
 - [Ziggy example](../apps/ziggy-example/README.md) - The small complete app built on Ziggy: what it shows, how to build, run, package and test it on each platform.
 - [Photosphere App](../apps/photosphere/README.md) - Building and running the app on each platform.
 - [UI stories](../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player.
