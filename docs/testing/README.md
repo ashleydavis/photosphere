@@ -87,6 +87,16 @@ Run the CLI to desktop LAN share suite, which shares secrets and databases in bo
 bun run test:lan-share:cli-desktop
 ```
 
+Run the Ziggy smoke tests, which drive the Ziggy application shell (see [Ziggy architecture](../ziggy-architecture.md) and [Ziggy smoke tests](../../apps/photosphere-smoke-tests/README.md)). The desktop suite runs on the host operating system, the mobile suites on the Android emulator pool or device and on the iOS simulator:
+
+```bash
+bun run test:ziggy       # desktop, on the host operating system
+bun run test:ziggy:and   # Android emulator or attached device
+bun run test:ziggy:ios   # iOS simulator (needs macOS with Xcode)
+```
+
+The Ziggy core's Zig unit tests run with `zig build test` in `packages-zig/photosphere-core`.
+
 Run the mobile test harness's own tests, covering the device run lock, the work queue and worker pool, and the timeout helper. They drive shell rather than the app, so they need no device and take seconds:
 
 ```bash
@@ -278,16 +288,19 @@ The stories browser mounts every page, modal, dialog, and component in isolation
 The story player cycles the live app through every story (in light and then dark), captures a screenshot of each, and fails if any story crashes while rendering:
 
 ```bash
-bun run stories            # Electron desktop
-bun run stories:and    # Android emulator or attached device
-bun run stories:ios        # iOS simulator
+bun run stories:ziggy      # Photosphere App on the host operating system
+bun run stories:ziggy:and  # Photosphere App on the Android emulator or attached device
+bun run stories:ziggy:ios  # Photosphere App on the iOS simulator
+bun run stories            # Electron desktop (deprecated)
+bun run stories:and        # Capacitor Android app (deprecated)
+bun run stories:ios        # Capacitor iOS app (deprecated)
 ```
 
 The web build has no scripted runner: start it with `bun run dev:web`, open `http://localhost:8080/#/stories`, and click **▶ Play on automatic** to cycle the stories by hand. The port is `apps/dev-frontend/vite.config.ts`, which pins 8080.
 
 Screenshots go to `stories-screenshots/<platform>/`, with an `index.html` showing each story's light and dark shots side by side. Add `-- --open` to open it when the run finishes.
 
-Running the stories on Android or iOS renders every page at phone resolution, which is the quickest way to catch a page that does not fit on mobile (content pushed off-screen, buttons out of reach, text clipped).
+Running the stories on the Photosphere App on Android or iOS (`stories:ziggy:and`, `stories:ziggy:ios`) renders every page at phone resolution, which is the quickest way to catch a page that does not fit on mobile (content pushed off-screen, buttons out of reach, text clipped).
 
 These runs are long, so they are excluded from `bun run test:all`.
 

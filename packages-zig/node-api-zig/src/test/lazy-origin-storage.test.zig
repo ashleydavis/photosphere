@@ -369,7 +369,7 @@ test "readStream() tees a file larger than the cache queue" {
 }
 
 test "readStream() streams a file larger than the cache queue in full when the local cache write fails" {
-    // A divergence kept on purpose (docs/zig-port-map.md, "Divergences kept"): the TypeScript stops after its
+    // A divergence kept on purpose: the TypeScript stops after its
     // PassThrough buffers fill, because nothing drains the cache stream once the cache write has failed, and the
     // caller waits for ever. The Zig stops feeding the cache and hands the caller the whole file.
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

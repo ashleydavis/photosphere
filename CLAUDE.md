@@ -108,6 +108,9 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run test:cli:hash-cache` - CLI hash cache concurrency smoke tests
 - `bun run test:cli:zig` - Zig CLI smoke tests (apps/cli/smoke-tests-zig): the Zig port of `replicate` and `verify`, and TypeScript/Zig interop
 - `bun run test:lan-share:cli-desktop` (alias `tlcd`) - CLI to desktop LAN share smoke tests, both directions
+- `bun run test:ziggy` - Ziggy desktop smoke tests, on the host operating system
+- `bun run test:ziggy:and` - Ziggy smoke tests on the Android emulator pool or device
+- `bun run test:ziggy:ios` - Ziggy smoke tests on the iOS simulator (macOS only)
 - `bun run test:harness` - The mobile test harness's own tests (run lock, work queue and worker pool, timeout helper). Needs no device
 - `bun run test:electron` - Build and run Electron smoke tests
 - `bun run test:everything:plan` - Print which test scripts would run and why, without running anything
@@ -116,6 +119,9 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `what-changed targets` - Just the affected target names, one per line
 - `what-changed baseline capture` - Record the current tree as the baseline without running anything (an assertion, not a check)
 - `bun run find-flakey-tests` - Loop `test:everything --force` until a target number of consecutive green runs is reached (default 100), stopping at the first failure with a diagnosis report. Prints when the current run and the whole streak should finish, estimated from the most recent runs. `-- --target N` sets the streak, `-- --resume N` carries on from a previous session that banked N green runs, `-- --ladder` climbs the suites one at a time instead, cheapest first, every suite the pre-commit hook runs, requiring the full streak of each before starting the next. See [Testing](docs/testing/README.md)
+- `bun run stories:ziggy` - Cycle the Photosphere App on the host operating system through every UI story, capturing screenshots (long-running, excluded from `test:all`)
+- `bun run stories:ziggy:and` - Same stories cycle for the Photosphere App on the Android emulator/device. Renders every page at phone resolution, so this is how to check pages fit on mobile
+- `bun run stories:ziggy:ios` - Same stories cycle for the Photosphere App on the iOS simulator
 - `bun run stories` - Cycle the Electron app through every UI story, capturing screenshots (long-running, excluded from `test:all`)
 - `bun run stories:and` - Same stories cycle on the Android emulator/device. Renders every page at phone resolution, so this is how to check pages fit on mobile
 - `bun run stories:ios` - Same stories cycle on the iOS simulator
@@ -136,6 +142,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - [UI stories](packages/user-interface/src/stories/README.md) - The stories browser (every page/modal/dialog/component in isolation) and the cross-platform story player. Run the stories on Android/iOS to check pages fit on a phone screen
 - [Testing](docs/testing/README.md) - How to run the automated tests, the manual e2e scripts, and the UI stories
 - [Background tasks](docs/background-tasks.md) - How to add a new background task type (worker handler, registration, frontend consumption)
+- [Ziggy architecture](docs/ziggy-architecture.md) - The Zig and system web view application shell: parts, message protocol, adding a channel or a task type, test hooks, and edits made to existing UI code
 - [Delivering the Android app to testers](docs/android-tester-distribution.md) - Getting a build to Android testers through Firebase App Distribution
 - [Mobile native media tools](docs/mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired and activated (iOS/Android)
 - [Updating mobile ImageMagick/ffmpeg](docs/updating-mobile-imagemagick-ffmpeg.md) - How to update the bundled versions (see also `scripts/update-mobile-media-tools.sh`)

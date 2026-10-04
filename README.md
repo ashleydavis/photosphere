@@ -23,8 +23,7 @@ Visit the [Photosphere website](https://photosphere.codecapers.com.au/) to learn
 Note: The self-hosted server option has been discontinued for now, but may be reinstated later if there's demand for it.
 
 Contained herein are the code for Photosphere's:
-- Desktop app
-- Mobile apps
+- Photosphere App (desktop and mobile)
 - CLI tool
 
 Early development of Photosphere was covered in the book [The Feedback-Driven Developer](https://tfdd.codecapers.com.au/).
@@ -58,6 +57,7 @@ The desktop and CLI builds use ImageMagick and ffmpeg installed on the host syst
 After `bun install`, run `bun run setup` for the one-time, per-platform environment setup. It fans out to each package's own `setup` script (`bun --filter '*' setup`): the Android SDK toolchain on Linux/macOS and the iOS CocoaPods on macOS, each skipping cleanly where it does not apply. Install the git hooks (`bash scripts/install-hooks.sh`) and the pinned toolchain (`mise install`) separately. See [Development](docs/development.md) for the full walkthrough.
 
 - [Development](docs/development.md) - Setup, the common commands, and how to run each app.
-- [Testing](docs/testing/README.md) - Unit tests, CLI and Electron smoke tests, and the manual end-to-end scripts.
+- [Ziggy architecture](docs/ziggy-architecture.md) - How the Photosphere App on Windows, macOS, Linux, Android and iOS is put together.
+- [Testing](docs/testing/README.md) - Unit tests, CLI and Photosphere App smoke tests, and the manual end-to-end scripts.
 - [UI stories](packages/user-interface/src/stories/README.md) - Every page, modal, dialog, and component in isolation, and the story player that cycles them on desktop, Android, and iOS.
 
