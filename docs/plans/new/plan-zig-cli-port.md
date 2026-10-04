@@ -154,7 +154,7 @@ Release workflow is green. Each point is ticked off as it is confirmed:
 
 ### What the audit has done so far
 
-- Side by side comparison of every package and of `apps/cli`, recorded in `docs/zig-port-map.md` with its "Divergences fixed" section.
+- Side by side comparison of every package and of `apps/cli`, with each divergence fixed under a unit test.
 - Coverage pass recorded in `docs/zig-test-coverage.md`, then further coverage branches (`audit/audit-*`, `audit/cli-a` to `audit/cli-d`) merged in `90158286`.
 - Smoke timings recorded in `docs/zig-smoke-timings.md`.
 
@@ -181,9 +181,9 @@ Each item records its result for the final documentation item. A finding is fixe
     9. Smoke test `apps/cli/smoke-tests-zig/104-no-typescript-runtime/test.sh`: the Zig binary copied alone into a test directory, run with a `PATH` holding only the directories of `magick`, `ffmpeg` and `ffprobe` (the test fails if `bun` or `node` is reachable), runs `init`, `add`, `summary`, `list`, `export` and `verify` with asserted output and exit codes, then `ts_verify` with the normal `PATH`. It also asserts the binary is not a bun-compiled executable, the check chosen from bun's documentation of `bun build --compile` output. Watch it fail pointed at the TypeScript binary `apps/cli/bin/x64/linux/psi`. Runs on Windows and macOS too.
 9. Mutation run: for each command in `apps/cli-zig/index.zig`, break one line of its Zig handler and of the `packages-zig` function doing its core read or write with the Edit tool, run that command's Zig smoke tests and the changed file's unit tests, require red, restore with the Edit tool (never `git restore` or `git checkout`). Strengthen any test that stayed green and repeat the break.
 10. Fake test review of the Zig unit tests: list any `test "` block with no assertion or one that cannot fail, and fix each, watched failing first. List every `error.SkipZigTest` with its platform condition.
-11. Side by side review of the third party ports (commander, picocolors, open, readline, string-width, wrap-ansi, sisteransi, the MCP SDK) against the npm package versions in `node_modules` the TypeScript CLI uses, added to `docs/zig-port-map.md`, with each divergence fixed under a unit test that fails before the fix.
-12. Update the `docs/zig-port-map.md` rows for every `apps/cli-zig` and `packages-zig` source change since `0172d27a`, re-comparing the touched functions.
-13. Documentation: update `docs/zig-test-coverage.md` (MCP hang fixed, binary coverage under the smoke suites, new dated figures, uncovered lines with reasons) and the progress line of `docs/zig-port-map.md`; add `docs/zig-port-verification.md` covering how the Zig psi is shown to be real and faithful (the results of item 8 and the mutation run as dated events, `ts_verify` after every write, the byte-for-byte test, the no-TypeScript-runtime test, smoke coverage of the binary); link it from `docs/testing/README.md`, and add `test:zig` to `CLAUDE.md`'s command list. Do not reference this plan from any of them.
+11. Side by side review of the third party ports (commander, picocolors, open, readline, string-width, wrap-ansi, sisteransi, the MCP SDK) against the npm package versions in `node_modules` the TypeScript CLI uses, with each divergence fixed under a unit test that fails before the fix.
+12. Re-compare the touched functions of every `apps/cli-zig` and `packages-zig` source change since `0172d27a` with their TypeScript originals.
+13. Documentation: update `docs/zig-test-coverage.md` (MCP hang fixed, binary coverage under the smoke suites, new dated figures, uncovered lines with reasons); add `docs/zig-port-verification.md` covering how the Zig psi is shown to be real and faithful (the results of item 8 and the mutation run as dated events, `ts_verify` after every write, the byte-for-byte test, the no-TypeScript-runtime test, smoke coverage of the binary); link it from `docs/testing/README.md`, and add `test:zig` to `CLAUDE.md`'s command list. Do not reference this plan from any of them.
 
 ### Audit verification
 

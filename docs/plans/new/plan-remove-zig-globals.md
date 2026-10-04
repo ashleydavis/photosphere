@@ -2,7 +2,7 @@
 
 ## Overview
 
-Global variables are not allowed in this repository unless the human explicitly asks for one. The Zig port of `psi` (`apps/cli-zig` and `packages-zig/*-zig`) holds mutable process-wide state in top-level `var` and `threadlocal var` declarations, and in `var` declarations inside struct bodies. This plan audits every one of them and removes them, moving each value into a struct that is created by whoever owns it (usually `main` in `apps/cli-zig/index.zig`) and passed down the call chain the way `allocator` and `io` already are. Many of these globals copy module-level state in the TypeScript original, so removing them makes the Zig code differ from the TypeScript in places; `docs/zig-port-map.md` is updated to say where.
+Global variables are not allowed in this repository unless the human explicitly asks for one. The Zig port of `psi` (`apps/cli-zig` and `packages-zig/*-zig`) holds mutable process-wide state in top-level `var` and `threadlocal var` declarations, and in `var` declarations inside struct bodies. This plan audits every one of them and removes them, moving each value into a struct that is created by whoever owns it (usually `main` in `apps/cli-zig/index.zig`) and passed down the call chain the way `allocator` and `io` already are. Many of these globals copy module-level state in the TypeScript original, so removing them makes the Zig code differ from the TypeScript in places; a comment in the Zig code says where.
 
 Find every global with these commands. The audit below was taken from them on 2026-10-04.
 
@@ -85,7 +85,7 @@ Every step ends with: the code compiles (`mise exec -- bun run compile`), the un
 21. Signals: only after the human has answered the signal question in Notes. Merge `termination.zig` and `process-signals.zig` into one `SignalDispatcher` as described in the Audit, created in `main` and carried in `IAppContext` and `ICommandContext`; update the spinner, `cmd/secrets.zig`, `cmd/dbs.zig`, `file-logger.zig`, `init-cmd.zig`, `cmd/sync.zig`, node-api `import.zig`, LAN share receiver and every `exit` caller. Leave only the approved handler global.
 22. `packages-zig/vault-zig/src/lib/keychain-types.zig` `spawn_function`: only after the human has answered the spawn question in Notes.
 23. Run the two audit commands from the Overview and confirm the only results are the globals the human approved. Run `mise exec -- bun run tev`.
-24. Documentation: in `docs/zig-port-map.md`, update the entry of every TypeScript function whose Zig port changed signature or moved into a struct, and record each place the Zig code no longer copies TypeScript module state and what owns it instead. Document `IAppContext`, the new `ICommandContext` and `ITaskContext` fields, and the signal handler global in the header comments of the files that define them.
+24. Documentation: in a comment above each function whose Zig port changed signature or moved into a struct, record each place the Zig code no longer copies TypeScript module state and what owns it instead. Document `IAppContext`, the new `ICommandContext` and `ITaskContext` fields, and the signal handler global in the header comments of the files that define them.
 
 ## Unit Tests
 
