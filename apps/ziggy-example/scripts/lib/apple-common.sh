@@ -121,3 +121,44 @@ apple_pick_simulator() {
     fi
     printf '%s\n' "$udid"
 }
+
+# Prints the Apple development team to sign a device build with. The environment variable ZIGGY_IOS_TEAM names one.
+# Without it, the team of the account signed in to Xcode (Preferences, Accounts) is used, if there is exactly one.
+apple_pick_team() {
+    local teams count
+    if [ -n "${ZIGGY_IOS_TEAM:-}" ]; then
+        printf '%s\n' "$ZIGGY_IOS_TEAM"
+        return
+    fi
+    teams="$(defaults export com.apple.dt.Xcode - | plutil -extract IDEProvisioningTeams xml1 -o - - 2> /dev/null | grep -A1 '<key>teamID</key>' | sed -n 's/.*<string>\(.*\)<\/string>.*/\1/p' | sort -u)"
+    count="$(printf '%s' "$teams" | grep -c . || true)"
+    if [ "$count" = "0" ]; then
+        apple_fail "Xcode has no signed in account to sign a device build with. Sign in under Xcode, Preferences, Accounts, or set ZIGGY_IOS_TEAM."
+    fi
+    if [ "$count" != "1" ]; then
+        apple_fail "Xcode has several teams ($(printf '%s' "$teams" | tr '\n' ' ')). Set ZIGGY_IOS_TEAM to the one to sign with."
+    fi
+    printf '%s\n' "$teams"
+}
+
+# Prints the identifier of the connected iOS device to run on, or nothing when none is connected. The environment variable
+# ZIGGY_IOS_DEVICE names one. Without it, the first connected device is used.
+apple_connected_device() {
+    apple_require_tool jq
+    if [ -n "${ZIGGY_IOS_DEVICE:-}" ]; then
+        printf '%s\n' "$ZIGGY_IOS_DEVICE"
+        return
+    fi
+    "$APPLE_REPO_ROOT/node_modules/.bin/native-run" ios --list --json | jq -r '.devices | first | .id // empty' || apple_fail "native-run could not list the iOS devices."
+}
+
+# Prints the identifier of the connected iOS device to run on, as apple_connected_device chooses it, and fails when none
+# is connected.
+apple_pick_device() {
+    local udid
+    udid="$(apple_connected_device)" || exit 1
+    if [ -z "$udid" ]; then
+        apple_fail "there is no iOS device connected. Plug one in, unlock it and trust this Mac."
+    fi
+    printf '%s\n' "$udid"
+}
