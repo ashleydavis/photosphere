@@ -23,7 +23,7 @@ Everything here is the example's own. Ziggy, the framework it is built on, is al
 
 ## Commands
 
-Run these from the repository root. `<platform>` is `linux`, `windows`, `macos`, `android` or `ios`, and each platform's commands run on that platform (MacOS and iOS need a Mac with Xcode 14.2, Windows needs Git Bash).
+Run these from the repository root. `<platform>` is `linux`, `windows`, `macos`, `android` or `ios`, and each platform's commands run on that platform (MacOS and iOS need a Mac with Xcode 14.2, and on Windows see below for the terminal to run them from).
 
 | Command | What it does |
 |---|---|
@@ -42,9 +42,9 @@ Run these from the repository root. `<platform>` is `linux`, `windows`, `macos`,
 ## What each platform needs
 
 - **Linux:** the GTK 3 and WebKitGTK 4.1 runtime libraries (`libgtk-3-0`, `libwebkit2gtk-4.1-0`) to build and run, with no development packages, `xvfb`, `xwininfo` and `jq` for the smoke tests, and `zip` and `dpkg-deb` to package. If the web view's sandbox cannot start on your system the app says so and runs without it. See `scripts/run-linux.md`.
-- **Windows:** `bun run setup:ziggy-example:windows` downloads the pinned WebView2 SDK. Packaging needs NSIS (`makensis`).
+- **Windows:** the scripts are bash scripts and run under Git Bash. The tools `mise install` puts in place (`bun`, `zig`, `jq`) must be on PATH: add `%LOCALAPPDATA%\mise\shims` to PATH, or activate mise in your shell. Then `bun run --filter=ziggy-example setup` downloads the pinned WebView2 SDK, once. Packaging needs NSIS (`makensis`).
 - **MacOS and iOS:** a Mac with the pinned toolchain, macOS 12.7.6 and Xcode 14.2. No version is raised.
-- **Android:** `bun run setup:ziggy-example:android`, which uses the same Android SDK setup as the rest of the repository.
+- **Android:** `bun run --filter=ziggy-example setup`, which uses the same Android SDK setup as the rest of the repository.
 
 ## Test hooks
 

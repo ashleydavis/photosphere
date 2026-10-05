@@ -40,6 +40,25 @@ windows_zig_target() {
 }
 
 #
+# Fails, naming what is missing and how to get it, when any of the given commands is not on PATH.
+# Usage: windows_require_commands <command>...
+#
+windows_require_commands() {
+    local missing=""
+    local command_name
+    for command_name in "$@"; do
+        if ! command -v "$command_name" > /dev/null 2>&1; then
+            missing="$missing $command_name"
+        fi
+    done
+    if [ -n "$missing" ]; then
+        echo "Not found on PATH:$missing. Run \"mise install\" from the repository root, and put the tools it installs on PATH:" >&2
+        echo "add %LOCALAPPDATA%\\mise\\shims to PATH, or activate mise in your shell." >&2
+        exit 1
+    fi
+}
+
+#
 # Prints the app's version, read from package.json.
 #
 windows_app_version() {
