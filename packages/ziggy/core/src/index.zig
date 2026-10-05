@@ -12,3 +12,6 @@ pub const jni = @import("lib/jni.zig");
 pub const test_control = @import("lib/test-control.zig");
 pub const fake_shell = @import("lib/fake-shell.zig");
 pub const accelerator = @import("lib/accelerator.zig");
+pub const inject_script = @import("lib/inject-script.zig");
+pub const ui_files = @import("lib/ui-files.zig");
+pub const UiFile = ui_files.UiFile;

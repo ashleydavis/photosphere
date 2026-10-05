@@ -72,8 +72,8 @@ apple_zig_arch() {
     esac
 }
 
-# Bundles the example's page and builds the Zig static library, so an Xcode build has everything it links and copies.
-# <native_dir> gets lib/libziggy_example.a, include/ziggy.h and ui/ (the page).
+# Bundles the example's page and builds the Zig static library, which embeds the page, so an Xcode build has everything it links.
+# <native_dir> gets lib/libziggy_example.a and include/ziggy.h.
 # Usage: apple_sync_native <zig_target> <native_dir> <yes|no test hooks> <zig optimize mode>
 apple_sync_native() {
     local zig_target="$1"
@@ -89,8 +89,6 @@ apple_sync_native() {
     else
         (cd "$APPLE_REPO_ROOT/apps/ziggy-example/core" && zig build -Dtarget="$zig_target" -Doptimize="$optimize" -p "$native_dir") || apple_fail "the Zig build failed."
     fi
-    mkdir -p "$native_dir/ui"
-    rsync -a --delete "$APPLE_EXAMPLE_DIR/dist/" "$native_dir/ui/" || apple_fail "copying the page failed."
 }
 
 # Prints the identifier of the iOS simulator to use, booting it if it is not running. It never creates or deletes a

@@ -1,6 +1,6 @@
 # clean-macos
 
-Runs `xcodebuild clean` for the Debug and Release configurations and removes the synced `lib/libziggy_example.a` and `include/ziggy.h`. The synced `ui/` copy stays until the next sync overwrites it.
+Runs `xcodebuild clean` for the Debug and Release configurations and removes the synced `lib/libziggy_example.a` and `include/ziggy.h`.
 
 Run it on a Mac: `bash apps/ziggy-example/scripts/clean-macos.sh`.
 

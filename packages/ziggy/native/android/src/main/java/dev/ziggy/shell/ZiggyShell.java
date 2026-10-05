@@ -50,11 +50,9 @@ public final class ZiggyShell implements ZiggyHost {
     private static final String EXTRA_TEST_MODE = "ziggy.testMode";
     private static final String EXTRA_TEST_PORT_FILE = "ziggy.testPortFile";
 
-    // The asset that holds the script exposing window.ziggy. The app's build copies it there from ziggy-bridge.
-    private static final String INJECT_SCRIPT_ASSET = "ziggy-inject.js";
-
-    // Where the built page is, inside the APK assets, and the prefix every address of the app's own page starts with.
-    private static final String APP_URL_PREFIX = "file:///android_asset/ui/";
+    // The prefix every address of the app's own page starts with. The page is embedded in the app's native library and each file is
+    // answered from there in shouldInterceptRequest. The host name is under .invalid, which can never be looked up.
+    private static final String APP_URL_PREFIX = "https://ziggy-app.invalid/";
 
     // The values of ziggy_check_url's answer.
     private static final int URL_ALLOW = 0;
@@ -175,7 +173,7 @@ public final class ZiggyShell implements ZiggyHost {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             throw new IllegalStateException("This WebView cannot run a script at document start (WebViewFeature.DOCUMENT_START_SCRIPT), which Ziggy needs to expose window.ziggy before the page's scripts.");
         }
-        WebViewCompat.addDocumentStartJavaScript(webView, readAsset(INJECT_SCRIPT_ASSET), Collections.singleton("*"));
+        WebViewCompat.addDocumentStartJavaScript(webView, new String(ZiggyNative.injectScript(), StandardCharsets.UTF_8), Collections.singleton("*"));
 
         webView.addJavascriptInterface(new PageBridge(), "ZiggyAndroid");
         webView.setWebViewClient(new ZiggyWebViewClient());
@@ -191,18 +189,43 @@ public final class ZiggyShell implements ZiggyHost {
         });
     }
 
-    private String readAsset(String name) {
-        try (InputStream stream = activity.getAssets().open(name)) {
-            java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
-            byte[] buffer = new byte[8192];
-            int count;
-            while ((count = stream.read(buffer)) != -1) {
-                bytes.write(buffer, 0, count);
+    // Answers a request to the app's own page from the files embedded in the core library: the file's bytes with its content
+    // type, or a 404 when the page has no such file. Anything asked after the core is destroyed is refused.
+    private WebResourceResponse pageResponse(String url) {
+        String path = url.substring(APP_URL_PREFIX.length());
+        int pathEnd = path.length();
+        for (int index = 0; index < path.length(); index++) {
+            char character = path.charAt(index);
+            if (character == '?' || character == '#') {
+                pathEnd = index;
+                break;
             }
-            return new String(bytes.toByteArray(), StandardCharsets.UTF_8);
-        } catch (IOException error) {
-            throw new IllegalStateException("Ziggy could not read the asset " + name, error);
         }
+        byte[] pathBytes = path.substring(0, pathEnd).getBytes(StandardCharsets.UTF_8);
+        byte[] content;
+        String contentType;
+        coreLock.readLock().lock();
+        try {
+            if (handle == 0) {
+                return new WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", Collections.<String, String>emptyMap(), new ByteArrayInputStream(new byte[0]));
+            }
+            content = ZiggyNative.uiFileContent(handle, pathBytes);
+            contentType = ZiggyNative.uiFileContentType(handle, pathBytes);
+        } finally {
+            coreLock.readLock().unlock();
+        }
+        if (content == null || contentType == null) {
+            return new WebResourceResponse("text/plain", "UTF-8", 404, "Not Found", Collections.<String, String>emptyMap(), new ByteArrayInputStream(new byte[0]));
+        }
+        // The content type is such as "text/javascript; charset=utf-8": the web view wants the type and the character set apart.
+        String mimeType = contentType;
+        String encoding = null;
+        int separator = contentType.indexOf(';');
+        if (separator >= 0) {
+            mimeType = contentType.substring(0, separator).trim();
+            encoding = "UTF-8";
+        }
+        return new WebResourceResponse(mimeType, encoding, 200, "OK", Collections.<String, String>emptyMap(), new ByteArrayInputStream(content));
     }
 
     // Asks the core what to do with an address. Anything asked after the core is destroyed is refused.
@@ -428,6 +451,9 @@ public final class ZiggyShell implements ZiggyHost {
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
             String url = request.getUrl().toString();
+            if (url.startsWith(APP_URL_PREFIX)) {
+                return pageResponse(url);
+            }
             if (checkUrl(url) == URL_ALLOW) {
                 return null;
             }

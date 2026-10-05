@@ -12,12 +12,12 @@ The static library with the core (`libziggy_example.a` for the example) is not p
 ```swift
 let bridge = ZiggyBridge(frame: frame)  // web view, injected script, message handler
 // put bridge.webView on screen
-bridge.start()                          // creates the core and loads ui/index.html
+bridge.start()                          // creates the core and loads the page, which the core serves
 // when the app ends:
 bridge.shutdown()                       // ziggy_destroy, once
 ```
 
-The app bundle must contain `ziggy-inject.js` (from `packages/ziggy/bridge/inject`) and the built page in a `ui` directory of its resources. The bundle identifier names the data directory under Application Support.
+The app bundle needs nothing from Ziggy: the page and the script that exposes `window.ziggy` (`ziggy-inject.js`, from `packages/ziggy/bridge/inject`) are both embedded in the app's core library. The bridge serves the page through a `WKURLSchemeHandler` for the `ziggy-app` scheme, asking the core for each file with `ziggy_ui_file`, and injects the script it gets from `ziggy_inject_script`. The bundle identifier names the data directory under Application Support.
 
 ## Test hooks
 

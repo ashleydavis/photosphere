@@ -8,6 +8,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXAMPLE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ZIGGY_DIR="$(cd "$SCRIPT_DIR/../../../packages/ziggy" && pwd)"
 
+# The example's core embeds the built page, so the page is built before anything here.
+(cd "$EXAMPLE_DIR" && bun run bundle:ui)
+
 ACTION="${1:-}"
 case "$ACTION" in
     build)
@@ -22,11 +25,13 @@ case "$ACTION" in
                 (cd "$EXAMPLE_DIR/core" && zig build -Dtarget="$target" -Dtest-hooks="$hooks" -p "zig-out/cross/$target-$hooks")
             done
         done
-        # The Windows shell, which needs the WebView2 SDK, fetched once and then reused.
+        # The Windows shell, which needs the WebView2 SDK, fetched once and then reused. It is only compiled here, not linked: the
+        # link needs Microsoft's toolchain, which is on a Windows machine, and Zig has no Windows headers for that toolchain, so
+        # the check uses the MinGW target, which has them.
         bash "$SCRIPT_DIR/fetch-webview2.sh"
         for target in x86_64-windows-gnu aarch64-windows-gnu; do
-            echo "Cross-building the Windows shell for $target"
-            (cd "$EXAMPLE_DIR/shells/windows" && zig build -Dtarget="$target" -p "zig-out/cross/$target")
+            echo "Checking the Windows shell for $target"
+            (cd "$EXAMPLE_DIR/shells/windows" && zig build check -Dtarget="$target" -Dcompile-only=true)
         done
         ;;
     test)

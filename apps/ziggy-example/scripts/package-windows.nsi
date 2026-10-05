@@ -1,7 +1,7 @@
 ; The NSIS installer for the Ziggy example on Windows. Built by package-windows.sh, which defines:
 ;   VERSION      the app's version
 ;   ARCH         x64 or arm64
-;   SOURCE_DIR   the directory holding ziggy-example.exe, WebView2Loader.dll and the ui directory
+;   SOURCE_DIR   the directory holding ziggy-example.exe, which is the whole app
 ;   OUTPUT_FILE  the installer to write
 ; The installer is unsigned and installs for the current user only, so it needs no administrator rights.
 
@@ -23,9 +23,6 @@ RequestExecutionLevel user
 Section "Install"
     SetOutPath "$INSTDIR"
     File "${SOURCE_DIR}\ziggy-example.exe"
-    File "${SOURCE_DIR}\WebView2Loader.dll"
-    SetOutPath "$INSTDIR\ui"
-    File /r "${SOURCE_DIR}\ui\*.*"
     WriteUninstaller "$INSTDIR\uninstall.exe"
     CreateShortcut "$SMPROGRAMS\Ziggy example.lnk" "$INSTDIR\ziggy-example.exe"
     WriteRegStr HKCU "Software\dev.ziggy.example" "InstallDir" "$INSTDIR"
@@ -36,11 +33,6 @@ SectionEnd
 
 Section "Uninstall"
     Delete "$INSTDIR\ziggy-example.exe"
-    Delete "$INSTDIR\WebView2Loader.dll"
-    Delete "$INSTDIR\ui\index.html"
-    Delete "$INSTDIR\ui\assets\main.js"
-    RMDir "$INSTDIR\ui\assets"
-    RMDir "$INSTDIR\ui"
     Delete "$INSTDIR\uninstall.exe"
     RMDir "$INSTDIR"
     Delete "$SMPROGRAMS\Ziggy example.lnk"

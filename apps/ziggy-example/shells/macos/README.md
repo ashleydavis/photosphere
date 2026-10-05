@@ -8,7 +8,7 @@ An AppKit app: a window holding Ziggy's `WKWebView`, and a main menu with Quit. 
 
 ## Building
 
-The project links `libziggy_example.a` from the directory in the `ZIGGY_NATIVE_DIR` build setting (default `zig-out` beside the project) and copies its `ui/` directory into the app's Resources, with a run script phase. Fill that directory first with `scripts/sync-macos.sh`. The build and run scripts (`build-macos.sh`, `run-macos.sh`, `package-macos.sh`, `open-macos.sh`, `clean-macos.sh`) do it for you.
+The project links `libziggy_example.a` from the directory in the `ZIGGY_NATIVE_DIR` build setting (default `zig-out` beside the project) (which has the page embedded in it, so the app has no page files of its own). Fill that directory first with `scripts/sync-macos.sh`. The build and run scripts (`build-macos.sh`, `run-macos.sh`, `package-macos.sh`, `open-macos.sh`, `clean-macos.sh`) do it for you.
 
 ## What you do on the Mac
 

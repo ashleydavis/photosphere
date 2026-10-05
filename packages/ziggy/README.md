@@ -7,7 +7,7 @@ All of Ziggy is in this folder, and nothing in it names an app. An app (the [Zig
 ## Where things are
 
 - `core/`: the Zig library every app links. It has the C interface (`core/src/lib/ziggy.h`), the message dispatcher, the task runner, the origin check, the host callback plumbing and the test control connection. It is the same code on every platform and never touches a window.
-- `bridge/`: the TypeScript the page side needs. `inject/ziggy-inject.js` is the script every shell injects to create `window.ziggy`, and `src` holds its types.
+- `bridge/`: the TypeScript the page side needs. `inject/ziggy-inject.js` is the script every shell injects to create `window.ziggy`. It is embedded in the core library, so an app supplies nothing for it. `src` holds its types.
 - `native/<platform>/`: the framework half of each shell, which hosts the system web view, draws the menu, handles shortcuts and developer tools, shows the file and folder dialogs, and moves messages between the page and the core through `ziggy.h`.
   - `linux`: Zig, GTK 3 and WebKitGTK 4.1.
   - `windows`: Zig, WebView2.

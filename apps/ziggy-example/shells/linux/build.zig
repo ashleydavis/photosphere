@@ -1,8 +1,9 @@
 const std = @import("std");
+const ziggy_shell_build = @import("ziggy-shell-linux");
 
 //
-// Builds the Ziggy example's Linux shell, installed to zig-out/bin/ziggy-example. The built page is expected in
-// zig-out/bin/ui, put there by the sync script.
+// Builds the Ziggy example's Linux shell, installed to zig-out/bin/ziggy-example. The built page (apps/ziggy-example/dist,
+// made by `bun run bundle:ui`) is embedded in the executable, so the executable is the whole app.
 //
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
@@ -26,9 +27,7 @@ pub fn build(b: *std.Build) !void {
         .link_libc = true,
     });
     module.addImport("ziggy-shell-linux", shell.module("ziggy-shell-linux"));
-    module.addAnonymousImport("ziggy-inject", .{
-        .root_source_file = b.path("../../../../packages/ziggy/bridge/inject/ziggy-inject.js"),
-    });
+    module.addImport("ui-files", try ziggy_shell_build.embedPage(b, shell.module("ziggy-shell-linux"), "../../dist"));
     module.linkLibrary(core.artifact("ziggy_example"));
 
     const executable = b.addExecutable(.{

@@ -9,6 +9,13 @@ const std = @import("std");
 const c = @import("gtk.zig");
 const z = @import("c");
 const menu_keys = @import("menu-keys.zig");
+const ui_files = @import("ui-files");
+
+// The URL scheme the bundled page is served under. WebKitGTK asks the shell for each file instead of reading a directory.
+const app_scheme = "ziggy-app";
+
+// The URL prefix of the bundled page, with a trailing slash. It is what the core allows the web view to navigate to.
+const app_url_prefix = app_scheme ++ "://app/";
 
 //
 // What an app tells the shell about itself.
@@ -22,10 +29,8 @@ pub const AppConfig = struct {
     default_width: c_int,
     // The window's height when the command line does not give one.
     default_height: c_int,
-    // The script that exposes window.ziggy, run in the page before its own scripts.
-    inject_script: [:0]const u8,
-    // The name of the directory beside the executable that holds the app's bundled page.
-    ui_directory_name: [:0]const u8,
+    // The files of the app's bundled page, embedded in the executable. One of them must be "index.html".
+    ui_files: []const ui_files.UiFile,
 };
 
 //
@@ -54,8 +59,6 @@ const Shell = struct {
     queue: *c.GAsyncQueue,
     // Set when the core has been destroyed, so nothing more is delivered.
     destroyed: std.atomic.Value(bool),
-    // The URL prefix of the app's bundled page, with a trailing slash. Owned.
-    app_url_prefix: [:0]u8,
     // Whether a test hooks build was started in test mode.
     test_mode: bool,
     // The window, once it exists.
@@ -84,7 +87,6 @@ pub fn run(app_config: AppConfig, args: []const [:0]const u8) !u8 {
         .core = null,
         .queue = c.g_async_queue_new() orelse return error.OutOfMemory,
         .destroyed = .init(false),
-        .app_url_prefix = undefined,
         .test_mode = false,
         .window = null,
         .menu_arena = std.heap.ArenaAllocator.init(std.heap.c_allocator),
@@ -127,6 +129,25 @@ fn turnSandboxOffWhenItCannotStart() !void {
     }
 }
 
+//
+// Answers a web view request for one of the bundled page's files, from the files embedded in the executable. A path that
+// is not one of them is answered with a not found error.
+//
+fn onUriSchemeRequest(request: *c.WebKitURISchemeRequest, user_data: c.gpointer) callconv(.c) void {
+    const shell: *Shell = @ptrCast(@alignCast(user_data.?));
+    const request_path = std.mem.span(c.webkit_uri_scheme_request_get_path(request));
+    const file = ui_files.findFile(shell.app_config.ui_files, request_path) orelse {
+        const not_found = c.g_error_new_literal(c.g_io_error_quark(), c.G_IO_ERROR_NOT_FOUND, "the page has no such file");
+        c.webkit_uri_scheme_request_finish_error(request, not_found);
+        c.g_error_free(not_found);
+        return;
+    };
+    // The bytes live in the executable for as long as it runs, so the stream is told not to free them.
+    const stream = c.g_memory_input_stream_new_from_data(file.content.ptr, @intCast(file.content.len), null);
+    c.webkit_uri_scheme_request_finish(request, stream, @intCast(file.content.len), ui_files.contentType(file.path).ptr);
+    c.g_object_unref(stream);
+}
+
 fn onActivate(application: *c.GtkApplication, user_data: ?*anyopaque) callconv(.c) void {
     const shell: *Shell = @ptrCast(@alignCast(user_data.?));
     start(shell, application) catch |err| {
@@ -141,19 +162,16 @@ fn start(shell: *Shell, application: *c.GtkApplication) !void {
     const test_hooks = z.ziggy_test_hooks_enabled();
     shell.test_mode = test_hooks and c.g_getenv("ZIGGY_TEST_MODE") != null;
 
-    const executable = c.g_file_read_link("/proc/self/exe", null) orelse {
-        return error.ExecutablePathUnknown;
-    };
-    defer c.g_free(executable);
-    const executable_directory = c.g_path_get_dirname(executable);
-    defer c.g_free(executable_directory);
-    const ui_directory = c.g_build_filename(executable_directory, shell.app_config.ui_directory_name.ptr, @as([*c]const u8, null));
-    defer c.g_free(ui_directory);
-    const ui_directory_uri = c.g_filename_to_uri(ui_directory, null, null) orelse {
-        return error.UiDirectoryUriFailed;
-    };
-    defer c.g_free(ui_directory_uri);
-    shell.app_url_prefix = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}/", .{std.mem.span(ui_directory_uri)}, 0);
+    if (ui_files.findFile(shell.app_config.ui_files, "/") == null) {
+        return error.UiHasNoIndexPage;
+    }
+    // The page's own scripts are classic scripts, but a page may also fetch its files, which needs the scheme to be
+    // allowed to make cross-origin style requests and to count as a secure context like https does.
+    const web_context = c.webkit_web_context_get_default();
+    c.webkit_web_context_register_uri_scheme(web_context, app_scheme, onUriSchemeRequest, shell, null);
+    const security_manager = c.webkit_web_context_get_security_manager(web_context);
+    c.webkit_security_manager_register_uri_scheme_as_secure(security_manager, app_scheme);
+    c.webkit_security_manager_register_uri_scheme_as_cors_enabled(security_manager, app_scheme);
 
     const data_directory = c.g_build_filename(c.g_get_user_data_dir(), shell.app_config.app_id.ptr, @as([*c]const u8, null));
     defer c.g_free(data_directory);
@@ -194,7 +212,9 @@ fn start(shell: *Shell, application: *c.GtkApplication) !void {
         return error.ScriptMessageHandlerFailed;
     }
     _ = c.g_signal_connect_data(content_manager, "script-message-received::ziggy", @ptrCast(&onScriptMessage), shell, null, 0);
-    const user_script = c.webkit_user_script_new(shell.app_config.inject_script.ptr, c.WEBKIT_USER_CONTENT_INJECT_TOP_FRAME, c.WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, null, null);
+    var inject_script_length: usize = 0;
+    const inject_script = z.ziggy_inject_script(&inject_script_length);
+    const user_script = c.webkit_user_script_new(@ptrCast(inject_script), c.WEBKIT_USER_CONTENT_INJECT_TOP_FRAME, c.WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, null, null);
     c.webkit_user_content_manager_add_script(content_manager, user_script);
     c.webkit_user_script_unref(user_script);
     _ = c.g_signal_connect_data(web_view, "decide-policy", @ptrCast(&onDecidePolicy), shell, null, 0);
@@ -209,7 +229,7 @@ fn start(shell: *Shell, application: *c.GtkApplication) !void {
     config.menu_action = menuAction;
     config.worker_threads = c.g_get_num_processors();
     config.max_concurrent_child_tasks = 10;
-    config.app_url_prefix = shell.app_url_prefix.ptr;
+    config.app_url_prefix = app_url_prefix;
     config.data_dir = data_directory;
     if (shell.test_mode) {
         config.test_mode = true;
@@ -222,7 +242,7 @@ fn start(shell: *Shell, application: *c.GtkApplication) !void {
     try buildMenu(shell, box_widget, window);
 
     const query: []const u8 = if (shell.test_mode) "?testMode=1" else "";
-    const page_url = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}index.html{s}", .{ shell.app_url_prefix, query }, 0);
+    const page_url = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}index.html{s}", .{ app_url_prefix, query }, 0);
     defer std.heap.c_allocator.free(page_url);
     c.webkit_web_view_load_uri(web_view, page_url.ptr);
     c.gtk_widget_show_all(window_widget);
@@ -314,7 +334,6 @@ fn onShutdown(application: *c.GApplication, user_data: ?*anyopaque) callconv(.c)
     const shell: *Shell = @ptrCast(@alignCast(user_data.?));
     destroyCore(shell);
     discardPending(shell);
-    std.heap.c_allocator.free(shell.app_url_prefix);
 }
 
 //

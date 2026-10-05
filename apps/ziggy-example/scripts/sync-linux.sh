@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Builds the example's page and its Linux shell, and puts the page beside the executable. See sync-linux.md.
+# Builds the example's page and its Linux shell, which embeds the page in the executable. See sync-linux.md.
 
 set -eu
 
@@ -15,5 +15,3 @@ fi
 
 (cd "$EXAMPLE_DIR" && bun run bundle:ui)
 (cd "$SHELL_DIR" && zig build $HOOKS_ARGUMENT)
-mkdir -p "$SHELL_DIR/zig-out/bin/ui"
-cp -R "$EXAMPLE_DIR/dist/." "$SHELL_DIR/zig-out/bin/ui/"

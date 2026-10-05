@@ -91,3 +91,4 @@ apps/ziggy-example/out/
 packages/ziggy/native/android/build/
 packages/ziggy/native/android/.gradle/
 apps/ziggy-example/release/
+apps/ziggy-example/dist-build.*

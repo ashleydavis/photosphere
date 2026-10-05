@@ -17,23 +17,25 @@ fi
 WINDOWS_SHELL_DIR="$WINDOWS_EXAMPLE_DIR/shells/windows"
 WINDOWS_SDK_DIR="$WINDOWS_EXAMPLE_DIR/webview2-sdk"
 
-# The name of the directory inside an install prefix that holds the exe, WebView2Loader.dll and the ui directory.
+# The name of the directory inside an install prefix that holds the exe, which is the whole app.
 WINDOWS_APP_DIR_NAME="ziggy-example"
 
 #
-# Prints the Zig target for an architecture name (x64 or arm64), or fails.
-# Usage: windows_zig_target <x64|arm64>
+# Prints the Zig target for an architecture name, or fails. Only x64 can be built: the WebView2 loader is linked from the SDK's
+# static library, which needs the -windows-msvc target, and Zig 0.16's standard library does not compile for aarch64-windows-msvc.
+# Usage: windows_zig_target <x64>
 #
 windows_zig_target() {
     case "$1" in
         x64)
-            echo "x86_64-windows-gnu"
+            echo "x86_64-windows-msvc"
             ;;
         arm64)
-            echo "aarch64-windows-gnu"
+            echo "Windows arm64 cannot be built yet: it needs the aarch64-windows-msvc target, which Zig 0.16's standard library does not compile." >&2
+            return 1
             ;;
         *)
-            echo "Unknown architecture \"$1\". Use x64 or arm64." >&2
+            echo "Unknown architecture \"$1\". Use x64." >&2
             return 1
             ;;
     esac

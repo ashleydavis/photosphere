@@ -13,5 +13,5 @@ What it does:
 
 1. Writes a libc file per architecture from the NDK's sysroot. Zig has no C library for Android, so `zig build --libc <file>` is given the NDK's headers and libraries (the ones for the app's minimum SDK level). The Zig core's JNI code is translated from the NDK's own `jni.h` with the include directories read from the same file.
 2. Builds `libziggy_example.so` per architecture with `zig build -Dtarget=<arch>-linux-android` in `apps/ziggy-example/core` and copies it to `jniLibs/<abi>/`. A library of an architecture not asked for is removed, by name.
-3. Builds the page (`bun run bundle:ui`) and copies `dist` to `assets/ui`, deleting files of an earlier build that are gone.
-4. Copies `packages/ziggy/bridge/inject/ziggy-inject.js` to `assets/ziggy-inject.js`, which the shell injects into the page.
+3. Builds the page (`bun run bundle:ui`) before the library, because the library embeds it. The library is where the shell finds the page, so nothing of the page goes into the assets.
+4. Deletes the page and inject script copies that earlier versions of this script put in the assets, because the library holds both now.

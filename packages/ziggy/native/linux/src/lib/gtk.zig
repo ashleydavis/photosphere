@@ -155,3 +155,27 @@ pub extern fn gtk_file_chooser_set_current_name(chooser: *GtkFileChooserNative, 
 pub extern fn gtk_file_chooser_set_do_overwrite_confirmation(chooser: *GtkFileChooserNative, do_overwrite_confirmation: gboolean) void;
 pub extern fn gtk_file_chooser_get_filenames(chooser: *GtkFileChooserNative) ?*GSList;
 pub extern fn g_slist_free(list: ?*GSList) void;
+
+pub const WebKitWebContext = opaque {};
+pub const WebKitSecurityManager = opaque {};
+pub const WebKitURISchemeRequest = opaque {};
+pub const GInputStream = opaque {};
+
+// A WebKitURISchemeRequestCallback: called for every request to a URL of a scheme the app registered.
+pub const WebKitURISchemeRequestCallback = *const fn (request: *WebKitURISchemeRequest, user_data: gpointer) callconv(.c) void;
+
+// G_IO_ERROR_NOT_FOUND.
+pub const G_IO_ERROR_NOT_FOUND: c_int = 1;
+
+pub extern fn webkit_web_context_get_default() *WebKitWebContext;
+pub extern fn webkit_web_context_register_uri_scheme(context: *WebKitWebContext, scheme: [*:0]const u8, callback: WebKitURISchemeRequestCallback, user_data: gpointer, user_data_destroy_func: gpointer) void;
+pub extern fn webkit_web_context_get_security_manager(context: *WebKitWebContext) *WebKitSecurityManager;
+pub extern fn webkit_security_manager_register_uri_scheme_as_secure(security_manager: *WebKitSecurityManager, scheme: [*:0]const u8) void;
+pub extern fn webkit_security_manager_register_uri_scheme_as_cors_enabled(security_manager: *WebKitSecurityManager, scheme: [*:0]const u8) void;
+pub extern fn webkit_uri_scheme_request_get_path(request: *WebKitURISchemeRequest) [*:0]const u8;
+pub extern fn webkit_uri_scheme_request_finish(request: *WebKitURISchemeRequest, stream: *GInputStream, stream_length: i64, content_type: ?[*:0]const u8) void;
+pub extern fn webkit_uri_scheme_request_finish_error(request: *WebKitURISchemeRequest, err: *GError) void;
+pub extern fn g_memory_input_stream_new_from_data(data: ?*const anyopaque, len: isize, destroy: gpointer) *GInputStream;
+pub extern fn g_io_error_quark() u32;
+pub extern fn g_error_new_literal(domain: u32, code: c_int, message: [*:0]const u8) *GError;
+pub extern fn g_error_free(err: *GError) void;

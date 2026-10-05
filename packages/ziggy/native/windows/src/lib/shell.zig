@@ -5,18 +5,23 @@
 // Messages from the core arrive on any thread, so they are queued and delivered to the web view from the UI thread.
 //
 // WebView2 is used through its native COM interface, with the declarations translated from the SDK's own WebView2.h.
-// WebView2Loader.dll is loaded from the executable's directory when the shell starts.
+// The WebView2 loader is linked into the executable from the SDK's static library, so no DLL is needed beside it.
 //
 
 const std = @import("std");
 const builtin = @import("builtin");
 const c = @import("c");
 const geometry_lib = @import("geometry.zig");
-const file_url = @import("file-url.zig");
+const ui_files = @import("ui-files");
 const accelerator_lib = @import("accelerator.zig");
 const actions_lib = @import("actions.zig");
 const menu_lib = @import("menu.zig");
 const pickers_lib = @import("pickers.zig");
+
+//
+// The URL prefix the bundled page is served under, with a trailing slash. The host name is under .invalid, which can never
+// be looked up, so a request to it can only ever be answered by the shell. It is what the core allows the web view to navigate to.
+const app_url_prefix = "https://ziggy-app.invalid/";
 
 //
 // What an app tells the shell about itself.
@@ -30,10 +35,8 @@ pub const AppConfig = struct {
     default_width: c_int,
     // The window's height when the command line does not give one.
     default_height: c_int,
-    // The script that exposes window.ziggy, run in the page before its own scripts.
-    inject_script: [:0]const u8,
-    // The name of the directory beside the executable that holds the app's bundled page.
-    ui_directory_name: [:0]const u8,
+    // The files of the app's bundled page, embedded in the executable. One of them must be "index.html".
+    ui_files: []const ui_files.UiFile,
 };
 
 //
@@ -54,9 +57,6 @@ const WM_ZIGGY_PICK: c.UINT = c.WM_APP + 2;
 const WM_ZIGGY_MENU: c.UINT = c.WM_APP + 3;
 
 //
-// The signature of CreateCoreWebView2EnvironmentWithOptions, which is looked up in WebView2Loader.dll.
-//
-const CreateEnvironmentFn = *const @TypeOf(c.CreateCoreWebView2EnvironmentWithOptions);
 
 //
 // The name of the window class the shell registers.
@@ -131,6 +131,10 @@ const NavigationHandler = ComHandler(c.ICoreWebView2NavigationStartingEventHandl
 //
 const NewWindowHandler = ComHandler(c.ICoreWebView2NewWindowRequestedEventHandler, c.IID_ICoreWebView2NewWindowRequestedEventHandler);
 //
+// The handler object for the WebResourceRequested callback, which WebView2 calls on the UI thread for each request to the bundled page.
+//
+const ResourceHandler = ComHandler(c.ICoreWebView2WebResourceRequestedEventHandler, c.IID_ICoreWebView2WebResourceRequestedEventHandler);
+//
 // The handler object for the ScriptAdded callback, which WebView2 calls on the UI thread.
 //
 const ScriptAddedHandler = ComHandler(c.ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler, c.IID_ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler);
@@ -201,8 +205,6 @@ const Shell = struct {
     destroyed: std.atomic.Value(bool),
     // Set on the UI thread when the window starts closing, so the creation callbacks still to come do nothing.
     closing: bool,
-    // The URL prefix of the app's bundled page, with a trailing slash. Owned.
-    app_url_prefix: [:0]u8,
     // The page's address as UTF-16, including the query in test mode. Owned.
     page_url: [:0]u16,
     // The script that exposes window.ziggy, as UTF-16. Owned.
@@ -223,6 +225,10 @@ const Shell = struct {
     navigation_handler: NavigationHandler,
     // Receives every request to open a new window.
     new_window_handler: NewWindowHandler,
+    // Receives every request to the bundled page, which is answered from the files embedded in the executable.
+    resource_handler: ResourceHandler,
+    // The WebView2 environment, which makes the responses to those requests. Null until it exists.
+    environment: ?*c.ICoreWebView2Environment,
     // Receives the result of adding the injected script.
     script_added_handler: ScriptAddedHandler,
     // The menu items that do something, in command id order. Every action is owned.
@@ -261,7 +267,6 @@ pub fn run(app_config: AppConfig, args: []const [:0]const u8) !u8 {
         .queue = .empty,
         .destroyed = .init(false),
         .closing = false,
-        .app_url_prefix = undefined,
         .page_url = undefined,
         .inject_script = undefined,
         .data_directory = undefined,
@@ -280,6 +285,8 @@ pub fn run(app_config: AppConfig, args: []const [:0]const u8) !u8 {
         .web_message_handler = undefined,
         .navigation_handler = undefined,
         .new_window_handler = undefined,
+        .resource_handler = undefined,
+        .environment = null,
         .script_added_handler = undefined,
         .script_executed_handler = undefined,
     };
@@ -353,6 +360,12 @@ fn initHandlers(shell: *Shell) void {
         },
         .shell = shell,
     };
+    shell.resource_handler = .{
+        .interface = .{
+            .lpVtbl = @constCast(&resource_vtable),
+        },
+        .shell = shell,
+    };
     shell.script_added_handler = .{
         .interface = .{
             .lpVtbl = @constCast(&script_added_vtable),
@@ -405,16 +418,6 @@ fn readEnvironment(allocator: std.mem.Allocator, comptime name: []const u8) !?[:
 }
 
 //
-// Reads the path of the running executable as UTF-8. The caller owns the result.
-//
-fn executablePath(allocator: std.mem.Allocator) ![:0]u8 {
-    var buffer: [32768]u16 = undefined;
-    const length = c.GetModuleFileNameW(null, &buffer, buffer.len);
-    if (length == 0 or length >= buffer.len) {
-        return error.ExecutablePathUnknown;
-    }
-    return try std.unicode.utf16LeToUtf8AllocZ(allocator, buffer[0..length]);
-}
 
 //
 // Creates the window, starts WebView2 and runs the message loop until the window closes.
@@ -427,19 +430,16 @@ fn start(shell: *Shell, allocator: std.mem.Allocator) !u8 {
         shell.test_mode = test_mode != null;
     }
 
-    const executable = try executablePath(allocator);
-    defer allocator.free(executable);
-    const executable_directory = std.fs.path.dirnameWindows(executable) orelse {
-        return error.ExecutablePathUnknown;
-    };
-    const ui_directory = try std.fmt.allocPrint(allocator, "{s}\\{s}", .{ executable_directory, shell.app_config.ui_directory_name });
-    defer allocator.free(ui_directory);
-    shell.app_url_prefix = try file_url.directoryFileUrl(allocator, ui_directory);
+    if (ui_files.findFile(shell.app_config.ui_files, "/") == null) {
+        return error.UiHasNoIndexPage;
+    }
     const query: []const u8 = if (shell.test_mode) "?testMode=1" else "";
-    const page_url_utf8 = try std.fmt.allocPrint(allocator, "{s}index.html{s}", .{ shell.app_url_prefix, query });
+    const page_url_utf8 = try std.fmt.allocPrint(allocator, "{s}index.html{s}", .{ app_url_prefix, query });
     defer allocator.free(page_url_utf8);
     shell.page_url = try std.unicode.utf8ToUtf16LeAllocZ(allocator, page_url_utf8);
-    shell.inject_script = try std.unicode.utf8ToUtf16LeAllocZ(allocator, shell.app_config.inject_script);
+    var inject_script_length: usize = 0;
+    const inject_script = c.ziggy_inject_script(&inject_script_length);
+    shell.inject_script = try std.unicode.utf8ToUtf16LeAllocZ(allocator, inject_script[0..inject_script_length]);
 
     const local_app_data = try readEnvironment(allocator, "LOCALAPPDATA") orelse {
         return error.LocalAppDataMissing;
@@ -536,15 +536,7 @@ fn start(shell: *Shell, allocator: std.mem.Allocator) !u8 {
         return error.WindowCreateFailed;
     }
 
-    const loader = c.LoadLibraryExW(std.unicode.utf8ToUtf16LeStringLiteral("WebView2Loader.dll"), null, c.LOAD_LIBRARY_SEARCH_APPLICATION_DIR) orelse {
-        std.debug.print("ziggy shell: WebView2Loader.dll could not be loaded from the executable's directory, error {d}\n", .{c.GetLastError()});
-        return error.WebView2LoaderMissing;
-    };
-    const create_address = c.GetProcAddress(loader, "CreateCoreWebView2EnvironmentWithOptions") orelse {
-        return error.WebView2LoaderInvalid;
-    };
-    const create_environment: CreateEnvironmentFn = @ptrCast(create_address);
-    check("CreateCoreWebView2EnvironmentWithOptions", create_environment(null, wide_user_data_folder.ptr, null, &shell.environment_handler.interface));
+    check("CreateCoreWebView2EnvironmentWithOptions", c.CreateCoreWebView2EnvironmentWithOptions(null, wide_user_data_folder.ptr, null, &shell.environment_handler.interface));
 
     var message: c.MSG = undefined;
     while (true) {
@@ -673,6 +665,10 @@ fn closeWebView(shell: *Shell) void {
         check("Close", controller.lpVtbl.*.Close.?(controller));
         _ = controller.lpVtbl.*.Release.?(controller);
         shell.controller = null;
+    }
+    if (shell.environment) |environment| {
+        _ = environment.lpVtbl.*.Release.?(environment);
+        shell.environment = null;
     }
 }
 
@@ -828,7 +824,7 @@ fn onControllerCreated(shell: *Shell, controller: *c.ICoreWebView2Controller) vo
     c.GetSystemInfo(&system_info);
     config.worker_threads = system_info.dwNumberOfProcessors;
     config.max_concurrent_child_tasks = 10;
-    config.app_url_prefix = shell.app_url_prefix.ptr;
+    config.app_url_prefix = app_url_prefix;
     config.data_dir = shell.data_directory.ptr;
     if (shell.test_mode) {
         config.test_mode = true;
@@ -855,6 +851,8 @@ fn onControllerCreated(shell: *Shell, controller: *c.ICoreWebView2Controller) vo
     var token: c.EventRegistrationToken = undefined;
     check("add_AcceleratorKeyPressed", controller.lpVtbl.*.add_AcceleratorKeyPressed.?(controller, &shell.accelerator_handler.interface, &token));
     check("add_WebMessageReceived", created_web_view.lpVtbl.*.add_WebMessageReceived.?(created_web_view, &shell.web_message_handler.interface, &token));
+    check("AddWebResourceRequestedFilter", created_web_view.lpVtbl.*.AddWebResourceRequestedFilter.?(created_web_view, std.unicode.utf8ToUtf16LeStringLiteral(app_url_prefix ++ "*"), c.COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL));
+    check("add_WebResourceRequested", created_web_view.lpVtbl.*.add_WebResourceRequested.?(created_web_view, &shell.resource_handler.interface, &token));
     check("add_NavigationStarting", created_web_view.lpVtbl.*.add_NavigationStarting.?(created_web_view, &shell.navigation_handler.interface, &token));
     check("add_NewWindowRequested", created_web_view.lpVtbl.*.add_NewWindowRequested.?(created_web_view, &shell.new_window_handler.interface, &token));
     check("AddScriptToExecuteOnDocumentCreated", created_web_view.lpVtbl.*.AddScriptToExecuteOnDocumentCreated.?(created_web_view, shell.inject_script.ptr, &shell.script_added_handler.interface));
@@ -1570,6 +1568,8 @@ fn environmentInvoke(this: [*c]c.ICoreWebView2CreateCoreWebView2EnvironmentCompl
     if (environment == null) {
         fatal("WebView2 gave no environment", .{});
     }
+    _ = environment.*.lpVtbl.*.AddRef.?(environment);
+    shell.environment = environment;
     check("CreateCoreWebView2Controller", environment.*.lpVtbl.*.CreateCoreWebView2Controller.?(environment, shell.window, &shell.controller_handler.interface));
     return c.S_OK;
 }
@@ -1643,6 +1643,79 @@ fn newWindowInvoke(this: [*c]c.ICoreWebView2NewWindowRequestedEventHandler, send
     if (checkAddress(shell, address) == c.ZIGGY_URL_OPEN_EXTERNALLY) {
         openAddress(address);
     }
+    return c.S_OK;
+}
+
+//
+// Copies bytes into a new in-memory stream, which WebView2 reads a response from and releases when it is done. The copy is
+// needed because WebView2 owns the stream's memory, and the embedded bytes are not its to free.
+//
+fn memoryStream(content: []const u8) *c.IStream {
+    const memory = c.GlobalAlloc(c.GMEM_MOVEABLE, content.len) orelse {
+        fatal("memory for a response could not be allocated", .{});
+    };
+    const locked = c.GlobalLock(memory) orelse {
+        fatal("memory for a response could not be locked", .{});
+    };
+    @memcpy(@as([*]u8, @ptrCast(locked))[0..content.len], content);
+    _ = c.GlobalUnlock(memory);
+    var stream: ?*c.IStream = null;
+    check("CreateStreamOnHGlobal", c.CreateStreamOnHGlobal(memory, 1, @ptrCast(&stream)));
+    return stream orelse {
+        fatal("a response stream was not created", .{});
+    };
+}
+
+//
+// Answers a request to the bundled page from the files embedded in the executable. A path that is not one of them is
+// answered with a 404.
+//
+fn resourceInvoke(this: [*c]c.ICoreWebView2WebResourceRequestedEventHandler, sender: [*c]c.ICoreWebView2, args: [*c]c.ICoreWebView2WebResourceRequestedEventArgs) callconv(.c) c.HRESULT {
+    _ = sender;
+    const shell = ResourceHandler.fromInterface(this).shell;
+    const environment = shell.environment orelse {
+        fatal("a page request arrived before the web view environment existed", .{});
+    };
+    var request: ?*c.ICoreWebView2WebResourceRequest = null;
+    check("get_Request", args.*.lpVtbl.*.get_Request.?(args, @ptrCast(&request)));
+    const web_request = request orelse {
+        fatal("the web view gave no request", .{});
+    };
+    defer _ = web_request.lpVtbl.*.Release.?(web_request);
+    var wide: [*c]c.WCHAR = null;
+    check("get_Uri", web_request.lpVtbl.*.get_Uri.?(web_request, &wide));
+    const address = takeAddress(wide);
+    defer std.heap.c_allocator.free(address);
+
+    // The path is what follows the prefix, up to a query or a fragment.
+    var path: []const u8 = "";
+    if (std.mem.startsWith(u8, address, app_url_prefix)) {
+        path = address[app_url_prefix.len..];
+    }
+    const path_end = std.mem.indexOfAny(u8, path, "?#") orelse path.len;
+    path = path[0..path_end];
+
+    var response: ?*c.ICoreWebView2WebResourceResponse = null;
+    if (ui_files.findFile(shell.app_config.ui_files, path)) |file| {
+        const stream = memoryStream(file.content);
+        defer _ = stream.lpVtbl.*.Release.?(stream);
+        const headers = std.fmt.allocPrint(std.heap.c_allocator, "Content-Type: {s}", .{ui_files.contentType(file.path)}) catch {
+            fatal("the response headers could not be built", .{});
+        };
+        defer std.heap.c_allocator.free(headers);
+        const wide_headers = std.unicode.utf8ToUtf16LeAllocZ(std.heap.c_allocator, headers) catch {
+            fatal("the response headers cannot be converted to UTF-16", .{});
+        };
+        defer std.heap.c_allocator.free(wide_headers);
+        check("CreateWebResourceResponse", environment.lpVtbl.*.CreateWebResourceResponse.?(environment, @ptrCast(stream), 200, std.unicode.utf8ToUtf16LeStringLiteral("OK"), wide_headers.ptr, @ptrCast(&response)));
+    } else {
+        check("CreateWebResourceResponse", environment.lpVtbl.*.CreateWebResourceResponse.?(environment, null, 404, std.unicode.utf8ToUtf16LeStringLiteral("Not Found"), std.unicode.utf8ToUtf16LeStringLiteral(""), @ptrCast(&response)));
+    }
+    const created_response = response orelse {
+        fatal("the web view gave no response", .{});
+    };
+    defer _ = created_response.lpVtbl.*.Release.?(created_response);
+    check("put_Response", args.*.lpVtbl.*.put_Response.?(args, created_response));
     return c.S_OK;
 }
 
@@ -1726,6 +1799,16 @@ const new_window_vtable = c.struct_ICoreWebView2NewWindowRequestedEventHandlerVt
     .AddRef = NewWindowHandler.addRef,
     .Release = NewWindowHandler.release,
     .Invoke = newWindowInvoke,
+};
+
+//
+// The table of functions of the resource handler.
+//
+const resource_vtable = c.struct_ICoreWebView2WebResourceRequestedEventHandlerVtbl{
+    .QueryInterface = ResourceHandler.queryInterface,
+    .AddRef = ResourceHandler.addRef,
+    .Release = ResourceHandler.release,
+    .Invoke = resourceInvoke,
 };
 
 //

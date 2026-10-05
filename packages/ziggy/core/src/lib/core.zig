@@ -11,6 +11,7 @@ const json_util = @import("json-util.zig");
 const task_runner = @import("task-runner.zig");
 const origin_check = @import("origin-check.zig");
 const test_control = @import("test-control.zig");
+const ui_files = @import("ui-files.zig");
 
 const ZiggyConfig = types.ZiggyConfig;
 
@@ -45,6 +46,9 @@ pub const AppHandlers = struct {
     // or {"separator": true}, and may hold its own "items" for a submenu. "[]" for an app with no menu. Shells show it on
     // desktop only. See "Menus" in the architecture document.
     menu_json: []const u8,
+    // The files of the app's bundled page, embedded in the app's library, for a shell that serves the page by asking the core
+    // for each file (the MacOS, iOS and Android shells). Empty for an app whose shell embeds the page itself.
+    ui_files: []const ui_files.UiFile,
 };
 
 //
@@ -89,6 +93,8 @@ pub const Core = struct {
     next_request_task: std.atomic.Value(u64),
     // The desktop menu as JSON, owned by the app.
     menu_json: []const u8,
+    // The files of the app's bundled page, owned by the app.
+    ui_files: []const ui_files.UiFile,
     // The shell's configuration. The strings in it are copies owned by the core.
     config: ZiggyConfig,
     // The owned copy of the app's URL prefix.
@@ -120,6 +126,7 @@ pub const Core = struct {
         core.task_channels = app.task_channels;
         core.next_request_task = .init(0);
         core.menu_json = app.menu_json;
+        core.ui_files = app.ui_files;
         core.config = config;
         core.app_url_prefix = try allocator.dupe(u8, std.mem.span(config.app_url_prefix));
         errdefer allocator.free(core.app_url_prefix);
@@ -170,6 +177,13 @@ pub const Core = struct {
     //
     pub fn checkUrl(self: *Core, url: []const u8) types.UrlDecision {
         return origin_check.checkUrl(self.app_url_prefix, url);
+    }
+
+    //
+    // Finds the bundled page's file for the path of a request, or null when the page has no such file. See ui-files.zig.
+    //
+    pub fn uiFile(self: *Core, request_path: []const u8) ?*const ui_files.UiFile {
+        return ui_files.findFile(self.ui_files, request_path);
     }
 
     //

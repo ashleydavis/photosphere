@@ -65,7 +65,7 @@ typedef struct ziggy_config {
     uint32_t worker_threads;
     // The limit on child tasks in flight for any one parent task.
     uint32_t max_concurrent_child_tasks;
-    // The URL prefix of the app's own bundled page, such as "file:///path/to/dist/" (NUL terminated).
+    // The URL prefix of the app's own bundled page, such as "ziggy-app://app/" or "https://ziggy-app.invalid/", the address the shell serves the page from (NUL terminated).
     const char *app_url_prefix;
     // The app's private data directory (NUL terminated).
     const char *data_dir;
@@ -121,6 +121,26 @@ typedef struct ziggy_accelerator {
 // is {"label", "action", "accelerator"} or {"separator": true} and may hold its own "items" for a submenu. Desktop shells
 // show it, and a phone's shell never calls this. The length is written to the pointer given.
 const char *ziggy_menu_json(void *handle, size_t *length);
+
+// A file of the app's bundled page, as ziggy_ui_file gives it.
+typedef struct ziggy_ui_file_result {
+    // The file's bytes, valid for as long as the library is loaded.
+    const uint8_t *content;
+    // The number of bytes.
+    size_t content_length;
+    // The file's content type, such as "text/html; charset=utf-8" (NUL terminated), valid for as long as the library is loaded.
+    const char *content_type;
+} ziggy_ui_file_result;
+
+// Finds a file of the app's bundled page by the path of a request, which starts with a slash ("/" is the page itself), and
+// writes it into the struct given. Returns false, leaving the struct unchanged, when the page has no such file. Used by the
+// shells that serve the page by asking the core for each file (MacOS, iOS and Android).
+bool ziggy_ui_file(void *handle, const char *path, size_t path_len, ziggy_ui_file_result *result);
+
+// The script a shell injects into the page before the page's own scripts, which exposes window.ziggy (NUL terminated, valid for
+// as long as the library is loaded). It is embedded in the library, so an app supplies nothing. The length, not counting the
+// terminator, is written to the pointer given.
+const char *ziggy_inject_script(size_t *length);
 
 // Reads keyboard shortcut text such as "CmdOrCtrl+Shift+I" into the struct given. CmdOrCtrl becomes Command on MacOS and
 // Control elsewhere. Returns false, leaving the struct unchanged, when the text is not a shortcut.

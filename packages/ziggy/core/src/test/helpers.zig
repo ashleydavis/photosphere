@@ -164,6 +164,12 @@ pub const app = core_module.AppHandlers{
     },
     .tasks = &task_handlers,
     .menu_json = "[]",
+    .ui_files = &[_]ziggy.ui_files.UiFile{
+        .{
+            .path = "index.html",
+            .content = "<html></html>",
+        },
+    },
     .task_channels = &[_]core_module.TaskChannelEntry{
         .{ .name = "quick-request", .task_type = "quick" },
         .{ .name = "fail-request", .task_type = "fail" },

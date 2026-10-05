@@ -7,7 +7,7 @@
   "scripts": {
     "compile": "tsc --noEmit",
     "c": "bun run compile",
-    "bundle:ui": "vite build",
+    "bundle:ui": "bash ./scripts/bundle-ui.sh",
     "test": "jest --passWithNoTests",
     "t": "bun run test",
     "test:smoke": "bash ./smoke-tests/run-desktop.sh",
