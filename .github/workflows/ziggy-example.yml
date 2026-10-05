@@ -151,7 +151,7 @@ jobs:
 
       - name: Fetch the WebView2 SDK
         shell: bash
-        run: bun run setup:ziggy-example:windows
+        run: bun run --filter=ziggy-example setup
 
       - name: Run the smoke tests
         shell: bash
@@ -271,7 +271,7 @@ jobs:
         run: bun install
 
       - name: Set up the Android SDK and NDK
-        run: bun run setup:ziggy-example:android
+        run: bun run --filter=ziggy-example setup
 
       - name: Package
         run: bun run package:ziggy-example:android

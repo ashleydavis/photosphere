@@ -9,7 +9,7 @@ bun run distribute:ziggy-example:android
 bun run distribute:ziggy-example:android -- --groups testers,family
 ```
 
-It needs the Firebase CLI on your PATH and signed in (`curl -sL https://firebase.tools | bash`, then `firebase login`), and the Android SDK and NDK that `bun run setup:ziggy-example:android` sets up.
+It needs the Firebase CLI on your PATH and signed in (`curl -sL https://firebase.tools | bash`, then `firebase login`), and the Android SDK and NDK that `bun run --filter=ziggy-example setup` sets up.
 
 ## Arguments
 

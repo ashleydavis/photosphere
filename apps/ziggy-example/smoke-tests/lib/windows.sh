@@ -109,9 +109,13 @@ ziggy_platform_has_control_port() {
 
 #
 # Succeeds when the developer tools are showing. WebView2 opens them as a window of their own, so the page's area does not change and
-# they are found by their window's title, "DevTools", in the list of windows Windows keeps.
+# they are found by their window's title, "DevTools - " and the page's address. The address holds this run's build directory, so the
+# developer tools of any other app or run on the machine do not count. Only the WebView2 processes are asked, because asking every
+# process for its window title takes many seconds.
 # Usage: ziggy_platform_devtools_visible <test_dir> <the page's area before they opened>
 #
 ziggy_platform_devtools_visible() {
-    tasklist //v //fo csv //nh 2> /dev/null | grep -qi "devtools"
+    local windows
+    windows="$(tasklist //v //fo csv //nh //fi "IMAGENAME eq msedgewebview2.exe")" || fail "could not list the WebView2 windows"
+    printf '%s\n' "$windows" | grep -qF "DevTools - file:///$(windows_native_path "$ZIGGY_SMOKE_RUN_DIR")/"
 }

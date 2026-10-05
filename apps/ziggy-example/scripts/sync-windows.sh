@@ -38,8 +38,10 @@ done
 
 zig_target="$(windows_zig_target "$arch")"
 
+windows_require_commands bun zig
+
 if [ ! -f "$WINDOWS_SDK_DIR/include/WebView2.h" ]; then
-    echo "The WebView2 SDK is not fetched. Run setup-windows.sh first." >&2
+    echo "The WebView2 SDK is not fetched. Run \"bun run --filter=ziggy-example setup\" from the repository root first." >&2
     exit 1
 fi
 

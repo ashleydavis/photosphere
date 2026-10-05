@@ -18,11 +18,11 @@ const json_util = @import("json-util.zig");
 const answer_timeout_ms: i64 = 30_000;
 
 //
-// One connection being served: the thread serving it and its socket.
+// One connection being served: the task serving it and its socket.
 //
 const Connection = struct {
-    // The thread that reads this connection's commands.
-    thread: std.Thread,
+    // The task that reads this connection's commands, cancelled when the control is stopped.
+    task: std.Io.Future(void),
     // The connection's socket, closed when the control is stopped.
     stream: std.Io.net.Stream,
 };
@@ -45,9 +45,12 @@ pub const TestControl = struct {
     server: std.Io.net.Server,
     // The port it listens on.
     port: u16,
-    // One connection being served: its thread and its socket.
-    // Every connection is served on a thread of its own, and all of them are ended when the control is stopped.
+    // One connection being served: its task and its socket.
+    // Every connection is served by a task of its own, and all of them are ended when the control is stopped.
     connections: std.ArrayList(Connection),
+    // Runs the connection tasks. The core's Io is single threaded and ignores cancel requests, and cancelling is the only way
+    // to end a read that is waiting on a connection: on Windows shutting the socket down does not wake the read.
+    connection_threaded: std.Io.Threaded,
     // Held while a command is with the page, so only one is waiting for an answer at a time.
     command_mutex: std.Io.Mutex,
     // The thread that accepts connections.
@@ -86,6 +89,7 @@ pub const TestControl = struct {
             .thread = undefined,
             .stopping = .init(false),
             .connections = .empty,
+            .connection_threaded = .init(allocator, .{}),
             .command_mutex = .init,
             .mutex = .init,
             .next_request = 1,
@@ -95,6 +99,7 @@ pub const TestControl = struct {
             .pick_answer = null,
         };
         errdefer self.server.deinit(io);
+        errdefer self.connection_threaded.deinit();
         if (config.test_port_file) |port_file| {
             var port_buffer: [16]u8 = undefined;
             const port_text = try std.fmt.bufPrint(&port_buffer, "{d}\n", .{self.port});
@@ -118,18 +123,12 @@ pub const TestControl = struct {
         }
         else |_| {}
         self.thread.join();
-        self.mutex.lockUncancelable(self.io);
-        for (self.connections.items) |connection| {
-            connection.stream.shutdown(self.io, .both) catch |err| {
-                std.debug.print("test control: could not shut a connection down: {s}\n", .{@errorName(err)});
-            };
-        }
-        self.mutex.unlock(self.io);
-        for (self.connections.items) |connection| {
-            connection.thread.join();
+        for (self.connections.items) |*connection| {
+            connection.task.cancel(self.connection_threaded.io());
             connection.stream.close(self.io);
         }
         self.connections.deinit(self.allocator);
+        self.connection_threaded.deinit();
         self.server.deinit(self.io);
         self.mutex.lockUncancelable(self.io);
         if (self.pick_answer) |text| {
@@ -204,7 +203,7 @@ pub const TestControl = struct {
                 stream.close(self.io);
                 return;
             }
-            const thread = std.Thread.spawn(.{}, serveConnection, .{ self, stream }) catch |err| {
+            const task = self.connection_threaded.io().concurrent(serveConnection, .{ self, stream }) catch |err| {
                 std.debug.print("test control: could not serve a connection: {s}\n", .{@errorName(err)});
                 stream.close(self.io);
                 continue;
@@ -212,19 +211,29 @@ pub const TestControl = struct {
             self.mutex.lockUncancelable(self.io);
             defer self.mutex.unlock(self.io);
             self.connections.append(self.allocator, .{
-                .thread = thread,
+                .task = task,
                 .stream = stream,
             }) catch @panic("out of memory serving a test control connection");
         }
     }
 
+    //
+    // Serves one connection's commands until it closes or the control is stopped. Stopping cancels this task, and the cancel is
+    // taken only while waiting for the next line: the command being run finishes first, because the waits inside it treat a
+    // cancel as a bug.
+    //
     fn serveConnection(self: *TestControl, stream: std.Io.net.Stream) void {
+        const connection_io = self.connection_threaded.io();
+        _ = connection_io.swapCancelProtection(.blocked);
         var read_buffer: [64 * 1024]u8 = undefined;
         var write_buffer: [1024]u8 = undefined;
-        var reader = stream.reader(self.io, &read_buffer);
-        var writer = stream.writer(self.io, &write_buffer);
+        var reader = stream.reader(connection_io, &read_buffer);
+        var writer = stream.writer(connection_io, &write_buffer);
         while (true) {
-            const line = reader.interface.takeDelimiter('\n') catch {
+            _ = connection_io.swapCancelProtection(.unblocked);
+            const taken = reader.interface.takeDelimiter('\n');
+            _ = connection_io.swapCancelProtection(.blocked);
+            const line = taken catch {
                 return;
             } orelse {
                 return;

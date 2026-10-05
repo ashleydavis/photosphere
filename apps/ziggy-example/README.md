@@ -15,7 +15,7 @@ A small complete app built on Ziggy, kept as the reference for building an app o
 
 Everything here is the example's own. Ziggy, the framework it is built on, is all in `packages/ziggy` (see its [README](../../packages/ziggy/README.md)), and nothing in this folder is shared with another app.
 
-- `page/`: the page. `page/index.html` is the page and `page/src/lib` holds the plain functions that have unit tests. `vite.config.ts` is its build, which writes `dist` with relative paths and a classic script so it loads from a file address in every web view that loads it that way. `dist` is embedded in the app's own code on every platform (the Linux and Windows executables, and the core library that the MacOS, iOS and Android apps contain), using Ziggy's `embedPage`, so no platform has a folder of page files (see the [architecture guide](../../packages/ziggy/docs/architecture.md#the-bundled-page)).
+- `page/`: the page. `page/index.html` is the page and `page/src/lib` holds the plain functions that have unit tests. `vite.config.ts` is its build, which writes `dist` with relative paths and a classic script so it loads from a file address in every web view.
 - `core/`: the example's Zig library, which adds its channel handlers and task handlers to Ziggy's core (`packages/ziggy/core`).
 - `shells/<platform>/`: the example's native project for each platform: its name, window, icon and the app's core and page packaged together. Each one builds on Ziggy's framework half for that platform in `packages/ziggy/native/<platform>` (MacOS and iOS share `packages/ziggy/native/apple`).
 - `scripts`: the build, run and packaging scripts, each with a markdown file beside it.
@@ -23,7 +23,7 @@ Everything here is the example's own. Ziggy, the framework it is built on, is al
 
 ## Commands
 
-Run these from the repository root. `<platform>` is `linux`, `windows`, `macos`, `android` or `ios`, and each platform's commands run on that platform (MacOS and iOS need a Mac with Xcode 14.2, Windows needs Git Bash).
+Run these from the repository root. `<platform>` is `linux`, `windows`, `macos`, `android` or `ios`, and each platform's commands run on that platform (MacOS and iOS need a Mac with Xcode 14.2, and on Windows see below for the terminal to run them from).
 
 | Command | What it does |
 |---|---|
@@ -42,9 +42,9 @@ Run these from the repository root. `<platform>` is `linux`, `windows`, `macos`,
 ## What each platform needs
 
 - **Linux:** the GTK 3 and WebKitGTK 4.1 runtime libraries (`libgtk-3-0`, `libwebkit2gtk-4.1-0`) to build and run, with no development packages, `xvfb`, `xwininfo` and `jq` for the smoke tests, and `zip` and `dpkg-deb` to package. If the web view's sandbox cannot start on your system the app says so and runs without it. See `scripts/run-linux.md`.
-- **Windows:** `bun run setup:ziggy-example:windows` downloads the pinned WebView2 SDK. Building needs Microsoft's C++ toolchain and the Windows SDK (Visual Studio or its Build Tools, the "Desktop development with C++" workload), because the WebView2 loader is linked into the exe from the SDK's static library and that library is built with it. Packaging needs NSIS (`makensis`).
+- **Windows:** the scripts are bash scripts and run under Git Bash. The tools `mise install` puts in place (`bun`, `zig`, `jq`) must be on PATH: add `%LOCALAPPDATA%\mise\shims` to PATH, or activate mise in your shell. Then `bun run --filter=ziggy-example setup` downloads the pinned WebView2 SDK, once. Packaging needs NSIS (`makensis`).
 - **MacOS and iOS:** a Mac with the pinned toolchain, macOS 12.7.6 and Xcode 14.2. No version is raised.
-- **Android:** `bun run setup:ziggy-example:android`, which uses the same Android SDK setup as the rest of the repository.
+- **Android:** `bun run --filter=ziggy-example setup`, which uses the same Android SDK setup as the rest of the repository.
 
 ## Test hooks
 
