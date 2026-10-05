@@ -7,6 +7,6 @@ Invoke: `mise exec -- bash apps/ziggy-example/scripts/package-android.sh [--arch
 - `--arch "<list>"`: `x86_64` and `arm64`, space separated, or `all`. The default is both.
 - `--version-name <name>`: the version the APK reports, and the name in its file name. The default is the version in `apps/ziggy-example/package.json`.
 - `--version-code <number>`: the whole number Android uses to tell a newer build from an older one, which has to go up with every build that replaces another on a phone. The default is 1.
-- `--output-dir <dir>`: where the APKs go. The default is `apps/ziggy-example/release`.
+- `--output-dir <dir>`: where the APKs go. The default is `apps/ziggy-example/out/android`.
 
 The artifacts are named `ziggy-example-<version>-android-<arch>.apk`, with the version from `package.json`.

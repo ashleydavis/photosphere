@@ -7,7 +7,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/android-common.sh"
 
 arch_list="x86_64 arm64"
-output_dir="$ZIGGY_EXAMPLE_DIR/release"
+output_dir="$ZIGGY_EXAMPLE_DIR/out/android"
 version="$(ziggy_android_version)"
 version_code="1"
 while [ $# -gt 0 ]; do

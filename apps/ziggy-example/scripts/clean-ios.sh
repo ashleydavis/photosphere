@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Cleans the iOS build with xcodebuild's own clean and removes the synced Zig library and header. See clean-ios.md.
+# Cleans the iOS build with xcodebuild's own clean and removes the synced Zig library and header and the packages. See clean-ios.md.
 
 set -euo pipefail
 
@@ -40,4 +40,7 @@ for configuration in Debug Release; do
         clean
 done
 rm -f "$NATIVE_DIR/lib/libziggy_example.a" "$NATIVE_DIR/include/ziggy.h"
+if [ -d "$APPLE_EXAMPLE_DIR/out/ios" ]; then
+    find "$APPLE_EXAMPLE_DIR/out/ios" -type f -delete
+fi
 echo "Cleaned the iOS build."

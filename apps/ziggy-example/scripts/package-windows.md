@@ -1,6 +1,6 @@
 # package-windows.sh
 
-Builds a ReleaseSafe app and packages it twice, unsigned: a zip and an NSIS installer. Both go in `apps/ziggy-example/shells/windows/package/` (gitignored) and are named `ziggy-example-<version>-windows-<arch>.zip` and `.exe`, with the version read from `apps/ziggy-example/package.json`.
+Builds a ReleaseSafe app and packages it twice, unsigned: a zip and an NSIS installer. Both go in `apps/ziggy-example/out/windows/` (gitignored) and are named `ziggy-example-<version>-windows-<arch>.zip` and `.exe`, with the version read from `apps/ziggy-example/package.json`. The build they are made from is installed in `apps/ziggy-example/shells/windows/package/<arch>/`.
 
 Run it as `bash apps/ziggy-example/scripts/package-windows.sh [arch]`.
 

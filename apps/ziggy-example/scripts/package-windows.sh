@@ -13,8 +13,8 @@ fi
 windows_zig_target "$arch" > /dev/null
 
 version="$(windows_app_version)"
-package_dir="$WINDOWS_SHELL_DIR/package"
-prefix="$package_dir/$arch"
+package_dir="$WINDOWS_EXAMPLE_DIR/out/windows"
+prefix="$WINDOWS_SHELL_DIR/package/$arch"
 artifact_base="ziggy-example-$version-windows-$arch"
 mkdir -p "$package_dir"
 

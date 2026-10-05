@@ -22,7 +22,7 @@ version="$(windows_app_version)"
 for arch in x64 arm64; do
     remove_install "$WINDOWS_SHELL_DIR/package/$arch/$WINDOWS_APP_DIR_NAME"
     rmdir "$WINDOWS_SHELL_DIR/package/$arch" 2> /dev/null || true
-    rm -f "$WINDOWS_SHELL_DIR/package/ziggy-example-$version-windows-$arch.zip"
-    rm -f "$WINDOWS_SHELL_DIR/package/ziggy-example-$version-windows-$arch.exe"
+    rm -f "$WINDOWS_EXAMPLE_DIR/out/windows/ziggy-example-$version-windows-$arch.zip"
+    rm -f "$WINDOWS_EXAMPLE_DIR/out/windows/ziggy-example-$version-windows-$arch.exe"
 done
 rmdir "$WINDOWS_SHELL_DIR/package" 2> /dev/null || true

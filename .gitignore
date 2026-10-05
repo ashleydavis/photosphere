@@ -82,7 +82,7 @@ zig-pkg/
 apps/cli-zig/bin/
 apps/cli/test/tmp-zig/
 
-# The WebView2 SDK fetched by the Ziggy example's setup-windows script, and what its package-windows script produces
+# The WebView2 SDK fetched by the Ziggy example's setup-windows script, and the build that its package-windows script packages
 apps/ziggy-example/webview2-sdk/
 apps/ziggy-example/shells/windows/package/
 
@@ -90,5 +90,4 @@ apps/ziggy-example/shells/windows/package/
 apps/ziggy-example/out/
 packages/ziggy/native/android/build/
 packages/ziggy/native/android/.gradle/
-apps/ziggy-example/release/
 apps/ziggy-example/dist-build.*
