@@ -8,10 +8,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXAMPLE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SHELL_DIR="$EXAMPLE_DIR/shells/linux"
 
+OPTIMIZE="ReleaseSafe"
 HOOKS_ARGUMENT=""
-if [ "${1:-}" = "--test-hooks" ]; then
-    HOOKS_ARGUMENT="-Dtest-hooks=true"
-fi
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --optimize)
+            OPTIMIZE="$2"
+            shift 2
+            ;;
+        --test-hooks)
+            HOOKS_ARGUMENT="-Dtest-hooks=true"
+            shift
+            ;;
+        *)
+            echo "Unknown argument $1. See sync-linux.md." >&2
+            exit 2
+            ;;
+    esac
+done
 
 (cd "$EXAMPLE_DIR" && bun run bundle:ui)
-(cd "$SHELL_DIR" && zig build $HOOKS_ARGUMENT)
+(cd "$SHELL_DIR" && zig build "-Doptimize=$OPTIMIZE" $HOOKS_ARGUMENT)

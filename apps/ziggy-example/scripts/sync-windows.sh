@@ -8,7 +8,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/windows-common.sh"
 
 arch="x64"
 prefix="$WINDOWS_SHELL_DIR/zig-out"
-optimize="Debug"
+optimize="ReleaseSafe"
 test_hooks="false"
 
 while [ "$#" -gt 0 ]; do

@@ -4,10 +4,11 @@ Builds the example's page (`bun run bundle:ui`) and its Linux shell (`zig build`
 
 ## Usage
 
-`bash apps/ziggy-example/scripts/sync-linux.sh [--test-hooks]`
+`bash apps/ziggy-example/scripts/sync-linux.sh [--optimize <mode>] [--test-hooks]`
 
 Run it through the root `package.json` script, not directly.
 
 ## Arguments
 
+- `--optimize <Debug|ReleaseSafe|ReleaseFast|ReleaseSmall>`: the Zig optimize mode. Default `ReleaseSafe`.
 - `--test-hooks`: builds the test hooks into the app (the test control connection). Off by default, and never used for `package-linux.sh`.
