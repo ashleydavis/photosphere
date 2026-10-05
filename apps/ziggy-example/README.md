@@ -30,7 +30,7 @@ Run these from the repository root. `<platform>` is `linux`, `windows`, `macos`,
 | `bun run build:ziggy-example:<platform>` | Builds the page and the app. |
 | `bun run run:ziggy-example:<platform>` | Builds the app and launches it (an emulator, simulator or device for a phone). |
 | `bun run open:ziggy-example:<platform>` | Syncs, then opens the native project in its editor. |
-| `bun run package:ziggy-example:<platform>` | Packages the app for distribution, without the test hooks. |
+| `bun run package:ziggy-example:<platform>` | Packages the app for distribution, without the test hooks, into `out/<platform>`. |
 | `bun run distribute:ziggy-example:android` | Builds the Android app and uploads it to Firebase App Distribution for the tester group. See `scripts/distribute-android.md`. |
 | `bun run clean:ziggy-example:<platform>` | Removes the platform's build output. |
 | `bun run test:ziggy-example` | The smoke tests on the host operating system. |

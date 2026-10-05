@@ -203,7 +203,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ziggy-example-macos
-          path: apps/ziggy-example/shells/macos/zig-out/package/*
+          path: apps/ziggy-example/out/macos/*
 
   ziggy-example-ios:
     # The example's iOS archive, built without signing. It is built and not run: the iOS smoke tests need a simulator.
@@ -238,7 +238,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ziggy-example-ios
-          path: apps/ziggy-example/shells/ios/zig-out/package/*
+          path: apps/ziggy-example/out/ios/*
 
   ziggy-example-android:
     # The example's APKs, built with the Android SDK and NDK. They are built and not run here: the Android smoke tests need
@@ -277,4 +277,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ziggy-example-android
-          path: apps/ziggy-example/release/*
+          path: apps/ziggy-example/out/android/*
