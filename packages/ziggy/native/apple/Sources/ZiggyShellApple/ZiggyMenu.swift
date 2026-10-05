@@ -251,6 +251,18 @@ final class ZiggyMenu: NSObject {
             }
             window.makeKeyAndOrderFront(nil)
             window.makeFirstResponder(webView)
+
+            // The undo manager groups the edits made during one event and closes the group when the event ends. A test
+            // chooses the action with no event, so the open group is closed here and, except for undo and redo, which work
+            // on closed groups, a new one is opened for the action's edit, as the event of a click would.
+            if let undoManager = webView.undoManager, undoManager.groupsByEvent {
+                if undoManager.groupingLevel == 1 {
+                    undoManager.endUndoGrouping()
+                }
+                if action != "undo" && action != "redo" {
+                    undoManager.beginUndoGrouping()
+                }
+            }
             if !NSApplication.shared.sendAction(Selector(selectorName), to: nil, from: self) {
                 ZiggyBridge.report("\(action): nothing in the responder chain handled \(selectorName)")
             }
