@@ -36,10 +36,20 @@ cp "$STAGE_DIR/prefix/bin/ziggy-example" "$STAGE_DIR/zip/ziggy-example/"
 rm -f "$OUTPUT_DIR/$BASE_NAME.zip"
 (cd "$STAGE_DIR/zip" && zip -q -r "$OUTPUT_DIR/$BASE_NAME.zip" ziggy-example)
 
-# The deb installs under /opt and puts a link in /usr/bin.
-mkdir -p "$STAGE_DIR/deb/DEBIAN" "$STAGE_DIR/deb/opt/ziggy-example" "$STAGE_DIR/deb/usr/bin"
+# The deb installs under /opt, puts a link in /usr/bin and adds a menu entry so the app shows in the applications menu.
+mkdir -p "$STAGE_DIR/deb/DEBIAN" "$STAGE_DIR/deb/opt/ziggy-example" "$STAGE_DIR/deb/usr/bin" "$STAGE_DIR/deb/usr/share/applications"
 cp "$STAGE_DIR/prefix/bin/ziggy-example" "$STAGE_DIR/deb/opt/ziggy-example/"
 ln -s /opt/ziggy-example/ziggy-example "$STAGE_DIR/deb/usr/bin/ziggy-example"
+cat > "$STAGE_DIR/deb/usr/share/applications/dev.ziggy.example.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Ziggy example
+Comment=A small complete app built on Ziggy
+Exec=/usr/bin/ziggy-example
+Terminal=false
+Categories=Utility;
+StartupWMClass=dev.ziggy.example
+DESKTOP
 cat > "$STAGE_DIR/deb/DEBIAN/control" <<CONTROL
 Package: ziggy-example
 Version: $VERSION
