@@ -2,13 +2,20 @@
 
 # The iOS platform library of the Ziggy example's smoke tests. See common.sh for what it implements.
 #
-# The app runs on an iOS simulator that already exists: ZIGGY_IOS_SIMULATOR names one, otherwise a running one or the first
-# available iPhone is used (see apple_pick_simulator). Nothing is created or deleted. A simulator process shares the host's
-# file system and network, so the control port file is a host path and the control connection is reached at 127.0.0.1.
-# The app's process is not a child of this shell, so it is recorded by its process id and stopped with simctl.
+# When an iPhone or iPad is connected the scenarios run on it, as run-ios.sh runs the app there, and ios-device.sh, sourced
+# below, replaces everything here. Otherwise the app runs on an iOS simulator that already exists: ZIGGY_IOS_SIMULATOR names
+# one, otherwise a running one or the first available iPhone is used (see apple_pick_simulator). Nothing is created or
+# deleted. A simulator process shares the host's file system and network, so the control port file is a host path and the
+# control connection is reached at 127.0.0.1. The app's process is not a child of this shell, so it is recorded by its
+# process id and stopped with simctl.
 
 IOS_SCRIPTS_DIR="$ZIGGY_SMOKE_REPO_ROOT/apps/ziggy-example/scripts"
 source "$IOS_SCRIPTS_DIR/lib/apple-common.sh"
+
+if [ -n "$(apple_connected_device)" ]; then
+    source "$ZIGGY_SMOKE_DIR/lib/ios-device.sh"
+    return 0
+fi
 
 # The app's bundle identifier.
 IOS_BUNDLE_ID="dev.ziggy.example"

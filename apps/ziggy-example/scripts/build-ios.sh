@@ -69,6 +69,20 @@ case "$SDK" in
         ;;
 esac
 
+# A simulator runs an unsigned app, but a device runs only one signed by a development team, so a device build is
+# signed automatically, letting Xcode create the certificate and provisioning profile it needs.
+case "$SDK" in
+    simulator)
+        SIGNING=(CODE_SIGNING_ALLOWED=NO)
+        ;;
+    device)
+        SIGNING=(-allowProvisioningUpdates CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Development" DEVELOPMENT_TEAM="$(apple_pick_team)")
+        ;;
+    *)
+        apple_fail "unknown --sdk '$SDK'. Use simulator or device."
+        ;;
+esac
+
 if [ "$TEST_HOOKS" = "yes" ]; then
     bash "$SCRIPT_DIR/sync-ios.sh" --sdk "$SDK" --arch "$ARCH" --native-dir "$NATIVE_DIR" --optimize "$OPTIMIZE" --test-hooks
 else
@@ -84,7 +98,7 @@ xcodebuild \
     -destination "$DESTINATION" \
     ARCHS="$ARCH" \
     ONLY_ACTIVE_ARCH=NO \
-    CODE_SIGNING_ALLOWED=NO \
+    "${SIGNING[@]}" \
     ZIGGY_NATIVE_DIR="$NATIVE_DIR" \
     MARKETING_VERSION="$(apple_package_version)" \
     build
