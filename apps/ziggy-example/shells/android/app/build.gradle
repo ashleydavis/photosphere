@@ -27,7 +27,6 @@ android {
     sourceSets {
         main {
             jniLibs.srcDirs = ['build/ziggy/jniLibs']
-            assets.srcDirs = ['build/ziggy/assets']
         }
     }
 
@@ -44,19 +43,10 @@ dependencies {
     implementation project(':ziggy-shell-android')
 }
 
-// A build run without scripts/sync-android.sh would package an app with no library and no page, which fails only when
+// A build run without scripts/sync-android.sh would package an app with no library, which fails only when
 // it runs on a device. Fail the build instead, with the command that fixes it.
 tasks.register('checkZiggySync') {
     doLast {
-        def requiredFiles = [
-            file('build/ziggy/assets/ui/index.html'),
-            file('build/ziggy/assets/ziggy-inject.js'),
-        ]
-        requiredFiles.each { requiredFile ->
-            if (!requiredFile.exists()) {
-                throw new GradleException("Missing generated file: ${requiredFile}\nRun scripts/sync-android.sh (bun run sync:android) from apps/ziggy-example first.")
-            }
-        }
         if (!fileTree('build/ziggy/jniLibs').matching { include '**/libziggy_example.so' }.any()) {
             throw new GradleException("No libziggy_example.so under build/ziggy/jniLibs.\nRun scripts/sync-android.sh (bun run sync:android) from apps/ziggy-example first.")
         }

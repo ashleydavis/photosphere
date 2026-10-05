@@ -32,3 +32,18 @@ test "a malformed address is blocked" {
 test "a prefix that does not end in a slash allows nothing" {
     try std.testing.expectEqual(ziggy.types.UrlDecision.block, ziggy.origin_check.checkUrl("file:///app/dist", "file:///app/dist/index.html"));
 }
+
+test "a page served under the ziggy-app scheme is allowed, and another host or scheme is blocked" {
+    const scheme_prefix = "ziggy-app://app/";
+    try std.testing.expectEqual(ziggy.types.UrlDecision.allow, ziggy.origin_check.checkUrl(scheme_prefix, "ziggy-app://app/index.html?testMode=1"));
+    try std.testing.expectEqual(ziggy.types.UrlDecision.block, ziggy.origin_check.checkUrl(scheme_prefix, "ziggy-app://other/index.html"));
+    try std.testing.expectEqual(ziggy.types.UrlDecision.block, ziggy.origin_check.checkUrl(scheme_prefix, "ziggy-app://app/../index.html"));
+    try std.testing.expectEqual(ziggy.types.UrlDecision.block, ziggy.origin_check.checkUrl(scheme_prefix, "file:///app/index.html"));
+}
+
+test "a page served from the Windows shell's reserved host is allowed, and a host that merely starts with it is not" {
+    const windows_prefix = "https://ziggy-app.invalid/";
+    try std.testing.expectEqual(ziggy.types.UrlDecision.allow, ziggy.origin_check.checkUrl(windows_prefix, "https://ziggy-app.invalid/assets/main.js"));
+    try std.testing.expectEqual(ziggy.types.UrlDecision.open_externally, ziggy.origin_check.checkUrl(windows_prefix, "https://ziggy-app.invalid.example.com/index.html"));
+    try std.testing.expectEqual(ziggy.types.UrlDecision.open_externally, ziggy.origin_check.checkUrl(windows_prefix, "https://example.com/"));
+}

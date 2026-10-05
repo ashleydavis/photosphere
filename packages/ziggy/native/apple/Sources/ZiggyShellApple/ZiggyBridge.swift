@@ -16,6 +16,52 @@ import AppKit
 import UIKit
 #endif
 
+// Answers the web view's requests for the bundled page from the files embedded in the core library, which it asks for each
+// file with ziggy_ui_file. The page's address is ziggy-app://app/, and the core is given to the handler once it exists.
+// It runs on the main thread, as does everything that sets or clears the core.
+final class ZiggyPageSchemeHandler: NSObject, WKURLSchemeHandler {
+    // The core's handle, from start until shutdown. Null means the page cannot be served.
+    var core: UnsafeMutableRawPointer?
+
+    func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+        guard let url = urlSchemeTask.request.url else {
+            ZiggyBridge.fail("a request for the page has no address")
+        }
+        guard let handle = core else {
+            urlSchemeTask.didFailWithError(URLError(.cancelled))
+            return
+        }
+        let path = url.path
+        var result = ziggy_ui_file_result()
+        let found = path.withCString { pointer in
+            ziggy_ui_file(handle, pointer, path.utf8.count, &result)
+        }
+        if !found {
+            guard let notFound = HTTPURLResponse(url: url, statusCode: 404, httpVersion: "HTTP/1.1", headerFields: nil) else {
+                ZiggyBridge.fail("could not make a 404 response for \(url)")
+            }
+            urlSchemeTask.didReceive(notFound)
+            urlSchemeTask.didFinish()
+            return
+        }
+        // The bytes live in the library for as long as it is loaded, so they are not copied.
+        let content = Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: result.content), count: Int(result.content_length), deallocator: .none)
+        let headers = [
+            "Content-Type": String(cString: result.content_type),
+            "Content-Length": String(content.count),
+        ]
+        guard let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: headers) else {
+            ZiggyBridge.fail("could not make a response for \(url)")
+        }
+        urlSchemeTask.didReceive(response)
+        urlSchemeTask.didReceive(content)
+        urlSchemeTask.didFinish()
+    }
+
+    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
+    }
+}
+
 // Hosts one web view and one Ziggy core for the app. The app creates it, puts webView on screen, calls start, and calls
 // shutdown when the app is ending.
 public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
@@ -28,8 +74,12 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
     // Set by shutdown. Read and written on the main thread only, so nothing is delivered to the page after it is set.
     private var destroyed: Bool
 
-    // The directory in the app bundle that holds the bundled page, with index.html in it.
-    private let uiDirectory: URL
+    // Answers the web view's requests for the bundled page, from the core.
+    private let pageHandler = ZiggyPageSchemeHandler()
+
+    // The scheme and address of the bundled page. The files are embedded in the core library, not in the app bundle.
+    private static let pageScheme = "ziggy-app"
+    private static let appUrlPrefix = "ziggy-app://app/"
 
     // The app's private data directory, which the core is given.
     private let dataDirectory: URL
@@ -53,28 +103,17 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
     #endif
 
     // Creates the web view with the injected script and the message handler. The page is not loaded and the core does not
-    // exist until start. The page lives in the "ui" directory of the app's resources, and the injected script is the
-    // app's "ziggy-inject.js" resource.
+    // exist until start. The page and the injected script are both embedded in the core library, so the app supplies neither.
     public init(frame: CGRect) {
         let bundle = Bundle.main
         guard let bundleIdentifier = bundle.bundleIdentifier else {
             ZiggyBridge.fail("the app has no bundle identifier")
         }
-        guard let resourceURL = bundle.resourceURL else {
-            ZiggyBridge.fail("the app has no resources directory")
+        var injectScriptLength = 0
+        guard let injectScriptText = ziggy_inject_script(&injectScriptLength) else {
+            ZiggyBridge.fail("the core has no inject script")
         }
-        guard let scriptURL = bundle.url(forResource: "ziggy-inject", withExtension: "js") else {
-            ZiggyBridge.fail("the app has no ziggy-inject.js resource")
-        }
-        let injectScript: String
-        do {
-            injectScript = try String(contentsOf: scriptURL, encoding: .utf8)
-        }
-        catch {
-            ZiggyBridge.fail("could not read \(scriptURL.path): \(error)")
-        }
-
-        self.uiDirectory = resourceURL.appendingPathComponent("ui", isDirectory: true)
+        let injectScript = String(cString: injectScriptText)
 
         let supportDirectory: URL
         do {
@@ -97,6 +136,7 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         self.destroyed = false
 
         let configuration = WKWebViewConfiguration()
+        configuration.setURLSchemeHandler(pageHandler, forURLScheme: ZiggyBridge.pageScheme)
         let userScript = WKUserScript(source: injectScript, injectionTime: .atDocumentStart, forMainFrameOnly: true)
         configuration.userContentController.addUserScript(userScript)
         #if os(macOS)
@@ -199,11 +239,7 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         config.max_concurrent_child_tasks = 2
         #endif
 
-        let appUrlPrefix = uiDirectory.absoluteString
-        if !appUrlPrefix.hasSuffix("/") {
-            ZiggyBridge.fail("the page directory address does not end in a slash: \(appUrlPrefix)")
-        }
-        let prefixText = ZiggyBridge.duplicate(appUrlPrefix)
+        let prefixText = ZiggyBridge.duplicate(ZiggyBridge.appUrlPrefix)
         let dataText = ZiggyBridge.duplicate(dataDirectory.path)
         var portFileText: UnsafeMutablePointer<CChar>? = nil
         defer {
@@ -224,6 +260,7 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
             ZiggyBridge.fail("ziggy_create failed")
         }
         core = created
+        pageHandler.core = created
 
         #if os(macOS)
         var menuLength = 0
@@ -233,14 +270,14 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         menu = ZiggyMenu(bridge: self, menuJSON: Data(bytes: menuText, count: menuLength))
         #endif
 
-        var components = URLComponents(url: uiDirectory.appendingPathComponent("index.html"), resolvingAgainstBaseURL: false)
+        var components = URLComponents(string: ZiggyBridge.appUrlPrefix + "index.html")
         if testMode {
             components?.query = "testMode=1"
         }
         guard let pageURL = components?.url else {
             ZiggyBridge.fail("could not build the page address")
         }
-        webView.loadFileURL(pageURL, allowingReadAccessTo: uiDirectory)
+        webView.load(URLRequest(url: pageURL))
     }
 
     // Destroys the core once. After it returns the core runs nothing and nothing more is delivered to the page.
@@ -250,6 +287,7 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         }
         destroyed = true
         core = nil
+        pageHandler.core = nil
         webView.configuration.userContentController.removeScriptMessageHandler(forName: ZiggyBridge.handlerName)
         ziggy_destroy(handle)
     }

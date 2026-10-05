@@ -1,15 +1,17 @@
 const std = @import("std");
+const ziggy_core_build = @import("ziggy-core");
 
 //
 // Builds the module an app's Windows shell imports. The shell is Zig that talks to Win32 and to WebView2 through their C
-// headers, and to the core through ziggy.h. The WebView2 headers come from the SDK the app's setup script downloads, whose
-// include directory is passed in as the webview2-include option. WebView2Loader.dll is loaded at run time, so nothing
-// links against the SDK.
+// headers, and to the core through ziggy.h. The WebView2 headers and the loader's static library come from the SDK the app's
+// setup script downloads: the include directory is passed in as the webview2-include option and the library as the
+// webview2-loader-library option. The loader is linked into the executable, so nothing is loaded from a file at run time.
 //
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const webview2_include = b.option(std.Build.LazyPath, "webview2-include", "The directory holding WebView2.h and EventToken.h");
+    const webview2_loader_library = b.option(std.Build.LazyPath, "webview2-loader-library", "The SDK's WebView2LoaderStatic.lib for the target, which is linked into the executable");
 
     const host_test_module = b.createModule(.{
         .root_source_file = b.path("src/tests.zig"),
@@ -45,9 +47,23 @@ pub fn build(b: *std.Build) !void {
         .link_libc = true,
     });
     module.addImport("c", translate_c.createModule());
+    module.addImport("ui-files", ziggy_core.module("ziggy-ui-files"));
     module.linkSystemLibrary("user32", .{});
     module.linkSystemLibrary("kernel32", .{});
     module.linkSystemLibrary("ole32", .{});
     module.linkSystemLibrary("shell32", .{});
     module.linkSystemLibrary("uuid", .{});
+    // Without the library the module still compiles, which is how a machine that cannot link a Windows executable checks the
+    // shell, but nothing built from it links.
+    if (webview2_loader_library) |library| {
+        module.addObjectFile(library);
+    }
+}
+
+//
+// For an app's build.zig to call: makes the module that holds the app's built page, to be imported by the app's shell code.
+// See embedPage in ziggy-core's build.zig for what it does. The module's `files` is what the app gives AppConfig.ui_files.
+//
+pub fn embedPage(b: *std.Build, shell_module: *std.Build.Module, page_directory: []const u8) !*std.Build.Module {
+    return try ziggy_core_build.embedPage(b, shell_module, "ziggy-shell-windows", page_directory);
 }

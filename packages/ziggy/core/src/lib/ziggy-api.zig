@@ -8,6 +8,20 @@ const build_options = @import("build_options");
 const types = @import("types.zig");
 const core_module = @import("core.zig");
 const accelerator = @import("accelerator.zig");
+const ui_files = @import("ui-files.zig");
+const inject_script = @import("inject-script.zig");
+
+//
+// What ziggy_ui_file gives back for a file of the bundled page. Laid out like ziggy_ui_file_result in ziggy.h.
+//
+const UiFileResult = extern struct {
+    // The file's bytes, which stay valid for as long as the library is loaded.
+    content: [*]const u8,
+    // The number of bytes.
+    content_length: usize,
+    // The file's content type, NUL terminated, which stays valid for as long as the library is loaded.
+    content_type: [*:0]const u8,
+};
 
 //
 // Exports ziggy_create, ziggy_destroy, ziggy_post_message, ziggy_check_url and ziggy_test_hooks_enabled from the library
@@ -51,6 +65,26 @@ pub fn exportApi(comptime app: core_module.AppHandlers) void {
             return core.menu_json.ptr;
         }
 
+        fn uiFile(handle: ?*core_module.Core, path_ptr: [*]const u8, path_len: usize, result: *UiFileResult) callconv(.c) bool {
+            const core = handle orelse {
+                @panic("ziggy_ui_file called with a null handle");
+            };
+            const file = core.uiFile(path_ptr[0..path_len]) orelse {
+                return false;
+            };
+            result.* = .{
+                .content = file.content.ptr,
+                .content_length = file.content.len,
+                .content_type = ui_files.contentType(file.path).ptr,
+            };
+            return true;
+        }
+
+        fn injectScript(length: *usize) callconv(.c) [*:0]const u8 {
+            length.* = inject_script.text.len;
+            return inject_script.text.ptr;
+        }
+
         fn parseAccelerator(text_ptr: [*]const u8, text_len: usize, result: *accelerator.Accelerator) callconv(.c) bool {
             result.* = accelerator.parse(text_ptr[0..text_len]) catch {
                 return false;
@@ -67,6 +101,8 @@ pub fn exportApi(comptime app: core_module.AppHandlers) void {
     @export(&Api.postMessage, .{ .name = "ziggy_post_message" });
     @export(&Api.checkUrl, .{ .name = "ziggy_check_url" });
     @export(&Api.menuJson, .{ .name = "ziggy_menu_json" });
+    @export(&Api.uiFile, .{ .name = "ziggy_ui_file" });
+    @export(&Api.injectScript, .{ .name = "ziggy_inject_script" });
     @export(&Api.parseAccelerator, .{ .name = "ziggy_parse_accelerator" });
     @export(&Api.testHooksEnabled, .{ .name = "ziggy_test_hooks_enabled" });
 }

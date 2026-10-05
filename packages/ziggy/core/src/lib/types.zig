@@ -72,7 +72,7 @@ pub const ZiggyConfig = extern struct {
     worker_threads: u32,
     // The limit on child tasks in flight for any one parent task.
     max_concurrent_child_tasks: u32,
-    // The URL prefix of the app's own bundled page, such as "file:///path/to/dist/" (NUL terminated).
+    // The URL prefix of the app's own bundled page, such as "ziggy-app://app/" or "https://ziggy-app.invalid/", the address the shell serves the page from (NUL terminated).
     app_url_prefix: [*:0]const u8,
     // The app's private data directory (NUL terminated).
     data_dir: [*:0]const u8,

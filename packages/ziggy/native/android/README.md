@@ -4,8 +4,8 @@ Ziggy's Android framework code: a Java library module (no Kotlin) that an app's 
 
 `ZiggyShell` takes an activity and a `WebView` and:
 
-- Configures the web view: JavaScript on; file access, file-URL access, content access and universal access off (the bundled page loads from `file:///android_asset/ui/` without file access); no cleartext or mixed content.
-- Injects `ziggy-inject.js` (an app asset) with `WebViewCompat.addDocumentStartJavaScript` (androidx.webkit), so it runs before the page's own scripts. There is no fallback: a web view without that feature makes `start` throw, because running the script when the page starts loading races the page's first script and would lose quietly.
+- Configures the web view: JavaScript on; file access, file-URL access, content access and universal access off (the bundled page is answered from the core library through `shouldInterceptRequest`, so it needs no file access); no cleartext or mixed content.
+- Injects `ziggy-inject.js` (embedded in the core library, so the app supplies nothing) with `WebViewCompat.addDocumentStartJavaScript` (androidx.webkit), so it runs before the page's own scripts. There is no fallback: a web view without that feature makes `start` throw, because running the script when the page starts loading races the page's first script and would lose quietly.
 - Exposes `window.ZiggyAndroid.postMessage(string)` with `addJavascriptInterface`, which the injected script posts through.
 - Delivers core messages with `evaluateJavascript("window.__ziggyReceive(<json>);")` on the main thread, in the order they arrived. The core delivers from any thread, so each message is copied and posted to the main looper.
 - Decides every navigation and request with the core's origin check: `shouldOverrideUrlLoading` opens http, https and mailto links in the system browser and blocks the rest, and `shouldInterceptRequest` blocks any request that is not the app's own.

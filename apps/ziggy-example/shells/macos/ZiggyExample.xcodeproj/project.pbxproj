@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* AppMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* AppMain.swift */; };
 		A10000000000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* AppDelegate.swift */; };
-		A10000000000000000000003 /* ziggy-inject.js in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* ziggy-inject.js */; };
 		A10000000000000000000004 /* ZiggyShellApple in Frameworks */ = {isa = PBXBuildFile; productRef = A60000000000000000000001 /* ZiggyShellApple */; };
 /* End PBXBuildFile section */
 
@@ -17,7 +16,6 @@
 		A20000000000000000000001 /* AppMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMain.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A20000000000000000000004 /* ziggy-inject.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "ziggy-inject.js"; path = "../../../../packages/ziggy/bridge/inject/ziggy-inject.js"; sourceTree = "<group>"; };
 		A20000000000000000000005 /* ZiggyExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ZiggyExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -55,7 +53,6 @@
 		A40000000000000000000003 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				A20000000000000000000004 /* ziggy-inject.js */,
 			);
 			name = Resources;
 			sourceTree = "<group>";
@@ -78,7 +75,6 @@
 				A30000000000000000000002 /* Sources */,
 				A30000000000000000000001 /* Frameworks */,
 				A30000000000000000000003 /* Resources */,
-				A30000000000000000000004 /* Copy the built page */,
 			);
 			buildRules = (
 			);
@@ -127,33 +123,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000000000000000000003 /* ziggy-inject.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
-		A30000000000000000000004 /* Copy the built page */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Copy the built page";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "set -eu\nif [ ! -f \"${ZIGGY_NATIVE_DIR}/ui/index.html\" ]; then\n    echo \"error: ${ZIGGY_NATIVE_DIR}/ui/index.html does not exist. Run the sync script (sync-macos.sh) first.\" >&2\n    exit 1\nfi\nmkdir -p \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ui\"\nrsync -a --delete \"${ZIGGY_NATIVE_DIR}/ui/\" \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ui/\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A30000000000000000000002 /* Sources */ = {

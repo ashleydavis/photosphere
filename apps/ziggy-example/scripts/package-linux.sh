@@ -28,20 +28,17 @@ BASE_NAME="ziggy-example-$VERSION-linux-$ARCHITECTURE"
 (cd "$EXAMPLE_DIR" && bun run bundle:ui)
 STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ziggy-example-package-XXXXXX")"
 (cd "$SHELL_DIR" && zig build -Doptimize=ReleaseSafe -p "$STAGE_DIR/prefix")
-mkdir -p "$STAGE_DIR/prefix/bin/ui" "$OUTPUT_DIR"
-cp -R "$EXAMPLE_DIR/dist/." "$STAGE_DIR/prefix/bin/ui/"
+mkdir -p "$OUTPUT_DIR"
 
-# The zip holds the executable and its page in one folder.
+# The zip holds the executable, which has the page embedded, in one folder.
 mkdir -p "$STAGE_DIR/zip/ziggy-example"
 cp "$STAGE_DIR/prefix/bin/ziggy-example" "$STAGE_DIR/zip/ziggy-example/"
-cp -R "$STAGE_DIR/prefix/bin/ui" "$STAGE_DIR/zip/ziggy-example/"
 rm -f "$OUTPUT_DIR/$BASE_NAME.zip"
 (cd "$STAGE_DIR/zip" && zip -q -r "$OUTPUT_DIR/$BASE_NAME.zip" ziggy-example)
 
 # The deb installs under /opt and puts a link in /usr/bin.
 mkdir -p "$STAGE_DIR/deb/DEBIAN" "$STAGE_DIR/deb/opt/ziggy-example" "$STAGE_DIR/deb/usr/bin"
 cp "$STAGE_DIR/prefix/bin/ziggy-example" "$STAGE_DIR/deb/opt/ziggy-example/"
-cp -R "$STAGE_DIR/prefix/bin/ui" "$STAGE_DIR/deb/opt/ziggy-example/"
 ln -s /opt/ziggy-example/ziggy-example "$STAGE_DIR/deb/usr/bin/ziggy-example"
 cat > "$STAGE_DIR/deb/DEBIAN/control" <<CONTROL
 Package: ziggy-example

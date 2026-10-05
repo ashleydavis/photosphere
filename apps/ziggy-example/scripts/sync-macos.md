@@ -1,6 +1,6 @@
 # sync-macos
 
-Puts what the MacOS Xcode project needs into a native directory: `lib/libziggy_example.a` and `include/ziggy.h` (built with Zig for the macOS target, deployment target 11.0) and `ui/` (the example's page from `bun run bundle:ui`). The Xcode project links the library and copies `ui/` into the app.
+Builds the example's page (`bun run bundle:ui`) and puts what the MacOS Xcode project needs into a native directory: `lib/libziggy_example.a` and `include/ziggy.h` (built with Zig for the macOS target, deployment target 11.0). The page is embedded in the library, so the app has no page files of its own.
 
 Run it on a Mac, through mise so the pinned Zig and Bun are used: `mise exec -- bash apps/ziggy-example/scripts/sync-macos.sh`.
 

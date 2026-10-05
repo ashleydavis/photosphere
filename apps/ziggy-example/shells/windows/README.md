@@ -5,11 +5,11 @@ The Windows executable of the Ziggy example. `src/main.zig` names the app and ha
 ## What the shell does
 
 - Creates a Win32 window. `-geometry=WxH` or `-geometry=WxH+X+Y` sets the page size in pixels at 96 DPI, and the position is honoured.
-- Hosts the page in WebView2, through its native COM interface. The declarations come from `zig translate-c` on the SDK's own `WebView2.h`, and `WebView2Loader.dll` is loaded at run time from the executable's directory. Nothing is linked against the SDK.
+- Hosts the page in WebView2, through its native COM interface. The declarations come from `zig translate-c` on the SDK's own `WebView2.h`, and the SDK's static loader library is linked into the executable, so no DLL is needed.
 - Injects `ziggy-inject.js` with `AddScriptToExecuteOnDocumentCreated`, and loads the page only after that has completed.
 - Passes page messages (`WebMessageReceived`, read with `TryGetWebMessageAsString`) to `ziggy_post_message`.
 - Delivers core messages by `ExecuteScript("window.__ziggyReceive(...)")` on the UI thread. The core delivers from any thread, so messages are queued under a lock and the UI thread is woken with a window message.
-- Loads the page from a `file://` URL of the `ui` directory beside the executable, and decides every navigation (`NavigationStarting`) and new window request (`NewWindowRequested`) with `ziggy_check_url`. External links open in the system browser.
+- Serves the page from the files embedded in the executable: it answers every request to `https://ziggy-app.invalid/` (a host name that can never be looked up) from the list, through the web view's `WebResourceRequested` event, and decides every navigation (`NavigationStarting`) and new window request (`NewWindowRequested`) with `ziggy_check_url`. External links open in the system browser.
 - Keeps the app's data under `%LOCALAPPDATA%\<app id>`, which is also WebView2's profile directory (in `WebView2` inside it).
 - Draws the app's menu as a native Win32 menu bar. After the core is created the shell reads the menu from `ziggy_menu_json`, and parses each shortcut with `ziggy_parse_accelerator`. The shortcut is shown after a tab in the Windows style (`Ctrl+Shift+I`). A menu with no menus shows no menu bar.
 - Makes the shortcuts work. With the keyboard inside the web view, WebView2 consumes key presses, so the shell uses the controller's `AcceleratorKeyPressed` event: a key that matches a menu shortcut runs its action and is marked handled (a held key does not repeat an action). The editing shortcuts (undo, redo, cut, copy, paste, select all) are left to the web view, which does them natively. With the window itself holding the keyboard, an accelerator table in the message loop does the same, and menu clicks arrive as `WM_COMMAND`.
@@ -25,4 +25,4 @@ Every failure prints a message and ends the process with a non-zero code.
 
 ## Building
 
-Run `bash apps/ziggy-example/scripts/setup-windows.sh` once to fetch the WebView2 SDK, then `build-windows.sh` or `run-windows.sh` from the same directory. The build installs `ziggy-example.exe`, `WebView2Loader.dll` and `ui` into `zig-out/ziggy-example`. The scripts are described beside them. The shell needs the WebView2 runtime on the machine, which Windows 11 and current Windows 10 have.
+Run `bash apps/ziggy-example/scripts/setup-windows.sh` once to fetch the WebView2 SDK, then `build-windows.sh` or `run-windows.sh` from the same directory. The build installs `ziggy-example.exe`, which is the whole app, into `zig-out/ziggy-example`. The scripts are described beside them. The shell needs the WebView2 runtime on the machine, which Windows 11 and current Windows 10 have.

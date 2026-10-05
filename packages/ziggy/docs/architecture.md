@@ -43,11 +43,24 @@ Ziggy and the app built on it are kept in separate places. Ziggy's code never na
 
 Every platform has its own native project.
 
+## The bundled page
+
+The page is built once (Vite writes `dist`) and every platform delivers the same files, embedded in the app's own code so there is no folder of page files to install beside it. How the web view reaches them differs:
+
+- **Linux and Windows**: the files are embedded in the executable. The app's `build.zig` calls `embedPage`, which each shell package's `build.zig` offers and the core's `build.zig` implements, with the page directory. It reads the directory every time the build runs, embeds each file with `@embedFile` and returns a module whose `files` the app passes to the shell as `AppConfig.ui_files` (a list of `UiFile`, each a path and its bytes). The build fails when `dist` is missing or has no `index.html`, so the page has to be built first, and a changed file rebuilds the executable. The lookup of a request path in that list and the choice of content type from the file's extension are in the core (`ui-files.zig`), so every shell shares and tests them once. A path that is not in the list gets a not found answer.
+  - On Linux the shell registers the URL scheme `ziggy-app` with WebKitGTK and answers each request for `ziggy-app://app/<path>` from the list. The page's URL prefix, which the core's origin check allows, is `ziggy-app://app/`.
+  - On Windows the shell asks WebView2 for every request to `https://ziggy-app.invalid/*` (a host name that can never be looked up) with `AddWebResourceRequestedFilter`, and answers each one from the list in its `WebResourceRequested` handler. That address is the page's URL prefix. WebView2's loader is linked into the executable from the SDK's static library, which needs Microsoft's toolchain to link, so there is no loader DLL beside the executable.
+- **MacOS, iOS and Android**: the files are embedded in the app's core library, which is already part of the app. The app's core `build.zig` calls the same `embedPage` and puts the result in its `AppHandlers.ui_files`. The shell asks the core for each file through the C interface (`ziggy_ui_file`, and `uiFileContent` and `uiFileContentType` through JNI on Android).
+  - On MacOS and iOS the bridge registers a `WKURLSchemeHandler` for the `ziggy-app` scheme and answers each request for `ziggy-app://app/<path>` from the core.
+  - On Android the shell answers every request to `https://ziggy-app.invalid/` in `shouldInterceptRequest`, so the APK holds no page files of its own.
+
+Every shell serves the page from an address of its own (never `file://`), so the page's build writes relative paths and a classic script instead of a module script.
+
 ## The message bridge
 
 The page reaches Zig by JSON messages.
 
-Each shell injects a script before the page loads that exposes only `window.ziggy`, with `invoke`, `send`, `onMessage` and `removeAllListeners`. UI code never uses the web view's own native handle (`window.chrome.webview`, `window.webkit.messageHandlers`, the Android interface object) directly.
+Each shell injects a script before the page loads, taken from the core library where it is embedded (`ziggy_inject_script`), so an app supplies nothing for it. It exposes only `window.ziggy`, with `invoke`, `send`, `onMessage` and `removeAllListeners`. UI code never uses the web view's own native handle (`window.chrome.webview`, `window.webkit.messageHandlers`, the Android interface object) directly.
 
 A message from the page is `{ "id", "channel", "data" }`. A reply is `{ "id", "ok", "data" }` or `{ "id", "ok": false, "error" }`. An unknown channel gets an error reply, never silence. A one-way message (`send`) has no reply. An event from Zig to the page is `{ "channel", "data" }`.
 
@@ -79,7 +92,7 @@ A message passed in either direction is valid only while the call or callback ca
 
 ### Origin check
 
-A shell accepts messages only from the app's own bundled page, blocks navigation to anything else, and opens external links in the system browser. Whether an address is the app's own is a Zig function in the core (`origin-check.zig`) called by the shell, so it is written and tested once.
+A shell accepts messages only from the app's own bundled page, blocks navigation to anything else, and opens external links in the system browser. Whether an address is the app's own is a Zig function in the core (`origin-check.zig`) called by the shell, so it is written and tested once. It compares against a URL prefix the shell gives the core (`app_url_prefix`), which is `ziggy-app://app/` on Linux, MacOS and iOS and `https://ziggy-app.invalid/` on Windows and Android.
 
 ## Tasks
 

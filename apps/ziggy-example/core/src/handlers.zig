@@ -7,6 +7,7 @@ const channels = @import("lib/channels.zig");
 const hello_tasks = @import("lib/hello-tasks.zig");
 const menu = @import("lib/menu.zig");
 const pickers = @import("lib/pickers.zig");
+const page = @import("page-files");
 
 //
 // The example's channels and task types.
@@ -19,6 +20,7 @@ pub const app = ziggy.core.AppHandlers{
         .{ .name = "fail", .handler = channels.failHandler },
     },
     .menu_json = menu.menu_json,
+    .ui_files = &page.files,
     .task_channels = &[_]ziggy.core.TaskChannelEntry{
         .{ .name = "pick-folder", .task_type = "pick-folder" },
         .{ .name = "pick-files", .task_type = "pick-files" },

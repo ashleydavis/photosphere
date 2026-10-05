@@ -17,6 +17,8 @@ const build_options = @import("build_options");
 const c = @import("jni-c");
 const types = @import("types.zig");
 const core_module = @import("core.zig");
+const ui_files = @import("ui-files.zig");
+const inject_script = @import("inject-script.zig");
 
 //
 // The Java interface the core calls back into.
@@ -472,6 +474,60 @@ pub fn exportJni(comptime app: core_module.AppHandlers) void {
             defer std.heap.smp_allocator.free(copy);
             return @intFromEnum(bridge.core.checkUrl(copy));
         }
+
+        // Copies the Java byte array of a request path and finds the bundled page's file for it. Null when there is no such
+        // file, or when the path could not be copied (in which case a Java exception is pending).
+        fn findUiFile(env: *c.JNIEnv, handle: c.jlong, path: c.jbyteArray) ?*const ui_files.UiFile {
+            const bridge: *Bridge = @ptrFromInt(@as(usize, @intCast(handle)));
+            const copy = copyJavaBytes(env, std.heap.smp_allocator, path) catch |err| {
+                if (err != error.JavaException) {
+                    throwJava(env, "java/lang/OutOfMemoryError", "Ziggy could not copy a page path");
+                }
+                return null;
+            };
+            defer std.heap.smp_allocator.free(copy);
+            return bridge.core.uiFile(copy);
+        }
+
+
+        fn injectScript(env: *c.JNIEnv, class: c.jclass) callconv(.c) c.jbyteArray {
+            _ = class;
+            const array = envTable(env).NewByteArray.?(env, @intCast(inject_script.text.len));
+            if (array == null) {
+                failOnPendingException(env, "Ziggy JNI: could not allocate a byte array for the inject script");
+                fatal(env, "Ziggy JNI: could not allocate a byte array for the inject script");
+            }
+            envTable(env).SetByteArrayRegion.?(env, array, 0, @intCast(inject_script.text.len), @ptrCast(inject_script.text.ptr));
+            failOnPendingException(env, "Ziggy JNI: could not copy the inject script into a byte array");
+            return array;
+        }
+        fn uiFileContent(env: *c.JNIEnv, class: c.jclass, handle: c.jlong, path: c.jbyteArray) callconv(.c) c.jbyteArray {
+            _ = class;
+            const file = findUiFile(env, handle, path) orelse {
+                return null;
+            };
+            const array = envTable(env).NewByteArray.?(env, @intCast(file.content.len));
+            if (array == null) {
+                failOnPendingException(env, "Ziggy JNI: could not allocate a byte array for a page file");
+                fatal(env, "Ziggy JNI: could not allocate a byte array for a page file");
+            }
+            envTable(env).SetByteArrayRegion.?(env, array, 0, @intCast(file.content.len), @ptrCast(file.content.ptr));
+            failOnPendingException(env, "Ziggy JNI: could not copy a page file into a byte array");
+            return array;
+        }
+
+        fn uiFileContentType(env: *c.JNIEnv, class: c.jclass, handle: c.jlong, path: c.jbyteArray) callconv(.c) c.jstring {
+            _ = class;
+            const file = findUiFile(env, handle, path) orelse {
+                return null;
+            };
+            const text = envTable(env).NewStringUTF.?(env, ui_files.contentType(file.path).ptr);
+            if (text == null) {
+                failOnPendingException(env, "Ziggy JNI: could not allocate a string for a content type");
+                fatal(env, "Ziggy JNI: could not allocate a string for a content type");
+            }
+            return text;
+        }
     };
     @export(&Exports.onLoad, .{ .name = "JNI_OnLoad" });
     @export(&Exports.testHooksEnabled, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_testHooksEnabled" });
@@ -479,4 +535,7 @@ pub fn exportJni(comptime app: core_module.AppHandlers) void {
     @export(&Exports.destroy, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_destroy" });
     @export(&Exports.postMessage, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_postMessage" });
     @export(&Exports.checkUrl, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_checkUrl" });
+    @export(&Exports.injectScript, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_injectScript" });
+    @export(&Exports.uiFileContent, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_uiFileContent" });
+    @export(&Exports.uiFileContentType, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_uiFileContentType" });
 }

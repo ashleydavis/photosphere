@@ -24,6 +24,16 @@ pub fn build(b: *std.Build) !void {
         .link_libc = true,
     });
     module.addOptions("build_options", options);
+    module.addAnonymousImport("ziggy-inject", .{
+        .root_source_file = b.path("../bridge/inject/ziggy-inject.js"),
+    });
+
+    // The list of the bundled page's files and the lookup in it, which the shells of the platforms that embed the page import.
+    _ = b.addModule("ziggy-ui-files", .{
+        .root_source_file = b.path("src/lib/ui-files.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
 
     // The Android shell reaches the core through JNI, written in Zig against the NDK's own jni.h. Only an Android target
     // has that header, so the import exists only for one.
@@ -84,9 +94,66 @@ pub fn build(b: *std.Build) !void {
         .link_libc = true,
     });
     test_core_module.addOptions("build_options", test_options);
+    test_core_module.addAnonymousImport("ziggy-inject", .{
+        .root_source_file = b.path("../bridge/inject/ziggy-inject.js"),
+    });
     test_module.addImport(module_name, test_core_module);
     const unit_test = b.addTest(.{ .root_module = test_module });
     const run_test = b.addRunArtifact(unit_test);
     run_test.setCwd(b.path("."));
     test_step.dependOn(&run_test.step);
+}
+//
+// For a shell package's build.zig to offer its apps: makes the module that holds the app's built page, a list of every file under the page's
+// directory (a path relative to the app's build.zig), each embedded with @embedFile. Pass the module to the app's shell
+// code and give the list to AppConfig.ui_files. The directory is read every time the build runs, so whatever the page build
+// produced is what gets embedded, with no list of files to keep up to date. A changed file rebuilds the executable. Fails
+// the build when the directory is missing or has no index.html, which means the page was not built first.
+//
+pub fn embedPage(b: *std.Build, shell_module: *std.Build.Module, shell_import_name: []const u8, page_directory: []const u8) !*std.Build.Module {
+    const io = b.graph.io;
+    var directory = b.build_root.handle.openDir(io, page_directory, .{ .iterate = true }) catch |err| {
+        std.debug.print("The built page is not in {s} ({s}). Build the page first.\n", .{ page_directory, @errorName(err) });
+        return error.PageNotBuilt;
+    };
+    defer directory.close(io);
+
+    var source: std.ArrayList(u8) = .empty;
+    try source.appendSlice(b.allocator, b.fmt("const shell = @import(\"{s}\");\n\npub const files = [_]shell.UiFile{{\n", .{shell_import_name}));
+    var embedded_names: std.ArrayList([]const u8) = .empty;
+    var embedded_paths: std.ArrayList([]const u8) = .empty;
+    var has_index = false;
+    var walker = try directory.walk(b.allocator);
+    defer walker.deinit();
+    while (try walker.next(io)) |entry| {
+        if (entry.kind != .file) {
+            continue;
+        }
+        const path = b.dupe(entry.path);
+        std.mem.replaceScalar(u8, path, '\\', '/');
+        const import_name = b.fmt("ui-file-{d}", .{embedded_names.items.len});
+        try embedded_names.append(b.allocator, import_name);
+        try embedded_paths.append(b.allocator, b.fmt("{s}/{s}", .{ page_directory, path }));
+        try source.appendSlice(b.allocator, b.fmt("    .{{ .path = \"{s}\", .content = @embedFile(\"{s}\") }},\n", .{ path, import_name }));
+        if (std.mem.eql(u8, path, "index.html")) {
+            has_index = true;
+        }
+    }
+    if (!has_index) {
+        std.debug.print("The built page in {s} has no index.html. Build the page first.\n", .{page_directory});
+        return error.PageNotBuilt;
+    }
+    try source.appendSlice(b.allocator, "};\n");
+
+    const generated = b.addWriteFiles();
+    const module = b.createModule(.{
+        .root_source_file = generated.add("ui-files.zig", source.items),
+    });
+    module.addImport(shell_import_name, shell_module);
+    for (embedded_names.items, embedded_paths.items) |import_name, file_path| {
+        module.addAnonymousImport(import_name, .{
+            .root_source_file = b.path(file_path),
+        });
+    }
+    return module;
 }

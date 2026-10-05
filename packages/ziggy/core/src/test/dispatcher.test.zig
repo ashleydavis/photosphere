@@ -196,6 +196,17 @@ test "the core holds the app's menu for shells to read" {
     try std.testing.expectEqualStrings("[]", core.menu_json);
 }
 
+test "the core finds a file of the app's bundled page by the path of a request" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try helpers.createCore(&shell, 1, 1);
+    defer core.destroy();
+    try std.testing.expectEqualStrings("<html></html>", core.uiFile("/index.html").?.content);
+    try std.testing.expectEqualStrings("index.html", core.uiFile("/").?.path);
+    try std.testing.expect(core.uiFile("/missing.js") == null);
+}
+
 test "a task channel answers the request with the task's result, without blocking the dispatcher" {
     var shell: helpers.FakeShell = undefined;
     shell.init(std.testing.allocator);

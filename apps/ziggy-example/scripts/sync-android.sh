@@ -53,7 +53,7 @@ if [ ! -d "$sysroot" ]; then
     exit 1
 fi
 
-mkdir -p "$generated_dir/zig-libc" "$generated_dir/assets/ui" "$generated_dir/jniLibs"
+mkdir -p "$generated_dir/zig-libc" "$generated_dir/jniLibs"
 
 # Zig has no C library for Android, so it is given the NDK's as a libc file, one per ABI because the headers and the
 # libraries differ. The libraries are the ones for the app's minimum SDK level, so the library links only against what that
@@ -83,6 +83,16 @@ if [ "$test_hooks" = "true" ]; then
     test_hooks_argument="-Dtest-hooks=true"
 fi
 
+# The page is embedded in the library, so it is built first.
+if [ "$skip_ui" = "false" ]; then
+    echo "Building the page..."
+    (cd "$ZIGGY_EXAMPLE_DIR" && bun run bundle:ui)
+fi
+if [ ! -f "$ZIGGY_EXAMPLE_DIR/dist/index.html" ]; then
+    echo "ERROR: $ZIGGY_EXAMPLE_DIR/dist/index.html does not exist. Run without --skip-ui." >&2
+    exit 1
+fi
+
 # A library of another ABI left by an earlier sync is removed by name, so the APK holds only what was asked for.
 for arch in x86_64 arm64; do
     rm -f "$generated_dir/jniLibs/$(ziggy_android_abi "$arch")/libziggy_example.so"
@@ -109,18 +119,9 @@ for arch in $arch_list; do
     cp "$generated_dir/zig-out/$abi/lib/libziggy_example.so" "$generated_dir/jniLibs/$abi/libziggy_example.so"
 done
 
-if [ "$skip_ui" = "false" ]; then
-    echo "Building the page..."
-    (cd "$ZIGGY_EXAMPLE_DIR" && bun run bundle:ui)
+# An earlier version of this script put the page and the inject script in the assets. Both are in the library now, so the old
+# copies are deleted, one file at a time, rather than left to be packaged into the APK.
+if [ -d "$generated_dir/assets" ]; then
+    find "$generated_dir/assets" -type f -delete
 fi
-if [ ! -f "$ZIGGY_EXAMPLE_DIR/dist/index.html" ]; then
-    echo "ERROR: $ZIGGY_EXAMPLE_DIR/dist/index.html does not exist. Run without --skip-ui." >&2
-    exit 1
-fi
-
-# The page is copied over the previous one, and files of an earlier build that this one no longer has are deleted, one
-# file at a time, so a renamed script never lingers in the APK.
-find "$generated_dir/assets/ui" -type f -delete
-cp -R "$ZIGGY_EXAMPLE_DIR/dist/." "$generated_dir/assets/ui/"
-cp "$ZIGGY_REPO_ROOT/packages/ziggy/bridge/inject/ziggy-inject.js" "$generated_dir/assets/ziggy-inject.js"
 echo "Synced into $generated_dir"

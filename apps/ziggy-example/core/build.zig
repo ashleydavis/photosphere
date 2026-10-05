@@ -1,4 +1,5 @@
 const std = @import("std");
+const ziggy_core_build = @import("ziggy-core");
 
 //
 // The name of the module exposed by this package.
@@ -7,7 +8,8 @@ const module_name = "ziggy-example-core";
 
 //
 // Builds the example's core as a static library (libziggy_example.a, with ziggy.h installed beside it) and, for
-// Android, a shared library, plus a test step that runs every file in src/test.
+// Android, a shared library, plus a test step that runs every file in src/test. The built page (apps/ziggy-example/dist,
+// made by `bun run bundle:ui`) is embedded in the library for the shells that ask the core for each file of the page.
 // The test-hooks option compiles in the test control connection and is never set for a release.
 //
 pub fn build(b: *std.Build) !void {
@@ -28,6 +30,7 @@ pub fn build(b: *std.Build) !void {
         .link_libc = true,
     });
     handlers_module.addImport("ziggy-core", ziggy_core.module("ziggy-core"));
+    handlers_module.addImport("page-files", try ziggy_core_build.embedPage(b, ziggy_core.module("ziggy-core"), "ziggy-core", "../dist"));
 
     const static_library = b.addLibrary(.{
         .name = "ziggy_example",
@@ -45,6 +48,7 @@ pub fn build(b: *std.Build) !void {
             .link_libc = true,
         });
         shared_module.addImport("ziggy-core", ziggy_core.module("ziggy-core"));
+        shared_module.addImport("page-files", try ziggy_core_build.embedPage(b, ziggy_core.module("ziggy-core"), "ziggy-core", "../dist"));
         const shared_library = b.addLibrary(.{
             .name = "ziggy_example",
             .root_module = shared_module,
@@ -90,6 +94,7 @@ pub fn build(b: *std.Build) !void {
         .link_libc = true,
     });
     example_for_tests.addImport("ziggy-core", test_core.module("ziggy-core"));
+    example_for_tests.addImport("page-files", try ziggy_core_build.embedPage(b, test_core.module("ziggy-core"), "ziggy-core", "../dist"));
     test_module.addImport("ziggy-core", test_core.module("ziggy-core"));
     test_module.addImport(module_name, example_for_tests);
     const unit_test = b.addTest(.{ .root_module = test_module });

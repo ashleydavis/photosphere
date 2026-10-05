@@ -28,4 +28,15 @@ final class ZiggyNative {
     // Decides what to do with an address the web view is about to load: 0 to load it, 1 to open it in the system browser,
     // 2 to block it.
     static native int checkUrl(long handle, byte[] url);
+
+    // The script that exposes window.ziggy, as UTF-8, which the shell runs in the page before the page's own scripts. It is
+    // embedded in the core library, so the app supplies nothing.
+    static native byte[] injectScript();
+
+    // The bytes of the app's bundled page file for a request path as UTF-8 (such as "/index.html"), or null when the page has
+    // no such file.
+    static native byte[] uiFileContent(long handle, byte[] path);
+
+    // The content type of that file, such as "text/html; charset=utf-8", or null when the page has no such file.
+    static native String uiFileContentType(long handle, byte[] path);
 }

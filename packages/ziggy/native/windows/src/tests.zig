@@ -5,7 +5,6 @@
 
 test {
     _ = @import("test/geometry.test.zig");
-    _ = @import("test/file-url.test.zig");
     _ = @import("test/accelerator.test.zig");
     _ = @import("test/actions.test.zig");
     _ = @import("test/menu.test.zig");

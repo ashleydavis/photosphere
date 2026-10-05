@@ -18,9 +18,15 @@ ziggy_platform_prepare() {
     (cd "$LINUX_EXAMPLE_DIR" && bun run bundle:ui) || return 1
     (cd "$LINUX_SHELL_DIR" && zig build -Dtest-hooks=true -p "$run_dir/test") || return 1
     (cd "$LINUX_SHELL_DIR" && zig build -p "$run_dir/release") || return 1
-    mkdir -p "$run_dir/test/bin/ui" "$run_dir/release/bin/ui"
-    cp -R "$LINUX_EXAMPLE_DIR/dist/." "$run_dir/test/bin/ui/" || return 1
-    cp -R "$LINUX_EXAMPLE_DIR/dist/." "$run_dir/release/bin/ui/" || return 1
+    # The page is embedded in the executable, so nothing but the executable is installed. A scenario that passes proves the
+    # page loads from the executable alone, which is why nothing is copied beside it.
+    local installed
+    installed="$(find "$run_dir/test/bin" "$run_dir/release/bin" -type f | wc -l)"
+    if [ "$installed" -ne 2 ]; then
+        echo "The Linux build installed more than the two executables:" >&2
+        find "$run_dir/test/bin" "$run_dir/release/bin" -type f >&2
+        return 1
+    fi
 }
 
 ziggy_platform_start() {
