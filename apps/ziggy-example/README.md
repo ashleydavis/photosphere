@@ -37,6 +37,18 @@ Run these from the repository root. `<platform>` is `linux`, `windows`, `macos`,
 | `bun run test:ziggy-example:and` | The smoke tests on the Android emulator pool or a device. |
 | `bun run test:ziggy-example:ios` | The smoke tests on the iOS simulator. |
 
+`bun run package:ziggy-example:<platform>` builds the release app, without the test hooks, and writes unsigned packages. Each platform's script doc says where they go and what they need:
+
+| Platform | Packages | Where | Script doc |
+|---|---|---|---|
+| `linux` | zip, `.deb` | `out/linux/` | `scripts/package-linux.md` |
+| `windows` | zip, NSIS installer `.exe` | `shells/windows/package/` | `scripts/package-windows.md` |
+| `macos` | `.dmg`, zip | `shells/macos/zig-out/package/` | `scripts/package-macos.md` |
+| `ios` | `.xcarchive`, `.ipa` | `shells/ios/zig-out/package/` | `scripts/package-ios.md` |
+| `android` | `.apk` per architecture | `release/` | `scripts/package-android.md` |
+
+On Linux, `scripts/sync-linux.md` also says how to build just the release executable.
+
 `bun run test` runs the page's unit tests. `bun run test:zig` runs the Zig unit tests of Ziggy's core, the example's core and the Windows shell package, and `bun run compile:zig` builds the Zig code and cross-builds it for every platform. `bun run test:everything` runs both, each as its own lane.
 
 ## What each platform needs

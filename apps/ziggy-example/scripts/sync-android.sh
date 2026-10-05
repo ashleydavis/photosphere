@@ -7,7 +7,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/android-common.sh"
 
 arch_list="x86_64 arm64"
-optimize="ReleaseSmall"
+optimize="ReleaseSafe"
 test_hooks="false"
 skip_ui="false"
 while [ $# -gt 0 ]; do
