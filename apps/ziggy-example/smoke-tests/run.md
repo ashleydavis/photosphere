@@ -4,7 +4,7 @@ Runs the Ziggy example's smoke test scenarios for one platform. Invoked by the r
 
 ## Arguments
 
-- `<platform>`: `linux`, `windows`, `macos`, `android` or `ios`. Each has a platform library in `lib/<platform>.sh` that builds the app, starts it and stops it.
+- `<platform>`: `linux`, `windows`, `macos`, `android` or `ios` (a connected iPhone or iPad when there is one, see `lib/ios-device.sh`, otherwise a simulator). Each has a platform library in `lib/<platform>.sh` that builds the app, starts it and stops it.
 - `[scenario]`: optional scenario number or name, to run one scenario.
 
 ## Behaviour
