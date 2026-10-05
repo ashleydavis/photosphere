@@ -39,9 +39,10 @@ done
 zig_target="$(windows_zig_target "$arch")"
 
 windows_require_commands bun zig
+windows_require_msvc_toolchain
 
-if [ ! -f "$WINDOWS_SDK_DIR/include/WebView2.h" ]; then
-    echo "The WebView2 SDK is not fetched. Run \"bun run --filter=ziggy-example setup\" from the repository root first." >&2
+if [ ! -f "$WINDOWS_SDK_DIR/include/WebView2.h" ] || [ ! -f "$WINDOWS_SDK_DIR/$arch/WebView2LoaderStatic.lib" ]; then
+    echo "The WebView2 SDK is not fetched, or was fetched by an older setup without the static loader. Run \"bun run --filter=ziggy-example setup\" from the repository root first." >&2
     exit 1
 fi
 

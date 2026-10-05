@@ -31,9 +31,16 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
+    // The headers are translated for the -gnu ABI of the target's architecture, so that they come from the mingw headers Zig
+    // bundles. With the -msvc target on a machine that has the Windows SDK, Zig would hand translate-c the SDK's own headers,
+    // which its C front end cannot parse (MSVC extensions such as __ptr64 in basetsd.h). The two ABIs share the calling
+    // convention and struct layout on Windows, so the declarations are the same, and the executable is still built and linked
+    // for the -msvc target.
+    var translate_query = target.query;
+    translate_query.abi = .gnu;
     const translate_c = b.addTranslateC(.{
         .root_source_file = b.path("src/c.h"),
-        .target = target,
+        .target = b.resolveTargetQuery(translate_query),
         .optimize = optimize,
         .link_libc = true,
     });
@@ -53,6 +60,8 @@ pub fn build(b: *std.Build) !void {
     module.linkSystemLibrary("ole32", .{});
     module.linkSystemLibrary("shell32", .{});
     module.linkSystemLibrary("uuid", .{});
+    // The WebView2 static loader reads the registry and writes event traces, which live in advapi32.
+    module.linkSystemLibrary("advapi32", .{});
     // Without the library the module still compiles, which is how a machine that cannot link a Windows executable checks the
     // shell, but nothing built from it links.
     if (webview2_loader_library) |library| {

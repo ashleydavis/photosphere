@@ -25,4 +25,4 @@ Every failure prints a message and ends the process with a non-zero code.
 
 ## Building
 
-From a Git Bash terminal at the repository root, run `bun run --filter=ziggy-example setup` once to fetch the WebView2 SDK, then `bun run build:ziggy-example:windows` or `bun run run:ziggy-example:windows`. See the example's README for what Windows needs. The build installs `ziggy-example.exe`, which is the whole app, into `zig-out/ziggy-example`. The scripts are described beside them. The shell needs the WebView2 runtime on the machine, which Windows 11 and current Windows 10 have.
+From a Git Bash terminal at the repository root, run `bun run --filter=ziggy-example setup` once to fetch the WebView2 SDK and the WiX Toolset and install the C++ toolchain and the Windows SDK where they are missing, then `bun run build:ziggy-example:windows` or `bun run run:ziggy-example:windows`. See the example's README for what Windows needs. The build installs `ziggy-example.exe`, which is the whole app, into `zig-out/ziggy-example`. The scripts are described beside them. The shell needs the WebView2 runtime on the machine, which Windows 11 and current Windows 10 have.

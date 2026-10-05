@@ -17,6 +17,11 @@ fi
 WINDOWS_SHELL_DIR="$WINDOWS_EXAMPLE_DIR/shells/windows"
 WINDOWS_SDK_DIR="$WINDOWS_EXAMPLE_DIR/webview2-sdk"
 
+# The pinned WiX Toolset that fetch-wix.sh extracts, which package-windows.sh builds the MSI installer with.
+WIX_VERSION="3.14.1"
+WINDOWS_WIX_ROOT="$WINDOWS_EXAMPLE_DIR/wix"
+WINDOWS_WIX_DIR="$WINDOWS_WIX_ROOT/wix-$WIX_VERSION"
+
 # The name of the directory inside an install prefix that holds the exe, which is the whole app.
 WINDOWS_APP_DIR_NAME="ziggy-example"
 
@@ -56,6 +61,79 @@ windows_require_commands() {
     if [ -n "$missing" ]; then
         echo "Not found on PATH:$missing. Run \"mise install\" from the repository root, and put the tools it installs on PATH:" >&2
         echo "add %LOCALAPPDATA%\\mise\\shims to PATH, or activate mise in your shell." >&2
+        exit 1
+    fi
+}
+
+#
+# Succeeds when Microsoft's C++ toolchain and the Windows SDK are installed, the two things Zig looks for to build the
+# -windows-msvc target: a Visual Studio or Build Tools instance with the x64 C++ tools, found with vswhere, and the
+# Windows 10/11 SDK root in the registry. Prints nothing.
+#
+windows_msvc_toolchain_installed() {
+    if [ "$WINDOWS_HOST" != "1" ]; then
+        return 1
+    fi
+    local vswhere
+    vswhere="$(printenv 'ProgramFiles(x86)')/Microsoft Visual Studio/Installer/vswhere.exe"
+    if [ ! -f "$vswhere" ]; then
+        return 1
+    fi
+    local vc_tools_path
+    vc_tools_path="$("$vswhere" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)"
+    if [ -z "$vc_tools_path" ]; then
+        return 1
+    fi
+
+    # reg takes /v as an argument, which Git Bash would otherwise rewrite into a path.
+    MSYS2_ARG_CONV_EXCL='*' reg query 'HKLM\SOFTWARE\Microsoft\Windows Kits\Installed Roots' /v KitsRoot10 > /dev/null 2>&1
+}
+
+#
+# Fails, saying how to get them, when Microsoft's C++ toolchain or the Windows SDK is not installed on this Windows machine.
+# On any other host there is no vswhere or registry to look in, so Zig is left to find what it needs or report it.
+# Usage: windows_require_msvc_toolchain
+#
+windows_require_msvc_toolchain() {
+    if [ "$WINDOWS_HOST" != "1" ]; then
+        return 0
+    fi
+    if ! windows_msvc_toolchain_installed; then
+        echo "Building the Windows app needs Microsoft's C++ toolchain and the Windows SDK, and they were not found on this machine." >&2
+        echo "Run \"bun run --filter=ziggy-example setup\" from the repository root under Git Bash to install them, or add the" >&2
+        echo "\"Desktop development with C++\" workload in the Visual Studio Installer. See setup-windows.md." >&2
+        exit 1
+    fi
+}
+
+#
+# Downloads a file unless it is already there with the right hash, then fails if the hash is wrong.
+# Usage: fetch_verified <url> <file> <sha256>
+#
+fetch_verified() {
+    local url="$1"
+    local file="$2"
+    local expected="$3"
+    if [ ! -f "$file" ]; then
+        echo "Downloading $url"
+        curl --fail --silent --show-error --location --output "$file" "$url"
+    fi
+    local actual
+    actual="$(sha256sum "$file" | cut -d ' ' -f 1)"
+    if [ "$actual" != "$expected" ]; then
+        echo "The sha256 of $file is $actual, expected $expected. Delete the file and run again, or check the pin." >&2
+        return 1
+    fi
+}
+
+#
+# Fails, saying how to get it, when the pinned WiX Toolset has not been fetched into WINDOWS_WIX_DIR.
+# Usage: windows_require_wix
+#
+windows_require_wix() {
+    if [ ! -f "$WINDOWS_WIX_DIR/candle.exe" ] || [ ! -f "$WINDOWS_WIX_DIR/light.exe" ]; then
+        echo "Packaging the Windows app needs WiX Toolset $WIX_VERSION in $WINDOWS_WIX_DIR, and it is not there." >&2
+        echo "Run \"bun run --filter=ziggy-example setup\" from the repository root under Git Bash to fetch it. See setup-windows.md." >&2
         exit 1
     fi
 }

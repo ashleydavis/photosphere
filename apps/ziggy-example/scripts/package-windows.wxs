@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    The MSI installer for the Ziggy example on Windows, compiled by WiX Toolset 3 (candle and light). Built by
+    package-windows.sh, which defines:
+        Version     the app's version, as major.minor.build
+        SourceDir   the directory holding ziggy-example.exe, which is the whole app
+    The installer is unsigned and installs for the current user only, into %LOCALAPPDATA%\Programs\Ziggy example, so it
+    needs no administrator rights. It adds a Start menu shortcut, and Windows Installer adds the entry in Installed apps.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <!-- The UpgradeCode stays the same for every version, so installing a newer one replaces the older one. -->
+    <Product Id="*" Name="Ziggy example" Language="1033" Version="$(var.Version)" Manufacturer="Ziggy" UpgradeCode="D979F1DE-F1C0-4B62-94F2-F1F254229814">
+        <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" InstallPrivileges="limited" Platform="x64" />
+        <MajorUpgrade DowngradeErrorMessage="A newer version of Ziggy example is already installed." />
+        <MediaTemplate EmbedCab="yes" />
+
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="LocalAppDataFolder">
+                <Directory Id="ProgramsFolder" Name="Programs">
+                    <Directory Id="INSTALLFOLDER" Name="Ziggy example" />
+                </Directory>
+            </Directory>
+            <Directory Id="ProgramMenuFolder" />
+        </Directory>
+
+        <!--
+            A per-user component's key path must be a registry value under HKCU rather than a file, which is what Windows
+            Installer checks to know whether the component is installed. RemoveFolder takes the folders away on uninstall when
+            they are left empty.
+        -->
+        <DirectoryRef Id="INSTALLFOLDER">
+            <Component Id="AppExecutable" Guid="30A28374-5D2F-4FE5-A861-8806E009B6A4" Win64="yes">
+                <File Id="ZiggyExampleExe" Source="$(var.SourceDir)\ziggy-example.exe" KeyPath="no" />
+                <RegistryValue Root="HKCU" Key="Software\dev.ziggy.example" Name="InstallDir" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+                <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+                <RemoveFolder Id="RemoveProgramsFolder" Directory="ProgramsFolder" On="uninstall" />
+            </Component>
+        </DirectoryRef>
+
+        <DirectoryRef Id="ProgramMenuFolder">
+            <Component Id="StartMenuShortcut" Guid="17A33700-BE68-477F-894B-203DA47EDBE1" Win64="yes">
+                <Shortcut Id="ZiggyExampleShortcut" Name="Ziggy example" Target="[INSTALLFOLDER]ziggy-example.exe" WorkingDirectory="INSTALLFOLDER" />
+                <RegistryValue Root="HKCU" Key="Software\dev.ziggy.example" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+            </Component>
+        </DirectoryRef>
+
+        <Feature Id="App" Title="Ziggy example" Level="1">
+            <ComponentRef Id="AppExecutable" />
+            <ComponentRef Id="StartMenuShortcut" />
+        </Feature>
+    </Product>
+</Wix>

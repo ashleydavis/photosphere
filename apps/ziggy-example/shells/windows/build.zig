@@ -49,6 +49,9 @@ pub fn build(b: *std.Build) !void {
         .root_module = module,
     });
     executable.subsystem = .windows;
+    // The windows subsystem keeps a console from opening, but its default entry point in the MSVC C runtime calls WinMain.
+    // Zig's main is exported as the C main, so the entry point is the C runtime's one that calls main.
+    executable.entry = .{ .symbol_name = "mainCRTStartup" };
 
     // Compiles the shell without linking it, for a machine that cannot link a Windows executable. The link needs Microsoft's
     // toolchain because the SDK's static loader is built with it.

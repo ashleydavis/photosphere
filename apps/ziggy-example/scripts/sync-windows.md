@@ -1,6 +1,6 @@
 # sync-windows.sh
 
-Builds the example's page (`bun run bundle:ui`) and the Windows shell (`zig build`), and installs everything the app needs into one directory, `<prefix>/ziggy-example`: `ziggy-example.exe`, which is the whole app. Run `bun run --filter=ziggy-example setup` from the repository root first. It stops with a message saying what to do when `bun` or `zig` is not on PATH, or the WebView2 SDK has not been fetched.
+Builds the example's page (`bun run bundle:ui`) and the Windows shell (`zig build`), and installs everything the app needs into one directory, `<prefix>/ziggy-example`: `ziggy-example.exe`, which is the whole app. Run `bun run --filter=ziggy-example setup` from the repository root first. It stops with a message saying what to do when `bun` or `zig` is not on PATH, when on Windows Microsoft's C++ toolchain or the Windows SDK is not installed, or when the WebView2 SDK has not been fetched.
 
 Run it as `bash apps/ziggy-example/scripts/sync-windows.sh [options]`. It works under Git Bash on Windows and cross builds from Linux.
 

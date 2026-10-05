@@ -42,7 +42,7 @@ Run these from the repository root. `<platform>` is `linux`, `windows`, `macos`,
 | Platform | Packages | Where | Script doc |
 |---|---|---|---|
 | `linux` | zip, `.deb` | `out/linux/` | `scripts/package-linux.md` |
-| `windows` | zip, NSIS installer `.exe` | `shells/windows/package/` | `scripts/package-windows.md` |
+| `windows` | zip, `.msi` installer | `out/windows/` | `scripts/package-windows.md` |
 | `macos` | `.dmg`, zip | `shells/macos/zig-out/package/` | `scripts/package-macos.md` |
 | `ios` | `.xcarchive`, `.ipa` | `shells/ios/zig-out/package/` | `scripts/package-ios.md` |
 | `android` | `.apk` per architecture | `release/` | `scripts/package-android.md` |
@@ -54,7 +54,7 @@ On Linux, `scripts/sync-linux.md` also says how to build just the release execut
 ## What each platform needs
 
 - **Linux:** the GTK 3 and WebKitGTK 4.1 runtime libraries (`libgtk-3-0`, `libwebkit2gtk-4.1-0`) to build and run, with no development packages, `xvfb`, `xwininfo` and `jq` for the smoke tests, and `zip` and `dpkg-deb` to package. If the web view's sandbox cannot start on your system the app says so and runs without it. See `scripts/run-linux.md`.
-- **Windows:** the scripts are bash scripts and run under Git Bash. The tools `mise install` puts in place (`bun`, `zig`, `jq`) must be on PATH: add `%LOCALAPPDATA%\mise\shims` to PATH, or activate mise in your shell. Then `bun run --filter=ziggy-example setup` downloads the pinned WebView2 SDK, once. Building needs Microsoft's C++ toolchain and the Windows SDK (Visual Studio or its Build Tools, the "Desktop development with C++" workload), because the WebView2 loader is linked into the exe from the SDK's static library and that library is built with it. Packaging needs NSIS (`makensis`).
+- **Windows:** the scripts are bash scripts and run under Git Bash. The tools `mise install` puts in place (`bun`, `zig`, `jq`) must be on PATH: add `%LOCALAPPDATA%\mise\shims` to PATH, or activate mise in your shell. Then run `bun run --filter=ziggy-example setup` once. Building needs Microsoft's C++ toolchain and the Windows SDK (Visual Studio or its Build Tools, the "Desktop development with C++" workload), because the WebView2 loader is linked into the exe from the SDK's static library and that library is built with it, and packaging needs the WiX Toolset. Setup downloads the pinned WebView2 SDK and a pinned WiX Toolset, which need no administrator approval, and installs the C++ toolchain and the Windows SDK through `winget` when they are missing, which does. See `scripts/setup-windows.md`.
 - **MacOS and iOS:** a Mac with the pinned toolchain, macOS 12.7.6 and Xcode 14.2. No version is raised.
 - **Android:** `bun run --filter=ziggy-example setup`, which uses the same Android SDK setup as the rest of the repository.
 

@@ -23,26 +23,6 @@ DOWNLOAD_DIR="$WINDOWS_SDK_DIR/download"
 NUPKG="$DOWNLOAD_DIR/microsoft.web.webview2.$WEBVIEW2_VERSION.nupkg"
 EVENT_TOKEN_FILE="$DOWNLOAD_DIR/eventtoken-$EVENT_TOKEN_COMMIT.h"
 
-#
-# Downloads a file unless it is already there with the right hash, then fails if the hash is wrong.
-# Usage: fetch_verified <url> <file> <sha256>
-#
-fetch_verified() {
-    local url="$1"
-    local file="$2"
-    local expected="$3"
-    if [ ! -f "$file" ]; then
-        echo "Downloading $url"
-        curl --fail --silent --show-error --location --output "$file" "$url"
-    fi
-    local actual
-    actual="$(sha256sum "$file" | cut -d ' ' -f 1)"
-    if [ "$actual" != "$expected" ]; then
-        echo "The sha256 of $file is $actual, expected $expected. Delete the file and run again, or check the pin." >&2
-        return 1
-    fi
-}
-
 mkdir -p "$DOWNLOAD_DIR" "$WINDOWS_SDK_DIR/include" "$WINDOWS_SDK_DIR/x64" "$WINDOWS_SDK_DIR/arm64"
 
 fetch_verified "$WEBVIEW2_URL" "$NUPKG" "$WEBVIEW2_SHA256"
