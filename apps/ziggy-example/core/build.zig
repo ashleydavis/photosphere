@@ -34,6 +34,8 @@ pub fn build(b: *std.Build) !void {
         .root_module = handlers_module,
         .linkage = .static,
     });
+    // The Xcode linker is not Zig's, so the compiler runtime (for example ___zig_probe_stack) must travel inside the archive.
+    static_library.bundle_compiler_rt = true;
     b.installArtifact(static_library);
     b.getInstallStep().dependOn(&b.addInstallFileWithDir(ziggy_core.path("src/lib/ziggy.h"), .header, "ziggy.h").step);
 

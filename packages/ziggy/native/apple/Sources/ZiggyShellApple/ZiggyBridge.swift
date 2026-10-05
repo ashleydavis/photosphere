@@ -233,7 +233,7 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         menu = ZiggyMenu(bridge: self, menuJSON: Data(bytes: menuText, count: menuLength))
         #endif
 
-        var components = URLComponents(url: uiDirectory.appendingPathComponent("index.html"), resolvingAgainstBaseURL: false)
+        var components = URLComponents(url: uiDirectory.appendingPathComponent("index.html"), resolvingAgainstBaseURL: true)
         if testMode {
             components?.query = "testMode=1"
         }
