@@ -139,6 +139,10 @@ const ScriptAddedHandler = ComHandler(c.ICoreWebView2AddScriptToExecuteOnDocumen
 //
 const ScriptExecutedHandler = ComHandler(c.ICoreWebView2ExecuteScriptCompletedHandler, c.IID_ICoreWebView2ExecuteScriptCompletedHandler);
 //
+// The handler object for the DevToolsCall callback, which WebView2 calls on the UI thread when a DevTools protocol call ends.
+//
+const DevToolsCallHandler = ComHandler(c.ICoreWebView2CallDevToolsProtocolMethodCompletedHandler, c.IID_ICoreWebView2CallDevToolsProtocolMethodCompletedHandler);
+//
 // The handler object for the AcceleratorKey callback, which WebView2 calls on the UI thread before a key press reaches the page.
 //
 const AcceleratorHandler = ComHandler(c.ICoreWebView2AcceleratorKeyPressedEventHandler, c.IID_ICoreWebView2AcceleratorKeyPressedEventHandler);
@@ -241,6 +245,8 @@ const Shell = struct {
     copy_handler: ScriptExecutedHandler,
     // Receives the selected text a cut asked the page for.
     cut_handler: ScriptExecutedHandler,
+    // Receives the end of a paste, which is a DevTools protocol call.
+    paste_handler: DevToolsCallHandler,
     // Receives the result of running a script that delivers a message.
     script_executed_handler: ScriptExecutedHandler,
 };
@@ -275,6 +281,7 @@ pub fn run(app_config: AppConfig, args: []const [:0]const u8) !u8 {
         .accelerator_handler = undefined,
         .copy_handler = undefined,
         .cut_handler = undefined,
+        .paste_handler = undefined,
         .environment_handler = undefined,
         .controller_handler = undefined,
         .web_message_handler = undefined,
@@ -374,6 +381,12 @@ fn initHandlers(shell: *Shell) void {
     shell.cut_handler = .{
         .interface = .{
             .lpVtbl = @constCast(&cut_vtable),
+        },
+        .shell = shell,
+    };
+    shell.paste_handler = .{
+        .interface = .{
+            .lpVtbl = @constCast(&paste_vtable),
         },
         .shell = shell,
     };
@@ -1061,7 +1074,7 @@ fn runAction(shell: *Shell, action: []const u8) void {
             check("Reload", web_view.lpVtbl.*.Reload.?(web_view));
         },
         .toggle_devtools => {
-            check("OpenDevToolsWindow", web_view.lpVtbl.*.OpenDevToolsWindow.?(web_view));
+            toggleDevTools(web_view);
         },
         .toggle_fullscreen => {
             toggleFullscreen(shell);
@@ -1088,6 +1101,60 @@ fn runAction(shell: *Shell, action: []const u8) void {
             runEditCommand(shell, web_view, actions_lib.editCommand(known).?);
         },
     }
+}
+
+//
+// The search for the developer tools window: the browser process they belong to, and the window once it is found.
+//
+const DevToolsSearch = struct {
+    // The id of the web view's browser process, which owns the developer tools window.
+    process_id: c.DWORD,
+    // The developer tools window, or null until it is found.
+    window: c.HWND,
+};
+
+//
+// Opens the developer tools, or closes them when they are open. WebView2 can open its developer tools window but has no call
+// to close it, so the window is looked for among the visible top level windows of the web view's browser process, by the
+// title WebView2 gives it, and asked to close. Looking every time, rather than remembering, keeps the toggle right when the
+// user closes the window themselves.
+//
+fn toggleDevTools(web_view: *c.ICoreWebView2) void {
+    var browser_process_id: c.UINT32 = 0;
+    check("get_BrowserProcessId", web_view.lpVtbl.*.get_BrowserProcessId.?(web_view, &browser_process_id));
+    var search = DevToolsSearch{
+        .process_id = browser_process_id,
+        .window = null,
+    };
+    _ = c.EnumWindows(findDevToolsWindow, @bitCast(@intFromPtr(&search)));
+    if (search.window) |window| {
+        if (c.PostMessageW(window, c.WM_CLOSE, 0, 0) == 0) {
+            fatal("could not close the developer tools, error {d}", .{c.GetLastError()});
+        }
+        return;
+    }
+    check("OpenDevToolsWindow", web_view.lpVtbl.*.OpenDevToolsWindow.?(web_view));
+}
+
+//
+// Called by EnumWindows for each top level window: records the window and stops the search when it is the developer tools
+// window of the browser process being searched for.
+//
+fn findDevToolsWindow(window: c.HWND, lparam: c.LPARAM) callconv(.winapi) c.BOOL {
+    const search: *DevToolsSearch = @ptrFromInt(@as(usize, @bitCast(lparam)));
+    var process_id: c.DWORD = 0;
+    _ = c.GetWindowThreadProcessId(window, &process_id);
+    if (process_id != search.process_id or c.IsWindowVisible(window) == 0) {
+        return 1;
+    }
+    const prefix = std.unicode.utf8ToUtf16LeStringLiteral("DevTools");
+    var title: [prefix.len + 1]u16 = undefined;
+    const length = c.GetWindowTextW(window, &title, title.len);
+    if (length < prefix.len or !std.mem.eql(u16, title[0..prefix.len], prefix)) {
+        return 1;
+    }
+    search.window = window;
+    return 0;
 }
 
 //
@@ -1134,32 +1201,24 @@ fn copySelection(web_view: *c.ICoreWebView2, handler: *c.ICoreWebView2ExecuteScr
 }
 
 //
-// Types the clipboard's text into the focused field. Text is the only kind of clipboard content it handles, and a clipboard
-// with none pastes nothing.
+// Pastes the clipboard into the page with the web view's own paste command, as the paste key does, so the paste is an undo
+// step of its own. document.execCommand('paste') is refused to a script and WebView2 has no paste call, so the command is
+// sent through the DevTools protocol, whose key events can carry editing commands.
 //
 fn pasteClipboard(shell: *Shell, web_view: *c.ICoreWebView2) void {
-    const allocator = std.heap.c_allocator;
-    if (c.OpenClipboard(shell.window) == 0) {
-        std.debug.print("ziggy shell: could not open the clipboard to paste, error {d}\n", .{c.GetLastError()});
-        return;
-    }
-    defer _ = c.CloseClipboard();
-    const handle = c.GetClipboardData(c.CF_UNICODETEXT) orelse {
-        return;
-    };
-    const locked = c.GlobalLock(handle) orelse {
-        fatal("GlobalLock failed on the clipboard text, error {d}", .{c.GetLastError()});
-    };
-    defer _ = c.GlobalUnlock(handle);
-    const text = std.unicode.utf16LeToUtf8Alloc(allocator, std.mem.span(@as([*:0]const u16, @ptrCast(@alignCast(locked))))) catch {
-        fatal("the clipboard text cannot be converted to UTF-8", .{});
-    };
-    defer allocator.free(text);
-    const script = actions_lib.pasteScript(allocator, text) catch {
-        fatal("out of memory pasting", .{});
-    };
-    defer allocator.free(script);
-    runScript(web_view, script, &shell.script_executed_handler.interface);
+    check("CallDevToolsProtocolMethod", web_view.lpVtbl.*.CallDevToolsProtocolMethod.?(
+        web_view,
+        std.unicode.utf8ToUtf16LeStringLiteral("Input.dispatchKeyEvent"),
+        std.unicode.utf8ToUtf16LeStringLiteral("{\"type\":\"keyDown\",\"commands\":[\"paste\"]}"),
+        &shell.paste_handler.interface,
+    ));
+}
+
+fn pasteInvoke(this: [*c]c.ICoreWebView2CallDevToolsProtocolMethodCompletedHandler, error_code: c.HRESULT, result: [*c]const c.WCHAR) callconv(.c) c.HRESULT {
+    _ = this;
+    _ = result;
+    check("pasting", error_code);
+    return c.S_OK;
 }
 
 //
@@ -1776,4 +1835,14 @@ const cut_vtable = c.struct_ICoreWebView2ExecuteScriptCompletedHandlerVtbl{
     .AddRef = ScriptExecutedHandler.addRef,
     .Release = ScriptExecutedHandler.release,
     .Invoke = cutInvoke,
+};
+
+//
+// The table of functions of the paste handler.
+//
+const paste_vtable = c.struct_ICoreWebView2CallDevToolsProtocolMethodCompletedHandlerVtbl{
+    .QueryInterface = DevToolsCallHandler.queryInterface,
+    .AddRef = DevToolsCallHandler.addRef,
+    .Release = DevToolsCallHandler.release,
+    .Invoke = pasteInvoke,
 };

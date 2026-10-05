@@ -116,17 +116,6 @@ pub const selection_script =
     "(function () { var element = document.activeElement; if (element && (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') && typeof element.selectionStart === 'number') { return element.value.substring(element.selectionStart, element.selectionEnd); } return String(window.getSelection()); })();";
 
 //
-// Returns the script that types text into the focused field as if the user had pasted it. document.execCommand('paste') is
-// refused to a script, so the shell reads the clipboard itself and inserts the text with the editing command that is
-// allowed, which can still be undone. The caller owns the result.
-//
-pub fn pasteScript(allocator: std.mem.Allocator, text: []const u8) ![]u8 {
-    const literal = try std.json.Stringify.valueAlloc(allocator, text, .{});
-    defer allocator.free(literal);
-    return std.fmt.allocPrint(allocator, "document.execCommand('insertText', false, {s});", .{literal});
-}
-
-//
 // Returns the text in the JSON string that running selection_script gives back, such as "abc" (with its quotes). The caller
 // owns the result.
 //

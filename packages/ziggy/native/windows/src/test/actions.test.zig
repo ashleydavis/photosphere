@@ -43,12 +43,6 @@ test "an action name with quotes is escaped" {
     try std.testing.expectEqualStrings("{\"channel\":\"menu-action\",\"data\":{\"action\":\"a\\\"b\"}}", message);
 }
 
-test "pasted text becomes an insertText command with the text escaped" {
-    const script = try actions.pasteScript(std.testing.allocator, "a \"b\"\nc");
-    defer std.testing.allocator.free(script);
-    try std.testing.expectEqualStrings("document.execCommand('insertText', false, \"a \\\"b\\\"\\nc\");", script);
-}
-
 test "the selected text is read from the script's JSON result" {
     const text = try actions.selectionText(std.testing.allocator, "\"hello\\nworld\"");
     defer std.testing.allocator.free(text);
