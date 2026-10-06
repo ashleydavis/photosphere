@@ -28,9 +28,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  ziggy-example-zig:
-    # Ziggy's Zig code and the example's: built, cross-built for every other platform and unit tested, on each platform, so
-    # that a change to Ziggy cannot reach one platform without the example being built for all of them.
+  ziggy-example-zig-build:
+    # Builds Ziggy's Zig code and the example's, and cross-builds them for every other platform, on each platform. This
+    # follows build-zig-linux-x64 and its siblings in release.yml, and is a job of its own so a change to Ziggy cannot reach
+    # one platform without the example being built for all of them.
+    # Setup takes about 5 minutes and a cold build up to 20.
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -56,33 +58,95 @@ jobs:
         with:
           install_args: zig jq
 
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Build and cross-build the Zig code
+        shell: bash
+        run: bun run compile:zig
+
+  ziggy-example-zig-unit-tests:
+    # The unit tests of Ziggy's Zig code and of the example's, on each platform, because the behaviour of a test that runs
+    # against the system web view differs between them. A job of its own, as zig-unit-tests is in release.yml, so a red unit
+    # test is not reported as a red build or a red smoke test.
+    # Setup takes about 5 minutes and a cold unit test build up to 25.
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
       - name: Install what-changed
         uses: ./.github/actions/install-what-changed
 
       # The Linux shell links GTK and WebKitGTK by their runtime library files, and its build stops with "error:
-      # RuntimeLibraryMissing" when they are not installed. The ubuntu-latest run of this job failed its "Run the Zig unit tests"
-      # step with that error because nothing here installed them.
-      - name: Install the web view's runtime libraries
+      # RuntimeLibraryMissing" when they are not installed. The ubuntu-latest run of the unit tests failed with that error
+      # because nothing here installed them.
+      - name: Install the web view's runtime libraries (Linux)
         if: runner.os == 'Linux'
         uses: ./.github/actions/install-apt-packages
         with:
           packages: libgtk-3-0 libwebkit2gtk-4.1-0
 
       - name: Install dependencies
-        run: bun install
-
-      - name: Build and cross-build the Zig code
-        shell: bash
-        run: bun run compile:zig
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
 
       - name: Run the Zig unit tests
         shell: bash
         run: bun run test:zig
 
-  ziggy-example-linux:
-    # The example's smoke tests on Linux, on a virtual display, then its zip and deb.
-    timeout-minutes: 40
-    runs-on: ubuntu-latest
+  ziggy-example-smoke-tests:
+    # The example's smoke tests on each desktop platform, as zig-smoke-tests is in release.yml: Linux on a virtual
+    # display, Windows with the WebView2 SDK, and MacOS on the runner's own display.
+    # Setup takes about 5 minutes and a cold run of the smoke tests up to 30.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -97,65 +161,36 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Setup Zig and jq (versions from mise.toml)
+      - name: Setup Zig (version from mise.toml)
         uses: jdx/mise-action@v2
         with:
           install_args: zig jq
 
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
       - name: Install what-changed
         uses: ./.github/actions/install-what-changed
 
-      - name: Install the web view's runtime libraries and the display tools
+      - name: Install the web view's runtime libraries and the display tools (Linux)
+        if: runner.os == 'Linux'
         uses: ./.github/actions/install-apt-packages
         with:
           packages: libgtk-3-0 libwebkit2gtk-4.1-0 gstreamer1.0-plugins-good gstreamer1.0-libav xvfb x11-utils zip
           verify: xvfb-run xwininfo zip
 
       - name: Install dependencies
-        run: bun install
-
-      - name: Run the smoke tests
-        run: bun run test:ziggy-example
-
-      - name: Package
-        run: bun run package:ziggy-example:linux
-
-      - name: Upload the packages
-        uses: actions/upload-artifact@v4
+        uses: ./.github/actions/retry-install
         with:
-          name: ziggy-example-linux
-          path: apps/ziggy-example/out/linux/*
+          run: bun install
 
-  ziggy-example-windows:
-    # The example's smoke tests on Windows, then its zip and installer.
-    timeout-minutes: 40
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup Zig and jq (versions from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig jq
-
-      - name: Install what-changed
-        uses: ./.github/actions/install-what-changed
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Fetch the WebView2 SDK and the WiX Toolset
+      - name: Fetch the WebView2 SDK and the WiX Toolset (Windows)
+        if: runner.os == 'Windows'
         shell: bash
         run: bun run --filter=ziggy-example setup
 
@@ -163,20 +198,27 @@ jobs:
         shell: bash
         run: bun run test:ziggy-example
 
-      - name: Package
-        shell: bash
-        run: bun run package:ziggy-example:windows
-
-      - name: Upload the packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: ziggy-example-windows
-          path: apps/ziggy-example/out/windows/*
-
-  ziggy-example-macos:
-    # The example's smoke tests on MacOS, then its dmg and zip.
+  ziggy-example-package:
+    # Packages the example for every platform, as build-linux, build-windows, build-macos-arm64 and the mobile builds do in
+    # release.yml, and uploads the packages as artifacts of the run. The iOS archive is built without signing, and the
+    # Android APKs with the SDK and NDK. Both are built and not run: running them needs a simulator or an emulator.
+    # Setup takes about 5 minutes and a cold package build up to 40.
     timeout-minutes: 60
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-latest
+          - platform: windows
+            os: windows-latest
+          - platform: macos
+            os: macos-latest
+          - platform: ios
+            os: macos-latest
+          - platform: android
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -191,99 +233,49 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Setup Zig and jq (versions from mise.toml)
+      - name: Setup Zig (version from mise.toml)
         uses: jdx/mise-action@v2
         with:
           install_args: zig jq
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
 
       - name: Install what-changed
         uses: ./.github/actions/install-what-changed
 
-      - name: Install dependencies
-        run: bun install
+      - name: Install the packaging tools (Linux)
+        if: matrix.platform == 'linux'
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: libgtk-3-0 libwebkit2gtk-4.1-0 zip
+          verify: zip
 
-      - name: Run the smoke tests
-        run: bun run test:ziggy-example
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Fetch the WebView2 SDK and the WiX Toolset (Windows)
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: bun run --filter=ziggy-example setup
+
+      - name: Set up the Android SDK and NDK (Android)
+        if: matrix.platform == 'android'
+        run: bun run --filter=ziggy-example setup
 
       - name: Package
-        run: bun run package:ziggy-example:macos
+        shell: bash
+        run: bun run package:ziggy-example:${{ matrix.platform }}
 
       - name: Upload the packages
         uses: actions/upload-artifact@v4
         with:
-          name: ziggy-example-macos
-          path: apps/ziggy-example/out/macos/*
-
-  ziggy-example-ios:
-    # The example's iOS archive, built without signing. It is built and not run: the iOS smoke tests need a simulator.
-    timeout-minutes: 60
-    runs-on: macos-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup Zig and jq (versions from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig jq
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Package
-        run: bun run package:ziggy-example:ios
-
-      - name: Upload the archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: ziggy-example-ios
-          path: apps/ziggy-example/out/ios/*
-
-  ziggy-example-android:
-    # The example's APKs, built with the Android SDK and NDK. They are built and not run here: the Android smoke tests need
-    # an emulator, which the Android smoke test job above provides for the Photosphere app.
-    timeout-minutes: 60
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup Zig and jq (versions from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig jq
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Set up the Android SDK and NDK
-        run: bun run --filter=ziggy-example setup
-
-      - name: Package
-        run: bun run package:ziggy-example:android
-
-      - name: Upload the APKs
-        uses: actions/upload-artifact@v4
-        with:
-          name: ziggy-example-android
-          path: apps/ziggy-example/out/android/*
+          name: ziggy-example-${{ matrix.platform }}
+          path: apps/ziggy-example/out/${{ matrix.platform }}/*
