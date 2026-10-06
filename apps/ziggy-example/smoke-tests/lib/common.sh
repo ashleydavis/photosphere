@@ -101,6 +101,19 @@ control() {
     printf '%s\n' "$1" >&3 || fail "could not write to the control connection"
     local answer
     if ! read -r -t 90 -u 3 answer; then
+        # The macOS job of the Ziggy example workflow (run 37455466019, scenario 13-menu-edit) failed here with the app gone and
+        # nothing to say why, because only the command was reported. The app's own log is what says whether it crashed.
+        if [ -f "$ZIGGY_TEST_DIR/app.log" ]; then
+            echo "The app's log:" >&2
+            cat "$ZIGGY_TEST_DIR/app.log" >&2
+        fi
+        # A crash on MacOS is written as a report, which holds the exception and the stack of the thread that crashed.
+        for report in "$HOME"/Library/Logs/DiagnosticReports/ZiggyExample*; do
+            if [ -f "$report" ]; then
+                echo "Crash report $report:" >&2
+                head -c 20000 "$report" >&2
+            fi
+        done
         fail "no answer from the control connection to $1"
     fi
     printf '%s\n' "$answer"
