@@ -14,13 +14,16 @@ runs:
       run: |
         set -euo pipefail
 
-        # Runner OS and architecture pick the release asset. Only the two combinations the jobs
+        # Runner OS and architecture pick the release asset. Only the combinations the jobs
         # needing what-changed actually run on are handled; anything else fails here rather than
         # later, on a missing command, in whichever script happens to reach it first.
         case "$RUNNER_OS-$RUNNER_ARCH" in
             Linux-X64) asset="what-changed-linux-x64.tar.gz";;
             macOS-ARM64) asset="what-changed-macos-arm64.tar.gz";;
             macOS-X64) asset="what-changed-macos-x64.tar.gz";;
+            # The Ziggy example workflow's Windows jobs failed here with "No what-changed release asset for Windows-X64" because this list
+            # had no Windows entry, although the release publishes what-changed-windows-x64.zip.
+            Windows-X64) asset="what-changed-windows-x64.zip";;
             *) echo "::error::No what-changed release asset for $RUNNER_OS-$RUNNER_ARCH"; exit 1;;
         esac
 
@@ -28,8 +31,11 @@ runs:
         mkdir -p "$install_dir"
         gh release download "$WHAT_CHANGED_VERSION" --repo ashleydavis/what-changed \
             --pattern "$asset" --dir "$RUNNER_TEMP"
-        tar -xzf "$RUNNER_TEMP/$asset" -C "$install_dir"
-        chmod +x "$install_dir/what-changed"
+        case "$asset" in
+            *.zip) unzip -o -q "$RUNNER_TEMP/$asset" -d "$install_dir";;
+            *) tar -xzf "$RUNNER_TEMP/$asset" -C "$install_dir";;
+        esac
+        chmod +x "$install_dir"/what-changed*
 
         # GITHUB_PATH rather than a symlink into /usr/local/bin, so this needs no sudo and works the
         # same on both runner families.
