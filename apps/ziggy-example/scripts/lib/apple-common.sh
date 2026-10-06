@@ -80,7 +80,7 @@ apple_sync_native() {
     local native_dir="$2"
     local test_hooks="$3"
     local optimize="$4"
-    apple_require_tool bun zig rsync
+    apple_require_tool bun zig rsync xcrun
     echo "Bundling the page..."
     (cd "$APPLE_EXAMPLE_DIR" && bun run bundle:ui) || apple_fail "bundling the page failed."
     echo "Building the Zig library for $zig_target (optimize $optimize, test hooks $test_hooks)..."
@@ -89,6 +89,14 @@ apple_sync_native() {
     else
         (cd "$APPLE_REPO_ROOT/apps/ziggy-example/core" && zig build -Dtarget="$zig_target" -Doptimize="$optimize" -p "$native_dir") || apple_fail "the Zig build failed."
     fi
+    # A workaround for a bug in Zig 0.16.0, which is the pinned version. Its archive writer puts the contents of a long-named
+    # member at an offset that is not a multiple of 8, and Xcode 26's linker refuses such an archive: the macOS and iOS jobs of
+    # the Ziggy example workflow failed with "ld: 64-bit mach-o member 'libziggy_example_zcu.o' not 8-byte aligned in
+    # '.../lib/libziggy_example.a'". The fix is on Zig's master (ziglang/zig issue 35280) and will not reach 0.16.x. Apple's
+    # libtool writes the archive again with every member aligned, and the older Xcode this project builds with has it too.
+    echo "Aligning the members of the Zig library..."
+    xcrun libtool -static -o "$native_dir/lib/libziggy_example.a.aligned" "$native_dir/lib/libziggy_example.a" || apple_fail "libtool could not align the members of the Zig library."
+    mv "$native_dir/lib/libziggy_example.a.aligned" "$native_dir/lib/libziggy_example.a" || apple_fail "could not replace the Zig library with the aligned one."
 }
 
 # Prints the identifier of the iOS simulator to use, booting it if it is not running. It never creates or deletes a
