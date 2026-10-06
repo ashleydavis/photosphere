@@ -50,8 +50,13 @@ pub fn build(b: *std.Build) !void {
         "libjavascriptcoregtk-4.1.so.0",
         "libwebkit2gtk-4.1.so.0",
     };
-    for (runtime_libraries) |library| {
-        module.addObjectFile(.{ .cwd_relative = try findRuntimeLibrary(b, library) });
+    // Only a Linux target links the runtime libraries. The unit tests need none of them, and finding them on a host that is not
+    // Linux fails the build: the macOS job of the Ziggy example workflow failed its "Run the Zig unit tests" step here with
+    // "error: RuntimeLibraryMissing" from findRuntimeLibrary, because macOS has no libglib-2.0.so.0.
+    if (target.result.os.tag == .linux) {
+        for (runtime_libraries) |library| {
+            module.addObjectFile(.{ .cwd_relative = try findRuntimeLibrary(b, library) });
+        }
     }
 }
 
