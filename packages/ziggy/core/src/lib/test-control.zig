@@ -9,6 +9,7 @@
 //
 
 const std = @import("std");
+const builtin = @import("builtin");
 const types = @import("types.zig");
 const json_util = @import("json-util.zig");
 
@@ -127,7 +128,22 @@ pub const TestControl = struct {
         else |_| {}
         self.thread.join();
         for (self.connections.items) |*connection| {
-            connection.task.cancel(self.connection_threaded.io());
+            // Shutting the receiving side down wakes a read that is waiting, so the task ends without a signal being sent to
+            // its thread. That matters on Android: cancelling a blocked read sends the thread SIGIO and relies on a handler Zig
+            // 0.16.0 installs with a sigaction struct laid out for glibc, not for bionic (flags first, then handler, then a
+            // 64-bit mask), so no handler is installed and SIGIO kills the process. The unit tests on the Android emulator died
+            // with "I/O possible" and exit code 157 in "a second connection is served while the first stays open, and stopping
+            // ends both". On Windows shutting down does not wake the read, so the cancel below ends it there.
+            connection.stream.shutdown(self.io, .recv) catch |err| switch (err) {
+                error.ConnectionAborted, error.ConnectionResetByPeer, error.SocketUnconnected => {},
+                else => @panic("test control: could not shut a connection down"),
+            };
+            if (builtin.os.tag == .windows) {
+                connection.task.cancel(self.connection_threaded.io());
+            }
+            else {
+                connection.task.await(self.connection_threaded.io());
+            }
             connection.stream.close(self.io);
         }
         self.connections.deinit(self.allocator);
