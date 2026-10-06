@@ -59,6 +59,15 @@ jobs:
       - name: Install what-changed
         uses: ./.github/actions/install-what-changed
 
+      # The Linux shell links GTK and WebKitGTK by their runtime library files, and its build stops with "error:
+      # RuntimeLibraryMissing" when they are not installed. The ubuntu-latest run of this job failed its "Run the Zig unit tests"
+      # step with that error because nothing here installed them.
+      - name: Install the web view's runtime libraries
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: libgtk-3-0 libwebkit2gtk-4.1-0
+
       - name: Install dependencies
         run: bun install
 
