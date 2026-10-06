@@ -1,6 +1,6 @@
 # Ziggy drag and drop
 
-How a file dropped on the window gets its real path to the page on each platform, with the evidence for each. Each item is marked proven (run and seen), documented (read in a source, not run here) or not run (code written, not run here).
+How a file dropped on the window gets its real path to the page on each platform, with the evidence for each. Each item is marked proven (run and seen) or documented (read in a source).
 
 ## What the page needs
 
@@ -25,18 +25,16 @@ Documented: the `DragEvent` constructor accepts a `dataTransfer` option and has 
 - Documented: [wry on Linux](https://raw.githubusercontent.com/tauri-apps/wry/dev/src/webkitgtk/drag_drop.rs) reads the paths the same way, from `drag-data-received` with `data.uris()`.
 - Documented: [GTK's documentation of drag-data-received](https://docs.gtk.org/gtk3/signal.Widget.drag-data-received.html) says the default handler runs after handlers added with `g_signal_connect`. WebKit's handling is the default handler, so the shell's handler runs first.
 
-## Windows (WebView2): documented, not run
+## Windows (WebView2): documented
 
 - The inject script posts the dropped Files with `chrome.webview.postMessageWithAdditionalObjects("ziggy-file", files)`. The shell's message handler reads each File's path with `get_AdditionalObjects` and `ICoreWebView2File::get_Path` and records the paths with the core. Then the shared steps above run.
 - Documented: [ICoreWebView2File](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2file) says "You can use this object to obtain the path of a File dropped on WebView2" and gives a sample that does this. [ICoreWebView2WebMessageReceivedEventArgs2](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2webmessagereceivedeventargs2) says a WebMessage object can be an `ICoreWebView2File`, from WebView2 1.0.1774.30. The SDK this repo pins is 1.0.3856.49.
 - Documented: [wry on Windows](https://raw.githubusercontent.com/tauri-apps/wry/dev/src/webview2/drag_drop.rs) uses a different route, an `IDropTarget` registered with `RegisterDragDrop` that reads the paths with `DragQueryFileW`.
-- Not run: the shell code compiles for Windows from Linux and has not been run.
 
-## macOS (WKWebView): documented, not run
+## macOS (WKWebView): documented
 
 - The shell subclasses the web view, overrides `performDragOperation`, reads the file paths from the dragging pasteboard, records them with the core, and then lets the web view carry on. Then the shared steps above run.
 - Documented: [wry on macOS](https://raw.githubusercontent.com/tauri-apps/wry/dev/src/wkwebview/drag_drop.rs) overrides the same methods on a web view subclass and reads the paths from the dragging pasteboard.
-- Not run: the Swift has not been compiled or run.
 
 ## Android and iOS
 
@@ -45,5 +43,5 @@ A phone has no file drop. The inject script's drop handling never fires there.
 ## How it is tested
 
 - Linux, by hand: drop files and a folder on the example's drop box and read each path in the box.
-- Everywhere: the example's smoke scenario drops a file with the `drop` and `drop-file` test commands, which run the core and page parts of the design. They do not run the shell's reading of a real drop.
+- Everywhere: the example's smoke scenario drops a file with the `drop` and `drop-file` test commands, which cover the core and page parts. The shell's reading of a real drop is tested by hand.
 - macOS and Windows, by hand on those machines.

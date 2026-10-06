@@ -51,7 +51,7 @@ pub const MenuActionFn = *const fn (user_data: ?*anyopaque, action: [*:0]const u
 //
 // Tells the shell whether the app must keep running because tasks marked keep-alive are queued or running. Called with true when the
 // first such task is queued and with false when the last one ends, so the shell can use its platform's way of staying alive (an
-// Android foreground service, an iOS background task, a desktop app that stays running with its window closed). Called from any
+// Android foreground service or an iOS background task; a desktop shell provides none, because closing its window quits the app). Called from any
 // thread while the core holds a lock, so it must return at once and must not call back into the core.
 //
 pub const KeepAliveFn = *const fn (user_data: ?*anyopaque, keep_running: bool) callconv(.c) void;

@@ -1,5 +1,5 @@
 //
-// Ziggy's shell for MacOS and iOS. It owns the WKWebView, injects window.ziggy, loads the app's bundled page, calls the
+// Ziggy's shell for iOS. It owns the WKWebView, injects window.ziggy, loads the app's bundled page, calls the
 // core through the C interface and moves messages between the page and the core.
 //
 // Messages from the core arrive on any thread, so each is copied and handed to the main queue, which delivers them to the
@@ -9,12 +9,7 @@
 import Foundation
 import WebKit
 import CZiggy
-
-#if os(macOS)
-import AppKit
-#else
 import UIKit
-#endif
 
 // Answers the web view's requests for the bundled page from the files embedded in the core library, which it asks for each
 // file with ziggy_ui_file. The page's address is ziggy-app://app/, and the core is given to the handler once it exists.
@@ -62,22 +57,6 @@ final class ZiggyPageSchemeHandler: NSObject, WKURLSchemeHandler {
     }
 }
 
-#if os(macOS)
-// A web view that tells its owner the files of a drop before WebKit handles the drop, so that when the page's drop event runs the
-// files are already recorded with the core.
-final class ZiggyWebView: WKWebView {
-    // Called with the paths of the files dropped on the view.
-    var onFilesDropped: (([String]) -> Void)?
-
-    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
-        if !urls.isEmpty {
-            onFilesDropped?(urls.map { $0.path })
-        }
-        return super.performDragOperation(sender)
-    }
-}
-#endif
 
 // Hosts one web view and one Ziggy core for the app. The app creates it, puts webView on screen, calls start, and calls
 // shutdown when the app is ending.
@@ -104,29 +83,16 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
     // Whether a test hooks build was started in test mode.
     private let testMode: Bool
 
-    #if os(macOS)
-    // The main menu, once the core exists. This holds it because a menu item's target is not retained.
-    private var menu: ZiggyMenu?
-    #endif
 
-    // Whether the core has asked for the app to be kept running, because tasks the app must be kept running for are queued or
-    // running. Read and written on the main thread only.
-    public private(set) var keepsRunning = false
-
-    #if os(iOS)
-    // The background task that keeps an iOS app running for a while after it leaves the foreground, while keepsRunning is set.
+    // The background task that keeps an iOS app running for a while after it leaves the foreground, while the core asks for the app to
+    // be kept running.
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
-    #endif
 
     // The name of the script message handler that the injected script posts through.
     private static let handlerName = "ziggy"
 
     // The name the os_version callback gives the operating system.
-    #if os(macOS)
-    private static let operatingSystemName = "macOS"
-    #else
     private static let operatingSystemName = "iOS"
-    #endif
 
     // Creates the web view with the injected script and the message handler. The page is not loaded and the core does not
     // exist until start. The page and the injected script are both embedded in the core library, so the app supplies neither.
@@ -165,57 +131,15 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         configuration.setURLSchemeHandler(pageHandler, forURLScheme: ZiggyBridge.pageScheme)
         let userScript = WKUserScript(source: injectScript, injectionTime: .atDocumentStart, forMainFrameOnly: true)
         configuration.userContentController.addUserScript(userScript)
-        #if os(macOS)
-        // Turns on the web inspector, and with it Inspect Element in the context menu. This key is not in the public API but
-        // is how every WKWebView app on these SDKs does it. It is on in release builds too.
-        configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
-        #endif
-        #if os(macOS)
-        self.webView = ZiggyWebView(frame: frame, configuration: configuration)
-        #else
         self.webView = WKWebView(frame: frame, configuration: configuration)
-        #endif
-        #if os(macOS) && swift(>=5.8)
-        // The public switch for the same thing, which exists from macOS 13.3. It is compiled only by a toolchain whose SDK
-        // has it, because Xcode 14.2's SDK does not.
-        if #available(macOS 13.3, *) {
-            self.webView.isInspectable = true
-        }
-        #endif
 
         super.init()
 
         configuration.userContentController.add(self, name: ZiggyBridge.handlerName)
         self.webView.navigationDelegate = self
         self.webView.uiDelegate = self
-        #if os(macOS)
-        (self.webView as! ZiggyWebView).onFilesDropped = { [weak self] paths in
-            self?.filesDropped(paths)
-        }
-        #endif
     }
 
-    #if os(macOS)
-    // Runs on the main thread: records the files of a drop with the core, so the page can ask for the path of each one it is given.
-    private func filesDropped(_ paths: [String]) {
-        guard let handle = core else {
-            return
-        }
-        let json: Data
-        do {
-            json = try JSONSerialization.data(withJSONObject: paths)
-        }
-        catch {
-            ZiggyBridge.fail("could not write the dropped files as JSON: \(error)")
-        }
-        let recorded = json.withUnsafeBytes { bytes -> Bool in
-            ziggy_files_dropped(handle, bytes.bindMemory(to: CChar.self).baseAddress, json.count)
-        }
-        if !recorded {
-            ZiggyBridge.report("the core could not record the dropped files")
-        }
-    }
-    #endif
 
     // Creates the core and loads the app's page.
     public func start() {
@@ -283,27 +207,8 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
                 capacity: capacity
             )
         }
-        #if os(macOS)
-        config.menu_action = { userData, action in
-            guard let userData = userData, let action = action else {
-                ZiggyBridge.fail("the core chose a menu action with no bridge or no action")
-            }
-            let bridge = Unmanaged<ZiggyBridge>.fromOpaque(userData).takeUnretainedValue()
-            // Copied before the hop, because the core's text is valid only during this call.
-            let text = String(cString: action)
-            DispatchQueue.main.async {
-                guard let menu = bridge.menu else {
-                    ZiggyBridge.fail("the core chose the menu action \(text) before there was a menu")
-                }
-                menu.perform(action: text)
-            }
-        }
-        config.worker_threads = UInt32(ProcessInfo.processInfo.activeProcessorCount)
-        config.max_concurrent_child_tasks = 10
-        #else
         config.worker_threads = 5
         config.max_concurrent_child_tasks = 2
-        #endif
 
         let prefixText = ZiggyBridge.duplicate(ZiggyBridge.appUrlPrefix)
         let dataText = ZiggyBridge.duplicate(dataDirectory.path)
@@ -328,13 +233,6 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         core = created
         pageHandler.core = created
 
-        #if os(macOS)
-        var menuLength = 0
-        guard let menuText = ziggy_menu_json(created, &menuLength) else {
-            ZiggyBridge.fail("the core has no menu text")
-        }
-        menu = ZiggyMenu(bridge: self, menuJSON: Data(bytes: menuText, count: menuLength))
-        #endif
 
         var components = URLComponents(string: ZiggyBridge.appUrlPrefix + "index.html")
         if testMode {
@@ -358,13 +256,10 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         ziggy_destroy(handle)
     }
 
-    // Runs on the main thread: records whether the app is to be kept running and does what the platform needs for it. On iOS that
-    // is a background task, which lets the app run on after it leaves the foreground (the system ends it after a limited time,
-    // and the app is suspended then). On MacOS the app stays running with its window closed, and ends when the last of the tasks
-    // does, if its window is closed by then.
+    // Runs on the main thread: takes a background task while the core says tasks the app must be kept running for are queued or
+    // running, which lets the app run on after it leaves the foreground (the system ends it after a limited time, and the app is
+    // suspended then), and gives it back when they end. A desktop app has no such callback: closing its window quits the app.
     private func setKeepsRunning(_ keep: Bool) {
-        keepsRunning = keep
-        #if os(iOS)
         if keep && backgroundTask == .invalid {
             backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "ziggy-keep-alive") { [weak self] in
                 self?.endBackgroundTask()
@@ -373,14 +268,8 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         else if !keep {
             endBackgroundTask()
         }
-        #else
-        if !keep && !NSApplication.shared.windows.contains(where: { $0.isVisible || $0.isMiniaturized }) {
-            NSApplication.shared.terminate(nil)
-        }
-        #endif
     }
 
-    #if os(iOS)
     // Gives the background task back to the system.
     private func endBackgroundTask() {
         if backgroundTask != .invalid {
@@ -388,17 +277,12 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
             backgroundTask = .invalid
         }
     }
-    #endif
 
     // Ends the app. Only the core's test control connection asks for this.
     private func quit() {
-        #if os(macOS)
-        NSApplication.shared.terminate(nil)
-        #else
         // iOS has no way to quit an app, so the process ends once the core is destroyed.
         shutdown()
         exit(0)
-        #endif
     }
 
     // Runs on the main thread: sends one message from the core to the page.
@@ -509,17 +393,11 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
 
     // Opens an address in the system browser.
     private func openExternally(_ url: URL) {
-        #if os(macOS)
-        if !NSWorkspace.shared.open(url) {
-            ZiggyBridge.report("could not open \(url.absoluteString) in the system browser")
-        }
-        #else
         UIApplication.shared.open(url, options: [:]) { success in
             if !success {
                 ZiggyBridge.report("could not open \(url.absoluteString) in the system browser")
             }
         }
-        #endif
     }
 
     // Copies text into a new NUL terminated C string, which the caller frees.

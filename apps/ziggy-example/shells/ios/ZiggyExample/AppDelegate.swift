@@ -1,6 +1,6 @@
 //
 // The Ziggy example's iOS shell: the application delegate, which owns the window and the one view controller. Everything
-// else is in ZiggyShellApple.
+// else is in ZiggyShellIOS.
 //
 
 import UIKit

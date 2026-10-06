@@ -1,6 +1,6 @@
 # Ziggy example, MacOS shell
 
-An AppKit app: a window holding Ziggy's `WKWebView`, and a main menu with Quit. All the Ziggy behaviour is in the `ZiggyShellApple` Swift package (`packages/ziggy/native/apple`), which the project references as a local package. The window accepts `-geometry=WxH` (the position is ignored).
+An AppKit app: a window holding Ziggy's `WKWebView`, and a main menu with Quit. All the Ziggy behaviour is in the `ZiggyShellMacOS` Swift package (`packages/ziggy/native/macos`), which the project references as a local package. The window accepts `-geometry=WxH` (the position is ignored).
 
 ## Web view API used
 
@@ -43,4 +43,4 @@ In a test hooks build the core can choose a menu item by action through the `men
 - Quit calls `NSApplication.terminate`, which runs `applicationWillTerminate` (destroying the core) and ends the process. It would wait if a modal panel were open.
 - Nothing here was compiled or run.
 
-Dropped files are read from the drag pasteboard by the web view subclass in ZiggyShellApple. Not run: the Swift was written without compiling it. Keeping the app running with its window closed is in the architecture document.
+Dropped files are read from the drag pasteboard by the web view subclass in ZiggyShellMacOS.

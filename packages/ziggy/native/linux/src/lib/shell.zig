@@ -69,10 +69,6 @@ const Shell = struct {
     inspector_open: bool,
     // Whether the window is full screen.
     fullscreen: bool,
-    // Set by the core while tasks the app must be kept running for are queued or running. Set from any thread.
-    keep_running: std.atomic.Value(bool),
-    // Whether the window was closed and hidden, leaving the app running for those tasks.
-    window_hidden: bool,
 };
 
 //
@@ -96,8 +92,6 @@ pub fn run(app_config: AppConfig, args: []const [:0]const u8) !u8 {
         .menu_arena = std.heap.ArenaAllocator.init(std.heap.c_allocator),
         .inspector_open = false,
         .fullscreen = false,
-        .keep_running = .init(false),
-        .window_hidden = false,
     };
     defer c.g_async_queue_unref(shell.queue);
     _ = c.g_signal_connect_data(application, "activate", @ptrCast(&onActivate), &shell, null, 0);
@@ -234,7 +228,6 @@ fn start(shell: *Shell, application: *c.GtkApplication) !void {
     config.quit = quit;
     config.pick_paths = pickPaths;
     config.menu_action = menuAction;
-    config.keep_alive = keepAlive;
     config.worker_threads = c.g_get_num_processors();
     config.max_concurrent_child_tasks = 10;
     config.app_url_prefix = app_url_prefix;
@@ -368,44 +361,15 @@ fn onDragDataReceived(widget: *c.GtkWidget, drag_context: *c.GdkDragContext, x: 
     const json = std.json.Stringify.valueAlloc(std.heap.c_allocator, paths.items, .{}) catch @panic("out of memory recording a drop");
     defer std.heap.c_allocator.free(json);
     if (!z.ziggy_files_dropped(core, json.ptr, json.len)) {
+        std.debug.print("could not record the dropped files: {s}\n", .{json});
     }
 }
 
-//
-// Closing the window ends the app, except while tasks the app is kept running for are queued or running: then the window is
-// hidden and the app keeps running, and it ends when the last of those tasks does.
-//
 fn onDeleteEvent(window: *c.GtkWidget, event: ?*anyopaque, user_data: ?*anyopaque) callconv(.c) c.gboolean {
     _ = event;
+    _ = window;
     const shell: *Shell = @ptrCast(@alignCast(user_data.?));
-    if (shell.keep_running.load(.acquire)) {
-        c.gtk_widget_hide(window);
-        shell.window_hidden = true;
-        c.g_application_hold(@ptrCast(shell.application));
-        return 1;
-    }
     destroyCore(shell);
-    return 0;
-}
-
-//
-// The core's keep-alive callback. It can be called from any thread. When the last task the app is kept running for ends and the
-// window has been closed, the app ends, which happens on the main thread.
-//
-fn keepAlive(user_data: ?*anyopaque, keep_running: bool) callconv(.c) void {
-    const shell: *Shell = @ptrCast(@alignCast(user_data.?));
-    shell.keep_running.store(keep_running, .release);
-    if (!keep_running) {
-        _ = c.g_idle_add(endIfWindowClosed, shell);
-    }
-}
-
-fn endIfWindowClosed(user_data: ?*anyopaque) callconv(.c) c.gboolean {
-    const shell: *Shell = @ptrCast(@alignCast(user_data.?));
-    if (shell.window_hidden and !shell.keep_running.load(.acquire)) {
-        c.g_application_release(@ptrCast(shell.application));
-        c.g_application_quit(@ptrCast(shell.application));
-    }
     return 0;
 }
 

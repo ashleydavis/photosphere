@@ -1,10 +1,9 @@
 //
 // The desktop menu on MacOS. The core defines the menu as JSON, and this draws it as the application's main menu: the
 // application menu first (About and Quit), then the app's own menus. Each item's shortcut becomes its key equivalent, which
-// AppKit handles even while the web view has the focus. iOS has no menu, so none of this exists there.
+// AppKit handles even while the web view has the focus.
 //
 
-#if os(macOS)
 
 import AppKit
 import WebKit
@@ -333,4 +332,3 @@ final class ZiggyMenu: NSObject {
     }
 }
 
-#endif

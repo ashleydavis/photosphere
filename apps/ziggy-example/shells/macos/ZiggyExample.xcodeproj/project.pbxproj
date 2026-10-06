@@ -9,7 +9,7 @@
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* AppMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* AppMain.swift */; };
 		A10000000000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* AppDelegate.swift */; };
-		A10000000000000000000004 /* ZiggyShellApple in Frameworks */ = {isa = PBXBuildFile; productRef = A60000000000000000000001 /* ZiggyShellApple */; };
+		A10000000000000000000004 /* ZiggyShellMacOS in Frameworks */ = {isa = PBXBuildFile; productRef = A60000000000000000000001 /* ZiggyShellMacOS */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -17,7 +17,7 @@
 		A20000000000000000000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000005 /* ZiggyExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ZiggyExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A20000000000000000000006 /* apple */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = apple; path = "../../../../packages/ziggy/native/apple"; sourceTree = "<group>"; };
+		A20000000000000000000006 /* macos */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = macos; path = "../../../../packages/ziggy/native/macos"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -25,7 +25,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000000000000000000004 /* ZiggyShellApple in Frameworks */,
+				A10000000000000000000004 /* ZiggyShellMacOS in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -37,7 +37,7 @@
 			children = (
 				A40000000000000000000002 /* ZiggyExample */,
 				A40000000000000000000003 /* Resources */,
-				A20000000000000000000006 /* apple */,
+				A20000000000000000000006 /* macos */,
 				A40000000000000000000004 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -84,7 +84,7 @@
 			);
 			name = ZiggyExample;
 			packageProductDependencies = (
-				A60000000000000000000001 /* ZiggyShellApple */,
+				A60000000000000000000001 /* ZiggyShellMacOS */,
 			);
 			productName = ZiggyExample;
 			productReference = A20000000000000000000005 /* ZiggyExample.app */;
@@ -248,9 +248,9 @@
 
 
 /* Begin XCSwiftPackageProductDependency section */
-		A60000000000000000000001 /* ZiggyShellApple */ = {
+		A60000000000000000000001 /* ZiggyShellMacOS */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = ZiggyShellApple;
+			productName = ZiggyShellMacOS;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
