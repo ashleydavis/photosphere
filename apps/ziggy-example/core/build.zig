@@ -99,6 +99,12 @@ pub fn build(b: *std.Build) !void {
     example_for_tests.addImport("page-files", try ziggy_core_build.embedPage(b, test_core.module("ziggy-core"), "ziggy-core", "../dist"));
     test_module.addImport("ziggy-core", test_core.module("ziggy-core"));
     test_module.addImport(module_name, example_for_tests);
+    // Zig does not look in the iOS SDK for libSystem unless it is given the library directory, which --sysroot then makes the SDK's.
+    // A test program for the iOS simulator failed to link with "unable to find libSystem system library" with only the sysroot
+    // given, and linked past that once /usr/lib was added as a library path.
+    if (target.result.os.tag == .ios) {
+        test_module.addLibraryPath(.{ .cwd_relative = "/usr/lib" });
+    }
     const unit_test = b.addTest(.{ .root_module = test_module });
     // The NDK has no libc.a for the sysroot's API level directory Zig looks in, only libc.so, so a test program for Android is
     // linked dynamically. Zig's build failed with "failed to parse archive: FileNotFound" on libc.a, libm.a and libdl.a.

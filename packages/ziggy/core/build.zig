@@ -98,6 +98,12 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path("../bridge/inject/ziggy-inject.js"),
     });
     test_module.addImport(module_name, test_core_module);
+    // Zig does not look in the iOS SDK for libSystem unless it is given the library directory, which --sysroot then makes the SDK's.
+    // A test program for the iOS simulator failed to link with "unable to find libSystem system library" with only the sysroot
+    // given, and linked past that once /usr/lib was added as a library path.
+    if (target.result.os.tag == .ios) {
+        test_module.addLibraryPath(.{ .cwd_relative = "/usr/lib" });
+    }
     const unit_test = b.addTest(.{ .root_module = test_module });
     // The NDK has no libc.a for the sysroot's API level directory Zig looks in, only libc.so, so a test program for Android is
     // linked dynamically. Zig's build failed with "failed to parse archive: FileNotFound" on libc.a, libm.a and libdl.a.
