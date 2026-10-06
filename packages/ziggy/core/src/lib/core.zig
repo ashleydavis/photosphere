@@ -12,6 +12,7 @@ const task_runner = @import("task-runner.zig");
 const origin_check = @import("origin-check.zig");
 const test_control = @import("test-control.zig");
 const ui_files = @import("ui-files.zig");
+const dropped_files = @import("dropped-files.zig");
 
 const ZiggyConfig = types.ZiggyConfig;
 
@@ -70,6 +71,7 @@ const ziggy_channels = [_]ChannelEntry{
     .{ .name = "add-task", .handler = addTaskHandler },
     .{ .name = "cancel-tasks", .handler = cancelTasksHandler },
     .{ .name = "menu-action", .handler = menuActionHandler },
+    .{ .name = "get-dropped-paths", .handler = getDroppedPathsHandler },
 } ++ if (build_options.test_hooks) [_]ChannelEntry{
     .{ .name = "test-result", .handler = testResultHandler },
     .{ .name = "test-page-ready", .handler = testPageReadyHandler },
@@ -98,11 +100,13 @@ pub const Core = struct {
     // The shell's configuration. The strings in it are copies owned by the core.
     config: ZiggyConfig,
     // The owned copy of the app's URL prefix.
-    app_url_prefix: []u8,
+    app_url_prefix: [:0]u8,
     // The owned copy of the data directory.
-    data_dir: []u8,
+    data_dir: [:0]u8,
     // The task runner.
     runner: task_runner.TaskRunner,
+    // The files the user last dropped on the window, for getPathForFile.
+    dropped: dropped_files.DroppedFiles,
     // The test control connection, only in a test hooks build and only when the shell is in test mode.
     control: ?*test_control.TestControl,
 
@@ -128,10 +132,15 @@ pub const Core = struct {
         core.menu_json = app.menu_json;
         core.ui_files = app.ui_files;
         core.config = config;
-        core.app_url_prefix = try allocator.dupe(u8, std.mem.span(config.app_url_prefix));
+        core.app_url_prefix = try allocator.dupeZ(u8, std.mem.span(config.app_url_prefix));
         errdefer allocator.free(core.app_url_prefix);
-        core.data_dir = try allocator.dupe(u8, std.mem.span(config.data_dir));
+        core.data_dir = try allocator.dupeZ(u8, std.mem.span(config.data_dir));
         errdefer allocator.free(core.data_dir);
+        // The shell's own strings are valid only during the call, so everything that keeps the configuration keeps it pointing at the copies.
+        core.config.app_url_prefix = core.app_url_prefix.ptr;
+        core.config.data_dir = core.data_dir.ptr;
+        core.dropped = dropped_files.DroppedFiles.init(allocator);
+        errdefer core.dropped.deinit();
         core.control = null;
         try core.runner.start(allocator, core.threaded.io(), .{
             .user_data = core,
@@ -139,13 +148,13 @@ pub const Core = struct {
         }, app.tasks, .{
             .worker_threads = config.worker_threads,
             .max_concurrent_child_tasks = config.max_concurrent_child_tasks,
-        }, config);
+        }, core.config);
         errdefer core.runner.stop();
         if (build_options.test_hooks) {
             if (config.test_mode) {
                 const control = try allocator.create(test_control.TestControl);
                 errdefer allocator.destroy(control);
-                try control.start(allocator, core.threaded.io(), config, emitFromRunner, core);
+                try control.start(allocator, core.threaded.io(), config, emitFromRunner, core, filesDroppedFromControl);
                 core.control = control;
                 core.runner.pick_override = .{
                     .user_data = control,
@@ -165,6 +174,7 @@ pub const Core = struct {
             self.allocator.destroy(control);
         }
         self.runner.stop();
+        self.dropped.deinit();
         self.allocator.free(self.channels);
         self.allocator.free(self.app_url_prefix);
         self.allocator.free(self.data_dir);
@@ -184,6 +194,14 @@ pub const Core = struct {
     //
     pub fn uiFile(self: *Core, request_path: []const u8) ?*const ui_files.UiFile {
         return ui_files.findFile(self.ui_files, request_path);
+    }
+
+    //
+    // Records the files the user dropped on the window, replacing the last drop. The shell calls it when the drop happens, before the
+    // page's own drop event, with the paths as the JSON text of an array of strings.
+    //
+    pub fn filesDropped(self: *Core, paths_json: []const u8) !void {
+        try self.dropped.replace(self.io(), paths_json);
     }
 
     //
@@ -377,4 +395,22 @@ fn menuActionHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value
     const event = try std.fmt.allocPrint(arena, "{{\"channel\":\"menu-action\",\"data\":{{\"action\":{s}}}}}", .{action_json});
     core.deliver(event);
     return try arena.dupe(u8, "{}");
+}
+
+//
+
+//
+// What the test control connection calls for its drop command: records the files as the shell does when the user drops them.
+//
+fn filesDroppedFromControl(user_data: ?*anyopaque, paths_json: []const u8) anyerror!void {
+    const core: *Core = @ptrCast(@alignCast(user_data.?));
+    try core.filesDropped(paths_json);
+}
+
+//
+// Answers the page's request for the paths of the files in the last drop, as an array of strings (empty when nothing was dropped).
+//
+fn getDroppedPathsHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
+    _ = data;
+    return try core.dropped.pathsJson(core.io(), arena);
 }

@@ -6,20 +6,26 @@ import path from "path";
 //
 interface IFakeWindow {
     webkit?: { messageHandlers: { ziggy: { postMessage: (text: string) => void } } };
-    chrome?: { webview: { postMessage: (text: string) => void } };
+    chrome?: { webview: { postMessage: (text: string) => void; postMessageWithAdditionalObjects?: (text: string, objects: object[]) => void } };
     ZiggyAndroid?: { postMessage: (text: string) => void };
     ziggy?: {
         invoke: (channel: string, data: object | null) => Promise<object>;
         send: (channel: string, data: object | null) => void;
         onMessage: (channel: string, callback: (data: object) => void) => void;
         removeAllListeners: (channel: string) => void;
+        getPathForFile: (file: object) => string | undefined;
     };
     __ziggyReceive?: (message: object) => void;
+    addEventListener?: (type: string, listener: (event: IFakeDropEvent) => void, capture: boolean) => void;
+    DataTransfer?: new () => IFakeDataTransfer;
+    DragEvent?: new (type: string, init: object) => IFakeDropEvent;
+    File?: new (parts: unknown[], name: string) => { name: string; size: number };
 }
 
 const script = fs.readFileSync(path.join(__dirname, "../../inject/ziggy-inject.js"), "utf8");
 
 function inject(fakeWindow: IFakeWindow): void {
+    fakeWindow.addEventListener = fakeWindow.addEventListener ?? (() => undefined);
     new Function("window", script)(fakeWindow);
 }
 
@@ -33,6 +39,102 @@ function windowWithWebkit(posted: string[]): IFakeWindow {
             },
         },
     };
+}
+
+//
+// A stand-in for a drop event as the inject script sees one.
+//
+interface IFakeDropEvent {
+    type: string;
+    dataTransfer: IFakeDataTransfer | null;
+    target: IFakeTarget;
+    clientX: number;
+    clientY: number;
+    prevented: boolean;
+    stopped: boolean;
+    preventDefault: () => void;
+    stopImmediatePropagation: () => void;
+}
+
+//
+// A stand-in for a drop's data.
+//
+interface IFakeDataTransfer {
+    types: string[];
+    files: { name: string; size: number }[];
+    items: { add: (file: { name: string; size: number }) => void };
+    data: Record<string, string>;
+    getData: (type: string) => string;
+    setData: (type: string, value: string) => void;
+}
+
+//
+// A stand-in for the element a drop landed on, which records the events dispatched on it.
+//
+interface IFakeTarget {
+    dispatched: IFakeDropEvent[];
+    dispatchEvent: (event: IFakeDropEvent) => void;
+}
+
+function fakeTransfer(files: { name: string; size: number }[], data: Record<string, string>, types: string[]): IFakeDataTransfer {
+    const transfer: IFakeDataTransfer = {
+        types,
+        files: [...files],
+        data: { ...data },
+        items: {
+            add: file => {
+                transfer.files.push(file);
+            },
+        },
+        getData: type => transfer.data[type] ?? "",
+        setData: (type, value) => {
+            transfer.data[type] = value;
+        },
+    };
+    return transfer;
+}
+
+//
+// A window that records the drop listener the script registers and can make the events the script creates.
+//
+function windowForDrops(posted: string[]): IFakeWindow & { dropListeners: ((event: IFakeDropEvent) => void)[] } {
+    const dropListeners: ((event: IFakeDropEvent) => void)[] = [];
+    const fakeWindow = windowWithWebkit(posted) as IFakeWindow & { dropListeners: ((event: IFakeDropEvent) => void)[] };
+    fakeWindow.dropListeners = dropListeners;
+    fakeWindow.addEventListener = (type, listener, capture) => {
+        if (type === "drop" && capture) {
+            dropListeners.push(listener);
+        }
+    };
+    fakeWindow.File = function (this: { name: string; size: number }, parts: unknown[], name: string) {
+        return { name, size: parts.length };
+    } as unknown as new (parts: unknown[], name: string) => { name: string; size: number };
+    fakeWindow.DataTransfer = function () {
+        return fakeTransfer([], {}, []);
+    } as unknown as new () => IFakeDataTransfer;
+    fakeWindow.DragEvent = function (this: IFakeDropEvent, type: string, init: { dataTransfer: IFakeDataTransfer; clientX: number; clientY: number }) {
+        return makeEvent(type, init.dataTransfer, { dispatched: [], dispatchEvent: () => undefined }, init.clientX, init.clientY);
+    } as unknown as new (type: string, init: object) => IFakeDropEvent;
+    return fakeWindow;
+}
+
+function makeEvent(type: string, dataTransfer: IFakeDataTransfer | null, target: IFakeTarget, clientX: number, clientY: number): IFakeDropEvent {
+    const event: IFakeDropEvent = {
+        type,
+        dataTransfer,
+        target,
+        clientX,
+        clientY,
+        prevented: false,
+        stopped: false,
+        preventDefault: () => {
+            event.prevented = true;
+        },
+        stopImmediatePropagation: () => {
+            event.stopped = true;
+        },
+    };
+    return event;
 }
 
 describe("ziggy-inject", () => {
@@ -65,6 +167,74 @@ describe("ziggy-inject", () => {
         fakeWindow.__ziggyReceive!({ id: 1, ok: true, data: "first" });
         expect(await first).toBe("first");
         expect(await second).toBe("second");
+    });
+
+    test("a drop whose file addresses cannot be read asks the core for the paths and is fired again carrying them", async () => {
+        const posted: string[] = [];
+        const fakeWindow = windowForDrops(posted);
+        inject(fakeWindow);
+        const target: IFakeTarget = { dispatched: [], dispatchEvent: event => { target.dispatched.push(event); } };
+        const drop = makeEvent("drop", fakeTransfer([], { "text/uri-list": "" }, ["text/uri-list", "text/html"]), target, 5, 6);
+        fakeWindow.dropListeners[0](drop);
+        expect(drop.prevented).toBe(true);
+        expect(drop.stopped).toBe(true);
+        expect(JSON.parse(posted[0])).toEqual({ id: 1, channel: "get-dropped-paths", data: null });
+        fakeWindow.__ziggyReceive!({ id: 1, ok: true, data: ["/home/me/two words.txt", "/home/me/a folder"] });
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(target.dispatched.length).toBe(1);
+        const made = target.dispatched[0].dataTransfer!.files;
+        expect(made.map(file => file.name)).toEqual(["two words.txt", "a folder"]);
+        expect(made.map(file => fakeWindow.ziggy!.getPathForFile(file))).toEqual(["/home/me/two words.txt", "/home/me/a folder"]);
+        expect(target.dispatched[0].clientX).toBe(5);
+        // The event the script fired is not caught by the script again.
+        fakeWindow.dropListeners[0](target.dispatched[0]);
+        expect(target.dispatched[0].prevented).toBe(false);
+    });
+
+    test("a drop of Files is fired again with Files that give the real paths", async () => {
+        const posted: string[] = [];
+        const fakeWindow = windowForDrops(posted);
+        inject(fakeWindow);
+        const target: IFakeTarget = { dispatched: [], dispatchEvent: event => { target.dispatched.push(event); } };
+        const files = [{ name: "a.txt", size: 3 }, { name: "b.txt", size: 4 }];
+        fakeWindow.dropListeners[0](makeEvent("drop", fakeTransfer(files, {}, ["Files"]), target, 0, 0));
+        fakeWindow.__ziggyReceive!({ id: 1, ok: true, data: ["/home/me/a.txt", "/home/me/b.txt"] });
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const made = target.dispatched[0].dataTransfer!.files;
+        expect(made.map(file => file.name)).toEqual(["a.txt", "b.txt"]);
+        expect(made.map(file => fakeWindow.ziggy!.getPathForFile(file))).toEqual(["/home/me/a.txt", "/home/me/b.txt"]);
+        expect(fakeWindow.ziggy!.getPathForFile({ name: "a.txt", size: 3 })).toBeUndefined();
+    });
+
+    test("WebView2 is handed the Files themselves before the core is asked for the paths", () => {
+        const posted: string[] = [];
+        const withObjects: { text: string; objects: object[] }[] = [];
+        const fakeWindow = windowForDrops(posted);
+        fakeWindow.chrome = {
+            webview: {
+                postMessage: text => posted.push(text),
+                postMessageWithAdditionalObjects: (text, objects) => withObjects.push({ text, objects }),
+            },
+        };
+        fakeWindow.webkit = undefined;
+        inject(fakeWindow);
+        const files = [{ name: "a.txt", size: 3 }];
+        const target: IFakeTarget = { dispatched: [], dispatchEvent: () => undefined };
+        fakeWindow.dropListeners[0](makeEvent("drop", fakeTransfer(files, {}, ["Files"]), target, 0, 0));
+        expect(withObjects).toEqual([{ text: "ziggy-file", objects: files }]);
+        expect(JSON.parse(posted[0]).channel).toBe("get-dropped-paths");
+    });
+
+    test("a drop of a link or of text is left alone", () => {
+        const fakeWindow = windowForDrops([]);
+        inject(fakeWindow);
+        const target: IFakeTarget = { dispatched: [], dispatchEvent: event => { target.dispatched.push(event); } };
+        const link = makeEvent("drop", fakeTransfer([], { "text/uri-list": "https://example.com/a" }, ["text/uri-list"]), target, 0, 0);
+        const text = makeEvent("drop", fakeTransfer([], { "text/plain": "hello" }, ["text/plain"]), target, 0, 0);
+        fakeWindow.dropListeners[0](link);
+        fakeWindow.dropListeners[0](text);
+        expect(link.prevented || link.stopped || text.prevented || text.stopped).toBe(false);
+        expect(target.dispatched.length).toBe(0);
     });
 
     test("send posts a message with no id", () => {
@@ -118,10 +288,10 @@ describe("ziggy-inject", () => {
         expect(() => inject({})).toThrow("no native message handler");
     });
 
-    test("window.ziggy exposes exactly four methods and cannot be replaced", () => {
+    test("window.ziggy exposes exactly these methods and cannot be replaced", () => {
         const fakeWindow = windowWithWebkit([]);
         inject(fakeWindow);
-        expect(Object.keys(fakeWindow.ziggy!).sort()).toEqual(["invoke", "onMessage", "removeAllListeners", "send"]);
+        expect(Object.keys(fakeWindow.ziggy!).sort()).toEqual(["getPathForFile", "invoke", "onMessage", "removeAllListeners", "send"]);
         expect(() => {
             "use strict";
             (fakeWindow as { ziggy: object }).ziggy = {};

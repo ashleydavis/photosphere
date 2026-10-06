@@ -367,3 +367,38 @@ test "the menu command on a shell with no menu callback says what is missing" {
     defer if (client.answer) |text| std.testing.allocator.free(text);
     try std.testing.expectEqualStrings("{\"error\":\"HostCallbackMissing\"}", client.answer.?);
 }
+
+test "the drop command records a drop the way the shell does, so the page can ask for the paths of a drop" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "dropped.txt",
+        .data = "xyz",
+    });
+    const directory_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(directory_path);
+    const path = try std.fs.path.join(std.testing.allocator, &.{ directory_path, "dropped.txt" });
+    defer std.testing.allocator.free(path);
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try startControlledCore(&shell, &tmp);
+    defer core.destroy();
+    const line = try std.fmt.allocPrint(std.testing.allocator, "{{\"command\":\"drop\",\"paths\":[\"{s}\"]}}", .{path});
+    defer std.testing.allocator.free(line);
+    var client = Client{
+        .allocator = std.testing.allocator,
+        .port = core.control.?.port,
+        .line = line,
+        .answer = null,
+        .closed_without_answer = false,
+    };
+    const thread = try std.Thread.spawn(.{}, Client.run, .{&client});
+    thread.join();
+    defer if (client.answer) |text| std.testing.allocator.free(text);
+    try std.testing.expectEqualStrings("{\"ok\":true}", client.answer.?);
+    core.postMessage("{\"id\":31,\"channel\":\"get-dropped-paths\",\"data\":null}");
+    const expected = try std.fmt.allocPrint(std.testing.allocator, "{{\"id\":31,\"ok\":true,\"data\":[\"{s}\"]}}", .{path});
+    defer std.testing.allocator.free(expected);
+    try shell.expectMessageContaining(expected);
+}

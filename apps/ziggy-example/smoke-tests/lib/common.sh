@@ -8,18 +8,27 @@
 #       Builds the app twice into the run directory: the test build, with the test hooks, and the release build, without.
 #       Returns non-zero when a build fails.
 #
-#   ziggy_platform_start <test_dir> <test|release>
+#   ziggy_platform_start <test_dir> <test|release> [keep-data]
 #       Starts the app for one scenario, recording what it started through launch_in_process_group. For the test build
 #       it starts the app in test mode, and sets ZIGGY_CONTROL_HOST and
 #       ZIGGY_CONTROL_PORT to where the test control connection can be reached from the host. Returns non-zero when the
-#       app did not come up.
+#       app did not come up. With keep-data it starts the app again on the data the last run left, instead of fresh data,
+#       and on a phone on the same device and the same install.
 #
-#   ziggy_platform_stop <test_dir>
-#       Stops the app and everything it started.
+#   ziggy_platform_stop <test_dir> [keep-device]
+#       Stops the app and everything it started. With keep-device a phone stays claimed, so a restart finds its data.
 #
 #   ziggy_platform_devtools_visible <test_dir> <the page's area before they opened>   (desktop platforms)
 #       Succeeds when the developer tools are showing. How a script sees them differs: on Linux and macOS they dock inside the
 #       window and shrink the page's area, and on Windows they are a window of their own.
+#
+#   ziggy_platform_leave_app <test_dir>
+#       Takes the app out of the user's sight without ending it: on a desktop it closes the window (the File menu's Close Window), on
+#       Android it presses Home, and on the iOS simulator it opens another app over it. Returns non-zero when it cannot, which is
+#       the case on a connected iPhone or iPad.
+#
+#   ziggy_platform_process_alive <test_dir>
+#       Succeeds when the app's process is running, whether or not its window or activity is in sight.
 #
 #   ziggy_platform_data_dir <test_dir>
 #       Prints the directory the app uses for its private data in this scenario, when the host can read it, or nothing.
@@ -52,6 +61,18 @@ trap stop_app_on_exit EXIT
 #
 start_test_app() {
     ziggy_platform_start "$ZIGGY_TEST_DIR" test || fail "the app did not start"
+    exec 3<>"/dev/tcp/$ZIGGY_CONTROL_HOST/$ZIGGY_CONTROL_PORT" || fail "could not connect to the control connection at $ZIGGY_CONTROL_HOST:$ZIGGY_CONTROL_PORT"
+    wait_for_ready
+}
+
+#
+# Stops the app and starts it again on the data it kept, then opens the control connection to the new run. A scenario uses it to
+# check what survives a restart.
+#
+restart_test_app() {
+    exec 3>&-
+    ziggy_platform_stop "$ZIGGY_TEST_DIR" keep-device
+    ziggy_platform_start "$ZIGGY_TEST_DIR" test keep-data || fail "the app did not start again"
     exec 3<>"/dev/tcp/$ZIGGY_CONTROL_HOST/$ZIGGY_CONTROL_PORT" || fail "could not connect to the control connection at $ZIGGY_CONTROL_HOST:$ZIGGY_CONTROL_PORT"
     wait_for_ready
 }
@@ -276,4 +297,36 @@ wait_for_value() {
         waited=$((waited + 1))
     done
     fail "$1 never held \"$2\". It held: $shown"
+}
+
+#
+# Prints the number in a file the app keeps in its data directory (a count a background task writes), or 0 when there is no such
+# file yet. Usage: data_file_number <file name>
+#
+data_file_number() {
+    local data_dir
+    data_dir="$(ziggy_platform_data_dir "$ZIGGY_TEST_DIR")" || fail "could not read the app's data directory"
+    if [ -f "$data_dir/$1" ]; then
+        tr -d '\n' < "$data_dir/$1"
+    else
+        echo 0
+    fi
+}
+
+#
+# Waits until the number in a data file is at least the given value, and prints it. Usage: wait_for_data_file_number <file> <value>
+#
+wait_for_data_file_number() {
+    local waited=0
+    local number
+    while [ "$waited" -lt "$WAIT_TIMEOUT_SECONDS" ]; do
+        number="$(data_file_number "$1")"
+        if [ "$number" -ge "$2" ]; then
+            printf '%s\n' "$number"
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    fail "$1 never reached $2. It holds $number"
 }

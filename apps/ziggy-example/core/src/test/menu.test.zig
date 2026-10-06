@@ -3,7 +3,7 @@ const ziggy = @import("ziggy-core");
 const example = @import("ziggy-example-core");
 
 // The actions every shell performs itself. Every other action in the menu is the app's and goes to the page.
-const shell_actions = [_][]const u8{ "quit", "reload", "toggle-devtools", "toggle-fullscreen", "zoom-in", "zoom-out", "zoom-reset", "undo", "redo", "cut", "copy", "paste", "select-all" };
+const shell_actions = [_][]const u8{ "quit", "close-window", "reload", "toggle-devtools", "toggle-fullscreen", "zoom-in", "zoom-out", "zoom-reset", "undo", "redo", "cut", "copy", "paste", "select-all" };
 
 fn checkItems(items: std.json.Value, seen_accelerators: *std.ArrayList([]const u8)) !void {
     for (items.array.items) |item| {

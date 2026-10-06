@@ -39,6 +39,8 @@ const Bridge = struct {
     os_version_json_method: c.jmethodID,
     // ZiggyHost.quit().
     quit_method: c.jmethodID,
+    // ZiggyHost.keepAlive(boolean).
+    keep_alive_method: c.jmethodID,
     // ZiggyHost.pickPathsJson(int, String, String).
     pick_paths_method: c.jmethodID,
     // The core, once it has been created.
@@ -244,6 +246,22 @@ fn quitCallback(user_data: ?*anyopaque) callconv(.c) void {
 }
 
 //
+// The native host callback that keeps the app running, or says it need not be, by calling ZiggyHost.keepAlive. The core calls it
+// from the thread that queued or ended the task.
+//
+fn keepAliveCallback(user_data: ?*anyopaque, keep_running: bool) callconv(.c) void {
+    const bridge: *Bridge = @ptrCast(@alignCast(user_data.?));
+    const attachment = attach(bridge.java_vm);
+    defer detach(attachment);
+    const env = attachment.env;
+    var arguments = [1]c.jvalue{
+        .{ .z = if (keep_running) c.JNI_TRUE else c.JNI_FALSE },
+    };
+    envTable(env).CallVoidMethodA.?(env, bridge.host, bridge.keep_alive_method, &arguments);
+    failOnPendingException(env, "Ziggy JNI: ZiggyHost.keepAlive threw");
+}
+
+//
 // The native host callback that shows a file or folder picker, by calling ZiggyHost.pickPathsJson, which waits for the user.
 // The core calls it from a worker thread, so waiting here holds up only that worker. The answer comes back as a byte
 // array of UTF-8 JSON, which is copied into the buffer. Returns the number of bytes written, or a negative number when the
@@ -344,6 +362,9 @@ fn createBridge(env: *c.JNIEnv, allocator: std.mem.Allocator, arguments: CreateA
     bridge.quit_method = envTable(env).GetMethodID.?(env, host_class, "quit", "()V") orelse {
         return error.JavaException;
     };
+    bridge.keep_alive_method = envTable(env).GetMethodID.?(env, host_class, "keepAlive", "(Z)V") orelse {
+        return error.JavaException;
+    };
     bridge.pick_paths_method = envTable(env).GetMethodID.?(env, host_class, "pickPathsJson", "(ILjava/lang/String;Ljava/lang/String;)[B") orelse {
         return error.JavaException;
     };
@@ -374,6 +395,7 @@ fn createBridge(env: *c.JNIEnv, allocator: std.mem.Allocator, arguments: CreateA
         .quit = quitCallback,
         .pick_paths = pickPathsCallback,
         .menu_action = null,
+        .keep_alive = keepAliveCallback,
         .worker_threads = arguments.worker_threads,
         .max_concurrent_child_tasks = arguments.max_concurrent_child_tasks,
         .app_url_prefix = app_url_prefix.ptr,

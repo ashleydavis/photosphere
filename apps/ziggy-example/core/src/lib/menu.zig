@@ -1,13 +1,14 @@
 //
 // The example's desktop menu. Ziggy's shells draw it natively on every desktop platform and never on a phone.
 //
-// An action the shells know does what it says in the shell: quit, reload, toggle-devtools, toggle-fullscreen, zoom-in,
+// An action the shells know does what it says in the shell: quit, close-window, reload, toggle-devtools, toggle-fullscreen, zoom-in,
 // zoom-out, zoom-reset, undo, redo, cut, copy, paste and select-all. Every other action is the app's own, and the core hands it
 // to the page as a menu-action event. See "Menus" in the architecture document.
 //
 pub const menu_json =
     \\[
     \\  {"label": "File", "items": [
+    \\    {"label": "Close Window", "action": "close-window", "accelerator": "CmdOrCtrl+W"},
     \\    {"label": "Quit", "action": "quit", "accelerator": "CmdOrCtrl+Q"}
     \\  ]},
     \\  {"label": "Edit", "items": [

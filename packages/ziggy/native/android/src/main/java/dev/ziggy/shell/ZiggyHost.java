@@ -12,6 +12,10 @@ public interface ZiggyHost {
     // Asks the application to quit. Called by the test control connection, from its own thread.
     void quit();
 
+    // Keeps the application running (true) or says it need not be (false), because tasks the app must be kept running for are queued
+    // or running. Called from any thread, while the core holds a lock, so it must return at once.
+    void keepAlive(boolean keepRunning);
+
     // Shows a file or folder picker and waits for the user, which blocks the calling thread (a core worker thread, never
     // the main thread). kind is 0 to open files, 1 to save a file (initialName is the suggested name) or 2 to choose a
     // folder. Returns the answer as UTF-8 JSON, an array of path strings that is [] when the user cancelled, or null when

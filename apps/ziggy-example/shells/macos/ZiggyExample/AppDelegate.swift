@@ -34,9 +34,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         newBridge.start()
     }
 
-    // Closing the window ends the application.
+    // Closing the window ends the application, unless tasks the app is kept running for are queued or running. Then the app keeps
+    // running with no window, and ends when the last of those tasks does.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return true
+        return !(bridge?.keepsRunning ?? false)
     }
 
     // Destroys the core before the process ends.

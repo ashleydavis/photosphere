@@ -228,3 +228,33 @@ test "os-version fails clearly when the shell provides no native host callback" 
     try addTask(core, "t1", "os-version", "null");
     try shell.expectMessageContaining("\"status\":\"failed\",\"error\":\"HostCallbackMissing\"");
 }
+
+test "the keep-alive background task counts in a file in the data directory and asks the shell to keep the app running, and the normal one does not" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const data_dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(data_dir);
+    const data_dir_z = try std.testing.allocator.dupeZ(u8, data_dir);
+    defer std.testing.allocator.free(data_dir_z);
+
+    var shell: FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try createCore(&shell, data_dir_z.ptr);
+    defer core.destroy();
+    try addTask(core, "bk", "background-keep-alive", "{\"file\":\"keep.txt\",\"durationMs\":300}");
+    try addTask(core, "bn", "background-normal", "{\"file\":\"normal.txt\",\"durationMs\":300}");
+    _ = try indexOfMessage(&shell, "task-completed\",\"data\":{\"taskId\":\"bk\"");
+    _ = try indexOfMessage(&shell, "task-completed\",\"data\":{\"taskId\":\"bn\"");
+
+    const kept = try tmp.dir.readFileAlloc(std.testing.io, "keep.txt", std.testing.allocator, .limited(64));
+    defer std.testing.allocator.free(kept);
+    try std.testing.expect(try std.fmt.parseInt(u32, std.mem.trim(u8, kept, "\n"), 10) >= 2);
+    const normal = try tmp.dir.readFileAlloc(std.testing.io, "normal.txt", std.testing.allocator, .limited(64));
+    defer std.testing.allocator.free(normal);
+    try std.testing.expect(try std.fmt.parseInt(u32, std.mem.trim(u8, normal, "\n"), 10) >= 2);
+
+    shell.mutex.lockUncancelable(shell.threaded.io());
+    defer shell.mutex.unlock(shell.threaded.io());
+    try std.testing.expectEqualSlices(bool, &[_]bool{ true, false }, shell.keep_alive_calls.items);
+}

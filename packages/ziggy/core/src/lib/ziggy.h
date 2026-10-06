@@ -29,6 +29,11 @@ typedef void (*ziggy_quit_fn)(void *user_data);
 // menu item. The shell does the work on its UI thread and returns at once.
 typedef void (*ziggy_menu_action_fn)(void *user_data, const char *action);
 
+// Tells the shell whether the app must keep running because tasks marked keep-alive are queued or running: true when the first
+// such task is queued, false when the last one ends. Called from any thread while the core holds a lock, so it must return at
+// once and must not call back into the core.
+typedef void (*ziggy_keep_alive_fn)(void *user_data, bool keep_running);
+
 // What a shell is asked to show in ziggy_pick_paths_fn.
 enum {
     // A dialog to choose one or more existing files to open.
@@ -61,6 +66,8 @@ typedef struct ziggy_config {
     // Native host callback: do a menu action as if its menu item had been chosen. NULL on a platform with no menu. Used only by
     // the test control connection.
     ziggy_menu_action_fn menu_action;
+    // Native host callback: keep the app running, or stop. NULL when the platform has none.
+    ziggy_keep_alive_fn keep_alive;
     // The number of worker threads.
     uint32_t worker_threads;
     // The limit on child tasks in flight for any one parent task.
@@ -145,6 +152,11 @@ const char *ziggy_inject_script(size_t *length);
 // Reads keyboard shortcut text such as "CmdOrCtrl+Shift+I" into the struct given. CmdOrCtrl becomes Command on MacOS and
 // Control elsewhere. Returns false, leaving the struct unchanged, when the text is not a shortcut.
 bool ziggy_parse_accelerator(const char *text, size_t text_len, ziggy_accelerator *result);
+
+// Records the files the user dropped on the window, replacing the last drop, so the page can ask for each one's path with
+// getPathForFile. The shell calls it when the drop happens, before the page's own drop event. The paths are the JSON text of an array
+// of strings. Returns false, after logging why, when a path is not a readable file or the text is not such an array.
+bool ziggy_files_dropped(void *handle, const char *paths_json, size_t paths_len);
 
 // Returns true when the library was built with the test hooks.
 bool ziggy_test_hooks_enabled(void);

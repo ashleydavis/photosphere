@@ -35,6 +35,7 @@ ziggy_platform_start() {
     local app="$ZIGGY_SMOKE_RUN_DIR/$kind/bin/ziggy-example"
     local log="$test_dir/app.log"
     local port_file="$test_dir/control-port.txt"
+    rm -f "$port_file"
     mkdir -p "$test_dir/data"
     local pid pgid
     read -r pid pgid < <(launch_in_process_group "$log" env \
@@ -114,4 +115,12 @@ ziggy_platform_has_control_port() {
 #
 ziggy_platform_devtools_visible() {
     [ "$(viewport_size)" != "$2" ]
+}
+
+ziggy_platform_leave_app() {
+    choose_menu_item close-window
+}
+
+ziggy_platform_process_alive() {
+    ziggy_platform_is_running "$1"
 }

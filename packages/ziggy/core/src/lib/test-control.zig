@@ -41,6 +41,8 @@ pub const TestControl = struct {
     deliver: *const fn (user_data: ?*anyopaque, message: []const u8) void,
     // The pointer passed to deliver.
     deliver_user_data: ?*anyopaque,
+    // Records the files of a drop, as the shell does when the user drops them. Called with deliver_user_data.
+    files_dropped: *const fn (user_data: ?*anyopaque, paths_json: []const u8) anyerror!void,
     // The listening socket.
     server: std.Io.net.Server,
     // The port it listens on.
@@ -75,7 +77,7 @@ pub const TestControl = struct {
     // Starts listening on a loopback port the operating system chooses, writes the port to the port file when there is
     // one, and starts the thread that serves connections. It must stay where it is: the thread holds its address.
     //
-    pub fn start(self: *TestControl, allocator: std.mem.Allocator, io: std.Io, config: types.ZiggyConfig, deliver: *const fn (user_data: ?*anyopaque, message: []const u8) void, deliver_user_data: ?*anyopaque) !void {
+    pub fn start(self: *TestControl, allocator: std.mem.Allocator, io: std.Io, config: types.ZiggyConfig, deliver: *const fn (user_data: ?*anyopaque, message: []const u8) void, deliver_user_data: ?*anyopaque, files_dropped: *const fn (user_data: ?*anyopaque, paths_json: []const u8) anyerror!void) !void {
         const address = try std.Io.net.IpAddress.parseIp4("127.0.0.1", 0);
         const server = try address.listen(io, .{});
         self.* = .{
@@ -84,6 +86,7 @@ pub const TestControl = struct {
             .config = config,
             .deliver = deliver,
             .deliver_user_data = deliver_user_data,
+            .files_dropped = files_dropped,
             .server = server,
             .port = server.socket.address.getPort(),
             .thread = undefined,
@@ -294,6 +297,18 @@ pub const TestControl = struct {
             }
             const action_text = try arena.dupeZ(u8, action);
             choose(self.config.user_data, action_text.ptr);
+            return try self.allocator.dupe(u8, "{\"ok\":true}");
+        }
+        if (std.mem.eql(u8, name, "drop")) {
+            // Records a drop of files, as the shell does when the user drops files on the window, so a test can use getPathForFile
+            // without dragging anything. The files are the command's "paths", an array of strings.
+            const paths = command.object.get("paths") orelse {
+                return try self.allocator.dupe(u8, "{\"error\":\"InvalidCommand\"}");
+            };
+            const paths_json = try json_util.stringify(arena, paths);
+            self.files_dropped(self.deliver_user_data, paths_json) catch |err| {
+                return try std.fmt.allocPrint(self.allocator, "{{\"error\":\"{s}\"}}", .{@errorName(err)});
+            };
             return try self.allocator.dupe(u8, "{\"ok\":true}");
         }
         if (std.mem.eql(u8, name, "pick-answer")) {

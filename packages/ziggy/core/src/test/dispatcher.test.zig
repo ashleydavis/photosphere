@@ -262,3 +262,30 @@ test "a dialog with no callback from the shell is an error reply naming what is 
     core.postMessage("{\"id\":15,\"channel\":\"pick-open-request\",\"data\":null}");
     try shell.expectMessageContaining("{\"id\":15,\"ok\":false,\"error\":\"HostCallbackMissing\"}");
 }
+
+test "get-dropped-paths replies with the paths of the last drop, and an empty array before any drop" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "dropped one.txt",
+        .data = "abcd",
+    });
+    const directory_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(directory_path);
+    const path = try std.fs.path.join(std.testing.allocator, &.{ directory_path, "dropped one.txt" });
+    defer std.testing.allocator.free(path);
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try helpers.createCore(&shell, 2, 2);
+    defer core.destroy();
+    core.postMessage("{\"id\":1,\"channel\":\"get-dropped-paths\",\"data\":null}");
+    try shell.expectMessageContaining("{\"id\":1,\"ok\":true,\"data\":[]}");
+    const paths_json = try std.json.Stringify.valueAlloc(std.testing.allocator, &[_][]const u8{path}, .{});
+    defer std.testing.allocator.free(paths_json);
+    try core.filesDropped(paths_json);
+    core.postMessage("{\"id\":2,\"channel\":\"get-dropped-paths\",\"data\":null}");
+    const expected = try std.fmt.allocPrint(std.testing.allocator, "{{\"id\":2,\"ok\":true,\"data\":{s}}}", .{paths_json});
+    defer std.testing.allocator.free(expected);
+    try shell.expectMessageContaining(expected);
+}
