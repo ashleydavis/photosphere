@@ -3,6 +3,7 @@ const actions = @import("../lib/actions.zig");
 
 test "the shell's own actions are recognised by name" {
     try std.testing.expectEqual(actions.Action.quit, actions.fromName("quit").?);
+    try std.testing.expectEqual(actions.Action.close_window, actions.fromName("close-window").?);
     try std.testing.expectEqual(actions.Action.toggle_devtools, actions.fromName("toggle-devtools").?);
     try std.testing.expectEqual(actions.Action.select_all, actions.fromName("select-all").?);
     try std.testing.expectEqual(actions.Action.zoom_reset, actions.fromName("zoom-reset").?);

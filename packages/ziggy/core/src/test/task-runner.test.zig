@@ -370,3 +370,84 @@ test "cancelling the parent's source cancels its children and the parent complet
     try expectCompleted(&shell, "p.c0", "cancelled");
     try expectCompleted(&shell, "p.c1", "cancelled");
 }
+
+//
+// Waits until the shell has been told the given number of keep-alive changes, and returns what it was told.
+//
+fn keepAliveCalls(shell: *helpers.FakeShell, count: usize) ![]bool {
+    var waited: u32 = 0;
+    while (waited < 2000) : (waited += 1) {
+        shell.mutex.lockUncancelable(shell.threaded.io());
+        const have = shell.keep_alive_calls.items.len;
+        shell.mutex.unlock(shell.threaded.io());
+        if (have >= count) {
+            break;
+        }
+        try std.Io.sleep(shell.threaded.io(), .fromMilliseconds(1), .awake);
+    }
+    shell.mutex.lockUncancelable(shell.threaded.io());
+    defer shell.mutex.unlock(shell.threaded.io());
+    return try std.testing.allocator.dupe(bool, shell.keep_alive_calls.items);
+}
+
+test "a keep-alive task asks the shell to keep the app running while it is queued or running, and to stop when it ends" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try helpers.createCore(&shell, 2, 2);
+    defer core.destroy();
+    try addTask(core, "k1", "keep-sleep", "s", "{\"ms\":30}", 0);
+    const during = try keepAliveCalls(&shell, 1);
+    defer std.testing.allocator.free(during);
+    try std.testing.expectEqualSlices(bool, &[_]bool{true}, during[0..1]);
+    try expectCompleted(&shell, "k1", "succeeded");
+    const after = try keepAliveCalls(&shell, 2);
+    defer std.testing.allocator.free(after);
+    try std.testing.expectEqualSlices(bool, &[_]bool{ true, false }, after);
+}
+
+test "several keep-alive tasks ask once, and the shell is told to stop only when the last one ends" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try helpers.createCore(&shell, 3, 2);
+    defer core.destroy();
+    try addTask(core, "k1", "keep-sleep", "s1", "{\"ms\":20}", 0);
+    try addTask(core, "k2", "keep-sleep", "s2", "{\"ms\":100000}", 0);
+    try expectCompleted(&shell, "k1", "succeeded");
+    const calls = try keepAliveCalls(&shell, 1);
+    defer std.testing.allocator.free(calls);
+    try std.testing.expectEqualSlices(bool, &[_]bool{true}, calls);
+    try cancelSource(core, "s2");
+    try expectCompleted(&shell, "k2", "cancelled");
+    const done = try keepAliveCalls(&shell, 2);
+    defer std.testing.allocator.free(done);
+    try std.testing.expectEqualSlices(bool, &[_]bool{ true, false }, done);
+}
+
+test "a normal task never asks the shell to keep the app running" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try helpers.createCore(&shell, 2, 2);
+    defer core.destroy();
+    try addTask(core, "n1", "sleep", "s", "{\"ms\":10}", 0);
+    try expectCompleted(&shell, "n1", "succeeded");
+    try std.Io.sleep(shell.threaded.io(), .fromMilliseconds(50), .awake);
+    const calls = try keepAliveCalls(&shell, 0);
+    defer std.testing.allocator.free(calls);
+    try std.testing.expectEqual(@as(usize, 0), calls.len);
+}
+
+test "a keep-alive parent keeps the app running until its children are done and it ends" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try helpers.createCore(&shell, 3, 2);
+    defer core.destroy();
+    try addTask(core, "p1", "keep-parent", "s", "{\"children\":2,\"childMs\":20}", 0);
+    try expectCompleted(&shell, "p1", "succeeded");
+    const calls = try keepAliveCalls(&shell, 2);
+    defer std.testing.allocator.free(calls);
+    try std.testing.expectEqualSlices(bool, &[_]bool{ true, false }, calls);
+}

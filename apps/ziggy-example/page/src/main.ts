@@ -3,7 +3,7 @@ import { formatPingReply, IPingReply } from "./lib/format-reply";
 import { applyJobProgress, applyTaskCompleted, emptyJobList, IJobList, IJobProgressMessage } from "./lib/job-list";
 import { makeLargePayload } from "./lib/large-payload";
 import { crc32 } from "./lib/crc32";
-import { ITestCommand, performInsertCommand, performTestCommand, performViewportCommand, testResultToJson } from "./lib/test-commands";
+import { ITestCommand, performDropFileCommand, performInsertCommand, performTestCommand, performViewportCommand, testResultToJson } from "./lib/test-commands";
 import { aboutText, buttonForMenuAction } from "./lib/menu-actions";
 import { formatPicked } from "./lib/picked-paths";
 
@@ -18,7 +18,18 @@ interface ITaskMessageEvent {
     source: string;
 
     // The message the task sent.
-    message: IOutputMessage | IJobProgressMessage;
+    message: IOutputMessage | IJobProgressMessage | IMediaServerMessage;
+}
+
+//
+// A message that tells the page the media server is listening.
+//
+interface IMediaServerMessage {
+    // Always "media-server".
+    type: "media-server";
+
+    // The loopback port the server listens on.
+    port: number;
 }
 
 //
@@ -178,6 +189,14 @@ function startTasks(): void {
     element("start-fail").addEventListener("click", () => {
         queueTask("hello-fail", "fail-source", null);
     });
+    // The two background tasks count in a file in the app's data directory for fifteen seconds. The keep-alive one keeps the app
+    // running when its window is closed or it leaves the foreground, and the normal one does not.
+    element("start-keep-alive").addEventListener("click", () => {
+        queueTask("background-keep-alive", "keep-alive-source", { file: "keep-alive.txt", durationMs: 15000 });
+    });
+    element("start-background-normal").addEventListener("click", () => {
+        queueTask("background-normal", "background-normal-source", { file: "normal.txt", durationMs: 15000 });
+    });
     element("os-version").addEventListener("click", () => {
         queueTask("os-version", "os-source", null);
     });
@@ -234,6 +253,123 @@ function startPickers(): void {
 }
 
 
+//
+// Loads the example image and video from the media server on the loopback port, and asks it for a range of bytes with a
+// request from the page's script, which the browser lets through only because the server allows the page's origin. The
+// status shows what each of the three did.
+//
+function showMedia(port: number): void {
+    const base = `http://127.0.0.1:${port}`;
+    const image = element("media-image") as HTMLImageElement;
+    const video = element("media-video") as HTMLVideoElement;
+    image.addEventListener("load", () => {
+        appendTo("media-status", `image loaded ${image.naturalWidth}x${image.naturalHeight}`);
+    });
+    image.addEventListener("error", () => {
+        appendTo("media-status", "image failed");
+    });
+    video.addEventListener("loadedmetadata", () => {
+        appendTo("media-status", `video loaded ${video.duration.toFixed(1)}s`);
+    });
+    video.addEventListener("error", () => {
+        appendTo("media-status", `video failed ${video.error?.message ?? ""}`);
+    });
+    image.src = `${base}/example.png`;
+    video.src = `${base}/example.mp4`;
+    fetch(`${base}/example.mp4`, { headers: { Range: "bytes=0-9" } })
+        .then(async response => {
+            const bytes = await response.arrayBuffer();
+            appendTo("media-status", `range fetch ${response.status} ${bytes.byteLength} bytes`);
+        })
+        .catch(error => {
+            appendTo("media-status", `range fetch failed ${(error as Error).message}`);
+        });
+}
+
+function startMedia(): void {
+    element("start-media").addEventListener("click", () => {
+        queueTask("media-server", "media-source", null);
+    });
+    element("cancel-media").addEventListener("click", () => {
+        window.ziggy.send("cancel-tasks", { source: "media-source" });
+    });
+}
+
+//
+// Files dropped on the drop zone, written the way a page written for Electron would: for each File of the drop it asks
+// window.ziggy.getPathForFile for the real path. A drop anywhere else does nothing, rather than the web view navigating to the file.
+//
+function startDrop(): void {
+    const zone = element("drop-zone");
+    document.addEventListener("dragover", event => event.preventDefault());
+    document.addEventListener("drop", event => event.preventDefault());
+    zone.addEventListener("drop", event => {
+        event.preventDefault();
+        const files = Array.from(event.dataTransfer?.files ?? []);
+        if (files.length === 0) {
+            appendTo("drop-result", "dropped: no files");
+        }
+        for (const file of files) {
+            appendTo("drop-result", `dropped: ${window.ziggy.getPathForFile(file) ?? "no path"}`);
+        }
+    });
+}
+
+//
+// The value the storage buttons write, which has non-ASCII characters so the round trip through storage is checked too.
+//
+const storedValue = "kept é 世界 😀";
+
+//
+// Opens the example's IndexedDB database, creating its one store the first time.
+//
+function openDatabase(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open("ziggy-example", 1);
+        request.onupgradeneeded = () => {
+            request.result.createObjectStore("values");
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+//
+// Runs one request against the store and resolves with its result once the transaction has committed.
+//
+async function useStore<TResult>(mode: IDBTransactionMode, makeRequest: (store: IDBObjectStore) => IDBRequest<TResult>): Promise<TResult> {
+    const database = await openDatabase();
+    try {
+        return await new Promise<TResult>((resolve, reject) => {
+            const transaction = database.transaction("values", mode);
+            const request = makeRequest(transaction.objectStore("values"));
+            transaction.oncomplete = () => resolve(request.result);
+            transaction.onerror = () => reject(transaction.error);
+            transaction.onabort = () => reject(transaction.error);
+        });
+    }
+    finally {
+        database.close();
+    }
+}
+
+//
+// Writes a value to localStorage and to IndexedDB, and reads both back, so a smoke test can quit the app, start it again and
+// see whether the web view kept them.
+//
+function startStorage(): void {
+    const status = element("storage-status");
+    element("storage-write").addEventListener("click", async () => {
+        localStorage.setItem("ziggy-example-value", storedValue);
+        await useStore("readwrite", store => store.put(storedValue, "ziggy-example-value"));
+        status.textContent = "written";
+    });
+    element("storage-read").addEventListener("click", async () => {
+        const fromDatabase = await useStore<string | undefined>("readonly", store => store.get("ziggy-example-value"));
+        status.textContent = `localStorage: ${localStorage.getItem("ziggy-example-value") ?? "none"}; indexedDB: ${fromDatabase ?? "none"}`;
+    });
+}
+
 function listenForEvents(): void {
     window.ziggy.onMessage<ITaskMessageEvent>("task-message", event => {
         appendTo("event-log", `task-message ${event.taskId} ${JSON.stringify(event.message)}`);
@@ -243,6 +379,9 @@ function listenForEvents(): void {
         else if (event.message.type === "job-progress") {
             jobList = applyJobProgress(jobList, event.taskId, event.message);
             renderJobs();
+        }
+        else if (event.message.type === "media-server") {
+            showMedia(event.message.port);
         }
     });
     window.ziggy.onMessage<ITaskCompletedEvent>("task-completed", event => {
@@ -291,6 +430,16 @@ function listenForTestCommands(): void {
             ? performViewportCommand(window.innerWidth, window.innerHeight)
             : event.command.command === "insert"
                 ? performInsertCommand(finder, event.command, text => document.execCommand("insertText", false, text))
+                : event.command.command === "drop-file"
+                ? performDropFileCommand(finder, event.command, (fileName, fileSize) => {
+                    const transfer = new DataTransfer();
+                    transfer.items.add(new File([new Uint8Array(fileSize)], fileName));
+                    return new DragEvent("drop", {
+                        dataTransfer: transfer,
+                        bubbles: true,
+                        cancelable: true,
+                    });
+                })
                 : performTestCommand(finder, event.command);
         await window.ziggy.invoke<IJsonValue>("test-result", {
             requestId: event.requestId,
@@ -306,6 +455,9 @@ listenForTestCommands();
 startTasks();
 startEdgeChecks();
 startPickers();
+startMedia();
+startStorage();
+startDrop();
 showReply().catch(error => {
     element("reply").textContent = `The Zig core did not answer: ${(error as Error).message}`;
 });

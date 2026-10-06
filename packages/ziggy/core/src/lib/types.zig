@@ -48,6 +48,14 @@ pub const PickKind = enum(i32) {
 //
 pub const MenuActionFn = *const fn (user_data: ?*anyopaque, action: [*:0]const u8) callconv(.c) void;
 
+//
+// Tells the shell whether the app must keep running because tasks marked keep-alive are queued or running. Called with true when the
+// first such task is queued and with false when the last one ends, so the shell can use its platform's way of staying alive (an
+// Android foreground service, an iOS background task, a desktop app that stays running with its window closed). Called from any
+// thread while the core holds a lock, so it must return at once and must not call back into the core.
+//
+pub const KeepAliveFn = *const fn (user_data: ?*anyopaque, keep_running: bool) callconv(.c) void;
+
 pub const PickPathsFn = *const fn (user_data: ?*anyopaque, kind: i32, title: ?[*:0]const u8, initial_name: ?[*:0]const u8, buffer: [*]u8, capacity: usize) callconv(.c) isize;
 
 //
@@ -68,6 +76,8 @@ pub const ZiggyConfig = extern struct {
     // Native host callback: do a menu action as if its menu item had been chosen. Null on a platform with no menu. Used only by
     // the test control connection.
     menu_action: ?MenuActionFn,
+    // Native host callback: keep the app running, or stop. Null when the platform has none.
+    keep_alive: ?KeepAliveFn,
     // The number of worker threads.
     worker_threads: u32,
     // The limit on child tasks in flight for any one parent task.

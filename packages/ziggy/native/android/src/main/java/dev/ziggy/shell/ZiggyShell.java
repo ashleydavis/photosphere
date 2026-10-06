@@ -156,6 +156,8 @@ public final class ZiggyShell implements ZiggyHost {
         // without it, and nothing else on the file system is the page's to read.
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
+        // localStorage and IndexedDB are off in a web view until this is set, and a page expects them to work.
+        settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false);
         settings.setAllowFileAccessFromFileURLs(false);
         settings.setAllowUniversalAccessFromFileURLs(false);
@@ -258,6 +260,18 @@ public final class ZiggyShell implements ZiggyHost {
     @Override
     public String osVersionJson() {
         return JSONObject.quote("Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ") " + Build.MANUFACTURER + " " + Build.MODEL);
+    }
+
+    // Starts or stops the foreground service that keeps the process running while the core has tasks the app must be kept running
+    // for. Starting happens when the task is queued, which is while the app is in the foreground, as Android requires.
+    @Override
+    public void keepAlive(boolean keepRunning) {
+        Intent intent = new Intent(activity, ZiggyKeepAliveService.class);
+        if (keepRunning) {
+            activity.startForegroundService(intent);
+        } else {
+            activity.stopService(intent);
+        }
     }
 
     @Override
@@ -454,7 +468,8 @@ public final class ZiggyShell implements ZiggyHost {
             if (url.startsWith(APP_URL_PREFIX)) {
                 return pageResponse(url);
             }
-            if (checkUrl(url) == URL_ALLOW) {
+            // Only a navigation is checked, as on every other platform. The page loads media from a server on the loopback address.
+            if (!request.isForMainFrame() || checkUrl(url) == URL_ALLOW) {
                 return null;
             }
             Log.w(TAG, "Blocked a request to " + url);

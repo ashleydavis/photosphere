@@ -148,16 +148,22 @@ ziggy_platform_start() {
     local kind="$2"
     local apk="$ZIGGY_SMOKE_RUN_DIR/$kind/app.apk"
     mkdir -p "$test_dir"
-    ziggy_android_claim_device || return 1
-    echo "$ANDROID_SERIAL_CLAIMED" > "$test_dir/device.txt"
+    if [ "${3:-}" = "keep-data" ]; then
+        # A restart: the same device, the same install and the data the last run left, so only the port file is removed.
+        ziggy_adb shell am force-stop "$ANDROID_APP_ID"
+        ziggy_adb shell run-as "$ANDROID_APP_ID" rm -f files/ziggy-control-port.txt || return 1
+    else
+        ziggy_android_claim_device || return 1
+        echo "$ANDROID_SERIAL_CLAIMED" > "$test_dir/device.txt"
 
-    # A fresh install with fresh data, so nothing of an earlier scenario is left in the app's files directory.
-    ziggy_adb install -r -t "$apk" > "$test_dir/install.log" 2>&1 || {
-        cat "$test_dir/install.log" >&2
-        return 1
-    }
-    ziggy_adb shell am force-stop "$ANDROID_APP_ID"
-    ziggy_adb shell pm clear "$ANDROID_APP_ID" > /dev/null || return 1
+        # A fresh install with fresh data, so nothing of an earlier scenario is left in the app's files directory.
+        ziggy_adb install -r -t "$apk" > "$test_dir/install.log" 2>&1 || {
+            cat "$test_dir/install.log" >&2
+            return 1
+        }
+        ziggy_adb shell am force-stop "$ANDROID_APP_ID"
+        ziggy_adb shell pm clear "$ANDROID_APP_ID" > /dev/null || return 1
+    fi
 
     ziggy_adb logcat -c
     ziggy_adb shell am start -W -n "$ANDROID_APP_ID/.MainActivity" \
@@ -210,6 +216,9 @@ ziggy_platform_stop() {
         : > "$test_dir/forward-port.txt"
     fi
     ziggy_adb shell am force-stop "$ANDROID_APP_ID" || true
+    if [ "${2:-}" = "keep-device" ]; then
+        return 0
+    fi
     ziggy_android_release_device
 }
 
@@ -255,4 +264,25 @@ ziggy_platform_has_control_port() {
     local port
     port="$(ziggy_android_read_port)"
     [ -n "$port" ]
+}
+
+#
+# Sends the app to the background, as the Home button does.
+#
+ziggy_platform_leave_app() {
+    ziggy_adb shell input keyevent KEYCODE_HOME
+}
+
+#
+# Whether the app's process is running, which is what a foreground service keeps going when the app is not in the foreground.
+#
+ziggy_platform_process_alive() {
+    [ -n "$(ziggy_adb shell pidof "$ANDROID_APP_ID" | tr -d '\r')" ]
+}
+
+#
+# Whether the app's foreground service is running.
+#
+ziggy_platform_keep_alive_service_running() {
+    ziggy_adb shell dumpsys activity services "$ANDROID_APP_ID" | grep -q "ZiggyKeepAliveService"
 }

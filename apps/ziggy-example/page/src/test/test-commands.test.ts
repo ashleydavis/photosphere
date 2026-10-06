@@ -1,4 +1,4 @@
-import { IFoundElement, performInsertCommand, performTestCommand, performViewportCommand, testResultToJson } from "../lib/test-commands";
+import { IFoundElement, performDropFileCommand, performInsertCommand, performTestCommand, performViewportCommand, testResultToJson } from "../lib/test-commands";
 
 function fakeElement(): IFoundElement & { clicks: number; focused: boolean; events: string[] } {
     const element = {
@@ -118,5 +118,24 @@ describe("performInsertCommand", () => {
     test("a command with no text is a failure", () => {
         const result = performInsertCommand({ find: () => fakeElement() }, { command: "insert", dataId: "notes" }, () => true);
         expect(result.ok).toBe(false);
+    });
+});
+
+describe("performDropFileCommand", () => {
+    test("dispatches the drop event for the file on the element", () => {
+        const element = fakeElement();
+        const made: string[] = [];
+        const result = performDropFileCommand({ find: () => element }, { command: "drop-file", dataId: "zone", fileName: "a.txt", fileSize: 3 }, (fileName, fileSize) => {
+            made.push(`${fileName} ${fileSize}`);
+            return new Event("drop");
+        });
+        expect(result).toEqual({ ok: true });
+        expect(made).toEqual(["a.txt 3"]);
+        expect(element.events).toEqual(["drop"]);
+    });
+
+    test("fails when the element is missing or the command lacks the file", () => {
+        expect(performDropFileCommand({ find: () => null }, { command: "drop-file", dataId: "zone", fileName: "a", fileSize: 1 }, () => new Event("drop")).ok).toBe(false);
+        expect(performDropFileCommand({ find: () => fakeElement() }, { command: "drop-file", dataId: "zone" }, () => new Event("drop")).ok).toBe(false);
     });
 });

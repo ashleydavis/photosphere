@@ -10,7 +10,7 @@ import type { IJsonObject } from "ziggy-bridge";
 // A command from the test control connection.
 //
 export interface ITestCommand {
-    // What to do: ready, click, type, get-value, get-text or exists.
+    // What to do: ready, click, type, get-value, get-text, exists, insert, viewport or drop-file.
     command: string;
 
     // The data-id of the element to act on.
@@ -18,6 +18,12 @@ export interface ITestCommand {
 
     // The text to type, for the type command.
     text?: string;
+
+    // The name of the file to drop, for the drop-file command.
+    fileName?: string;
+
+    // The size in bytes of the file to drop, for the drop-file command.
+    fileSize?: number;
 }
 
 //
@@ -139,5 +145,21 @@ export function performInsertCommand(finder: IElementFinder, command: ITestComma
     if (!insertText(command.text)) {
         return { ok: false, error: "The browser refused to insert the text." };
     }
+    return { ok: true };
+}
+
+//
+// Answers the drop-file command: drops a file of the given name and size on the element, as the browser does when the user drops a
+// file there, so the page's drop handling runs. The page gives the function that makes the drop event, which carries a File.
+//
+export function performDropFileCommand(finder: IElementFinder, command: ITestCommand, makeDropEvent: (fileName: string, fileSize: number) => Event): ITestResult {
+    if (command.dataId === undefined || command.fileName === undefined || command.fileSize === undefined) {
+        return { ok: false, error: "The drop-file command needs a dataId, a fileName and a fileSize." };
+    }
+    const element = finder.find(command.dataId);
+    if (element === null) {
+        return { ok: false, error: `No element has the data-id ${command.dataId}.` };
+    }
+    element.dispatchEvent(makeDropEvent(command.fileName, command.fileSize));
     return { ok: true };
 }

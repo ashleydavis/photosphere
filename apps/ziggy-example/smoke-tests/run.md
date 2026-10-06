@@ -23,6 +23,9 @@ Builds the example twice for the platform, once with the test hooks and once wit
 - `8-release-has-no-hooks`: the release build has no control connection.
 - `9-quit-ends-everything`: quitting with tasks running ends the app and everything it started.
 - `10-pickers`: the file and folder buttons show what the dialogs return, several files, a folder, a save location and a cancel. The scenario answers each dialog through the control connection, so no native dialog is shown.
+- `16-media-server`: the page loads an image and a video from the loopback HTTP server in the example's core, and asks it for a range of bytes. The video is read to its metadata only, because the Android emulator's software video decoding crashes the emulator.
+- `17-page-storage`: a value the page writes to `localStorage` and to IndexedDB is still there after the app is quit and started again. It waits before the restart because Android's web view writes `localStorage` to disk a few seconds after the page sets it.
+- `18-keep-alive-survives-leaving`: a keep-alive background task goes on counting in a file in the data directory when the window is closed (a desktop) or the app is sent to the background (a phone). On a desktop the app then ends by itself with the task, and on Android the foreground service is running.
 
 The scenarios in `desktop-only` run on Linux, Windows and macOS and not on a phone, because the menu is a desktop feature. They choose menu items through the control connection's `menu` command, which calls the shell's own function for the item, the one a click runs, so the shell's actions really happen:
 
@@ -31,5 +34,7 @@ The scenarios in `desktop-only` run on Linux, Windows and macOS and not on a pho
 - `13-menu-edit`: Select All, Cut, Paste, Copy, Undo and Redo edit the page's text area.
 - `14-menu-quit`: Quit ends the app and everything it started, with tasks running.
 - `15-menu-devtools`: Toggle Developer Tools opens and closes the developer tools, seen the way each platform shows them.
+- `19-normal-task-ends-with-window`: closing the window with only a normal background task running ends the app.
+- `20-drop-files`: a file dropped on the window gets its real path from `getPathForFile`, and a file of another size does not. The drop is faked in two steps, because no tool can drag a file into the window: the `drop` command records it with the core and `drop-file` gives the page a drop event. The shell's own reading of a real drop is tested by hand.
 
 Toggle Full Screen is not smoke tested. The Linux suite runs on a virtual display with no window manager, and nothing honours a request for full screen there, so there is nothing to see change.

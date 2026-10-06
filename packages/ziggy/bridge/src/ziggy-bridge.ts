@@ -1,5 +1,5 @@
 //
-// The page's view of Ziggy: the four methods every shell exposes as window.ziggy, and the JSON types messages are made of.
+// The page's view of Ziggy: the methods every shell exposes as window.ziggy, and the JSON types messages are made of.
 //
 
 //
@@ -20,7 +20,7 @@ export type IJsonValue = string | number | boolean | null | IJsonValue[] | IJson
 export type IMessageCallback<TData> = (data: TData) => void;
 
 //
-// What every shell injects into the page as window.ziggy. Nothing wider than these four methods is exposed, and the
+// What every shell injects into the page as window.ziggy. Nothing wider than these methods is exposed, and the
 // web view's own native handle is never used by the page directly.
 //
 export interface IZiggyBridge {
@@ -43,6 +43,12 @@ export interface IZiggyBridge {
     // Removes every callback registered for a channel.
     //
     removeAllListeners(channel: string): void;
+
+    //
+    // Returns the absolute path of a file from the drop event of a file dropped on the window, or undefined for a File that was not dropped. The same as
+    // Electron's webUtils.getPathForFile, and synchronous like it.
+    //
+    getPathForFile(file: File): string | undefined;
 }
 
 declare global {

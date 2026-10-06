@@ -36,6 +36,7 @@ ziggy_platform_start() {
     local app="$ZIGGY_SMOKE_RUN_DIR/$kind/ziggy-example/ziggy-example.exe"
     local log="$test_dir/app.log"
     local port_file="$test_dir/control-port.txt"
+    rm -f "$port_file"
     mkdir -p "$test_dir/data"
     local pid pgid
     read -r pid pgid < <(launch_in_process_group "$log" env \
@@ -118,4 +119,12 @@ ziggy_platform_devtools_visible() {
     local windows
     windows="$(tasklist //v //fo csv //nh //fi "IMAGENAME eq msedgewebview2.exe")" || fail "could not list the WebView2 windows"
     printf '%s\n' "$windows" | grep -qF "DevTools - file:///$(windows_native_path "$ZIGGY_SMOKE_RUN_DIR")/"
+}
+
+ziggy_platform_leave_app() {
+    choose_menu_item close-window
+}
+
+ziggy_platform_process_alive() {
+    ziggy_platform_is_running "$1"
 }

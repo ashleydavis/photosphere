@@ -92,6 +92,17 @@ pub fn exportApi(comptime app: core_module.AppHandlers) void {
             return true;
         }
 
+        fn filesDropped(handle: ?*core_module.Core, paths_ptr: [*]const u8, paths_len: usize) callconv(.c) bool {
+            const core = handle orelse {
+                @panic("ziggy_files_dropped called with a null handle");
+            };
+            core.filesDropped(paths_ptr[0..paths_len]) catch |err| {
+                std.debug.print("ziggy_files_dropped failed: {s}\n", .{@errorName(err)});
+                return false;
+            };
+            return true;
+        }
+
         fn testHooksEnabled() callconv(.c) bool {
             return build_options.test_hooks;
         }
@@ -105,4 +116,5 @@ pub fn exportApi(comptime app: core_module.AppHandlers) void {
     @export(&Api.injectScript, .{ .name = "ziggy_inject_script" });
     @export(&Api.parseAccelerator, .{ .name = "ziggy_parse_accelerator" });
     @export(&Api.testHooksEnabled, .{ .name = "ziggy_test_hooks_enabled" });
+    @export(&Api.filesDropped, .{ .name = "ziggy_files_dropped" });
 }

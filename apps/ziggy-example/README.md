@@ -9,6 +9,10 @@ A small complete app built on Ziggy, kept as the reference for building an app o
 - The edges of the bridge: a multi-megabyte payload, text with quotes, newlines and non-ASCII characters, an error reply, and a file written and read in the app's private data directory.
 - A native host callback: the page asks for the operating system's version, a task calls the shell's callback and the answer comes back to the page.
 - File and folder pickers: three buttons ask the core for the native dialogs, on the same channels and with the same data and replies as the Electron app (`pick-files`, `pick-folder`, `pick-file`), and the page shows the paths chosen. A phone has no save dialog, so that button gives an error on iOS.
+- A loopback HTTP server in the core (the example's own code, not Ziggy's) that serves an example image and video to the page, which loads them and asks for a range of bytes.
+- Keep-alive tasks: a background task type registered as keep-alive that goes on running when the window is closed (a desktop) or the app is in the background (a phone), and a normal one that does not.
+- Page storage: `localStorage` and IndexedDB values the page writes and reads back after the app is started again.
+- Dropped files: a drop zone that shows the real path of a dropped file, from `window.ziggy.getPathForFile`.
 - A desktop menu defined once in Zig and drawn natively, with keyboard shortcuts that work anywhere in the window, and developer tools (Ctrl+Shift+I, or Cmd+Shift+I on a Mac) that open from it. A phone shows no menu.
 
 ## Where things are

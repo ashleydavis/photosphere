@@ -57,6 +57,12 @@ const WM_ZIGGY_PICK: c.UINT = c.WM_APP + 2;
 const WM_ZIGGY_MENU: c.UINT = c.WM_APP + 3;
 
 //
+// Posted by the core's keep-alive callback, from any thread, when the last task the app is kept running for has ended. The UI thread then
+// closes the window if it was already closed and hidden.
+//
+const WM_ZIGGY_KEEP_ALIVE_ENDED: c.UINT = c.WM_APP + 4;
+
+//
 
 //
 // The name of the window class the shell registers.
@@ -209,6 +215,12 @@ const Shell = struct {
     destroyed: std.atomic.Value(bool),
     // Set on the UI thread when the window starts closing, so the creation callbacks still to come do nothing.
     closing: bool,
+    // Set by the core while tasks the app must be kept running for are queued or running. Set from any thread.
+    keep_running: std.atomic.Value(bool),
+    // Set when the app was asked to quit, which closes the window even while tasks the app is kept running for are running.
+    quit_requested: std.atomic.Value(bool),
+    // Whether the window was closed and hidden, leaving the app running for those tasks.
+    window_hidden: bool,
     // The page's address as UTF-16, including the query in test mode. Owned.
     page_url: [:0]u16,
     // The script that exposes window.ziggy, as UTF-16. Owned.
@@ -273,6 +285,9 @@ pub fn run(app_config: AppConfig, args: []const [:0]const u8) !u8 {
         .queue = .empty,
         .destroyed = .init(false),
         .closing = false,
+        .keep_running = .init(false),
+        .quit_requested = .init(false),
+        .window_hidden = false,
         .page_url = undefined,
         .inject_script = undefined,
         .data_directory = undefined,
@@ -625,6 +640,14 @@ fn windowProc(window: c.HWND, message: c.UINT, wparam: c.WPARAM, lparam: c.LPARA
             handleMenuRequest(shell, @ptrFromInt(@as(usize, @intCast(lparam))));
             return 0;
         },
+        WM_ZIGGY_KEEP_ALIVE_ENDED => {
+            if (shell.window_hidden and !shell.keep_running.load(.acquire)) {
+                if (c.PostMessageW(window, c.WM_CLOSE, 0, 0) == 0) {
+                    fatal("could not post a close to the window, error {d}", .{c.GetLastError()});
+                }
+            }
+            return 0;
+        },
         WM_ZIGGY_PICK => {
             handlePickRequest(shell, @ptrFromInt(@as(usize, @intCast(lparam))));
             return 0;
@@ -634,6 +657,13 @@ fn windowProc(window: c.HWND, message: c.UINT, wparam: c.WPARAM, lparam: c.LPARA
             return 0;
         },
         c.WM_CLOSE => {
+            // Closing the window ends the app, except while tasks the app is kept running for are queued or running and the app has
+            // not been asked to quit: then the window is hidden and the app keeps running until the last of those tasks ends.
+            if (shell.keep_running.load(.acquire) and !shell.quit_requested.load(.acquire)) {
+                _ = c.ShowWindow(window, c.SW_HIDE);
+                shell.window_hidden = true;
+                return 0;
+            }
             shell.closing = true;
             destroyCore(shell);
             closeWebView(shell);
@@ -771,11 +801,26 @@ fn osVersion(user_data: ?*anyopaque, buffer: [*c]u8, capacity: usize) callconv(.
 }
 
 //
+// The core's keep-alive callback. It can be called from any thread, so when the app need no longer be kept running it posts to the
+// UI thread, which closes the window if it was already closed.
+//
+fn keepAlive(user_data: ?*anyopaque, keep_running: bool) callconv(.c) void {
+    const shell: *Shell = @ptrCast(@alignCast(user_data.?));
+    shell.keep_running.store(keep_running, .release);
+    if (!keep_running) {
+        if (c.PostMessageW(shell.window, WM_ZIGGY_KEEP_ALIVE_ENDED, 0, 0) == 0) {
+            fatal("could not post to the UI thread, error {d}", .{c.GetLastError()});
+        }
+    }
+}
+
+//
 // The native host callback that quits the application, asked for by the test control connection. It can be called from any
 // thread, so it posts a close to the UI thread, which closes the window the same way the user closing it does.
 //
 fn quit(user_data: ?*anyopaque) callconv(.c) void {
     const shell: *Shell = @ptrCast(@alignCast(user_data.?));
+    shell.quit_requested.store(true, .release);
     if (c.PostMessageW(shell.window, c.WM_CLOSE, 0, 0) == 0) {
         fatal("could not post a close to the UI thread, error {d}", .{c.GetLastError()});
     }
@@ -833,6 +878,7 @@ fn onControllerCreated(shell: *Shell, controller: *c.ICoreWebView2Controller) vo
     config.quit = quit;
     config.pick_paths = pickPaths;
     config.menu_action = menuAction;
+    config.keep_alive = keepAlive;
     var system_info: c.SYSTEM_INFO = undefined;
     c.GetSystemInfo(&system_info);
     config.worker_threads = system_info.dwNumberOfProcessors;
@@ -1064,6 +1110,12 @@ fn runAction(shell: *Shell, action: []const u8) void {
     };
     switch (known) {
         .quit => {
+            shell.quit_requested.store(true, .release);
+            if (c.PostMessageW(shell.window, c.WM_CLOSE, 0, 0) == 0) {
+                fatal("could not post a close to the window, error {d}", .{c.GetLastError()});
+            }
+        },
+        .close_window => {
             if (c.PostMessageW(shell.window, c.WM_CLOSE, 0, 0) == 0) {
                 fatal("could not post a close to the window, error {d}", .{c.GetLastError()});
             }
@@ -1647,6 +1699,51 @@ fn controllerInvoke(this: [*c]c.ICoreWebView2CreateCoreWebView2ControllerComplet
 }
 
 //
+// Records the files that came with a message from the page, which WebView2 gives the native side as objects with real paths,
+// as a drop with the core.
+//
+fn recordPostedFiles(core: ?*anyopaque, args: [*c]c.ICoreWebView2WebMessageReceivedEventArgs) void {
+    var args2: ?*c.ICoreWebView2WebMessageReceivedEventArgs2 = null;
+    check("QueryInterface for the message arguments with objects", args.*.lpVtbl.*.QueryInterface.?(args, &c.IID_ICoreWebView2WebMessageReceivedEventArgs2, @ptrCast(&args2)));
+    defer _ = args2.?.lpVtbl.*.Release.?(args2.?);
+    var objects: [*c]c.ICoreWebView2ObjectCollectionView = null;
+    check("get_AdditionalObjects", args2.?.lpVtbl.*.get_AdditionalObjects.?(args2.?, &objects));
+    if (objects == null) {
+        return;
+    }
+    defer _ = objects.*.lpVtbl.*.Release.?(objects);
+    var count: c.UINT = 0;
+    check("get_Count", objects.*.lpVtbl.*.get_Count.?(objects, &count));
+    var paths: std.ArrayList([]u8) = .empty;
+    defer {
+        for (paths.items) |path| {
+            std.heap.c_allocator.free(path);
+        }
+        paths.deinit(std.heap.c_allocator);
+    }
+    var index: c.UINT = 0;
+    while (index < count) : (index += 1) {
+        var object: [*c]c.IUnknown = null;
+        check("GetValueAtIndex", objects.*.lpVtbl.*.GetValueAtIndex.?(objects, index, &object));
+        defer _ = object.*.lpVtbl.*.Release.?(object);
+        var file: ?*c.ICoreWebView2File = null;
+        if (object.*.lpVtbl.*.QueryInterface.?(object, &c.IID_ICoreWebView2File, @ptrCast(&file)) < 0) {
+            // An object that is not a file is not part of a drop.
+            continue;
+        }
+        defer _ = file.?.lpVtbl.*.Release.?(file.?);
+        var wide: [*c]c.WCHAR = null;
+        check("get_Path", file.?.lpVtbl.*.get_Path.?(file.?, &wide));
+        paths.append(std.heap.c_allocator, takeAddress(wide)) catch @panic("out of memory recording a drop");
+    }
+    const json = std.json.Stringify.valueAlloc(std.heap.c_allocator, paths.items, .{}) catch @panic("out of memory recording a drop");
+    defer std.heap.c_allocator.free(json);
+    if (!c.ziggy_files_dropped(core, json.ptr, json.len)) {
+        std.debug.print("could not record the dropped files: {s}\n", .{json});
+    }
+}
+
+//
 // A message from the page: hands it to the core.
 //
 fn webMessageInvoke(this: [*c]c.ICoreWebView2WebMessageReceivedEventHandler, sender: [*c]c.ICoreWebView2, args: [*c]c.ICoreWebView2WebMessageReceivedEventArgs) callconv(.c) c.HRESULT {
@@ -1662,6 +1759,12 @@ fn webMessageInvoke(this: [*c]c.ICoreWebView2WebMessageReceivedEventHandler, sen
     }
     const text = takeAddress(wide);
     defer std.heap.c_allocator.free(text);
+    if (std.mem.eql(u8, text, "ziggy-file")) {
+        // The page's getPathForFile handed the web view the File itself, which has its real path. It is recorded with the core, and the
+        // page's request for the path follows on the same channel.
+        recordPostedFiles(core, args);
+        return c.S_OK;
+    }
     c.ziggy_post_message(core, text.ptr, text.len);
     return c.S_OK;
 }

@@ -173,3 +173,31 @@ pub fn osVersionHandler(context: *TaskContext, data: std.json.Value) anyerror!?[
     try sendOutput(context, "asked the operating system for its version");
     return text;
 }
+
+//
+// Counts in a file in the app's data directory, one step every 100 milliseconds for "durationMs", so something outside the app can
+// see whether the task is still running while the app's window is closed or the app is in the background. The file's name is the
+// "file" field of the data, and it holds the number of steps so far. The example registers it twice, as a keep-alive task type and as
+// a normal one.
+//
+pub fn backgroundCountHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    const duration_ms = json_util.getInteger(data, "durationMs") orelse 20000;
+    const file_name = json_util.getString(data, "file") orelse {
+        return error.MissingFile;
+    };
+    const path = try std.fs.path.join(context.arena, &.{ std.mem.span(context.config().data_dir), file_name });
+    var elapsed: i64 = 0;
+    var step: i64 = 0;
+    while (elapsed < duration_ms) {
+        try context.checkCancelled();
+        step += 1;
+        const text = try std.fmt.allocPrint(context.arena, "{d}\n", .{step});
+        try std.Io.Dir.cwd().writeFile(context.io(), .{
+            .sub_path = path,
+            .data = text,
+        });
+        try context.io().sleep(.fromMilliseconds(100), .awake);
+        elapsed += 100;
+    }
+    return try std.fmt.allocPrint(context.arena, "{{\"steps\":{d}}}", .{step});
+}

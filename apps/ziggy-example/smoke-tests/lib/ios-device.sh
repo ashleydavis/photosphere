@@ -400,3 +400,16 @@ ziggy_platform_has_control_port() {
     fi
     [ -n "$(ziggy_ios_device_read_port "$test_dir")" ]
 }
+
+#
+# Sending the app to the background is not done on a connected device, where lldb holds the app. Scenarios that need it fail here.
+#
+ziggy_platform_leave_app() {
+    echo "Sending the app to the background is not implemented for a connected iPhone or iPad. Run this scenario on the simulator." >&2
+    return 1
+}
+
+ziggy_platform_process_alive() {
+    echo "Checking the app's process while it is in the background is not implemented for a connected iPhone or iPad. Run this scenario on the simulator." >&2
+    return 1
+}

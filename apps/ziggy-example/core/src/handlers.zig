@@ -5,6 +5,7 @@
 const ziggy = @import("ziggy-core");
 const channels = @import("lib/channels.zig");
 const hello_tasks = @import("lib/hello-tasks.zig");
+pub const media_server = @import("lib/media-server.zig");
 const menu = @import("lib/menu.zig");
 const pickers = @import("lib/pickers.zig");
 const page = @import("page-files");
@@ -32,6 +33,9 @@ pub const app = ziggy.core.AppHandlers{
         .{ .name = "hello-child", .handler = hello_tasks.helloChildHandler },
         .{ .name = "hello-fail", .handler = hello_tasks.helloFailHandler },
         .{ .name = "os-version", .handler = hello_tasks.osVersionHandler },
+        .{ .name = "media-server", .handler = media_server.mediaServerHandler },
+        .{ .name = "background-keep-alive", .handler = hello_tasks.backgroundCountHandler, .kind = .keep_alive },
+        .{ .name = "background-normal", .handler = hello_tasks.backgroundCountHandler },
         .{ .name = "pick-folder", .handler = pickers.pickFolderHandler },
         .{ .name = "pick-files", .handler = pickers.pickFilesHandler },
         .{ .name = "pick-file", .handler = pickers.pickFileHandler },

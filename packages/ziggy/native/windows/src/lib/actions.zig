@@ -9,6 +9,7 @@ const std = @import("std");
 //
 pub const Action = enum {
     quit,
+    close_window,
     reload,
     toggle_devtools,
     toggle_fullscreen,

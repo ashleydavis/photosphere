@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- No INTERNET permission: the app's page is in the APK and external links open in the system browser. -->
+    <!-- The example's media server listens on the loopback address, and opening a socket needs this permission. The app reaches no
+         other host: its page is in the APK and external links open in the system browser. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:label="Ziggy example"
         android:allowBackup="false"
-        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true">
         <!-- exported is required for an activity with an intent filter from Android 12, and the launcher needs it. The
              configuration changes are handled in place, because recreating the activity would destroy the core. -->

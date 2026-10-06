@@ -130,6 +130,8 @@ pub const task_handlers = [_]task_runner.TaskHandlerEntry{
     .{ .name = "flooder", .handler = flooderTask },
     .{ .name = "pick-open", .handler = pickOpenTask },
     .{ .name = "pick-save", .handler = pickSaveTask },
+    .{ .name = "keep-sleep", .handler = sleepTask, .kind = .keep_alive },
+    .{ .name = "keep-parent", .handler = parentTask, .kind = .keep_alive },
 };
 fn pickOpenTask(context: *task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const title: ?[]const u8 = if (data == .string) data.string else null;

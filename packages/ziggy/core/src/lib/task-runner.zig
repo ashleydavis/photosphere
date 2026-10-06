@@ -21,6 +21,17 @@ const ZiggyConfig = types.ZiggyConfig;
 pub const TaskHandler = *const fn (context: *TaskContext, data: std.json.Value) anyerror!?[]const u8;
 
 //
+// Whether a task type keeps the app running when the app is not in the foreground. A task of a keep-alive type that is queued or
+// running makes the core ask the shell to keep the app running, until the last such task ends.
+//
+pub const TaskKind = enum {
+    // An ordinary task. The platform may stop it when the app is in the background.
+    normal,
+    // A task the app must be kept running for, on every platform, by the means that platform has.
+    keep_alive,
+};
+
+//
 // A task type and its handler.
 //
 pub const TaskHandlerEntry = struct {
@@ -28,6 +39,8 @@ pub const TaskHandlerEntry = struct {
     name: []const u8,
     // The function that runs the task.
     handler: TaskHandler,
+    // Whether the app is kept running for tasks of this type. A child task takes its parent's kind.
+    kind: TaskKind = .normal,
 };
 
 //
@@ -100,6 +113,9 @@ const Task = struct {
     cancelled: std.atomic.Value(bool),
     // The task that queued this one.
     parent: ?*Task,
+    // Whether the app is kept running for this task: a top level task whose type is keep-alive. A child is covered by its parent, which
+    // lives at least as long, so it takes its parent's kind without being counted again.
+    keep_alive: bool,
     // Where the task is in its life.
     state: TaskState,
     // Children that have been queued and have not finished.
@@ -276,6 +292,8 @@ pub const TaskRunner = struct {
     pick_override: ?PickOverride,
     // Set once shutdown has begun, so that nothing more is sent to the shell.
     silent: std.atomic.Value(bool),
+    // The number of top level keep-alive tasks that are queued or running. Guarded by the mutex.
+    keep_alive_count: u32,
 
     //
     // Creates a runner and starts its worker threads. It must stay where it is: the threads hold its address.
@@ -297,6 +315,7 @@ pub const TaskRunner = struct {
             .shutting_down = false,
             .pick_override = null,
             .silent = .init(false),
+            .keep_alive_count = 0,
         };
         errdefer self.stop();
         var worker_index: u32 = 0;
@@ -355,7 +374,39 @@ pub const TaskRunner = struct {
         try self.live.append(self.allocator, task);
         errdefer _ = self.live.pop();
         try self.queue.append(self.allocator, task);
+        if (task.keep_alive) {
+            self.keep_alive_count += 1;
+            if (self.keep_alive_count == 1) {
+                self.callKeepAlive(true);
+            }
+        }
         self.changed.broadcast(self.io);
+    }
+
+    //
+    // The kind of a task type, normal when the type is not known (the task then fails as an unknown type).
+    //
+    fn kindOf(self: *TaskRunner, task_type: []const u8) TaskKind {
+        for (self.handlers) |entry| {
+            if (std.mem.eql(u8, entry.name, task_type)) {
+                return entry.kind;
+            }
+        }
+        return .normal;
+    }
+
+    //
+    // Tells the shell to keep the app running, or that it need not. Called while the lock is held, so the shell hears the changes in
+    // the order they happen. Nothing is sent once shutdown has begun.
+    //
+    fn callKeepAlive(self: *TaskRunner, keep_running: bool) void {
+        if (self.silent.load(.acquire)) {
+            return;
+        }
+        const keep_alive = self.config.keep_alive orelse {
+            return;
+        };
+        keep_alive(self.config.user_data, keep_running);
     }
 
     //
@@ -429,6 +480,7 @@ pub const TaskRunner = struct {
             .sequence = 0,
             .cancelled = .init(false),
             .parent = parent,
+            .keep_alive = parent == null and self.kindOf(task_type) == .keep_alive,
             .state = .queued,
             .inflight_children = 0,
             .children = .empty,
@@ -618,6 +670,12 @@ pub const TaskRunner = struct {
                 if (live_task == task) {
                     _ = self.live.orderedRemove(index);
                     break;
+                }
+            }
+            if (task.keep_alive) {
+                self.keep_alive_count -= 1;
+                if (self.keep_alive_count == 0) {
+                    self.callKeepAlive(false);
                 }
             }
         }

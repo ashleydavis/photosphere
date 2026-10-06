@@ -66,6 +66,69 @@
         listeners.delete(channel);
     }
 
+    // Dropped files. A web view does not give the page the real paths of the files dropped on it: WebKitGTK lists file addresses as a
+    // type of the drop and gives no way to read them, and no File objects, and the others give Files that have no path readable by the
+    // page. The shell reads the paths natively and records them with the core. This catches every drop of files before the page does,
+    // asks the core for the paths of the last drop, and fires the drop again holding one File per path, which it makes itself and
+    // remembers the path of. getPathForFile then answers from that memory, as Electron's does, so a page written for Electron runs
+    // unchanged. The Files are empty: a page that wants a dropped file's contents reads the path. WebView2 hands the shell the Files
+    // themselves, so there the shell reads their paths first. A drop of something else, such as a link, is left alone.
+    var redispatchedDrops = new WeakSet();
+    var pathsOfDroppedFiles = new WeakMap();
+
+    function getPathForFile(file) {
+        return pathsOfDroppedFiles.get(file);
+    }
+
+    function isDropOfFiles(transfer) {
+        var types = Array.prototype.slice.call(transfer.types);
+        if (transfer.files.length > 0 || types.indexOf("Files") >= 0) {
+            return true;
+        }
+        // A file's address is listed but cannot be read. A link's address can be, and is not a file.
+        return types.indexOf("text/uri-list") >= 0 && transfer.getData("text/uri-list").indexOf("http") !== 0;
+    }
+
+    function onDrop(event) {
+        if (redispatchedDrops.has(event) || !event.dataTransfer || !isDropOfFiles(event.dataTransfer)) {
+            return;
+        }
+        var files = Array.prototype.slice.call(event.dataTransfer.files);
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        var target = event.target;
+        if (files.length > 0 && window.chrome && window.chrome.webview && window.chrome.webview.postMessageWithAdditionalObjects) {
+            try {
+                window.chrome.webview.postMessageWithAdditionalObjects("ziggy-file", files);
+            }
+            catch (error) {
+                // WebView2 takes only Files that came from a drop. The core is still asked, and answers with the last drop it was told of.
+                console.warn("Ziggy: WebView2 would not hand the shell these files, so their paths are not known from the files themselves.", error);
+            }
+        }
+        invoke("get-dropped-paths", null).then(function (paths) {
+            var transfer = new window.DataTransfer();
+            paths.forEach(function (path) {
+                var file = new window.File([], path.split(/[\\/]/).pop());
+                pathsOfDroppedFiles.set(file, path);
+                transfer.items.add(file);
+            });
+            var again = new window.DragEvent("drop", {
+                bubbles: true,
+                cancelable: true,
+                composed: true,
+                clientX: event.clientX,
+                clientY: event.clientY,
+                dataTransfer: transfer,
+            });
+            redispatchedDrops.add(again);
+            target.dispatchEvent(again);
+        });
+    }
+
+    window.addEventListener("drop", onDrop, true);
+
+
     function receive(message) {
         if (message.id !== undefined && message.ok !== undefined) {
             var request = pending.get(message.id);
@@ -100,6 +163,7 @@
             send: send,
             onMessage: onMessage,
             removeAllListeners: removeAllListeners,
+            getPathForFile: getPathForFile,
         }),
     });
     Object.defineProperty(window, "__ziggyReceive", { value: receive });

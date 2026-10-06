@@ -29,6 +29,8 @@
         <button data-id="cancel-source">Cancel the long task source</button>
         <button data-id="cancel-many-first">Cancel the first of the three</button>
         <button data-id="start-fail">Start failing task</button>
+        <button data-id="start-keep-alive">Start a keep-alive background task</button>
+        <button data-id="start-background-normal">Start a normal background task</button>
     </section>
     <section>
         <button data-id="send-large">Send large payload</button>
@@ -48,6 +50,25 @@
         <button data-id="pick-folder">Pick a folder...</button>
         <button data-id="pick-file">Pick where to save a file...</button>
         <pre data-id="picked"></pre>
+    </section>
+    <section>
+        <h2>Media from a loopback server</h2>
+        <button data-id="start-media">Start the media server</button>
+        <button data-id="cancel-media">Stop the media server</button>
+        <pre data-id="media-status"></pre>
+        <img data-id="media-image" width="160" height="120" alt="example" />
+        <video data-id="media-video" width="160" height="120" controls muted preload="metadata"></video>
+    </section>
+    <section>
+        <h2>Dropped files</h2>
+        <div data-id="drop-zone" style="border: 2px dashed #8888; padding: 24px;">Drop files here</div>
+        <pre data-id="drop-result"></pre>
+    </section>
+    <section>
+        <h2>Page storage</h2>
+        <button data-id="storage-write">Write to localStorage and IndexedDB</button>
+        <button data-id="storage-read">Read them back</button>
+        <pre data-id="storage-status"></pre>
     </section>
     <section>
         <h2>Output</h2>

@@ -20,6 +20,8 @@ pub const FakeShell = struct {
     messages: std.ArrayList([]u8),
     // The menu actions chosen through the menu_action callback, one per line.
     chosen_actions: std.ArrayList(u8),
+    // What the keep_alive callback was told, in order: true to keep the app running, false to stop.
+    keep_alive_calls: std.ArrayList(bool),
     // Set by the quit callback.
     quit_called: std.atomic.Value(bool),
 
@@ -31,6 +33,7 @@ pub const FakeShell = struct {
             .messages = .empty,
             .quit_called = .init(false),
             .chosen_actions = .empty,
+            .keep_alive_calls = .empty,
         };
     }
 
@@ -40,6 +43,7 @@ pub const FakeShell = struct {
         }
         self.messages.deinit(self.allocator);
         self.chosen_actions.deinit(self.allocator);
+        self.keep_alive_calls.deinit(self.allocator);
     }
 
     fn io(self: *FakeShell) std.Io {
@@ -107,6 +111,16 @@ pub const FakeShell = struct {
         self.chosen_actions.append(self.allocator, '\n') catch @panic("out of memory");
     }
 
+    //
+    // The keep-alive callback: records what the core asked.
+    //
+    pub fn keepAlive(user_data: ?*anyopaque, keep_running: bool) callconv(.c) void {
+        const self: *FakeShell = @ptrCast(@alignCast(user_data.?));
+        self.mutex.lockUncancelable(self.io());
+        defer self.mutex.unlock(self.io());
+        self.keep_alive_calls.append(self.allocator, keep_running) catch @panic("out of memory");
+    }
+
     pub fn quit(user_data: ?*anyopaque) callconv(.c) void {
         const self: *FakeShell = @ptrCast(@alignCast(user_data.?));
         self.quit_called.store(true, .release);
@@ -123,6 +137,7 @@ pub const FakeShell = struct {
             .quit = quit,
             .pick_paths = pickPaths,
             .menu_action = menuAction,
+            .keep_alive = keepAlive,
             .worker_threads = worker_threads,
             .max_concurrent_child_tasks = max_children,
             .app_url_prefix = "file:///app/dist/",

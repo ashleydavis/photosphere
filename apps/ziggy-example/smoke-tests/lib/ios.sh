@@ -35,13 +35,17 @@ ziggy_platform_start() {
     local kind="$2"
     local app="$ZIGGY_SMOKE_RUN_DIR/$kind-build/Build/Products/Release-iphonesimulator/ZiggyExample.app"
     local port_file="$test_dir/control-port.txt"
+    rm -f "$port_file"
     local udid
     udid="$(apple_pick_simulator)" || return 1
     echo "$udid" > "$test_dir/$IOS_UDID_FILE_NAME"
     # The test and release builds share a bundle identifier, so installing replaces the other one. Terminating first fails
-    # when the app is not running, which is the usual case and not an error.
+    # when the app is not running, which is the usual case and not an error. A restart does not install again, which keeps the
+    # app's data.
     xcrun simctl terminate "$udid" "$IOS_BUNDLE_ID" > /dev/null 2>&1 || true
-    xcrun simctl install "$udid" "$app" || return 1
+    if [ "${3:-}" != "keep-data" ]; then
+        xcrun simctl install "$udid" "$app" || return 1
+    fi
     local launched
     launched="$(SIMCTL_CHILD_ZIGGY_TEST_MODE=1 \
         SIMCTL_CHILD_ZIGGY_TEST_PORT_FILE="$port_file" \
@@ -112,4 +116,15 @@ ziggy_platform_artifact_files() {
 
 ziggy_platform_has_control_port() {
     [ -s "$1/control-port.txt" ]
+}
+
+#
+# Sends the app to the background by opening another app over it.
+#
+ziggy_platform_leave_app() {
+    xcrun simctl launch "$(cat "$1/$IOS_UDID_FILE_NAME")" com.apple.Preferences > /dev/null
+}
+
+ziggy_platform_process_alive() {
+    kill -0 "$(cat "$1/$IOS_PID_FILE_NAME")" 2>/dev/null
 }

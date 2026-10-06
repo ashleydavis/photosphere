@@ -269,6 +269,12 @@ final class ZiggyMenu: NSObject {
             return
         }
         switch action {
+        case "close-window":
+            guard let window = webView.window else {
+                ZiggyBridge.report("close-window: the web view is not in a window")
+                return
+            }
+            window.performClose(nil)
         case "quit":
             NSApplication.shared.terminate(nil)
         case "reload":
