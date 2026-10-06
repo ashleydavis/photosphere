@@ -55,7 +55,7 @@ Package: ziggy-example
 Version: $VERSION
 Architecture: $DEB_ARCHITECTURE
 Maintainer: Ziggy
-Depends: libgtk-3-0, libwebkit2gtk-4.1-0
+Depends: libgtk-3-0, libwebkit2gtk-4.1-0, gstreamer1.0-plugins-good, gstreamer1.0-libav
 Description: The Ziggy example app
  A small complete app built on Ziggy.
 CONTROL
