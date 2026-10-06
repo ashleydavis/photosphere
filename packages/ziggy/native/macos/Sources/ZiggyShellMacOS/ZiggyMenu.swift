@@ -255,7 +255,11 @@ final class ZiggyMenu: NSObject {
             // chooses the action with no event, so the open group is closed here and, except for undo and redo, which work
             // on closed groups, a new one is opened for the action's edit, as the event of a click would.
             if let undoManager = webView.undoManager, undoManager.groupsByEvent {
-                if undoManager.groupingLevel == 1 {
+                // Every open group is closed, not just a single one: undo raises an exception when any group is open ("undo
+                // was called with too many nested undo groups"), and the groups the earlier actions opened can add up to more
+                // than one before the event that would close them ever runs. The macOS smoke test job of the Ziggy example
+                // workflow (run 37458283805, scenario 13-menu-edit) crashed the app with that exception from this method.
+                while undoManager.groupingLevel > 0 {
                     undoManager.endUndoGrouping()
                 }
                 if action != "undo" && action != "redo" {
