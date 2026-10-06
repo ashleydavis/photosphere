@@ -77,3 +77,43 @@ ziggy_android_abi() {
             ;;
     esac
 }
+
+#
+# Writes the libc file Zig is given for an Android target, because Zig has no C library for Android and uses the NDK's. One file
+# per architecture, because the headers and the libraries differ. The libraries are the ones for the given SDK level, so
+# the program links only against what that level has. Usage: ziggy_android_write_libc_file <x86_64|arm64> <file> <sdk level>
+#
+ziggy_android_write_libc_file() {
+    local arch="$1"
+    local file="$2"
+    local sdk_level="$3"
+    local sysroot triple
+    sysroot="$ANDROID_HOME/ndk/$(ziggy_android_ndk_version)/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+    if [ "$(uname -s)" = "Darwin" ]; then
+        sysroot="$ANDROID_HOME/ndk/$(ziggy_android_ndk_version)/toolchains/llvm/prebuilt/darwin-x86_64/sysroot"
+    fi
+    if [ ! -d "$sysroot" ]; then
+        echo "ERROR: the NDK sysroot is not at $sysroot. Run setup-android.sh." >&2
+        return 1
+    fi
+    case "$arch" in
+        x86_64)
+            triple="x86_64-linux-android"
+            ;;
+        arm64)
+            triple="aarch64-linux-android"
+            ;;
+        *)
+            echo "ERROR: unknown architecture '$arch' (expected x86_64 or arm64)" >&2
+            return 1
+            ;;
+    esac
+    {
+        echo "include_dir=$sysroot/usr/include"
+        echo "sys_include_dir=$sysroot/usr/include/$triple"
+        echo "crt_dir=$sysroot/usr/lib/$triple/$sdk_level"
+        echo "msvc_lib_dir="
+        echo "kernel32_lib_dir="
+        echo "gcc_dir="
+    } > "$file"
+}

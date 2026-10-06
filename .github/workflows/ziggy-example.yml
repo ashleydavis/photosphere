@@ -81,13 +81,24 @@ jobs:
   ziggy-example-zig-unit-tests:
     # The unit tests of Ziggy's Zig code and of the example's, on each platform, because the behaviour of a test that runs
     # against the system web view differs between them. A job of its own, as zig-unit-tests is in release.yml, so a red unit
-    # test is not reported as a red build or a red smoke test.
+    # test is not reported as a red build or a red smoke test. The desktop platforms run the tests on the runner. Android runs
+    # the test programs on an emulator and iOS on a simulator, because a program built for a phone cannot run on the runner.
     # Setup takes about 5 minutes and a cold unit test build up to 25.
     timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - platform: linux
+            os: ubuntu-latest
+          - platform: macos
+            os: macos-latest
+          - platform: windows
+            os: windows-latest
+          - platform: android
+            os: ubuntu-latest
+          - platform: ios
+            os: macos-latest
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -123,7 +134,7 @@ jobs:
       # RuntimeLibraryMissing" when they are not installed. The ubuntu-latest run of the unit tests failed with that error
       # because nothing here installed them.
       - name: Install the web view's runtime libraries (Linux)
-        if: runner.os == 'Linux'
+        if: matrix.platform == 'linux'
         uses: ./.github/actions/install-apt-packages
         with:
           packages: libgtk-3-0 libwebkit2gtk-4.1-0
@@ -134,8 +145,58 @@ jobs:
           run: bun install
 
       - name: Run the Zig unit tests
+        if: matrix.platform == 'linux' || matrix.platform == 'macos' || matrix.platform == 'windows'
         shell: bash
         run: bun run test:zig
+
+      # The Android scripts need JDK 17, as in the android jobs of release.yml, and the NDK those jobs install.
+      - name: Setup JDK 17 (Android)
+        if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android NDK (Android)
+        if: matrix.platform == 'android'
+        uses: ./.github/actions/retry-install
+        with:
+          run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
+
+      - name: Enable KVM (Android)
+        if: matrix.platform == 'android'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # The script is one line, because this action runs each line of `script:` in a shell of its own, as the note on the
+      # Android smoke test job in release.yml says. PHOTOSPHERE_ANDROID_DEVICES names the emulator, because the script only
+      # picks an emulator of the repository's pool, a plugged-in device, or the one named here.
+      - name: Run the Zig unit tests on an emulator (Android)
+        if: matrix.platform == 'android'
+        timeout-minutes: 30
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          PHOTOSPHERE_ANDROID_DEVICES: emulator-5554
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          script: bun run --filter=ziggy-example test:zig:android
+
+      # The script runs the programs on a booted simulator and fails when none is, so one is booted here.
+      - name: Boot an iOS simulator (iOS)
+        if: matrix.platform == 'ios'
+        shell: bash
+        run: |
+          udid="$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))][0].udid')"
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+
+      - name: Run the Zig unit tests on a simulator (iOS)
+        if: matrix.platform == 'ios'
+        run: bun run --filter=ziggy-example test:zig:ios
 
   ziggy-example-smoke-tests:
     # The example's smoke tests on each desktop platform, as zig-smoke-tests is in release.yml: Linux on a virtual
