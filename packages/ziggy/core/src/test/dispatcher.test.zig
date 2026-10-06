@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const ziggy = @import("ziggy-core");
 const helpers = @import("helpers.zig");
 
@@ -99,7 +100,13 @@ test "get-platform reports the platform kind" {
     const core = try helpers.createCore(&shell, 1, 1);
     defer core.destroy();
     core.postMessage("{\"id\":5,\"channel\":\"get-platform\",\"data\":null}");
-    try shell.expectMessageContaining("\"platformKind\":\"desktop\"");
+    // Android and iOS are the mobile platforms, and every other platform is desktop. The test runs on both, so it names the
+    // kind each is expected to report.
+    const expected = if (builtin.os.tag == .ios or builtin.abi.isAndroid())
+        "\"platformKind\":\"mobile\""
+    else
+        "\"platformKind\":\"desktop\"";
+    try shell.expectMessageContaining(expected);
 }
 
 test "text with quotes, newlines and non-ASCII characters round trips unchanged" {
