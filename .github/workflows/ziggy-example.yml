@@ -74,9 +74,53 @@ jobs:
         with:
           run: bun install
 
+      - name: Restore the Zig build caches
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            apps/ziggy-example/core/.zig-cache
+            apps/ziggy-example/shells/linux/.zig-cache
+            apps/ziggy-example/shells/windows/.zig-cache
+            packages/ziggy/core/.zig-cache
+            packages/ziggy/native/linux/.zig-cache
+            packages/ziggy/native/windows/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-
+
+      # Every save is the restored cache plus what the job built, so without this the cache only grows. The same limit and
+      # the same move aside as in build-zig-linux-x64 in release.yml, for each of the example's and Ziggy's cache directories.
+      - name: Start fresh Zig build caches when the restored ones have grown too big
+        shell: bash
+        run: |
+          for cache_dir in apps/ziggy-example/core apps/ziggy-example/shells/linux apps/ziggy-example/shells/windows packages/ziggy/core packages/ziggy/native/linux packages/ziggy/native/windows; do
+              if [ -d "$cache_dir/.zig-cache" ]; then
+                  megabytes="$(du -sm "$cache_dir/.zig-cache" | cut -f1)"
+                  echo "Restored Zig build cache of $cache_dir: ${megabytes} MB"
+                  if [ "$megabytes" -ge 5120 ]; then
+                      mv "$cache_dir/.zig-cache" "$RUNNER_TEMP/stale-zig-cache-$(basename "$cache_dir")"
+                      echo "Moved it aside to start a fresh one"
+                  fi
+              fi
+          done
+
       - name: Build and cross-build the Zig code
         shell: bash
         run: bun run compile:zig
+
+      # Always, so a job that fails part way still leaves what it compiled, as build-zig-linux-x64 does in release.yml.
+      - name: Save the Zig build caches
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/ziggy-example/core/.zig-cache
+            apps/ziggy-example/shells/linux/.zig-cache
+            apps/ziggy-example/shells/windows/.zig-cache
+            packages/ziggy/core/.zig-cache
+            packages/ziggy/native/linux/.zig-cache
+            packages/ziggy/native/windows/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
 
   ziggy-example-zig-unit-tests:
     # The unit tests of Ziggy's Zig code and of the example's, on each platform, because the behaviour of a test that runs
@@ -144,6 +188,36 @@ jobs:
         with:
           run: bun install
 
+      - name: Restore the Zig build caches
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            apps/ziggy-example/core/.zig-cache
+            apps/ziggy-example/shells/linux/.zig-cache
+            apps/ziggy-example/shells/windows/.zig-cache
+            packages/ziggy/core/.zig-cache
+            packages/ziggy/native/linux/.zig-cache
+            packages/ziggy/native/windows/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-unit-tests-${{ matrix.platform }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-unit-tests-${{ matrix.platform }}-
+
+      # Every save is the restored cache plus what the job built, so without this the cache only grows. The same limit and
+      # the same move aside as in build-zig-linux-x64 in release.yml, for each of the example's and Ziggy's cache directories.
+      - name: Start fresh Zig build caches when the restored ones have grown too big
+        shell: bash
+        run: |
+          for cache_dir in apps/ziggy-example/core apps/ziggy-example/shells/linux apps/ziggy-example/shells/windows packages/ziggy/core packages/ziggy/native/linux packages/ziggy/native/windows; do
+              if [ -d "$cache_dir/.zig-cache" ]; then
+                  megabytes="$(du -sm "$cache_dir/.zig-cache" | cut -f1)"
+                  echo "Restored Zig build cache of $cache_dir: ${megabytes} MB"
+                  if [ "$megabytes" -ge 5120 ]; then
+                      mv "$cache_dir/.zig-cache" "$RUNNER_TEMP/stale-zig-cache-$(basename "$cache_dir")"
+                      echo "Moved it aside to start a fresh one"
+                  fi
+              fi
+          done
+
       - name: Run the Zig unit tests
         if: matrix.platform == 'linux' || matrix.platform == 'macos' || matrix.platform == 'windows'
         shell: bash
@@ -197,6 +271,20 @@ jobs:
       - name: Run the Zig unit tests on a simulator (iOS)
         if: matrix.platform == 'ios'
         run: bun run --filter=ziggy-example test:zig:ios
+
+      # Always, so a job that fails part way still leaves what it compiled, as build-zig-linux-x64 does in release.yml.
+      - name: Save the Zig build caches
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/ziggy-example/core/.zig-cache
+            apps/ziggy-example/shells/linux/.zig-cache
+            apps/ziggy-example/shells/windows/.zig-cache
+            packages/ziggy/core/.zig-cache
+            packages/ziggy/native/linux/.zig-cache
+            packages/ziggy/native/windows/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-unit-tests-${{ matrix.platform }}-${{ github.sha }}
 
   ziggy-example-smoke-tests:
     # The example's smoke tests on each desktop platform, as zig-smoke-tests is in release.yml: Linux on a virtual
@@ -255,6 +343,36 @@ jobs:
         shell: bash
         run: bun run --filter=ziggy-example setup
 
+      - name: Restore the Zig build caches
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            apps/ziggy-example/core/.zig-cache
+            apps/ziggy-example/shells/linux/.zig-cache
+            apps/ziggy-example/shells/windows/.zig-cache
+            packages/ziggy/core/.zig-cache
+            packages/ziggy/native/linux/.zig-cache
+            packages/ziggy/native/windows/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-smoke-tests-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-smoke-tests-
+
+      # Every save is the restored cache plus what the job built, so without this the cache only grows. The same limit and
+      # the same move aside as in build-zig-linux-x64 in release.yml, for each of the example's and Ziggy's cache directories.
+      - name: Start fresh Zig build caches when the restored ones have grown too big
+        shell: bash
+        run: |
+          for cache_dir in apps/ziggy-example/core apps/ziggy-example/shells/linux apps/ziggy-example/shells/windows packages/ziggy/core packages/ziggy/native/linux packages/ziggy/native/windows; do
+              if [ -d "$cache_dir/.zig-cache" ]; then
+                  megabytes="$(du -sm "$cache_dir/.zig-cache" | cut -f1)"
+                  echo "Restored Zig build cache of $cache_dir: ${megabytes} MB"
+                  if [ "$megabytes" -ge 5120 ]; then
+                      mv "$cache_dir/.zig-cache" "$RUNNER_TEMP/stale-zig-cache-$(basename "$cache_dir")"
+                      echo "Moved it aside to start a fresh one"
+                  fi
+              fi
+          done
+
       - name: Run the smoke tests
         # Windows runs of this step have twice ended with "The hosted runner lost communication with the server" after
         # about 50 minutes (runs 37479157077 and 37488241174), and GitHub keeps no log for a job it loses, so nothing
@@ -263,6 +381,20 @@ jobs:
         timeout-minutes: 30
         shell: bash
         run: bun run test:ziggy-example
+
+      # Always, so a job that fails part way still leaves what it compiled, as build-zig-linux-x64 does in release.yml.
+      - name: Save the Zig build caches
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/ziggy-example/core/.zig-cache
+            apps/ziggy-example/shells/linux/.zig-cache
+            apps/ziggy-example/shells/windows/.zig-cache
+            packages/ziggy/core/.zig-cache
+            packages/ziggy/native/linux/.zig-cache
+            packages/ziggy/native/windows/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-smoke-tests-${{ github.sha }}
 
   ziggy-example-package:
     # Packages the example for every platform, as build-linux, build-windows, build-macos-arm64 and the mobile builds do in
@@ -336,6 +468,36 @@ jobs:
         if: matrix.platform == 'android'
         run: bun run --filter=ziggy-example setup
 
+      - name: Restore the Zig build caches
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            apps/ziggy-example/core/.zig-cache
+            apps/ziggy-example/shells/linux/.zig-cache
+            apps/ziggy-example/shells/windows/.zig-cache
+            packages/ziggy/core/.zig-cache
+            packages/ziggy/native/linux/.zig-cache
+            packages/ziggy/native/windows/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-package-${{ matrix.platform }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-package-${{ matrix.platform }}-
+
+      # Every save is the restored cache plus what the job built, so without this the cache only grows. The same limit and
+      # the same move aside as in build-zig-linux-x64 in release.yml, for each of the example's and Ziggy's cache directories.
+      - name: Start fresh Zig build caches when the restored ones have grown too big
+        shell: bash
+        run: |
+          for cache_dir in apps/ziggy-example/core apps/ziggy-example/shells/linux apps/ziggy-example/shells/windows packages/ziggy/core packages/ziggy/native/linux packages/ziggy/native/windows; do
+              if [ -d "$cache_dir/.zig-cache" ]; then
+                  megabytes="$(du -sm "$cache_dir/.zig-cache" | cut -f1)"
+                  echo "Restored Zig build cache of $cache_dir: ${megabytes} MB"
+                  if [ "$megabytes" -ge 5120 ]; then
+                      mv "$cache_dir/.zig-cache" "$RUNNER_TEMP/stale-zig-cache-$(basename "$cache_dir")"
+                      echo "Moved it aside to start a fresh one"
+                  fi
+              fi
+          done
+
       - name: Package
         shell: bash
         run: bun run package:ziggy-example:${{ matrix.platform }}
@@ -345,3 +507,17 @@ jobs:
         with:
           name: ziggy-example-${{ matrix.platform }}
           path: apps/ziggy-example/out/${{ matrix.platform }}/*
+
+      # Always, so a job that fails part way still leaves what it compiled, as build-zig-linux-x64 does in release.yml.
+      - name: Save the Zig build caches
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/ziggy-example/core/.zig-cache
+            apps/ziggy-example/shells/linux/.zig-cache
+            apps/ziggy-example/shells/windows/.zig-cache
+            packages/ziggy/core/.zig-cache
+            packages/ziggy/native/linux/.zig-cache
+            packages/ziggy/native/windows/.zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-package-${{ matrix.platform }}-${{ github.sha }}
