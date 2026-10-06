@@ -47,6 +47,8 @@
     "setup": "bash ./scripts/setup.sh",
     "compile:zig": "bash ./scripts/zig-packages.sh build && bash ./scripts/zig-packages.sh cross",
     "test:zig": "bash ./scripts/zig-packages.sh test",
+    "test:zig:android": "bash ./scripts/test-zig-mobile.sh android",
+    "test:zig:ios": "bash ./scripts/test-zig-mobile.sh ios",
     "distribute:android": "bash ./scripts/distribute-android.sh"
   },
   "dependencies": {

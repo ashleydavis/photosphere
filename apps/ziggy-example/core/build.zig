@@ -100,6 +100,21 @@ pub fn build(b: *std.Build) !void {
     test_module.addImport("ziggy-core", test_core.module("ziggy-core"));
     test_module.addImport(module_name, example_for_tests);
     const unit_test = b.addTest(.{ .root_module = test_module });
+    // The NDK has no libc.a for the sysroot's API level directory Zig looks in, only libc.so, so a test program for Android is
+    // linked dynamically. Zig's build failed with "failed to parse archive: FileNotFound" on libc.a, libm.a and libdl.a.
+    if (target.result.abi.isAndroid()) {
+        unit_test.linkage = .dynamic;
+    }
+    // Installs the unit test program without running it, under zig-out/test-bin, for a target that cannot run it here: the
+    // Android and iOS test scripts build it for their target and run it on the emulator or simulator.
+    const test_binary_step = b.step("test-binary", "Build the unit test program and install it without running it");
+    test_binary_step.dependOn(&b.addInstallArtifact(unit_test, .{
+        .dest_dir = .{
+            .override = .{
+                .custom = "test-bin",
+            },
+        },
+    }).step);
     const run_test = b.addRunArtifact(unit_test);
     run_test.setCwd(b.path("."));
     test_step.dependOn(&run_test.step);
