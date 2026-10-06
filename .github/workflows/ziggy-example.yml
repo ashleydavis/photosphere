@@ -198,9 +198,9 @@ jobs:
             packages/ziggy/core/.zig-cache
             packages/ziggy/native/linux/.zig-cache
             packages/ziggy/native/windows/.zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-unit-tests-${{ matrix.platform }}-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-unit-tests-${{ matrix.platform }}-
+            ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-
 
       # Every save is the restored cache plus what the job built, so without this the cache only grows. The same limit and
       # the same move aside as in build-zig-linux-x64 in release.yml, for each of the example's and Ziggy's cache directories.
@@ -284,7 +284,7 @@ jobs:
             packages/ziggy/core/.zig-cache
             packages/ziggy/native/linux/.zig-cache
             packages/ziggy/native/windows/.zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-unit-tests-${{ matrix.platform }}-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
 
   ziggy-example-smoke-tests:
     # The example's smoke tests on each desktop platform, as zig-smoke-tests is in release.yml: Linux on a virtual
@@ -353,9 +353,9 @@ jobs:
             packages/ziggy/core/.zig-cache
             packages/ziggy/native/linux/.zig-cache
             packages/ziggy/native/windows/.zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-smoke-tests-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-smoke-tests-
+            ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-
 
       # Every save is the restored cache plus what the job built, so without this the cache only grows. The same limit and
       # the same move aside as in build-zig-linux-x64 in release.yml, for each of the example's and Ziggy's cache directories.
@@ -394,7 +394,7 @@ jobs:
             packages/ziggy/core/.zig-cache
             packages/ziggy/native/linux/.zig-cache
             packages/ziggy/native/windows/.zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-smoke-tests-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
 
   ziggy-example-package:
     # Packages the example for every platform, as build-linux, build-windows, build-macos-arm64 and the mobile builds do in
@@ -478,9 +478,9 @@ jobs:
             packages/ziggy/core/.zig-cache
             packages/ziggy/native/linux/.zig-cache
             packages/ziggy/native/windows/.zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-package-${{ matrix.platform }}-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-package-${{ matrix.platform }}-
+            ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-
 
       # Every save is the restored cache plus what the job built, so without this the cache only grows. The same limit and
       # the same move aside as in build-zig-linux-x64 in release.yml, for each of the example's and Ziggy's cache directories.
@@ -520,4 +520,4 @@ jobs:
             packages/ziggy/core/.zig-cache
             packages/ziggy/native/linux/.zig-cache
             packages/ziggy/native/windows/.zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-package-${{ matrix.platform }}-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
