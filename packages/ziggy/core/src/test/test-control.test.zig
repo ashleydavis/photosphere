@@ -384,7 +384,8 @@ test "the drop command records a drop the way the shell does, so the page can as
     defer shell.deinit();
     const core = try startControlledCore(&shell, &tmp);
     defer core.destroy();
-    const line = try std.fmt.allocPrint(std.testing.allocator, "{{\"command\":\"drop\",\"paths\":[\"{s}\"]}}", .{path});
+    // The path is written as a JSON string, so a Windows path's backslashes are escaped.
+    const line = try std.fmt.allocPrint(std.testing.allocator, "{{\"command\":\"drop\",\"paths\":[{f}]}}", .{std.json.fmt(path, .{})});
     defer std.testing.allocator.free(line);
     var client = Client{
         .allocator = std.testing.allocator,
@@ -398,7 +399,7 @@ test "the drop command records a drop the way the shell does, so the page can as
     defer if (client.answer) |text| std.testing.allocator.free(text);
     try std.testing.expectEqualStrings("{\"ok\":true}", client.answer.?);
     core.postMessage("{\"id\":31,\"channel\":\"get-dropped-paths\",\"data\":null}");
-    const expected = try std.fmt.allocPrint(std.testing.allocator, "{{\"id\":31,\"ok\":true,\"data\":[\"{s}\"]}}", .{path});
+    const expected = try std.fmt.allocPrint(std.testing.allocator, "{{\"id\":31,\"ok\":true,\"data\":[{f}]}}", .{std.json.fmt(path, .{})});
     defer std.testing.allocator.free(expected);
     try shell.expectMessageContaining(expected);
 }
