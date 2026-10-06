@@ -87,7 +87,15 @@ else
     for package_dir in $packages; do
         name="$(basename "$(dirname "$package_dir")")-$(basename "$package_dir")"
         echo "Building the unit tests of $package_dir for the iOS simulator"
-        (cd "$package_dir" && zig build test-binary -Dtarget=aarch64-ios.14.0-simulator --sysroot "$sdk_path" -p "$work_dir/$name")
+        (cd "$package_dir" && zig build test-binary -Dtarget=aarch64-ios.14.0-simulator --sysroot "$sdk_path" -p "$work_dir/$name") || {
+            # The build failed with "unable to find libSystem system library" with the sysroot given too (run 37458283805, job
+            # ziggy-example-zig-unit-tests (ios, macos-latest), log line 526), so what the SDK holds is printed to show why.
+            echo "The simulator SDK's libSystem files:" >&2
+            ls -la "$sdk_path"/usr/lib/libSystem* >&2 || true
+            head -n 12 "$sdk_path/usr/lib/libSystem.tbd" >&2 || true
+            echo "FAILED: could not build the unit tests of $package_dir for the simulator." >&2
+            exit 1
+        }
         test_binary="$(find "$work_dir/$name/test-bin" -type f | head -n 1)"
         echo "Running them on simulator $udid"
         (cd "$package_dir" && xcrun simctl spawn "$udid" "$test_binary") || {
