@@ -231,12 +231,16 @@ fn runSecretTool(standIn: *const IStandIn, args: []const []const u8) !IOutcome {
     }
 
     if (std.mem.eql(u8, subcommand, "store")) {
-        if (std.mem.eql(u8, standIn.mode, "failing-store")) {
-            return outcome("", "no daemon\n", 2);
-        }
+        // The stdin is read before failing as well. Failing without reading let this process exit before the caller
+        // wrote the value, so the write got EPIPE and the test saw error.BrokenPipe instead of the exit code
+        // (Release workflow, zig-unit-tests on ubuntu-latest: "set reports a failing secret-tool store with its exit
+        // code and stderr", expected error.Thrown, found error.BrokenPipe).
         var stdinBuffer: [4096]u8 = undefined;
         var stdinReader = std.Io.File.stdin().readerStreaming(standIn.io, &stdinBuffer);
         const value = try stdinReader.interface.allocRemaining(allocator, .unlimited);
+        if (std.mem.eql(u8, standIn.mode, "failing-store")) {
+            return outcome("", "no daemon\n", 2);
+        }
         try standIn.recordArgs("last-store-args", args);
         try standIn.writeStateFile("last-store-stdin", value);
 
