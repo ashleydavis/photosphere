@@ -102,6 +102,10 @@ apple_sync_native() {
     local members_dir
     members_dir="$(mktemp -d "$native_dir/members.XXXXXX")" || apple_fail "could not make a directory for the library's members."
     (cd "$members_dir" && xcrun ar x "$library") || apple_fail "could not take the members out of the Zig library."
+    # ar x gives each file the mode stored in Zig's archive, which leaves it unreadable: the macOS job of the Ziggy example
+    # workflow logged "libtool: warning: cannot open() '.../members.CzH9Kq/compiler_rt.o', errno=13" (EACCES) for each member
+    # and the link then failed with undefined _ziggy_* symbols.
+    chmod u+rw "$members_dir"/*.o || apple_fail "could not make the Zig library's members readable."
     xcrun libtool -static -o "$library.aligned" "$members_dir"/*.o || apple_fail "libtool could not write the Zig library again."
     mv "$library.aligned" "$library" || apple_fail "could not replace the Zig library with the aligned one."
     find "$members_dir" -type f -delete
