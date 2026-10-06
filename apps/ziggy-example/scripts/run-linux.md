@@ -1,6 +1,6 @@
 # run-linux.sh
 
-Builds the example's Linux app with `build-linux.sh` and runs it. Runs on Linux, and needs the GTK 3 and WebKitGTK 4.1 runtime libraries (`libgtk-3-0` and `libwebkit2gtk-4.1-0`), which most desktop distributions already have. No development packages are needed.
+Builds the example's Linux app with `build-linux.sh` and runs it. Runs on Linux, and needs the GTK 3 and WebKitGTK 4.1 runtime libraries (`libgtk-3-0` and `libwebkit2gtk-4.1-0`) and the GStreamer plugins WebKitGTK plays video with (`gstreamer1.0-plugins-good` and `gstreamer1.0-libav`), which most desktop distributions already have. No development packages are needed.
 
 Arguments are passed to the app, so `-geometry=WxH` sets the window size.
 

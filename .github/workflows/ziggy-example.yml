@@ -99,7 +99,7 @@ jobs:
       - name: Install the web view's runtime libraries and the display tools
         uses: ./.github/actions/install-apt-packages
         with:
-          packages: libgtk-3-0 libwebkit2gtk-4.1-0 xvfb x11-utils zip
+          packages: libgtk-3-0 libwebkit2gtk-4.1-0 gstreamer1.0-plugins-good gstreamer1.0-libav xvfb x11-utils zip
           verify: xvfb-run xwininfo zip
 
       - name: Install dependencies
