@@ -75,6 +75,10 @@ else
     apple_require_tool zig xcrun
     work_dir="$(mktemp -d "$EXAMPLE_DIR/zig-mobile-test.XXXXXX")"
     trap 'find "$work_dir" -type f -delete; find "$work_dir" -depth -type d -empty -delete' EXIT
+    # Zig finds the macOS SDK by itself but not the iOS simulator's, and linking a program needs it: the unit test job of the Ziggy
+    # example workflow failed with "unable to find libSystem system library" (run 37455466019, job ziggy-example-zig-unit-tests
+    # (ios, macos-latest), log line 710). The SDK's path is given as the sysroot.
+    sdk_path="$(xcrun --sdk iphonesimulator --show-sdk-path)" || apple_fail "could not find the iOS simulator SDK."
     udid="$(xcrun simctl list devices booted | sed -n 's/.*(\([0-9A-F-]\{36\}\)) (Booted).*/\1/p' | head -n 1)"
     if [ -z "$udid" ]; then
         echo "ERROR: no iOS simulator is booted." >&2
@@ -83,7 +87,7 @@ else
     for package_dir in $packages; do
         name="$(basename "$(dirname "$package_dir")")-$(basename "$package_dir")"
         echo "Building the unit tests of $package_dir for the iOS simulator"
-        (cd "$package_dir" && zig build test-binary -Dtarget=aarch64-ios.14.0-simulator -p "$work_dir/$name")
+        (cd "$package_dir" && zig build test-binary -Dtarget=aarch64-ios.14.0-simulator --sysroot "$sdk_path" -p "$work_dir/$name")
         test_binary="$(find "$work_dir/$name/test-bin" -type f | head -n 1)"
         echo "Running them on simulator $udid"
         (cd "$package_dir" && xcrun simctl spawn "$udid" "$test_binary") || {
