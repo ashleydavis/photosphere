@@ -71,7 +71,7 @@ start_test_app() {
 #
 restart_test_app() {
     exec 3>&-
-    ziggy_platform_stop "$ZIGGY_TEST_DIR" keep-device
+    ziggy_platform_stop "$ZIGGY_TEST_DIR" keep-device || fail "the app did not stop cleanly before it was started again"
     ziggy_platform_start "$ZIGGY_TEST_DIR" test keep-data || fail "the app did not start again"
     open_control_connection
     wait_for_ready
