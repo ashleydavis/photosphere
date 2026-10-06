@@ -119,7 +119,7 @@ The core counts the keep-alive tasks that are queued or running, and calls one h
 - `get-platform`, which reports `platformKind` (`desktop` or `mobile`) so the platform layer does not sniff the user agent.
 - `get-dropped-paths`, which the inject script sends when files are dropped on the window, and which replies with the real paths of the files in the last drop as an array of strings. A page cannot read a path from a File, and WebKitGTK gives the page no Files and hides the file addresses, so on a desktop the shell reads the paths of a drop and reports them to the core (`ziggy_files_dropped`) before the page's drop event runs: Linux reads them from `drag-data-received`, MacOS from the drag pasteboard, and Windows has WebView2 hand over the dropped Files, which have their paths. The inject script catches the drop, asks for the paths, and fires the drop again holding one empty File per path that it made and remembers the path of, and `window.ziggy.getPathForFile(file)` answers from that memory, synchronously, as Electron's does. A phone has no drop. See [the drag and drop findings](../../../docs/ziggy-drag-and-drop-findings.md) for the evidence on each platform.
 
-Every other message belongs to the app. Request and reply types for all messages are defined in `protocol.zig` in the core, which is the source of truth for every payload.
+Every other message belongs to the app. Each channel's request and reply types are defined in the same file as its handler, so the handler is the source of truth for its payload.
 
 ## Channels
 
@@ -128,7 +128,7 @@ A channel is how the page and the core talk. The page sends requests on a channe
 To add a channel:
 
 1. Prefer an existing channel. Send a named action from the page to the core through one generic command channel that takes the action's name, rather than adding a channel per action (for example a dedicated channel to toggle developer tools).
-2. If a new channel is unavoidable, define its request and reply types in `protocol.zig`.
+2. If a new channel is unavoidable, define its request and reply types beside its handler.
 3. Write the handler in the core, register it in the dispatcher, and write its unit test beside the core's other tests.
 4. Platform-specific code never goes in the shared UI. The platform layer passes platform behaviour into it through the platform abstraction the shared UI defines.
 
