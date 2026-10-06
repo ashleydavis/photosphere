@@ -4,6 +4,10 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
+# The files searched are binaries. In a UTF-8 locale the BSD grep on MacOS skips text that shares a line with bytes that are not
+# valid UTF-8, so it would miss strings that are there. The C locale compares bytes.
+export LC_ALL=C
+
 # The test build contains the control connection's code and the release build does not.
 for file in $(ziggy_platform_artifact_files test); do
     if ! grep -a -q "InvalidCommand" "$file"; then
