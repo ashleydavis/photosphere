@@ -3,7 +3,7 @@
 //
 
 import UIKit
-import ZiggyShellApple
+import ZiggyShellIOS
 
 // Hosts Ziggy's web view as its whole view.
 final class ViewController: UIViewController {

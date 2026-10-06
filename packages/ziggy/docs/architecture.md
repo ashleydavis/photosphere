@@ -106,11 +106,11 @@ The task runner runs handlers on a pool of threads inside the core. It provides 
 
 An app registers each task type as `normal` (the default) or `keep-alive` in the Zig code that registers it (the `kind` of its `TaskHandlerEntry`), so the page's code and the data it queues a task with do not change. A child task is covered by its parent, which lives at least as long.
 
-The core counts the keep-alive tasks that are queued or running, and calls one host callback, `keep_alive`, with the same meaning on every platform: true when the first such task is queued, false when the last one ends. It asks when the task is queued, because platforms require the request while the app is in the foreground. The callback is called from the thread that queued or ended the task, while the core holds a lock, so a shell hands the work to its own thread and the callback never calls back into the core. Shells differ only in what they do about it:
+The core counts the keep-alive tasks that are queued or running, and calls one host callback, `keep_alive`, with the same meaning wherever a shell provides it: true when the first such task is queued, false when the last one ends. It asks when the task is queued, because platforms require the request while the app is in the foreground. The callback is called from the thread that queued or ended the task, while the core holds a lock, so a shell hands the work to its own thread and the callback never calls back into the core. Only the phone shells provide it:
 
 - **Android:** a foreground service (`ZiggyKeepAliveService`, with a notification) is started when the callback says true and stopped when it says false, so the process is not stopped when the app goes to the background. Finishing the activity still ends the app's tasks.
 - **iOS:** a background task assertion (`beginBackgroundTask`) is taken and given back. The system ends it after a limited time, and the app is suspended then.
-- **Linux, Windows and MacOS:** closing the window with a keep-alive task running hides the window and leaves the app running, and the app ends when the last such task does. Closing it with none running ends the app, as before. The `quit` action ends the app whatever is running.
+- **Linux, Windows and MacOS:** a desktop shell provides no `keep_alive` callback.
 
 ## Messages that belong to Ziggy
 

@@ -1,19 +1,12 @@
 //
 // Native file and folder pickers. The core asks for one from a worker thread. The dialog is shown on the main thread and the
-// worker waits for the user, so the main thread is never blocked. On MacOS these are NSOpenPanel and NSSavePanel. On iOS they
-// are UIDocumentPickerViewController, which can open files and choose a folder but has no dialog for choosing where to save.
+// worker waits for the user, so the main thread is never blocked. On MacOS these are NSOpenPanel and NSSavePanel.
 //
 
 import Foundation
 import WebKit
 import CZiggy
-
-#if os(macOS)
 import AppKit
-#else
-import UIKit
-import UniformTypeIdentifiers
-#endif
 
 // What the user did with a picker.
 enum ZiggyPickOutcome {
@@ -74,7 +67,6 @@ enum ZiggyPicker {
         }
     }
 
-    #if os(macOS)
     // Runs on the main thread: shows the panel for the kind, which blocks the main thread inside the panel's own event loop
     // until the user answers, then reports the outcome.
     private static func present(webView: WKWebView, kind: Int32, title: String?, initialName: String?, completion: @escaping (ZiggyPickOutcome) -> Void) {
@@ -119,83 +111,5 @@ enum ZiggyPicker {
         }
         completion(.chosen([url.path]))
     }
-    #else
-    // Runs on the main thread: presents a document picker over the web view's window and reports the outcome from its
-    // delegate. Saving has no iOS dialog, so it fails.
-    private static func present(webView: WKWebView, kind: Int32, title: String?, initialName: String?, completion: @escaping (ZiggyPickOutcome) -> Void) {
-        let picker: UIDocumentPickerViewController
-        switch Int(kind) {
-        case Int(ZIGGY_PICK_OPEN_FILES):
-            // asCopy gives the app copies in its temporary directory, which it can read without any access to the originals.
-            picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.item], asCopy: true)
-            picker.allowsMultipleSelection = true
-        case Int(ZIGGY_PICK_FOLDER):
-            picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.folder])
-        case Int(ZIGGY_PICK_SAVE_FILE):
-            completion(.failed("iOS has no dialog for choosing where to save a file"))
-            return
-        default:
-            completion(.failed("unknown picker kind \(kind)"))
-            return
-        }
-        guard var presenter = webView.window?.rootViewController else {
-            completion(.failed("the web view is not in a window with a root view controller"))
-            return
-        }
-        while let presented = presenter.presentedViewController {
-            presenter = presented
-        }
-        if let title = title {
-            picker.title = title
-        }
-        let delegate = ZiggyPickerDelegate(isFolder: Int(kind) == Int(ZIGGY_PICK_FOLDER), completion: completion)
-        picker.delegate = delegate
-        delegate.keepAlive = delegate
-        presenter.present(picker, animated: true)
-    }
-    #endif
 }
 
-#if os(iOS)
-// Receives a document picker's answer. The picker holds its delegate weakly, so this keeps itself alive until it has answered.
-final class ZiggyPickerDelegate: NSObject, UIDocumentPickerDelegate {
-    // Whether the picker chose a folder, whose access must be started, rather than copies of files.
-    private let isFolder: Bool
-
-    // Reports the outcome.
-    private let completion: (ZiggyPickOutcome) -> Void
-
-    // Set to this object while the picker is showing, and cleared after it answers.
-    var keepAlive: ZiggyPickerDelegate?
-
-    // Creates the delegate for one picker.
-    init(isFolder: Bool, completion: @escaping (ZiggyPickOutcome) -> Void) {
-        self.isFolder = isFolder
-        self.completion = completion
-        super.init()
-    }
-
-    // The user chose something.
-    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-        keepAlive = nil
-        if isFolder {
-            guard let folder = urls.first else {
-                completion(.failed("the folder picker returned no folder"))
-                return
-            }
-            // Access to the folder lasts until the process ends, because nothing calls stopAccessingSecurityScopedResource.
-            if !folder.startAccessingSecurityScopedResource() {
-                completion(.failed("could not start accessing the folder \(folder.path)"))
-                return
-            }
-        }
-        completion(.chosen(urls.map { $0.path }))
-    }
-
-    // The user cancelled, which is a normal answer of no paths.
-    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-        keepAlive = nil
-        completion(.chosen([]))
-    }
-}
-#endif

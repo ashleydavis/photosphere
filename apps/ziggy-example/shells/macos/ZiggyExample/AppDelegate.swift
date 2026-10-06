@@ -1,10 +1,10 @@
 //
 // The Ziggy example's MacOS shell: a window and Ziggy's web view in the window. Everything else is
-// in ZiggyShellApple.
+// in ZiggyShellMacOS.
 //
 
 import AppKit
-import ZiggyShellApple
+import ZiggyShellMacOS
 
 // Owns the window and Ziggy's bridge for the life of the application.
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -34,10 +34,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         newBridge.start()
     }
 
-    // Closing the window ends the application, unless tasks the app is kept running for are queued or running. Then the app keeps
-    // running with no window, and ends when the last of those tasks does.
+    // Closing the window ends the application.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return !(bridge?.keepsRunning ?? false)
+        return true
     }
 
     // Destroys the core before the process ends.

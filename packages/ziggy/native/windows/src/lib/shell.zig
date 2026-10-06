@@ -57,12 +57,6 @@ const WM_ZIGGY_PICK: c.UINT = c.WM_APP + 2;
 const WM_ZIGGY_MENU: c.UINT = c.WM_APP + 3;
 
 //
-// Posted by the core's keep-alive callback, from any thread, when the last task the app is kept running for has ended. The UI thread then
-// closes the window if it was already closed and hidden.
-//
-const WM_ZIGGY_KEEP_ALIVE_ENDED: c.UINT = c.WM_APP + 4;
-
-//
 
 //
 // The name of the window class the shell registers.
@@ -215,12 +209,6 @@ const Shell = struct {
     destroyed: std.atomic.Value(bool),
     // Set on the UI thread when the window starts closing, so the creation callbacks still to come do nothing.
     closing: bool,
-    // Set by the core while tasks the app must be kept running for are queued or running. Set from any thread.
-    keep_running: std.atomic.Value(bool),
-    // Set when the app was asked to quit, which closes the window even while tasks the app is kept running for are running.
-    quit_requested: std.atomic.Value(bool),
-    // Whether the window was closed and hidden, leaving the app running for those tasks.
-    window_hidden: bool,
     // The page's address as UTF-16, including the query in test mode. Owned.
     page_url: [:0]u16,
     // The script that exposes window.ziggy, as UTF-16. Owned.
@@ -285,9 +273,6 @@ pub fn run(app_config: AppConfig, args: []const [:0]const u8) !u8 {
         .queue = .empty,
         .destroyed = .init(false),
         .closing = false,
-        .keep_running = .init(false),
-        .quit_requested = .init(false),
-        .window_hidden = false,
         .page_url = undefined,
         .inject_script = undefined,
         .data_directory = undefined,
@@ -640,14 +625,6 @@ fn windowProc(window: c.HWND, message: c.UINT, wparam: c.WPARAM, lparam: c.LPARA
             handleMenuRequest(shell, @ptrFromInt(@as(usize, @intCast(lparam))));
             return 0;
         },
-        WM_ZIGGY_KEEP_ALIVE_ENDED => {
-            if (shell.window_hidden and !shell.keep_running.load(.acquire)) {
-                if (c.PostMessageW(window, c.WM_CLOSE, 0, 0) == 0) {
-                    fatal("could not post a close to the window, error {d}", .{c.GetLastError()});
-                }
-            }
-            return 0;
-        },
         WM_ZIGGY_PICK => {
             handlePickRequest(shell, @ptrFromInt(@as(usize, @intCast(lparam))));
             return 0;
@@ -657,13 +634,6 @@ fn windowProc(window: c.HWND, message: c.UINT, wparam: c.WPARAM, lparam: c.LPARA
             return 0;
         },
         c.WM_CLOSE => {
-            // Closing the window ends the app, except while tasks the app is kept running for are queued or running and the app has
-            // not been asked to quit: then the window is hidden and the app keeps running until the last of those tasks ends.
-            if (shell.keep_running.load(.acquire) and !shell.quit_requested.load(.acquire)) {
-                _ = c.ShowWindow(window, c.SW_HIDE);
-                shell.window_hidden = true;
-                return 0;
-            }
             shell.closing = true;
             destroyCore(shell);
             closeWebView(shell);
@@ -801,26 +771,11 @@ fn osVersion(user_data: ?*anyopaque, buffer: [*c]u8, capacity: usize) callconv(.
 }
 
 //
-// The core's keep-alive callback. It can be called from any thread, so when the app need no longer be kept running it posts to the
-// UI thread, which closes the window if it was already closed.
-//
-fn keepAlive(user_data: ?*anyopaque, keep_running: bool) callconv(.c) void {
-    const shell: *Shell = @ptrCast(@alignCast(user_data.?));
-    shell.keep_running.store(keep_running, .release);
-    if (!keep_running) {
-        if (c.PostMessageW(shell.window, WM_ZIGGY_KEEP_ALIVE_ENDED, 0, 0) == 0) {
-            fatal("could not post to the UI thread, error {d}", .{c.GetLastError()});
-        }
-    }
-}
-
-//
 // The native host callback that quits the application, asked for by the test control connection. It can be called from any
 // thread, so it posts a close to the UI thread, which closes the window the same way the user closing it does.
 //
 fn quit(user_data: ?*anyopaque) callconv(.c) void {
     const shell: *Shell = @ptrCast(@alignCast(user_data.?));
-    shell.quit_requested.store(true, .release);
     if (c.PostMessageW(shell.window, c.WM_CLOSE, 0, 0) == 0) {
         fatal("could not post a close to the UI thread, error {d}", .{c.GetLastError()});
     }
@@ -878,7 +833,6 @@ fn onControllerCreated(shell: *Shell, controller: *c.ICoreWebView2Controller) vo
     config.quit = quit;
     config.pick_paths = pickPaths;
     config.menu_action = menuAction;
-    config.keep_alive = keepAlive;
     var system_info: c.SYSTEM_INFO = undefined;
     c.GetSystemInfo(&system_info);
     config.worker_threads = system_info.dwNumberOfProcessors;
@@ -1110,7 +1064,6 @@ fn runAction(shell: *Shell, action: []const u8) void {
     };
     switch (known) {
         .quit => {
-            shell.quit_requested.store(true, .release);
             if (c.PostMessageW(shell.window, c.WM_CLOSE, 0, 0) == 0) {
                 fatal("could not post a close to the window, error {d}", .{c.GetLastError()});
             }

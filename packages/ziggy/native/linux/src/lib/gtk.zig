@@ -55,8 +55,6 @@ pub extern fn g_object_unref(object: gpointer) void;
 pub extern fn g_signal_connect_data(instance: gpointer, detailed_signal: [*:0]const u8, handler: GCallback, data: gpointer, destroy_data: gpointer, connect_flags: c_uint) c_ulong;
 pub extern fn g_application_run(application: *GApplication, argc: c_int, argv: ?[*]?[*:0]u8) c_int;
 pub extern fn g_application_quit(application: *GApplication) void;
-pub extern fn g_application_hold(application: *GApplication) void;
-pub extern fn g_application_release(application: *GApplication) void;
 pub extern fn g_async_queue_new() ?*GAsyncQueue;
 pub extern fn g_async_queue_unref(queue: *GAsyncQueue) void;
 pub extern fn g_async_queue_push(queue: *GAsyncQueue, data: gpointer) void;
@@ -83,7 +81,6 @@ pub extern fn gtk_container_add(container: *GtkWidget, widget: *GtkWidget) void;
 pub extern fn gtk_widget_show_all(widget: *GtkWidget) void;
 pub extern fn gtk_window_present(window: *GtkWindow) void;
 pub extern fn gtk_window_close(window: *GtkWindow) void;
-pub extern fn gtk_widget_hide(widget: *GtkWidget) void;
 pub extern fn gtk_show_uri_on_window(parent: ?*GtkWindow, uri: [*:0]const u8, timestamp: u32, err: ?*?*GError) gboolean;
 
 pub extern fn webkit_web_view_new() *GtkWidget;

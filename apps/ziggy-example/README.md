@@ -10,7 +10,7 @@ A small complete app built on Ziggy, kept as the reference for building an app o
 - A native host callback: the page asks for the operating system's version, a task calls the shell's callback and the answer comes back to the page.
 - File and folder pickers: three buttons ask the core for the native dialogs, on the same channels and with the same data and replies as the Electron app (`pick-files`, `pick-folder`, `pick-file`), and the page shows the paths chosen. A phone has no save dialog, so that button gives an error on iOS.
 - A loopback HTTP server in the core (the example's own code, not Ziggy's) that serves an example image and video to the page, which loads them and asks for a range of bytes.
-- Keep-alive tasks: a background task type registered as keep-alive that goes on running when the window is closed (a desktop) or the app is in the background (a phone), and a normal one that does not.
+- Keep-alive tasks: a background task type registered as keep-alive that goes on running when the app is sent to the background (a phone), and a normal one that does not.
 - Page storage: `localStorage` and IndexedDB values the page writes and reads back after the app is started again.
 - Dropped files: a drop zone that shows the real path of a dropped file, from `window.ziggy.getPathForFile`.
 - A desktop menu defined once in Zig and drawn natively, with keyboard shortcuts that work anywhere in the window, and developer tools (Ctrl+Shift+I, or Cmd+Shift+I on a Mac) that open from it. A phone shows no menu.
@@ -21,7 +21,7 @@ Everything here is the example's own. Ziggy, the framework it is built on, is al
 
 - `page/`: the page. `page/index.html` is the page and `page/src/lib` holds the plain functions that have unit tests. `vite.config.ts` is its build, which writes `dist` with relative paths and a classic script so it loads from a file address in every web view that loads it that way. `dist` is embedded in the app's own code on every platform (the Linux and Windows executables, and the core library that the MacOS, iOS and Android apps contain), using Ziggy's `embedPage`, so no platform has a folder of page files (see the [architecture guide](../../packages/ziggy/docs/architecture.md#the-bundled-page)).
 - `core/`: the example's Zig library, which adds its channel handlers and task handlers to Ziggy's core (`packages/ziggy/core`).
-- `shells/<platform>/`: the example's native project for each platform: its name, window, icon and the app's core and page packaged together. Each one builds on Ziggy's framework half for that platform in `packages/ziggy/native/<platform>` (MacOS and iOS share `packages/ziggy/native/apple`).
+- `shells/<platform>/`: the example's native project for each platform: its name, window, icon and the app's core and page packaged together. Each one builds on Ziggy's framework half for that platform in `packages/ziggy/native/<platform>`.
 - `scripts`: the build, run and packaging scripts, each with a markdown file beside it.
 - `smoke-tests`: the smoke test scenarios and a library for each platform. See `smoke-tests/run.md`.
 
