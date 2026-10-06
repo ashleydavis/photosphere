@@ -61,7 +61,7 @@ trap stop_app_on_exit EXIT
 #
 start_test_app() {
     ziggy_platform_start "$ZIGGY_TEST_DIR" test || fail "the app did not start"
-    exec 3<>"/dev/tcp/$ZIGGY_CONTROL_HOST/$ZIGGY_CONTROL_PORT" || fail "could not connect to the control connection at $ZIGGY_CONTROL_HOST:$ZIGGY_CONTROL_PORT"
+    open_control_connection
     wait_for_ready
 }
 
@@ -73,8 +73,25 @@ restart_test_app() {
     exec 3>&-
     ziggy_platform_stop "$ZIGGY_TEST_DIR" keep-device
     ziggy_platform_start "$ZIGGY_TEST_DIR" test keep-data || fail "the app did not start again"
-    exec 3<>"/dev/tcp/$ZIGGY_CONTROL_HOST/$ZIGGY_CONTROL_PORT" || fail "could not connect to the control connection at $ZIGGY_CONTROL_HOST:$ZIGGY_CONTROL_PORT"
+    open_control_connection
     wait_for_ready
+}
+
+#
+# Opens the test control connection on file descriptor 3. A signal that reaches this script while bash connects, such as the
+# exit of a child it started, makes connect fail with "Interrupted system call", which bash reports and does not retry, so that
+# failure is tried again. Any other failure ends the scenario.
+#
+open_control_connection() {
+    local error_file="$ZIGGY_TEST_DIR/control-connect-error.txt"
+    local attempt=1
+    while ! { exec 3<>"/dev/tcp/$ZIGGY_CONTROL_HOST/$ZIGGY_CONTROL_PORT"; } 2>"$error_file"; do
+        if ! grep -q "Interrupted system call" "$error_file" || [ "$attempt" -ge 5 ]; then
+            cat "$error_file" >&2
+            fail "could not connect to the control connection at $ZIGGY_CONTROL_HOST:$ZIGGY_CONTROL_PORT"
+        fi
+        attempt=$((attempt + 1))
+    done
 }
 
 #
