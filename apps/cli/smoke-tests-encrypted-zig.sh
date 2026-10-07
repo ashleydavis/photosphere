@@ -248,9 +248,9 @@ get_cli_command() {
 # Get the Zig CLI command: the Zig port of psi (apps/cli-zig), which runs the ported commands.
 get_zig_cli_command() {
     if [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
-        echo "../cli-zig/zig-out/bin/psi.exe"
+        echo "../../zig-out/bin/psi.exe"
     else
-        echo "../cli-zig/zig-out/bin/psi"
+        echo "../../zig-out/bin/psi"
     fi
 }
 

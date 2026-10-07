@@ -2,18 +2,21 @@ const std = @import("std");
 const vault_zig = @import("vault-zig");
 const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const test_environment = @import("test-environment.zig");
+const fixture_dirs = @import("fixture-dirs.zig");
 const openStorage = node_api.open_storage.openStorage;
 
 //
 // Installs the environment and points the config dir at a new directory with the given databases.toml.
 //
 fn setup(allocator: std.mem.Allocator, io: std.Io, databasesToml: []const u8) ![]const u8 {
-    _ = try helpers.setupEnvironment(io);
-    const configDir = try helpers.makeTempDir(allocator, io, "open-storage-config");
-    try helpers.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
+    _ = try test_environment.setupEnvironment(io);
+    const configDir = try temp_dirs.makeTempDir(allocator, io, "open-storage-config");
+    try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
     if (databasesToml.len > 0) {
-        try helpers.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/databases.toml", .{configDir}), databasesToml);
+        try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/databases.toml", .{configDir}), databasesToml);
     }
     return configDir;
 }
@@ -24,11 +27,11 @@ test "forwards databasePath, encryptionKey, and s3Key to resolveStorageCredentia
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try setup(allocator, io, "");
-    defer helpers.removeTempDir(io, configDir);
+    defer temp_dirs.removeTempDir(io, configDir);
     const vault = try vault_zig.get_vault.getVault("plaintext");
     try vault.set(allocator, io, .{ .name = "open-storage-s3", .type = "s3-credentials", .value = "{\"region\":\"us-east-1\",\"accessKeyId\":\"AKID\",\"secretAccessKey\":\"SECRET\"}" });
 
-    const result = try openStorage(allocator, io, "s3:bucket:/prefix", helpers.KEYS_DIR ++ "/ts-private.pem", "open-storage-s3");
+    const result = try openStorage(allocator, io, "s3:bucket:/prefix", fixture_dirs.KEYS_DIR ++ "/ts-private.pem", "open-storage-s3");
 
     try std.testing.expectEqualStrings("AKID", result.s3Config.?.accessKeyId);
     try std.testing.expectEqual(@as(usize, 1), result.encryptionKeyPems.len);
@@ -40,11 +43,11 @@ test "passes the resolved encryption PEMs to loadEncryptionKeysFromPem" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try setup(allocator, io, "");
-    defer helpers.removeTempDir(io, configDir);
-    const dir = try helpers.makeTempDir(allocator, io, "open-storage-encrypted");
-    defer helpers.removeTempDir(io, dir);
+    defer temp_dirs.removeTempDir(io, configDir);
+    const dir = try temp_dirs.makeTempDir(allocator, io, "open-storage-encrypted");
+    defer temp_dirs.removeTempDir(io, dir);
 
-    const result = try openStorage(allocator, io, dir, helpers.KEYS_DIR ++ "/ts-private.pem", null);
+    const result = try openStorage(allocator, io, dir, fixture_dirs.KEYS_DIR ++ "/ts-private.pem", null);
 
     try std.testing.expect(result.storageOptions.encryptionPublicKey != null);
     try std.testing.expect(result.storageOptions.decryptionKeyMap.?.get("default") != null);
@@ -62,7 +65,7 @@ test "passes the resolved s3Config and storage options into createStorage" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try setup(allocator, io, "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = \"s3:bucket/prefix\"\ns3_key = \"open-storage-registered\"\n");
-    defer helpers.removeTempDir(io, configDir);
+    defer temp_dirs.removeTempDir(io, configDir);
     const vault = try vault_zig.get_vault.getVault("plaintext");
     try vault.set(allocator, io, .{ .name = "open-storage-registered", .type = "s3-credentials", .value = "{\"region\":\"us-east-1\",\"accessKeyId\":\"AKID\",\"secretAccessKey\":\"SECRET\"}" });
 
@@ -77,10 +80,10 @@ test "returns storage, rawStorage, encryptionKeyPems, s3Config, storageOptions, 
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const dir = try helpers.makeTempDir(allocator, io, "open-storage-all");
-    defer helpers.removeTempDir(io, dir);
+    const dir = try temp_dirs.makeTempDir(allocator, io, "open-storage-all");
+    defer temp_dirs.removeTempDir(io, dir);
     const configDir = try setup(allocator, io, try std.fmt.allocPrint(allocator, "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = '{s}'\ngeocoding_key = \"open-storage-geo\"\n", .{dir}));
-    defer helpers.removeTempDir(io, configDir);
+    defer temp_dirs.removeTempDir(io, configDir);
     const vault = try vault_zig.get_vault.getVault("plaintext");
     try vault.set(allocator, io, .{ .name = "open-storage-geo", .type = "api-key", .value = "google-api-key" });
 
@@ -105,7 +108,7 @@ test "works without encryptionKey or s3Key arguments" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try setup(allocator, io, "");
-    defer helpers.removeTempDir(io, configDir);
+    defer temp_dirs.removeTempDir(io, configDir);
 
     const result = try openStorage(allocator, io, "/some/path", null, null);
 

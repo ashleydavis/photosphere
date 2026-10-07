@@ -1,8 +1,8 @@
+const test_files = @import("test-files.zig");
 const std = @import("std");
 const builtin = @import("builtin");
 const storage_zig = @import("storage-zig");
 const utils = @import("utils-zig");
-const helpers = @import("test-helpers.zig");
 
 const FileStorage = storage_zig.file_storage.FileStorage;
 
@@ -25,14 +25,14 @@ const Fixture = struct {
     fn init(fixture: *Fixture, name: []const u8) !void {
         fixture.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         fixture.fileStorage = FileStorage.init("fs:");
-        fixture.tempDir = try helpers.makeTempDir(fixture.arena.allocator(), std.testing.io, name);
+        fixture.tempDir = try test_files.makeTempDir(fixture.arena.allocator(), std.testing.io, name);
     }
 
     //
     // Deletes the temporary directory and frees the arena.
     //
     fn deinit(fixture: *Fixture) void {
-        helpers.removeTempDir(std.testing.io, fixture.tempDir);
+        test_files.removeTempDir(std.testing.io, fixture.tempDir);
         fixture.arena.deinit();
     }
 
@@ -63,7 +63,7 @@ test "isEmpty returns true for a missing or empty directory and false otherwise"
     const io = std.testing.io;
     try std.testing.expect(try fixture.fileStorage.isEmpty(allocator, io, try fixture.path("missing")));
     try std.testing.expect(try fixture.fileStorage.isEmpty(allocator, io, fixture.tempDir));
-    try helpers.writeFile(io, try fixture.path("sub/file.txt"), "x");
+    try test_files.writeFile(io, try fixture.path("sub/file.txt"), "x");
     try std.testing.expect(!try fixture.fileStorage.isEmpty(allocator, io, fixture.tempDir));
     try std.testing.expect(!try fixture.fileStorage.isEmpty(allocator, io, try fixture.path("sub")));
 }
@@ -82,7 +82,7 @@ test "listFiles lists only files, sorted like localeCompare with numeric orderin
     else
         &.{ "file10", "file2", "file1", "b.txt", "a.txt", "_x", "10", "9" };
     for (fileNames) |fileName| {
-        try helpers.writeFile(io, try fixture.path(fileName), "x");
+        try test_files.writeFile(io, try fixture.path(fileName), "x");
     }
     try std.Io.Dir.cwd().createDirPath(io, try fixture.path("dir"));
 
@@ -117,7 +117,7 @@ test "listDirs lists only directories, sorted" {
     for (dirNames) |dirName| {
         try std.Io.Dir.cwd().createDirPath(io, try fixture.path(dirName));
     }
-    try helpers.writeFile(io, try fixture.path("file.txt"), "x");
+    try test_files.writeFile(io, try fixture.path("file.txt"), "x");
 
     const result = try fixture.fileStorage.listDirs(allocator, io, fixture.tempDir, 1000, null);
     const expected = [_][]const u8{ "shard1", "shard2", "shard11" };
@@ -135,7 +135,7 @@ test "fileExists is true only for files and dirExists only for directories" {
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
-    try helpers.writeFile(io, try fixture.path("dir/file.txt"), "x");
+    try test_files.writeFile(io, try fixture.path("dir/file.txt"), "x");
     try std.testing.expect(try fixture.fileStorage.fileExists(allocator, io, try fixture.path("dir/file.txt")));
     try std.testing.expect(!try fixture.fileStorage.fileExists(allocator, io, try fixture.path("dir")));
     try std.testing.expect(!try fixture.fileStorage.fileExists(allocator, io, try fixture.path("missing")));
@@ -151,7 +151,7 @@ test "info returns the length and last modified time of a file, and null for dir
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
     const before = std.Io.Clock.real.now(io).toMilliseconds();
-    try helpers.writeFile(io, try fixture.path("file.bin"), "12345");
+    try test_files.writeFile(io, try fixture.path("file.bin"), "12345");
     const after = std.Io.Clock.real.now(io).toMilliseconds();
     const fileInfo = (try fixture.fileStorage.info(allocator, io, try fixture.path("file.bin"))).?;
     try std.testing.expectEqual(@as(u64, 5), fileInfo.length);
@@ -167,7 +167,7 @@ test "read returns the file contents or null when missing" {
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
-    try helpers.writeFile(io, try fixture.path("file.bin"), "contents");
+    try test_files.writeFile(io, try fixture.path("file.bin"), "contents");
     try std.testing.expectEqualStrings("contents", (try fixture.fileStorage.read(allocator, io, try fixture.path("file.bin"))).?);
     try std.testing.expect((try fixture.fileStorage.read(allocator, io, try fixture.path("missing"))) == null);
 }
@@ -193,11 +193,11 @@ test "readStream streams the file contents" {
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
-    const data = try helpers.makeData(allocator, 300 * 1024);
-    try helpers.writeFile(io, try fixture.path("big.bin"), data);
+    const data = try test_files.makeData(allocator, 300 * 1024);
+    try test_files.writeFile(io, try fixture.path("big.bin"), data);
     const stream = try fixture.fileStorage.readStream(allocator, io, try fixture.path("big.bin"));
     defer stream.destroy(io);
-    try std.testing.expectEqualSlices(u8, data, try helpers.readAll(allocator, stream.reader()));
+    try std.testing.expectEqualSlices(u8, data, try test_files.readAll(allocator, stream.reader()));
 }
 
 test "readStream fails with the Node ENOENT message for a missing file" {
@@ -216,7 +216,7 @@ test "writeStream writes the stream to the file and leaves no .tmp file" {
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
-    const data = try helpers.makeData(allocator, 200 * 1024 + 3);
+    const data = try test_files.makeData(allocator, 200 * 1024 + 3);
     var input = std.Io.Reader.fixed(data);
     const filePath = try fixture.path("out/file.bin");
     try fixture.fileStorage.writeStream(allocator, io, filePath, null, &input, null);
@@ -230,9 +230,9 @@ test "writeStream replaces the file its input stream is reading, because the str
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
-    const data = try helpers.makeData(allocator, 200 * 1024 + 3);
+    const data = try test_files.makeData(allocator, 200 * 1024 + 3);
     const filePath = try fixture.path("file.bin");
-    try helpers.writeFile(io, filePath, data);
+    try test_files.writeFile(io, filePath, data);
 
     // Node's fs.createReadStream closes the file once it has read the end, so a copy onto the file's own path
     // (as encrypt and decrypt do) replaces it with nothing still holding it open. Windows refuses to replace an
@@ -250,7 +250,7 @@ test "deleteFile deletes a file and ignores a missing file" {
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
-    try helpers.writeFile(io, try fixture.path("file.bin"), "x");
+    try test_files.writeFile(io, try fixture.path("file.bin"), "x");
     try fixture.fileStorage.deleteFile(allocator, io, try fixture.path("file.bin"));
     try std.testing.expect(!try fixture.fileStorage.fileExists(allocator, io, try fixture.path("file.bin")));
     try fixture.fileStorage.deleteFile(allocator, io, try fixture.path("file.bin"));
@@ -262,7 +262,7 @@ test "deleteDir deletes a directory tree and ignores a missing directory" {
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
-    try helpers.writeFile(io, try fixture.path("dir/a/b.txt"), "x");
+    try test_files.writeFile(io, try fixture.path("dir/a/b.txt"), "x");
     try fixture.fileStorage.deleteDir(allocator, io, try fixture.path("dir"));
     try std.testing.expect(!try fixture.fileStorage.dirExists(allocator, io, try fixture.path("dir")));
     try fixture.fileStorage.deleteDir(allocator, io, try fixture.path("dir"));
@@ -274,7 +274,7 @@ test "copyTo copies a file and creates the destination directory" {
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
-    try helpers.writeFile(io, try fixture.path("source.bin"), "copied");
+    try test_files.writeFile(io, try fixture.path("source.bin"), "copied");
     try fixture.fileStorage.copyTo(allocator, io, try fixture.path("source.bin"), try fixture.path("dest/copy.bin"));
     try std.testing.expectEqualStrings("copied", (try fixture.fileStorage.read(allocator, io, try fixture.path("dest/copy.bin"))).?);
 }
@@ -313,7 +313,7 @@ test "storedHash is undefined, because a filesystem keeps no hash" {
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
-    try helpers.writeFile(io, try fixture.path("a.bin"), "x");
+    try test_files.writeFile(io, try fixture.path("a.bin"), "x");
     try std.testing.expect((try fixture.fileStorage.storedHash(allocator, io, try fixture.path("a.bin"))) == null);
 }
 

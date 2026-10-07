@@ -95,10 +95,6 @@ jobs:
         with:
           install_args: zig
 
-      - name: Fetch the Zig package dependencies (one at a time)
-        shell: bash
-        run: bun run --cwd packages-zig/storage-zig fetch-deps
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -179,10 +175,6 @@ jobs:
         uses: jdx/mise-action@v2
         with:
           install_args: zig
-
-      - name: Fetch the Zig package dependencies (one at a time)
-        shell: bash
-        run: bun run --cwd packages-zig/storage-zig fetch-deps
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -1623,10 +1615,6 @@ jobs:
         with:
           install_args: zig
 
-      - name: Fetch the Zig package dependencies (one at a time)
-        shell: bash
-        run: bun run --cwd packages-zig/storage-zig fetch-deps
-
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
         with:
@@ -1646,7 +1634,7 @@ jobs:
       - name: Restore the Zig build cache
         uses: actions/cache/restore@v4
         with:
-          path: apps/cli-zig/.zig-cache
+          path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-build-
@@ -1654,18 +1642,18 @@ jobs:
       - name: Start a fresh Zig build cache when the restored one has grown too big
         shell: bash
         run: |
-          if [ -d apps/cli-zig/.zig-cache ]; then
-              megabytes="$(du -sm apps/cli-zig/.zig-cache | cut -f1)"
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
               echo "Restored Zig build cache: ${megabytes} MB"
               if [ "$megabytes" -ge 5120 ]; then
-                  mv apps/cli-zig/.zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
                   echo "Moved it aside to start a fresh one"
               fi
           fi
 
       - name: Build the Zig CLI natively for Linux x64
-        working-directory: ./apps/cli-zig
-        run: zig build -Dcpu=baseline --prefix bin/x64/linux --prefix-exe-dir .
+        working-directory: .
+        run: zig build -Dcpu=baseline --prefix apps/cli-zig/bin/x64/linux --prefix-exe-dir .
 
       - name: Check the binary was produced
         working-directory: ./apps/cli-zig
@@ -1693,7 +1681,7 @@ jobs:
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: apps/cli-zig/.zig-cache
+          path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
 
   build-zig-windows-x64:
@@ -1718,10 +1706,6 @@ jobs:
         with:
           install_args: zig
 
-      - name: Fetch the Zig package dependencies (one at a time)
-        shell: bash
-        run: bun run --cwd packages-zig/storage-zig fetch-deps
-
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
         with:
@@ -1741,7 +1725,7 @@ jobs:
       - name: Restore the Zig build cache
         uses: actions/cache/restore@v4
         with:
-          path: apps/cli-zig/.zig-cache
+          path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-build-
@@ -1749,18 +1733,18 @@ jobs:
       - name: Start a fresh Zig build cache when the restored one has grown too big
         shell: bash
         run: |
-          if [ -d apps/cli-zig/.zig-cache ]; then
-              megabytes="$(du -sm apps/cli-zig/.zig-cache | cut -f1)"
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
               echo "Restored Zig build cache: ${megabytes} MB"
               if [ "$megabytes" -ge 5120 ]; then
-                  mv apps/cli-zig/.zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
                   echo "Moved it aside to start a fresh one"
               fi
           fi
 
       - name: Build the Zig CLI natively for Windows x64
-        working-directory: ./apps/cli-zig
-        run: zig build -Dcpu=baseline --prefix bin/x64/win --prefix-exe-dir .
+        working-directory: .
+        run: zig build -Dcpu=baseline --prefix apps/cli-zig/bin/x64/win --prefix-exe-dir .
 
       - name: Check the binary was produced
         shell: bash
@@ -1788,7 +1772,7 @@ jobs:
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: apps/cli-zig/.zig-cache
+          path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
 
   build-zig-macos-x64:
@@ -1813,10 +1797,6 @@ jobs:
         with:
           install_args: zig
 
-      - name: Fetch the Zig package dependencies (one at a time)
-        shell: bash
-        run: bun run --cwd packages-zig/storage-zig fetch-deps
-
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
         with:
@@ -1836,7 +1816,7 @@ jobs:
       - name: Restore the Zig build cache
         uses: actions/cache/restore@v4
         with:
-          path: apps/cli-zig/.zig-cache
+          path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-build-
@@ -1844,18 +1824,18 @@ jobs:
       - name: Start a fresh Zig build cache when the restored one has grown too big
         shell: bash
         run: |
-          if [ -d apps/cli-zig/.zig-cache ]; then
-              megabytes="$(du -sm apps/cli-zig/.zig-cache | cut -f1)"
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
               echo "Restored Zig build cache: ${megabytes} MB"
               if [ "$megabytes" -ge 5120 ]; then
-                  mv apps/cli-zig/.zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
                   echo "Moved it aside to start a fresh one"
               fi
           fi
 
       - name: Build the Zig CLI natively for macOS x64
-        working-directory: ./apps/cli-zig
-        run: bun run build-mac-x64
+        working-directory: .
+        run: zig build -Dcpu=baseline --prefix apps/cli-zig/bin/x64/mac --prefix-exe-dir .
 
       - name: Check the binary was produced
         working-directory: ./apps/cli-zig
@@ -1883,7 +1863,7 @@ jobs:
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: apps/cli-zig/.zig-cache
+          path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
 
   build-zig-macos-arm64:
@@ -1908,10 +1888,6 @@ jobs:
         with:
           install_args: zig
 
-      - name: Fetch the Zig package dependencies (one at a time)
-        shell: bash
-        run: bun run --cwd packages-zig/storage-zig fetch-deps
-
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
         with:
@@ -1931,7 +1907,7 @@ jobs:
       - name: Restore the Zig build cache
         uses: actions/cache/restore@v4
         with:
-          path: apps/cli-zig/.zig-cache
+          path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-build-
@@ -1939,18 +1915,18 @@ jobs:
       - name: Start a fresh Zig build cache when the restored one has grown too big
         shell: bash
         run: |
-          if [ -d apps/cli-zig/.zig-cache ]; then
-              megabytes="$(du -sm apps/cli-zig/.zig-cache | cut -f1)"
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
               echo "Restored Zig build cache: ${megabytes} MB"
               if [ "$megabytes" -ge 5120 ]; then
-                  mv apps/cli-zig/.zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
                   echo "Moved it aside to start a fresh one"
               fi
           fi
 
       - name: Build the Zig CLI natively for macOS arm64
-        working-directory: ./apps/cli-zig
-        run: bun run build-mac-arm64
+        working-directory: .
+        run: zig build -Dcpu=baseline --prefix apps/cli-zig/bin/arm64/mac --prefix-exe-dir .
 
       - name: Check the binary was produced
         working-directory: ./apps/cli-zig
@@ -1978,7 +1954,7 @@ jobs:
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: apps/cli-zig/.zig-cache
+          path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
 
   build-aws-sdk:
@@ -2006,10 +1982,6 @@ jobs:
         with:
           install_args: zig
 
-      - name: Fetch the Zig package dependencies (one at a time)
-        shell: bash
-        run: bun run --cwd packages-zig/storage-zig fetch-deps
-
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
         with:
@@ -2022,14 +1994,14 @@ jobs:
       # SDK builds in this same mode, so one cache serves all of them: the Zig cache is keyed by optimisation
       # mode, and the unit tests and the storage integration tests build in this mode too.
       - name: Build the Zig CLI, which compiles the AWS SDK
-        working-directory: ./apps/cli-zig
+        working-directory: .
         run: zig build
 
       - name: Save the Zig build cache
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: apps/cli-zig/.zig-cache
+          path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
 
   zig-unit-tests:
@@ -2064,10 +2036,6 @@ jobs:
         uses: jdx/mise-action@v2
         with:
           install_args: zig
-
-      - name: Fetch the Zig package dependencies (one at a time)
-        shell: bash
-        run: bun run --cwd packages-zig/storage-zig fetch-deps
 
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
@@ -2121,7 +2089,7 @@ jobs:
       - name: Restore the Zig build cache
         uses: actions/cache/restore@v4
         with:
-          path: apps/cli-zig/.zig-cache
+          path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-build-
@@ -2134,11 +2102,11 @@ jobs:
       - name: Start a fresh Zig build cache when the restored one has grown too big
         shell: bash
         run: |
-          if [ -d apps/cli-zig/.zig-cache ]; then
-              megabytes="$(du -sm apps/cli-zig/.zig-cache | cut -f1)"
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
               echo "Restored Zig build cache: ${megabytes} MB"
               if [ "$megabytes" -ge 5120 ]; then
-                  mv apps/cli-zig/.zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
                   echo "Moved it aside to start a fresh one"
               fi
           fi
@@ -2153,8 +2121,7 @@ jobs:
         run: |
           # The Zig CLI and every Zig package in one build, so each dependency, the AWS SDK for C among
           # them, is compiled once rather than once in each package that uses it.
-          cd apps/cli-zig
-          zig build test-all --summary all --test-timeout 20m
+          zig build test --summary all --test-timeout 20m
 
       # A key of its own, because the smoke job saves under the plain one and actions/cache/save fails
       # when the key already exists.
@@ -2202,9 +2169,6 @@ jobs:
         uses: jdx/mise-action@v2
         with:
           install_args: zig
-      - name: Fetch the Zig package dependencies (one at a time)
-        shell: bash
-        run: bun run --cwd packages-zig/storage-zig fetch-deps
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
         with:
@@ -2261,7 +2225,7 @@ jobs:
       - name: Restore the Zig build cache
         uses: actions/cache/restore@v4
         with:
-          path: apps/cli-zig/.zig-cache
+          path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
@@ -2274,12 +2238,12 @@ jobs:
       - name: Put the Zig CLI where the smoke suites look for it
         shell: bash
         run: |
-          mkdir -p apps/cli-zig/zig-out/bin
-          cp zig-binary/${{ matrix.artifact }} apps/cli-zig/zig-out/bin/${{ matrix.binary }}
+          mkdir -p zig-out/bin
+          cp zig-binary/${{ matrix.artifact }} zig-out/bin/${{ matrix.binary }}
           # The artifact is downloaded without the executable bit, and the smoke suites fail with exit 126
           # (found but not executable) without it.
-          chmod +x apps/cli-zig/zig-out/bin/${{ matrix.binary }}
-          ls -la apps/cli-zig/zig-out/bin
+          chmod +x zig-out/bin/${{ matrix.binary }}
+          ls -la zig-out/bin
       - name: Run the Zig CLI smoke tests
         # 101 tests, and the Windows runner is the slowest: it reached test 100 in 14 minutes, so the
         # old 14-minute limit killed the step with every test passing.

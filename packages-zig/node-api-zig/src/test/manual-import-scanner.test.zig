@@ -2,7 +2,9 @@ const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const string_lists = @import("string-lists.zig");
 const ManualImportScanner = node_api.manual_import_scanner.ManualImportScanner;
 const IScannedImportFile = node_api.import_scanner.IScannedImportFile;
 const ScannerState = node_api.file_scanner.ScannerState;
@@ -80,7 +82,7 @@ const ScannerTest = struct {
     fn init(self: *ScannerTest) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
-        self.tempDir = try helpers.makeTempDir(allocator, std.testing.io, "manual-import-scanner");
+        self.tempDir = try temp_dirs.makeTempDir(allocator, std.testing.io, "manual-import-scanner");
         self.photosDir = try path.join(allocator, &.{ self.tempDir, "photos" });
         try std.Io.Dir.cwd().createDirPath(std.testing.io, self.photosDir);
     }
@@ -89,7 +91,7 @@ const ScannerTest = struct {
     // Removes the directories.
     //
     fn deinit(self: *ScannerTest) void {
-        helpers.removeTempDir(std.testing.io, self.tempDir);
+        temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
     }
 
@@ -98,7 +100,7 @@ const ScannerTest = struct {
     //
     fn writePhoto(self: *ScannerTest, fileName: []const u8, contents: []const u8) ![]const u8 {
         const filePath = try path.join(self.arena.allocator(), &.{ self.photosDir, fileName });
-        try helpers.writeFile(std.testing.io, filePath, contents);
+        try test_files.writeFile(std.testing.io, filePath, contents);
         return filePath;
     }
 };
@@ -117,7 +119,7 @@ test "pushes every file the scan finds and then returns" {
     for (pushed, 0..) |file, index| {
         names[index] = path.basename(file.filePath);
     }
-    helpers.sortStrings(names);
+    string_lists.sortStrings(names);
     try std.testing.expectEqual(@as(usize, 2), names.len);
     try std.testing.expectEqualStrings("a.jpg", names[0]);
     try std.testing.expectEqualStrings("b.jpg", names[1]);
@@ -182,5 +184,5 @@ test "has nothing to release, because it materialised nothing" {
     try scanner.importScanner().release(context.arena.allocator(), std.testing.io, filePath);
 
     // The file the user asked to import is still there. Releasing it must never mean deleting it.
-    try std.testing.expect(helpers.fileExists(std.testing.io, filePath));
+    try std.testing.expect(test_files.fileExists(std.testing.io, filePath));
 }

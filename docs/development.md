@@ -51,7 +51,7 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
             - bridge - The page side: the `window.ziggy` script every shell injects, and its types
             - native/ - The framework half of each shell: `linux` (GTK 3 and WebKitGTK), `windows` (WebView2), `apple` (MacOS and iOS, Swift, WKWebView) and `android` (Java, Android WebView)
             - docs - The architecture guide
-    - packages-zig/
+    - packages-zig/ - The Zig packages, built and tested by the `build.zig` at the root of the repository
         - api-zig - Zig port of api
         - bdb-zig - Zig port of bdb
         - encryption-zig - Zig port of encryption
@@ -112,6 +112,7 @@ Everything below is run from the repo root.
 | Command | What it does |
 |---|---|
 | `bun run build:ziggy:<platform>` / `bun run run:ziggy:<platform>` | Build, or build and launch, the Photosphere App on `linux`, `windows`, `macos`, `android` or `ios`. See the [Photosphere App README](../apps/photosphere/README.md) for every command and where each runs. |
+| `zig build` / `zig build test` | Build the Zig CLI (`zig-out/bin/psi`), or run every Zig test: the packages in `packages-zig`, Ziggy and the example, and the CLI. Both are steps of the one `build.zig` at the root of the repository, which also has `ziggy-example-core`, `ziggy-example-linux` and `ziggy-example-windows`; `zig build --help` lists them. `bun run test:zig` runs the tests. |
 | `bun run test:ziggy` / `bun run test:ziggy:and` / `bun run test:ziggy:ios` | Photosphere App smoke tests, on the host operating system, the Android emulator/device or the iOS simulator. |
 | `bun run build:ziggy-example:<platform>` / `bun run run:ziggy-example:<platform>` / `bun run package:ziggy-example:<platform>` | Build, build and launch, or package the Ziggy example on `linux`, `windows`, `macos`, `android` or `ios`. See the [Ziggy example README](../apps/ziggy-example/README.md). |
 | `bun run test:ziggy-example` / `bun run test:ziggy-example:and` / `bun run test:ziggy-example:ios` | Ziggy example smoke tests, on the host operating system, the Android emulator/device or the iOS simulator. |

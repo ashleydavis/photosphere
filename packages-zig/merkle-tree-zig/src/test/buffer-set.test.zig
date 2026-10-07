@@ -55,6 +55,7 @@ test "should add and check existence of buffers" {
     try std.testing.expect(containsBuffer(values, &hash1));
     try std.testing.expect(containsBuffer(values, &hash2));
     try std.testing.expectEqual(@as(usize, 2), values.len);
+    try std.testing.expectEqual(@as(usize, 2), bufferSet.size());
 }
 
 test "should delete buffers" {
@@ -70,6 +71,7 @@ test "should delete buffers" {
     try std.testing.expect(deleted);
     try std.testing.expect(!try bufferSet.has(&hash));
     try std.testing.expectEqual(@as(usize, 0), (try collectValues(arena.allocator(), &bufferSet)).len);
+    try std.testing.expectEqual(@as(usize, 0), bufferSet.size());
 }
 
 test "should return false when deleting non-existent buffer" {
@@ -89,6 +91,7 @@ test "should not add duplicate buffers" {
     _ = try bufferSet.add(&hash);
     _ = try bufferSet.add(&hash);
     try std.testing.expectEqual(@as(usize, 1), (try collectValues(arena.allocator(), &bufferSet)).len);
+    try std.testing.expectEqual(@as(usize, 1), bufferSet.size());
 }
 
 test "should handle buffer content equality (not reference)" {
@@ -111,6 +114,23 @@ test "should throw error for non-32-byte buffers" {
     try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "BufferSet expects 32-byte hashes"));
 }
 
+test "should clear all buffers" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var bufferSet = BufferSet.init(arena.allocator());
+    const hash1 = sha256("test1");
+    const hash2 = sha256("test2");
+
+    _ = try bufferSet.add(&hash1);
+    _ = try bufferSet.add(&hash2);
+    try std.testing.expectEqual(@as(usize, 2), bufferSet.size());
+
+    bufferSet.clear();
+    try std.testing.expectEqual(@as(usize, 0), bufferSet.size());
+    try std.testing.expectEqual(false, try bufferSet.has(&hash1));
+    try std.testing.expectEqual(false, try bufferSet.has(&hash2));
+}
+
 test "should iterate over values" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -130,6 +150,45 @@ test "should iterate over values" {
     try std.testing.expect(containsBuffer(values, &hash2));
 }
 
+//
+// Collects the buffers forEach passes (TypeScript: `collected.push(value)`).
+//
+const BufferCollector = struct {
+    // Allocates the list.
+    allocator: std.mem.Allocator,
+
+    // The collected buffers.
+    buffers: std.ArrayList([]const u8),
+};
+
+//
+// The forEach callback: collects the buffer.
+//
+fn collectBuffer(collector: *BufferCollector, buffer: []const u8) anyerror!void {
+    try collector.buffers.append(collector.allocator, buffer);
+}
+
+test "should support forEach" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var bufferSet = BufferSet.init(arena.allocator());
+    const hash1 = sha256("test1");
+    const hash2 = sha256("test2");
+
+    _ = try bufferSet.add(&hash1);
+    _ = try bufferSet.add(&hash2);
+
+    var collector: BufferCollector = .{
+        .allocator = arena.allocator(),
+        .buffers = .empty,
+    };
+    try bufferSet.forEach(&collector, collectBuffer);
+
+    try std.testing.expectEqual(@as(usize, 2), collector.buffers.items.len);
+    try std.testing.expect(containsBuffer(collector.buffers.items, &hash1));
+    try std.testing.expect(containsBuffer(collector.buffers.items, &hash2));
+}
+
 test "should support iteration with for...of" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -145,6 +204,7 @@ test "should support iteration with for...of" {
         count += 1;
     }
     try std.testing.expectEqual(@as(usize, 2), count);
+    try std.testing.expectEqual(@as(usize, 2), bufferSet.size());
 }
 
 test "should handle hash collisions correctly" {
@@ -159,11 +219,33 @@ test "should handle hash collisions correctly" {
     }
     const values = try collectValues(allocator, &bufferSet);
     try std.testing.expectEqual(@as(usize, 100), values.len);
+    try std.testing.expectEqual(@as(usize, 100), bufferSet.size());
 
     // Verify all buffers are still accessible
     for (&buffers) |*buffer| {
         try std.testing.expect(containsBuffer(values, buffer));
+        try std.testing.expectEqual(true, try bufferSet.has(buffer));
     }
+}
+
+test "should handle entries iteration" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var bufferSet = BufferSet.init(arena.allocator());
+    const hash1 = sha256("test1");
+    const hash2 = sha256("test2");
+
+    _ = try bufferSet.add(&hash1);
+    _ = try bufferSet.add(&hash2);
+
+    var count: usize = 0;
+    var entryIterator = bufferSet.entries();
+    while (entryIterator.next()) |entry| {
+        // Each entry should be [buffer, buffer] since it's a Set
+        try std.testing.expect(std.mem.eql(u8, entry.key, entry.value));
+        count += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 2), count);
 }
 
 test "should find hash 0034217e5269895c55acc694c6423f3ddb695ecbbb68635d950cee57542a4d14 after adding it" {
@@ -186,10 +268,19 @@ test "should find hash 0034217e5269895c55acc694c6423f3ddb695ecbbb68635d950cee575
     try std.testing.expectEqual(@as(usize, 2), values.len);
     try std.testing.expect(containsBuffer(values, &hashBuffer));
     try std.testing.expect(containsBuffer(values, &collisionBuffer));
+    try std.testing.expectEqual(@as(usize, 2), bufferSet.size());
+    try std.testing.expectEqual(true, try bufferSet.has(&hashBuffer));
+    try std.testing.expectEqual(true, try bufferSet.has(&collisionBuffer));
 
-    // Adding a new buffer with the same content as hashBuffer (different reference, simulating nodeA.hash) finds it
+    // Delete the collision buffer first (simulating deleting a different node that collides)
+    _ = try bufferSet.delete(&collisionBuffer);
+
+    // Verify the collision buffer is gone
+    try std.testing.expectEqual(false, try bufferSet.has(&collisionBuffer));
+    try std.testing.expectEqual(@as(usize, 1), bufferSet.size());
+
+    // A buffer with the same content as hashBuffer (different reference, simulating nodeA.hash) is still found
     var hashBuffer2: [32]u8 = undefined;
     _ = try std.fmt.hexToBytes(&hashBuffer2, "0034217e5269895c55acc694c6423f3ddb695ecbbb68635d950cee57542a4d14");
-    _ = try bufferSet.add(&hashBuffer2);
-    try std.testing.expectEqual(@as(usize, 2), (try collectValues(arena.allocator(), &bufferSet)).len);
+    try std.testing.expectEqual(true, try bufferSet.has(&hashBuffer2));
 }

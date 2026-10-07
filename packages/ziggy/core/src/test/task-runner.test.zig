@@ -451,3 +451,59 @@ test "a keep-alive parent keeps the app running until its children are done and 
     defer std.testing.allocator.free(calls);
     try std.testing.expectEqualSlices(bool, &[_]bool{ true, false }, calls);
 }
+
+fn hostRequestTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    const method = ziggy.json_util.getString(data, "method").?;
+    const reply = try context.hostRequest(method, "{\"key\":\"value\"}");
+    if (!reply.succeeded) {
+        return try std.fmt.allocPrint(context.arena, "{{\"failedBecause\":\"{s}\"}}", .{reply.text});
+    }
+    return try context.arena.dupe(u8, reply.text);
+}
+
+test "a task asks the shell to do something only the platform can do, and gets its answer" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const host_tasks = helpers.task_handlers ++ [_]ziggy.task_runner.TaskHandlerEntry{
+        .{ .name = "host-request", .handler = hostRequestTask },
+    };
+    var host_app = helpers.app;
+    host_app.tasks = &host_tasks;
+    const core = try ziggy.core.Core.create(std.testing.allocator, shell.config(1, 1), host_app);
+    defer core.destroy();
+    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"h1\",\"taskType\":\"host-request\",\"source\":\"src\",\"data\":{\"method\":\"exportFile\"},\"priority\":0}}");
+    try shell.expectMessageContaining("\"result\":{\"method\":\"exportFile\",\"request\":{\"key\":\"value\"}}");
+}
+
+test "a task is told why the shell could not do what was asked" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const host_tasks = helpers.task_handlers ++ [_]ziggy.task_runner.TaskHandlerEntry{
+        .{ .name = "host-request", .handler = hostRequestTask },
+    };
+    var host_app = helpers.app;
+    host_app.tasks = &host_tasks;
+    const core = try ziggy.core.Core.create(std.testing.allocator, shell.config(1, 1), host_app);
+    defer core.destroy();
+    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"h2\",\"taskType\":\"host-request\",\"source\":\"src\",\"data\":{\"method\":\"fail\"},\"priority\":0}}");
+    try shell.expectMessageContaining("\"result\":{\"failedBecause\":\"The phone said no.\"}");
+}
+
+test "a task on a platform with no host request callback gets HostCallbackMissing" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const host_tasks = helpers.task_handlers ++ [_]ziggy.task_runner.TaskHandlerEntry{
+        .{ .name = "host-request", .handler = hostRequestTask },
+    };
+    var host_app = helpers.app;
+    host_app.tasks = &host_tasks;
+    var config = shell.config(1, 1);
+    config.host_request = null;
+    const core = try ziggy.core.Core.create(std.testing.allocator, config, host_app);
+    defer core.destroy();
+    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"h3\",\"taskType\":\"host-request\",\"source\":\"src\",\"data\":{\"method\":\"exportFile\"},\"priority\":0}}");
+    try shell.expectMessageContaining("HostCallbackMissing");
+}

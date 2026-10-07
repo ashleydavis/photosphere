@@ -1,7 +1,7 @@
 const std = @import("std");
 const bdb = @import("bdb-zig");
 const serialization_zig = @import("serialization-zig");
-const helpers = @import("test-helpers.zig");
+const fixtures = @import("fixtures.zig");
 const js_value = bdb.js_value;
 const BsonValue = serialization_zig.bson.BsonValue;
 const BsonDocument = serialization_zig.bson.BsonDocument;
@@ -28,7 +28,7 @@ test "numberToString matches Number.prototype.toString for the golden numbers" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const fixture = try helpers.readJsonFixture(allocator, io, "js-values.json");
+    const fixture = try fixtures.readJsonFixture(allocator, io, "js-values.json");
     var mismatches: usize = 0;
     for (fixture.object.get("numbers").?.array.items) |item| {
         const value = try doubleFromBits(item.object.get("bits").?.string);
@@ -62,7 +62,7 @@ test "stringToNumber matches Number(string)" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const fixture = try helpers.readJsonFixture(allocator, io, "js-values.json");
+    const fixture = try fixtures.readJsonFixture(allocator, io, "js-values.json");
     for (fixture.object.get("numberStrings").?.array.items) |item| {
         const text = item.object.get("text").?.string;
         const actual = js_value.stringToNumber(text);
@@ -87,7 +87,7 @@ test "parseDate matches Date.parse" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const fixture = try helpers.readJsonFixture(allocator, io, "js-values.json");
+    const fixture = try fixtures.readJsonFixture(allocator, io, "js-values.json");
     for (fixture.object.get("dates").?.array.items) |item| {
         const text = item.object.get("text").?.string;
         const actual = js_value.parseDate(text);
@@ -117,7 +117,7 @@ test "date toString and toJSON match JavaScript (UTC)" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const fixture = try helpers.readJsonFixture(allocator, io, "js-values.json");
+    const fixture = try fixtures.readJsonFixture(allocator, io, "js-values.json");
     for (fixture.object.get("dateTimes").?.array.items) |item| {
         const time: i64 = switch (item.object.get("time").?) {
             .integer => |integer| integer,

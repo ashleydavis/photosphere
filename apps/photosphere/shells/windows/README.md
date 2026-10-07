@@ -15,4 +15,4 @@ A Zig executable hosting WebView2 through its C-compatible COM interface. The in
 
 ## Project and build
 
-The shell is a Zig package with its own `build.zig` and `build.zig.zon`. `sync:windows` builds the core as a static library and the UI and copies them into the project, then `zig build` builds the shell. `open:windows` opens the project in the editor. Runs on Windows, and cross-compiles from Linux. See [Photosphere App](../../README.md).
+The shell is built by the `build.zig` at the root of the repository. `sync:windows` builds the core as a static library and the UI and copies them into the project, then `zig build` builds the shell from the root of the repository. `open:windows` opens the project in the editor. Runs on Windows, and cross-compiles from Linux. See [Photosphere App](../../README.md).

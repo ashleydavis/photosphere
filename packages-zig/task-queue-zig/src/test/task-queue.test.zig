@@ -189,7 +189,7 @@ fn resetRecording() void {
 }
 
 //
-// A handler that records its id, tracks concurrency and optionally sleeps 100ms.
+// A handler that records its id, tracks concurrency and optionally waits until two tasks have run at once.
 //
 fn recordingHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
     _ = allocator;
@@ -204,7 +204,22 @@ fn recordingHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.Val
     record_mutex.unlock(io);
 
     if (sleeps) {
-        io.sleep(.fromMilliseconds(100), .awake) catch {};
+        // Holds the task until two tasks have been running at the same time, which is what the 100ms sleep of the
+        // TypeScript test is there to make happen. max_concurrent never goes down, so whichever task arrives second
+        // releases both, and no timer is involved. A pool that never runs two at once fails the task after five seconds.
+        const waitStarted = std.Io.Clock.real.now(io).toMilliseconds();
+        while (true) {
+            record_mutex.lockUncancelable(io);
+            const reached = max_concurrent >= 2;
+            record_mutex.unlock(io);
+            if (reached) {
+                break;
+            }
+            if (std.Io.Clock.real.now(io).toMilliseconds() - waitStarted > 5000) {
+                return error.NeverRanTwoTasksAtOnce;
+            }
+            std.Thread.yield() catch {};
+        }
     }
 
     record_mutex.lockUncancelable(io);

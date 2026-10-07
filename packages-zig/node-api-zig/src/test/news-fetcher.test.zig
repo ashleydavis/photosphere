@@ -2,7 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 const node_api = @import("node-api-zig");
 const utils = @import("utils-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
 const fetchNews = node_api.news_fetcher.fetchNews;
 
 //
@@ -150,10 +151,10 @@ test "reads from disk for file:// URLs" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const dir = try helpers.makeTempDir(allocator, io, "news-fetcher");
-    defer helpers.removeTempDir(io, dir);
+    const dir = try temp_dirs.makeTempDir(allocator, io, "news-fetcher");
+    defer temp_dirs.removeTempDir(io, dir);
     const filePath = try std.fmt.allocPrint(allocator, "{s}/news feed.yaml", .{dir});
-    try helpers.writeFile(io, filePath,
+    try test_files.writeFile(io, filePath,
         \\items:
         \\  - id: a
         \\    message: From file
@@ -185,10 +186,10 @@ test "a link label that is not a string is printed as a JavaScript template stri
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const dir = try helpers.makeTempDir(allocator, io, "news-fetcher-labels");
-    defer helpers.removeTempDir(io, dir);
+    const dir = try temp_dirs.makeTempDir(allocator, io, "news-fetcher-labels");
+    defer temp_dirs.removeTempDir(io, dir);
     const filePath = try std.fmt.allocPrint(allocator, "{s}/feed.yaml", .{dir});
-    try helpers.writeFile(io, filePath,
+    try test_files.writeFile(io, filePath,
         \\items:
         \\  - id: a
         \\    message: Labels
@@ -244,10 +245,10 @@ test "writes the label and url of a link as a template string would" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const dir = try helpers.makeTempDir(allocator, io, "news-fetcher-links");
-    defer helpers.removeTempDir(io, dir);
+    const dir = try temp_dirs.makeTempDir(allocator, io, "news-fetcher-links");
+    defer temp_dirs.removeTempDir(io, dir);
     const filePath = try std.fmt.allocPrint(allocator, "{s}/news.yaml", .{dir});
-    try helpers.writeFile(io, filePath,
+    try test_files.writeFile(io, filePath,
         \\items:
         \\  - id: array-and-float
         \\    message: m

@@ -28,4 +28,4 @@ while [ "$#" -gt 0 ]; do
 done
 
 (cd "$EXAMPLE_DIR" && bun run bundle:ui)
-(cd "$SHELL_DIR" && zig build "-Doptimize=$OPTIMIZE" $HOOKS_ARGUMENT)
+(cd "$EXAMPLE_DIR/../.." && zig build ziggy-example-linux "-Doptimize=$OPTIMIZE" $HOOKS_ARGUMENT --prefix "$SHELL_DIR/zig-out")

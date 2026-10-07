@@ -1,6 +1,8 @@
 const std = @import("std");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const test_environment = @import("test-environment.zig");
 const state_file = node_api.state_file;
 const state_format = node_api.state_format;
 const std_json = std.json;
@@ -9,10 +11,10 @@ const std_json = std.json;
 // Points PHOTOSPHERE_CONFIG_DIR at a new empty directory and returns it.
 //
 fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const u8 {
-    _ = try helpers.setupEnvironment(io);
-    const dir = try helpers.makeTempDir(allocator, io, name);
+    _ = try test_environment.setupEnvironment(io);
+    const dir = try temp_dirs.makeTempDir(allocator, io, name);
     const configDir = try std.fmt.allocPrint(allocator, "{s}/config", .{dir});
-    try helpers.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
+    try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
     return configDir;
 }
 
@@ -20,7 +22,7 @@ fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![
 // Writes the state file in the config directory.
 //
 fn writeState(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8, text: []const u8) !void {
-    try helpers.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/state.yaml", .{configDir}), text);
+    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/state.yaml", .{configDir}), text);
 }
 
 //
@@ -40,7 +42,7 @@ test "loadStateFile returns the defaults when the state file does not exist" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "state-file-missing");
-    defer helpers.removeTempDir(io, configDir);
+    defer temp_dirs.removeTempDir(io, configDir);
     try std.Io.Dir.cwd().createDirPath(io, configDir);
 
     const state = try state_file.loadStateFile(allocator, io);
@@ -61,7 +63,7 @@ test "loadStateFile reads the sections of the file and keeps a malformed section
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "state-file-sections");
-    defer helpers.removeTempDir(io, configDir);
+    defer temp_dirs.removeTempDir(io, configDir);
     try writeState(allocator, io, configDir,
         \\desktop:
         \\  last_folder: /home/me/photos

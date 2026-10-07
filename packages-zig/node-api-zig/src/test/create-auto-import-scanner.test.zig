@@ -4,7 +4,9 @@ const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("task-queue-zig");
 const serialization_zig = @import("serialization-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const test_environment = @import("test-environment.zig");
 const createAutoImportScanner = node_api.create_auto_import_scanner.createAutoImportScanner;
 const registerFolderMediaSourceBuilder = node_api.create_auto_import_scanner.registerFolderMediaSourceBuilder;
 const IAutoImportScannerProgress = node_api.auto_import_scanner.IAutoImportScannerProgress;
@@ -127,15 +129,15 @@ const ScannerTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try helpers.setupEnvironment(io);
+        _ = try test_environment.setupEnvironment(io);
         try registerFolderMediaSourceBuilder();
 
-        self.tempDir = try helpers.makeTempDir(allocator, io, "create-auto-import-scanner");
+        self.tempDir = try temp_dirs.makeTempDir(allocator, io, "create-auto-import-scanner");
         self.watchedDir = try path.join(allocator, &.{ self.tempDir, "watched" });
         try std.Io.Dir.cwd().createDirPath(io, self.watchedDir);
 
         self.photoPath = try path.join(allocator, &.{ self.watchedDir, "photo.jpg" });
-        try helpers.writeFile(io, self.photoPath, "the contents of a photo");
+        try test_files.writeFile(io, self.photoPath, "the contents of a photo");
 
         self.hashCache = try HashCache.init(try path.join(allocator, &.{ self.tempDir, "hash-cache" }), false);
         _ = try self.hashCache.load(io);
@@ -157,14 +159,22 @@ const ScannerTest = struct {
     //
     fn deinit(self: *ScannerTest) void {
         self.hashCache.deinit();
-        helpers.removeTempDir(std.testing.io, self.tempDir);
+        temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
     }
 
     //
-    // Records that the database holds an asset with the given content hash.
+    // Records that the database holds an asset with the given content hash, and commits it.
     //
     fn addAsset(self: *ScannerTest, assetId: []const u8, contentHash: []const u8) !void {
+        try self.insertAsset(assetId, contentHash);
+        try self.database.bsonDatabase.commit(std.testing.io);
+    }
+
+    //
+    // Puts an asset with the given content hash in the database, without committing it.
+    //
+    fn insertAsset(self: *ScannerTest, assetId: []const u8, contentHash: []const u8) !void {
         const allocator = self.arena.allocator();
         var record = try BsonDocument.fromFields(allocator, &.{
             .{
@@ -177,7 +187,6 @@ const ScannerTest = struct {
             },
         });
         try self.database.metadataCollection.insertOne(std.testing.io, &record, null);
-        try self.database.bsonDatabase.commit(std.testing.io);
     }
 
     //
@@ -326,7 +335,7 @@ test "a photo whose size no longer matches is pushed, however well known its ide
     try context.init();
     defer context.deinit();
     try context.recordAsImported("asset-1");
-    try helpers.writeFile(std.testing.io, context.photoPath, "the contents of a photo, edited and now longer");
+    try test_files.writeFile(std.testing.io, context.photoPath, "the contents of a photo, edited and now longer");
 
     const pushed = try context.runOnePass();
     try std.testing.expectEqual(@as(usize, 1), pushed.len);
@@ -428,7 +437,7 @@ test "the cache is saved every hundred photos the database is asked about" {
     for (0..100) |index| {
         const photoPath = try path.join(allocator, &.{ context.watchedDir, try std.fmt.allocPrint(allocator, "batch-{d:0>3}.jpg", .{index}) });
         const contents = try std.fmt.allocPrint(allocator, "photo number {d}", .{index});
-        try helpers.writeFile(io, photoPath, contents);
+        try test_files.writeFile(io, photoPath, contents);
         const stat = try std.Io.Dir.cwd().statFile(io, photoPath, .{});
         var digest: [32]u8 = undefined;
         Sha256.hash(contents, &digest, .{});
@@ -438,8 +447,9 @@ test "the cache is saved every hundred photos the database is asked about" {
             .lastModified = @intCast(@divFloor(stat.mtime.nanoseconds, std.time.ns_per_ms)),
         });
         // (The record keeps the hex it is given, so it gets a copy of its own.)
-        try context.addAsset(try std.fmt.allocPrint(allocator, "a1b2c3d4-e5f6-4890-abcd-ef1234567{d:0>3}", .{index}), try allocator.dupe(u8, &std.fmt.bytesToHex(digest, .lower)));
+        try context.insertAsset(try std.fmt.allocPrint(allocator, "a1b2c3d4-e5f6-4890-abcd-ef1234567{d:0>3}", .{index}), try allocator.dupe(u8, &std.fmt.bytesToHex(digest, .lower)));
     }
+    try context.database.bsonDatabase.commit(io);
 
     const pushed = try context.runOnePass();
 

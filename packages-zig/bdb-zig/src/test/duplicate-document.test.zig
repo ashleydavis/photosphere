@@ -2,7 +2,7 @@ const std = @import("std");
 const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
-const helpers = @import("test-helpers.zig");
+const test_clock = @import("test-clock.zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const BsonDocument = serialization_zig.bson.BsonDocument;
 const BsonDatabase = bdb.database.BsonDatabase;
@@ -21,7 +21,7 @@ var random_uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{}
 // never used, so it is not ported).
 //
 fn newCollection(allocator: std.mem.Allocator, storage: *MemoryStorage) !*IBsonCollection {
-    const db = try BsonDatabase.init(allocator, storage.asStorage(), "", random_uuid_generator.uuidGenerator(), helpers.timestamp_provider.timestampProvider());
+    const db = try BsonDatabase.init(allocator, storage.asStorage(), "", random_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
     return db.collection("testCollection");
 }
 

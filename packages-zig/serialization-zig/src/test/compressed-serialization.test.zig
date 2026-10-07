@@ -26,7 +26,7 @@ const io = std.testing.io;
 // Reads a fixture file.
 //
 fn readFixture(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
-    const fixture_path = try std.fmt.allocPrint(allocator, "src/test/fixtures/{s}", .{name});
+    const fixture_path = try std.fmt.allocPrint(allocator, "serialization-zig/src/test/fixtures/{s}", .{name});
     return std.Io.Dir.cwd().readFileAlloc(io, fixture_path, allocator, .unlimited);
 }
 

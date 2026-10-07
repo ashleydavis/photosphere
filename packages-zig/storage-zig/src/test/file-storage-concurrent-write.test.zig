@@ -9,9 +9,9 @@
 // failure was swallowed, so the command reported "Added 1 files" and the database held none.
 //
 
+const test_files = @import("test-files.zig");
 const std = @import("std");
 const storage_zig = @import("storage-zig");
-const helpers = @import("test-helpers.zig");
 
 const FileStorage = storage_zig.file_storage.FileStorage;
 
@@ -107,8 +107,8 @@ test "both writes complete and the file holds one writer's content in full" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const tempDir = try helpers.makeTempDir(allocator, std.testing.io, "temp-test-concurrent-write");
-    defer helpers.removeTempDir(std.testing.io, tempDir);
+    const tempDir = try test_files.makeTempDir(allocator, std.testing.io, "temp-test-concurrent-write");
+    defer test_files.removeTempDir(std.testing.io, tempDir);
     var storage = FileStorage.init(tempDir);
     const target = try std.fmt.allocPrint(allocator, "{s}/files.dat", .{tempDir});
 
@@ -121,8 +121,8 @@ test "both stream writes complete and the file holds one writer's content in ful
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const tempDir = try helpers.makeTempDir(allocator, std.testing.io, "temp-test-concurrent-write");
-    defer helpers.removeTempDir(std.testing.io, tempDir);
+    const tempDir = try test_files.makeTempDir(allocator, std.testing.io, "temp-test-concurrent-write");
+    defer test_files.removeTempDir(std.testing.io, tempDir);
     var storage = FileStorage.init(tempDir);
     const target = try std.fmt.allocPrint(allocator, "{s}/files.dat", .{tempDir});
 
@@ -135,8 +135,8 @@ test "no staging files are left behind" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const tempDir = try helpers.makeTempDir(allocator, std.testing.io, "temp-test-concurrent-write");
-    defer helpers.removeTempDir(std.testing.io, tempDir);
+    const tempDir = try test_files.makeTempDir(allocator, std.testing.io, "temp-test-concurrent-write");
+    defer test_files.removeTempDir(std.testing.io, tempDir);
     var storage = FileStorage.init(tempDir);
     const target = try std.fmt.allocPrint(allocator, "{s}/files.dat", .{tempDir});
 

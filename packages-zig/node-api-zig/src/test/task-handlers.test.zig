@@ -27,6 +27,11 @@ test "initTaskHandlers registers the handler psi check runs" {
     try std.testing.expect(task_queue_zig.worker.getHandler("check-file") == node_api.check_worker.checkFileHandler);
 }
 
+test "initTaskHandlers registers the check-database-exists handler" {
+    try node_api.task_handlers.initTaskHandlers();
+    try std.testing.expect(task_queue_zig.worker.getHandler("check-database-exists") == node_api.check_database_exists_worker.checkDatabaseExistsHandler);
+}
+
 test "initTaskHandlers registers the folder media source builder, as loading its modules does in TypeScript" {
     node_api.media_source_registry.clearMediaSourceBuilders();
     try node_api.task_handlers.initTaskHandlers();

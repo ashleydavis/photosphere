@@ -77,6 +77,7 @@ This is crass platform app. Developed on Linux, but delivered and tested on Wind
 - DO NOT PASS `--force` TO `test:everything` UNLESS I ASK FOR IT. Without it only the suites whose watched paths changed since they last passed are run, which is the point of the change gate and is usually a couple of minutes. Forcing runs every suite including the whole mobile set, which is where the ten minutes goes, and it is almost never what a change needs. Use the plain `bun run tev`. Force it only when I ask for the whole set. A rebase is not a reason: the gate compares file content against the last passing run, so it is unaffected by commits being rewritten underneath it and reports exactly the files that actually differ.
 - Assume there IS a shell answer until you have tried it and watched it fail. Eight helpers were once written here on the judgement that shell could not do their job, and six of them were later replaced by shell that does exactly that: finding a free port, decoding a little-endian binary field, percent-encoding, escaping and reading JSON, resolving a package path, and rewriting a file. Every one of those had a comment asserting there was no shell answer, and the assertion was the only evidence behind it. If you are about to write that sentence in a new helper, that is the moment to go and try the shell version instead.
 - The local iOS development environment is fixed: macOS 12.7.6 and Xcode 14.2. That is why the project is stuck on Capacitor 5 (later Capacitor requires a newer Xcode/macOS). Never bump tool or framework versions that would break this environment: do not upgrade Capacitor past 5, and do not require an Xcode or macOS version newer than Xcode 14.2 / macOS 12.7.6. When mobile code needs a newer API, prefer an availability guard or a compatible approach over raising a version. If a version bump seems unavoidable, stop and ask first.
+- When I ask you to record a note or a todo, never change my writing or distort it in any way.
 
 ## Project Overview
 
@@ -108,7 +109,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run test:cli:sync` - CLI sync smoke tests, several processes syncing at once
 - `bun run test:cli:write-lock` - CLI write lock smoke tests, several processes writing at once
 - `bun run test:cli:hash-cache` - CLI hash cache concurrency smoke tests
-- `bun run test:zig` - Unit tests of the Zig CLI and of every Zig package (`zig build test-all` in `apps/cli-zig`)
+- `bun run test:zig` - Unit tests of the Zig CLI and of every Zig package (`zig build test` at the repository root)
 - `bun run test:cli:zig` - Zig CLI smoke tests (apps/cli/smoke-tests-zig): the TypeScript CLI smoke suites with the commands run by the Zig CLI, and a TypeScript `psi verify` of every database it writes
 - `bun run test:lan-share:cli-desktop` (alias `tlcd`) - CLI to desktop LAN share smoke tests, both directions
 - `bun run test:ziggy` - Ziggy desktop smoke tests, on the host operating system

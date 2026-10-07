@@ -1,6 +1,6 @@
 # test-zig-mobile.sh
 
-Runs the unit tests of Ziggy's core (`packages/ziggy/core`) and the example's core (`apps/ziggy-example/core`) on a phone platform. The test program is built for the platform with the `test-binary` step of each package's `build.zig`, which installs it under `zig-out/test-bin` without running it, and is then run on the emulator or simulator, because this machine cannot run it. The script exits non-zero when either program fails.
+Runs the unit tests of Ziggy's core (`packages/ziggy/core`) and the example's core (`apps/ziggy-example/core`) on a phone platform. The test program is built for the platform with the `test-binary-ziggy-core` and `test-binary-ziggy-example-core` steps of the root `build.zig`, which install it under `test-bin` of the prefix without running it, and is then run on the emulator or simulator, because this machine cannot run it. The script exits non-zero when either program fails.
 
 ## Usage
 

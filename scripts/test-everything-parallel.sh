@@ -93,7 +93,6 @@ elif [ "$FORCE" = true ]; then
         test:cli:sync
         test:cli:write-lock
         test:cli:hash-cache
-        test:zig
         test:cli:zig
         test:cli:encrypted:zig
         test:cli:sync:zig

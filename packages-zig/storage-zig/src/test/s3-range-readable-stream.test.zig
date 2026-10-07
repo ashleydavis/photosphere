@@ -2,16 +2,17 @@
 // Tests for S3RangeReadableStream (port of src/tests/s3-range-readable-stream.test.ts).
 //
 
+const test_files = @import("test-files.zig");
 const std = @import("std");
 const storage_zig = @import("storage-zig");
 const utils = @import("utils-zig");
-const helpers = @import("test-helpers.zig");
 
 const s3_client = storage_zig.s3_client;
 const S3Client = s3_client.S3Client;
 const S3Command = s3_client.S3Command;
 const S3CommandOutput = s3_client.S3CommandOutput;
 const S3RangeReadableStream = storage_zig.s3_range_readable_stream.S3RangeReadableStream;
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 
 //
 // The three chunk sizes the stream attempts, in order: 100 MB, 20 MB, 10 MB.
@@ -68,6 +69,9 @@ const MockS3 = struct {
     // The Range of every request sent, in order (TypeScript: `mockSend.mock.calls[n][0].input.Range`).
     ranges: std.ArrayList([]const u8),
 
+    // The Io the stream runs on.
+    streamIo: std.Io,
+
     // The client whose send() this replaces.
     s3: S3Client,
 
@@ -80,6 +84,7 @@ const MockS3 = struct {
             .data = data,
             .answer = answer,
             .ranges = .empty,
+            .streamIo = std.testing.io,
             .s3 = S3Client.init(std.testing.io, .{ .endpoint = null, .region = null, .credentials = null }),
         };
         mock.s3.send = .{ .context = mock, .function = send };
@@ -113,7 +118,7 @@ const MockS3 = struct {
     // Creates a stream over the mock client.
     //
     fn stream(mock: *MockS3) !*S3RangeReadableStream {
-        return S3RangeReadableStream.init(mock.allocator, std.testing.io, &mock.s3, "my-bucket", "my-key");
+        return S3RangeReadableStream.init(mock.allocator, mock.streamIo, &mock.s3, "my-bucket", "my-key");
     }
 };
 
@@ -143,7 +148,7 @@ fn sliceAnswer(mock: *MockS3, range: IRange) anyerror!S3CommandOutput {
 // Collects a stream into a single buffer (TypeScript: streamToBuffer).
 //
 fn streamToBuffer(allocator: std.mem.Allocator, rangeStream: *S3RangeReadableStream) ![]u8 {
-    return helpers.readAll(allocator, rangeStream.reader());
+    return test_files.readAll(allocator, rangeStream.reader());
 }
 
 //
@@ -229,15 +234,19 @@ fn unavailableAnswer(mock: *MockS3, range: IRange) anyerror!S3CommandOutput {
 }
 
 test "emits an error when all chunk sizes fail" {
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mock: MockS3 = undefined;
     mock.init(arena.allocator(), &.{}, unavailableAnswer);
     defer mock.deinit();
+    mock.streamIo = backoff_time.io();
     _ = captureStderr(arena.allocator());
     defer utils.console.setCapture(null, null);
     const rangeStream = try mock.stream();
-    defer rangeStream.destroy(std.testing.io);
+    defer rangeStream.destroy(backoff_time.io());
     try std.testing.expectError(error.ReadFailed, streamToBuffer(arena.allocator(), rangeStream));
     try std.testing.expectEqualStrings("S3 unavailable", utils.errors.lastErrorMessage());
 }
@@ -252,15 +261,19 @@ fn networkFailureAnswer(mock: *MockS3, range: IRange) anyerror!S3CommandOutput {
 }
 
 test "tries all three chunk sizes before emitting error" {
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mock: MockS3 = undefined;
     mock.init(arena.allocator(), &.{}, networkFailureAnswer);
     defer mock.deinit();
+    mock.streamIo = backoff_time.io();
     _ = captureStderr(arena.allocator());
     defer utils.console.setCapture(null, null);
     const rangeStream = try mock.stream();
-    defer rangeStream.destroy(std.testing.io);
+    defer rangeStream.destroy(backoff_time.io());
     try std.testing.expectError(error.ReadFailed, streamToBuffer(arena.allocator(), rangeStream));
     try std.testing.expectEqualStrings("network failure", utils.errors.lastErrorMessage());
     try std.testing.expectEqual(@as(usize, 3), mock.callCount());
@@ -278,15 +291,19 @@ fn failLargeAnswer(mock: *MockS3, range: IRange) anyerror!S3CommandOutput {
 }
 
 test "falls back to medium chunk size when large chunk fails" {
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mock: MockS3 = undefined;
     mock.init(arena.allocator(), try arena.allocator().dupe(u8, "hello world"), failLargeAnswer);
     defer mock.deinit();
+    mock.streamIo = backoff_time.io();
     _ = captureStderr(arena.allocator());
     defer utils.console.setCapture(null, null);
     const rangeStream = try mock.stream();
-    defer rangeStream.destroy(std.testing.io);
+    defer rangeStream.destroy(backoff_time.io());
     const result = try streamToBuffer(arena.allocator(), rangeStream);
     try std.testing.expectEqualStrings("hello world", result);
     // First call fails (100 MB), second succeeds (20 MB)
@@ -306,15 +323,19 @@ fn failMediumAnswer(mock: *MockS3, range: IRange) anyerror!S3CommandOutput {
 }
 
 test "falls back to small chunk size when large and medium chunks fail" {
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mock: MockS3 = undefined;
     mock.init(arena.allocator(), try arena.allocator().dupe(u8, "hello world"), failMediumAnswer);
     defer mock.deinit();
+    mock.streamIo = backoff_time.io();
     _ = captureStderr(arena.allocator());
     defer utils.console.setCapture(null, null);
     const rangeStream = try mock.stream();
-    defer rangeStream.destroy(std.testing.io);
+    defer rangeStream.destroy(backoff_time.io());
     const result = try streamToBuffer(arena.allocator(), rangeStream);
     try std.testing.expectEqualStrings("hello world", result);
     // First two calls fail (100 MB, 20 MB), third succeeds (10 MB)
@@ -334,6 +355,9 @@ fn failFirstAnswer(mock: *MockS3, range: IRange) anyerror!S3CommandOutput {
 }
 
 test "uses the smaller chunk size for all subsequent chunks after a fallback" {
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const data = try arena.allocator().alloc(u8, 25);
@@ -341,10 +365,11 @@ test "uses the smaller chunk size for all subsequent chunks after a fallback" {
     var mock: MockS3 = undefined;
     mock.init(arena.allocator(), data, failFirstAnswer);
     defer mock.deinit();
+    mock.streamIo = backoff_time.io();
     _ = captureStderr(arena.allocator());
     defer utils.console.setCapture(null, null);
     const rangeStream = try mock.stream();
-    defer rangeStream.destroy(std.testing.io);
+    defer rangeStream.destroy(backoff_time.io());
     const result = try streamToBuffer(arena.allocator(), rangeStream);
     try std.testing.expectEqualSlices(u8, data, result);
     // 1 failed large + 1 medium chunk that covers the whole 25-byte file
@@ -395,15 +420,19 @@ test "handles missing Body in response gracefully" {
 // A stream that failed fails again on every later read, rather than being read as if it had ended.
 //
 test "a stream that failed keeps failing when read again" {
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mock: MockS3 = undefined;
     mock.init(arena.allocator(), &.{}, unavailableAnswer);
     defer mock.deinit();
+    mock.streamIo = backoff_time.io();
     _ = captureStderr(arena.allocator());
     defer utils.console.setCapture(null, null);
     const rangeStream = try mock.stream();
-    defer rangeStream.destroy(std.testing.io);
+    defer rangeStream.destroy(backoff_time.io());
 
     try std.testing.expectError(error.ReadFailed, streamToBuffer(arena.allocator(), rangeStream));
 

@@ -44,6 +44,7 @@ pub const cleanup_sources_worker = @import("lib/cleanup-sources.worker.zig");
 pub const import_module = @import("lib/import.zig");
 pub const check = @import("lib/check.zig");
 pub const check_worker = @import("lib/check.worker.zig");
+pub const check_database_exists_worker = @import("lib/check-database-exists.worker.zig");
 // Not ported: zip-utils,
 // load-assets.worker, apply-database-ops.
 pub const resolve_storage_credentials = @import("lib/resolve-storage-credentials.zig");
@@ -54,6 +55,13 @@ pub const news_fetcher = @import("lib/news-fetcher.zig");
 pub const news_state = @import("lib/news-state.zig");
 pub const state_format = @import("lib/state-format.zig");
 pub const state_file = @import("lib/state-file.zig");
+pub const config_format = @import("lib/config-format.zig");
+pub const config_file = @import("lib/config-file.zig");
+pub const app_config_format = @import("lib/app-config-format.zig");
+pub const app_config = @import("lib/app-config.zig");
+pub const app_state_format = @import("lib/app-state-format.zig");
+pub const app_state = @import("lib/app-state.zig");
+pub const auto_import_desktop = @import("lib/auto-import-desktop.zig");
 pub const lazy_origin_storage = @import("lib/lazy-origin-storage.zig");
 // Not ported: desktop-config, get-database-summary.worker, move-assets.worker,
 // hash-file.worker, save-asset.worker, save-assets-batch.worker, create-database.worker,

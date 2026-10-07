@@ -402,6 +402,7 @@ fn createBridge(env: *c.JNIEnv, allocator: std.mem.Allocator, arguments: CreateA
         .data_dir = data_dir.ptr,
         .test_mode = arguments.test_mode != c.JNI_FALSE,
         .test_port_file = if (bridge.test_port_file) |port_file| port_file.ptr else null,
+        .host_request = null,
     };
     bridge.core = try core_module.Core.create(allocator, config, app);
     return bridge;

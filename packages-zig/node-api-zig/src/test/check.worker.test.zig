@@ -4,7 +4,10 @@ const task_queue_zig = @import("task-queue-zig");
 const serialization_zig = @import("serialization-zig");
 const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const test_environment = @import("test-environment.zig");
+const mock_log = @import("mock-log.zig");
 const check_worker = node_api.check_worker;
 const checkFileHandler = check_worker.checkFileHandler;
 const ICheckFileData = check_worker.ICheckFileData;
@@ -77,11 +80,11 @@ const CheckTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try helpers.setupEnvironment(io);
-        self.tempDir = try helpers.makeTempDir(allocator, io, "check-worker");
-        self.contents = try helpers.readFile(allocator, io, "../../test/test.png");
+        _ = try test_environment.setupEnvironment(io);
+        self.tempDir = try temp_dirs.makeTempDir(allocator, io, "check-worker");
+        self.contents = try test_files.readFile(allocator, io, "../test/test.png");
         self.filePath = try path.join(allocator, &.{ self.tempDir, "photos", "asset.png" });
-        try helpers.writeFile(io, self.filePath, self.contents);
+        try test_files.writeFile(io, self.filePath, self.contents);
         self.hashCacheDir = try path.join(allocator, &.{ self.tempDir, "hash-cache" });
         self.uuidGenerator = try TestUuidGenerator.init(allocator);
         self.timestampProvider = .{};
@@ -99,7 +102,7 @@ const CheckTest = struct {
     // Removes the directory.
     //
     fn deinit(self: *CheckTest) void {
-        helpers.removeTempDir(std.testing.io, self.tempDir);
+        temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
     }
 
@@ -219,7 +222,11 @@ test "returns an empty result without opening storage when the file cannot be ha
     var context: CheckTest = undefined;
     try context.init();
     defer context.deinit();
-    try helpers.writeFile(std.testing.io, context.filePath, "this is not a png");
+    // The handler logs the image that cannot be read; a passing test must write nothing to stderr, so the log is muted.
+    var mutedLog: mock_log.MutedLog = .{};
+    mutedLog.install();
+    defer mutedLog.uninstall();
+    try test_files.writeFile(std.testing.io, context.filePath, "this is not a png");
     var data = context.makeData();
     data.fileStat.length = 17;
     // A database that cannot be opened: opening it would fail the handler.

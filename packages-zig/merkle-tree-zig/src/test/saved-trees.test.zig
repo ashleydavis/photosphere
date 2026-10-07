@@ -24,12 +24,12 @@ const io = std.testing.io;
 //
 // The directory of the fixtures (tests run with the package directory as cwd).
 //
-const FIXTURES_DIR = "src/test/fixtures";
+const FIXTURES_DIR = "merkle-tree-zig/src/test/fixtures";
 
 //
 // The repo's test databases, relative to the package directory.
 //
-const TEST_DBS_DIR = "../../test/dbs";
+const TEST_DBS_DIR = "../test/dbs";
 
 //
 // Reads a fixture file.

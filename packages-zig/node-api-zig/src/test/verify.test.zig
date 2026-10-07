@@ -2,7 +2,10 @@ const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const test_environment = @import("test-environment.zig");
+const progress_recorder = @import("progress-recorder.zig");
 const verify_module = node_api.verify;
 
 //
@@ -14,15 +17,15 @@ const ASSET_ID = "89171cd9-a652-4047-b869-1154bf2c95a1";
 // Records progress messages.
 //
 fn recordProgress(context: ?*anyopaque, message: ?[]const u8) void {
-    const recorder: *helpers.ProgressRecorder = @ptrCast(@alignCast(context.?));
+    const recorder: *progress_recorder.ProgressRecorder = @ptrCast(@alignCast(context.?));
     recorder.record(message orelse "");
 }
 
 //
 // Runs verify on a database directory.
 //
-fn runVerify(allocator: std.mem.Allocator, io: std.Io, databaseDir: []const u8, options: ?verify_module.IVerifyOptions, recorder: ?*helpers.ProgressRecorder) !verify_module.IVerifyResult {
-    _ = try helpers.setupEnvironment(io);
+fn runVerify(allocator: std.mem.Allocator, io: std.Io, databaseDir: []const u8, options: ?verify_module.IVerifyOptions, recorder: ?*progress_recorder.ProgressRecorder) !verify_module.IVerifyResult {
+    _ = try test_environment.setupEnvironment(io);
     try node_api.task_handlers.initTaskHandlers();
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
@@ -37,9 +40,9 @@ test "verify reports every file of an intact database as unmodified" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    var recorder: helpers.ProgressRecorder = .{ .allocator = allocator };
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    var recorder: progress_recorder.ProgressRecorder = .{ .allocator = allocator };
 
     const result = try runVerify(allocator, io, databaseDir, null, &recorder);
 
@@ -63,10 +66,10 @@ test "verify detects removed and modified files" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     try std.Io.Dir.cwd().deleteFile(io, try std.fmt.allocPrint(allocator, "{s}/display/{s}", .{ databaseDir, ASSET_ID }));
-    try helpers.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/thumb/{s}", .{ databaseDir, ASSET_ID }), "modified");
+    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/thumb/{s}", .{ databaseDir, ASSET_ID }), "modified");
 
     const result = try runVerify(allocator, io, databaseDir, null, null);
 
@@ -82,9 +85,9 @@ test "verify with a path filter only verifies the matching files" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    var recorder: helpers.ProgressRecorder = .{ .allocator = allocator };
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    var recorder: progress_recorder.ProgressRecorder = .{ .allocator = allocator };
 
     const result = try runVerify(allocator, io, databaseDir, .{ .pathFilter = "thumb" }, &recorder);
 
@@ -98,9 +101,9 @@ test "verify reports a long path filter in full" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    var recorder: helpers.ProgressRecorder = .{ .allocator = allocator };
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    var recorder: progress_recorder.ProgressRecorder = .{ .allocator = allocator };
     const longFilter = "thumb/" ++ "x" ** 2000;
 
     const result = try runVerify(allocator, io, databaseDir, .{ .pathFilter = longFilter }, &recorder);
@@ -114,8 +117,8 @@ test "verify reports a missing database record as a record mismatch" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     try std.Io.Dir.cwd().deleteFile(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/shards/96", .{databaseDir}));
 
     const result = try runVerify(allocator, io, databaseDir, null, null);
@@ -129,11 +132,11 @@ test "verify ignores missing files and records of a partial database" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try helpers.setupEnvironment(io);
+    _ = try test_environment.setupEnvironment(io);
     try node_api.task_handlers.initTaskHandlers();
-    const sourceDir = try helpers.copyTestDatabase(allocator, io, "v6");
+    const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     const root = std.fs.path.dirname(sourceDir).?;
-    defer helpers.removeTempDir(io, root);
+    defer temp_dirs.removeTempDir(io, root);
     const partialDir = try std.fmt.allocPrint(allocator, "{s}/partial", .{root});
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     _ = try node_api.replicate_database.replicateDatabase(allocator, io, uuidGenerator.uuidGenerator(), .{ .sourcePath = sourceDir, .destPath = partialDir, .partial = true, .force = false }, null);
@@ -150,10 +153,10 @@ test "verifyDatabaseFiles verifies the trees, shards and sort indexes" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    const storage = try helpers.directoryStorage(allocator, io, databaseDir);
-    var recorder: helpers.ProgressRecorder = .{ .allocator = allocator };
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    const storage = try test_files.directoryStorage(allocator, io, databaseDir);
+    var recorder: progress_recorder.ProgressRecorder = .{ .allocator = allocator };
 
     const result = try verify_module.verifyDatabaseFiles(allocator, io, storage, .{ .context = &recorder, .function = recordProgress });
 
@@ -170,13 +173,13 @@ test "verifyDatabaseFiles reports a corrupted shard" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     const shardPath = try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/shards/96", .{databaseDir});
-    const shard = try helpers.readFile(allocator, io, shardPath);
+    const shard = try test_files.readFile(allocator, io, shardPath);
     shard[shard.len / 2] ^= 0xff;
-    try helpers.writeFile(io, shardPath, shard);
-    const storage = try helpers.directoryStorage(allocator, io, databaseDir);
+    try test_files.writeFile(io, shardPath, shard);
+    const storage = try test_files.directoryStorage(allocator, io, databaseDir);
 
     const result = try verify_module.verifyDatabaseFiles(allocator, io, storage, null);
 
@@ -191,21 +194,21 @@ test "verifyDatabaseFiles reports every kind of database file that is corrupted,
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
 
     // The database tree, a shard's tree and a sort index's tree have a byte flipped; the collection tree is too short
     // to be one.
     const flipped = [_][]const u8{ ".db/files.dat", ".db/bson/collections/metadata/shards/96.dat", ".db/bson/indexes/metadata/hash_asc/tree.dat" };
     for (flipped) |relativePath| {
         const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ databaseDir, relativePath });
-        const contents = try helpers.readFile(allocator, io, filePath);
+        const contents = try test_files.readFile(allocator, io, filePath);
         contents[contents.len / 2] ^= 0xff;
-        try helpers.writeFile(io, filePath, contents);
+        try test_files.writeFile(io, filePath, contents);
     }
-    try helpers.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/collection.dat", .{databaseDir}), "short");
-    try helpers.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/indexes/metadata/hash_asc/build.checkpoint", .{databaseDir}), "not a serialized file");
-    const storage = try helpers.directoryStorage(allocator, io, databaseDir);
+    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/collection.dat", .{databaseDir}), "short");
+    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/indexes/metadata/hash_asc/build.checkpoint", .{databaseDir}), "not a serialized file");
+    const storage = try test_files.directoryStorage(allocator, io, databaseDir);
 
     const result = try verify_module.verifyDatabaseFiles(allocator, io, storage, null);
 
@@ -229,9 +232,9 @@ test "verify reports a database record whose hash is wrong as a record mismatch"
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    _ = try helpers.setupEnvironment(io);
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    _ = try test_environment.setupEnvironment(io);
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
     const opened = try node_api.open_storage.openStorage(allocator, io, databaseDir, null, null);

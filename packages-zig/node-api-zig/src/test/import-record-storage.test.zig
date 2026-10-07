@@ -1,7 +1,10 @@
 const std = @import("std");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const test_environment = @import("test-environment.zig");
+const string_lists = @import("string-lists.zig");
 const MAX_IMPORT_RECORD_ENTRIES = api.import_record.MAX_IMPORT_RECORD_ENTRIES;
 const IImportRecordEntry = api.import_record.IImportRecordEntry;
 const ImportSource = api.import_record.ImportSource;
@@ -43,9 +46,9 @@ const RecordTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try helpers.setupEnvironment(io);
-        self.runRoot = try helpers.makeTempDir(allocator, io, "import-record-test");
-        try helpers.setEnv("PHOTOSPHERE_CACHE_DIR", try std.fmt.allocPrint(allocator, "{s}/cache", .{self.runRoot}));
+        _ = try test_environment.setupEnvironment(io);
+        self.runRoot = try temp_dirs.makeTempDir(allocator, io, "import-record-test");
+        try test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", try std.fmt.allocPrint(allocator, "{s}/cache", .{self.runRoot}));
         self.databasePath = try std.fmt.allocPrint(allocator, "{s}/photos", .{self.runRoot});
     }
 
@@ -53,8 +56,8 @@ const RecordTest = struct {
     // Puts the cache directory back the way it was (TypeScript: the afterEach).
     //
     fn deinit(self: *RecordTest) void {
-        helpers.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
-        helpers.removeTempDir(std.testing.io, self.runRoot);
+        test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
+        temp_dirs.removeTempDir(std.testing.io, self.runRoot);
         self.arena.deinit();
     }
 };
@@ -118,7 +121,7 @@ test "it is written to the local path and nowhere else" {
 
     // The location is the whole point of this file: a local path derived from the database path,
     // not a path inside the database, so nothing that copies the database can carry it.
-    const written = try helpers.readFile(allocator, io, try getImportRecordPath(allocator, context.databasePath));
+    const written = try test_files.readFile(allocator, io, try getImportRecordPath(allocator, context.databasePath));
     const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, written, .{});
     try std.testing.expectEqualStrings("one", parsed.object.get("entries").?.array.items[0].object.get("logicalPath").?.string);
 }
@@ -167,7 +170,7 @@ test "recording nothing does not write" {
 
     recordImports(allocator, io, context.databasePath, &.{});
 
-    try std.testing.expect(!helpers.fileExists(io, try getImportRecordPath(allocator, context.databasePath)));
+    try std.testing.expect(!test_files.fileExists(io, try getImportRecordPath(allocator, context.databasePath)));
 }
 
 test "a record that is not JSON reads as empty rather than throwing" {
@@ -176,7 +179,7 @@ test "a record that is not JSON reads as empty rather than throwing" {
     defer context.deinit();
     const allocator = context.arena.allocator();
     const io = std.testing.io;
-    try helpers.writeFile(io, try getImportRecordPath(allocator, context.databasePath), "this is not a record");
+    try test_files.writeFile(io, try getImportRecordPath(allocator, context.databasePath), "this is not a record");
 
     const record = try loadImportRecord(allocator, io, context.databasePath);
 
@@ -189,7 +192,7 @@ test "JSON that is not a record reads as empty rather than throwing" {
     defer context.deinit();
     const allocator = context.arena.allocator();
     const io = std.testing.io;
-    try helpers.writeFile(io, try getImportRecordPath(allocator, context.databasePath), "{\"somethingElse\":true}");
+    try test_files.writeFile(io, try getImportRecordPath(allocator, context.databasePath), "{\"somethingElse\":true}");
 
     const record = try loadImportRecord(allocator, io, context.databasePath);
 
@@ -220,17 +223,17 @@ test "a record that cannot be written does not fail the import" {
     const allocator = context.arena.allocator();
     const io = std.testing.io;
     // The cache root is a file, so the directory the record needs cannot be created.
-    const blockedDir = try helpers.makeTempDir(allocator, io, "import-record-blocked");
-    defer helpers.removeTempDir(io, blockedDir);
+    const blockedDir = try temp_dirs.makeTempDir(allocator, io, "import-record-blocked");
+    defer temp_dirs.removeTempDir(io, blockedDir);
     const blockedRoot = try std.fmt.allocPrint(allocator, "{s}/cache", .{blockedDir});
-    try helpers.writeFile(io, blockedRoot, "not a directory");
-    try helpers.setEnv("PHOTOSPHERE_CACHE_DIR", blockedRoot);
+    try test_files.writeFile(io, blockedRoot, "not a directory");
+    try test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", blockedRoot);
 
     // The photos are already in the database by this point. Losing the note about them must not
     // turn a successful import into a failed one. (Zig: recordImports returns nothing, so it cannot fail.)
     recordImports(allocator, io, context.databasePath, &.{try makeEntry(allocator, "one", .manual)});
 
-    try std.testing.expect(!helpers.fileExists(io, try getImportRecordPath(allocator, context.databasePath)));
+    try std.testing.expect(!test_files.fileExists(io, try getImportRecordPath(allocator, context.databasePath)));
 }
 
 test "the record stays capped across many imports" {
@@ -296,7 +299,7 @@ test "writers into one database at the same time all survive" {
     for (record.entries, 0..) |entry, index| {
         recorded[index] = entry.logicalPath;
     }
-    helpers.sortStrings(recorded);
+    string_lists.sortStrings(recorded);
     try std.testing.expectEqual(@as(usize, writerCount), recorded.len);
     for (recorded, 0..) |logicalPath, index| {
         try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "writer-{d}", .{index}), logicalPath);

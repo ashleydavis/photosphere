@@ -128,17 +128,17 @@ ts_psi_cmd() {
     (cd "$SCRIPT_DIR" && bun run --silent start -- --quiet "$@")
 }
 
-# The Zig port of psi (apps/cli-zig), built with `zig build` in that directory.
+# The Zig port of psi (apps/cli-zig), built with `zig build` in the repository root.
 case "$(uname -s)" in
     CYGWIN*|MINGW*|MSYS*)
-        ZIG_CLI="$SCRIPT_DIR/../cli-zig/zig-out/bin/psi.exe"
+        ZIG_CLI="$SCRIPT_DIR/../../zig-out/bin/psi.exe"
         ;;
     *)
-        ZIG_CLI="$SCRIPT_DIR/../cli-zig/zig-out/bin/psi"
+        ZIG_CLI="$SCRIPT_DIR/../../zig-out/bin/psi"
         ;;
 esac
 if [ ! -x "$ZIG_CLI" ]; then
-    echo -e "${RED}FAIL: the Zig CLI is not built: $ZIG_CLI (run zig build in apps/cli-zig)${NC}"
+    echo -e "${RED}FAIL: the Zig CLI is not built: $ZIG_CLI (run `zig build` in the repository root)${NC}"
     exit 1
 fi
 

@@ -4,7 +4,11 @@ const node_utils = @import("node-utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const console_capture = @import("console-capture.zig");
+const test_environment = @import("test-environment.zig");
+const progress_recorder = @import("progress-recorder.zig");
 const media_file_database = node_api.media_file_database;
 const repair = node_api.repair.repair;
 
@@ -46,13 +50,13 @@ const TestDatabase = struct {
 // Creates a new database in a temporary directory.
 //
 fn createTestDatabase(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !TestDatabase {
-    _ = try helpers.setupEnvironment(io);
+    _ = try test_environment.setupEnvironment(io);
     const generators = try allocator.create(Generators);
     generators.* = .{
         .uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator),
         .timestampProvider = .{},
     };
-    const dir = try helpers.makeTempDir(allocator, io, name);
+    const dir = try temp_dirs.makeTempDir(allocator, io, name);
     const created = try @import("storage-zig").storage_factory.createStorage(allocator, io, dir, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
     try media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, null);
@@ -65,7 +69,7 @@ test "bumps lastModifiedAt when records are repaired" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const testDatabase = try createTestDatabase(allocator, io, "repair-bump");
-    defer helpers.removeTempDir(io, testDatabase.dir);
+    defer temp_dirs.removeTempDir(io, testDatabase.dir);
     const assetStorage = testDatabase.assetStorage;
 
     //
@@ -111,7 +115,7 @@ test "does not bump lastModifiedAt when no repairs were needed" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const testDatabase = try createTestDatabase(allocator, io, "repair-no-bump");
-    defer helpers.removeTempDir(io, testDatabase.dir);
+    defer temp_dirs.removeTempDir(io, testDatabase.dir);
 
     const before = try api.database_state.loadDatabaseState(allocator, io, testDatabase.rawStorage);
     try std.testing.expect(before == null or before.?.lastModifiedAt == null);
@@ -150,14 +154,14 @@ const IV6Copy = struct {
 // Copies test/dbs/v6 into a temporary directory and opens it.
 //
 fn copyV6(allocator: std.mem.Allocator, io: std.Io) !IV6Copy {
-    _ = try helpers.setupEnvironment(io);
+    _ = try test_environment.setupEnvironment(io);
     const generators = try allocator.create(Generators);
     generators.* = .{
         .uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator),
         .timestampProvider = .{},
     };
-    const dir = try helpers.copyTestDatabase(allocator, io, "v6");
-    const storage = try helpers.directoryStorage(allocator, io, dir);
+    const dir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    const storage = try test_files.directoryStorage(allocator, io, dir);
     return .{
         .dir = dir,
         .storage = storage,
@@ -169,7 +173,7 @@ fn copyV6(allocator: std.mem.Allocator, io: std.Io) !IV6Copy {
 // Records the progress messages of a repair.
 //
 fn recordProgress(context: ?*anyopaque, message: ?[]const u8) void {
-    const recorder: *helpers.ProgressRecorder = @ptrCast(@alignCast(context.?));
+    const recorder: *progress_recorder.ProgressRecorder = @ptrCast(@alignCast(context.?));
     recorder.record(message.?);
 }
 
@@ -191,9 +195,9 @@ test "restores a missing file and a corrupted one from the source database" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const target = try copyV6(allocator, io);
-    defer helpers.removeTempDir(io, std.fs.path.dirname(target.dir).?);
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(target.dir).?);
     const source = try copyV6(allocator, io);
-    defer helpers.removeTempDir(io, std.fs.path.dirname(source.dir).?);
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(source.dir).?);
 
     // The asset goes missing and the display file is overwritten with other bytes.
     const assetPath = "asset/" ++ V6_ASSET_ID;
@@ -201,7 +205,7 @@ test "restores a missing file and a corrupted one from the source database" {
     try target.storage.deleteFile(allocator, io, assetPath);
     try target.storage.write(allocator, io, displayPath, "image/jpeg", "corrupted bytes");
 
-    var recorder: helpers.ProgressRecorder = .{ .allocator = allocator };
+    var recorder: progress_recorder.ProgressRecorder = .{ .allocator = allocator };
     const result = try repair(allocator, io, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
         .source = source.dir,
     }, .{ .context = &recorder, .function = recordProgress });
@@ -209,7 +213,7 @@ test "restores a missing file and a corrupted one from the source database" {
     try std.testing.expect(containsName(result.repaired, assetPath));
     try std.testing.expect(containsName(result.repaired, displayPath));
     try std.testing.expectEqual(@as(usize, 0), result.unrepaired.len);
-    try std.testing.expectEqualSlices(u8, try helpers.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ source.dir, displayPath })), try helpers.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ target.dir, displayPath })));
+    try std.testing.expectEqualSlices(u8, try test_files.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ source.dir, displayPath })), try test_files.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ target.dir, displayPath })));
     try std.testing.expect(containsName(recorder.messages.items, "Repairing missing file: " ++ assetPath));
     try std.testing.expect(containsName(recorder.messages.items, "Repairing corrupted file: " ++ displayPath));
 
@@ -223,9 +227,9 @@ test "reports what the source cannot restore: a file it does not have, or has wi
     const allocator = arena.allocator();
     const io = std.testing.io;
     const target = try copyV6(allocator, io);
-    defer helpers.removeTempDir(io, std.fs.path.dirname(target.dir).?);
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(target.dir).?);
     const source = try copyV6(allocator, io);
-    defer helpers.removeTempDir(io, std.fs.path.dirname(source.dir).?);
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(source.dir).?);
 
     // The asset is missing from both, and the thumb is corrupted in both.
     const assetPath = "asset/" ++ V6_ASSET_ID;
@@ -236,8 +240,8 @@ test "reports what the source cannot restore: a file it does not have, or has wi
     try source.storage.write(allocator, io, thumbPath, "image/jpeg", "other corrupted bytes");
 
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    helpers.captureStderr(&stderr_capture.writer);
-    defer helpers.endConsoleCapture();
+    console_capture.captureStderr(&stderr_capture.writer);
+    defer console_capture.endConsoleCapture();
 
     const result = try repair(allocator, io, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
         .source = source.dir,
@@ -258,7 +262,7 @@ test "a full repair hashes every file, and puts right the hash of a record" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const target = try copyV6(allocator, io);
-    defer helpers.removeTempDir(io, std.fs.path.dirname(target.dir).?);
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(target.dir).?);
 
     // The record's hash is wrong.
     var updates: @import("serialization-zig").bson.BsonDocument = .empty;
@@ -272,16 +276,16 @@ test "a full repair hashes every file, and puts right the hash of a record" {
     const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, target.storage)).?;
     const thumbNode = merkle_tree_zig.merkle_tree.findItemInTree(filesTree.sort, thumbName).?;
     const thumbPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ target.dir, thumbName });
-    const thumb = try helpers.readFile(allocator, io, thumbPath);
+    const thumb = try test_files.readFile(allocator, io, thumbPath);
     @memset(thumb[0..16], 0);
-    try helpers.writeFile(io, thumbPath, thumb);
+    try test_files.writeFile(io, thumbPath, thumb);
     const thumbFile = try std.Io.Dir.cwd().openFile(io, thumbPath, .{ .mode = .read_write });
     try thumbFile.setTimestamps(io, .{ .modify_timestamp = .{ .new = std.Io.Timestamp.fromNanoseconds(@as(i96, thumbNode.lastModified.?) * std.time.ns_per_ms) } });
     thumbFile.close(io);
 
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    helpers.captureStderr(&stderr_capture.writer);
-    defer helpers.endConsoleCapture();
+    console_capture.captureStderr(&stderr_capture.writer);
+    defer console_capture.endConsoleCapture();
 
     const result = try repair(allocator, io, target.storage, target.storage, target.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
         .source = target.dir,

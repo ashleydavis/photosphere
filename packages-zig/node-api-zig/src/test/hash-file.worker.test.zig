@@ -3,7 +3,10 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("task-queue-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const test_environment = @import("test-environment.zig");
+const mock_log = @import("mock-log.zig");
 const hash_file_worker = node_api.hash_file_worker;
 const hashFileHandler = hash_file_worker.hashFileHandler;
 const IHashFileData = hash_file_worker.IHashFileData;
@@ -77,12 +80,12 @@ const HandlerTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try helpers.setupEnvironment(io);
+        _ = try test_environment.setupEnvironment(io);
         forgetSharedHashCaches();
-        self.tempDir = try helpers.makeTempDir(allocator, io, "hash-file-worker");
-        self.contents = try helpers.readFile(allocator, io, "../../test/test.png");
+        self.tempDir = try temp_dirs.makeTempDir(allocator, io, "hash-file-worker");
+        self.contents = try test_files.readFile(allocator, io, "../test/test.png");
         self.filePath = try std.fmt.allocPrint(allocator, "{s}/photos/img.png", .{self.tempDir});
-        try helpers.writeFile(io, self.filePath, self.contents);
+        try test_files.writeFile(io, self.filePath, self.contents);
         self.hashCacheDir = try std.fmt.allocPrint(allocator, "{s}/hash-cache", .{self.tempDir});
         self.uuidGenerator = try TestUuidGenerator.init(allocator);
         self.timestampProvider = .{};
@@ -98,7 +101,7 @@ const HandlerTest = struct {
     //
     fn deinit(self: *HandlerTest) void {
         forgetSharedHashCaches();
-        helpers.removeTempDir(std.testing.io, self.tempDir);
+        temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
     }
 
@@ -200,16 +203,20 @@ test "does not ask the database whether the hash is already there" {
     const result = try context.run(data);
 
     try std.testing.expectEqualStrings(&context.photoHash(), result.hash);
-    try std.testing.expect(!helpers.fileExists(std.testing.io, "/test/db"));
+    try std.testing.expect(!test_files.fileExists(std.testing.io, "/test/db"));
 }
 
 test "throws when validateAndHash returns undefined" {
     var context: HandlerTest = undefined;
     try context.init();
     defer context.deinit();
+    // The validation logs the failure; a passing test must write nothing to stderr, so the log is muted.
+    var mutedLog: mock_log.MutedLog = .{};
+    mutedLog.install();
+    defer mutedLog.uninstall();
     var data = context.makeData();
     // A file that is not the image it claims to be fails its validation.
-    try helpers.writeFile(std.testing.io, data.filePath, "not a png at all");
+    try test_files.writeFile(std.testing.io, data.filePath, "not a png at all");
     data.fileStat.length = 16;
 
     try std.testing.expectError(error.Thrown, context.run(data));

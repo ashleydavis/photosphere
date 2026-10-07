@@ -554,7 +554,7 @@ test "vault() exposes the PlaintextVault through the IVault interface" {
 // Loads the secrets that generate.ts wrote to ts-vault/.
 //
 fn loadFixtureSecrets(allocator: std.mem.Allocator, io: std.Io) ![]ISecret {
-    const json = try std.Io.Dir.cwd().readFileAlloc(io, "src/test/fixtures/secrets.json", allocator, .unlimited);
+    const json = try std.Io.Dir.cwd().readFileAlloc(io, "vault-zig/src/test/fixtures/secrets.json", allocator, .unlimited);
     return std.json.parseFromSliceLeaky([]ISecret, allocator, json, .{});
 }
 
@@ -564,7 +564,7 @@ test "interop: Zig reads a vault file written by TypeScript" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const secrets = try loadFixtureSecrets(allocator, io);
-    var vault = PlaintextVault.init("src/test/fixtures/ts-vault");
+    var vault = PlaintextVault.init("vault-zig/src/test/fixtures/ts-vault");
 
     for (secrets) |expected| {
         const result = (try vault.get(allocator, io, expected.name)).?;
@@ -577,7 +577,7 @@ test "interop: Zig reads a vault file written by TypeScript" {
     // TypeScript wrote them to the file in.
     const listed = try vault.list(allocator, io);
     try std.testing.expectEqual(secrets.len, listed.len);
-    const raw = try std.Io.Dir.cwd().readFileAlloc(io, "src/test/fixtures/ts-vault/vault.json", allocator, .unlimited);
+    const raw = try std.Io.Dir.cwd().readFileAlloc(io, "vault-zig/src/test/fixtures/ts-vault/vault.json", allocator, .unlimited);
     var previous_position: usize = 0;
     for (listed) |secret| {
         const quoted_name = try std.json.Stringify.valueAlloc(allocator, secret.name, .{});
@@ -602,7 +602,7 @@ test "interop: Zig writes a vault file byte-identical to TypeScript (so TypeScri
         try vault.set(allocator, io, secret);
     }
 
-    const expected = try std.Io.Dir.cwd().readFileAlloc(io, "src/test/fixtures/ts-vault/vault.json", allocator, .unlimited);
+    const expected = try std.Io.Dir.cwd().readFileAlloc(io, "vault-zig/src/test/fixtures/ts-vault/vault.json", allocator, .unlimited);
     const actual = try temp_dir.tmp_dir.dir.readFileAlloc(io, "vault.json", allocator, .unlimited);
     try std.testing.expectEqualStrings(expected, actual);
 

@@ -3,7 +3,9 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const string_lists = @import("string-lists.zig");
 const auto_import_scanner = node_api.auto_import_scanner;
 const AutoImportScanner = auto_import_scanner.AutoImportScanner;
 const IAutoImportScannerDeps = auto_import_scanner.IAutoImportScannerDeps;
@@ -103,7 +105,7 @@ const FakeMediaSource = struct {
         const self: *FakeMediaSource = @ptrCast(@alignCast(ptr));
         try self.exportedIds.append(self.allocator, item.sourceId);
         const exportedPath = try path.join(allocator, &.{ self.exportDir, try std.fmt.allocPrint(allocator, "{s}.jpg", .{item.sourceId}) });
-        try helpers.writeFile(io, exportedPath, try std.fmt.allocPrint(allocator, "contents of {s}", .{item.sourceId}));
+        try test_files.writeFile(io, exportedPath, try std.fmt.allocPrint(allocator, "contents of {s}", .{item.sourceId}));
         return exportedPath;
     }
 
@@ -255,7 +257,7 @@ const ScannerTest = struct {
     //
     fn init(self: *ScannerTest) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-        self.tempDir = try helpers.makeTempDir(self.arena.allocator(), std.testing.io, "auto-import-scanner");
+        self.tempDir = try temp_dirs.makeTempDir(self.arena.allocator(), std.testing.io, "auto-import-scanner");
         self.generator = .{};
         self.hooks = .{
             .allocator = self.arena.allocator(),
@@ -266,7 +268,7 @@ const ScannerTest = struct {
     // Removes the directory.
     //
     fn deinit(self: *ScannerTest) void {
-        helpers.removeTempDir(std.testing.io, self.tempDir);
+        temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
     }
 
@@ -595,7 +597,7 @@ test "reports the whole library once the run has read all of it" {
 
     try std.testing.expectEqual(@as(usize, 1), context.hooks.walkedLibraries.items.len);
     const walked = try allocator.dupe([]const u8, context.hooks.walkedLibraries.items[0]);
-    helpers.sortStrings(walked);
+    string_lists.sortStrings(walked);
     try expectStrings(&.{ "one", "three", "two" }, walked);
 }
 

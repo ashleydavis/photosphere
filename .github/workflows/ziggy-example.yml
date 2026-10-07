@@ -78,12 +78,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: |
-            apps/ziggy-example/core/.zig-cache
-            apps/ziggy-example/shells/linux/.zig-cache
-            apps/ziggy-example/shells/windows/.zig-cache
-            packages/ziggy/core/.zig-cache
-            packages/ziggy/native/linux/.zig-cache
-            packages/ziggy/native/windows/.zig-cache
+            .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-
@@ -93,7 +88,7 @@ jobs:
       - name: Start fresh Zig build caches when the restored ones have grown too big
         shell: bash
         run: |
-          for cache_dir in apps/ziggy-example/core apps/ziggy-example/shells/linux apps/ziggy-example/shells/windows packages/ziggy/core packages/ziggy/native/linux packages/ziggy/native/windows; do
+          for cache_dir in .; do
               if [ -d "$cache_dir/.zig-cache" ]; then
                   megabytes="$(du -sm "$cache_dir/.zig-cache" | cut -f1)"
                   echo "Restored Zig build cache of $cache_dir: ${megabytes} MB"
@@ -114,12 +109,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: |
-            apps/ziggy-example/core/.zig-cache
-            apps/ziggy-example/shells/linux/.zig-cache
-            apps/ziggy-example/shells/windows/.zig-cache
-            packages/ziggy/core/.zig-cache
-            packages/ziggy/native/linux/.zig-cache
-            packages/ziggy/native/windows/.zig-cache
+            .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
 
   ziggy-example-zig-unit-tests:
@@ -192,12 +182,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: |
-            apps/ziggy-example/core/.zig-cache
-            apps/ziggy-example/shells/linux/.zig-cache
-            apps/ziggy-example/shells/windows/.zig-cache
-            packages/ziggy/core/.zig-cache
-            packages/ziggy/native/linux/.zig-cache
-            packages/ziggy/native/windows/.zig-cache
+            .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-
@@ -207,7 +192,7 @@ jobs:
       - name: Start fresh Zig build caches when the restored ones have grown too big
         shell: bash
         run: |
-          for cache_dir in apps/ziggy-example/core apps/ziggy-example/shells/linux apps/ziggy-example/shells/windows packages/ziggy/core packages/ziggy/native/linux packages/ziggy/native/windows; do
+          for cache_dir in .; do
               if [ -d "$cache_dir/.zig-cache" ]; then
                   megabytes="$(du -sm "$cache_dir/.zig-cache" | cut -f1)"
                   echo "Restored Zig build cache of $cache_dir: ${megabytes} MB"
@@ -278,12 +263,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: |
-            apps/ziggy-example/core/.zig-cache
-            apps/ziggy-example/shells/linux/.zig-cache
-            apps/ziggy-example/shells/windows/.zig-cache
-            packages/ziggy/core/.zig-cache
-            packages/ziggy/native/linux/.zig-cache
-            packages/ziggy/native/windows/.zig-cache
+            .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
 
   ziggy-example-smoke-tests:
@@ -347,12 +327,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: |
-            apps/ziggy-example/core/.zig-cache
-            apps/ziggy-example/shells/linux/.zig-cache
-            apps/ziggy-example/shells/windows/.zig-cache
-            packages/ziggy/core/.zig-cache
-            packages/ziggy/native/linux/.zig-cache
-            packages/ziggy/native/windows/.zig-cache
+            .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-
@@ -362,7 +337,7 @@ jobs:
       - name: Start fresh Zig build caches when the restored ones have grown too big
         shell: bash
         run: |
-          for cache_dir in apps/ziggy-example/core apps/ziggy-example/shells/linux apps/ziggy-example/shells/windows packages/ziggy/core packages/ziggy/native/linux packages/ziggy/native/windows; do
+          for cache_dir in .; do
               if [ -d "$cache_dir/.zig-cache" ]; then
                   megabytes="$(du -sm "$cache_dir/.zig-cache" | cut -f1)"
                   echo "Restored Zig build cache of $cache_dir: ${megabytes} MB"
@@ -388,12 +363,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: |
-            apps/ziggy-example/core/.zig-cache
-            apps/ziggy-example/shells/linux/.zig-cache
-            apps/ziggy-example/shells/windows/.zig-cache
-            packages/ziggy/core/.zig-cache
-            packages/ziggy/native/linux/.zig-cache
-            packages/ziggy/native/windows/.zig-cache
+            .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
 
   ziggy-example-package:
@@ -472,12 +442,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: |
-            apps/ziggy-example/core/.zig-cache
-            apps/ziggy-example/shells/linux/.zig-cache
-            apps/ziggy-example/shells/windows/.zig-cache
-            packages/ziggy/core/.zig-cache
-            packages/ziggy/native/linux/.zig-cache
-            packages/ziggy/native/windows/.zig-cache
+            .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-
@@ -487,7 +452,7 @@ jobs:
       - name: Start fresh Zig build caches when the restored ones have grown too big
         shell: bash
         run: |
-          for cache_dir in apps/ziggy-example/core apps/ziggy-example/shells/linux apps/ziggy-example/shells/windows packages/ziggy/core packages/ziggy/native/linux packages/ziggy/native/windows; do
+          for cache_dir in .; do
               if [ -d "$cache_dir/.zig-cache" ]; then
                   megabytes="$(du -sm "$cache_dir/.zig-cache" | cut -f1)"
                   echo "Restored Zig build cache of $cache_dir: ${megabytes} MB"
@@ -514,10 +479,5 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: |
-            apps/ziggy-example/core/.zig-cache
-            apps/ziggy-example/shells/linux/.zig-cache
-            apps/ziggy-example/shells/windows/.zig-cache
-            packages/ziggy/core/.zig-cache
-            packages/ziggy/native/linux/.zig-cache
-            packages/ziggy/native/windows/.zig-cache
+            .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-ziggy-example-zig-build-${{ github.sha }}

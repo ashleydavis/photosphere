@@ -1,6 +1,6 @@
 const std = @import("std");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
 const hash_cache = node_api.hash_cache;
 const HashCache = hash_cache.HashCache;
 const loadSharedHashCache = hash_cache.loadSharedHashCache;
@@ -44,7 +44,7 @@ const SharedCacheTest = struct {
     //
     fn init(self: *SharedCacheTest) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-        self.cacheDir = try helpers.makeTempDir(self.arena.allocator(), std.testing.io, "shared-hash-cache-test");
+        self.cacheDir = try temp_dirs.makeTempDir(self.arena.allocator(), std.testing.io, "shared-hash-cache-test");
         forgetSharedHashCaches();
     }
 
@@ -53,7 +53,7 @@ const SharedCacheTest = struct {
     //
     fn deinit(self: *SharedCacheTest) void {
         forgetSharedHashCaches();
-        helpers.removeTempDir(std.testing.io, self.cacheDir);
+        temp_dirs.removeTempDir(std.testing.io, self.cacheDir);
         self.arena.deinit();
     }
 };
@@ -112,8 +112,8 @@ test "caches in different directories are kept apart" {
     defer context.deinit();
     const allocator = context.arena.allocator();
     const io = std.testing.io;
-    const otherDir = try helpers.makeTempDir(allocator, io, "shared-hash-cache-other-test");
-    defer helpers.removeTempDir(io, otherDir);
+    const otherDir = try temp_dirs.makeTempDir(allocator, io, "shared-hash-cache-other-test");
+    defer temp_dirs.removeTempDir(io, otherDir);
     try writeAnEntry(context.cacheDir, "photo-1.jpg", 100);
 
     const here = try loadSharedHashCache(io, context.cacheDir);

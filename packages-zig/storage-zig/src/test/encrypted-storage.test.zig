@@ -1,7 +1,7 @@
+const test_files = @import("test-files.zig");
 const std = @import("std");
 const storage_zig = @import("storage-zig");
 const encryption = @import("encryption-zig");
-const helpers = @import("test-helpers.zig");
 const RecordingStorage = @import("recording-storage.zig").RecordingStorage;
 
 const EncryptedStorage = storage_zig.encrypted_storage.EncryptedStorage;
@@ -16,8 +16,8 @@ const computeEncryptedLength = encryption.encrypt_stream.computeEncryptedLength;
 fn loadFixtureOptions(allocator: std.mem.Allocator) !encryption.encryption_types.IStorageOptions {
     const cwd = std.Io.Dir.cwd();
     const io = std.testing.io;
-    const privateKeyPem = try cwd.readFileAlloc(io, "../encryption-zig/src/test/fixtures/ts-private.pem", allocator, .unlimited);
-    const publicKeyPem = try cwd.readFileAlloc(io, "../encryption-zig/src/test/fixtures/ts-public.pem", allocator, .unlimited);
+    const privateKeyPem = try cwd.readFileAlloc(io, "encryption-zig/src/test/fixtures/ts-private.pem", allocator, .unlimited);
+    const publicKeyPem = try cwd.readFileAlloc(io, "encryption-zig/src/test/fixtures/ts-public.pem", allocator, .unlimited);
     const loaded = try key_utils.loadEncryptionKeysFromPem(allocator, &.{.{ .privateKeyPem = privateKeyPem, .publicKeyPem = publicKeyPem }});
     return loaded.options;
 }
@@ -37,14 +37,14 @@ test "write encrypts, read decrypts and info returns the raw on-disk length" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const tempDir = try helpers.makeTempDir(allocator, io, "encrypted-storage-write");
-    defer helpers.removeTempDir(io, tempDir);
+    const tempDir = try test_files.makeTempDir(allocator, io, "encrypted-storage-write");
+    defer test_files.removeTempDir(io, tempDir);
     var fileStorage = FileStorage.init("fs:");
     const encryptedStorage = try makeEncryptedStorage(allocator, fileStorage.storage());
     const storage = encryptedStorage.storage();
     try std.testing.expectEqualStrings("fs:", storage.location);
 
-    const plain = try helpers.makeData(allocator, 1000);
+    const plain = try test_files.makeData(allocator, 1000);
     const filePath = try std.fmt.allocPrint(allocator, "{s}/file.bin", .{tempDir});
     try storage.write(allocator, io, filePath, null, plain);
 
@@ -61,12 +61,12 @@ test "readStream decrypts and writeStream encrypts" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const tempDir = try helpers.makeTempDir(allocator, io, "encrypted-storage-stream");
-    defer helpers.removeTempDir(io, tempDir);
+    const tempDir = try test_files.makeTempDir(allocator, io, "encrypted-storage-stream");
+    defer test_files.removeTempDir(io, tempDir);
     var fileStorage = FileStorage.init("fs:");
     const encryptedStorage = try makeEncryptedStorage(allocator, fileStorage.storage());
 
-    const plain = try helpers.makeData(allocator, 300 * 1024 + 5);
+    const plain = try test_files.makeData(allocator, 300 * 1024 + 5);
     const filePath = try std.fmt.allocPrint(allocator, "{s}/stream.bin", .{tempDir});
     var input = std.Io.Reader.fixed(plain);
     try encryptedStorage.writeStream(allocator, io, filePath, null, &input, plain.len);
@@ -75,7 +75,7 @@ test "readStream decrypts and writeStream encrypts" {
 
     const stream = try encryptedStorage.readStream(allocator, io, filePath);
     defer stream.destroy(io);
-    try std.testing.expectEqualSlices(u8, plain, try helpers.readAll(allocator, stream.reader()));
+    try std.testing.expectEqualSlices(u8, plain, try test_files.readAll(allocator, stream.reader()));
 }
 
 test "unencrypted files are read unchanged" {
@@ -83,8 +83,8 @@ test "unencrypted files are read unchanged" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const tempDir = try helpers.makeTempDir(allocator, io, "encrypted-storage-plain");
-    defer helpers.removeTempDir(io, tempDir);
+    const tempDir = try test_files.makeTempDir(allocator, io, "encrypted-storage-plain");
+    defer test_files.removeTempDir(io, tempDir);
     var fileStorage = FileStorage.init("fs:");
     const encryptedStorage = try makeEncryptedStorage(allocator, fileStorage.storage());
     const filePath = try std.fmt.allocPrint(allocator, "{s}/plain.txt", .{tempDir});
@@ -135,7 +135,7 @@ test "the other methods forward to the wrapped storage unchanged" {
 //
 // The directory of the encryption-zig golden fixtures that the TypeScript encryption package wrote with ts-public.pem.
 //
-const encryption_fixtures_dir = "../encryption-zig/src/test/fixtures";
+const encryption_fixtures_dir = "encryption-zig/src/test/fixtures";
 
 //
 // The 44-byte header TypeScript wrote at the start of every file it encrypted with ts-public.pem: "PSEN", version 1
@@ -187,8 +187,8 @@ test "EncryptedStorage reads the files TypeScript encrypted" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const dbDir = try helpers.makeTempDir(allocator, io, "encrypted-storage-ts-files");
-    defer helpers.removeTempDir(io, dbDir);
+    const dbDir = try test_files.makeTempDir(allocator, io, "encrypted-storage-ts-files");
+    defer test_files.removeTempDir(io, dbDir);
     const created = try createStorage(allocator, io, dbDir, null, try loadFixtureOptions(allocator));
     try std.testing.expectEqualStrings("encrypted-fs", created.@"type");
 
@@ -207,7 +207,7 @@ test "EncryptedStorage reads the files TypeScript encrypted" {
         try std.testing.expectEqualSlices(u8, plain, (try created.storage.read(allocator, io, tsFile.fileName)).?);
         const stream = try created.storage.readStream(allocator, io, tsFile.fileName);
         defer stream.destroy(io);
-        try std.testing.expectEqualSlices(u8, plain, try helpers.readAll(allocator, stream.reader()));
+        try std.testing.expectEqualSlices(u8, plain, try test_files.readAll(allocator, stream.reader()));
         try std.testing.expectEqual(@as(u64, tsFile.encryptedLength), (try created.storage.info(allocator, io, tsFile.fileName)).?.length);
     }
 }
@@ -217,8 +217,8 @@ test "EncryptedStorage writes files with the header and length TypeScript writes
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const dbDir = try helpers.makeTempDir(allocator, io, "encrypted-storage-zig-files");
-    defer helpers.removeTempDir(io, dbDir);
+    const dbDir = try test_files.makeTempDir(allocator, io, "encrypted-storage-zig-files");
+    defer test_files.removeTempDir(io, dbDir);
     const created = try createStorage(allocator, io, dbDir, null, try loadFixtureOptions(allocator));
 
     for (ts_encrypted_files) |tsFile| {
@@ -265,8 +265,8 @@ test "writeStreamHashed writes the stream without the hash, and the bytes make t
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const tempDir = try helpers.makeTempDir(allocator, io, "encrypted-storage-write-stream-hashed");
-    defer helpers.removeTempDir(io, tempDir);
+    const tempDir = try test_files.makeTempDir(allocator, io, "encrypted-storage-write-stream-hashed");
+    defer test_files.removeTempDir(io, tempDir);
     var fileStorage = FileStorage.init("fs:");
     const encryptedStorage = try makeEncryptedStorage(allocator, fileStorage.storage());
 
@@ -293,4 +293,124 @@ test "storedHash is undefined, because the stored bytes are ciphertext" {
 
     // The store underneath is not asked.
     try std.testing.expectEqual(@as(usize, 0), recording.calls.items.len);
+}
+
+//
+// A storage that records the length each stream write was told to expect, which is what becomes the Content-Length
+// of the request that carries it (the LengthRecordingStorage of encrypted-storage-lengths.test.ts). It stores the
+// bytes in files, like the MockStorage the TypeScript class extends keeps them in memory.
+//
+const LengthRecordingStorage = struct {
+    // The storage the bytes are really written to.
+    inner: FileStorage,
+
+    // Allocates the recorded lengths.
+    allocator: std.mem.Allocator,
+
+    // The length declared for each file written, by file path. Null for a write that declared none.
+    declaredLengths: std.StringHashMap(?u64),
+
+    //
+    // Creates the storage.
+    //
+    fn init(allocator: std.mem.Allocator) LengthRecordingStorage {
+        return .{
+            .inner = FileStorage.init("fs:"),
+            .allocator = allocator,
+            .declaredLengths = std.StringHashMap(?u64).init(allocator),
+        };
+    }
+
+    //
+    // Records the declared length, then writes the stream.
+    //
+    fn writeStream(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) anyerror!void {
+        const inner: *FileStorage = @ptrCast(@alignCast(ptr));
+        const self: *LengthRecordingStorage = @fieldParentPtr("inner", inner);
+        try self.declaredLengths.put(try self.allocator.dupe(u8, filePath), contentLength);
+        return inner.writeStream(allocator, io, filePath, contentType, inputStream, contentLength);
+    }
+};
+
+//
+// Builds an IStorage over a length recording storage.
+//
+fn lengthRecordingInterface(recording: *LengthRecordingStorage, vtable: *storage_zig.storage.IStorage.VTable) storage_zig.storage.IStorage {
+    vtable.* = storage_zig.storage.implement(FileStorage).*;
+    vtable.writeStream = LengthRecordingStorage.writeStream;
+    return .{
+        .ptr = &recording.inner,
+        .vtable = vtable,
+        .location = "fs:",
+    };
+}
+
+//
+// Fifteen bytes of padding and one, and every count between, all land on the same stored length, which is exactly why
+// the stored length cannot be turned back into the plaintext's.
+//
+test "it will not say how long a read is, because the stored length cannot say" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var recording = RecordingStorage.init(allocator);
+    const encryptedStorage = try makeEncryptedStorage(allocator, recording.storage());
+
+    var plainLength: u64 = 1;
+    while (plainLength <= 64) : (plainLength += 1) {
+        const fileInfo: storage_zig.storage.IFileInfo = .{
+            .contentType = "image/jpeg",
+            .length = computeEncryptedLength(plainLength),
+            .lastModified = 1767225600000,
+        };
+        try std.testing.expectEqual(@as(?u64, null), encryptedStorage.storage().readableLength(fileInfo));
+    }
+}
+
+test "a write given no length declares none to the store underneath" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tempDir = try test_files.makeTempDir(allocator, io, "encrypted-storage-lengths");
+    defer test_files.removeTempDir(io, tempDir);
+    var underlying = LengthRecordingStorage.init(allocator);
+    var vtable: storage_zig.storage.IStorage.VTable = undefined;
+    const encryptedStorage = try makeEncryptedStorage(allocator, lengthRecordingInterface(&underlying, &vtable));
+
+    const contents = "a thumbnail's worth of bytes";
+    const filePath = try std.fmt.allocPrint(allocator, "{s}/thumb/one.jpg", .{tempDir});
+    var input = std.Io.Reader.fixed(contents);
+    _ = try encryptedStorage.writeStreamHashed(allocator, io, filePath, "image/jpeg", &input, null, &([_]u8{7} ** 32));
+
+    try std.testing.expectEqual(@as(?u64, null), underlying.declaredLengths.get(filePath).?);
+
+    // The bytes still made the trip, and come back out as what went in.
+    try std.testing.expectEqualStrings(contents, (try encryptedStorage.read(allocator, io, filePath)).?);
+}
+
+//
+// A caller that does know the plaintext's length, an import writing bytes it is holding, still gets an exact one
+// declared, which is what lets a write stream instead of being counted first.
+//
+test "a write given a length declares what the ciphertext will come to" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tempDir = try test_files.makeTempDir(allocator, io, "encrypted-storage-lengths");
+    defer test_files.removeTempDir(io, tempDir);
+    var underlying = LengthRecordingStorage.init(allocator);
+    var vtable: storage_zig.storage.IStorage.VTable = undefined;
+    const encryptedStorage = try makeEncryptedStorage(allocator, lengthRecordingInterface(&underlying, &vtable));
+
+    const contents = "a thumbnail's worth of bytes";
+    const filePath = try std.fmt.allocPrint(allocator, "{s}/thumb/two.jpg", .{tempDir});
+    var input = std.Io.Reader.fixed(contents);
+    try encryptedStorage.storage().writeStream(allocator, io, filePath, "image/jpeg", &input, contents.len);
+
+    try std.testing.expectEqual(@as(?u64, computeEncryptedLength(contents.len)), underlying.declaredLengths.get(filePath).?);
+
+    const stored = (try underlying.inner.read(allocator, io, filePath)).?;
+    try std.testing.expectEqual(computeEncryptedLength(contents.len), stored.len);
 }

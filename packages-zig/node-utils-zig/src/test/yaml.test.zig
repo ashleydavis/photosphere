@@ -52,11 +52,11 @@ test "load parses the news feeds like js-yaml" {
     // Every value in the feeds is a mapping, a sequence or a string (no scalar resolves to another type).
     const expectedLoads = [_]ExpectedLoad{
         .{
-            .file = "../../news.yaml",
+            .file = "../news.yaml",
             .json = "{\"items\":[{\"id\":\"welcome-2026-05-17\",\"message\":\"Welcome to Photosphere. Thanks for trying it out!\",\"link\":{\"label\":\"Read the docs\",\"url\":\"https://github.com/ashleydavis/photosphere/wiki\"},\"action\":{\"label\":\"What's new\",\"url\":\"https://github.com/ashleydavis/photosphere/releases/latest\"}}]}",
         },
         .{
-            .file = "../../test/demo-news.yaml",
+            .file = "../test/demo-news.yaml",
             .json = "{\"items\":[" ++
                 "{\"id\":\"demo-001-welcome\",\"message\":\"Welcome to Photosphere. Thanks for trying it out!\",\"link\":{\"label\":\"Read the docs\",\"url\":\"https://github.com/ashleydavis/photosphere/wiki\"},\"action\":{\"label\":\"What's new\",\"url\":\"https://github.com/ashleydavis/photosphere/releases/latest\"}}," ++
                 "{\"id\":\"demo-002-survey\",\"message\":\"We'd love your feedback. Take our 2-minute user survey!\",\"color\":\"neutral\",\"link\":{\"label\":\"Open the survey\",\"url\":\"https://example.com/photosphere/survey\"}}," ++

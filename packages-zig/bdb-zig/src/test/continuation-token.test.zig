@@ -9,7 +9,7 @@ const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const serialization_zig = @import("serialization-zig");
-const helpers = @import("test-helpers.zig");
+const test_clock = @import("test-clock.zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const BsonDocument = serialization_zig.bson.BsonDocument;
 const IStorage = storage_zig.storage.IStorage;
@@ -86,7 +86,7 @@ fn emptyTokenStorage(memoryStorage: *MemoryStorage) IStorage {
 // Writes one record into collection "users" and commits it through a normal storage.
 //
 fn writeOneRecord(allocator: std.mem.Allocator, memoryStorage: *MemoryStorage) !void {
-    const database = try bdb.database.BsonDatabase.init(allocator, memoryStorage.asStorage(), "", test_uuid_generator.uuidGenerator(), helpers.timestamp_provider.timestampProvider());
+    const database = try bdb.database.BsonDatabase.init(allocator, memoryStorage.asStorage(), "", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
     const collection = try database.collection("users");
     try collection.setInternalRecord(io, .{
         ._id = RECORD_ID,
@@ -103,7 +103,7 @@ test "BsonDatabase.collections stops listing on an empty continuation token" {
     var memoryStorage = MemoryStorage.init(allocator);
     try writeOneRecord(allocator, &memoryStorage);
 
-    const database = try bdb.database.BsonDatabase.init(allocator, emptyTokenStorage(&memoryStorage), "", test_uuid_generator.uuidGenerator(), helpers.timestamp_provider.timestampProvider());
+    const database = try bdb.database.BsonDatabase.init(allocator, emptyTokenStorage(&memoryStorage), "", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
     const names = try database.collections(io);
     try std.testing.expectEqual(@as(usize, 1), names.len);
     try std.testing.expectEqualStrings("users", names[0]);
@@ -116,7 +116,7 @@ test "BsonCollection.iterateShards stops listing on an empty continuation token"
     var memoryStorage = MemoryStorage.init(allocator);
     try writeOneRecord(allocator, &memoryStorage);
 
-    const database = try bdb.database.BsonDatabase.init(allocator, emptyTokenStorage(&memoryStorage), "", test_uuid_generator.uuidGenerator(), helpers.timestamp_provider.timestampProvider());
+    const database = try bdb.database.BsonDatabase.init(allocator, emptyTokenStorage(&memoryStorage), "", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
     const collection = try database.collection("users");
     var shards = collection.iterateShards();
     const firstShard = (try shards.next(io)).?;
@@ -190,7 +190,7 @@ test "listShards and buildDatabaseMerkleTree follow the continuation token throu
     defer arena.deinit();
     const allocator = arena.allocator();
     var memoryStorage = MemoryStorage.init(allocator);
-    const database = try bdb.database.BsonDatabase.init(allocator, memoryStorage.asStorage(), "", test_uuid_generator.uuidGenerator(), helpers.timestamp_provider.timestampProvider());
+    const database = try bdb.database.BsonDatabase.init(allocator, memoryStorage.asStorage(), "", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
     for ([_][]const u8{ "users", "photos" }) |collectionName| {
         const collection = try database.collection(collectionName);
         for ([_][]const u8{ RECORD_ID, "22222222-2222-4222-a222-222222222222", "33333333-3333-4333-a333-333333333333", "44444444-4444-4444-a444-444444444444", "55555555-5555-4555-a555-555555555555" }) |recordId| {

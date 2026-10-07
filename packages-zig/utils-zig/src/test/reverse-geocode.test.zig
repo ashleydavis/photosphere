@@ -147,7 +147,14 @@ test "reverse geocoding throws with bad arguments" {
 test "reverse geocoding does nothing without an API key" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+
+    // The warning goes to a capture so that nothing reaches stderr (the TypeScript test has no such case).
+    var captured = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer captured.deinit();
+    utils.console.setCapture(null, &captured.writer);
+    defer utils.console.setCapture(null, null);
     try std.testing.expect((try reverse_geocode.reverseGeocode(arena.allocator(), std.testing.io, .{ .lat = 1, .lng = 2 }, null)) == null);
+    try std.testing.expectEqualStrings("No Google API key set. Not doing reverse geocoding.\n", captured.written());
 }
 
 test "isLocationInRange checks both coordinates" {

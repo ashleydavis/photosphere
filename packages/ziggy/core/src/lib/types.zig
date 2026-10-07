@@ -37,7 +37,8 @@ pub const PickKind = enum(i32) {
 // A native host callback that shows a native file or folder dialog, waits for the user, and writes what they chose into the
 // buffer the core gives it, as a JSON array of path strings ("[]" when they cancelled). Returns the number of bytes written, or
 // a negative number on failure. The title is NUL terminated and may be null. The initial name is NUL terminated and may be
-// null, and is used only to save. The core calls it from a worker thread, never from the one that handles page messages, so
+// null: for a save dialog it is the suggested file name, and for a dialog that opens files or a folder it is the folder the dialog
+// starts in, which a shell that cannot start a dialog in a folder leaves out. The core calls it from a worker thread, never from the one that handles page messages, so
 // the shell shows the dialog on its UI thread and waits.
 //
 //
@@ -57,6 +58,25 @@ pub const MenuActionFn = *const fn (user_data: ?*anyopaque, action: [*:0]const u
 pub const KeepAliveFn = *const fn (user_data: ?*anyopaque, keep_running: bool) callconv(.c) void;
 
 pub const PickPathsFn = *const fn (user_data: ?*anyopaque, kind: i32, title: ?[*:0]const u8, initial_name: ?[*:0]const u8, buffer: [*]u8, capacity: usize) callconv(.c) isize;
+
+//
+// A native host callback that does one thing only the platform can do, named by `method` ("exportFile", "secureStoreGet", ...). The
+// request is the JSON text of the method's argument (NUL terminated), and the shell writes the JSON text of its answer into the
+// buffer and returns the number of bytes written. When it cannot do what was asked it writes the text of the reason, in words the user
+// can act on, and returns that number of bytes negated. The shell may show native interface and wait for the user, so the core calls
+// it from a worker thread, never from the one that handles page messages, and it may take a long time.
+//
+pub const HostRequestFn = *const fn (user_data: ?*anyopaque, method: [*:0]const u8, request_json: [*:0]const u8, buffer: [*]u8, capacity: usize) callconv(.c) isize;
+
+//
+// What a shell answered a host request with.
+//
+pub const HostReply = struct {
+    // Whether the shell did what was asked.
+    succeeded: bool,
+    // The JSON text of the answer when it succeeded, and the text of the reason when it did not.
+    text: []const u8,
+};
 
 //
 // What the shell passes to ziggy_create. Every pointer is copied by the core, so it need only be valid during the call.
@@ -90,6 +110,9 @@ pub const ZiggyConfig = extern struct {
     test_mode: bool,
     // The file the test control connection writes its port to, or null for none. Used only in a test hooks build.
     test_port_file: ?[*:0]const u8,
+    // Native host callback: do one thing only the platform can do (a share sheet, a permission prompt, the keychain), by name. Null when
+    // the platform has none. Last in the struct so that a shell that builds it with zeroes needs no change.
+    host_request: ?HostRequestFn,
 };
 
 //
@@ -132,4 +155,57 @@ pub const TaskError = error{
     Cancelled,
     UnknownTaskType,
     HostCallbackMissing,
+};
+
+//
+// A function that gives the text to report for an error a handler returned, or null to report the error's name. An app supplies
+// one when its code records the reason for a failure somewhere other than the error's name, as a Zig error carries no message.
+//
+pub const ErrorDescriber = *const fn (err: anyerror) ?[]const u8;
+
+//
+// How a task ended, as reported to the app's observer: the task's type and input as well as its outcome, which the page's
+// task-completed event does not carry on its own account (the page knows what it asked for).
+//
+pub const TaskEnd = struct {
+    // The id of the task.
+    task_id: []const u8,
+    // The task type string.
+    task_type: []const u8,
+    // The source the task was queued under.
+    source: []const u8,
+    // The task's input data as JSON text.
+    input_json: []const u8,
+    // How the task ended.
+    status: TaskStatus,
+    // The text of the error, when it failed.
+    error_message: ?[]const u8,
+};
+
+//
+// A message a task sent, as reported to the app's observer.
+//
+pub const TaskSentMessage = struct {
+    // The id of the task.
+    task_id: []const u8,
+    // The task type string.
+    task_type: []const u8,
+    // The source the task was queued under.
+    source: []const u8,
+    // The message as JSON text.
+    message_json: []const u8,
+};
+
+//
+// Lets the app see every task end and every message a task sends, as the Electron main process does with the worker pool's
+// onTaskComplete and onAnyTaskMessage. Both functions are called from the thread the event happened on, with no lock held, and the
+// values are valid only during the call.
+//
+pub const TaskObserver = struct {
+    // The observer's own pointer, passed back on every call.
+    user_data: ?*anyopaque,
+    // Called when a task has ended, after the page has been told.
+    on_task_end: *const fn (user_data: ?*anyopaque, end: TaskEnd) void,
+    // Called when a task sends a message, after the page has been told.
+    on_task_message: *const fn (user_data: ?*anyopaque, sent: TaskSentMessage) void,
 };

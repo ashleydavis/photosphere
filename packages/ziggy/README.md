@@ -21,4 +21,4 @@ The framework half in `native/` does the work. An app's own native project (`app
 
 ## Running the tests
 
-`bun run test:zig` runs the Zig unit tests of Ziggy and the example, `bun run compile:zig` builds and cross-builds the Zig code, and `bun run --filter=ziggy-bridge test` runs the bridge's tests. The platform smoke tests that drive a whole app are in the example (`bun run test:ziggy-example`).
+`bun run test:zig` runs the Zig tests of Ziggy, the example, the CLI and every package in `packages-zig`, all from the `build.zig` at the root of the repository, `bun run compile:zig` builds and cross-builds the Zig code, and `bun run --filter=ziggy-bridge test` runs the bridge's tests. The platform smoke tests that drive a whole app are in the example (`bun run test:ziggy-example`).

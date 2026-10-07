@@ -1,6 +1,7 @@
 const std = @import("std");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
+const MockLog = @import("mock-log.zig").MockLog;
 
 const spinner = cli.spinner.spinner;
 
@@ -34,6 +35,9 @@ test "uses the animated spinner when a user is watching" {
     const allocator = arena.allocator();
     const capture = try startCapture(allocator);
     defer utils.console.setCapture(null, null);
+    var mock = MockLog.init(allocator);
+    mock.install();
+    defer mock.uninstall();
 
     const spin = try spinner(allocator, std.testing.io, true);
 
@@ -41,6 +45,7 @@ test "uses the animated spinner when a user is watching" {
     // test checks which kind it is and that nothing was logged.
     try std.testing.expect(spin == .animated);
     try std.testing.expectEqualStrings("", capture.stdout.written());
+    try std.testing.expectEqual(@as(usize, 0), mock.callCount(.info));
 }
 
 test "does not create an animated spinner when non-interactive" {
@@ -65,13 +70,19 @@ test "reports the same messages as plain log lines when non-interactive" {
     const allocator = arena.allocator();
     const capture = try startCapture(allocator);
     defer utils.console.setCapture(null, null);
+    var mock = MockLog.init(allocator);
+    mock.install();
+    defer mock.uninstall();
     const spin = try spinner(allocator, std.testing.io, false);
 
     try spin.start("Waiting for sender");
     spin.message("Still waiting");
     try spin.stop("Payload received");
 
-    try std.testing.expectEqualStrings("Waiting for sender\nStill waiting\nPayload received\n", capture.stdout.written());
+    try std.testing.expect(mock.wasCalledWith(.info, "Waiting for sender"));
+    try std.testing.expect(mock.wasCalledWith(.info, "Still waiting"));
+    try std.testing.expect(mock.wasCalledWith(.info, "Payload received"));
+    try std.testing.expectEqualStrings("", capture.stdout.written());
 }
 
 test "reports nothing as cancelled when non-interactive" {

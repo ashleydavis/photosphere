@@ -4,7 +4,11 @@ const utils = @import("utils-zig");
 const bdb = @import("bdb-zig");
 const tools = @import("tools-zig");
 const serialization_zig = @import("serialization-zig");
-const test_helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const console_capture = @import("console-capture.zig");
+const mock_log = @import("mock-log.zig");
+const test_environment = @import("test-environment.zig");
 const test_jpg_exif = @import("test-jpg-exif.zig");
 const image = node_api.image;
 
@@ -140,11 +144,16 @@ test "getImageMetadata reads the metadata TypeScript reads" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    _ = try test_helpers.setupEnvironment(std.testing.io);
+    _ = try test_environment.setupEnvironment(std.testing.io);
+
+    // The code under test logs the failure below; a passing test must write nothing to stderr, so the log is muted.
+    var mutedLog: mock_log.MutedLog = .{};
+    mutedLog.install();
+    defer mutedLog.uninstall();
     const cases = [_]IMetadataCase{
         // A photo with EXIF and GPS; the frame header (at byte 87843) is inside the 256 KB head.
         .{
-            .filePath = "../../test/test.jpg",
+            .filePath = "../test/test.jpg",
             .contentType = "image/jpeg",
             .metadata = test_jpg_exif.TEST_JPG_TAGS_JSON,
             .coordinates = TEST_JPG_LOCATION,
@@ -157,7 +166,7 @@ test "getImageMetadata reads the metadata TypeScript reads" {
         // A JPEG with no APP1 section: no tags (so the whole file is read again, and still has none), no date, but
         // the 100x80 frame header.
         .{
-            .filePath = "../../test/multiple-files/test-1.jpeg",
+            .filePath = "../test/multiple-files/test-1.jpeg",
             .contentType = "image/jpg",
             .metadata = "{}",
             .coordinates = null,
@@ -169,7 +178,7 @@ test "getImageMetadata reads the metadata TypeScript reads" {
         },
         // Only JPEGs are read.
         .{
-            .filePath = "../../test/test.png",
+            .filePath = "../test/test.png",
             .contentType = "image/png",
             .metadata = null,
             .coordinates = null,
@@ -178,7 +187,7 @@ test "getImageMetadata reads the metadata TypeScript reads" {
         },
         // A file that is not a JPEG makes exif-parser throw, which TypeScript logs and turns into nothing.
         .{
-            .filePath = "../../test/demo-news.yaml",
+            .filePath = "../test/demo-news.yaml",
             .contentType = "image/jpeg",
             .metadata = null,
             .coordinates = null,
@@ -232,7 +241,7 @@ test "getImageDetails produces the details and the files TypeScript produces" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    _ = try test_helpers.setupEnvironment(std.testing.io);
+    _ = try test_environment.setupEnvironment(std.testing.io);
 
     // resizeImage (packages/node-api/src/lib/image.ts) makes the short side minSize and the long side
     // Math.trunc(long / short * minSize): the display at 1000 and quality 95, the thumbnail at 300 and quality 90
@@ -241,7 +250,7 @@ test "getImageDetails produces the details and the files TypeScript produces" {
     const cases = [_]IDetailsCase{
         // 2560x1920: 1333x1000, 400x300 and 53x40.
         .{
-            .filePath = "../../test/test.jpg",
+            .filePath = "../test/test.jpg",
             .contentType = "image/jpeg",
             .resolution = .{
                 .width = 2560,
@@ -256,7 +265,7 @@ test "getImageDetails produces the details and the files TypeScript produces" {
         },
         // 100x80: 1250x1000, 375x300 and 50x40.
         .{
-            .filePath = "../../test/multiple-files/test-1.jpeg",
+            .filePath = "../test/multiple-files/test-1.jpeg",
             .contentType = "image/jpeg",
             .resolution = .{
                 .width = 100,
@@ -271,7 +280,7 @@ test "getImageDetails produces the details and the files TypeScript produces" {
         },
         // 100x90, the size from the image tool as there is no EXIF parse: 1111x1000, 333x300 and 44x40.
         .{
-            .filePath = "../../test/test.png",
+            .filePath = "../test/test.png",
             .contentType = "image/png",
             .resolution = .{
                 .width = 100,
@@ -286,7 +295,7 @@ test "getImageDetails produces the details and the files TypeScript produces" {
         },
         // 100x80, from the image tool: 1250x1000, 375x300 and 50x40.
         .{
-            .filePath = "../../test/test.webp",
+            .filePath = "../test/test.webp",
             .contentType = "image/webp",
             .resolution = .{
                 .width = 100,
@@ -302,8 +311,8 @@ test "getImageDetails produces the details and the files TypeScript produces" {
     };
     for (cases) |expected| {
         errdefer std.debug.print("case: {s}\n", .{expected.filePath});
-        const tempDir = try test_helpers.makeTempDir(allocator, std.testing.io, "image-details");
-        defer test_helpers.removeTempDir(std.testing.io, tempDir);
+        const tempDir = try temp_dirs.makeTempDir(allocator, std.testing.io, "image-details");
+        defer temp_dirs.removeTempDir(std.testing.io, tempDir);
         var generator: CountingUuidGenerator = .{};
         const details = try image.getImageDetails(allocator, std.testing.io, expected.filePath, tempDir, expected.contentType, generator.uuidGenerator(), expected.filePath);
         try std.testing.expectEqual(expected.resolution, details.resolution);
@@ -421,7 +430,7 @@ fn writeJpegWithExif(allocator: std.mem.Allocator, io: std.Io, dir: []const u8, 
     try std.testing.expectEqual(@as(usize, 38), tiff.items.len);
     try appendIfd(allocator, &tiff, gpsTags);
 
-    const original = try test_helpers.readFile(allocator, io, "../../test/multiple-files/test-1.jpeg");
+    const original = try test_files.readFile(allocator, io, "../test/multiple-files/test-1.jpeg");
     var jpeg: std.ArrayList(u8) = .empty;
     try jpeg.appendSlice(allocator, original[0..2]);
     try jpeg.appendSlice(allocator, &.{ 0xFF, 0xE1 });
@@ -432,7 +441,7 @@ fn writeJpegWithExif(allocator: std.mem.Allocator, io: std.Io, dir: []const u8, 
     try jpeg.appendSlice(allocator, tiff.items);
     try jpeg.appendSlice(allocator, original[2..]);
     const filePath = try std.fmt.allocPrint(allocator, "{s}/exif.jpg", .{dir});
-    try test_helpers.writeFile(io, filePath, jpeg.items);
+    try test_files.writeFile(io, filePath, jpeg.items);
     return filePath;
 }
 
@@ -441,9 +450,9 @@ test "getImageDetails turns a photo its Orientation says is on its side, and ign
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_helpers.setupEnvironment(io);
-    const tempDir = try test_helpers.makeTempDir(allocator, io, "image-details-rotated");
-    defer test_helpers.removeTempDir(io, tempDir);
+    _ = try test_environment.setupEnvironment(io);
+    const tempDir = try temp_dirs.makeTempDir(allocator, io, "image-details-rotated");
+    defer temp_dirs.removeTempDir(io, tempDir);
     const filePath = try writeJpegWithExif(allocator, io, tempDir, 6, &.{
         .{ .tag = 0x0001, .tiffType = 2, .count = 2, .value = "N\x00" },
         .{ .tag = 0x0002, .tiffType = 5, .count = 3, .value = try rationals(allocator, &.{ .{ 95, 1 }, .{ 0, 1 }, .{ 0, 1 } }) },
@@ -452,8 +461,8 @@ test "getImageDetails turns a photo its Orientation says is on its side, and ign
     });
 
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    test_helpers.captureStderr(&stderr_capture.writer);
-    defer test_helpers.endConsoleCapture();
+    console_capture.captureStderr(&stderr_capture.writer);
+    defer console_capture.endConsoleCapture();
     var generator: CountingUuidGenerator = .{};
     const details = try image.getImageDetails(allocator, io, filePath, tempDir, "image/jpeg", generator.uuidGenerator(), filePath);
 
@@ -474,13 +483,13 @@ test "getImageMetadata writes coordinates that are not numbers as null, and give
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_helpers.setupEnvironment(io);
-    const tempDir = try test_helpers.makeTempDir(allocator, io, "image-metadata-gps");
-    defer test_helpers.removeTempDir(io, tempDir);
+    _ = try test_environment.setupEnvironment(io);
+    const tempDir = try temp_dirs.makeTempDir(allocator, io, "image-metadata-gps");
+    defer temp_dirs.removeTempDir(io, tempDir);
 
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    test_helpers.captureStderr(&stderr_capture.writer);
-    defer test_helpers.endConsoleCapture();
+    console_capture.captureStderr(&stderr_capture.writer);
+    defer console_capture.endConsoleCapture();
 
     // 0/0 degrees is NaN, which JSON.stringify writes as null.
     const nanPath = try writeJpegWithExif(allocator, io, tempDir, 1, &.{

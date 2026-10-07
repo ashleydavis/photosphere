@@ -56,7 +56,11 @@ pub fn getDatabasesConfigPath(allocator: std.mem.Allocator) ![]const u8 {
     return DATABASES_FILE(allocator);
 }
 
-// Not ported: MAX_RECENT_DATABASES (not used by the ported commands).
+//
+// How many recently opened databases are remembered. Named once so the list that is trimmed and the
+// list that is read back cannot disagree about the number.
+//
+pub const MAX_RECENT_DATABASES = 5;
 
 //
 // Gets an array property of a TOML object (null when it is absent or not an array, like Array.isArray).
@@ -97,7 +101,8 @@ pub fn tomlToDatabasesConfig(allocator: std.mem.Allocator, toml: std.json.Object
         }
     }
 
-    // TODO: non-string recent database names are dropped, where JavaScript carries them through.
+    // (Zig: a recent database name that is not text is dropped, where JavaScript carries it through, because recentDatabaseNames
+    // holds text only.)
     const recentDatabaseNames = if (arrayProperty(toml, "recent_database_names")) |names|
         try stringItems(allocator, names)
     else
@@ -380,5 +385,139 @@ pub fn removeDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, name: []con
     try updateDatabasesConfig(allocator, io, &mutator);
 }
 
-// Not ported: getRecentDatabases, removeRecentDatabaseName, markDatabaseOpened, getLastDatabase, setLastDatabase
-// (not used by the ported commands).
+//
+// Returns the most recently opened databases, ordered most-recent first, at most
+// MAX_RECENT_DATABASES of them.
+// Names that no longer resolve to an entry in the databases list are silently dropped.
+//
+pub fn getRecentDatabases(allocator: std.mem.Allocator, io: std.Io) ![]const IDatabaseEntry {
+    const config = try loadDatabasesConfig(allocator, io);
+    var result: std.ArrayList(IDatabaseEntry) = .empty;
+    for (config.recentDatabaseNames) |recentName| {
+        var found: ?IDatabaseEntry = null;
+        for (config.databases) |dbEntry| {
+            if (namesMatch(dbEntry.name, recentName)) {
+                found = dbEntry;
+                break;
+            }
+        }
+        if (found) |foundEntry| {
+            try result.append(allocator, foundEntry);
+        }
+    }
+    return result.items;
+}
+
+//
+// The mutator of removeRecentDatabaseName (the arrow function in TypeScript).
+//
+const RemoveRecentDatabaseNameMutator = struct {
+    // The name to remove from the recents.
+    name: []const u8,
+
+    //
+    // Drops the name from the recents and leaves everything else as it was.
+    //
+    pub fn run(self: *const RemoveRecentDatabaseNameMutator, allocator: std.mem.Allocator, config: IDatabasesConfig) !IDatabasesConfig {
+        var recentDatabaseNames: std.ArrayList([]const u8) = .empty;
+        for (config.recentDatabaseNames) |recentName| {
+            if (!namesMatch(recentName, self.name)) {
+                try recentDatabaseNames.append(allocator, recentName);
+            }
+        }
+        var updated = config;
+        updated.recentDatabaseNames = recentDatabaseNames.items;
+        return updated;
+    }
+};
+
+//
+// Removes the given name from recentDatabaseNames only. Leaves the matching entry
+// in `databases` untouched. No-op if the name is not in the recent list.
+//
+pub fn removeRecentDatabaseName(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
+    const mutator: RemoveRecentDatabaseNameMutator = .{ .name = name };
+    try updateDatabasesConfig(allocator, io, &mutator);
+}
+
+//
+// The mutator of markDatabaseOpened (the arrow function in TypeScript).
+//
+const MarkDatabaseOpenedMutator = struct {
+    // The name of the database that was opened.
+    name: []const u8,
+
+    //
+    // Puts the entry's name first in the recents, trimming the list.
+    //
+    pub fn run(self: *const MarkDatabaseOpenedMutator, allocator: std.mem.Allocator, config: IDatabasesConfig) !IDatabasesConfig {
+        var found: ?IDatabaseEntry = null;
+        for (config.databases) |dbEntry| {
+            if (namesMatch(dbEntry.name, self.name)) {
+                found = dbEntry;
+                break;
+            }
+        }
+        const foundEntry = found orelse {
+            return config;
+        };
+        var recentDatabaseNames: std.ArrayList([]const u8) = .empty;
+        try recentDatabaseNames.append(allocator, foundEntry.name);
+        for (config.recentDatabaseNames) |recentName| {
+            if (!namesMatch(recentName, foundEntry.name)) {
+                try recentDatabaseNames.append(allocator, recentName);
+            }
+        }
+        var updated = config;
+        updated.recentDatabaseNames = recentDatabaseNames.items[0..@min(recentDatabaseNames.items.len, MAX_RECENT_DATABASES)];
+        return updated;
+    }
+};
+
+//
+// Moves the database entry matching the given name (case-insensitive) to the front of
+// recentDatabaseNames, trimming the list to MAX_RECENT_DATABASES entries.
+// No-op if no entry matches.
+//
+pub fn markDatabaseOpened(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
+    const mutator: MarkDatabaseOpenedMutator = .{ .name = name };
+    try updateDatabasesConfig(allocator, io, &mutator);
+}
+
+//
+// Returns the path of the database to reopen on the next launch, or null (undefined in TypeScript) when none is open.
+//
+pub fn getLastDatabase(allocator: std.mem.Allocator, io: std.Io) !?[]const u8 {
+    const config = try loadDatabasesConfig(allocator, io);
+    return config.lastDatabase;
+}
+
+//
+// The mutator of setLastDatabase (the arrow function in TypeScript).
+//
+const SetLastDatabaseMutator = struct {
+    // The database to reopen on the next launch, or null to clear it.
+    databasePath: ?[]const u8,
+
+    //
+    // Replaces the last database and carries everything else through.
+    //
+    pub fn run(self: *const SetLastDatabaseMutator, allocator: std.mem.Allocator, config: IDatabasesConfig) !IDatabasesConfig {
+        _ = allocator;
+        var updated = config;
+        updated.lastDatabase = self.databasePath;
+        return updated;
+    }
+};
+
+//
+// Records the database to reopen on the next launch. null (undefined in TypeScript) clears it, which is what closing a
+// database does.
+//
+// Written through updateDatabasesConfig like every other edit here, so the databases and recents
+// lists are carried through untouched rather than being rewritten from a copy read earlier.
+//
+pub fn setLastDatabase(allocator: std.mem.Allocator, io: std.Io, databasePath: ?[]const u8) !void {
+    const mutator: SetLastDatabaseMutator = .{ .databasePath = databasePath };
+    try updateDatabasesConfig(allocator, io, &mutator);
+}

@@ -119,8 +119,6 @@ test "should format GB values" {
     try std.testing.expectEqualStrings("1.5 GB", try formatDecimal(allocator, 1500000000));
 }
 
-// Not ported: "should format with German locale", "should format with French locale" (only en-US is ported).
-
 test "should respect custom decimal places for small values" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

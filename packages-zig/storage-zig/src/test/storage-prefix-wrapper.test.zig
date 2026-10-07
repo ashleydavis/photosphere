@@ -108,8 +108,8 @@ test "readableLength asks the storage underneath" {
 
     const io = std.testing.io;
     const cwd = std.Io.Dir.cwd();
-    const privateKeyPem = try cwd.readFileAlloc(io, "../encryption-zig/src/test/fixtures/ts-private.pem", allocator, .unlimited);
-    const publicKeyPem = try cwd.readFileAlloc(io, "../encryption-zig/src/test/fixtures/ts-public.pem", allocator, .unlimited);
+    const privateKeyPem = try cwd.readFileAlloc(io, "encryption-zig/src/test/fixtures/ts-private.pem", allocator, .unlimited);
+    const publicKeyPem = try cwd.readFileAlloc(io, "encryption-zig/src/test/fixtures/ts-public.pem", allocator, .unlimited);
     const loaded = try encryption.key_utils.loadEncryptionKeysFromPem(allocator, &.{.{
         .privateKeyPem = privateKeyPem,
         .publicKeyPem = publicKeyPem,

@@ -1,7 +1,7 @@
 const std = @import("std");
 const encryption = @import("encryption-zig");
 const utils = @import("utils-zig");
-const helpers = @import("test-helpers.zig");
+const fixtures = @import("fixtures.zig");
 
 const key_utils = encryption.key_utils;
 const crypto = encryption.node_crypto;
@@ -11,8 +11,8 @@ const crypto = encryption.node_crypto;
 //
 fn loadFixturePem(allocator: std.mem.Allocator, prefix: []const u8) !key_utils.IEncryptionKeyPem {
     return key_utils.IEncryptionKeyPem{
-        .privateKeyPem = try helpers.readFixture(allocator, try std.fmt.allocPrint(allocator, "{s}-private.pem", .{prefix})),
-        .publicKeyPem = try helpers.readFixture(allocator, try std.fmt.allocPrint(allocator, "{s}-public.pem", .{prefix})),
+        .privateKeyPem = try fixtures.readFixture(allocator, try std.fmt.allocPrint(allocator, "{s}-private.pem", .{prefix})),
+        .publicKeyPem = try fixtures.readFixture(allocator, try std.fmt.allocPrint(allocator, "{s}-public.pem", .{prefix})),
     };
 }
 
@@ -62,7 +62,7 @@ test "hashPublicKey equals the TypeScript hash for the same key" {
     const prefixes = [_][]const u8{ "ts", "ts2" };
     for (prefixes) |prefix| {
         const keyPem = try loadFixturePem(allocator, prefix);
-        const expectedHex = try helpers.readFixture(allocator, try std.fmt.allocPrint(allocator, "{s}-public-hash.hex", .{prefix}));
+        const expectedHex = try fixtures.readFixture(allocator, try std.fmt.allocPrint(allocator, "{s}-public-hash.hex", .{prefix}));
         const fromPublic = try key_utils.hashPublicKey(allocator, try crypto.createPublicKey(allocator, keyPem.publicKeyPem));
         try std.testing.expectEqualStrings(expectedHex, &std.fmt.bytesToHex(fromPublic, .lower));
         const privateKey = try crypto.createPrivateKey(allocator, keyPem.privateKeyPem);
@@ -117,8 +117,8 @@ test "registers multiple keys and uses the first as default/write key" {
     try std.testing.expect(result.isEncrypted);
     const map = result.options.decryptionKeyMap.?;
     try std.testing.expectEqual(@as(usize, 3), map.count());
-    const hash1 = try helpers.readFixture(allocator, "ts-public-hash.hex");
-    const hash2 = try helpers.readFixture(allocator, "ts2-public-hash.hex");
+    const hash1 = try fixtures.readFixture(allocator, "ts-public-hash.hex");
+    const hash2 = try fixtures.readFixture(allocator, "ts2-public-hash.hex");
     try std.testing.expect(map.get(hash1).? == map.get("default").?);
     try std.testing.expect(map.get(hash2).? != map.get("default").?);
     const writeHash = std.fmt.bytesToHex(try key_utils.hashPublicKey(allocator, result.options.encryptionPublicKey.?), .lower);

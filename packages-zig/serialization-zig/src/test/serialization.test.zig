@@ -17,6 +17,7 @@ const IDeserializer = serialization.IDeserializer;
 const BsonDocument = bson.BsonDocument;
 const BsonValue = bson.BsonValue;
 const Sha256 = std.crypto.hash.sha2.Sha256;
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 
 //
 // The Io used by the tests.
@@ -178,7 +179,7 @@ fn expectThrownContaining(result: anytype, text: []const u8) !void {
 // Reads a fixture file.
 //
 fn readFixture(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
-    const fixture_path = try std.fmt.allocPrint(allocator, "src/test/fixtures/{s}", .{name});
+    const fixture_path = try std.fmt.allocPrint(allocator, "serialization-zig/src/test/fixtures/{s}", .{name});
     return std.Io.Dir.cwd().readFileAlloc(io, fixture_path, allocator, .unlimited);
 }
 
@@ -1187,7 +1188,7 @@ test "load reads a real shard from test/dbs/v6 and its BSON re-encodes to the sa
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
-    const shardPath = "../../test/dbs/v6/.db/bson/collections/metadata/shards/96";
+    const shardPath = "../test/dbs/v6/.db/bson/collections/metadata/shards/96";
     const shardBytes = try std.Io.Dir.cwd().readFileAlloc(io, shardPath, allocator, .unlimited);
     try storage.write(allocator, io, "shard", null, shardBytes);
 
@@ -1225,7 +1226,7 @@ test "load reads the real files tree from test/dbs/v6 including its gzip string 
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
-    const treeBytes = try std.Io.Dir.cwd().readFileAlloc(io, "../../test/dbs/v6/.db/files.dat", allocator, .unlimited);
+    const treeBytes = try std.Io.Dir.cwd().readFileAlloc(io, "../test/dbs/v6/.db/files.dat", allocator, .unlimited);
     try storage.write(allocator, io, "files.dat", null, treeBytes);
 
     const Tree = struct {
@@ -1303,6 +1304,10 @@ const FailingStorage = struct {
 };
 
 test "save names the file it could not write once every retry has failed" {
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
+    const backoff_io = backoff_time.io();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1314,11 +1319,15 @@ test "save names the file it could not write once every retry has failed" {
     defer utils.console.setCapture(null, null);
 
     const testData: TestDataV1 = .{ .name = "test", .value = 42 };
-    try expectThrownContaining(serialization.save(allocator, io, &storage, "data.bin", testData, 1, "TEST", serializeV1), "Failed to write data.bin: cannot write data.bin");
+    try expectThrownContaining(serialization.save(allocator, backoff_io, &storage, "data.bin", testData, 1, "TEST", serializeV1), "Failed to write data.bin: cannot write data.bin");
     try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Failed to write data.bin. Retrying after: cannot write data.bin") != null);
 }
 
 test "load names the file it could not read once every retry has failed" {
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
+    const backoff_io = backoff_time.io();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1332,11 +1341,15 @@ test "load names the file it could not read once every retry has failed" {
     const deserializers = [_]Entry{
         .{ .version = 1, .deserializer = deserializeV1 },
     };
-    try expectThrownContaining(serialization.load(TestData, allocator, io, &storage, "data.bin", "TEST", {}, &deserializers), "Failed to read data.bin: cannot read data.bin");
+    try expectThrownContaining(serialization.load(TestData, allocator, backoff_io, &storage, "data.bin", "TEST", {}, &deserializers), "Failed to read data.bin: cannot read data.bin");
     try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Failed to read data.bin. Retrying after: cannot read data.bin") != null);
 }
 
 test "verify names the file it could not read once every retry has failed" {
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
+    const backoff_io = backoff_time.io();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1347,7 +1360,7 @@ test "verify names the file it could not read once every retry has failed" {
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    try expectThrownContaining(serialization.verify(allocator, io, &storage, "data.bin"), "Failed to read data.bin: cannot read data.bin");
+    try expectThrownContaining(serialization.verify(allocator, backoff_io, &storage, "data.bin"), "Failed to read data.bin: cannot read data.bin");
     try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Failed to read data.bin. Retrying after: cannot read data.bin") != null);
 }
 

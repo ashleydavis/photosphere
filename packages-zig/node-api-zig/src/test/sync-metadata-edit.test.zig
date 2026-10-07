@@ -7,7 +7,8 @@ const storage_zig = @import("storage-zig");
 const serialization_zig = @import("serialization-zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_environment = @import("test-environment.zig");
 const sync_helpers = @import("sync-test-helpers.zig");
 const tree = node_api.tree;
 const media_file_database = node_api.media_file_database;
@@ -176,12 +177,12 @@ fn expectEditReachesTheOrigin(partial: bool, editClockOffsetMs: i64, originDescr
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try helpers.setupEnvironment(io);
+    _ = try test_environment.setupEnvironment(io);
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
-    const workingDir = try helpers.makeTempDir(allocator, io, "psphere-sync-edit");
-    defer helpers.removeTempDir(io, workingDir);
+    const workingDir = try temp_dirs.makeTempDir(allocator, io, "psphere-sync-edit");
+    defer temp_dirs.removeTempDir(io, workingDir);
 
     const description = try runEditAndSync(allocator, io, workingDir, partial, editClockOffsetMs, originDescription);
     try std.testing.expectEqualStrings("Edited on the replica", description.?);

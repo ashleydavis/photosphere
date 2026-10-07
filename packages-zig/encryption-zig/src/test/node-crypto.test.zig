@@ -1,7 +1,7 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const encryption = @import("encryption-zig");
-const helpers = @import("test-helpers.zig");
+const fixtures = @import("fixtures.zig");
 
 const openssl = @import("openssl");
 
@@ -104,7 +104,7 @@ test "createPrivateKey and exportPrivateKey reproduce the TypeScript PKCS#8 PEM"
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const privateKeyPem = try helpers.readFixture(allocator, "ts-private.pem");
+    const privateKeyPem = try fixtures.readFixture(allocator, "ts-private.pem");
     const privateKey = try crypto.createPrivateKey(allocator, privateKeyPem);
     try std.testing.expectEqualStrings(privateKeyPem, try crypto.exportPrivateKey(allocator, privateKey, .pem));
 }
@@ -113,8 +113,8 @@ test "createPublicKey accepts SPKI, PKCS#1 and private key PEMs" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const publicKeyPem = try helpers.readFixture(allocator, "ts-public.pem");
-    const privateKeyPem = try helpers.readFixture(allocator, "ts-private.pem");
+    const publicKeyPem = try fixtures.readFixture(allocator, "ts-public.pem");
+    const privateKeyPem = try fixtures.readFixture(allocator, "ts-private.pem");
     const fromSpki = try crypto.createPublicKey(allocator, publicKeyPem);
     try std.testing.expectEqualStrings(publicKeyPem, try crypto.exportPublicKey(allocator, fromSpki, .pem));
     const fromPrivate = try crypto.createPublicKey(allocator, privateKeyPem);
@@ -130,7 +130,7 @@ test "createPrivateKey accepts a PKCS#1 RSA PRIVATE KEY PEM" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const privateKeyPem = try helpers.readFixture(allocator, "ts-private.pem");
+    const privateKeyPem = try fixtures.readFixture(allocator, "ts-private.pem");
     const pkcs1Pem = try toPkcs1PrivateKeyPem(allocator, privateKeyPem);
     try std.testing.expect(std.mem.startsWith(u8, pkcs1Pem, "-----BEGIN RSA PRIVATE KEY-----\n"));
     const fromPkcs1 = try crypto.createPrivateKey(allocator, pkcs1Pem);
@@ -143,7 +143,7 @@ test "createPrivateKey throws the Node decoder error for invalid input" {
     const allocator = arena.allocator();
     try std.testing.expectError(error.Thrown, crypto.createPrivateKey(allocator, "garbage"));
     try std.testing.expectEqualStrings("error:1E08010C:DECODER routines::unsupported", utils.errors.lastErrorMessage());
-    const publicKeyPem = try helpers.readFixture(allocator, "ts-public.pem");
+    const publicKeyPem = try fixtures.readFixture(allocator, "ts-public.pem");
     try std.testing.expectError(error.Thrown, crypto.createPrivateKey(allocator, publicKeyPem));
     try std.testing.expectError(error.Thrown, crypto.createPublicKey(allocator, "-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----\n"));
 }
@@ -179,8 +179,8 @@ test "publicEncrypt and privateDecrypt use OAEP and report Node errors" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const privateKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts-private.pem"));
-    const otherKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts2-private.pem"));
+    const privateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts-private.pem"));
+    const otherKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts2-private.pem"));
     const publicKey = crypto.createPublicKeyFromPrivateKey(privateKey);
     const encrypted = try crypto.publicEncrypt(allocator, std.testing.io, publicKey, "aes key");
     try std.testing.expectEqualStrings("aes key", try crypto.privateDecrypt(allocator, privateKey, encrypted));
@@ -198,7 +198,7 @@ test "createPublicKey accepts CRLF line endings and text around the PEM block" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const publicKeyPem = try helpers.readFixture(allocator, "ts-public.pem");
+    const publicKeyPem = try fixtures.readFixture(allocator, "ts-public.pem");
     const crlfPem = try std.mem.replaceOwned(u8, allocator, publicKeyPem, "\n", "\r\n");
     const surrounded = try std.mem.concat(allocator, u8, &.{
         "junk before\r\n",
@@ -240,8 +240,8 @@ test "privateDecrypt decrypts the AES key TypeScript wrapped with publicEncrypt"
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const privateKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts-private.pem"));
-    const encrypted = try helpers.readFixture(allocator, "new-17.bin");
+    const privateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts-private.pem"));
+    const encrypted = try fixtures.readFixture(allocator, "new-17.bin");
     const key = try crypto.privateDecrypt(allocator, privateKey, encrypted[44 .. 44 + 512]);
     try std.testing.expectEqual(@as(usize, 32), key.len);
 
@@ -251,14 +251,14 @@ test "privateDecrypt decrypts the AES key TypeScript wrapped with publicEncrypt"
         try decipher.update(allocator, encrypted[44 + 512 + 16 ..]),
         try decipher.final(allocator),
     });
-    try std.testing.expectEqualSlices(u8, try helpers.readFixture(allocator, "plain-17.bin"), decrypted);
+    try std.testing.expectEqualSlices(u8, try fixtures.readFixture(allocator, "plain-17.bin"), decrypted);
 }
 
 test "publicEncrypt output is randomized, takes up to k - 42 bytes and decrypts with the matching key only" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const privateKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts-private.pem"));
+    const privateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts-private.pem"));
     const publicKey = crypto.createPublicKeyFromPrivateKey(privateKey);
     const first = try crypto.publicEncrypt(allocator, std.testing.io, publicKey, "secret");
     const second = try crypto.publicEncrypt(allocator, std.testing.io, publicKey, "secret");
@@ -276,7 +276,7 @@ test "privateDecrypt reports the Node error for a ciphertext not smaller than th
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const privateKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts-private.pem"));
+    const privateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts-private.pem"));
     try std.testing.expectError(error.Thrown, crypto.privateDecrypt(allocator, privateKey, &([_]u8{0xff} ** 512)));
     try std.testing.expectEqualStrings("error:02000084:rsa routines::data too large for modulus", utils.errors.lastErrorMessage());
 }
@@ -379,7 +379,7 @@ test "createSign signs with RSA PKCS#1 v1.5 and SHA-256 like openssl dgst -sha25
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const privateKeyPem = try helpers.readFixture(allocator, "ts-private.pem");
+    const privateKeyPem = try fixtures.readFixture(allocator, "ts-private.pem");
 
     // `printf 'photosphere' | openssl dgst -sha256 -sign ts-private.pem` (PKCS#1 v1.5 signatures are deterministic).
     const expected = hex("09a9e9ab88528897d91377f3e99d3c24510e8f4e261823f35c04f13451bf50708bcc016d9913037f99ac13c70dba7e81ce7ffb89c950f61f6dfa68dc08259ceead07660b8b9c84d584d75506d7918bb62c33e7786f5082711387c2729c2ad0c396db58cf88978ddb0c570df39a866a7c1264a57c360cb4010005a4764ce8c90edd755505225ef7ffcfffc0efa49e3d2ddb2563e21e7360ece9cc40d6b2577b4a51d8d347f198d770a629eaaba2758f83258a68c1f98e6ef265c4e9821e3a9ac9d8ab8190ab920ca9bcdeb66a75e74921b7297ec90e240a620143f34dc50f844bf1f6c72b1788fb244cf95967a859a18ace0e6659898c391a98d05473a433aa7518c6e7e7bb6298131c75b55ba4a7e93ebeb9911bfe8d0ea0a264003d3968a75c1e7a61fc84fa59006cb4281d3e2ce505b763816ae636d896b5b352961ceb00bb5c4941307e045ac93f3727e2497ee929d83a5dc7931c72e4bec12f8fb7dd0e3e5a44a063a2f6f6f4ce69d784aba8b53ad31e35a731b43de715b71f3a076aa6c8ab98f3c7adce0aaf3b346e0210b9a99acdd80fb2fe15729cad3d4744ebcf1bb50287f1bf90ba0b14ef9530677f46e1fa66662f2a3b9c857ba6985acecde12ca367c18db560c0bb065767d3be725341f63a49040f30ebb8b71291b05a40b52aa97218f2c4a69f4b8f472b4252b23c2a0221d0af9d9dda69f1ee23ffbd36ff4ab4");
@@ -449,7 +449,7 @@ test "exportPrivateKey and exportPublicKey give the DER the keys hold" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const privateKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts-private.pem"));
+    const privateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts-private.pem"));
     const privateDer = try crypto.exportPrivateKey(allocator, privateKey, .der);
     try std.testing.expectEqualSlices(u8, privateKey.pkcs8, privateDer);
 

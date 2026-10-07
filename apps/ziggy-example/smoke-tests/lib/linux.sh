@@ -16,8 +16,8 @@ LINUX_PGID_FILE_NAME="app.pgid"
 ziggy_platform_prepare() {
     local run_dir="$1"
     (cd "$LINUX_EXAMPLE_DIR" && bun run bundle:ui) || return 1
-    (cd "$LINUX_SHELL_DIR" && zig build -Dtest-hooks=true -p "$run_dir/test") || return 1
-    (cd "$LINUX_SHELL_DIR" && zig build -p "$run_dir/release") || return 1
+    (cd "$ZIGGY_SMOKE_REPO_ROOT" && zig build ziggy-example-linux -Dtest-hooks=true -p "$run_dir/test") || return 1
+    (cd "$ZIGGY_SMOKE_REPO_ROOT" && zig build ziggy-example-linux -p "$run_dir/release") || return 1
     # The page is embedded in the executable, so nothing but the executable is installed. A scenario that passes proves the
     # page loads from the executable alone, which is why nothing is copied beside it.
     local installed

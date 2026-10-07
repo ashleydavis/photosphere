@@ -1,6 +1,7 @@
 const std = @import("std");
 const lan_share = @import("lan-share-network-zig");
-const helpers = @import("test-helpers.zig");
+const pairing_code = @import("pairing-code.zig");
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 
 const LanShareReceiver = lan_share.lan_share_receiver.LanShareReceiver;
 const https = lan_share.https;
@@ -21,7 +22,7 @@ fn requestReceiver(allocator: std.mem.Allocator, receiver: *const LanShareReceiv
 test "cancel resolves receive with null" {
     var receiver = LanShareReceiver.init(std.testing.io, 60000);
     defer receiver.deinit();
-    try receiver.start(try helpers.pairingCode());
+    try receiver.start(try pairing_code.pairingCode());
 
     const startedAt = std.Io.Clock.awake.now(std.testing.io).toMilliseconds();
     receiver.cancel();
@@ -35,23 +36,32 @@ test "cancel resolves receive with null" {
 }
 
 test "receive times out and returns null" {
-    var receiver = LanShareReceiver.init(std.testing.io, 500); // 500ms timeout
-    defer receiver.deinit();
-    try receiver.start(try helpers.pairingCode());
+    // The receiver's wait for its timeout is a wait on the Io it is given, so a virtual clock ends it at once.
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
 
-    const startedAt = std.Io.Clock.awake.now(std.testing.io).toMilliseconds();
+    var receiver = LanShareReceiver.init(io, 500); // 500ms timeout
+    defer receiver.deinit();
+    try receiver.start(try pairing_code.pairingCode());
+
+    const startedAt = std.Io.Clock.awake.now(io).toMilliseconds();
     const result = try receiver.receive();
     try std.testing.expect(result == null);
 
     // The TypeScript test's 10 second timeout.
-    try std.testing.expect(std.Io.Clock.awake.now(std.testing.io).toMilliseconds() - startedAt < 10000);
+    try std.testing.expect(std.Io.Clock.awake.now(io).toMilliseconds() - startedAt < 10000);
+
+    // The receiver waited out its timeout: the virtual clock moved at least that far.
+    try std.testing.expect(std.Io.Clock.awake.now(io).toMilliseconds() - startedAt >= 500);
 }
 
 test "GET /pairing-code-hash returns hash of the provided code" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const code = try helpers.pairingCode();
+    const code = try pairing_code.pairingCode();
     var receiver = LanShareReceiver.init(std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
@@ -69,7 +79,7 @@ test "accepts payload with correct code hash" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const code = try helpers.pairingCode();
+    const code = try pairing_code.pairingCode();
     var receiver = LanShareReceiver.init(std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
@@ -91,7 +101,7 @@ test "rejects payload with wrong code hash" {
     const allocator = arena.allocator();
     var receiver = LanShareReceiver.init(std.testing.io, 10000);
     defer receiver.deinit();
-    try receiver.start(try helpers.pairingCode());
+    try receiver.start(try pairing_code.pairingCode());
 
     const wrongCodeHash = sha256Hex("0000");
     const body = try std.fmt.allocPrint(allocator, "{{\"codeHash\":\"{s}\",\"payload\":{{\"message\":\"bad\"}}}}", .{&wrongCodeHash});
@@ -110,7 +120,7 @@ test "aborts and returns 429 after exceeding the request budget" {
     const allocator = arena.allocator();
     var receiver = LanShareReceiver.init(std.testing.io, 10000);
     defer receiver.deinit();
-    try receiver.start(try helpers.pairingCode());
+    try receiver.start(try pairing_code.pairingCode());
 
     const wrongCodeHash = sha256Hex("0000");
     const body = try std.fmt.allocPrint(allocator, "{{\"codeHash\":\"{s}\",\"payload\":{{}}}}", .{&wrongCodeHash});
@@ -132,7 +142,7 @@ test "does not abort when request count stays within budget" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const code = try helpers.pairingCode();
+    const code = try pairing_code.pairingCode();
     var receiver = LanShareReceiver.init(std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
@@ -208,7 +218,7 @@ test "a payload with a repeated key is read with its last value, as JSON.parse r
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const code = try helpers.pairingCode();
+    const code = try pairing_code.pairingCode();
     var receiver = LanShareReceiver.init(std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
@@ -227,7 +237,7 @@ test "answers a body that is not JSON with 400 and a path it does not serve with
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const code = try helpers.pairingCode();
+    const code = try pairing_code.pairingCode();
     var receiver = LanShareReceiver.init(std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
@@ -250,7 +260,7 @@ test "answers a body that is not JSON with 400 and a path it does not serve with
 // Posts a payload written as JSON text with the right code hash, and returns what the receiver received.
 //
 fn receivePayloadText(allocator: std.mem.Allocator, payloadText: []const u8) !?std.json.Value {
-    const code = try helpers.pairingCode();
+    const code = try pairing_code.pairingCode();
     var receiver = LanShareReceiver.init(std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
@@ -273,7 +283,7 @@ test "a connection kept alive is served request after request, those sent togeth
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const code = try helpers.pairingCode();
+    const code = try pairing_code.pairingCode();
     var receiver = LanShareReceiver.init(std.testing.io, 30000);
     defer receiver.deinit();
     try receiver.start(code);

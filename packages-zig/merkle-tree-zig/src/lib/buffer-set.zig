@@ -114,11 +114,33 @@ pub const BufferSet = struct {
         return true;
     }
 
-    // Not ported: clear (not reached by the CLI)
+    //
+    // Removes every buffer from the set.
+    //
+    pub fn clear(self: *BufferSet) void {
+        self._map.clearRetainingCapacity();
+    }
 
-    // Not ported: size (not reached by the CLI)
+    //
+    // Returns the number of buffers in the set (TypeScript: the `size` getter).
+    //
+    pub fn size(self: *const BufferSet) usize {
+        var total: usize = 0;
+        for (self._map.values()) |bucket| {
+            total += bucket.items.len;
+        }
+        return total;
+    }
 
-    // Not ported: forEach (not reached by the CLI)
+    //
+    // Calls the callback with each buffer in the set.
+    //
+    pub fn forEach(self: *const BufferSet, context: anytype, callback: *const fn (@TypeOf(context), []const u8) anyerror!void) !void {
+        var valueIterator = self.values();
+        while (valueIterator.next()) |buffer| {
+            try callback(context, buffer);
+        }
+    }
 
     //
     // Iterates the buffers in the set (the Zig form of the TypeScript generator).
@@ -129,7 +151,46 @@ pub const BufferSet = struct {
 
     // Not ported: keys (not reached by the CLI)
 
-    // Not ported: entries (not reached by the CLI)
+    //
+    // Iterates the [buffer, buffer] pairs of the set (TypeScript: `entries()`; a Set yields each value as both).
+    //
+    pub fn entries(self: *const BufferSet) EntryIterator {
+        return .{
+            .valueIterator = self.values(),
+        };
+    }
+
+    //
+    // One [buffer, buffer] pair of the set.
+    //
+    pub const Entry = struct {
+        // The key (the same buffer as the value).
+        key: []const u8,
+
+        // The value.
+        value: []const u8,
+    };
+
+    //
+    // Iterator returned by entries().
+    //
+    pub const EntryIterator = struct {
+        // The iterator over the buffers.
+        valueIterator: ValueIterator,
+
+        //
+        // Returns the next pair or null when finished.
+        //
+        pub fn next(self: *EntryIterator) ?Entry {
+            const buffer = self.valueIterator.next() orelse {
+                return null;
+            };
+            return .{
+                .key = buffer,
+                .value = buffer,
+            };
+        }
+    };
 
     //
     // Iterator returned by values().
