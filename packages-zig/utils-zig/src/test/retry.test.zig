@@ -3,6 +3,8 @@ const utils = @import("utils-zig");
 const retry_module = utils.retry;
 const errors = utils.errors;
 const console = utils.console;
+const ExceptionLog = @import("exception-log.zig").ExceptionLog;
+const virtual_time_io = @import("virtual-time-io.zig");
 
 //
 // A fake operation (the jest.fn() of the TypeScript tests): fails a number of times, then succeeds.
@@ -224,7 +226,14 @@ test "should succeed on first attempt" {
 }
 
 test "should succeed after retries" {
-    const io = std.testing.io;
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
+    const io = backoff_time.io();
+    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    var log: ExceptionLog = .{};
+    log.install();
+    defer log.uninstall();
     var operation: MockOperation = .{ .failuresBeforeSuccess = 2 };
     const start = std.Io.Clock.awake.now(io);
 
@@ -238,7 +247,14 @@ test "should succeed after retries" {
 }
 
 test "should throw error after all retries exhausted" {
-    const io = std.testing.io;
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
+    const io = backoff_time.io();
+    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    var log: ExceptionLog = .{};
+    log.install();
+    defer log.uninstall();
     var capture: StderrCapture = undefined;
     capture.begin();
     defer capture.end();
@@ -255,6 +271,10 @@ test "should throw error after all retries exhausted" {
 
 test "should use default maxAttempts of 3" {
     const io = std.testing.io;
+    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    var log: ExceptionLog = .{};
+    log.install();
+    defer log.uninstall();
     var capture: StderrCapture = undefined;
     capture.begin();
     defer capture.end();
@@ -267,7 +287,14 @@ test "should use default maxAttempts of 3" {
 }
 
 test "should use default waitTimeMS of 1000" {
-    const io = std.testing.io;
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
+    const io = backoff_time.io();
+    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    var log: ExceptionLog = .{};
+    log.install();
+    defer log.uninstall();
     var operation: MockOperation = .{ .failuresBeforeSuccess = 1 };
     const start = std.Io.Clock.awake.now(io);
 
@@ -278,7 +305,14 @@ test "should use default waitTimeMS of 1000" {
 }
 
 test "should use default waitTimeScale of 2" {
-    const io = std.testing.io;
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
+    const io = backoff_time.io();
+    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    var log: ExceptionLog = .{};
+    log.install();
+    defer log.uninstall();
     var operation: MockOperation = .{ .failuresBeforeSuccess = 2 };
     const start = std.Io.Clock.awake.now(io);
 
@@ -289,7 +323,14 @@ test "should use default waitTimeScale of 2" {
 }
 
 test "should work with custom waitTimeScale" {
-    const io = std.testing.io;
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
+    const io = backoff_time.io();
+    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    var log: ExceptionLog = .{};
+    log.install();
+    defer log.uninstall();
     var operation: MockOperation = .{ .failuresBeforeSuccess = 2 };
     const start = std.Io.Clock.awake.now(io);
 
@@ -300,7 +341,14 @@ test "should work with custom waitTimeScale" {
 }
 
 test "should not sleep on last attempt" {
-    const io = std.testing.io;
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
+    const io = backoff_time.io();
+    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    var log: ExceptionLog = .{};
+    log.install();
+    defer log.uninstall();
     var capture: StderrCapture = undefined;
     capture.begin();
     defer capture.end();
@@ -321,6 +369,10 @@ test "should not sleep on last attempt" {
 
 test "should throw error immediately when maxAttempts is 1" {
     const io = std.testing.io;
+    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    var log: ExceptionLog = .{};
+    log.install();
+    defer log.uninstall();
     var capture: StderrCapture = undefined;
     capture.begin();
     defer capture.end();
@@ -334,6 +386,7 @@ test "should throw error immediately when maxAttempts is 1" {
     try std.testing.expectEqualStrings("Operation failed", errors.lastErrorMessage());
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
     try std.testing.expect(elapsedMilliseconds(io, start) < 10_000);
+    try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
     try std.testing.expectEqualStrings("Operation failed, no more retries allowed. Last error: Error: Operation failed\n", capture.allocating.written());
 }
 
@@ -378,7 +431,14 @@ test "should handle operations that return undefined" {
 }
 
 test "should retry when operation times out" {
-    const io = std.testing.io;
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
+    const io = backoff_time.io();
+    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    var log: ExceptionLog = .{};
+    log.install();
+    defer log.uninstall();
     var capture: StderrCapture = undefined;
     capture.begin();
     defer capture.end();

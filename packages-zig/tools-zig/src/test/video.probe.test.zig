@@ -78,14 +78,14 @@ const FakeFfmpegDirectory = struct {
 };
 
 //
-// Reads the information of build.zig (a file that exists) as a video, with ffprobe printing the given JSON.
+// Reads the information of a video that exists (the checked in test.mp4), with ffprobe printing the given JSON.
 //
 fn probe(allocator: std.mem.Allocator, probeJson: []const u8) !tools.types.AssetInfo {
     const io = std.testing.io;
     var directory: FakeFfmpegDirectory = undefined;
     try directory.create(allocator, io, probeJson);
     defer directory.destroy(io);
-    var video = Video.init(allocator, io, "build.zig");
+    var video = Video.init(allocator, io, "../test/multiple-files/test.mp4");
     return video.getInfo(allocator, io);
 }
 
@@ -225,15 +225,15 @@ test "extractScreenshot writes the time as a template string writes a number" {
     var directory: FakeFfmpegDirectory = undefined;
     try directory.create(allocator, io, "{}");
     defer directory.destroy(io);
-    var video = Video.init(allocator, io, "build.zig");
+    var video = Video.init(allocator, io, "../test/multiple-files/test.mp4");
     _ = try video.extractScreenshot(allocator, io, "out.jpg", 1e-7);
 
     // The command quotes both paths, as the TypeScript does (`ffmpeg -i "<file>" ... -y "<output>"`). /bin/sh takes
     // the quotes apart before the fake command sees the arguments, and cmd.exe hands the command line to the fake
     // .cmd exactly as it is, so on Windows the quotes are recorded too.
     const ffmpegArguments = if (builtin.os.tag == .windows)
-        "-i \"build.zig\" -ss 1e-7 -vframes 1 -q:v 2 -y \"out.jpg\""
+        "-i \"../test/multiple-files/test.mp4\" -ss 1e-7 -vframes 1 -q:v 2 -y \"out.jpg\""
     else
-        "-i build.zig -ss 1e-7 -vframes 1 -q:v 2 -y out.jpg";
+        "-i ../test/multiple-files/test.mp4 -ss 1e-7 -vframes 1 -q:v 2 -y out.jpg";
     try std.testing.expectEqualStrings(ffmpegArguments, try directory.ffmpegArguments(allocator, io));
 }

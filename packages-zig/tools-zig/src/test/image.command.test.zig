@@ -175,7 +175,7 @@ fn expectDominantColorRefusal(allocator: std.mem.Allocator, io: std.Io, fakeOutp
     var directory: FakeOutputTools = undefined;
     try directory.create(allocator, io, &modern_command_names, fakeOutput, false);
     defer directory.destroy(io);
-    var image = Image.init("build.zig");
+    var image = Image.init("../test/test.png");
     try std.testing.expectError(error.Thrown, image.getDominantColor(allocator, io));
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Failed to extract dominant color: Error: Invalid RGB values: {s}", .{fakeOutput}), utils.errors.lastErrorMessage());
 }
@@ -190,7 +190,7 @@ test "getInfo reads a width and a height of NaN from output ImageMagick did not 
     // The fake identify prints "100" with no height, so parseInt reads the width and finds nothing for the height.
     try directory.create(allocator, io, &modern_command_names, "100", false);
     defer directory.destroy(io);
-    var image = Image.init("build.zig");
+    var image = Image.init("../test/test.png");
     const info = try image.getInfo(allocator, io);
     try std.testing.expectEqual(tools.image.ImageMagickType.modern, tools.Image.getImageMagickType());
     try std.testing.expectEqual(@as(f64, 100), info.dimensions.width);
@@ -199,7 +199,7 @@ test "getInfo reads a width and a height of NaN from output ImageMagick did not 
     // Output with no width at all is NaN for both.
     directory.destroy(io);
     try directory.create(allocator, io, &modern_command_names, "", false);
-    var blank = Image.init("build.zig");
+    var blank = Image.init("../test/test.png");
     const blankInfo = try blank.getInfo(allocator, io);
     try std.testing.expect(std.math.isNan(blankInfo.dimensions.width));
     try std.testing.expect(std.math.isNan(blankInfo.dimensions.height));
@@ -279,7 +279,7 @@ test "resize and transform write their numbers as a template string writes a num
     utils.console.setCapture(&capture.writer, &capture.writer);
     defer utils.console.setCapture(null, null);
     var uuids: FixedUuidGenerator = .{};
-    var image = Image.init("build.zig");
+    var image = Image.init("../test/test.png");
 
     // The command quotes both paths, as the TypeScript does (`magick "<file>" -resize <geometry> -strip "<output>"`),
     // and the output path is joined with node-utils' path.join, the port of Node's path.join, which normalizes
@@ -289,13 +289,13 @@ test "resize and transform write their numbers as a template string writes a num
     // starts with a space (` -rotate 1e+21`) and the template puts another one in front of it, which /bin/sh eats as
     // an argument separator and cmd.exe does not.
     const resizeArguments = if (builtin.os.tag == .windows)
-        "\"build.zig\" -resize 1e+21x -strip -quality 1e-7 \"out\\temp_resize_fixed.jpg\""
+        "\"../test/test.png\" -resize 1e+21x -strip -quality 1e-7 \"out\\temp_resize_fixed.jpg\""
     else
-        "build.zig -resize 1e+21x -strip -quality 1e-7 out/temp_resize_fixed.jpg";
+        "../test/test.png -resize 1e+21x -strip -quality 1e-7 out/temp_resize_fixed.jpg";
     const transformArguments = if (builtin.os.tag == .windows)
-        "\"build.zig\"  -rotate 1e+21 \"out\\temp_transform_output_fixed.jpg\""
+        "\"../test/test.png\"  -rotate 1e+21 \"out\\temp_transform_output_fixed.jpg\""
     else
-        "build.zig -rotate 1e+21 out/temp_transform_output_fixed.jpg";
+        "../test/test.png -rotate 1e+21 out/temp_transform_output_fixed.jpg";
 
     try std.testing.expectError(error.Thrown, image.resize(allocator, io, .{ .width = 1e21, .height = 0, .quality = 1e-7, .format = null, .ext = "jpg" }, "out", uuids.uuidGenerator()));
     try std.testing.expectEqualStrings(resizeArguments, try directory.arguments(allocator, io));

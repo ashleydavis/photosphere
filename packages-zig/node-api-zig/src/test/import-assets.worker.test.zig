@@ -6,7 +6,10 @@ const task_queue_zig = @import("task-queue-zig");
 const serialization_zig = @import("serialization-zig");
 const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const test_environment = @import("test-environment.zig");
+const mock_log = @import("mock-log.zig");
 const import_assets_worker = node_api.import_assets_worker;
 const importAssetsHandler = import_assets_worker.importAssetsHandler;
 const describeImportProgress = import_assets_worker.describeImportProgress;
@@ -17,6 +20,7 @@ const encodeAssetRecord = node_api.upload_asset_worker.encodeAssetRecord;
 const HashCache = node_api.hash_cache.HashCache;
 const getHashCacheDir = node_api.hash_cache.getHashCacheDir;
 const getImportRecordPath = node_api.database_cache_dir.getImportRecordPath;
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 const loadImportRecord = node_api.import_record_storage.loadImportRecord;
 const registerFolderMediaSourceBuilder = node_api.create_auto_import_scanner.registerFolderMediaSourceBuilder;
 const TaskContext = task_queue_zig.task_context.TaskContext;
@@ -611,13 +615,13 @@ const ImportTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try helpers.setupEnvironment(io);
+        _ = try test_environment.setupEnvironment(io);
         try registerFolderMediaSourceBuilder();
-        self.tempDir = try helpers.makeTempDir(allocator, io, "import-assets-worker");
+        self.tempDir = try temp_dirs.makeTempDir(allocator, io, "import-assets-worker");
         self.photosDir = try path.join(allocator, &.{ self.tempDir, "photos" });
         try std.Io.Dir.cwd().createDirPath(io, self.photosDir);
-        try helpers.setEnv("PHOTOSPHERE_TMP_DIR", try path.join(allocator, &.{ self.tempDir, "scratch" }));
-        try helpers.setEnv("PHOTOSPHERE_CACHE_DIR", try path.join(allocator, &.{ self.tempDir, "cache" }));
+        try test_environment.setEnv("PHOTOSPHERE_TMP_DIR", try path.join(allocator, &.{ self.tempDir, "scratch" }));
+        try test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", try path.join(allocator, &.{ self.tempDir, "cache" }));
 
         self.uuidGenerator = try TestUuidGenerator.init(allocator);
         self.timestampProvider = .{};
@@ -646,12 +650,12 @@ const ImportTest = struct {
     // Puts the environment back and removes the directory.
     //
     fn deinit(self: *ImportTest) void {
-        helpers.restoreQueueBackend();
+        test_environment.restoreQueueBackend();
         self.backend.deinit();
         self.messages.deinit();
-        helpers.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
-        helpers.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
-        helpers.removeTempDir(std.testing.io, self.tempDir);
+        test_environment.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
+        test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
+        temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
     }
 
@@ -678,7 +682,7 @@ const ImportTest = struct {
     //
     fn writePhoto(self: *ImportTest, fileName: []const u8) ![]const u8 {
         const filePath = try path.join(self.arena.allocator(), &.{ self.photosDir, fileName });
-        try helpers.writeFile(std.testing.io, filePath, fileName);
+        try test_files.writeFile(std.testing.io, filePath, fileName);
         return filePath;
     }
 
@@ -737,7 +741,14 @@ const ImportTest = struct {
     // Runs the handler and returns its output.
     //
     fn run(self: *ImportTest, data: std.json.Value) !std.json.Value {
-        return importAssetsHandler(self.arena.allocator(), std.testing.io, data, self.context.taskContext());
+        return self.runWithIo(std.testing.io, data);
+    }
+
+    //
+    // Runs the handler on the given Io and returns its output.
+    //
+    fn runWithIo(self: *ImportTest, io: std.Io, data: std.json.Value) !std.json.Value {
+        return importAssetsHandler(self.arena.allocator(), io, data, self.context.taskContext());
     }
 
     //
@@ -829,11 +840,15 @@ test "a missing or nonsensical concurrency limit fails loudly rather than import
 // the scan throw by mocking scanPaths; a real scan of a real folder does not throw).
 
 //
-// Releases the write lock another owner holds, a while after the import has started waiting for it.
+// Releases the write lock another owner holds, once the import has waited for it for a second of the time of its Io. That time
+// is the one the back-off sleeps of the import move, so the import has certainly been refused the lock and is waiting by the
+// time it is released, however fast the machine is.
 //
-fn releaseLockLater(rawStorage: storage_zig.storage.IStorage) void {
+fn releaseLockLater(rawStorage: storage_zig.storage.IStorage, importTime: *virtual_time_io.VirtualTimeIo) void {
     const io = std.testing.io;
-    utils.sleep.sleep(io, 1500) catch {};
+    while (importTime.jumped_nanoseconds.load(.monotonic) < 1_000_000_000) {
+        utils.sleep.sleep(io, 1) catch {};
+    }
     var arena = std.heap.ArenaAllocator.init(backend_allocator);
     defer arena.deinit();
     rawStorage.releaseWriteLock(arena.allocator(), io, ".db/write.lock") catch {};
@@ -844,19 +859,26 @@ test "when acquireWriteLock returns false, retries until lock is acquired and sl
     try context.init(newFileUploads);
     defer context.deinit();
     const allocator = context.arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     _ = try context.writePhoto("img1.jpg");
     // (Zig: another owner holds the lock when the import first asks for it, and lets go of it a while later.)
     const created = try storage_zig.storage_factory.createStorage(allocator, io, context.databaseDir, null, null);
     try std.testing.expect(try created.rawStorage.acquireWriteLock(allocator, io, ".db/write.lock", "other-owner"));
-    const releaser = try std.Thread.spawn(.{}, releaseLockLater, .{created.rawStorage});
+    // Waiting for the lock logs each failed attempt; a passing test must write nothing to stderr, so the log is muted.
+    var mutedLog: mock_log.MutedLog = .{};
+    mutedLog.install();
+    defer mutedLog.uninstall();
+    const releaser = try std.Thread.spawn(.{}, releaseLockLater, .{ created.rawStorage, &virtual_time });
     defer releaser.join();
 
-    const startedAt = std.Io.Clock.real.now(io).toMilliseconds();
-    const output = try context.run(try context.makeData(true));
+    const startedAt = std.Io.Clock.awake.now(io).toMilliseconds();
+    const output = try context.runWithIo(io, try context.makeData(true));
 
     // The import waited for the lock rather than giving up.
-    try std.testing.expect(std.Io.Clock.real.now(io).toMilliseconds() - startedAt >= 1000);
+    try std.testing.expect(std.Io.Clock.awake.now(io).toMilliseconds() - startedAt >= 1000);
     try std.testing.expectEqual(@as(usize, 1), output.object.get("imported").?.array.items.len);
 }
 
@@ -886,7 +908,7 @@ test "after a successful upload, merkle-tree.addItem and metadataCollection.inse
     const output = try context.run(try context.makeData(false));
 
     const assetId = output.object.get("imported").?.array.items[0].object.get("assetId").?.string;
-    const storage = try helpers.directoryStorage(allocator, io, context.databaseDir);
+    const storage = try test_files.directoryStorage(allocator, io, context.databaseDir);
     const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
     try std.testing.expect(node_api.media_file_database.getFilesImported(filesTree.databaseMetadata) == 1);
     try std.testing.expect(@import("merkle-tree-zig").merkle_tree.findItemInTree(filesTree.sort, try std.fmt.allocPrint(allocator, "asset/{s}", .{assetId})) != null);
@@ -1017,6 +1039,10 @@ test "skips duplicate hashes discovered in the same scan" {
     var context: ImportTest = undefined;
     try context.init(sameNewHashUploadFails);
     defer context.deinit();
+    // The failed upload is logged; a passing test must write nothing to stderr, so the log is muted.
+    var mutedLog: mock_log.MutedLog = .{};
+    mutedLog.install();
+    defer mutedLog.uninstall();
     // Both files return the same hash: the second should be skipped.
     _ = try context.writePhoto("img1.jpg");
     _ = try context.writePhoto("img2.jpg");
@@ -1183,7 +1209,7 @@ test "records against the database path, not the database's storage" {
 
     // The record is a local file worked out from the database path. Handing the record a storage
     // is what used to put it inside the database, where several machines overwrote each other's.
-    try std.testing.expect(helpers.fileExists(std.testing.io, try getImportRecordPath(allocator, context.databaseDir)));
+    try std.testing.expect(test_files.fileExists(std.testing.io, try getImportRecordPath(allocator, context.databaseDir)));
     try std.testing.expect(!std.mem.startsWith(u8, try getImportRecordPath(allocator, context.databaseDir), context.databaseDir));
 }
 
@@ -1195,7 +1221,7 @@ test "a dry run records nothing, because it changed nothing" {
 
     _ = try context.run(try context.makeData(true));
 
-    try std.testing.expect(!helpers.fileExists(std.testing.io, try getImportRecordPath(context.arena.allocator(), context.databaseDir)));
+    try std.testing.expect(!test_files.fileExists(std.testing.io, try getImportRecordPath(context.arena.allocator(), context.databaseDir)));
 }
 
 // Not ported: "releases each file once the import has finished with it" and "releases a file the database already
@@ -1299,7 +1325,7 @@ test "writes fewer assets than a batch holds rather than stranding them" {
     const output = try context.run(try context.autoImportData());
 
     try std.testing.expectEqual(@as(usize, 1), output.object.get("imported").?.array.items.len);
-    const storage = try helpers.directoryStorage(allocator, io, context.databaseDir);
+    const storage = try test_files.directoryStorage(allocator, io, context.databaseDir);
     const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
     try std.testing.expectEqual(@as(u64, 1), node_api.media_file_database.getFilesImported(filesTree.databaseMetadata));
 }

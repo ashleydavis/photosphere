@@ -2,7 +2,10 @@ const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const test_environment = @import("test-environment.zig");
+const mock_log = @import("mock-log.zig");
 const hash_cache = node_api.hash_cache;
 const HashCache = hash_cache.HashCache;
 const IHashCacheEntry = hash_cache.IHashCacheEntry;
@@ -13,6 +16,7 @@ const getProcessTmpDir = node_utils.fs.getProcessTmpDir;
 const path = node_utils.path;
 const errors = utils.errors;
 const Sha256 = std.crypto.hash.sha2.Sha256;
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 
 // Not ported: MockStorage (TypeScript keeps it only for reference; no test uses it).
 
@@ -58,7 +62,7 @@ const CacheTest = struct {
     //
     fn init(self: *CacheTest, name: []const u8) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-        self.cacheDir = try helpers.makeTempDir(self.arena.allocator(), std.testing.io, name);
+        self.cacheDir = try temp_dirs.makeTempDir(self.arena.allocator(), std.testing.io, name);
         self.hashCache = try HashCache.init(self.cacheDir, false);
     }
 
@@ -67,7 +71,7 @@ const CacheTest = struct {
     //
     fn deinit(self: *CacheTest) void {
         self.hashCache.deinit();
-        helpers.removeTempDir(std.testing.io, self.cacheDir);
+        temp_dirs.removeTempDir(std.testing.io, self.cacheDir);
         self.arena.deinit();
     }
 };
@@ -519,14 +523,14 @@ test "returns undefined when an entry runs past the end of the data" {
 // Reads and decodes the cache file written to a directory.
 //
 fn readCacheFile(allocator: std.mem.Allocator, cacheDir: []const u8) !?[]IHashCacheEntry {
-    return HashCache.decodeEntries(allocator, try helpers.readFile(allocator, std.testing.io, try std.fmt.allocPrint(allocator, "{s}/hash-cache-x.dat", .{cacheDir})));
+    return HashCache.decodeEntries(allocator, try test_files.readFile(allocator, std.testing.io, try std.fmt.allocPrint(allocator, "{s}/hash-cache-x.dat", .{cacheDir})));
 }
 
 //
 // Writes a cache file containing the supplied entries, as if another instance had saved it.
 //
 fn writeCacheFile(allocator: std.mem.Allocator, cacheDir: []const u8, entries: []const IHashCacheEntry) !void {
-    try helpers.writeFile(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/hash-cache-x.dat", .{cacheDir}), try HashCache.encodeEntries(allocator, entries));
+    try test_files.writeFile(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/hash-cache-x.dat", .{cacheDir}), try HashCache.encodeEntries(allocator, entries));
 }
 
 //
@@ -566,8 +570,8 @@ test "merges its own additions onto entries already on disk" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const cacheDir = try helpers.makeTempDir(allocator, io, "hash-cache-concurrent-test");
-    defer helpers.removeTempDir(io, cacheDir);
+    const cacheDir = try temp_dirs.makeTempDir(allocator, io, "hash-cache-concurrent-test");
+    defer temp_dirs.removeTempDir(io, cacheDir);
     try writeCacheFile(allocator, cacheDir, &.{ try makeEntry(allocator, "a/one.txt"), try makeEntry(allocator, "b/two.txt") });
 
     var hashCache = try HashCache.init(cacheDir, false);
@@ -585,8 +589,8 @@ test "keeps entries another instance added after this one loaded" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const cacheDir = try helpers.makeTempDir(allocator, io, "hash-cache-concurrent-test");
-    defer helpers.removeTempDir(io, cacheDir);
+    const cacheDir = try temp_dirs.makeTempDir(allocator, io, "hash-cache-concurrent-test");
+    defer temp_dirs.removeTempDir(io, cacheDir);
 
     // Both instances load the same (empty) cache, so neither knows about the other's entries.
     var firstCache = try HashCache.init(cacheDir, false);
@@ -616,8 +620,8 @@ test "loses no entries when many instances load together and save one after anot
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const cacheDir = try helpers.makeTempDir(allocator, io, "hash-cache-concurrent-test");
-    defer helpers.removeTempDir(io, cacheDir);
+    const cacheDir = try temp_dirs.makeTempDir(allocator, io, "hash-cache-concurrent-test");
+    defer temp_dirs.removeTempDir(io, cacheDir);
     const writerCount = 10;
     var caches: [writerCount]HashCache = undefined;
 
@@ -657,8 +661,8 @@ test "applies removals to the on-disk cache instead of resurrecting them" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const cacheDir = try helpers.makeTempDir(allocator, io, "hash-cache-concurrent-test");
-    defer helpers.removeTempDir(io, cacheDir);
+    const cacheDir = try temp_dirs.makeTempDir(allocator, io, "hash-cache-concurrent-test");
+    defer temp_dirs.removeTempDir(io, cacheDir);
     try writeCacheFile(allocator, cacheDir, &.{ try makeEntry(allocator, "a/one.txt"), try makeEntry(allocator, "b/two.txt") });
 
     var hashCache = try HashCache.init(cacheDir, false);
@@ -685,8 +689,8 @@ test "never publishes a corrupt file when saves overlap" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const cacheDir = try helpers.makeTempDir(allocator, io, "hash-cache-concurrent-test");
-    defer helpers.removeTempDir(io, cacheDir);
+    const cacheDir = try temp_dirs.makeTempDir(allocator, io, "hash-cache-concurrent-test");
+    defer temp_dirs.removeTempDir(io, cacheDir);
     // Overlapping saves used to share one temp file path and interleave their bytes into it,
     // so the published file failed its checksum and the whole cache was discarded on load.
     const writerCount = 8;
@@ -720,8 +724,8 @@ test "clears the changeset after a save so later saves only apply later changes"
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const cacheDir = try helpers.makeTempDir(allocator, io, "hash-cache-concurrent-test");
-    defer helpers.removeTempDir(io, cacheDir);
+    const cacheDir = try temp_dirs.makeTempDir(allocator, io, "hash-cache-concurrent-test");
+    defer temp_dirs.removeTempDir(io, cacheDir);
     var hashCache = try HashCache.init(cacheDir, false);
     defer hashCache.deinit();
     _ = try hashCache.load(io);
@@ -744,8 +748,8 @@ test "clears the changeset on load so pre-load changes are not re-applied" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const cacheDir = try helpers.makeTempDir(allocator, io, "hash-cache-concurrent-test");
-    defer helpers.removeTempDir(io, cacheDir);
+    const cacheDir = try temp_dirs.makeTempDir(allocator, io, "hash-cache-concurrent-test");
+    defer temp_dirs.removeTempDir(io, cacheDir);
     var hashCache = try HashCache.init(cacheDir, false);
     defer hashCache.deinit();
     _ = try hashCache.load(io);
@@ -804,17 +808,17 @@ test "sits under the platform cache directory, not the process temp directory" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try helpers.setupEnvironment(io);
+    _ = try test_environment.setupEnvironment(io);
     // Everything the cache knows can be recomputed, but recomputing it for a photo library means
     // copying and hashing every photo already imported. Under the process temp directory that
     // happened at every reboot on Linux, and after a few untouched days on macOS, with nothing
     // to say it had.
-    const runRoot = try helpers.makeTempDir(allocator, io, "hash-cache-home-check");
-    defer helpers.removeTempDir(io, runRoot);
-    try helpers.setEnv("PHOTOSPHERE_CACHE_DIR", try path.join(allocator, &.{ runRoot, "cache" }));
-    defer helpers.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
-    try helpers.setEnv("PHOTOSPHERE_TMP_DIR", try path.join(allocator, &.{ runRoot, "scratch" }));
-    defer helpers.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
+    const runRoot = try temp_dirs.makeTempDir(allocator, io, "hash-cache-home-check");
+    defer temp_dirs.removeTempDir(io, runRoot);
+    try test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", try path.join(allocator, &.{ runRoot, "cache" }));
+    defer test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
+    try test_environment.setEnv("PHOTOSPHERE_TMP_DIR", try path.join(allocator, &.{ runRoot, "scratch" }));
+    defer test_environment.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
 
     const cacheDir = try getHashCacheDir(allocator, "/photos/one");
 
@@ -834,16 +838,16 @@ test "is still found once the process temp directory has been taken away" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try helpers.setupEnvironment(io);
+    _ = try test_environment.setupEnvironment(io);
     // This is the restart, as far as a test can stage one: the scratch directory is gone and the
     // cache is read back anyway. Every platform gets this, because every platform's temp
     // directory is swept by something the app never hears about.
-    const runRoot = try helpers.makeTempDir(allocator, io, "hash-cache-survives-temp");
-    defer helpers.removeTempDir(io, runRoot);
-    try helpers.setEnv("PHOTOSPHERE_CACHE_DIR", try path.join(allocator, &.{ runRoot, "cache" }));
-    defer helpers.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
-    try helpers.setEnv("PHOTOSPHERE_TMP_DIR", try path.join(allocator, &.{ runRoot, "scratch" }));
-    defer helpers.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
+    const runRoot = try temp_dirs.makeTempDir(allocator, io, "hash-cache-survives-temp");
+    defer temp_dirs.removeTempDir(io, runRoot);
+    try test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", try path.join(allocator, &.{ runRoot, "cache" }));
+    defer test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
+    try test_environment.setEnv("PHOTOSPHERE_TMP_DIR", try path.join(allocator, &.{ runRoot, "scratch" }));
+    defer test_environment.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
     try std.Io.Dir.cwd().createDirPath(io, try getProcessTmpDir(allocator, io));
 
     var writer = try HashCache.init(try getHashCacheDir(allocator, "/photos/one"), false);
@@ -1155,6 +1159,10 @@ test "is discarded rather than read, whatever its version number says" {
     var context: CacheTest = undefined;
     try context.init("hash-cache-version-test");
     defer context.deinit();
+    // The load logs that the cache is unusable; a passing test must write nothing to stderr, so the log is muted.
+    var mutedLog: mock_log.MutedLog = .{};
+    mutedLog.install();
+    defer mutedLog.uninstall();
     const allocator = context.arena.allocator();
     const io = std.testing.io;
     // The cache is throwaway: everything in it can be recomputed, so a file written by any other
@@ -1164,7 +1172,7 @@ test "is discarded rather than read, whatever its version number says" {
     std.mem.writeInt(u32, fileBytes[0..4], 999, .little);
     // The checksum covers the version, so it has to be recomputed or the file is rejected for
     // being corrupt instead, which would prove nothing about the version check.
-    try helpers.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/hash-cache-x.dat", .{context.cacheDir}), try rechecksum(allocator, fileBytes));
+    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/hash-cache-x.dat", .{context.cacheDir}), try rechecksum(allocator, fileBytes));
 
     const loaded = try context.hashCache.load(io);
 
@@ -1177,7 +1185,10 @@ test "HashCache.save returns quietly when the update lock is held by somebody el
     try context.init("hash-cache-save-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     _ = try context.hashCache.load(io);
     try context.hashCache.addHash("a/one.txt", .{
         .hash = &([_]u8{7} ** 32),
@@ -1189,17 +1200,17 @@ test "HashCache.save returns quietly when the update lock is held by somebody el
     // staleness threshold for the duration of this test, so it is never broken.
     const cachePath = try std.fmt.allocPrint(allocator, "{s}/hash-cache-x.dat", .{context.cacheDir});
     const lockPath = try std.fmt.allocPrint(allocator, "{s}.lock", .{cachePath});
-    try helpers.writeFile(io, lockPath, "");
+    try test_files.writeFile(io, lockPath, "");
 
     try context.hashCache.save(io);
 
     // Nothing was published, because the save never got in.
-    try std.testing.expect(!helpers.fileExists(io, cachePath));
+    try std.testing.expect(!test_files.fileExists(io, cachePath));
 
     // The changeset was kept, so the entry lands as soon as the lock is free.
     try std.Io.Dir.cwd().deleteFile(io, lockPath);
     try context.hashCache.save(io);
-    try std.testing.expect(helpers.fileExists(io, cachePath));
+    try std.testing.expect(test_files.fileExists(io, cachePath));
 }
 
 // Not ported: "rethrows when the update fails for a reason that is not contention" (hash-cache-save.test.ts), which

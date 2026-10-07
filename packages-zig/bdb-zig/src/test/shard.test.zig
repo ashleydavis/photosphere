@@ -2,7 +2,7 @@ const std = @import("std");
 const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
-const helpers = @import("test-helpers.zig");
+const fixtures = @import("fixtures.zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const bson = serialization_zig.bson;
 const BsonShard = bdb.shard.BsonShard;
@@ -440,7 +440,7 @@ test "BsonShard loads a version 1 shard file written by TypeScript" {
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try storage.putFile("collections/test/shards/v1", try helpers.readFixture(allocator, io, "shard-v1.bin"));
+    try storage.putFile("collections/test/shards/v1", try fixtures.readFixture(allocator, io, "shard-v1.bin"));
     var shard = newTestShard(allocator, "v1", &storage);
     const records = try shard.records(io);
     try std.testing.expectEqual(@as(usize, 2), records.count());
@@ -457,7 +457,7 @@ test "BsonShard writes the same shard payload as the test database records" {
     defer arena.deinit();
     const allocator = arena.allocator();
     var source = MemoryStorage.init(allocator);
-    try source.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/50-assets/.db/bson", "db");
+    try source.loadDirectory(io, fixtures.TEST_DBS_DIR ++ "/50-assets/.db/bson", "db");
     var destination = MemoryStorage.init(allocator);
     var compared: usize = 0;
     for (source.files.keys()) |filePath| {

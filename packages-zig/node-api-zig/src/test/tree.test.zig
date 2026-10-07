@@ -2,12 +2,17 @@ const std = @import("std");
 const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const console_capture = @import("console-capture.zig");
+const test_environment = @import("test-environment.zig");
+const fixture_dirs = @import("fixture-dirs.zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
 const bdb = @import("bdb-zig");
 const api = @import("api-zig");
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 const tree = node_api.tree;
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const errors = utils.errors;
@@ -16,22 +21,28 @@ test "merkleTreeExists is false for an empty directory and true for a database" 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
-    const emptyDir = try helpers.makeTempDir(allocator, io, "tree-empty");
-    defer helpers.removeTempDir(io, emptyDir);
-    try std.testing.expect(!try tree.merkleTreeExists(allocator, io, try helpers.directoryStorage(allocator, io, emptyDir)));
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    const emptyDir = try temp_dirs.makeTempDir(allocator, io, "tree-empty");
+    defer temp_dirs.removeTempDir(io, emptyDir);
+    try std.testing.expect(!try tree.merkleTreeExists(allocator, io, try test_files.directoryStorage(allocator, io, emptyDir)));
 
-    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    try std.testing.expect(try tree.merkleTreeExists(allocator, io, try helpers.directoryStorage(allocator, io, databaseDir)));
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    try std.testing.expect(try tree.merkleTreeExists(allocator, io, try test_files.directoryStorage(allocator, io, databaseDir)));
 }
 
 test "loadMerkleTree loads the files tree of a v6 database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
-    const storage = try helpers.directoryStorage(allocator, io, helpers.TEST_DBS_DIR ++ "/v6");
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    const storage = try test_files.directoryStorage(allocator, io, fixture_dirs.TEST_DBS_DIR ++ "/v6");
     const loaded = (try tree.loadMerkleTree(allocator, io, storage)).?;
     try std.testing.expectEqual(@as(u32, 4), loaded.sort.?.leafCount);
     try std.testing.expect(loaded.merkle != null);
@@ -42,20 +53,26 @@ test "loadMerkleTree returns null when there is no database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
-    const emptyDir = try helpers.makeTempDir(allocator, io, "tree-none");
-    defer helpers.removeTempDir(io, emptyDir);
-    try std.testing.expect(try tree.loadMerkleTree(allocator, io, try helpers.directoryStorage(allocator, io, emptyDir)) == null);
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    const emptyDir = try temp_dirs.makeTempDir(allocator, io, "tree-none");
+    defer temp_dirs.removeTempDir(io, emptyDir);
+    try std.testing.expect(try tree.loadMerkleTree(allocator, io, try test_files.directoryStorage(allocator, io, emptyDir)) == null);
 }
 
 test "saveMerkleTree throws when no tree is provided" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
-    const emptyDir = try helpers.makeTempDir(allocator, io, "tree-null");
-    defer helpers.removeTempDir(io, emptyDir);
-    try std.testing.expectError(error.Thrown, tree.saveMerkleTree(allocator, io, null, try helpers.directoryStorage(allocator, io, emptyDir)));
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    const emptyDir = try temp_dirs.makeTempDir(allocator, io, "tree-null");
+    defer temp_dirs.removeTempDir(io, emptyDir);
+    try std.testing.expectError(error.Thrown, tree.saveMerkleTree(allocator, io, null, try test_files.directoryStorage(allocator, io, emptyDir)));
     try std.testing.expectEqualStrings("Cannot save database. No merkle tree provided.", errors.lastErrorMessage());
 }
 
@@ -63,10 +80,13 @@ test "saveMerkleTree rebuilds a dirty tree and saves it to .db/files.dat" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
-    const dir = try helpers.makeTempDir(allocator, io, "tree-save");
-    defer helpers.removeTempDir(io, dir);
-    const storage = try helpers.directoryStorage(allocator, io, dir);
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    const dir = try temp_dirs.makeTempDir(allocator, io, "tree-save");
+    defer temp_dirs.removeTempDir(io, dir);
+    const storage = try test_files.directoryStorage(allocator, io, dir);
 
     var merkleTree = merkle_tree.createTree("12345678-1234-5678-9abc-123456789abc");
     merkleTree = try merkle_tree.addItem(allocator, &merkleTree, .{ .name = "asset/a", .hash = &([_]u8{1} ** 32), .length = 5, .lastModified = 1000 });
@@ -78,15 +98,18 @@ test "saveMerkleTree rebuilds a dirty tree and saves it to .db/files.dat" {
     const loaded = (try tree.loadMerkleTree(allocator, io, storage)).?;
     try std.testing.expectEqualStrings("12345678-1234-5678-9abc-123456789abc", loaded.id);
     try std.testing.expectEqualSlices(u8, merkleTree.merkle.?.hash, loaded.merkle.?.hash);
-    try std.testing.expect(helpers.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/files.dat", .{dir})));
+    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/files.dat", .{dir})));
 }
 
 test "loadCollectionMerkleTree and loadShardMerkleTree load the BSON trees of a v6 database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
-    const storage = try helpers.directoryStorage(allocator, io, helpers.TEST_DBS_DIR ++ "/v6");
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    const storage = try test_files.directoryStorage(allocator, io, fixture_dirs.TEST_DBS_DIR ++ "/v6");
     const collectionTree = (try tree.loadCollectionMerkleTree(allocator, io, storage, "metadata")).?;
     var shardNames = merkle_tree.iterateLeaves(merkle_tree.MerkleNode, allocator, collectionTree.merkle);
     const shardLeaf = (try shardNames.next()).?;
@@ -123,8 +146,8 @@ fn addFileToFilesTree(allocator: std.mem.Allocator, io: std.Io, assetStorage: st
 // Creates a new database (files tree only, no committed BSON record) in a new directory.
 //
 fn createEmptyDatabase(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !TestDatabase {
-    _ = try helpers.setupEnvironment(io);
-    const dir = try helpers.makeTempDir(allocator, io, name);
+    _ = try test_environment.setupEnvironment(io);
+    const dir = try temp_dirs.makeTempDir(allocator, io, name);
     const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null);
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
@@ -151,8 +174,8 @@ const TestDatabase = struct {
 // A copy of test/dbs/v6: a database with a files tree and committed BSON records.
 //
 fn createPopulatedDatabase(allocator: std.mem.Allocator, io: std.Io) !TestDatabase {
-    _ = try helpers.setupEnvironment(io);
-    const dir = try helpers.copyTestDatabase(allocator, io, "v6");
+    _ = try test_environment.setupEnvironment(io);
+    const dir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null);
     return .{ .dir = dir, .assetStorage = opened.storage, .rawStorage = opened.rawStorage };
 }
@@ -161,19 +184,25 @@ test "returns undefined when there is no database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
-    const emptyDir = try helpers.makeTempDir(allocator, io, "content-hash-empty");
-    defer helpers.removeTempDir(io, emptyDir);
-    try std.testing.expect(try tree.getDatabaseContentHash(allocator, io, try helpers.directoryStorage(allocator, io, emptyDir)) == null);
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    const emptyDir = try temp_dirs.makeTempDir(allocator, io, "content-hash-empty");
+    defer temp_dirs.removeTempDir(io, emptyDir);
+    try std.testing.expect(try tree.getDatabaseContentHash(allocator, io, try test_files.directoryStorage(allocator, io, emptyDir)) == null);
 }
 
 test "returns undefined when the bson database tree is missing" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const database = try createEmptyDatabase(allocator, io, "content-hash-nobson");
-    defer helpers.removeTempDir(io, database.dir);
+    defer temp_dirs.removeTempDir(io, database.dir);
 
     // Files tree has content, but no bson record has been committed.
     try addFileToFilesTree(allocator, io, database.assetStorage, "asset/1", 1);
@@ -185,9 +214,12 @@ test "returns a 32-byte combined hash when both trees exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const database = try createPopulatedDatabase(allocator, io);
-    defer helpers.removeTempDir(io, std.fs.path.dirname(database.dir).?);
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(database.dir).?);
 
     const hash = (try tree.getDatabaseContentHash(allocator, io, database.assetStorage)).?;
     try std.testing.expectEqual(@as(usize, 32), hash.len);
@@ -202,9 +234,12 @@ test "changes when the files tree changes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const database = try createPopulatedDatabase(allocator, io);
-    defer helpers.removeTempDir(io, std.fs.path.dirname(database.dir).?);
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(database.dir).?);
 
     const before = (try tree.getDatabaseContentHash(allocator, io, database.assetStorage)).?;
     try addFileToFilesTree(allocator, io, database.assetStorage, "asset/2", 2);
@@ -217,9 +252,12 @@ test "writes the content hash plus the extra fields while holding the lock" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const database = try createPopulatedDatabase(allocator, io);
-    defer helpers.removeTempDir(io, std.fs.path.dirname(database.dir).?);
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(database.dir).?);
 
     try tree.stampDatabaseStateLocked(allocator, io, database.assetStorage, database.rawStorage, "session-1", .{ .lastSyncedAt = "2026-01-02T03:04:05.000Z" });
 
@@ -236,10 +274,13 @@ test "omits the content hash when the database is empty" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
-    _ = try helpers.setupEnvironment(io);
-    const dir = try helpers.makeTempDir(allocator, io, "stamp-locked-empty");
-    defer helpers.removeTempDir(io, dir);
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    _ = try test_environment.setupEnvironment(io);
+    const dir = try temp_dirs.makeTempDir(allocator, io, "stamp-locked-empty");
+    defer temp_dirs.removeTempDir(io, dir);
     const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null);
 
     try tree.stampDatabaseStateLocked(allocator, io, opened.storage, opened.rawStorage, "session-1", .{ .lastReplicatedAt = "2026-01-02T03:04:05.000Z" });
@@ -253,10 +294,18 @@ test "does nothing when the lock is held by another owner" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const database = try createPopulatedDatabase(allocator, io);
-    defer helpers.removeTempDir(io, std.fs.path.dirname(database.dir).?);
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(database.dir).?);
     _ = try database.rawStorage.acquireWriteLock(allocator, io, ".db/write.lock", "other-owner");
+
+    // The failed lock attempt warns on the console; captured so nothing reaches the test program's stderr.
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    console_capture.captureStderr(&stderr_capture.writer);
+    defer console_capture.endConsoleCapture();
 
     try tree.stampDatabaseStateLocked(allocator, io, database.assetStorage, database.rawStorage, "session-1", .{ .lastSyncedAt = "2026-01-02T03:04:05.000Z" });
 
@@ -267,9 +316,12 @@ test "writes the given fields plus the current content hash without acquiring th
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const database = try createPopulatedDatabase(allocator, io);
-    defer helpers.removeTempDir(io, std.fs.path.dirname(database.dir).?);
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(database.dir).?);
 
     try tree.stampDatabaseState(allocator, io, database.assetStorage, database.rawStorage, .{ .lastSyncedAt = "2026-01-02T03:04:05.000Z" });
 
@@ -286,10 +338,13 @@ test "omits the content hash when the database is empty and preserves other fiel
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
-    _ = try helpers.setupEnvironment(io);
-    const dir = try helpers.makeTempDir(allocator, io, "stamp-state-empty");
-    defer helpers.removeTempDir(io, dir);
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    _ = try test_environment.setupEnvironment(io);
+    const dir = try temp_dirs.makeTempDir(allocator, io, "stamp-state-empty");
+    defer temp_dirs.removeTempDir(io, dir);
     const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null);
     try api.database_state.saveDatabaseState(allocator, io, opened.rawStorage, .{ .lastModifiedAt = "2026-01-02T03:04:05.000Z" });
 
@@ -315,9 +370,12 @@ test "writes lastModifiedAt and the current content hash" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const database = try createPopulatedDatabase(allocator, io);
-    defer helpers.removeTempDir(io, std.fs.path.dirname(database.dir).?);
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(database.dir).?);
 
     const before = try nowIsoString(allocator, io);
     try tree.stampDatabaseModified(allocator, io, database.assetStorage, database.rawStorage);
@@ -336,10 +394,13 @@ test "writes lastModifiedAt but no content hash when the database is empty" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
-    _ = try helpers.setupEnvironment(io);
-    const dir = try helpers.makeTempDir(allocator, io, "stamp-modified-empty");
-    defer helpers.removeTempDir(io, dir);
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    _ = try test_environment.setupEnvironment(io);
+    const dir = try temp_dirs.makeTempDir(allocator, io, "stamp-modified-empty");
+    defer temp_dirs.removeTempDir(io, dir);
     const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null);
 
     try tree.stampDatabaseModified(allocator, io, opened.storage, opened.rawStorage);
@@ -353,9 +414,12 @@ test "preserves other state fields when stamping" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const database = try createPopulatedDatabase(allocator, io);
-    defer helpers.removeTempDir(io, std.fs.path.dirname(database.dir).?);
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(database.dir).?);
     try api.database_state.saveDatabaseState(allocator, io, database.rawStorage, .{ .lastSyncedAt = "2026-01-02T03:04:05.000Z" });
 
     try tree.stampDatabaseModified(allocator, io, database.assetStorage, database.rawStorage);
@@ -370,10 +434,13 @@ test "isDatabaseEncrypted is true only when the database has the encryption mark
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
-    const databaseDir = try helpers.copyTestDatabase(allocator, io, "v6");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    const storage = try helpers.directoryStorage(allocator, io, databaseDir);
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    const storage = try test_files.directoryStorage(allocator, io, databaseDir);
     try std.testing.expect(!try tree.isDatabaseEncrypted(allocator, io, storage));
 
     try storage.write(allocator, io, ".db/encryption.pub", null, "a public key");
@@ -496,7 +563,10 @@ test "builds tree from storage when no existing tree" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     var memoryStorage = MemoryStorage.init(allocator);
     const storage = memoryStorage.asStorage();
     try storage.write(allocator, io, "asset/f1", "application/octet-stream", "a");
@@ -523,7 +593,10 @@ test "preserves existing tree id when rebuilding" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     var memoryStorage = MemoryStorage.init(allocator);
     const storage = memoryStorage.asStorage();
     const existingTree = try buildMinimalTree(allocator, &.{"asset/old"});
@@ -544,7 +617,10 @@ test "ignores paths under .db/" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     var memoryStorage = MemoryStorage.init(allocator);
     const storage = memoryStorage.asStorage();
     try storage.write(allocator, io, "asset/f1", "application/octet-stream", "a");
@@ -562,7 +638,10 @@ test "returns fileCount 0 and filesImported 0 when storage has no content files"
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     var memoryStorage = MemoryStorage.init(allocator);
     const storage = memoryStorage.asStorage();
 
@@ -578,7 +657,10 @@ test "invokes progressCallback with incrementing count for each file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     var memoryStorage = MemoryStorage.init(allocator);
     const storage = memoryStorage.asStorage();
     try storage.write(allocator, io, "asset/a", "application/octet-stream", "a");
@@ -598,7 +680,10 @@ test "saved tree can be loaded and has correct databaseMetadata" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     var memoryStorage = MemoryStorage.init(allocator);
     const storage = memoryStorage.asStorage();
     try storage.write(allocator, io, "asset/only", "application/octet-stream", "x");

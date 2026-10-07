@@ -3,7 +3,8 @@ const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
-const helpers = @import("test-helpers.zig");
+const fixtures = @import("fixtures.zig");
+const test_clock = @import("test-clock.zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const bson = serialization_zig.bson;
 const BsonDocument = bson.BsonDocument;
@@ -22,6 +23,69 @@ const js_value = bdb.js_value;
 const io = std.testing.io;
 
 //
+// Hex SHA-256 of some bytes.
+//
+fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]const u8 {
+    var digest: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(data, &digest, .{});
+    const hex = std.fmt.bytesToHex(digest, .lower);
+    return allocator.dupe(u8, &hex);
+}
+
+//
+// The time the scenario dates are based on (generate.ts BASE_TIME: Date.UTC(2020, 0, 1)).
+//
+const BASE_TIME: i64 = 1577836800000;
+
+//
+// Builds the fields of scenario record `index` exactly like generate.ts makeFields (same keys in the same order).
+//
+fn makeFields(allocator: std.mem.Allocator, index: i64, variant: i64) !BsonDocument {
+    var fields: BsonDocument = .empty;
+    if (@mod(index, 7) == 0) {
+        try fields.put(allocator, "hash", .{ .string = try std.fmt.allocPrint(allocator, "dup-{d}", .{variant}) });
+    }
+    else {
+        try fields.put(allocator, "hash", .{ .string = try sha256Hex(allocator, try std.fmt.allocPrint(allocator, "record-{d}-{d}", .{ index, variant })) });
+    }
+    try fields.put(allocator, "name", .{ .string = try std.fmt.allocPrint(allocator, "file-{d}.jpg", .{index}) });
+    const dateKind = @mod(index, 5);
+    const photoTime = BASE_TIME + index * 3600000 * (variant + 1);
+    if (dateKind == 1) {
+        var output: std.Io.Writer.Allocating = .init(allocator);
+        try js_value.writeIsoString(&output.writer, photoTime);
+        try fields.put(allocator, "photoDate", .{ .string = output.written() });
+    }
+    else if (dateKind != 0) {
+        try fields.put(allocator, "photoDate", .{ .date = photoTime });
+    }
+    try fields.put(allocator, "size", .{ .number = @floatFromInt(index * 1000 + variant) });
+    try fields.put(allocator, "ratio", .{ .number = @as(f64, @floatFromInt(index)) / 7.0 });
+    const tags = try allocator.alloc(bson.BsonValue, 2);
+    tags[0] = .{ .string = "a" };
+    tags[1] = .{ .number = @floatFromInt(index) };
+    try fields.put(allocator, "tags", .{ .array = tags });
+    if (@mod(index, 3) == 0) {
+        try fields.put(allocator, "location", .null);
+    }
+    else {
+        const location = try BsonDocument.fromFields(allocator, &.{
+            .{ .key = "lat", .value = .{ .number = @as(f64, @floatFromInt(index)) * 0.5 } },
+            .{ .key = "lng", .value = .{ .number = -@as(f64, @floatFromInt(index)) } },
+        });
+        try fields.put(allocator, "location", .{ .document = location });
+    }
+    return fields;
+}
+
+//
+// Builds a metadata document `{ timestamp }` like the scenarios in generate.ts.
+//
+fn makeMetadata(allocator: std.mem.Allocator, timestamp: i64) !BsonDocument {
+    return BsonDocument.fromFields(allocator, &.{.{ .key = "timestamp", .value = .{ .number = @floatFromInt(timestamp) } }});
+}
+
+//
 // Number of records in the create, update and build scenarios (generate.ts SCENARIO_RECORD_COUNT).
 //
 const SCENARIO_RECORD_COUNT = 2000;
@@ -35,7 +99,7 @@ const LARGE_RECORD_COUNT = 93000;
 // Creates a new database over a storage.
 //
 fn openDatabase(allocator: std.mem.Allocator, storage: *MemoryStorage, uuidGenerator: *TestUuidGenerator) !*BsonDatabase {
-    return BsonDatabase.init(allocator, storage.asStorage(), ".db/bson", uuidGenerator.uuidGenerator(), helpers.timestamp_provider.timestampProvider());
+    return BsonDatabase.init(allocator, storage.asStorage(), ".db/bson", uuidGenerator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
 }
 
 //
@@ -44,8 +108,8 @@ fn openDatabase(allocator: std.mem.Allocator, storage: *MemoryStorage, uuidGener
 fn makeRecord(allocator: std.mem.Allocator, id: []const u8, index: i64, variant: i64, timestamp: i64) !IInternalRecord {
     return .{
         ._id = id,
-        .fields = try helpers.makeFields(allocator, index, variant),
-        .metadata = try helpers.makeMetadata(allocator, timestamp),
+        .fields = try makeFields(allocator, index, variant),
+        .metadata = try makeMetadata(allocator, timestamp),
     };
 }
 
@@ -109,7 +173,7 @@ fn expectTreeMatches(allocator: std.mem.Allocator, storage: *MemoryStorage, file
     }
     try json.writer.writeAll("]");
     try std.testing.expectEqual(jsonInteger(expected.object.get("leafCount").?), @as(i64, @intCast(leaves.items.len)));
-    std.testing.expectEqualStrings(expected.object.get("leavesSha256").?.string, try helpers.sha256Hex(allocator, json.written())) catch |err| {
+    std.testing.expectEqualStrings(expected.object.get("leavesSha256").?.string, try sha256Hex(allocator, json.written())) catch |err| {
         std.debug.print("merkle tree leaves differ: {s}\n{s}\n", .{ filePath, json.written() });
         return err;
     };
@@ -137,7 +201,7 @@ fn pathLessThan(context: void, left: []const u8, right: []const u8) bool {
 // Checks every file of the storage against the scenario fixture and returns the parsed fixture.
 //
 fn expectMatchesSnapshot(allocator: std.mem.Allocator, storage: *MemoryStorage, fixtureName: []const u8) !std.json.Value {
-    const fixture = try helpers.readJsonFixture(allocator, io, fixtureName);
+    const fixture = try fixtures.readJsonFixture(allocator, io, fixtureName);
     const expectedFiles = fixture.object.get("files").?.array.items;
     const trees = fixture.object.get("trees").?.object;
 
@@ -163,7 +227,7 @@ fn expectMatchesSnapshot(allocator: std.mem.Allocator, storage: *MemoryStorage, 
             };
             continue;
         }
-        const actualSha = try helpers.sha256Hex(allocator, data);
+        const actualSha = try sha256Hex(allocator, data);
         if (!std.mem.eql(u8, expectedFile.object.get("sha256").?.string, actualSha) or jsonInteger(expectedFile.object.get("size").?) != @as(i64, @intCast(data.len))) {
             if (mismatches < 10) {
                 std.debug.print("{s}: file {s} differs (size {d}, expected {d})\n", .{ fixtureName, filePath, data.len, jsonInteger(expectedFile.object.get("size").?) });
@@ -264,7 +328,7 @@ test "scenario existing: records updated, deleted and added in the 50-assets tes
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try storage.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
+    try storage.loadDirectory(io, fixtures.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
     var uuidGenerator: TestUuidGenerator = .{};
     var recordIdGenerator: TestUuidGenerator = .{};
     const database = try openDatabase(allocator, &storage, &uuidGenerator);
@@ -281,13 +345,13 @@ test "scenario existing: records updated, deleted and added in the 50-assets tes
             // { ...record.fields, hash }: a copy of the fields with the hash replaced in place.
             var fields: BsonDocument = .empty;
             try fields.fields.appendSlice(allocator, record.fields.fields.items);
-            try fields.put(allocator, "hash", .{ .string = try helpers.sha256Hex(allocator, try std.fmt.allocPrint(allocator, "changed-{d}", .{index})) });
+            try fields.put(allocator, "hash", .{ .string = try sha256Hex(allocator, try std.fmt.allocPrint(allocator, "changed-{d}", .{index})) });
             try collection.setInternalRecord(io, .{ ._id = record._id, .fields = fields, .metadata = record.metadata });
         }
         else if (@mod(index, 4) == 1) {
             var fields: BsonDocument = .empty;
             try fields.fields.appendSlice(allocator, record.fields.fields.items);
-            try fields.put(allocator, "photoDate", .{ .date = helpers.BASE_TIME + index * 86400000 });
+            try fields.put(allocator, "photoDate", .{ .date = BASE_TIME + index * 86400000 });
             try collection.setInternalRecord(io, .{ ._id = record._id, .fields = fields, .metadata = record.metadata });
         }
         else if (@mod(index, 4) == 2 and index < 20) {

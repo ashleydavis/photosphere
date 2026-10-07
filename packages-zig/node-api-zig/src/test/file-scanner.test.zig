@@ -2,7 +2,11 @@ const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const test_environment = @import("test-environment.zig");
+const mock_log = @import("mock-log.zig");
+const string_lists = @import("string-lists.zig");
 const zip_fixture = @import("zip-fixture.zig");
 const buildZip = zip_fixture.buildZip;
 const file_scanner = node_api.file_scanner;
@@ -175,9 +179,9 @@ const ScannerTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try helpers.setupEnvironment(io);
-        self.testDir = try helpers.makeTempDir(allocator, io, "file-scanner-test");
-        self.sessionTempDir = try helpers.makeTempDir(allocator, io, "file-scanner-session");
+        _ = try test_environment.setupEnvironment(io);
+        self.testDir = try temp_dirs.makeTempDir(allocator, io, "file-scanner-test");
+        self.sessionTempDir = try temp_dirs.makeTempDir(allocator, io, "file-scanner-session");
         self.generator = .{};
     }
 
@@ -185,8 +189,8 @@ const ScannerTest = struct {
     // Clean up test directory.
     //
     fn deinit(self: *ScannerTest) void {
-        helpers.removeTempDir(std.testing.io, self.testDir);
-        helpers.removeTempDir(std.testing.io, self.sessionTempDir);
+        temp_dirs.removeTempDir(std.testing.io, self.testDir);
+        temp_dirs.removeTempDir(std.testing.io, self.sessionTempDir);
         self.arena.deinit();
     }
 
@@ -195,7 +199,7 @@ const ScannerTest = struct {
     //
     fn write(self: *ScannerTest, relativePath: []const u8, data: []const u8) ![]const u8 {
         const filePath = try path.join(self.arena.allocator(), &.{ self.testDir, relativePath });
-        try helpers.writeFile(std.testing.io, filePath, data);
+        try test_files.writeFile(std.testing.io, filePath, data);
         return filePath;
     }
 
@@ -615,6 +619,10 @@ test "should handle invalid zip file gracefully" {
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
+    // The scan logs the failure; a passing test must write nothing to stderr, so the log is muted.
+    var mutedLog: mock_log.MutedLog = .{};
+    mutedLog.install();
+    defer mutedLog.uninstall();
     // (Zig: TypeScript reads the scanner's state object after the scan, through the reference the progress
     // callback was handed. A Zig scan's state is gone when it returns, so the zip sits in a folder with a photo
     // after it, and the progress reported for the photo carries the count.)
@@ -694,13 +702,13 @@ test "scans a zip whose entries are compressed" {
     const allocator = context.arena.allocator();
     // (Zig: not in the TypeScript tests. The checked in test archive is compressed with DEFLATE, the method the
     // zips a camera or a phone writes use, so the scan inflates each entry.)
-    const zipPath = try context.write("test-archive.zip", try helpers.readFile(allocator, std.testing.io, "../../test/multiple-files/test-archive.zip"));
+    const zipPath = try context.write("test-archive.zip", try test_files.readFile(allocator, std.testing.io, "../test/multiple-files/test-archive.zip"));
 
     const scanned = try context.scan(zipPath, defaultScannerOptions, null);
 
     try std.testing.expect(scanned.files.items.len > 0);
     for (scanned.files.items) |file| {
-        const extracted = try helpers.readFile(allocator, std.testing.io, file.filePath);
+        const extracted = try test_files.readFile(allocator, std.testing.io, file.filePath);
         try std.testing.expectEqual(@as(u64, extracted.len), file.fileStat.length);
         try std.testing.expect(extracted.len > 0);
     }
@@ -816,7 +824,7 @@ test "scanPaths with relative paths yields absolute filePaths in callbacks" {
         try std.testing.expect(std.fs.path.isAbsolute(file.filePath));
         resolved[index] = file.filePath;
     }
-    helpers.sortStrings(resolved);
+    string_lists.sortStrings(resolved);
     try std.testing.expectEqualStrings(file1, resolved[0]);
     try std.testing.expectEqualStrings(file2, resolved[1]);
 }
@@ -895,6 +903,10 @@ test "should track failed files count" {
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
+    // The scan logs the failure; a passing test must write nothing to stderr, so the log is muted.
+    var mutedLog: mock_log.MutedLog = .{};
+    mutedLog.install();
+    defer mutedLog.uninstall();
     // (Zig: see "should handle invalid zip file gracefully".)
     _ = try context.write("invalid.zip", "not a zip");
     _ = try context.write("z.png", &MINIMAL_PNG);
@@ -1134,6 +1146,10 @@ test "counts empty files and empty nested zips in a zip as failed" {
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
+    // The scan logs the skipped files; a passing test must write nothing to stderr, so the log is muted.
+    var mutedLog: mock_log.MutedLog = .{};
+    mutedLog.install();
+    defer mutedLog.uninstall();
     const allocator = context.arena.allocator();
     // (A file after the zip, so the progress reported for it includes the zip's counts.)
     _ = try context.write("z.png", &MINIMAL_PNG);

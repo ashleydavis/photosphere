@@ -104,21 +104,159 @@ pub fn BufferMap(comptime V: type) type {
             return bucket.items[index].value;
         }
 
-        // Not ported: has (not reached by the CLI)
+        //
+        // Returns true when the key is present.
+        //
+        pub fn has(self: *const Self, key: []const u8) !bool {
+            return (try self.get(key)) != null;
+        }
 
-        // Not ported: delete (not reached by the CLI)
+        //
+        // Removes the key. Returns false when it is not present.
+        //
+        pub fn delete(self: *Self, key: []const u8) !bool {
+            const hash = try _hash(key);
+            const bucket = self._map.getPtr(hash) orelse {
+                return false;
+            };
 
-        // Not ported: clear (not reached by the CLI)
+            const index = findEntryIndex(bucket.items, key) orelse {
+                return false;
+            };
 
-        // Not ported: size (not reached by the CLI)
+            _ = bucket.orderedRemove(index);
 
-        // Not ported: forEach (not reached by the CLI)
+            // Remove bucket if empty
+            if (bucket.items.len == 0) {
+                _ = self._map.orderedRemove(hash);
+            }
 
-        // Not ported: values (not reached by the CLI)
+            return true;
+        }
 
-        // Not ported: keys (not reached by the CLI)
+        //
+        // Removes every entry.
+        //
+        pub fn clear(self: *Self) void {
+            self._map.clearRetainingCapacity();
+        }
 
-        // Not ported: entries (not reached by the CLI)
+        //
+        // Returns the number of entries (TypeScript: the `size` getter).
+        //
+        pub fn size(self: *const Self) usize {
+            var total: usize = 0;
+            for (self._map.values()) |bucket| {
+                total += bucket.items.len;
+            }
+            return total;
+        }
+
+        //
+        // Calls the callback with each [key, value] pair.
+        //
+        pub fn forEach(self: *const Self, context: anytype, callback: *const fn (@TypeOf(context), Entry) anyerror!void) !void {
+            var entryIterator = self.entries();
+            while (entryIterator.next()) |entry| {
+                try callback(context, entry);
+            }
+        }
+
+        //
+        // Iterates the values.
+        //
+        pub fn values(self: *const Self) ValueIterator {
+            return .{
+                .entryIterator = self.entries(),
+            };
+        }
+
+        //
+        // Iterates the keys.
+        //
+        pub fn keys(self: *const Self) KeyIterator {
+            return .{
+                .entryIterator = self.entries(),
+            };
+        }
+
+        //
+        // Iterates the [key, value] pairs (TypeScript: `entries()`, also what `for...of` iterates).
+        //
+        pub fn entries(self: *const Self) EntryIterator {
+            return .{
+                .buckets = self._map.values(),
+                .bucketIndex = 0,
+                .entryIndex = 0,
+            };
+        }
+
+        //
+        // Iterator returned by entries().
+        //
+        pub const EntryIterator = struct {
+            // The buckets being iterated.
+            buckets: []const std.ArrayList(Entry),
+
+            // The index of the current bucket.
+            bucketIndex: usize,
+
+            // The index of the next entry in the current bucket.
+            entryIndex: usize,
+
+            //
+            // Returns the next pair or null when finished.
+            //
+            pub fn next(self: *EntryIterator) ?Entry {
+                while (self.bucketIndex < self.buckets.len) {
+                    const bucket = self.buckets[self.bucketIndex].items;
+                    if (self.entryIndex < bucket.len) {
+                        const entry = bucket[self.entryIndex];
+                        self.entryIndex += 1;
+                        return entry;
+                    }
+                    self.bucketIndex += 1;
+                    self.entryIndex = 0;
+                }
+                return null;
+            }
+        };
+
+        //
+        // Iterator returned by values().
+        //
+        pub const ValueIterator = struct {
+            // The iterator over the pairs.
+            entryIterator: EntryIterator,
+
+            //
+            // Returns the next value or null when finished.
+            //
+            pub fn next(self: *ValueIterator) ?V {
+                const entry = self.entryIterator.next() orelse {
+                    return null;
+                };
+                return entry.value;
+            }
+        };
+
+        //
+        // Iterator returned by keys().
+        //
+        pub const KeyIterator = struct {
+            // The iterator over the pairs.
+            entryIterator: EntryIterator,
+
+            //
+            // Returns the next key or null when finished.
+            //
+            pub fn next(self: *KeyIterator) ?[]const u8 {
+                const entry = self.entryIterator.next() orelse {
+                    return null;
+                };
+                return entry.key;
+            }
+        };
 
         //
         // One [key, value] pair of the map (TypeScript: `[Buffer, V]`).

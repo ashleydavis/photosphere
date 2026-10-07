@@ -6,6 +6,7 @@ const serialization_zig = @import("serialization-zig");
 const bdb = @import("bdb-zig");
 const api = @import("api-zig");
 const tree = @import("tree.zig");
+const open_storage = @import("open-storage.zig");
 const retry_operations = @import("retry-operations.zig");
 const resolve_storage_credentials = @import("resolve-storage-credentials.zig");
 const lazy_origin_storage = @import("lazy-origin-storage.zig");
@@ -16,6 +17,8 @@ const bson = serialization_zig.bson;
 const errors = utils.errors;
 const log = &utils.log.log;
 const retry = utils.retry.retry;
+const retryOnce = utils.retry.retryOnce;
+const DATABASE_REACHABLE_TIMEOUT = api.constants.DATABASE_REACHABLE_TIMEOUT;
 const IStorage = storage_zig.storage.IStorage;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const ITimestampProvider = utils.timestamp_provider.ITimestampProvider;
@@ -747,7 +750,68 @@ fn configOrigin(config: ?std.json.Value) ?[]const u8 {
     };
 }
 
-// Not ported: checkDatabaseExists (not reached by the ported commands).
+//
+// The arrow function checkDatabaseExists passes to retryOnce:
+// `async () => { const { storage } = await openStorage(databasePath); return await merkleTreeExists(storage); }`.
+//
+const OpenAndCheckMerkleTreeOperation = struct {
+    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    pub const source =
+        \\async () => {
+        \\        const { storage } = await openStorage(databasePath);
+        \\        return await merkleTreeExists(storage);
+        \\    }
+    ;
+
+    // Allocates what opening the storage and checking it need.
+    allocator: std.mem.Allocator,
+
+    // The path of the database to look for.
+    databasePath: []const u8,
+
+    //
+    // Opens the storage for the path and asks whether it holds a merkle tree.
+    //
+    pub fn run(self: *OpenAndCheckMerkleTreeOperation, io: std.Io) !bool {
+        const opened = try open_storage.openStorage(self.allocator, io, self.databasePath, null, null);
+        return tree.merkleTreeExists(self.allocator, io, opened.storage);
+    }
+};
+
+//
+// Returns true when a database exists at the given path. Works for any storage path (local
+// filesystem, S3, network).
+//
+// This answers existence, not connectivity: it is reached through the check-database-exists task and
+// its answer decides whether the app opens a database or tells the user there is none there. Whether
+// an automatic sync may run is a separate question, decided by computeSyncAllowed from the platform's
+// reported network status.
+//
+pub fn checkDatabaseExists(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8) !bool {
+    // Open storage the same way the load path does: openStorage resolves S3/encryption credentials
+    // from the database's own config, so the existence check and the actual load agree on what is
+    // reachable rather than probing with no credentials.
+    //
+    // Storage errors are deliberately NOT caught. A bucket that cannot be reached, a credential that
+    // does not work and a DNS failure are all different from "there is no database here", and this
+    // used to report every one of them as the latter: the app told the user their database was not
+    // found when it simply could not get to it. Reaching the storage and finding no merkle tree is
+    // the only thing that returns false.
+    //
+    // Bounded, because nothing else bounds it. One attempt, because this is a question a user is
+    // waiting on the answer to rather than work worth retrying: the app tells them the database
+    // cannot be reached, and pressing it again is the retry. Without the bound the wait fell through
+    // to the S3 client's ten minute request ceiling, which is set for a phone pushing a large video
+    // and leaves someone opening a database looking at a screen that never resolves. It only bites
+    // where a connection is accepted and then answers nothing, which is what a phone reaching a
+    // stopped server through an `adb reverse` forward gets, and is why this was invisible on an
+    // emulator, where the same server refuses the connection at once.
+    var operation: OpenAndCheckMerkleTreeOperation = .{
+        .allocator = allocator,
+        .databasePath = databasePath,
+    };
+    return retryOnce(io, &operation, DATABASE_REACHABLE_TIMEOUT);
+}
 
 //
 // README content for database directories

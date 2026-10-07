@@ -1,6 +1,6 @@
 const std = @import("std");
 const encryption = @import("encryption-zig");
-const helpers = @import("test-helpers.zig");
+const fixtures = @import("fixtures.zig");
 
 //
 // Golden interop tests between the TypeScript encryption package and this port, in both directions.
@@ -43,7 +43,7 @@ fn decryptThroughStream(allocator: std.mem.Allocator, keyMap: *const IPrivateKey
     const input = try allocator.create(std.Io.Reader);
     input.* = std.Io.Reader.fixed(encrypted);
     const decryptionStream = try encrypt_stream.createDecryptionStream(allocator, keyMap, input);
-    return helpers.readAll(allocator, decryptionStream.reader());
+    return fixtures.readAll(allocator, decryptionStream.reader());
 }
 
 //
@@ -53,32 +53,32 @@ fn encryptThroughStream(allocator: std.mem.Allocator, publicKey: *const crypto.P
     const input = try allocator.create(std.Io.Reader);
     input.* = std.Io.Reader.fixed(plain);
     const encryptionStream = try encrypt_stream.createEncryptionStream(allocator, std.testing.io, publicKey, input);
-    return helpers.readAll(allocator, encryptionStream.reader());
+    return fixtures.readAll(allocator, encryptionStream.reader());
 }
 
 test "Zig decrypts every TypeScript fixture (new format, legacy format and stream output)" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const privateKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts-private.pem"));
+    const privateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts-private.pem"));
     const keyMap = try buildKeyMap(allocator, privateKey);
     var hashOnlyMap = try keyMap.clone(allocator);
     _ = hashOnlyMap.swapRemove("default");
 
     for (sizes) |size| {
-        const plain = try helpers.makePlaintext(allocator, size);
-        const newFormat = try helpers.readFixture(allocator, try std.fmt.allocPrint(allocator, "new-{d}.bin", .{size}));
+        const plain = try fixtures.makePlaintext(allocator, size);
+        const newFormat = try fixtures.readFixture(allocator, try std.fmt.allocPrint(allocator, "new-{d}.bin", .{size}));
         try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(allocator, newFormat, &keyMap));
         try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptNewFormat(allocator, newFormat, &hashOnlyMap));
         try std.testing.expectEqualSlices(u8, plain, try decryptThroughStream(allocator, &keyMap, newFormat));
 
         var legacy: []const u8 = newFormat[44..];
         if (size != large_size) {
-            const storedPlain = try helpers.readFixture(allocator, try std.fmt.allocPrint(allocator, "plain-{d}.bin", .{size}));
+            const storedPlain = try fixtures.readFixture(allocator, try std.fmt.allocPrint(allocator, "plain-{d}.bin", .{size}));
             try std.testing.expectEqualSlices(u8, plain, storedPlain);
-            legacy = try helpers.readFixture(allocator, try std.fmt.allocPrint(allocator, "legacy-{d}.bin", .{size}));
+            legacy = try fixtures.readFixture(allocator, try std.fmt.allocPrint(allocator, "legacy-{d}.bin", .{size}));
 
-            const streamed = try helpers.readFixture(allocator, try std.fmt.allocPrint(allocator, "stream-{d}.bin", .{size}));
+            const streamed = try fixtures.readFixture(allocator, try std.fmt.allocPrint(allocator, "stream-{d}.bin", .{size}));
             try std.testing.expectEqual(encrypt_stream.computeEncryptedLength(size), streamed.len);
             try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(allocator, streamed, &keyMap));
             try std.testing.expectEqualSlices(u8, plain, try decryptThroughStream(allocator, &keyMap, streamed));
@@ -93,11 +93,11 @@ test "Zig encrypts and decrypts its own output for every size" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const privateKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts-private.pem"));
-    const publicKey = try crypto.createPublicKey(allocator, try helpers.readFixture(allocator, "ts-public.pem"));
+    const privateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts-private.pem"));
+    const publicKey = try crypto.createPublicKey(allocator, try fixtures.readFixture(allocator, "ts-public.pem"));
     const keyMap = try buildKeyMap(allocator, privateKey);
     for (sizes) |size| {
-        const plain = try helpers.makePlaintext(allocator, size);
+        const plain = try fixtures.makePlaintext(allocator, size);
         const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, publicKey, plain);
         try std.testing.expectEqual(encrypt_stream.computeEncryptedLength(size), encrypted.len);
         try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(allocator, encrypted, &keyMap));
@@ -130,16 +130,16 @@ test "Zig output with the TypeScript key has the header and length of the TypeSc
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const privateKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts-private.pem"));
-    const tsPublicKey = try crypto.createPublicKey(allocator, try helpers.readFixture(allocator, "ts-public.pem"));
+    const privateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts-private.pem"));
+    const tsPublicKey = try crypto.createPublicKey(allocator, try fixtures.readFixture(allocator, "ts-public.pem"));
 
     // TypeScript decrypts with a key map that holds only the key hash, so Zig output must carry that hash.
     var hashOnlyMap = try buildKeyMap(allocator, privateKey);
     _ = hashOnlyMap.swapRemove("default");
 
     for (sizes, ts_encrypted_lengths) |size, expectedLength| {
-        const plain = try helpers.makePlaintext(allocator, size);
-        const tsEncrypted = try helpers.readFixture(allocator, try std.fmt.allocPrint(allocator, "new-{d}.bin", .{size}));
+        const plain = try fixtures.makePlaintext(allocator, size);
+        const tsEncrypted = try fixtures.readFixture(allocator, try std.fmt.allocPrint(allocator, "new-{d}.bin", .{size}));
         try std.testing.expectEqual(expectedLength, tsEncrypted.len);
         try std.testing.expectEqualSlices(u8, ts_key_header, tsEncrypted[0..ts_key_header.len]);
 
@@ -154,7 +154,7 @@ test "Zig output with the TypeScript key has the header and length of the TypeSc
         try std.testing.expectEqualSlices(u8, ts_key_header, zigStream[0..ts_key_header.len]);
         try std.testing.expectEqualSlices(u8, plain, try decryptThroughStream(allocator, &hashOnlyMap, zigStream));
         if (size != large_size) {
-            const tsStream = try helpers.readFixture(allocator, try std.fmt.allocPrint(allocator, "stream-{d}.bin", .{size}));
+            const tsStream = try fixtures.readFixture(allocator, try std.fmt.allocPrint(allocator, "stream-{d}.bin", .{size}));
             try std.testing.expectEqual(expectedLength, tsStream.len);
             try std.testing.expectEqualSlices(u8, ts_key_header, tsStream[0..ts_key_header.len]);
         }
@@ -183,7 +183,7 @@ test "Zig-generated keys export as PEM with the layout of the TypeScript PEM fil
 
     // An RSA-4096 SPKI public key with exponent 65537 always has the same length and the same DER prefix, so the
     // Zig PEM has the length (800 bytes) and the first two lines of ts-public.pem up to where the modulus starts.
-    const tsPublicKeyPem = try helpers.readFixture(allocator, "ts-public.pem");
+    const tsPublicKeyPem = try fixtures.readFixture(allocator, "ts-public.pem");
     const spkiPrefix = "-----BEGIN PUBLIC KEY-----\nMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA";
     try std.testing.expectEqual(@as(usize, 800), tsPublicKeyPem.len);
     try std.testing.expectEqualStrings(spkiPrefix, tsPublicKeyPem[0..spkiPrefix.len]);
@@ -195,7 +195,7 @@ test "Zig-generated keys export as PEM with the layout of the TypeScript PEM fil
     // Zig output with the Zig key decrypts with the Zig private key, in the new format, the legacy format and as a stream.
     const keyMap = try buildKeyMap(allocator, keyPair.privateKey);
     for (sizes, ts_encrypted_lengths) |size, expectedLength| {
-        const plain = try helpers.makePlaintext(allocator, size);
+        const plain = try fixtures.makePlaintext(allocator, size);
         const zigEncrypted = try encrypt_buffer.encryptBuffer(allocator, io, keyPair.publicKey, plain);
         try std.testing.expectEqual(expectedLength, zigEncrypted.len);
         try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(allocator, zigEncrypted, &keyMap));

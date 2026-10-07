@@ -4,7 +4,9 @@ const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("task-queue-zig");
 const serialization_zig = @import("serialization-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const test_environment = @import("test-environment.zig");
 const cleanup_sources_worker = node_api.cleanup_sources_worker;
 const cleanupSourcesHandler = cleanup_sources_worker.cleanupSourcesHandler;
 const ICleanupSourcesResult = cleanup_sources_worker.ICleanupSourcesResult;
@@ -67,17 +69,17 @@ const CleanupTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try helpers.setupEnvironment(io);
+        _ = try test_environment.setupEnvironment(io);
         try registerFolderMediaSourceBuilder();
-        self.tempDir = try helpers.makeTempDir(allocator, io, "cleanup-sources-worker");
+        self.tempDir = try temp_dirs.makeTempDir(allocator, io, "cleanup-sources-worker");
         self.photosDir = try path.join(allocator, &.{ self.tempDir, "photos" });
         try std.Io.Dir.cwd().createDirPath(io, self.photosDir);
-        try helpers.setEnv("PHOTOSPHERE_TMP_DIR", self.tempDir);
+        try test_environment.setEnv("PHOTOSPHERE_TMP_DIR", self.tempDir);
 
         // The hash cache this test writes to and reads back lives in the platform's cache location,
         // so pointing that at the test's own directory is what keeps the test off the developer's
         // real cache and out of the way of any other run on the machine.
-        try helpers.setEnv("PHOTOSPHERE_CACHE_DIR", try path.join(allocator, &.{ self.tempDir, "cache" }));
+        try test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", try path.join(allocator, &.{ self.tempDir, "cache" }));
 
         self.uuidGenerator = try TestUuidGenerator.init(allocator);
         self.timestampProvider = .{};
@@ -95,9 +97,9 @@ const CleanupTest = struct {
     // Puts the environment back and removes the directory.
     //
     fn deinit(self: *CleanupTest) void {
-        helpers.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
-        helpers.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
-        helpers.removeTempDir(std.testing.io, self.tempDir);
+        test_environment.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
+        test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
+        temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
     }
 
@@ -106,7 +108,7 @@ const CleanupTest = struct {
     //
     fn writePhoto(self: *CleanupTest, fileName: []const u8, contents: []const u8) ![]const u8 {
         const filePath = try path.join(self.arena.allocator(), &.{ self.photosDir, fileName });
-        try helpers.writeFile(std.testing.io, filePath, contents);
+        try test_files.writeFile(std.testing.io, filePath, contents);
         return filePath;
     }
 
@@ -259,7 +261,7 @@ test "leaves a photo whose cache entry no longer describes it" {
     // not recoverable.
     const filePath = try context.writePhoto("changed.jpg", "one");
     try context.seedCacheEntry(filePath, "one", "a1b2c3d4-e5f6-4890-abcd-ef1234567890");
-    try helpers.writeFile(std.testing.io, filePath, "a completely different photo");
+    try test_files.writeFile(std.testing.io, filePath, "a completely different photo");
     try context.holdInDatabase("one");
 
     const result = try context.run(true, true);
@@ -278,7 +280,7 @@ test "a counting pass deletes nothing" {
     const result = try context.run(true, true);
 
     try std.testing.expectEqual(@as(usize, 0), result.deletedSourceIds.len);
-    try std.testing.expect(helpers.fileExists(std.testing.io, filePath));
+    try std.testing.expect(test_files.fileExists(std.testing.io, filePath));
 }
 
 test "a deleting pass deletes what it offered" {
@@ -292,7 +294,7 @@ test "a deleting pass deletes what it offered" {
     const result = try context.run(false, true);
 
     try expectStrings(&.{filePath}, result.deletedSourceIds);
-    try std.testing.expect(!helpers.fileExists(std.testing.io, filePath));
+    try std.testing.expect(!test_files.fileExists(std.testing.io, filePath));
 }
 
 test "a deleting pass leaves the photos it did not offer" {
@@ -306,8 +308,8 @@ test "a deleting pass leaves the photos it did not offer" {
 
     _ = try context.run(false, true);
 
-    try std.testing.expect(helpers.fileExists(std.testing.io, keptPath));
-    try std.testing.expect(!helpers.fileExists(std.testing.io, deletedPath));
+    try std.testing.expect(test_files.fileExists(std.testing.io, keptPath));
+    try std.testing.expect(!test_files.fileExists(std.testing.io, deletedPath));
 }
 
 test "refuses to run with no sources configured, rather than looking nowhere and reporting success" {

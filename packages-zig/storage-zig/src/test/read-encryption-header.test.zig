@@ -1,7 +1,7 @@
+const test_files = @import("test-files.zig");
 const std = @import("std");
 const storage_zig = @import("storage-zig");
 const encryption = @import("encryption-zig");
-const helpers = @import("test-helpers.zig");
 
 const FileStorage = storage_zig.file_storage.FileStorage;
 const readEncryptionHeader = storage_zig.read_encryption_header.readEncryptionHeader;
@@ -34,7 +34,7 @@ const Fixture = struct {
     fn init(self: *Fixture) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
-        self.tempDir = try helpers.makeTempDir(allocator, io, "read-encryption-header");
+        self.tempDir = try test_files.makeTempDir(allocator, io, "read-encryption-header");
         self.fileStorage = FileStorage.init("fs:");
         self.filePath = try std.fmt.allocPrint(allocator, "{s}/some/file.dat", .{self.tempDir});
     }
@@ -43,7 +43,7 @@ const Fixture = struct {
     // Deletes the temporary directory and frees the test's memory.
     //
     fn deinit(self: *Fixture) void {
-        helpers.removeTempDir(io, self.tempDir);
+        test_files.removeTempDir(io, self.tempDir);
         self.arena.deinit();
     }
 

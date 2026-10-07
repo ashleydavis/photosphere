@@ -1,11 +1,12 @@
+const test_files = @import("test-files.zig");
 const std = @import("std");
 const storage_zig = @import("storage-zig");
 const utils = @import("utils-zig");
-const helpers = @import("test-helpers.zig");
 
 const FileStorage = storage_zig.file_storage.FileStorage;
 const StoragePrefixWrapper = storage_zig.storage_prefix_wrapper.StoragePrefixWrapper;
 const walk_directory = storage_zig.walk_directory;
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 
 //
 // Matches /^\.db(\/|$)/ (the pattern tree.ts passes).
@@ -18,7 +19,14 @@ fn matchesDbDirectory(fullPath: []const u8) bool {
 // Walks a directory and returns the file names in order.
 //
 fn walkAll(allocator: std.mem.Allocator, storage: storage_zig.storage.IStorage, dirPath: []const u8, ignorePatterns: []const walk_directory.IgnorePattern) ![]const []const u8 {
-    var walker = try walk_directory.walkDirectory(allocator, std.testing.io, storage, dirPath, ignorePatterns);
+    return walkAllOn(allocator, std.testing.io, storage, dirPath, ignorePatterns);
+}
+
+//
+// Walks a directory on the given Io and returns the file names in order.
+//
+fn walkAllOn(allocator: std.mem.Allocator, io: std.Io, storage: storage_zig.storage.IStorage, dirPath: []const u8, ignorePatterns: []const walk_directory.IgnorePattern) ![]const []const u8 {
+    var walker = try walk_directory.walkDirectory(allocator, io, storage, dirPath, ignorePatterns);
     var fileNames: std.ArrayList([]const u8) = .empty;
     while (try walker.next()) |orderedFile| {
         try fileNames.append(allocator, orderedFile.fileName);
@@ -31,11 +39,11 @@ test "walkDirectory yields the files of a directory before the files of its subd
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const tempDir = try helpers.makeTempDir(allocator, io, "walk-directory");
-    defer helpers.removeTempDir(io, tempDir);
+    const tempDir = try test_files.makeTempDir(allocator, io, "walk-directory");
+    defer test_files.removeTempDir(io, tempDir);
     const files = [_][]const u8{ "b.txt", "a.txt", "asset/10", "asset/2", "asset/deep/x", "display/1", ".db/tree.dat", ".db/bson/db.dat", "node_modules/m", ".git/HEAD", "sub/.DS_Store" };
     for (files) |file| {
-        try helpers.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ tempDir, file }), "x");
+        try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ tempDir, file }), "x");
     }
     var fileStorage = FileStorage.init("fs:");
     var wrapper = try StoragePrefixWrapper.init(allocator, fileStorage.storage(), tempDir);
@@ -247,6 +255,9 @@ test "walkDirectory skips an ignored name and carries on to the next page" {
 // A listing that keeps failing is retried and then given up on, rather than walking on as if it were empty.
 //
 test "walkDirectory gives up when the listing keeps failing" {
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -276,7 +287,7 @@ test "walkDirectory gives up when the listing keeps failing" {
 
     // The retry gives up on the third attempt and throws a WrappedError naming what it was listing, as
     // retry's errorContext asks it to.
-    try std.testing.expectError(error.Thrown, walkAll(allocator, storage, "dir", &.{}));
+    try std.testing.expectError(error.Thrown, walkAllOn(allocator, backoff_time.io(), storage, "dir", &.{}));
     try std.testing.expectEqualStrings("WrappedError", utils.errors.lastErrorName());
     try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "Failed to list the files in dir") != null);
 }

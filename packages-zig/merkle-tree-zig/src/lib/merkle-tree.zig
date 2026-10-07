@@ -919,8 +919,8 @@ pub fn addItem(
 }
 
 //
-// Iterator returned by iterateLeaves (the Zig form of the TypeScript generator).
-// Visits leaves in pre-order (node, left subtree, right subtree) and is lazy like a generator.
+// Iterator returned by iterateNodes and iterateLeaves (the Zig form of the TypeScript generators).
+// Visits nodes (or only leaves) in pre-order (node, left subtree, right subtree) and is lazy like a generator.
 //
 pub fn NodeIterator(comptime NodeT: type) type {
     return struct {
@@ -934,6 +934,9 @@ pub fn NodeIterator(comptime NodeT: type) type {
 
         // The root node, until the first call to next.
         root: ?*NodeT,
+
+        // True to yield only the leaves (iterateLeaves), false to yield every node (iterateNodes).
+        leavesOnly: bool,
 
         //
         // Returns the next node, or null when the iteration is finished.
@@ -950,7 +953,7 @@ pub fn NodeIterator(comptime NodeT: type) type {
                 if (node.left) |left| {
                     try self.stack.append(self.allocator, left);
                 }
-                if (node.left == null and node.right == null) {
+                if (!self.leavesOnly or (node.left == null and node.right == null)) {
                     return node;
                 }
             }
@@ -959,13 +962,28 @@ pub fn NodeIterator(comptime NodeT: type) type {
     };
 }
 
-// Not ported: iterateNodes (not reached by the CLI)
+//
+// Iterates all nodes in the tree.
+//
+pub fn iterateNodes(comptime NodeT: type, allocator: std.mem.Allocator, node: ?*NodeT) NodeIterator(NodeT) {
+    return .{
+        .allocator = allocator,
+        .stack = .empty,
+        .root = node,
+        .leavesOnly = false,
+    };
+}
 
 //
 // Iterates all leaves in the tree.
 //
 pub fn iterateLeaves(comptime NodeT: type, allocator: std.mem.Allocator, node: ?*NodeT) NodeIterator(NodeT) {
-    return .{ .allocator = allocator, .stack = .empty, .root = node };
+    return .{
+        .allocator = allocator,
+        .stack = .empty,
+        .root = node,
+        .leavesOnly = true,
+    };
 }
 
 //
@@ -2238,6 +2256,84 @@ pub fn deleteItem(
 ) !void {
     merkleTree.sort = try _deleteNode(allocator, merkleTree.sort, name);
     merkleTree.dirty = true; // Mark the tree as dirty so it will be rebuilt later.
+}
+
+//
+// Completely removes items from the Merkle tree by rebuilding it from the remaining items.
+// This function is intended for cleanup operations like database upgrades where a complete rebuild is acceptable.
+//
+// @param merkleTree The merkle tree to remove the items from
+// @param names Item names to completely remove
+// @returns number of items that were found and removed
+//
+pub fn deleteItems(
+    allocator: std.mem.Allocator,
+    merkleTree: *IMerkleTree,
+    names: []const []const u8,
+) !usize {
+    if (merkleTree.sort == null) {
+        return errors.throwError("Cannot delete items from empty or invalid merkle tree", .{});
+    }
+
+    if (names.len == 0) {
+        return errors.throwError("Cannot delete items: no names provided", .{});
+    }
+
+    // Get all items from the tree using traversal
+    var allItems: std.ArrayList(HashedItem) = .empty;
+    var leafIterator = iterateLeaves(SortNode, allocator, merkleTree.sort);
+    while (try leafIterator.next()) |leaf| {
+        if (leaf.name) |leafName| {
+            if (leaf.lastModified) |lastModified| {
+                try allItems.append(allocator, .{
+                    .name = leafName,
+                    .hash = leaf.contentHash.?,
+                    .length = leaf.size,
+                    .lastModified = lastModified,
+                });
+            }
+        }
+    }
+
+    // Check if any items don't exist
+    var nonExistentItems: std.ArrayList(u8) = .empty;
+    for (names) |name| {
+        if (findItemInTree(merkleTree.sort, name) == null) {
+            if (nonExistentItems.items.len > 0) {
+                try nonExistentItems.appendSlice(allocator, ", ");
+            }
+            try nonExistentItems.appendSlice(allocator, name);
+        }
+    }
+    if (nonExistentItems.items.len > 0) {
+        return errors.throwError("Cannot delete items: the following items do not exist: {s}", .{nonExistentItems.items});
+    }
+
+    var itemsRemoved: usize = 0;
+
+    // Get all remaining items (excluding the ones to delete)
+    var newTree = createTree(merkleTree.id);
+    for (allItems.items) |item| {
+        var shouldDelete = false;
+        for (names) |name| {
+            if (std.mem.eql(u8, name, item.name)) {
+                shouldDelete = true;
+                break;
+            }
+        }
+        if (shouldDelete) {
+            itemsRemoved += 1;
+        }
+        else {
+            newTree = try addItem(allocator, &newTree, item);
+        }
+    }
+
+    // If no items remain, the tree is empty. Otherwise replace the tree contents.
+    merkleTree.sort = newTree.sort;
+    merkleTree.merkle = newTree.merkle;
+
+    return itemsRemoved;
 }
 
 //

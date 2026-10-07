@@ -1,6 +1,6 @@
 const std = @import("std");
 const bdb = @import("bdb-zig");
-const helpers = @import("test-helpers.zig");
+const fixtures = @import("fixtures.zig");
 const locale_compare = bdb.locale_compare;
 
 test "localeCompare matches String.prototype.localeCompare for every golden pair" {
@@ -8,7 +8,7 @@ test "localeCompare matches String.prototype.localeCompare for every golden pair
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const fixture = try helpers.readJsonFixture(allocator, io, "js-values.json");
+    const fixture = try fixtures.readJsonFixture(allocator, io, "js-values.json");
     const strings = fixture.object.get("localeStrings").?.array.items;
     const matrix = fixture.object.get("localeMatrix").?.array.items;
     var mismatches: usize = 0;

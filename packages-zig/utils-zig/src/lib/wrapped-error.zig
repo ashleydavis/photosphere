@@ -46,8 +46,9 @@ fn stackName(name: []const u8) []const u8 {
 //
 pub fn formatErrorChain(allocator: std.mem.Allocator, err: anyerror) ![]const u8 {
     var allocating_writer = std.Io.Writer.Allocating.init(allocator);
+    errdefer allocating_writer.deinit();
     try writeErrorChain(&allocating_writer.writer, err);
-    return allocating_writer.written();
+    return allocating_writer.toOwnedSlice();
 }
 
 //

@@ -3,7 +3,9 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const task_queue_zig = @import("task-queue-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_environment = @import("test-environment.zig");
+const progress_recorder = @import("progress-recorder.zig");
 const errors = utils.errors;
 const replicateDatabase = node_api.replicate_database.replicateDatabase;
 const ReplicateProgressCallback = node_api.replicate_database.ReplicateProgressCallback;
@@ -12,7 +14,7 @@ const ReplicateProgressCallback = node_api.replicate_database.ReplicateProgressC
 // Records the progress strings of replicateDatabase.
 //
 fn recordProgress(context: ?*anyopaque, progress: []const u8) void {
-    const recorder: *helpers.ProgressRecorder = @ptrCast(@alignCast(context.?));
+    const recorder: *progress_recorder.ProgressRecorder = @ptrCast(@alignCast(context.?));
     recorder.record(progress);
 }
 
@@ -21,14 +23,14 @@ test "replicateDatabase runs the replicate-database task and returns its result 
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try helpers.setupEnvironment(io);
+    _ = try test_environment.setupEnvironment(io);
     try node_api.task_handlers.initTaskHandlers();
-    const sourceDir = try helpers.copyTestDatabase(allocator, io, "v6");
+    const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     const root = std.fs.path.dirname(sourceDir).?;
-    defer helpers.removeTempDir(io, root);
+    defer temp_dirs.removeTempDir(io, root);
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
 
-    var recorder: helpers.ProgressRecorder = .{ .allocator = allocator };
+    var recorder: progress_recorder.ProgressRecorder = .{ .allocator = allocator };
     const onProgress: ReplicateProgressCallback = .{ .context = &recorder, .function = recordProgress };
     const result = try replicateDatabase(allocator, io, uuidGenerator.uuidGenerator(), .{
         .sourcePath = sourceDir,
@@ -51,10 +53,10 @@ test "replicateDatabase throws the task error message when replication fails" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try helpers.setupEnvironment(io);
+    _ = try test_environment.setupEnvironment(io);
     try node_api.task_handlers.initTaskHandlers();
-    const root = try helpers.makeTempDir(allocator, io, "replicate-database-missing");
-    defer helpers.removeTempDir(io, root);
+    const root = try temp_dirs.makeTempDir(allocator, io, "replicate-database-missing");
+    defer temp_dirs.removeTempDir(io, root);
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
 
     try std.testing.expectError(error.Thrown, replicateDatabase(allocator, io, uuidGenerator.uuidGenerator(), .{
@@ -71,12 +73,12 @@ test "replicateDatabase fails when the destination is an unrelated database" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try helpers.setupEnvironment(io);
+    _ = try test_environment.setupEnvironment(io);
     try node_api.task_handlers.initTaskHandlers();
-    const sourceDir = try helpers.copyTestDatabase(allocator, io, "v6");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(sourceDir).?);
-    const destDir = try helpers.copyTestDatabase(allocator, io, "50-assets");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(destDir).?);
+    const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(sourceDir).?);
+    const destDir = try temp_dirs.copyTestDatabase(allocator, io, "50-assets");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(destDir).?);
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
 
     try std.testing.expectError(error.Thrown, replicateDatabase(allocator, io, uuidGenerator.uuidGenerator(), .{
@@ -145,11 +147,11 @@ fn recordCancelTasks(ptr: *anyopaque, source: []const u8) void {
 // Returns the path of the source database (a directory that has been removed again).
 //
 fn replicateRecorded(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
-    _ = try helpers.setupEnvironment(io);
+    _ = try test_environment.setupEnvironment(io);
     try node_api.task_handlers.initTaskHandlers();
-    const sourceDir = try helpers.copyTestDatabase(allocator, io, "v6");
+    const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     const root = std.fs.path.dirname(sourceDir).?;
-    defer helpers.removeTempDir(io, root);
+    defer temp_dirs.removeTempDir(io, root);
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
 
     const realBackend = try task_queue_zig.queue_backend.getQueueBackend();

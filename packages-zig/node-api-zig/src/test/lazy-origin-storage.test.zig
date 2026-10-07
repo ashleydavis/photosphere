@@ -1,7 +1,8 @@
 const std = @import("std");
 const node_api = @import("node-api-zig");
 const storage_zig = @import("storage-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
 
 const LazyOriginStorage = node_api.lazy_origin_storage.LazyOriginStorage;
 const storage_module = storage_zig.storage;
@@ -427,12 +428,12 @@ test "every other operation goes to the local storage and never to the origin" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const localDir = try helpers.makeTempDir(allocator, io, "lazy-local");
-    defer helpers.removeTempDir(io, localDir);
-    const originDir = try helpers.makeTempDir(allocator, io, "lazy-origin");
-    defer helpers.removeTempDir(io, originDir);
-    const local = try helpers.directoryStorage(allocator, io, localDir);
-    const origin = try helpers.directoryStorage(allocator, io, originDir);
+    const localDir = try temp_dirs.makeTempDir(allocator, io, "lazy-local");
+    defer temp_dirs.removeTempDir(io, localDir);
+    const originDir = try temp_dirs.makeTempDir(allocator, io, "lazy-origin");
+    defer temp_dirs.removeTempDir(io, originDir);
+    const local = try test_files.directoryStorage(allocator, io, localDir);
+    const origin = try test_files.directoryStorage(allocator, io, originDir);
     var lazy = LazyOriginStorage.init(local, origin);
     const storage = lazy.storage();
 

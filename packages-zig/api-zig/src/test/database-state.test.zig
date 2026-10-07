@@ -2,6 +2,7 @@ const std = @import("std");
 const api_zig = @import("api-zig");
 const utils = @import("utils-zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 const storage_zig = @import("storage-zig");
 const database_state = api_zig.database_state;
 const IDatabaseState = database_state.IDatabaseState;
@@ -202,18 +203,22 @@ test "updateDatabaseStateLocked does nothing when the lock is held by another ow
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    _ = try storage.asStorage().acquireWriteLock(allocator, io, LOCK_PATH, "other-owner");
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const virtual_io = virtual_time.io();
+    _ = try storage.asStorage().acquireWriteLock(allocator, virtual_io, LOCK_PATH, "other-owner");
 
     // (Zig: the warning acquireWriteLock logs is captured, because the test runner fails a test that writes to stderr.)
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    try updateDatabaseStateLocked(allocator, io, storage.asStorage(), "session-1", .{
+    try updateDatabaseStateLocked(allocator, virtual_io, storage.asStorage(), "session-1", .{
         .lastSyncedAt = "X",
     });
 
-    try std.testing.expect((try loadDatabaseState(allocator, io, storage.asStorage())) == null);
+    try std.testing.expect((try loadDatabaseState(allocator, virtual_io, storage.asStorage())) == null);
     try std.testing.expect(std.mem.startsWith(u8, stderr_capture.written(), "Failed to acquire write lock after 3 attempts. Lock is currently held by \"other-owner\" since "));
     try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "s ago (acquired at ") != null);
 }
@@ -230,7 +235,7 @@ test "the state file is byte-identical to the one TypeScript writes" {
         .lastModifiedAt = "2026-01-02T03:04:05.000Z",
         .lastReplicatedAt = "2026-01-02T03:04:07.000Z",
     });
-    const expected = try std.Io.Dir.cwd().readFileAlloc(io, "src/test/fixtures/database-state.dat", allocator, .unlimited);
+    const expected = try std.Io.Dir.cwd().readFileAlloc(io, "api-zig/src/test/fixtures/database-state.dat", allocator, .unlimited);
     try std.testing.expectEqualSlices(u8, expected, storage.getFile(STATE_PATH).?);
 
     try storage.putFile(STATE_PATH, expected);
@@ -253,9 +258,19 @@ test "updateDatabaseStateLocked releases the lock and passes the error on when t
     // A directory where the state file goes, so saving the state fails.
     try tempDir.dir.createDirPath(io, STATE_PATH);
 
-    try std.testing.expect(std.meta.isError(updateDatabaseStateLocked(allocator, io, storage, "session-1", .{
+    // (Zig: the retry warnings of the failing read and write are captured so that nothing reaches stderr.)
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(null, &stderr_capture.writer);
+    defer utils.console.setCapture(null, null);
+
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
+
+    try std.testing.expect(std.meta.isError(updateDatabaseStateLocked(allocator, backoff_time.io(), storage, "session-1", .{
         .lastSyncedAt = "X",
     })));
+    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Failed to read .db/state.dat") != null);
 
     // The lock is released afterwards, so another owner can acquire it.
     try std.testing.expect(try storage.acquireWriteLock(allocator, io, LOCK_PATH, "other"));

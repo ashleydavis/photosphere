@@ -1,6 +1,6 @@
 # bundle-core.sh
 
-Runs `zig build` in `packages-zig/photosphere-core` for one target. Invoked as `bun run --filter=ziggy bundle:core -- <target>`.
+Runs `zig build` from the root of the repository for one target. Invoked as `bun run --filter=ziggy bundle:core -- <target>`.
 
 ## Arguments
 

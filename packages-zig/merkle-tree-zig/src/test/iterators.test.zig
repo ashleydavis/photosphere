@@ -1,6 +1,5 @@
 //
-// Tests for iterateLeaves (port of src/test/iterators.test.ts; the iterateNodes tests are not ported
-// because iterateNodes is not ported).
+// Tests for iterateNodes and iterateLeaves (port of src/test/iterators.test.ts).
 // (Zig: test names are prefixed with the describe name.)
 //
 
@@ -19,6 +18,18 @@ const node = merkle_verify.node;
 fn allLeaves(allocator: std.mem.Allocator, root: ?*SortNode) ![]const *SortNode {
     var nodes: std.ArrayList(*SortNode) = .empty;
     var iterator = merkle_tree.iterateLeaves(SortNode, allocator, root);
+    while (try iterator.next()) |current| {
+        try nodes.append(allocator, current);
+    }
+    return nodes.items;
+}
+
+//
+// Collects every node iterateNodes yields.
+//
+fn allNodes(allocator: std.mem.Allocator, root: ?*SortNode) ![]const *SortNode {
+    var nodes: std.ArrayList(*SortNode) = .empty;
+    var iterator = merkle_tree.iterateNodes(SortNode, allocator, root);
     while (try iterator.next()) |current| {
         try nodes.append(allocator, current);
     }
@@ -60,6 +71,208 @@ fn paddedFileNames(allocator: std.mem.Allocator, count: usize, width: usize) ![]
         name.* = try std.fmt.allocPrint(allocator, "file_{s}{s}", .{ padding, digits });
     }
     return names;
+}
+
+test "iterateNodes: returns nothing for undefined node" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expectEqual(@as(usize, 0), (try allNodes(arena.allocator(), null)).len);
+}
+
+test "iterateNodes: iterates single leaf node" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const nodes = try allNodes(allocator, try leaf(allocator, "A", 100));
+    try std.testing.expectEqual(@as(usize, 1), nodes.len);
+    try std.testing.expectEqualStrings("A", nodes[0].name.?);
+    try std.testing.expectEqualStrings("A", nodes[0].contentHash.?);
+}
+
+test "iterateNodes: iterates two leaf nodes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const nodes = try allNodes(allocator, try node(allocator, try leaf(allocator, "A", 100), try leaf(allocator, "B", 100)));
+
+    // Should return parent node, then left child, then right child
+    try std.testing.expectEqual(@as(usize, 3), nodes.len);
+    try std.testing.expectEqualStrings("A", nodes[0].minName); // Parent node
+    try std.testing.expectEqualStrings("A", nodes[1].name.?); // Left leaf
+    try std.testing.expectEqualStrings("B", nodes[2].name.?); // Right leaf
+}
+
+test "iterateNodes: performs pre-order traversal (parent, left, right)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Build tree: ((A, B), C)
+    const sortTree = try node(
+        allocator,
+        try node(allocator, try leaf(allocator, "A", 100), try leaf(allocator, "B", 100)),
+        try leaf(allocator, "C", 100),
+    );
+    const nodes = try allNodes(allocator, sortTree);
+
+    // Pre-order: root, left subtree (parent, A, B), right (C)
+    try std.testing.expectEqual(@as(usize, 5), nodes.len);
+
+    // First node is root
+    try std.testing.expectEqualStrings("A", nodes[0].minName);
+    try std.testing.expectEqual(@as(u32, 5), nodes[0].nodeCount);
+
+    // Second node is left child (parent of A and B)
+    try std.testing.expectEqualStrings("A", nodes[1].minName);
+    try std.testing.expectEqual(@as(u32, 3), nodes[1].nodeCount);
+
+    // Third node is leaf A
+    try std.testing.expectEqualStrings("A", nodes[2].name.?);
+
+    // Fourth node is leaf B
+    try std.testing.expectEqualStrings("B", nodes[3].name.?);
+
+    // Fifth node is leaf C
+    try std.testing.expectEqualStrings("C", nodes[4].name.?);
+}
+
+test "iterateNodes: visits all nodes in correct order for balanced tree" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Build tree with 4 leaves: ((A, B), (C, D))
+    const tree = try buildTree(allocator, &.{ "A", "B", "C", "D" });
+    const nodes = try allNodes(allocator, tree.sort);
+
+    // Should have 7 nodes total: 1 root + 2 internal + 4 leaves
+    try std.testing.expectEqual(@as(usize, 7), nodes.len);
+
+    // Verify all nodes are present
+    const leafNames = try namesOf(allocator, nodes);
+    try std.testing.expectEqual(@as(usize, 4), leafNames.len);
+    try expectNames(&.{ "A", "B", "C", "D" }, leafNames);
+}
+
+test "iterateNodes: counts all nodes correctly for small tree" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const tree = try buildTree(allocator, &.{ "A", "B", "C" });
+
+    // Tree structure: ((A, B), C) = 5 nodes total
+    try std.testing.expectEqual(@as(usize, 5), (try allNodes(allocator, tree.sort)).len);
+}
+
+test "iterateNodes: counts all nodes correctly for power of 2 leaves" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const tree = try buildTree(allocator, &.{ "A", "B", "C", "D", "E", "F", "G", "H" });
+
+    // For 8 leaves in a binary tree, we have 15 total nodes (8 leaves + 7 internal)
+    try std.testing.expectEqual(@as(usize, 15), (try allNodes(allocator, tree.sort)).len);
+}
+
+test "iterateNodes: counts all nodes correctly for non-power of 2 leaves" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const tree = try buildTree(allocator, &.{ "A", "B", "C", "D", "E" });
+
+    // For 5 leaves, we should have 9 total nodes
+    try std.testing.expectEqual(@as(usize, 9), (try allNodes(allocator, tree.sort)).len);
+}
+
+test "iterateNodes: all nodes have valid nodeCount property" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const tree = try buildTree(allocator, &.{ "A", "B", "C", "D", "E", "F" });
+    for (try allNodes(allocator, tree.sort)) |current| {
+        try std.testing.expect(current.nodeCount >= 1);
+    }
+}
+
+test "iterateNodes: all nodes have valid minFileName property" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const tree = try buildTree(allocator, &.{ "A", "B", "C", "D" });
+    for (try allNodes(allocator, tree.sort)) |current| {
+        try std.testing.expect(current.minName.len > 0);
+    }
+}
+
+test "iterateNodes: leaf nodes have name property" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const tree = try buildTree(allocator, &.{ "A", "B", "C" });
+    const nodes = try allNodes(allocator, tree.sort);
+
+    var leafCount: usize = 0;
+    for (nodes) |current| {
+        if (current.name != null) {
+            leafCount += 1;
+            try std.testing.expect(current.contentHash != null);
+            try std.testing.expectEqual(@as(u32, 1), current.nodeCount);
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 3), leafCount);
+}
+
+test "iterateNodes: iterates large tree with 100 nodes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const fileNames = try paddedFileNames(allocator, 100, 3);
+    const tree = try buildTree(allocator, fileNames);
+    const nodes = try allNodes(allocator, tree.sort);
+
+    // Should have all nodes
+    try std.testing.expect(nodes.len >= 100);
+
+    // All 100 files should be present
+    try std.testing.expectEqual(@as(usize, 100), (try namesOf(allocator, nodes)).len);
+}
+
+test "iterateNodes: can be used in for...of loop" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const tree = try buildTree(allocator, &.{ "A", "B", "C" });
+    var nodeNames: std.ArrayList([]const u8) = .empty;
+    var iterator = merkle_tree.iterateNodes(SortNode, allocator, tree.sort);
+    while (try iterator.next()) |current| {
+        try nodeNames.append(allocator, current.minName);
+    }
+    try std.testing.expect(nodeNames.items.len > 0);
+}
+
+test "iterateNodes: can be converted to array multiple times" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const tree = try buildTree(allocator, &.{ "A", "B", "C" });
+    const nodes1 = try allNodes(allocator, tree.sort);
+    const nodes2 = try allNodes(allocator, tree.sort);
+    try std.testing.expectEqual(nodes1.len, nodes2.len);
+}
+
+test "iterateNodes: is lazy and does not iterate until consumed" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const tree = try buildTree(allocator, &.{ "A", "B", "C" });
+
+    // Creating the generator should not iterate
+    var iterator = merkle_tree.iterateNodes(SortNode, allocator, tree.sort);
+    try std.testing.expectEqual(@as(usize, 0), iterator.stack.items.len);
+
+    // Only when we consume it does it iterate
+    const firstNode = try iterator.next();
+    try std.testing.expect(firstNode != null);
 }
 
 test "iterateLeaves: returns nothing for undefined node" {
@@ -106,6 +319,8 @@ test "iterateLeaves: does not return parent nodes" {
     const allocator = arena.allocator();
     const tree = try buildTree(allocator, &.{ "A", "B", "C", "D", "E" });
     const leaves = try allLeaves(allocator, tree.sort);
+    const allNodeList = try allNodes(allocator, tree.sort);
+    try std.testing.expect(leaves.len < allNodeList.len);
     try std.testing.expect(leaves.len < tree.sort.?.nodeCount);
     try std.testing.expectEqual(@as(usize, 5), leaves.len);
 }
@@ -322,4 +537,45 @@ test "iterateLeaves: handles nodes with only right child" {
     const rightLeaf = try leaf(allocator, "B", 100);
     var parent: SortNode = .{ .nodeCount = 2, .leafCount = 1, .size = rightLeaf.size, .minName = "B", .right = rightLeaf };
     try expectNames(&.{"B"}, try namesOf(allocator, try allLeaves(allocator, &parent)));
+}
+
+test "iterateNodes vs iterateLeaves: iterateNodes returns more nodes than iterateLeaves" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const tree = try buildTree(allocator, &.{ "A", "B", "C", "D", "E" });
+
+    const nodes = try allNodes(allocator, tree.sort);
+    const leaves = try allLeaves(allocator, tree.sort);
+
+    try std.testing.expect(nodes.len > leaves.len);
+}
+
+test "iterateNodes vs iterateLeaves: all leaves from iterateLeaves are present in iterateNodes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const tree = try buildTree(allocator, &.{ "A", "B", "C", "D" });
+
+    const nodes = try allNodes(allocator, tree.sort);
+    const leaves = try allLeaves(allocator, tree.sort);
+
+    try expectNames(try namesOf(allocator, leaves), try namesOf(allocator, nodes));
+}
+
+test "iterateNodes vs iterateLeaves: difference in count equals number of internal nodes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const tree = try buildTree(allocator, &.{ "A", "B", "C", "D", "E", "F", "G", "H" });
+
+    const nodes = try allNodes(allocator, tree.sort);
+    const leaves = try allLeaves(allocator, tree.sort);
+
+    const internalNodeCount = nodes.len - leaves.len;
+
+    // For a binary tree with n leaves, we have n-1 internal nodes
+    // (but this can vary based on tree structure)
+    try std.testing.expect(internalNodeCount > 0);
+    try std.testing.expect(internalNodeCount < leaves.len);
 }

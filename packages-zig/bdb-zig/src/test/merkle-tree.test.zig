@@ -3,7 +3,8 @@ const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
-const helpers = @import("test-helpers.zig");
+const fixtures = @import("fixtures.zig");
+const test_clock = @import("test-clock.zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const bson = serialization_zig.bson;
 const merkle_tree = bdb.merkle_tree;
@@ -20,7 +21,7 @@ test "hashRecord matches TypeScript for the synthetic records" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const fixture = try helpers.readJsonFixture(allocator, io, "hash-records.json");
+    const fixture = try fixtures.readJsonFixture(allocator, io, "hash-records.json");
     const decoder = std.base64.standard.Decoder;
     for (fixture.object.get("synthetic").?.array.items) |item| {
         const encoded = item.object.get("bson").?.string;
@@ -42,7 +43,7 @@ test "hashRecord matches the hashes TypeScript stored for every test database re
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const fixture = try helpers.readJsonFixture(allocator, io, "hash-records.json");
+    const fixture = try fixtures.readJsonFixture(allocator, io, "hash-records.json");
     var currentDatabase: []const u8 = "";
     var records: std.StringHashMapUnmanaged(IInternalRecord) = .empty;
     for (fixture.object.get("real").?.array.items) |item| {
@@ -52,8 +53,8 @@ test "hashRecord matches the hashes TypeScript stored for every test database re
             records = .empty;
             const storage = try allocator.create(MemoryStorage);
             storage.* = MemoryStorage.init(allocator);
-            try storage.loadDirectory(io, try std.fmt.allocPrint(allocator, "{s}/{s}/.db/bson", .{ helpers.TEST_DBS_DIR, databaseName }), ".db/bson");
-            const database = try bdb.database.BsonDatabase.init(allocator, storage.asStorage(), ".db/bson", test_uuid_generator.uuidGenerator(), helpers.timestamp_provider.timestampProvider());
+            try storage.loadDirectory(io, try std.fmt.allocPrint(allocator, "{s}/{s}/.db/bson", .{ fixtures.TEST_DBS_DIR, databaseName }), ".db/bson");
+            const database = try bdb.database.BsonDatabase.init(allocator, storage.asStorage(), ".db/bson", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
             const collection = try database.collection("metadata");
             var iterator = collection.iterateRecords();
             while (try iterator.next(io)) |record| {
@@ -120,7 +121,7 @@ test "loadDatabaseMerkleTree loads the tree TypeScript wrote for the v6 test dat
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try storage.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/v6/.db/bson", ".db/bson");
+    try storage.loadDirectory(io, fixtures.TEST_DBS_DIR ++ "/v6/.db/bson", ".db/bson");
     const databaseTree = (try merkle_tree.loadDatabaseMerkleTree(allocator, io, storage.asStorage(), ".db/bson")).?;
     const collectionTree = (try merkle_tree.loadCollectionMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata")).?;
     const shardTree = (try merkle_tree.loadShardMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata", "96")).?;
@@ -136,7 +137,7 @@ test "getDatabaseRootHash returns the root hash of the database merkle tree, or 
     var storage = MemoryStorage.init(allocator);
     try std.testing.expect((try merkle_tree.getDatabaseRootHash(allocator, io, storage.asStorage(), ".db/bson")) == null);
 
-    try storage.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/v6/.db/bson", ".db/bson");
+    try storage.loadDirectory(io, fixtures.TEST_DBS_DIR ++ "/v6/.db/bson", ".db/bson");
     const databaseTree = (try merkle_tree.loadDatabaseMerkleTree(allocator, io, storage.asStorage(), ".db/bson")).?;
     const rootHash = (try merkle_tree.getDatabaseRootHash(allocator, io, storage.asStorage(), ".db/bson")).?;
     try std.testing.expectEqualSlices(u8, databaseTree.merkle.?.hash, rootHash);
@@ -163,7 +164,7 @@ const UpdateFixture = struct {
 fn newUpdateFixture(allocator: std.mem.Allocator) !UpdateFixture {
     const storage = try allocator.create(MemoryStorage);
     storage.* = MemoryStorage.init(allocator);
-    const database = try bdb.database.BsonDatabase.init(allocator, storage.asStorage(), "", test_uuid_generator.uuidGenerator(), helpers.timestamp_provider.timestampProvider());
+    const database = try bdb.database.BsonDatabase.init(allocator, storage.asStorage(), "", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
     return .{
         .storage = storage,
         .database = database,
@@ -335,7 +336,7 @@ test "listShards lists the shards of a collection in name order, skipping the me
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try storage.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
+    try storage.loadDirectory(io, fixtures.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
 
     const shardIds = try merkle_tree.listShards(allocator, io, storage.asStorage(), ".db/bson", "metadata");
     try std.testing.expectEqual(@as(usize, 40), shardIds.len);
@@ -357,7 +358,7 @@ test "buildDatabaseMerkleTree with rebuild reproduces the merkle trees TypeScrip
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try storage.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
+    try storage.loadDirectory(io, fixtures.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
     const originalDatabaseHash = (try merkle_tree.getDatabaseRootHash(allocator, io, storage.asStorage(), ".db/bson")).?;
     const originalCollectionTree = (try merkle_tree.loadCollectionMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata")).?;
     const shardIds = try merkle_tree.listShards(allocator, io, storage.asStorage(), ".db/bson", "metadata");
@@ -382,7 +383,7 @@ test "buildDatabaseMerkleTree without rebuild loads the saved trees and builds t
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try storage.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
+    try storage.loadDirectory(io, fixtures.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
     const originalDatabaseHash = (try merkle_tree.getDatabaseRootHash(allocator, io, storage.asStorage(), ".db/bson")).?;
     const originalCollectionTree = (try merkle_tree.loadCollectionMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata")).?;
     const shardIds = try merkle_tree.listShards(allocator, io, storage.asStorage(), ".db/bson", "metadata");
@@ -410,7 +411,7 @@ test "buildDatabaseMerkleTree uses the preloaded collection tree in place of the
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try storage.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
+    try storage.loadDirectory(io, fixtures.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
     const shardIds = try merkle_tree.listShards(allocator, io, storage.asStorage(), ".db/bson", "metadata");
     const preloadedTree = (try merkle_tree.loadShardMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata", shardIds[0])).?;
     const collectionFile = storage.getFile(".db/bson/collections/metadata/collection.dat").?;
@@ -432,7 +433,7 @@ test "buildCollectionMerkleTree deletes the merkle tree of an empty shard and le
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try storage.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/v6/.db/bson", ".db/bson");
+    try storage.loadDirectory(io, fixtures.TEST_DBS_DIR ++ "/v6/.db/bson", ".db/bson");
     const originalCollectionTree = (try merkle_tree.loadCollectionMerkleTree(allocator, io, storage.asStorage(), ".db/bson", "metadata")).?;
     try serialization_zig.serialization.save(allocator, io, storage.asStorage(), ".db/bson/collections/metadata/shards/5", @as(u32, 0), 2, "SHAR", writeEmptyShard);
     try storage.putFile(".db/bson/collections/metadata/shards/5.dat", storage.getFile(".db/bson/collections/metadata/shards/96.dat").?);

@@ -6,17 +6,17 @@ const std = @import("std");
 const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
-const helpers = @import("test-helpers.zig");
+const js_object_builders = @import("js-object-builders.zig");
 const bson = serialization_zig.bson;
 const BsonValue = bson.BsonValue;
 const BsonDocument = bson.BsonDocument;
 const Metadata = bdb.collection.Metadata;
 const IInternalRecord = bdb.shard.IInternalRecord;
 const mergeRecords = bdb.merge_records.mergeRecords;
-const property = helpers.property;
-const stringValue = helpers.stringValue;
-const numberValue = helpers.numberValue;
-const objectValue = helpers.objectValue;
+const property = js_object_builders.property;
+const stringValue = js_object_builders.stringValue;
+const numberValue = js_object_builders.numberValue;
+const objectValue = js_object_builders.objectValue;
 
 //
 // Builds a JS object literal as a document.

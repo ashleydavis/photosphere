@@ -8,8 +8,9 @@ const merkle_tree_zig = @import("merkle-tree-zig");
 const storage_zig = @import("storage-zig");
 const serialization_zig = @import("serialization-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
 const sync_helpers = @import("sync-test-helpers.zig");
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const tree = node_api.tree;
 const media_file_database = node_api.media_file_database;
@@ -173,12 +174,15 @@ test "a target that knows its own hash is not read back" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
-    const workingDir = try helpers.makeTempDir(allocator, io, "psphere-sync-verify");
-    defer helpers.removeTempDir(io, workingDir);
+    const workingDir = try temp_dirs.makeTempDir(allocator, io, "psphere-sync-verify");
+    defer temp_dirs.removeTempDir(io, workingDir);
 
     // Reading every copied file back is what made syncing a phone's library unusable: the file
     // crosses the network twice and is hashed by the embedded engine's pure JavaScript SHA-256.
@@ -196,12 +200,15 @@ test "a store that checked the bytes as it wrote them is asked nothing further" 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
-    const workingDir = try helpers.makeTempDir(allocator, io, "psphere-sync-verify");
-    defer helpers.removeTempDir(io, workingDir);
+    const workingDir = try temp_dirs.makeTempDir(allocator, io, "psphere-sync-verify");
+    defer temp_dirs.removeTempDir(io, workingDir);
 
     // Asking cost two more round trips per file on top of the write: one to learn the file is
     // there and how long it is, another to read back the hash the server had just verified. On a
@@ -218,12 +225,15 @@ test "the hash the sync already has goes up with the file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
-    const workingDir = try helpers.makeTempDir(allocator, io, "psphere-sync-verify");
-    defer helpers.removeTempDir(io, workingDir);
+    const workingDir = try temp_dirs.makeTempDir(allocator, io, "psphere-sync-verify");
+    defer temp_dirs.removeTempDir(io, workingDir);
 
     // Nothing should have to compute it. The AWS SDK asked to checksum a body hashes it in the
     // embedded engine's pure JavaScript SHA-256 at well under a megabyte a second, and on a
@@ -239,12 +249,15 @@ test "a target that does not know its own hash is checked by length, not read ba
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
-    const workingDir = try helpers.makeTempDir(allocator, io, "psphere-sync-verify");
-    defer helpers.removeTempDir(io, workingDir);
+    const workingDir = try temp_dirs.makeTempDir(allocator, io, "psphere-sync-verify");
+    defer temp_dirs.removeTempDir(io, workingDir);
 
     // Reading a file back to hash it is what made syncing a phone's library impossible: each file
     // crossed the network twice and was hashed by the embedded engine's pure JavaScript SHA-256
@@ -260,12 +273,15 @@ test "a file that will not copy is left behind and the rest of the library still
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
-    const workingDir = try helpers.makeTempDir(allocator, io, "psphere-sync-verify");
-    defer helpers.removeTempDir(io, workingDir);
+    const workingDir = try temp_dirs.makeTempDir(allocator, io, "psphere-sync-verify");
+    defer temp_dirs.removeTempDir(io, workingDir);
 
     // The rest of the library has nothing to do with the bad file, and abandoning the pass on it
     // means everything after it in the tree never goes anywhere: measured on a Pixel 6 against a

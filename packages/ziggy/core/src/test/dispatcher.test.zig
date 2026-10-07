@@ -296,3 +296,180 @@ test "get-dropped-paths replies with the paths of the last drop, and an empty ar
     defer std.testing.allocator.free(expected);
     try shell.expectMessageContaining(expected);
 }
+
+fn describeTestError(err: anyerror) ?[]const u8 {
+    if (err == error.ChannelFailed) {
+        return "the channel failed because the test said so";
+    }
+    return null;
+}
+
+test "an app's error describer gives the text of an error reply" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    var described_app = helpers.app;
+    described_app.describe_error = describeTestError;
+    const core = try ziggy.core.Core.create(std.testing.allocator, shell.config(1, 1), described_app);
+    defer core.destroy();
+    core.postMessage("{\"id\":4,\"channel\":\"fail\",\"data\":null}");
+    const reply = try lastMessage(&shell);
+    defer std.testing.allocator.free(reply);
+    try std.testing.expectEqualStrings("{\"id\":4,\"ok\":false,\"error\":\"the channel failed because the test said so\"}", reply);
+}
+
+test "an error the describer has nothing to say about is replied to by name" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    var described_app = helpers.app;
+    described_app.describe_error = describeTestError;
+    const core = try ziggy.core.Core.create(std.testing.allocator, shell.config(1, 1), described_app);
+    defer core.destroy();
+    core.postMessage("{\"id\":5,\"channel\":\"nope\",\"data\":null}");
+    try shell.expectMessageContaining("{\"id\":5,\"ok\":false,\"error\":\"UnknownChannel\"}");
+}
+
+fn describeTaskError(err: anyerror) ?[]const u8 {
+    if (err == error.TestFailure) {
+        return "the task failed because \"the test\" said so, at C:\\dir";
+    }
+    return null;
+}
+
+test "an app's error describer gives the text of a failed request task's error reply" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    var described_app = helpers.app;
+    described_app.describe_error = describeTaskError;
+    const core = try ziggy.core.Core.create(std.testing.allocator, shell.config(1, 1), described_app);
+    defer core.destroy();
+    core.postMessage("{\"id\":6,\"channel\":\"fail-request\",\"data\":null}");
+    try shell.expectMessageContaining("{\"id\":6,\"ok\":false,\"error\":\"the task failed because \\\"the test\\\" said so, at C:\\\\dir\"}");
+}
+
+fn addOne(value: u32) u32 {
+    return value + 1;
+}
+
+test "the core's Io can run a task concurrently" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try helpers.createCore(&shell, 1, 1);
+    defer core.destroy();
+    const io = core.io();
+    var future = try io.concurrent(addOne, .{41});
+    try std.testing.expectEqual(@as(u32, 42), future.await(io));
+}
+
+//
+// What the observer test's app records, kept in the core's app state. The test allocator reports it as a leak when the core does
+// not destroy it, which is how the test knows the state was destroyed.
+//
+const ObserverRecord = struct {
+    // Each task end, as "id|type|source|input|status".
+    ends: std.ArrayList([]u8),
+    // Each task message, as "id|type|message".
+    messages: std.ArrayList([]u8),
+    // Guards the lists, which workers append to.
+    mutex: std.Io.Mutex,
+};
+
+fn createTestState(core: *ziggy.core.Core) anyerror!*anyopaque {
+    const record = try core.allocator.create(ObserverRecord);
+    record.* = .{
+        .ends = .empty,
+        .messages = .empty,
+        .mutex = .init,
+    };
+    return record;
+}
+
+fn destroyTestState(core: *ziggy.core.Core, state: *anyopaque) void {
+    const record: *ObserverRecord = @ptrCast(@alignCast(state));
+    for (record.ends.items) |text| {
+        core.allocator.free(text);
+    }
+    for (record.messages.items) |text| {
+        core.allocator.free(text);
+    }
+    record.ends.deinit(core.allocator);
+    record.messages.deinit(core.allocator);
+    core.allocator.destroy(record);
+}
+
+fn readStateTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = data;
+    const record: *ObserverRecord = @ptrCast(@alignCast(context.appState().?));
+    return try std.fmt.allocPrint(context.arena, "{{\"ends\":{d}}}", .{record.ends.items.len});
+}
+
+fn recordTaskEnd(core: *ziggy.core.Core, end: ziggy.types.TaskEnd) void {
+    const record: *ObserverRecord = @ptrCast(@alignCast(core.app_state.?));
+    const text = std.fmt.allocPrint(core.allocator, "{s}|{s}|{s}|{s}|{s}", .{ end.task_id, end.task_type, end.source, end.input_json, @tagName(end.status) }) catch @panic("out of memory");
+    record.mutex.lockUncancelable(core.io());
+    defer record.mutex.unlock(core.io());
+    record.ends.append(core.allocator, text) catch @panic("out of memory");
+}
+
+fn recordTaskMessage(core: *ziggy.core.Core, sent: ziggy.types.TaskSentMessage) void {
+    const record: *ObserverRecord = @ptrCast(@alignCast(core.app_state.?));
+    const text = std.fmt.allocPrint(core.allocator, "{s}|{s}|{s}", .{ sent.task_id, sent.task_type, sent.message_json }) catch @panic("out of memory");
+    record.mutex.lockUncancelable(core.io());
+    defer record.mutex.unlock(core.io());
+    record.messages.append(core.allocator, text) catch @panic("out of memory");
+}
+
+test "an app observes the end of a task and the messages it sent, and keeps its own state in the core" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    var observed_app = helpers.app;
+    observed_app.on_task_end = recordTaskEnd;
+    observed_app.on_task_message = recordTaskMessage;
+    observed_app.state = .{
+        .create = createTestState,
+        .destroy = destroyTestState,
+    };
+    const core = try ziggy.core.Core.create(std.testing.allocator, shell.config(1, 1), observed_app);
+    defer core.destroy();
+    const record: *ObserverRecord = @ptrCast(@alignCast(core.app_state.?));
+    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"t1\",\"taskType\":\"quick\",\"source\":\"src\",\"data\":{\"a\":1},\"priority\":0}}");
+    var waited_ms: u32 = 0;
+    while (waited_ms < 20_000) : (waited_ms += 2) {
+        record.mutex.lockUncancelable(core.io());
+        const seen = record.ends.items.len;
+        record.mutex.unlock(core.io());
+        if (seen > 0) {
+            break;
+        }
+        shell.sleepMs(2);
+    }
+    record.mutex.lockUncancelable(core.io());
+    defer record.mutex.unlock(core.io());
+    try std.testing.expectEqual(@as(usize, 1), record.ends.items.len);
+    try std.testing.expectEqualStrings("t1|quick|src|{\"a\":1}|succeeded", record.ends.items[0]);
+    try std.testing.expectEqual(@as(usize, 1), record.messages.items.len);
+    try std.testing.expectEqualStrings("t1|quick|{\"text\":\"hello\"}", record.messages.items[0]);
+}
+
+test "a task handler reaches the app's state through its context" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const state_tasks = helpers.task_handlers ++ [_]ziggy.task_runner.TaskHandlerEntry{
+        .{ .name = "read-state", .handler = readStateTask },
+    };
+    var state_app = helpers.app;
+    state_app.tasks = &state_tasks;
+    state_app.state = .{
+        .create = createTestState,
+        .destroy = destroyTestState,
+    };
+    const core = try ziggy.core.Core.create(std.testing.allocator, shell.config(1, 1), state_app);
+    defer core.destroy();
+    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"t2\",\"taskType\":\"read-state\",\"source\":\"src\",\"data\":null,\"priority\":0}}");
+    try shell.expectMessageContaining("\"result\":{\"ends\":");
+}

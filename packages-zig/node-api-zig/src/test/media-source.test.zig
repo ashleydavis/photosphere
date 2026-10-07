@@ -3,7 +3,9 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const string_lists = @import("string-lists.zig");
 const FolderMediaSource = node_api.folder_media_source.FolderMediaSource;
 const IMediaItem = node_api.media_source.IMediaItem;
 const MediaSourceDeleteError = node_api.media_source.MediaSourceDeleteError;
@@ -89,7 +91,7 @@ const SourceTest = struct {
     fn init(self: *SourceTest) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
-        self.tempDir = try helpers.makeTempDir(allocator, std.testing.io, "folder-media-source");
+        self.tempDir = try temp_dirs.makeTempDir(allocator, std.testing.io, "folder-media-source");
         self.photosDir = try path.join(allocator, &.{ self.tempDir, "photos" });
         self.sessionTempDir = try path.join(allocator, &.{ self.tempDir, "session" });
         try std.Io.Dir.cwd().createDirPath(std.testing.io, self.photosDir);
@@ -101,7 +103,7 @@ const SourceTest = struct {
     // Removes the directories.
     //
     fn deinit(self: *SourceTest) void {
-        helpers.removeTempDir(std.testing.io, self.tempDir);
+        temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
     }
 
@@ -110,7 +112,7 @@ const SourceTest = struct {
     //
     fn writePhoto(self: *SourceTest, relativePath: []const u8, contents: []const u8) ![]const u8 {
         const filePath = try path.join(self.arena.allocator(), &.{ self.photosDir, relativePath });
-        try helpers.writeFile(std.testing.io, filePath, contents);
+        try test_files.writeFile(std.testing.io, filePath, contents);
         return filePath;
     }
 
@@ -261,7 +263,7 @@ test "a recursive folder includes files in subfolders" {
 
     var source = context.source(&.{folderSource(context.photosDir, true)});
     const names = try displayNames(allocator, try listAll(allocator, &source, 10));
-    helpers.sortStrings(names);
+    string_lists.sortStrings(names);
 
     try expectStrings(&.{ "a.jpg", "b.jpg" }, names);
 }
@@ -287,14 +289,14 @@ test "lists across several folders" {
     const allocator = context.arena.allocator();
     const otherDir = try path.join(allocator, &.{ context.tempDir, "more-photos" });
     _ = try context.writePhoto("a.jpg", "one");
-    try helpers.writeFile(std.testing.io, try path.join(allocator, &.{ otherDir, "b.jpg" }), "two");
+    try test_files.writeFile(std.testing.io, try path.join(allocator, &.{ otherDir, "b.jpg" }), "two");
 
     var source = context.source(&.{
         folderSource(context.photosDir, true),
         folderSource(otherDir, true),
     });
     const names = try displayNames(allocator, try listAll(allocator, &source, 10));
-    helpers.sortStrings(names);
+    string_lists.sortStrings(names);
 
     try expectStrings(&.{ "a.jpg", "b.jpg" }, names);
 }
@@ -324,7 +326,7 @@ test "openItem returns the file path unchanged and closeItem does nothing" {
 
     try std.testing.expectEqualStrings(filePath, try source.openItem(allocator, io, page.items[0]));
     try source.closeItem(allocator, io, page.items[0]);
-    try std.testing.expect(helpers.fileExists(io, filePath));
+    try std.testing.expect(test_files.fileExists(io, filePath));
 }
 
 test "a file added later shows up in the next listing, which is how each run finds new photos" {
@@ -361,8 +363,8 @@ test "deleteItems removes the source files" {
 
     try source.deleteItems(allocator, io, &.{items[0].sourceId});
 
-    try std.testing.expect(!helpers.fileExists(io, firstPath));
-    try std.testing.expect(helpers.fileExists(io, secondPath));
+    try std.testing.expect(!test_files.fileExists(io, firstPath));
+    try std.testing.expect(test_files.fileExists(io, secondPath));
 }
 
 test "deleting an item that is already gone is not an error" {

@@ -15,7 +15,7 @@ const BsonValue = @import("serialization-zig").bson.BsonValue;
 //
 // The directory holding exif-parser's test files.
 //
-const FIXTURES_DIR = "src/test/fixtures/exif-parser";
+const FIXTURES_DIR = "node-api-zig/src/test/fixtures/exif-parser";
 
 //
 // Reads a file of exif-parser's test directory.

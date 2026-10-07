@@ -39,7 +39,7 @@ const TEST_MP4_METADATA = [_]IMetadataEntry{
 // (format.bit_rate), with audio, no creation_time tag and the metadata above.
 //
 fn expectTestMp4Info(info: tools.types.AssetInfo) !void {
-    try std.testing.expectEqualStrings("../../test/multiple-files/test.mp4", info.filePath);
+    try std.testing.expectEqualStrings("../test/multiple-files/test.mp4", info.filePath);
     try std.testing.expectEqual(@as(f64, 1280), info.dimensions.width);
     try std.testing.expectEqual(@as(f64, 720), info.dimensions.height);
     try std.testing.expectEqual(@as(?f64, 7.874533), info.duration);
@@ -89,7 +89,7 @@ test "getInfo reads a video like TypeScript" {
     defer arena.deinit();
     const allocator = arena.allocator();
     try requireFfmpeg(allocator);
-    var video = Video.init(allocator, std.testing.io, "../../test/multiple-files/test.mp4");
+    var video = Video.init(allocator, std.testing.io, "../test/multiple-files/test.mp4");
     const info = try video.getInfo(allocator, std.testing.io);
     try expectTestMp4Info(info);
     try std.testing.expectEqual(info.dimensions, try video.getDimensions(allocator, std.testing.io));
@@ -100,7 +100,7 @@ test "getInfo fails for a file that is not a video" {
     defer arena.deinit();
     const allocator = arena.allocator();
     try requireFfmpeg(allocator);
-    var video = Video.init(allocator, std.testing.io, "build.zig");
+    var video = Video.init(allocator, std.testing.io, "../test/demo-news.yaml");
     try std.testing.expectError(error.Thrown, video.getInfo(allocator, std.testing.io));
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to get video info: "));
 }
@@ -118,7 +118,7 @@ test "extractScreenshot writes the frame the TypeScript ffmpeg command writes" {
     const screenshotPath = try std.fmt.allocPrint(allocator, "{s}/screenshot.jpg", .{dir});
     const referencePath = try std.fmt.allocPrint(allocator, "{s}/reference.jpg", .{dir});
 
-    var video = Video.init(allocator, std.testing.io, "../../test/multiple-files/test.mp4");
+    var video = Video.init(allocator, std.testing.io, "../test/multiple-files/test.mp4");
     try std.testing.expectEqualStrings(screenshotPath, try video.extractScreenshot(allocator, std.testing.io, screenshotPath, 3.9372665));
 
     // A JPEG of one full size frame of the 1280x720 video.
@@ -128,7 +128,7 @@ test "extractScreenshot writes the frame the TypeScript ffmpeg command writes" {
 
     // The same bytes as the command TypeScript builds with the default quality of 85:
     // `ffmpeg -i "<file>" -ss <time> -vframes 1 -q:v 2 -y "<output>"` (Math.round((100 - 85) / 10) is 2).
-    _ = try runTool(allocator, &.{ "ffmpeg", "-i", "../../test/multiple-files/test.mp4", "-ss", "3.9372665", "-vframes", "1", "-q:v", "2", "-y", referencePath });
+    _ = try runTool(allocator, &.{ "ffmpeg", "-i", "../test/multiple-files/test.mp4", "-ss", "3.9372665", "-vframes", "1", "-q:v", "2", "-y", referencePath });
     try std.testing.expect(std.mem.eql(u8, try readFile(allocator, referencePath), screenshot));
 }
 
@@ -139,8 +139,8 @@ test "getFileInfo reads images and videos like TypeScript and nothing else" {
     try requireFfmpeg(allocator);
 
     // An image goes to the Image: the 100x90 PNG, with no audio, no EXIF date and no video properties.
-    const image = (try tools.getFileInfo(allocator, std.testing.io, "../../test/test.png", "image/png")).?;
-    try std.testing.expectEqualStrings("../../test/test.png", image.filePath);
+    const image = (try tools.getFileInfo(allocator, std.testing.io, "../test/test.png", "image/png")).?;
+    try std.testing.expectEqualStrings("../test/test.png", image.filePath);
     try std.testing.expectEqual(@as(f64, 100), image.dimensions.width);
     try std.testing.expectEqual(@as(f64, 90), image.dimensions.height);
     try std.testing.expectEqual(@as(?bool, false), image.hasAudio);
@@ -151,13 +151,13 @@ test "getFileInfo reads images and videos like TypeScript and nothing else" {
     try std.testing.expect(image.metadata == null);
 
     // A video goes to the Video.
-    try expectTestMp4Info((try tools.getFileInfo(allocator, std.testing.io, "../../test/multiple-files/test.mp4", "video/mp4")).?);
+    try expectTestMp4Info((try tools.getFileInfo(allocator, std.testing.io, "../test/multiple-files/test.mp4", "video/mp4")).?);
 
     // Anything else has no information.
-    try std.testing.expect((try tools.getFileInfo(allocator, std.testing.io, "../../test/test.png", "text/plain")) == null);
+    try std.testing.expect((try tools.getFileInfo(allocator, std.testing.io, "../test/test.png", "text/plain")) == null);
 
-    try std.testing.expectError(error.Thrown, tools.getFileInfo(allocator, std.testing.io, "../../test/missing.png", "image/png"));
-    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to get image info for ../../test/missing.png: Error: File not found: ../../test/missing.png"));
+    try std.testing.expectError(error.Thrown, tools.getFileInfo(allocator, std.testing.io, "../test/missing.png", "image/png"));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to get image info for ../test/missing.png: Error: File not found: ../test/missing.png"));
 }
 
 //
@@ -216,11 +216,11 @@ test "getInfo and extractScreenshot fail for a file that does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    var video = Video.init(allocator, std.testing.io, "../../test/no-such-video.mp4");
+    var video = Video.init(allocator, std.testing.io, "../test/no-such-video.mp4");
     try std.testing.expectError(error.Thrown, video.getInfo(allocator, std.testing.io));
-    try std.testing.expectEqualStrings("File not found: ../../test/no-such-video.mp4", utils.errors.lastErrorMessage());
+    try std.testing.expectEqualStrings("File not found: ../test/no-such-video.mp4", utils.errors.lastErrorMessage());
     try std.testing.expectError(error.Thrown, video.extractScreenshot(allocator, std.testing.io, "screenshot.jpg", 0));
-    try std.testing.expectEqualStrings("File not found: ../../test/no-such-video.mp4", utils.errors.lastErrorMessage());
+    try std.testing.expectEqualStrings("File not found: ../test/no-such-video.mp4", utils.errors.lastErrorMessage());
 }
 
 test "extractScreenshot fails loudly when ffmpeg cannot write the screenshot" {
@@ -231,7 +231,7 @@ test "extractScreenshot fails loudly when ffmpeg cannot write the screenshot" {
     const dir = try makeTempDir(allocator, "screenshot-fails");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
     const screenshotPath = try std.fmt.allocPrint(allocator, "{s}/missing/screenshot.jpg", .{dir});
-    var video = Video.init(allocator, std.testing.io, "../../test/multiple-files/test.mp4");
+    var video = Video.init(allocator, std.testing.io, "../test/multiple-files/test.mp4");
     try std.testing.expectError(error.Thrown, video.extractScreenshot(allocator, std.testing.io, screenshotPath, 0));
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to extract screenshot: Error: "));
 }
@@ -240,6 +240,6 @@ test "getFileInfo fails loudly for a video it cannot read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    try std.testing.expectError(error.Thrown, tools.getFileInfo(allocator, std.testing.io, "../../test/missing.mp4", "video/mp4"));
-    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to get video info for ../../test/missing.mp4: Error: File not found: ../../test/missing.mp4"));
+    try std.testing.expectError(error.Thrown, tools.getFileInfo(allocator, std.testing.io, "../test/missing.mp4", "video/mp4"));
+    try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to get video info for ../test/missing.mp4: Error: File not found: ../test/missing.mp4"));
 }

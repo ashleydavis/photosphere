@@ -109,7 +109,7 @@ for arch in $arch_list; do
             ;;
     esac
     echo "Building the Zig library for $abi ($optimize, $test_hooks_argument)..."
-    (cd "$core_dir" && zig build \
+    (cd "$ZIGGY_REPO_ROOT" && zig build ziggy-example-core \
         "-Dtarget=$triple" \
         "-Doptimize=$optimize" \
         "$test_hooks_argument" \

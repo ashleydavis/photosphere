@@ -1,8 +1,10 @@
 const std = @import("std");
 const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
+const storage_zig = @import("storage-zig");
 const serialization_zig = @import("serialization-zig");
-const helpers = @import("test-helpers.zig");
+const test_clock = @import("test-clock.zig");
+const sort_index_walk = @import("sort-index-walk.zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const bson = serialization_zig.bson;
 const js_date = serialization_zig.js_date;
@@ -49,7 +51,7 @@ const Fixture = struct {
     //
     fn collection(self: *Fixture, name: []const u8, records: []const IInternalRecord) !*BsonCollection {
         const newCollection = try self.allocator.create(BsonCollection);
-        newCollection.* = BsonCollection.init(self.allocator, name, "db", self.storage.asStorage(), "db", self.uuidGenerator.uuidGenerator(), helpers.timestamp_provider.timestampProvider(), .{ .context = self.storage, .function = ignoreDirty });
+        newCollection.* = BsonCollection.init(self.allocator, name, "db", self.storage.asStorage(), "db", self.uuidGenerator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider(), .{ .context = self.storage, .function = ignoreDirty });
         for (records) |record| {
             try newCollection.setInternalRecord(io, record);
         }
@@ -85,6 +87,55 @@ fn countDirty(context: *anyopaque) void {
     _ = context;
     dirty_count += 1;
 }
+
+//
+// A storage that records the path of every file written to it (the TypeScript test replaces `storage.write` with a
+// function that records the path and then calls the original). The files are kept in a MemoryStorage.
+//
+const WriteRecordingStorage = struct {
+    // Where the files are kept.
+    inner: MemoryStorage,
+
+    // Allocates the recorded paths.
+    allocator: std.mem.Allocator,
+
+    // The path of every file written, in order.
+    fileWrites: std.ArrayList([]const u8),
+
+    //
+    // Creates the storage.
+    //
+    fn init(allocator: std.mem.Allocator) WriteRecordingStorage {
+        return .{
+            .inner = MemoryStorage.init(allocator),
+            .allocator = allocator,
+            .fileWrites = .empty,
+        };
+    }
+
+    //
+    // Gets the IStorage interface, whose write records the path before it writes.
+    //
+    fn asStorage(self: *WriteRecordingStorage, vtable: *storage_zig.storage.IStorage.VTable) storage_zig.storage.IStorage {
+        vtable.* = storage_zig.storage.implement(MemoryStorage).*;
+        vtable.write = recordWrite;
+        return .{
+            .ptr = &self.inner,
+            .vtable = vtable,
+            .location = "memory://mock",
+        };
+    }
+
+    //
+    // Records the path, then writes the file.
+    //
+    fn recordWrite(ptr: *anyopaque, allocator: std.mem.Allocator, writeIo: std.Io, filePath: []const u8, contentType: ?[]const u8, data: []const u8) anyerror!void {
+        const inner: *MemoryStorage = @ptrCast(@alignCast(ptr));
+        const self: *WriteRecordingStorage = @fieldParentPtr("inner", inner);
+        try self.fileWrites.append(self.allocator, try self.allocator.dupe(u8, filePath));
+        return inner.write(allocator, writeIo, filePath, contentType, data);
+    }
+};
 
 //
 // The number of shards the test record ids are spread over. The collection stands in for the TypeScript
@@ -180,7 +231,7 @@ fn testRecords(allocator: std.mem.Allocator) ![5]IInternalRecord {
 //
 fn scores(allocator: std.mem.Allocator, index: *SortIndex, fieldName: []const u8) ![]f64 {
     _ = fieldName;
-    const values = try helpers.sortIndexValues(allocator, io, index);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
     const result = try allocator.alloc(f64, values.len);
     for (values, 0..) |value, valueIndex| {
         result[valueIndex] = value.number;
@@ -406,6 +457,37 @@ test "should no-op when calling deleteRecord without loading" {
     try std.testing.expect(!index.dirty());
 }
 
+test "should batch saves according to buildBatchSize" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    var records: std.ArrayList(IInternalRecord) = .empty;
+    var number: u32 = 0;
+    while (number < 25) : (number += 1) {
+        try records.append(allocator, try makeTestRecord(allocator, number, "Record", @as(f64, @floatFromInt(number)) * 10, "A"));
+    }
+    const collection = try fixture.collection("test_collection", records.items);
+    var recordingStorage = WriteRecordingStorage.init(allocator);
+    var vtable: storage_zig.storage.IStorage.VTable = undefined;
+    const index = try allocator.create(SortIndex);
+    index.* = try SortIndex.init(allocator, recordingStorage.asStorage(&vtable), "db", "test_collection", "score", .asc, fixture.uuidGenerator.uuidGenerator(), null, null, null);
+
+    // Track file writes
+    try index.build(io, collection);
+
+    // Should have written files (tree.dat and leaf page files)
+    // The exact count depends on splits, but we should have at least the tree file
+    try std.testing.expect(recordingStorage.fileWrites.items.len > 0);
+    var wroteTree = false;
+    for (recordingStorage.fileWrites.items) |filePath| {
+        if (std.mem.indexOf(u8, filePath, "tree.dat") != null) {
+            wroteTree = true;
+        }
+    }
+    try std.testing.expect(wroteTree);
+}
+
 test "should handle empty collection" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -446,7 +528,7 @@ test "should handle collection with all same values" {
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     try index.build(io, collection);
     try std.testing.expectEqual(@as(usize, 4), (try index.findByValue(io, .{ .number = 100 }, null)).len);
-    try std.testing.expectEqual(@as(usize, 4), (try helpers.walkSortIndex(allocator, io, index)).len);
+    try std.testing.expectEqual(@as(usize, 4), (try sort_index_walk.walkSortIndex(allocator, io, index)).len);
 }
 
 test "should handle records with undefined indexed field" {
@@ -588,6 +670,38 @@ test "addRecord then commit persists the record" {
     try std.testing.expectEqualStrings("Record 6", found[0].get("name").?.string);
 }
 
+test "addRecord then commit persists all records" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const records = try testRecords(allocator);
+    const collection = try fixture.collection("test_collection", records[0..3]);
+    const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
+    try index.build(io, collection);
+    try index.addRecord(io, try makeTestRecord(allocator, 10, "Batch 1", 60, "A"));
+    try index.addRecord(io, try makeTestRecord(allocator, 11, "Batch 2", 95, "B"));
+    try index.commit(io);
+
+    const all = try getAllRecords(allocator, index);
+    try std.testing.expectEqual(@as(usize, 5), all.len);
+    var found60 = false;
+    var found95 = false;
+    for (all) |record| {
+        const score = record.get("score").?.number;
+        if (score == 60) {
+            found60 = true;
+        }
+        if (score == 95) {
+            found95 = true;
+        }
+    }
+    try std.testing.expect(found60);
+    try std.testing.expect(found95);
+    try std.testing.expectEqual(@as(usize, 1), (try index.findByValue(io, .{ .number = 60 }, null)).len);
+    try std.testing.expectEqual(@as(usize, 1), (try index.findByValue(io, .{ .number = 95 }, null)).len);
+}
+
 test "updateRecord then commit persists update" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -621,7 +735,7 @@ test "deleteRecord then commit persists delete" {
 
     const reloaded = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     _ = try reloaded.load(io);
-    const ids = try helpers.walkSortIndex(allocator, io, reloaded);
+    const ids = try sort_index_walk.walkSortIndex(allocator, io, reloaded);
     try std.testing.expectEqual(@as(usize, 2), ids.len);
     for (ids) |id| {
         try std.testing.expect(!std.mem.eql(u8, id, records[1]._id));
@@ -681,7 +795,7 @@ test "multiple commit cycles" {
     try index.commit(io);
     try std.testing.expectEqual(@as(usize, 1), (try index.findByValue(io, .{ .number = 1 }, null)).len);
     try std.testing.expectEqual(@as(usize, 1), (try index.findByValue(io, .{ .number = 2 }, null)).len);
-    try std.testing.expectEqual(@as(usize, 5), (try helpers.walkSortIndex(allocator, io, index)).len);
+    try std.testing.expectEqual(@as(usize, 5), (try sort_index_walk.walkSortIndex(allocator, io, index)).len);
 }
 
 test "hasDirtyData() returns false on a fresh index" {
@@ -780,7 +894,7 @@ test "should infer string type when no type is specified" {
     });
     const index = try fixture.sortIndex("fruits", "name", .asc, null, null);
     try index.build(io, collection);
-    const values = try helpers.sortIndexValues(allocator, io, index);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
     try std.testing.expectEqualStrings("Apple", values[0].string);
     try std.testing.expectEqualStrings("Banana", values[1].string);
     try std.testing.expectEqualStrings("Cherry", values[2].string);
@@ -816,7 +930,7 @@ test "should infer date type when no type is specified" {
     });
     const index = try fixture.sortIndex("events", "eventDate", .asc, null, null);
     try index.build(io, collection);
-    const values = try helpers.sortIndexValues(allocator, io, index);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
     try std.testing.expectEqual(date1, values[0].date);
     try std.testing.expectEqual(date3, values[1].date);
     try std.testing.expectEqual(date2, values[2].date);
@@ -849,7 +963,7 @@ test "should work correctly when all values are the same inferred type" {
     });
     const index = try fixture.sortIndex("consistent", "value", .asc, null, null);
     try index.build(io, collection);
-    const values = try helpers.sortIndexValues(allocator, io, index);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
     try std.testing.expectEqualStrings("first", values[0].string);
     try std.testing.expectEqualStrings("second", values[1].string);
     try std.testing.expectEqualStrings("third", values[2].string);
@@ -969,7 +1083,7 @@ test "should handle date type sorting" {
     });
     const index = try fixture.sortIndex("test_collection", "createdAt", .asc, .date, null);
     try index.build(io, collection);
-    const values = try helpers.sortIndexValues(allocator, io, index);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
     try std.testing.expectEqualStrings("2024-01-01T00:00:00.000Z", values[0].string);
     try std.testing.expectEqual(@as(i64, 1704153600000), values[1].date);
     try std.testing.expectEqualStrings("2024-01-03T00:00:00.000Z", values[2].string);
@@ -991,7 +1105,7 @@ test "should handle mixed case string comparisons correctly" {
     });
     const index = try fixture.sortIndex("strings", "name", .asc, .string, null);
     try index.build(io, collection);
-    const values = try helpers.sortIndexValues(allocator, io, index);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
     // localeCompare: case-insensitive first, then lowercase before uppercase.
     try std.testing.expectEqualStrings("apple", values[0].string);
     try std.testing.expectEqualStrings("Apple", values[1].string);
@@ -1011,7 +1125,7 @@ test "should handle numeric strings as strings, not numbers" {
     });
     const index = try fixture.sortIndex("strings", "code", .asc, .string, null);
     try index.build(io, collection);
-    const values = try helpers.sortIndexValues(allocator, io, index);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
     try std.testing.expectEqualStrings("10", values[0].string);
     try std.testing.expectEqualStrings("100", values[1].string);
     try std.testing.expectEqualStrings("9", values[2].string);
@@ -1029,7 +1143,7 @@ test "should handle string numbers correctly when type is number" {
     });
     const index = try fixture.sortIndex("numbers", "value", .asc, .number, null);
     try index.build(io, collection);
-    const values = try helpers.sortIndexValues(allocator, io, index);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
     try std.testing.expectEqual(@as(f64, 9), values[0].number);
     try std.testing.expectEqualStrings("10", values[1].string);
     try std.testing.expectEqualStrings("100", values[2].string);
@@ -1047,7 +1161,7 @@ test "should handle NaN values correctly" {
     });
     const index = try fixture.sortIndex("numbers", "value", .asc, .number, null);
     try index.build(io, collection);
-    const values = try helpers.sortIndexValues(allocator, io, index);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
     // NaN sorts before every number.
     try std.testing.expectEqualStrings("not a number", values[0].string);
     try std.testing.expectEqual(@as(f64, 1), values[1].number);
@@ -1240,6 +1354,24 @@ fn dateTestRecords(allocator: std.mem.Allocator) ![5]IInternalRecord {
     };
 }
 
+test "should initialize the date sort indexes with records" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("test_collection", &try dateTestRecords(allocator));
+    const sortIndexAsc = try fixture.sortIndex("test_collection", "createdAt", .asc, .date, null);
+    const sortIndexDesc = try fixture.sortIndex("test_collection", "updatedAt", .desc, .date, null);
+
+    // Initialize both indexes
+    try sortIndexAsc.build(io, collection);
+    try sortIndexDesc.build(io, collection);
+
+    // Check that tree files have been written
+    try std.testing.expect(try fixture.storage.asStorage().fileExists(allocator, io, "db/indexes/test_collection/createdAt_asc/tree.dat"));
+    try std.testing.expect(try fixture.storage.asStorage().fileExists(allocator, io, "db/indexes/test_collection/updatedAt_desc/tree.dat"));
+}
+
 test "should retrieve records in ascending date order" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -1296,6 +1428,33 @@ test "should retrieve records in descending date order" {
 
     // Last record should be the oldest (earliest date)
     try std.testing.expectEqualStrings(try recordId(allocator, 3), allRecords[allRecords.len - 1].get("_id").?.string); // Record 3 (updated 4 days ago)
+}
+
+test "should find records by exact date value" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const records = try dateTestRecords(allocator);
+    const collection = try fixture.collection("test_collection", &records);
+    const sortIndexAsc = try fixture.sortIndex("test_collection", "createdAt", .asc, .date, null);
+
+    // Initialize the index
+    try sortIndexAsc.build(io, collection);
+
+    // Find a record with a specific createdAt date
+    const result = try sortIndexAsc.findByValue(io, records[2].fields.get("createdAt").?, null); // Record 3 (1 day ago)
+
+    // Should find exactly one record with this date
+    try std.testing.expectEqual(@as(usize, 1), result.len);
+    try std.testing.expectEqualStrings(try recordId(allocator, 3), result[0].get("_id").?.string);
+
+    // Find a non-existent date
+    const nonExistentDate = try isoString(allocator, DATE_TEST_NOW - 10 * DAY_MILLISECONDS); // 10 days ago
+    const noResult = try sortIndexAsc.findByValue(io, .{ .string = nonExistentDate }, null);
+
+    // Should find no records
+    try std.testing.expectEqual(@as(usize, 0), noResult.len);
 }
 
 test "should update records with new dates in the index" {
@@ -1412,6 +1571,24 @@ fn numberTestRecords(allocator: std.mem.Allocator) ![6]IInternalRecord {
     };
 }
 
+test "should initialize the number sort indexes with records" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("test_collection", &try numberTestRecords(allocator));
+    const sortIndexAsc = try fixture.sortIndex("test_collection", "score", .asc, .number, null);
+    const sortIndexDesc = try fixture.sortIndex("test_collection", "price", .desc, .number, null);
+
+    // Initialize both indexes
+    try sortIndexAsc.build(io, collection);
+    try sortIndexDesc.build(io, collection);
+
+    // Check that tree files have been written
+    try std.testing.expect(try fixture.storage.asStorage().fileExists(allocator, io, "db/indexes/test_collection/score_asc/tree.dat"));
+    try std.testing.expect(try fixture.storage.asStorage().fileExists(allocator, io, "db/indexes/test_collection/price_desc/tree.dat"));
+}
+
 test "should retrieve records in ascending numeric order" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -1474,6 +1651,32 @@ test "should retrieve records in descending numeric order" {
     try std.testing.expectEqual(@as(f64, 29.99), allRecords[3].get("price").?.number); // Product A
     try std.testing.expectEqual(@as(f64, 15.50), allRecords[4].get("price").?.number); // Product B
     try std.testing.expectEqual(@as(f64, 12.99), allRecords[5].get("price").?.number); // Product E
+}
+
+test "should find records by exact numeric value" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("test_collection", &try numberTestRecords(allocator));
+    const sortIndexAsc = try fixture.sortIndex("test_collection", "score", .asc, .number, null);
+
+    // Initialize the index
+    try sortIndexAsc.build(io, collection);
+
+    // Find records with exact numeric match
+    const result = try sortIndexAsc.findByValue(io, .{ .number = 85.5 }, null);
+
+    // Should find exactly one record with score 85.5
+    try std.testing.expectEqual(@as(usize, 1), result.len);
+    try std.testing.expectEqualStrings(try recordId(allocator, 1), result[0].get("_id").?.string);
+    try std.testing.expectEqual(@as(f64, 85.5), result[0].get("score").?.number);
+
+    // Find a non-existent score
+    const noResult = try sortIndexAsc.findByValue(io, .{ .number = 90.0 }, null);
+
+    // Should find no records
+    try std.testing.expectEqual(@as(usize, 0), noResult.len);
 }
 
 test "should update records with new numeric values in the index" {
@@ -1645,6 +1848,24 @@ fn stringTestRecords(allocator: std.mem.Allocator) ![7]IInternalRecord {
     };
 }
 
+test "should initialize the string sort indexes with records" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("test_collection", &try stringTestRecords(allocator));
+    const sortIndexAsc = try fixture.sortIndex("test_collection", "name", .asc, .string, null);
+    const sortIndexDesc = try fixture.sortIndex("test_collection", "status", .desc, .string, null);
+
+    // Initialize both indexes
+    try sortIndexAsc.build(io, collection);
+    try sortIndexDesc.build(io, collection);
+
+    // Check that tree files have been written
+    try std.testing.expect(try fixture.storage.asStorage().fileExists(allocator, io, "db/indexes/test_collection/name_asc/tree.dat"));
+    try std.testing.expect(try fixture.storage.asStorage().fileExists(allocator, io, "db/indexes/test_collection/status_desc/tree.dat"));
+}
+
 test "should retrieve records in ascending string order" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -1716,6 +1937,40 @@ test "should retrieve records in descending string order" {
     // Expected order: "pending", "pending", "inactive", "completed", "active", "active", "active"
     try std.testing.expectEqualStrings("pending", allRecords[0].get("status").?.string);
     try std.testing.expectEqualStrings("active", allRecords[allRecords.len - 1].get("status").?.string);
+}
+
+test "should find records by exact string value" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fixture = try Fixture.init(allocator);
+    const collection = try fixture.collection("test_collection", &try stringTestRecords(allocator));
+    const sortIndexAsc = try fixture.sortIndex("test_collection", "name", .asc, .string, null);
+
+    // Initialize the index
+    try sortIndexAsc.build(io, collection);
+
+    // Find records with exact string match
+    const result = try sortIndexAsc.findByValue(io, .{ .string = "apple" }, null);
+
+    // Should find exactly one record with lowercase 'apple'
+    try std.testing.expectEqual(@as(usize, 1), result.len);
+    try std.testing.expectEqualStrings(try recordId(allocator, 2), result[0].get("_id").?.string);
+    try std.testing.expectEqualStrings("apple", result[0].get("name").?.string);
+
+    // Find records with exact string match for 'Apple' (different case)
+    const resultCaps = try sortIndexAsc.findByValue(io, .{ .string = "Apple" }, null);
+
+    // Should find exactly one record with uppercase 'Apple'
+    try std.testing.expectEqual(@as(usize, 1), resultCaps.len);
+    try std.testing.expectEqualStrings(try recordId(allocator, 6), resultCaps[0].get("_id").?.string);
+    try std.testing.expectEqualStrings("Apple", resultCaps[0].get("name").?.string);
+
+    // Find a non-existent string
+    const noResult = try sortIndexAsc.findByValue(io, .{ .string = "nonexistent" }, null);
+
+    // Should find no records
+    try std.testing.expectEqual(@as(usize, 0), noResult.len);
 }
 
 test "should update records with new string values in the index" {
@@ -2335,7 +2590,7 @@ test "values that are neither numbers, strings nor dates are compared as the < o
     });
     const index = try fixture.sortIndex("flags", "flag", .asc, null, null);
     try index.build(io, collection);
-    const values = try helpers.sortIndexValues(allocator, io, index);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
     try std.testing.expectEqual(@as(usize, 3), values.len);
     try std.testing.expect(!values[0].boolean);
     try std.testing.expect(values[1].boolean and values[2].boolean);

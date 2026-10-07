@@ -34,6 +34,13 @@ typedef void (*ziggy_menu_action_fn)(void *user_data, const char *action);
 // once and must not call back into the core.
 typedef void (*ziggy_keep_alive_fn)(void *user_data, bool keep_running);
 
+// Native host callback: does one thing only the platform can do, named by method ("exportFile", "secureStoreGet", ...). The request is
+// the JSON text of the method's argument (NUL terminated), and the shell writes the JSON text of its answer into the buffer and returns
+// the number of bytes written. When it cannot do what was asked it writes the text of the reason and returns that number of bytes
+// negated. The shell may show native interface and wait for the user, so the core calls it from a worker thread, never from the one that
+// handles page messages, and it may take a long time.
+typedef intptr_t (*ziggy_host_request_fn)(void *user_data, const char *method, const char *request_json, char *buffer, size_t capacity);
+
 // What a shell is asked to show in ziggy_pick_paths_fn.
 enum {
     // A dialog to choose one or more existing files to open.
@@ -80,6 +87,9 @@ typedef struct ziggy_config {
     bool test_mode;
     // The file the test control connection writes its port to, or NULL for none. Used only in a test hooks build.
     const char *test_port_file;
+    // Native host callback: do one thing only the platform can do, by name. NULL when the platform has none. Last in the struct so that a
+    // shell that builds it with zeroes needs no change.
+    ziggy_host_request_fn host_request;
 } ziggy_config;
 
 // The result of ziggy_check_url.

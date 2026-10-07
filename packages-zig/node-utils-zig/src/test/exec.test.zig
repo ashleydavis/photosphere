@@ -66,6 +66,10 @@ test "execLogged returns the output of the command" {
 test "execLogged reports a command that fails as a failure to execute it" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    // Captured so that nothing reaches stderr.
+    var output = std.Io.Writer.Allocating.init(arena.allocator());
+    utils.console.setCapture(&output.writer, &output.writer);
+    defer utils.console.setCapture(null, null);
     try std.testing.expectError(error.Thrown, node_utils.exec.execLogged(arena.allocator(), std.testing.io, "sh", "exit 3", null));
     try std.testing.expectEqualStrings("Failed to execute command: exit 3", utils.errors.lastErrorMessage());
 }

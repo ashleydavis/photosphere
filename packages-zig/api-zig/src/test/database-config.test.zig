@@ -307,7 +307,7 @@ test "saveDatabaseConfig and updateDatabaseConfig write the same bytes as TypeSc
     const allocator = arena.allocator();
     const io = std.testing.io;
 
-    const json = try std.Io.Dir.cwd().readFileAlloc(io, "src/test/fixtures/database-config.json", allocator, .unlimited);
+    const json = try std.Io.Dir.cwd().readFileAlloc(io, "api-zig/src/test/fixtures/database-config.json", allocator, .unlimited);
     const scenarios = try std.json.parseFromSliceLeaky([]IScenario, allocator, json, .{});
     try std.testing.expect(scenarios.len >= 7);
 

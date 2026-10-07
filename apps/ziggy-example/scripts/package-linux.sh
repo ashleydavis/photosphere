@@ -27,7 +27,7 @@ BASE_NAME="ziggy-example-$VERSION-linux-$ARCHITECTURE"
 
 (cd "$EXAMPLE_DIR" && bun run bundle:ui)
 STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ziggy-example-package-XXXXXX")"
-(cd "$SHELL_DIR" && zig build -Doptimize=ReleaseSafe -p "$STAGE_DIR/prefix")
+(cd "$EXAMPLE_DIR/../.." && zig build ziggy-example-linux -Doptimize=ReleaseSafe -p "$STAGE_DIR/prefix")
 mkdir -p "$OUTPUT_DIR"
 
 # The zip holds the executable, which has the page embedded, in one folder.

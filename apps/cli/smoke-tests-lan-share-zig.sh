@@ -71,17 +71,17 @@ export PHOTOSPHERE_VAULT_TYPE="plaintext"
 TESTS_PASSED=0
 TESTS_FAILED=0
 
-# The Zig port of psi (apps/cli-zig), built with `zig build` in that directory.
+# The Zig port of psi (apps/cli-zig), built with `zig build` in the repository root.
 case "$(uname -s)" in
     CYGWIN*|MINGW*|MSYS*)
-        ZIG_CLI_CMD="../cli-zig/zig-out/bin/psi.exe"
+        ZIG_CLI_CMD="../../zig-out/bin/psi.exe"
         ;;
     *)
-        ZIG_CLI_CMD="../cli-zig/zig-out/bin/psi"
+        ZIG_CLI_CMD="../../zig-out/bin/psi"
         ;;
 esac
 if [ ! -x "$ZIG_CLI_CMD" ]; then
-    echo -e "${RED}[FAIL]${NC} The Zig CLI is not built: $ZIG_CLI_CMD (run zig build in apps/cli-zig)"
+    echo -e "${RED}[FAIL]${NC} The Zig CLI is not built: $ZIG_CLI_CMD (run `zig build` in the repository root)"
     exit 1
 fi
 

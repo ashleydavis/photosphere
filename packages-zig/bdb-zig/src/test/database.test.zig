@@ -2,7 +2,8 @@ const std = @import("std");
 const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
-const helpers = @import("test-helpers.zig");
+const fixtures = @import("fixtures.zig");
+const test_clock = @import("test-clock.zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const BsonDocument = serialization_zig.bson.BsonDocument;
 const BsonDatabase = bdb.database.BsonDatabase;
@@ -29,7 +30,7 @@ var test_uuid_generator: utils.test_uuid_generator.TestUuidGenerator = .{};
 // Creates the database under test (TypeScript: the beforeEach block).
 //
 fn newDatabase(allocator: std.mem.Allocator, storage: *MemoryStorage) !*BsonDatabase {
-    return BsonDatabase.init(allocator, storage.asStorage(), "", test_uuid_generator.uuidGenerator(), helpers.timestamp_provider.timestampProvider());
+    return BsonDatabase.init(allocator, storage.asStorage(), "", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
 }
 
 //
@@ -188,6 +189,20 @@ test "commit processes multiple collections" {
     try std.testing.expectEqual(@as(u32, 2), databaseTree.sort.?.leafCount);
 }
 
+test "merkleTree should return an IMerkleRef" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var storage = MemoryStorage.init(arena.allocator());
+    const database = try newDatabase(arena.allocator(), &storage);
+    const ref = try database.merkleTree();
+    try std.testing.expect(@intFromPtr(ref) != 0);
+    try std.testing.expect(@hasDecl(@TypeOf(ref.*), "get"));
+    try std.testing.expect(@hasDecl(@TypeOf(ref.*), "upsert"));
+    try std.testing.expect(@hasDecl(@TypeOf(ref.*), "remove"));
+    try std.testing.expect(@hasDecl(@TypeOf(ref.*), "commit"));
+    try std.testing.expect(@hasDecl(@TypeOf(ref.*), "flush"));
+}
+
 test "merkleTree should return the same instance on repeated calls" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -228,10 +243,10 @@ test "a database committed by Zig has the root hash TypeScript computes for the 
     defer arena.deinit();
     const allocator = arena.allocator();
     var source = MemoryStorage.init(allocator);
-    try source.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
+    try source.loadDirectory(io, fixtures.TEST_DBS_DIR ++ "/50-assets/.db/bson", ".db/bson");
     var destination = MemoryStorage.init(allocator);
-    const sourceDatabase = try BsonDatabase.init(allocator, source.asStorage(), ".db/bson", test_uuid_generator.uuidGenerator(), helpers.timestamp_provider.timestampProvider());
-    const destinationDatabase = try BsonDatabase.init(allocator, destination.asStorage(), ".db/bson", test_uuid_generator.uuidGenerator(), helpers.timestamp_provider.timestampProvider());
+    const sourceDatabase = try BsonDatabase.init(allocator, source.asStorage(), ".db/bson", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
+    const destinationDatabase = try BsonDatabase.init(allocator, destination.asStorage(), ".db/bson", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
     const sourceCollection = try sourceDatabase.collection("metadata");
     const destinationCollection = try destinationDatabase.collection("metadata");
     var iterator = sourceCollection.iterateRecords();

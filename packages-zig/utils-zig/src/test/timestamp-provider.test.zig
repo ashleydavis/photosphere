@@ -54,3 +54,12 @@ test "Date.toISOString writes years outside 0 to 9999 in the expanded form and r
     try std.testing.expectEqualStrings("RangeError", utils.errors.lastErrorName());
     try std.testing.expectEqualStrings("Invalid Date", utils.errors.lastErrorMessage());
 }
+
+test "Date.toISOString allocates only the string it returns, for a year in range and out of range" {
+    // std.testing.allocator fails the test on a leak, and on a free of anything but a whole allocation.
+    const times = [_]i64{ 0, 1709251199999, 253402300800000, -62198755200000 };
+    for (times) |epoch_milliseconds| {
+        const iso = try (timestamp_provider.Date{ .epochMilliseconds = epoch_milliseconds }).toISOString(std.testing.allocator);
+        std.testing.allocator.free(iso);
+    }
+}

@@ -20,7 +20,7 @@ const JoinCase = struct {
 // Loads the path.join cases.
 //
 fn loadJoinCases(allocator: std.mem.Allocator) ![]const JoinCase {
-    const bytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "src/test/fixtures/path-join.json", allocator, .unlimited);
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "node-utils-zig/src/test/fixtures/path-join.json", allocator, .unlimited);
     return std.json.parseFromSliceLeaky([]const JoinCase, allocator, bytes, .{});
 }
 

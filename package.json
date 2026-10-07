@@ -61,7 +61,7 @@
     "test:harness": "cd ./apps/smoke-tests && bash ./android-lock.test.sh && bash ./runner.test.sh && bash ./timeout.test.sh && cd ../.. && what-changed baseline capture test:harness",
     "th": "bun run test:harness",
     "compile:zig": "bun --filter '*' compile:zig && what-changed baseline capture compile:zig",
-    "test:zig": "bun --filter '*' test:zig && what-changed baseline capture test:zig",
+    "test:zig": "zig build test --summary all --test-timeout 20m && what-changed baseline capture test:zig",
     "sync:ziggy-example:linux": "bun run --filter=ziggy-example sync:linux",
     "sync:ziggy-example:windows": "bun run --filter=ziggy-example sync:windows",
     "sync:ziggy-example:macos": "bun run --filter=ziggy-example sync:macos",

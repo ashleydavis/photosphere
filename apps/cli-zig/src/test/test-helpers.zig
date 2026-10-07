@@ -265,7 +265,7 @@ pub fn fileUrl(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
 //
 // The path of the built psi binary (zig-out/bin/psi, psi.exe on Windows).
 //
-pub const psi_path = "zig-out/bin/psi" ++ builtin.os.tag.exeFileExt(builtin.cpu.arch);
+pub const psi_path = "../../zig-out/bin/psi" ++ builtin.os.tag.exeFileExt(builtin.cpu.arch);
 
 //
 // Runs a CLI command line (argv[0] is the program) with the environment, from the apps/cli directory, with its
@@ -357,7 +357,7 @@ pub fn runCliWithInput(allocator: std.mem.Allocator, argv: []const []const u8, i
 //
 // The path of the test driver (src/test/drivers/test-driver.zig), installed to zig-out/test-bin.
 //
-pub const test_driver_path = "zig-out/test-bin/test-driver" ++ builtin.os.tag.exeFileExt(builtin.cpu.arch);
+pub const test_driver_path = "../../zig-out/test-bin/test-driver" ++ builtin.os.tag.exeFileExt(builtin.cpu.arch);
 
 //
 // The result of running a scenario of the test driver.

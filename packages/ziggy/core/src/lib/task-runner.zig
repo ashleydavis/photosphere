@@ -61,6 +61,10 @@ pub const TaskRunnerOptions = struct {
     worker_threads: u32,
     // The limit on child tasks in flight for any one parent task.
     max_concurrent_child_tasks: u32,
+    // Gives the text to report for the error a task handler returned, or null to report the error's name. Null when the app has none.
+    describe_error: ?types.ErrorDescriber,
+    // Told of every task that ends and every message a task sends. Null when the app has no use for them.
+    observer: ?types.TaskObserver,
 };
 
 //
@@ -164,6 +168,14 @@ pub const TaskContext = struct {
     }
 
     //
+    // The app's state, which the app's state hooks made, or null for an app that keeps none. The handler casts it back to the type
+    // the app gave it.
+    //
+    pub fn appState(self: *TaskContext) ?*anyopaque {
+        return self.runner.app_state;
+    }
+
+    //
     // The configuration the shell gave the core, for host callbacks.
     //
     pub fn config(self: *TaskContext) *const ZiggyConfig {
@@ -234,6 +246,32 @@ pub const TaskContext = struct {
     }
 
     //
+    // Asks the shell to do one thing only the platform can do, by name, with the JSON text of the argument, and returns what it answered
+    // (see HostRequestFn). The shell may show native interface and wait for the user, so this must be called from a task. A platform
+    // with no such callback gives error.HostCallbackMissing, and one that cannot do what was asked gives an answer that did not
+    // succeed, with the reason in its text.
+    //
+    pub fn hostRequest(self: *TaskContext, method: []const u8, request_json: []const u8) !types.HostReply {
+        const request = self.runner.config.host_request orelse {
+            return error.HostCallbackMissing;
+        };
+        const method_text = try self.arena.dupeZ(u8, method);
+        const request_text = try self.arena.dupeZ(u8, request_json);
+        const buffer = try self.arena.alloc(u8, 256 * 1024);
+        const length = request(self.runner.config.user_data, method_text.ptr, request_text.ptr, buffer.ptr, buffer.len);
+        if (length < 0) {
+            return .{
+                .succeeded = false,
+                .text = buffer[0..@intCast(-length)],
+            };
+        }
+        return .{
+            .succeeded = true,
+            .text = buffer[0..@intCast(length)],
+        };
+    }
+
+    //
     // Shows a native file or folder dialog through the shell's native host callback, and returns what the user chose as the
     // JSON text of an array of path strings, empty when they cancelled. The dialog is shown on the shell's UI thread while this
     // waits, so it must be called from a task. A test hooks build lets a test answer instead, and no dialog is shown.
@@ -294,6 +332,9 @@ pub const TaskRunner = struct {
     silent: std.atomic.Value(bool),
     // The number of top level keep-alive tasks that are queued or running. Guarded by the mutex.
     keep_alive_count: u32,
+    // The app's state, which the core sets once the app has made it, for the task handlers to reach through their context. Null until
+    // then and for an app with none.
+    app_state: ?*anyopaque,
 
     //
     // Creates a runner and starts its worker threads. It must stay where it is: the threads hold its address.
@@ -316,6 +357,7 @@ pub const TaskRunner = struct {
             .pick_override = null,
             .silent = .init(false),
             .keep_alive_count = 0,
+            .app_state = null,
         };
         errdefer self.stop();
         var worker_index: u32 = 0;
@@ -626,7 +668,7 @@ pub const TaskRunner = struct {
             return .{
                 .status = .failed,
                 .result_json = null,
-                .error_message = @errorName(err),
+                .error_message = if (self.options.describe_error) |describe| (describe(err) orelse @errorName(err)) else @errorName(err),
             };
         };
         if (task.cancelled.load(.acquire)) {
@@ -655,6 +697,16 @@ pub const TaskRunner = struct {
         }
         else {
             self.emitTaskCompleted(task, completion);
+        }
+        if (self.options.observer) |observer| {
+            observer.on_task_end(observer.user_data, .{
+                .task_id = task.id,
+                .task_type = task.task_type,
+                .source = task.source,
+                .input_json = task.data_json,
+                .status = completion.status,
+                .error_message = completion.error_message,
+            });
         }
         const result_copy: ?[]u8 = if (completion.result_json) |text| self.allocator.dupe(u8, text) catch @panic("out of memory recording a task completion") else null;
         const error_copy: ?[]u8 = if (completion.error_message) |text| self.allocator.dupe(u8, text) catch @panic("out of memory recording a task completion") else null;
@@ -777,6 +829,14 @@ pub const TaskRunner = struct {
         const event = try std.fmt.allocPrint(self.allocator, "{{\"channel\":\"task-message\",\"data\":{{\"taskId\":{s},\"source\":{s},\"message\":{s}}}}}", .{ id, source, message_json });
         defer self.allocator.free(event);
         self.sink.emit(self.sink.user_data, event);
+        if (self.options.observer) |observer| {
+            observer.on_task_message(observer.user_data, .{
+                .task_id = task.id,
+                .task_type = task.task_type,
+                .source = task.source,
+                .message_json = message_json,
+            });
+        }
     }
     //
     // Sends the reply to the page request a task was answering: the task's result on success, or an error reply saying why not.
@@ -788,7 +848,11 @@ pub const TaskRunner = struct {
         const event = switch (completion.status) {
             .succeeded => std.fmt.allocPrint(self.allocator, "{{\"id\":{s},\"ok\":true,\"data\":{s}}}", .{ reply_id_json, completion.result_json orelse "null" }),
             .cancelled => std.fmt.allocPrint(self.allocator, "{{\"id\":{s},\"ok\":false,\"error\":\"Cancelled\"}}", .{reply_id_json}),
-            .failed => std.fmt.allocPrint(self.allocator, "{{\"id\":{s},\"ok\":false,\"error\":\"{s}\"}}", .{ reply_id_json, completion.error_message orelse "Failed" }),
+            .failed => blk: {
+                const message_json = json_util.stringify(self.allocator, completion.error_message orelse "Failed") catch @panic("out of memory building a reply");
+                defer self.allocator.free(message_json);
+                break :blk std.fmt.allocPrint(self.allocator, "{{\"id\":{s},\"ok\":false,\"error\":{s}}}", .{ reply_id_json, message_json });
+            },
         } catch @panic("out of memory building a reply");
         defer self.allocator.free(event);
         self.sink.emit(self.sink.user_data, event);

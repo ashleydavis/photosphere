@@ -855,3 +855,39 @@ test "cpuCount counts every CPU, like os.cpus().length, even when the process ma
 
     try std.testing.expectEqual(unpinned, try init_cmd.cpuCount(allocator, io));
 }
+
+test "findSimilarDatabaseNames returns empty array when fuzzyMatch returns nothing" {
+    var environment: TestEnvironment = undefined;
+    try environment.init();
+    defer environment.deinit();
+    try registerDatabases(&environment, &.{
+        .{ .name = "mydb", .description = "", .path = "/path" },
+    });
+    try std.testing.expectEqual(@as(usize, 0), (try init_cmd.findSimilarDatabaseNames(environment.arena.allocator(), std.testing.io, "zzzzzzzzzzzzzz")).len);
+}
+
+test "findSimilarDatabaseNames returns names returned by fuzzyMatch" {
+    var environment: TestEnvironment = undefined;
+    try environment.init();
+    defer environment.deinit();
+    try registerDatabases(&environment, &.{
+        .{ .name = "my-db", .description = "", .path = "/path1" },
+        .{ .name = "my-database", .description = "", .path = "/path2" },
+    });
+    const result = try init_cmd.findSimilarDatabaseNames(environment.arena.allocator(), std.testing.io, "my-databse");
+    try std.testing.expectEqual(@as(usize, 1), result.len);
+    try std.testing.expectEqualStrings("my-database", result[0]);
+}
+
+test "findSimilarDatabaseNames calls fuzzyMatch with the query string and database names array" {
+    var environment: TestEnvironment = undefined;
+    try environment.init();
+    defer environment.deinit();
+    try registerDatabases(&environment, &.{
+        .{ .name = "mydb", .description = "", .path = "/path" },
+    });
+    // "mydbb" is one edit from the database's name and from nothing else, so it is returned only when the name was a candidate.
+    const result = try init_cmd.findSimilarDatabaseNames(environment.arena.allocator(), std.testing.io, "mydbb");
+    try std.testing.expectEqual(@as(usize, 1), result.len);
+    try std.testing.expectEqualStrings("mydb", result[0]);
+}

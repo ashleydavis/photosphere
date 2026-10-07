@@ -69,6 +69,26 @@ pub const FakeShell = struct {
     }
 
     //
+    // The host request callback: answers a method with the method and the request it was given, as JSON, so a test can see what the
+    // core sent. A method named "fail" cannot be done, and answers with a reason.
+    //
+    pub fn hostRequest(user_data: ?*anyopaque, method: [*:0]const u8, request_json: [*:0]const u8, buffer: [*]u8, capacity: usize) callconv(.c) isize {
+        _ = user_data;
+        var text_buffer: [1024]u8 = undefined;
+        if (std.mem.eql(u8, std.mem.span(method), "fail")) {
+            const reason = "The phone said no.";
+            @memcpy(buffer[0..reason.len], reason);
+            return -@as(isize, @intCast(reason.len));
+        }
+        const answer = std.fmt.bufPrint(&text_buffer, "{{\"method\":\"{s}\",\"request\":{s}}}", .{ std.mem.span(method), std.mem.span(request_json) }) catch return -1;
+        if (capacity < answer.len) {
+            return -1;
+        }
+        @memcpy(buffer[0..answer.len], answer);
+        return @intCast(answer.len);
+    }
+
+    //
     // The dialog callback: answers with one fixed path for a folder, one fixed file name for a save and two files for an open, and
     // records the title and the initial name it was given so a test can check them.
     //
@@ -144,6 +164,7 @@ pub const FakeShell = struct {
             .data_dir = "/tmp",
             .test_mode = false,
             .test_port_file = null,
+            .host_request = hostRequest,
         };
     }
 

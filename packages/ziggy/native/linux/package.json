@@ -1,9 +1,0 @@
-{
-  "name": "ziggy-shell-linux",
-  "version": "1.0.0",
-  "description": "Ziggy's Linux shell: hosts WebKitGTK and the core library for an app.",
-  "private": true,
-  "scripts": {
-    "clean": "find zig-out .zig-cache -type f -delete 2>/dev/null; true"
-  }
-}

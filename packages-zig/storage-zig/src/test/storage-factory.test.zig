@@ -14,7 +14,7 @@ const key_utils = encryption.key_utils;
 // Reads a key fixture of encryption-zig (tests run with the package directory as cwd).
 //
 fn readKeyFixture(allocator: std.mem.Allocator, fileName: []const u8) ![]u8 {
-    const fixturePath = try std.fmt.allocPrint(allocator, "../encryption-zig/src/test/fixtures/{s}", .{fileName});
+    const fixturePath = try std.fmt.allocPrint(allocator, "encryption-zig/src/test/fixtures/{s}", .{fileName});
     return std.Io.Dir.cwd().readFileAlloc(std.testing.io, fixturePath, allocator, .unlimited);
 }
 

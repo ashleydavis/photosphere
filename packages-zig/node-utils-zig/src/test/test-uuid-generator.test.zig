@@ -1,6 +1,7 @@
 const std = @import("std");
 const node_utils = @import("node-utils-zig");
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 
 //
 // Creates a unique directory path under the package's .zig-cache directory for test isolation.
@@ -160,7 +161,11 @@ test "generate() takes over a lock that has been held for more than five seconds
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+
+    const io = virtual_time.io();
     const tmpDir = try uniqueTmpDir(allocator, io);
     var environ_map = std.process.Environ.Map.init(allocator);
     try environ_map.put("TEST_TMP_DIR", tmpDir);

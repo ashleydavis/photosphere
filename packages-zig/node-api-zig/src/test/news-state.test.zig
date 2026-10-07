@@ -1,7 +1,10 @@
 const std = @import("std");
 const node_api = @import("node-api-zig");
 const node_utils = @import("node-utils-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const test_environment = @import("test-environment.zig");
+const mock_log = @import("mock-log.zig");
 const news_state = node_api.news_state;
 const state_file = node_api.state_file;
 
@@ -9,10 +12,10 @@ const state_file = node_api.state_file;
 // Points PHOTOSPHERE_CONFIG_DIR at a new empty directory and returns it.
 //
 fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const u8 {
-    _ = try helpers.setupEnvironment(io);
-    const dir = try helpers.makeTempDir(allocator, io, name);
+    _ = try test_environment.setupEnvironment(io);
+    const dir = try temp_dirs.makeTempDir(allocator, io, name);
     const configDir = try std.fmt.allocPrint(allocator, "{s}/config", .{dir});
-    try helpers.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
+    try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
     return configDir;
 }
 
@@ -21,14 +24,14 @@ fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![
 //
 fn writeState(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8, text: []const u8) !void {
     try std.Io.Dir.cwd().createDirPath(io, configDir);
-    try helpers.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/state.yaml", .{configDir}), text);
+    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/state.yaml", .{configDir}), text);
 }
 
 //
 // Reads the state file.
 //
 fn readState(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8) ![]const u8 {
-    return helpers.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/state.yaml", .{configDir}));
+    return test_files.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/state.yaml", .{configDir}));
 }
 
 //
@@ -121,6 +124,10 @@ test "returns empty state when the state file cannot be read at all" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-unreadable");
+    // Loading logs that the state could not be read; a passing test must write nothing to stderr, so the log is muted.
+    var mutedLog: mock_log.MutedLog = .{};
+    mutedLog.install();
+    defer mutedLog.uninstall();
 
     // Not YAML at all, so reading it throws.
     try writeState(allocator, io, configDir, "news: [unclosed");
@@ -169,7 +176,7 @@ test "is a no-op for empty input" {
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-add-empty");
     try news_state.addShownNewsIds(allocator, io, &.{});
-    try std.testing.expect(!helpers.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/state.yaml", .{configDir})));
+    try std.testing.expect(!test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/state.yaml", .{configDir})));
 }
 
 test "appends new ids to the existing list" {

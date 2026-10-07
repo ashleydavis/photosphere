@@ -1,7 +1,8 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const encryption = @import("encryption-zig");
-const helpers = @import("test-helpers.zig");
+const fixtures = @import("fixtures.zig");
+const mock_log = @import("mock-log.zig");
 
 const crypto = encryption.node_crypto;
 const key_utils = encryption.key_utils;
@@ -31,8 +32,8 @@ const TestKeys = struct {
 // Loads the fixture key pair and builds the key map.
 //
 fn loadTestKeys(allocator: std.mem.Allocator) !TestKeys {
-    const privateKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts-private.pem"));
-    const publicKey = try crypto.createPublicKey(allocator, try helpers.readFixture(allocator, "ts-public.pem"));
+    const privateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts-private.pem"));
+    const publicKey = try crypto.createPublicKey(allocator, try fixtures.readFixture(allocator, "ts-public.pem"));
     const keyHashHex = try allocator.dupe(u8, &std.fmt.bytesToHex(try key_utils.hashPublicKey(allocator, publicKey), .lower));
     var keyMap: IPrivateKeyMap = .empty;
     try keyMap.put(allocator, "default", privateKey);
@@ -44,6 +45,11 @@ test "encrypts and decrypts with key map" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+
+    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    var mockLog: mock_log.MockLog = .{};
+    mockLog.install();
+    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
     const plain = "hello world";
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, plain);
@@ -68,6 +74,11 @@ test "decrypts legacy payload using default key" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+
+    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    var mockLog: mock_log.MockLog = .{};
+    mockLog.install();
+    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
     const plain = "legacy payload";
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, plain);
@@ -80,6 +91,11 @@ test "decrypts new-format payload using hash key in map" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+
+    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    var mockLog: mock_log.MockLog = .{};
+    mockLog.install();
+    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
     const plain = "new format";
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, plain);
@@ -97,7 +113,7 @@ test "is refused at the write rather than producing a file nothing can decrypt" 
     // 2048-bit RSA wraps the AES key into 256 bytes, and every reader slices it out of the file
     // at a fixed 512, which is an RSA-4096 block. So a file written with a smaller key can never
     // be decrypted by this codebase.
-    const smallPublicKey = try crypto.createPublicKey(allocator, try helpers.readFixture(allocator, "ts-small-public.pem"));
+    const smallPublicKey = try crypto.createPublicKey(allocator, try fixtures.readFixture(allocator, "ts-small-public.pem"));
 
     // The write is where this has to fail. Encrypting with such a key used to succeed and say
     // nothing, and making the read loud does not get the data back: by the time the read
@@ -110,6 +126,11 @@ test "throws when the data says it is encrypted and the key is not in the map" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+
+    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    var mockLog: mock_log.MockLog = .{};
+    mockLog.install();
+    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
 
     // It used to hand the ciphertext back, on the reading that a failed decryption means the
@@ -134,11 +155,16 @@ test "throws when the data says it is encrypted and the wrong key is in the map"
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+
+    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    var mockLog: mock_log.MockLog = .{};
+    mockLog.install();
+    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
 
     // (Zig: the second TypeScript fixture key pair stands in for generateKeyPair.)
-    const otherPrivateKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts2-private.pem"));
-    const otherKeyHashHex = try helpers.readFixture(allocator, "ts2-public-hash.hex");
+    const otherPrivateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts2-private.pem"));
+    const otherKeyHashHex = try fixtures.readFixture(allocator, "ts2-public-hash.hex");
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, "secret");
     var wrongMap: IPrivateKeyMap = .empty;
     try wrongMap.put(allocator, "default", otherPrivateKey);
@@ -151,6 +177,11 @@ test "still hands back a plaintext buffer unchanged, which is how an unencrypted
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+
+    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    var mockLog: mock_log.MockLog = .{};
+    mockLog.install();
+    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
 
     // The case the fallback exists for, and the reason it cannot simply be removed: a
@@ -158,12 +189,18 @@ test "still hands back a plaintext buffer unchanged, which is how an unencrypted
     const plain = "this was never encrypted, and is long enough to look like a file";
     const result = try encrypt_buffer.decryptBuffer(allocator, plain, &keys.keyMap);
     try std.testing.expectEqualSlices(u8, plain, result);
+    try std.testing.expectEqual(@as(u32, 2), mockLog.verboseCalls);
 }
 
 test "returns data unchanged when legacy data and no default key" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+
+    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    var mockLog: mock_log.MockLog = .{};
+    mockLog.install();
+    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, "x");
     const legacyPayload = encrypted[44..];
@@ -171,12 +208,18 @@ test "returns data unchanged when legacy data and no default key" {
     try noDefaultMap.put(allocator, keys.keyHashHex, keys.privateKey);
     const result = try encrypt_buffer.decryptBuffer(allocator, legacyPayload, &noDefaultMap);
     try std.testing.expectEqualSlices(u8, legacyPayload, result);
+    try std.testing.expectEqual(@as(u32, 1), mockLog.verboseCalls);
 }
 
 test "returns data unchanged when shorter than 4 bytes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+
+    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    var mockLog: mock_log.MockLog = .{};
+    mockLog.install();
+    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
     const short = [_]u8{ 0, 0 };
     const result = try encrypt_buffer.decryptBuffer(allocator, &short, &keys.keyMap);
@@ -187,10 +230,16 @@ test "returns plain data unchanged when the default key cannot decrypt it" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+
+    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    var mockLog: mock_log.MockLog = .{};
+    mockLog.install();
+    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
-    const plain = try helpers.makePlaintext(allocator, 1000);
+    const plain = try fixtures.makePlaintext(allocator, 1000);
     const result = try encrypt_buffer.decryptBuffer(allocator, plain, &keys.keyMap);
     try std.testing.expectEqualSlices(u8, plain, result);
+    try std.testing.expectEqual(@as(u32, 2), mockLog.verboseCalls);
 }
 
 test "throws when data too short for header" {
@@ -306,6 +355,11 @@ test "decryptBuffer passes an allocation failure on for new-format and legacy da
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+
+    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    var mockLog: mock_log.MockLog = .{};
+    mockLog.install();
+    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, "allocation failures");
     try expectOutOfMemoryAtEveryAllocation(encrypted, &keys.keyMap, "allocation failures");

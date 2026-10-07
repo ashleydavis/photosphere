@@ -4,7 +4,12 @@ const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("task-queue-zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const console_capture = @import("console-capture.zig");
+const test_environment = @import("test-environment.zig");
+const mock_log = @import("mock-log.zig");
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 const errors = utils.errors;
 const prefetchDatabaseHandler = node_api.prefetch_database_worker.prefetchDatabaseHandler;
 const replicateDatabaseHandler = node_api.replicate_database_worker.replicateDatabaseHandler;
@@ -56,7 +61,7 @@ const TestContext = struct {
 // Builds a minimal ITaskContext for testing, cancelled from the start when isCancelled is true.
 //
 fn makeContext(allocator: std.mem.Allocator, io: std.Io, isCancelled: bool) !*TestContext {
-    _ = try helpers.setupEnvironment(io);
+    _ = try test_environment.setupEnvironment(io);
     const testContext = try allocator.create(TestContext);
     testContext.* = .{
         .uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator),
@@ -92,7 +97,7 @@ const Directories = struct {
 // copy as the replica's origin when withOrigin is true.
 //
 fn makePartialReplica(allocator: std.mem.Allocator, io: std.Io, testContext: *TestContext, withOrigin: bool) !Directories {
-    const origin = try helpers.copyTestDatabase(allocator, io, "v6");
+    const origin = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     const root = std.fs.path.dirname(origin).?;
     const local = try std.fmt.allocPrint(allocator, "{s}/local", .{root});
     _ = try replicateDatabaseHandler(allocator, io, try node_api.replicate_database.replicateDatabaseDataToJson(allocator, .{
@@ -101,12 +106,12 @@ fn makePartialReplica(allocator: std.mem.Allocator, io: std.Io, testContext: *Te
         .partial = true,
         .force = false,
     }), testContext.context.taskContext());
-    const localRawStorage = try helpers.directoryStorage(allocator, io, local);
+    const localRawStorage = try test_files.directoryStorage(allocator, io, local);
 
     // The replica starts out holding every thumbnail and BSON file of the origin, so each test decides what it is
     // missing (TypeScript: the files the mocked walk yields and the mocked local storage does not hold).
-    try helpers.copyDirectory(allocator, io, try pathIn(allocator, origin, "thumb"), try pathIn(allocator, local, "thumb"));
-    try helpers.copyDirectory(allocator, io, try pathIn(allocator, origin, ".db/bson"), try pathIn(allocator, local, ".db/bson"));
+    try temp_dirs.copyDirectory(allocator, io, try pathIn(allocator, origin, "thumb"), try pathIn(allocator, local, "thumb"));
+    try temp_dirs.copyDirectory(allocator, io, try pathIn(allocator, origin, ".db/bson"), try pathIn(allocator, local, ".db/bson"));
 
     if (withOrigin) {
         try api.database_config.updateDatabaseConfig(allocator, io, localRawStorage, .{
@@ -158,7 +163,10 @@ test "throws when databasePath is empty" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const testContext = try makeContext(allocator, io, false);
 
     try std.testing.expectError(error.Thrown, prefetchDatabaseHandler(allocator, io, try makeData(allocator, ""), testContext.context.taskContext()));
@@ -169,44 +177,53 @@ test "returns without copying for a full (non-partial) database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const testContext = try makeContext(allocator, io, false);
-    const local = try helpers.copyTestDatabase(allocator, io, "v6");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(local).?);
-    const origin = try helpers.copyTestDatabase(allocator, io, "1-asset");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(origin).?);
-    try api.database_config.updateDatabaseConfig(allocator, io, try helpers.directoryStorage(allocator, io, local), .{
+    const local = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(local).?);
+    const origin = try temp_dirs.copyTestDatabase(allocator, io, "1-asset");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(origin).?);
+    try api.database_config.updateDatabaseConfig(allocator, io, try test_files.directoryStorage(allocator, io, local), .{
         .origin = origin,
     });
 
     _ = try prefetchDatabaseHandler(allocator, io, try makeData(allocator, local), testContext.context.taskContext());
 
-    try std.testing.expect(!helpers.fileExists(io, try pathIn(allocator, local, "thumb/63e9c63a-9164-6376-13e9-ef4d00000000")));
+    try std.testing.expect(!test_files.fileExists(io, try pathIn(allocator, local, "thumb/63e9c63a-9164-6376-13e9-ef4d00000000")));
 }
 
 test "returns without copying when the partial database has no origin configured" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const testContext = try makeContext(allocator, io, false);
     const dirs = try makePartialReplica(allocator, io, testContext, false);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
     try deleteFileIn(allocator, io, dirs.local, THUMB_PATH);
 
     _ = try prefetchDatabaseHandler(allocator, io, try makeData(allocator, dirs.local), testContext.context.taskContext());
 
-    try std.testing.expect(!helpers.fileExists(io, try pathIn(allocator, dirs.local, THUMB_PATH)));
+    try std.testing.expect(!test_files.fileExists(io, try pathIn(allocator, dirs.local, THUMB_PATH)));
 }
 
 test "copies files missing from the partial replica out of origin storage" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const testContext = try makeContext(allocator, io, false);
     const dirs = try makePartialReplica(allocator, io, testContext, true);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
     // thumb/ has one file missing, .db/bson another.
     try deleteFileIn(allocator, io, dirs.local, THUMB_PATH);
@@ -214,35 +231,41 @@ test "copies files missing from the partial replica out of origin storage" {
 
     _ = try prefetchDatabaseHandler(allocator, io, try makeData(allocator, dirs.local), testContext.context.taskContext());
 
-    try std.testing.expectEqualStrings(try helpers.readFile(allocator, io, try pathIn(allocator, dirs.origin, THUMB_PATH)), try helpers.readFile(allocator, io, try pathIn(allocator, dirs.local, THUMB_PATH)));
-    try std.testing.expectEqualStrings(try helpers.readFile(allocator, io, try pathIn(allocator, dirs.origin, SHARD_PATH)), try helpers.readFile(allocator, io, try pathIn(allocator, dirs.local, SHARD_PATH)));
+    try std.testing.expectEqualStrings(try test_files.readFile(allocator, io, try pathIn(allocator, dirs.origin, THUMB_PATH)), try test_files.readFile(allocator, io, try pathIn(allocator, dirs.local, THUMB_PATH)));
+    try std.testing.expectEqualStrings(try test_files.readFile(allocator, io, try pathIn(allocator, dirs.origin, SHARD_PATH)), try test_files.readFile(allocator, io, try pathIn(allocator, dirs.local, SHARD_PATH)));
 }
 
 test "skips files that already exist in the local replica" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const testContext = try makeContext(allocator, io, false);
     const dirs = try makePartialReplica(allocator, io, testContext, true);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
     // The local copy differs from the origin's, so copying it again would show.
-    try helpers.writeFile(io, try pathIn(allocator, dirs.local, THUMB_PATH), "local copy");
+    try test_files.writeFile(io, try pathIn(allocator, dirs.local, THUMB_PATH), "local copy");
 
     _ = try prefetchDatabaseHandler(allocator, io, try makeData(allocator, dirs.local), testContext.context.taskContext());
 
-    try std.testing.expectEqualStrings("local copy", try helpers.readFile(allocator, io, try pathIn(allocator, dirs.local, THUMB_PATH)));
+    try std.testing.expectEqualStrings("local copy", try test_files.readFile(allocator, io, try pathIn(allocator, dirs.local, THUMB_PATH)));
 }
 
 test "reports what it fetched, so the background loop knows whether to keep going" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const testContext = try makeContext(allocator, io, false);
     const dirs = try makePartialReplica(allocator, io, testContext, true);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
     // The loop stops when a pass reports nothing fetched and nothing missing, and asks again
     // otherwise, so these two numbers are the whole of what it decides on.
@@ -259,10 +282,13 @@ test "reports nothing fetched and nothing missing for a replica that is already 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const testContext = try makeContext(allocator, io, false);
     const dirs = try makePartialReplica(allocator, io, testContext, true);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
     // This is what tells the loop the replica is filled in and it can stop, rather than walking
     // every object at the origin again on every gap.
@@ -275,10 +301,13 @@ test "reports nothing fetched and nothing missing for a full database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const testContext = try makeContext(allocator, io, false);
-    const local = try helpers.copyTestDatabase(allocator, io, "v6");
-    defer helpers.removeTempDir(io, std.fs.path.dirname(local).?);
+    const local = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(local).?);
 
     const result = try prefetchDatabaseHandler(allocator, io, try makeData(allocator, local), testContext.context.taskContext());
 
@@ -292,17 +321,20 @@ test "stops copying when the task is cancelled" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const setupContext = try makeContext(allocator, io, false);
     const dirs = try makePartialReplica(allocator, io, setupContext, true);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
     try deleteFileIn(allocator, io, dirs.local, THUMB_PATH);
 
     // Cancelled before any batch runs, so nothing is copied.
     const cancelledContext = try makeContext(allocator, io, true);
     const result = try prefetchDatabaseHandler(allocator, io, try makeData(allocator, dirs.local), cancelledContext.context.taskContext());
 
-    try std.testing.expect(!helpers.fileExists(io, try pathIn(allocator, dirs.local, THUMB_PATH)));
+    try std.testing.expect(!test_files.fileExists(io, try pathIn(allocator, dirs.local, THUMB_PATH)));
 
     // And the file it had already found is reported as still missing. A cancelled pass that
     // reported nothing left behind would read to the loop exactly like a finished one, and the
@@ -314,20 +346,23 @@ test "returns without copying when the config of the partial database is not an 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const testContext = try makeContext(allocator, io, false);
     const dirs = try makePartialReplica(allocator, io, testContext, false);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
     try deleteFileIn(allocator, io, dirs.local, THUMB_PATH);
 
     const configs = [_][]const u8{ "[\"origin\"]", "{\"other\":1}" };
     for (configs) |config| {
-        try helpers.writeFile(io, try pathIn(allocator, dirs.local, ".db/config.json"), config);
+        try test_files.writeFile(io, try pathIn(allocator, dirs.local, ".db/config.json"), config);
 
         const result = try prefetchDatabaseHandler(allocator, io, try makeData(allocator, dirs.local), testContext.context.taskContext());
 
         try expectResult(result, 0, 0);
-        try std.testing.expect(!helpers.fileExists(io, try pathIn(allocator, dirs.local, THUMB_PATH)));
+        try std.testing.expect(!test_files.fileExists(io, try pathIn(allocator, dirs.local, THUMB_PATH)));
     }
 }
 
@@ -335,14 +370,25 @@ test "fails with the error of a file it could not fetch" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const testContext = try makeContext(allocator, io, false);
     const dirs = try makePartialReplica(allocator, io, testContext, true);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
     // A directory where the thumbnail should be: the replica does not hold the file, and cannot write it.
     try deleteFileIn(allocator, io, dirs.local, THUMB_PATH);
     try std.Io.Dir.cwd().createDirPath(io, try pathIn(allocator, dirs.local, THUMB_PATH ++ "/in-the-way"));
+    // The retries log each failure; a passing test must write nothing to stderr, so the log is muted.
+    var mutedLog: mock_log.MutedLog = .{};
+    mutedLog.install();
+    defer mutedLog.uninstall();
+    // The last failure is written to the console's stderr; captured here so nothing reaches the real one.
+    var stderrCapture = std.Io.Writer.Allocating.init(allocator);
+    console_capture.captureStderr(&stderrCapture.writer);
+    defer console_capture.endConsoleCapture();
 
     try std.testing.expectError(error.Thrown, prefetchDatabaseHandler(allocator, io, try makeData(allocator, dirs.local), testContext.context.taskContext()));
     try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "Failed to prefetch " ++ THUMB_PATH));

@@ -1,7 +1,7 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const test_files = @import("test-files.zig");
 const zip_fixture = @import("zip-fixture.zig");
 const JSZip = node_api.jszip.JSZip;
 const buildZip = zip_fixture.buildZip;
@@ -74,7 +74,7 @@ test "inflates the entries of a compressed zip" {
     const io = std.testing.io;
     var zip = JSZip.init(allocator);
 
-    const loaded = try zip.loadAsync(try helpers.readFile(allocator, io, "../../test/multiple-files/test-archive.zip"));
+    const loaded = try zip.loadAsync(try test_files.readFile(allocator, io, "../test/multiple-files/test-archive.zip"));
 
     var filesRead: usize = 0;
     for (loaded.files.names.items) |name| {

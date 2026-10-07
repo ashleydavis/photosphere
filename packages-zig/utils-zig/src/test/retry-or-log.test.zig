@@ -3,8 +3,7 @@ const utils = @import("utils-zig");
 const ExceptionLog = @import("exception-log.zig").ExceptionLog;
 const retryOrLog = utils.retry_or_log.retryOrLog;
 const errors = utils.errors;
-
-const io = std.testing.io;
+const virtual_time_io = @import("virtual-time-io.zig");
 
 //
 // An operation that fails a number of times and then resolves (the jest.fn() of the TypeScript tests).
@@ -50,13 +49,18 @@ const KeyValue = struct {
 
 //
 // Gets the elapsed milliseconds since `start` (TypeScript mocks sleep and checks what it was called
-// with; Zig measures how long the real sleeps took).
+// with; Zig measures how long the sleeps took on the virtual clock).
 //
-fn elapsedMilliseconds(start: std.Io.Timestamp) i64 {
+fn elapsedMilliseconds(io: std.Io, start: std.Io.Timestamp) i64 {
     return start.durationTo(std.Io.Clock.awake.now(io)).toMilliseconds();
 }
 
 test "should return result on first attempt" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -67,11 +71,16 @@ test "should return result on first attempt" {
 
     try std.testing.expectEqualStrings("success", result.?);
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(start) < 10_000);
+    try std.testing.expect(elapsedMilliseconds(io, start) < 10_000);
     try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
 }
 
 test "should return result after retries" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -84,11 +93,16 @@ test "should return result after retries" {
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
 
     // Two sleeps, of 100ms and 200ms.
-    try std.testing.expect(elapsedMilliseconds(start) >= 300);
+    try std.testing.expect(elapsedMilliseconds(io, start) >= 300);
     try std.testing.expectEqual(@as(u32, 2), log.exceptionCalls);
 }
 
 test "should return undefined and log error after all retries exhausted" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -99,13 +113,18 @@ test "should return undefined and log error after all retries exhausted" {
 
     try std.testing.expect(result == null);
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(start) >= 300);
+    try std.testing.expect(elapsedMilliseconds(io, start) >= 300);
     try std.testing.expectEqual(@as(u32, 3), log.exceptionCalls); // 2 retries + 1 final failure
     try std.testing.expectEqualStrings("Test error", log.lastMessage);
     try std.testing.expectEqualStrings("Operation failed", errors.errorMessage(log.lastError.?));
 }
 
 test "should use custom error message" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -118,6 +137,11 @@ test "should use custom error message" {
 }
 
 test "an empty error message is the same as none, which is how TypeScript reads it" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -130,6 +154,11 @@ test "an empty error message is the same as none, which is how TypeScript reads 
 }
 
 test "should use default maxAttempts of 3" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -140,10 +169,15 @@ test "should use default maxAttempts of 3" {
     _ = try retryOrLog(io, &operation, "Test error", 3, 1, 2);
 
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(start) >= 3);
+    try std.testing.expect(elapsedMilliseconds(io, start) >= 3);
 }
 
 test "should use default waitTimeMS of 1000" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -153,10 +187,15 @@ test "should use default waitTimeMS of 1000" {
     _ = try retryOrLog(io, &operation, "Test error", 2, 1000, 2);
 
     try std.testing.expectEqual(@as(u32, 2), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(start) >= 1000);
+    try std.testing.expect(elapsedMilliseconds(io, start) >= 1000);
 }
 
 test "should use default waitTimeScale of 2" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -166,10 +205,15 @@ test "should use default waitTimeScale of 2" {
     _ = try retryOrLog(io, &operation, "Test error", 3, 100, 2);
 
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(start) >= 300);
+    try std.testing.expect(elapsedMilliseconds(io, start) >= 300);
 }
 
 test "should work with custom waitTimeScale" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -181,10 +225,15 @@ test "should work with custom waitTimeScale" {
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
 
     // Two sleeps, of 100ms and 300ms.
-    try std.testing.expect(elapsedMilliseconds(start) >= 400);
+    try std.testing.expect(elapsedMilliseconds(io, start) >= 400);
 }
 
 test "should not sleep on last attempt" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -197,13 +246,18 @@ test "should not sleep on last attempt" {
     try std.testing.expectEqual(@as(u32, 2), operation.calls);
 
     // One sleep of 100ms (a sleep after the last attempt would add 10000ms).
-    const elapsed = elapsedMilliseconds(start);
+    const elapsed = elapsedMilliseconds(io, start);
     try std.testing.expect(elapsed >= 100);
     try std.testing.expect(elapsed < 10_000);
     try std.testing.expectEqual(@as(u32, 2), log.exceptionCalls); // 1 retry + 1 final failure
 }
 
 test "should return undefined immediately when maxAttempts is 1" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -214,12 +268,17 @@ test "should return undefined immediately when maxAttempts is 1" {
 
     try std.testing.expect(result == null);
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(start) < 10_000);
+    try std.testing.expect(elapsedMilliseconds(io, start) < 10_000);
     try std.testing.expectEqual(@as(u32, 1), log.exceptionCalls);
     try std.testing.expectEqualStrings("Test error", log.lastMessage);
 }
 
 test "should return undefined when maxAttempts is 0" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -233,6 +292,11 @@ test "should return undefined when maxAttempts is 0" {
 }
 
 test "should preserve error type in log" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -246,6 +310,11 @@ test "should preserve error type in log" {
 }
 
 test "should work with different return types" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -259,6 +328,11 @@ test "should work with different return types" {
 }
 
 test "should handle operations that return undefined" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -273,6 +347,11 @@ test "should handle operations that return undefined" {
 }
 
 test "should not throw errors" {
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();

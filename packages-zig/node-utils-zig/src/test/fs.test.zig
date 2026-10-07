@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const node_utils = @import("node-utils-zig");
 const utils = @import("utils-zig");
 const fs = node_utils.fs;
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 const errors = utils.errors;
 
 //
@@ -1391,7 +1392,10 @@ test "updateFileRawOptimistic gives up on an update lock another process holds" 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
     const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-raw-held-lock.bin");
 
     // A lock taken just now, which is held for as long as the update waits.
@@ -1532,4 +1536,60 @@ test "readFileHead fails for a directory" {
     try std.Io.Dir.cwd().createDirPath(io, dirPath);
 
     try std.testing.expectError(error.IsDir, fs.readFileHead(allocator, io, dirPath, 16));
+}
+
+test "readFileHead reads only the first bytes of a longer file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "long.bin");
+    const contents = try allocator.alloc(u8, 1024 * 1024);
+    for (contents, 0..) |*byte, index| {
+        byte.* = @intCast(index % 251);
+    }
+    try fs.outputFile(allocator, io, filePath, contents);
+
+    const head = try fs.readFileHead(allocator, io, filePath, 4096);
+
+    try std.testing.expectEqual(@as(usize, 4096), head.len);
+    try std.testing.expectEqualSlices(u8, contents[0..4096], head);
+}
+
+test "readFileHead reads the whole of a file shorter than the count asked for" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "short.bin");
+    try fs.outputFile(allocator, io, filePath, "short");
+
+    const head = try fs.readFileHead(allocator, io, filePath, 4096);
+
+    try std.testing.expectEqualSlices(u8, "short", head);
+}
+
+test "readFileHead reads nothing from an empty file rather than failing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "empty.bin");
+    try fs.outputFile(allocator, io, filePath, "");
+
+    try std.testing.expectEqual(@as(usize, 0), (try fs.readFileHead(allocator, io, filePath, 4096)).len);
+}
+
+test "getConfigDir is the same Unix-style path on Windows, so one support answer covers every machine" {
+    // getConfigDir reads the platform it was built for, so this checks the same path on whichever platform runs it.
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    const home_variable = if (builtin.os.tag == .windows) "USERPROFILE" else "HOME";
+    try environ_map.put(home_variable, "/some-home");
+
+    try std.testing.expectEqualStrings("/some-home/.config/photosphere", try fs.getConfigDir(allocator));
 }

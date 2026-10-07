@@ -2,7 +2,9 @@ const std = @import("std");
 const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
-const helpers = @import("test-helpers.zig");
+const fixtures = @import("fixtures.zig");
+const test_clock = @import("test-clock.zig");
+const sort_index_walk = @import("sort-index-walk.zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const bson = serialization_zig.bson;
 const BsonDocument = bson.BsonDocument;
@@ -35,7 +37,7 @@ var test_uuid_generator: utils.test_uuid_generator.TestUuidGenerator = .{};
 //
 fn newCollection(allocator: std.mem.Allocator, storage: *MemoryStorage) !*BsonCollection {
     const collection = try allocator.create(BsonCollection);
-    collection.* = BsonCollection.init(allocator, "users", "", storage.asStorage(), "", test_uuid_generator.uuidGenerator(), helpers.timestamp_provider.timestampProvider(), .{ .context = storage, .function = onDirty });
+    collection.* = BsonCollection.init(allocator, "users", "", storage.asStorage(), "", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider(), .{ .context = storage, .function = onDirty });
     return collection;
 }
 
@@ -210,7 +212,7 @@ test "should update sort index when record is updated" {
     try ageIndex.ensure(io, collection, .number);
 
     // Verify initial sort order
-    var values = try helpers.sortIndexValues(allocator, io, ageIndex);
+    var values = try sort_index_walk.sortIndexValues(allocator, io, ageIndex);
     try std.testing.expectEqual(@as(f64, 25), values[0].number); // Alice first
     try std.testing.expectEqual(@as(f64, 30), values[1].number); // John second
 
@@ -222,7 +224,7 @@ test "should update sort index when record is updated" {
         },
     }), .{});
 
-    values = try helpers.sortIndexValues(allocator, io, ageIndex);
+    values = try sort_index_walk.sortIndexValues(allocator, io, ageIndex);
     try std.testing.expectEqual(@as(f64, 20), values[0].number); // John first now
     try std.testing.expectEqual(@as(f64, 25), values[1].number); // Alice second now
 }
@@ -245,7 +247,7 @@ test "should update sort index when record is deleted" {
     // Delete Alice
     _ = try collection.deleteOne(io, alice._id);
 
-    const values = try helpers.sortIndexValues(allocator, io, ageIndex);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, ageIndex);
     try std.testing.expectEqual(@as(usize, 1), values.len);
     try std.testing.expectEqual(@as(i64, 1), ageIndex.totalEntries);
     try std.testing.expectEqual(@as(f64, 30), values[0].number); // Only John remains
@@ -400,9 +402,9 @@ test "getShardId matches the shard files of the test databases" {
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try storage.loadDirectory(io, helpers.TEST_DBS_DIR ++ "/50-assets/.db/bson", "db");
+    try storage.loadDirectory(io, fixtures.TEST_DBS_DIR ++ "/50-assets/.db/bson", "db");
     const collection = try allocator.create(BsonCollection);
-    collection.* = BsonCollection.init(allocator, "metadata", "db", storage.asStorage(), "db", test_uuid_generator.uuidGenerator(), helpers.timestamp_provider.timestampProvider(), .{ .context = &storage, .function = onDirty });
+    collection.* = BsonCollection.init(allocator, "metadata", "db", storage.asStorage(), "db", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider(), .{ .context = &storage, .function = onDirty });
     var checked: usize = 0;
     var shards = collection.iterateShards();
     var shardIdsSeen: std.ArrayList([]const u8) = .empty;
@@ -1076,10 +1078,10 @@ test "insertOne adds the record to every sort index the collection has, and sort
 
     const indexes = try collection.sortIndexes(io);
     try std.testing.expectEqual(@as(usize, 2), indexes.len);
-    const byAge = try helpers.sortIndexValues(allocator, io, try collection.sortIndex("age", .asc));
+    const byAge = try sort_index_walk.sortIndexValues(allocator, io, try collection.sortIndex("age", .asc));
     try std.testing.expectEqual(@as(usize, 2), byAge.len);
     try std.testing.expectEqual(@as(f64, 20), byAge[0].number);
-    const byName = try helpers.sortIndexValues(allocator, io, try collection.sortIndex("name", .desc));
+    const byName = try sort_index_walk.sortIndexValues(allocator, io, try collection.sortIndex("name", .desc));
     try std.testing.expectEqual(@as(usize, 2), byName.len);
     try std.testing.expectEqualStrings("Younger", byName[0].string);
 

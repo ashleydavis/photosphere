@@ -38,7 +38,7 @@ test "instantiateVault: plaintext uses PHOTOSPHERE_VAULT_DIR" {
     const io = std.testing.io;
 
     var environ_map = std.process.Environ.Map.init(allocator);
-    try environ_map.put("PHOTOSPHERE_VAULT_DIR", "src/test/fixtures/ts-vault");
+    try environ_map.put("PHOTOSPHERE_VAULT_DIR", "vault-zig/src/test/fixtures/ts-vault");
     process_env.setEnvironMap(&environ_map);
     defer process_env.setEnvironMap(null);
 
@@ -104,7 +104,7 @@ test "getVault: a keychain vault and a plaintext vault are separate instances" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var environ_map = std.process.Environ.Map.init(arena.allocator());
-    try environ_map.put("PHOTOSPHERE_VAULT_DIR", "src/test/fixtures/ts-vault");
+    try environ_map.put("PHOTOSPHERE_VAULT_DIR", "vault-zig/src/test/fixtures/ts-vault");
     process_env.setEnvironMap(&environ_map);
     defer process_env.setEnvironMap(null);
 

@@ -2,7 +2,9 @@ const std = @import("std");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
+const node_api = @import("node-api-zig");
 const helpers = @import("test-helpers.zig");
+const MockLog = @import("mock-log.zig").MockLog;
 
 //
 // Sets up a config dir and a news feed file, and returns the environment.
@@ -110,11 +112,138 @@ test "prints nothing when quiet is set, and does not even check" {
     var capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(&capture.writer, &capture.writer);
     defer utils.console.setCapture(null, null);
+    var mock = MockLog.init(allocator);
+    mock.install();
+    defer mock.uninstall();
 
     try cli.print_notifications.printNotifications(allocator, std.testing.io, true);
 
     try std.testing.expectEqualStrings("", capture.written());
+    try std.testing.expectEqual(@as(usize, 0), mock.callCount(.info));
 
     // The news was not even checked, so it is not recorded as shown.
     try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/config/state.yaml", .{root})));
+}
+
+test "does not record any update when no update is available" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "notifications-no-update");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    _ = try setup(allocator, root, "items: []\n");
+    defer node_utils.process_env.setEnvironMap(null);
+    var mock = MockLog.init(allocator);
+    mock.install();
+    defer mock.uninstall();
+
+    try cli.print_notifications.printNotifications(allocator, std.testing.io, false);
+
+    try std.testing.expect(try node_api.news_state.getLastShownUpdateVersion(allocator, std.testing.io) == null);
+}
+
+test "omits update line when checkForUpdates returns undefined" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "notifications-omit-update");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    _ = try setup(allocator, root, "items: []\n");
+    defer node_utils.process_env.setEnvironMap(null);
+    var mock = MockLog.init(allocator);
+    mock.install();
+    defer mock.uninstall();
+
+    try cli.print_notifications.printNotifications(allocator, std.testing.io, false);
+
+    try std.testing.expect(!mock.wasCalledContaining(.info, "A new version is available"));
+}
+
+test "prints news heading and message when a news item is available" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "notifications-heading");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    _ = try setup(allocator, root,
+        \\items:
+        \\  - id: a
+        \\    message: Hello users
+        \\
+    );
+    defer node_utils.process_env.setEnvironMap(null);
+    var mock = MockLog.init(allocator);
+    mock.install();
+    defer mock.uninstall();
+
+    try cli.print_notifications.printNotifications(allocator, std.testing.io, false);
+
+    try std.testing.expect(mock.wasCalledContaining(.info, "\u{1F4F0} News:"));
+    try std.testing.expect(mock.wasCalledContaining(.info, "Hello users"));
+}
+
+test "renders link and action when present on the news item" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "notifications-link-action");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    _ = try setup(allocator, root,
+        \\items:
+        \\  - id: a
+        \\    message: Hello
+        \\    link:
+        \\      label: Read more
+        \\      url: https://example.com/read
+        \\    action:
+        \\      label: Try it
+        \\      url: https://example.com/try
+        \\
+    );
+    defer node_utils.process_env.setEnvironMap(null);
+    cli.picocolors.setColorSupportOverride(false);
+    defer cli.picocolors.setColorSupportOverride(null);
+    var mock = MockLog.init(allocator);
+    mock.install();
+    defer mock.uninstall();
+
+    try cli.print_notifications.printNotifications(allocator, std.testing.io, false);
+
+    try std.testing.expect(mock.wasCalledWith(.info, "   Read more: https://example.com/read"));
+    try std.testing.expect(mock.wasCalledWith(.info, "   Try it: https://example.com/try"));
+}
+
+test "prints nothing extra when both checks return undefined" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "notifications-nothing");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    _ = try setup(allocator, root, "items: []\n");
+    defer node_utils.process_env.setEnvironMap(null);
+    var mock = MockLog.init(allocator);
+    mock.install();
+    defer mock.uninstall();
+
+    try cli.print_notifications.printNotifications(allocator, std.testing.io, false);
+
+    try std.testing.expectEqual(@as(usize, 0), mock.callCount(.info));
+}
+
+test "printNewsItem prints message body without link or action sections when neither is set" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var mock = MockLog.init(allocator);
+    mock.install();
+    defer mock.uninstall();
+
+    try cli.print_notifications.printNewsItem(allocator, .{
+        .id = "a",
+        .message = "Bare message",
+    });
+
+    try std.testing.expect(mock.wasCalledContaining(.info, "\u{1F4F0} News:"));
+    try std.testing.expect(mock.wasCalledContaining(.info, "Bare message"));
+    try std.testing.expectEqual(@as(usize, 3), mock.callCount(.info));
 }

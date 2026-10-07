@@ -3,7 +3,10 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("task-queue-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const test_environment = @import("test-environment.zig");
+const fixture_dirs = @import("fixture-dirs.zig");
 const errors = utils.errors;
 const replicateDatabaseHandler = node_api.replicate_database_worker.replicateDatabaseHandler;
 const TaskContext = task_queue_zig.task_context.TaskContext;
@@ -49,7 +52,7 @@ const RecordingContext = struct {
 // Builds a minimal ITaskContext for testing.
 //
 fn makeContext(allocator: std.mem.Allocator, io: std.Io) !*RecordingContext {
-    _ = try helpers.setupEnvironment(io);
+    _ = try test_environment.setupEnvironment(io);
     const recording = try allocator.create(RecordingContext);
     recording.* = .{
         .uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator),
@@ -80,7 +83,7 @@ const Directories = struct {
 // Creates the directories of a test.
 //
 fn makeDirectories(allocator: std.mem.Allocator, io: std.Io) !Directories {
-    const sourceDir = try helpers.copyTestDatabase(allocator, io, "v6");
+    const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     const root = std.fs.path.dirname(sourceDir).?;
     return .{ .root = root, .source = sourceDir, .dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root}) };
 }
@@ -96,7 +99,7 @@ fn makeData(allocator: std.mem.Allocator, data: IReplicateDatabaseData) !std.jso
 // Reads a file of a directory.
 //
 fn readFileIn(allocator: std.mem.Allocator, io: std.Io, dir: []const u8, name: []const u8) ![]const u8 {
-    return helpers.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ dir, name }));
+    return test_files.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ dir, name }));
 }
 
 test "opens source storage via openStorage with sourcePath and sourceEncryptionKey" {
@@ -106,8 +109,8 @@ test "opens source storage via openStorage with sourcePath and sourceEncryptionK
     const io = std.testing.io;
     const recording = try makeContext(allocator, io);
     const dirs = try makeDirectories(allocator, io);
-    defer helpers.removeTempDir(io, dirs.root);
-    const keyFile = helpers.KEYS_DIR ++ "/ts-private.pem";
+    defer temp_dirs.removeTempDir(io, dirs.root);
+    const keyFile = fixture_dirs.KEYS_DIR ++ "/ts-private.pem";
 
     // Make an encrypted copy, then replicate the encrypted copy back to a plain database with the source key.
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .destEncryptionKey = keyFile, .partial = false, .force = false }), recording.context.taskContext());
@@ -126,8 +129,8 @@ test "opens destination storage via openStorage with destPath, destEncryptionKey
     const io = std.testing.io;
     const recording = try makeContext(allocator, io);
     const dirs = try makeDirectories(allocator, io);
-    defer helpers.removeTempDir(io, dirs.root);
-    const keyFile = helpers.KEYS_DIR ++ "/ts2-private.pem";
+    defer temp_dirs.removeTempDir(io, dirs.root);
+    const keyFile = fixture_dirs.KEYS_DIR ++ "/ts2-private.pem";
 
     // destS3Key is only used for s3: destinations (see resolve-storage-credentials tests); here it is ignored.
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .destEncryptionKey = keyFile, .destS3Key = "dest-s3", .partial = false, .force = false }), recording.context.taskContext());
@@ -144,16 +147,16 @@ test "forwards partial flag to replicate() when partial is true" {
     const io = std.testing.io;
     const recording = try makeContext(allocator, io);
     const dirs = try makeDirectories(allocator, io);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = true, .force = false }), recording.context.taskContext());
 
     const dest = try node_api.open_storage.openStorage(allocator, io, dirs.dest, null, null);
     const destTree = (try node_api.tree.loadMerkleTree(allocator, io, dest.storage)).?;
     try std.testing.expect(node_api.media_file_database.isPartialDatabase(destTree.databaseMetadata));
-    try std.testing.expect(!helpers.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ dirs.dest, ASSET_ID })));
-    try std.testing.expect(helpers.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/shards/96.dat", .{dirs.dest})));
-    try std.testing.expect(!helpers.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/shards/96", .{dirs.dest})));
+    try std.testing.expect(!test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ dirs.dest, ASSET_ID })));
+    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/shards/96.dat", .{dirs.dest})));
+    try std.testing.expect(!test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/shards/96", .{dirs.dest})));
 }
 
 test "forwards partial flag to replicate() when partial is false" {
@@ -163,15 +166,15 @@ test "forwards partial flag to replicate() when partial is false" {
     const io = std.testing.io;
     const recording = try makeContext(allocator, io);
     const dirs = try makeDirectories(allocator, io);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
 
     const dest = try node_api.open_storage.openStorage(allocator, io, dirs.dest, null, null);
     const destTree = (try node_api.tree.loadMerkleTree(allocator, io, dest.storage)).?;
     try std.testing.expect(!node_api.media_file_database.isPartialDatabase(destTree.databaseMetadata));
-    try std.testing.expect(helpers.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ dirs.dest, ASSET_ID })));
-    try std.testing.expect(helpers.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/shards/96", .{dirs.dest})));
+    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ dirs.dest, ASSET_ID })));
+    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/shards/96", .{dirs.dest})));
 }
 
 test "forwards pathFilter to replicate() options" {
@@ -181,13 +184,13 @@ test "forwards pathFilter to replicate() options" {
     const io = std.testing.io;
     const recording = try makeContext(allocator, io);
     const dirs = try makeDirectories(allocator, io);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
     const output = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false, .pathFilter = "display/" ++ ASSET_ID }), recording.context.taskContext());
 
     try std.testing.expectEqual(@as(i64, 1), output.object.get("copiedFiles").?.integer);
-    try std.testing.expect(helpers.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/display/{s}", .{ dirs.dest, ASSET_ID })));
-    try std.testing.expect(!helpers.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/thumb/{s}", .{ dirs.dest, ASSET_ID })));
+    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/display/{s}", .{ dirs.dest, ASSET_ID })));
+    try std.testing.expect(!test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/thumb/{s}", .{ dirs.dest, ASSET_ID })));
 }
 
 test "emits a replicate-progress task message for each progress callback fired by replicate()" {
@@ -197,7 +200,7 @@ test "emits a replicate-progress task message for each progress callback fired b
     const io = std.testing.io;
     const recording = try makeContext(allocator, io);
     const dirs = try makeDirectories(allocator, io);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
 
@@ -230,7 +233,7 @@ test "reports its job alongside each progress string, carrying the tag it was qu
     const io = std.testing.io;
     const recording = try makeContext(allocator, io);
     const dirs = try makeDirectories(allocator, io);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{
         .sourcePath = dirs.source,
@@ -262,7 +265,7 @@ test "reports no job when the replication was queued without a tag" {
     const io = std.testing.io;
     const recording = try makeContext(allocator, io);
     const dirs = try makeDirectories(allocator, io);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
 
@@ -276,7 +279,7 @@ test "hands replicate() a way to ask whether the task has been cancelled" {
     const io = std.testing.io;
     const recording = try makeContext(allocator, io);
     const dirs = try makeDirectories(allocator, io);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
     // Asked at the time rather than read once when the task started, so a cancel that arrives
     // mid-copy is noticed.
@@ -293,12 +296,12 @@ test "writes encryption.pub to dest raw storage when destination is encrypted" {
     const io = std.testing.io;
     const recording = try makeContext(allocator, io);
     const dirs = try makeDirectories(allocator, io);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
-    _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .destEncryptionKey = helpers.KEYS_DIR ++ "/ts-private.pem", .partial = true, .force = false }), recording.context.taskContext());
+    _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .destEncryptionKey = fixture_dirs.KEYS_DIR ++ "/ts-private.pem", .partial = true, .force = false }), recording.context.taskContext());
 
     try std.testing.expectEqualStrings(
-        try helpers.readFile(allocator, io, helpers.KEYS_DIR ++ "/ts-public.pem"),
+        try test_files.readFile(allocator, io, fixture_dirs.KEYS_DIR ++ "/ts-public.pem"),
         try readFileIn(allocator, io, dirs.dest, ".db/encryption.pub"),
     );
 }
@@ -310,11 +313,11 @@ test "does not write encryption.pub when destination is not encrypted" {
     const io = std.testing.io;
     const recording = try makeContext(allocator, io);
     const dirs = try makeDirectories(allocator, io);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = true, .force = false }), recording.context.taskContext());
 
-    try std.testing.expect(!helpers.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/encryption.pub", .{dirs.dest})));
+    try std.testing.expect(!test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/encryption.pub", .{dirs.dest})));
 }
 
 test "returns the IReplicationResult from replicate()" {
@@ -324,7 +327,7 @@ test "returns the IReplicationResult from replicate()" {
     const io = std.testing.io;
     const recording = try makeContext(allocator, io);
     const dirs = try makeDirectories(allocator, io);
-    defer helpers.removeTempDir(io, dirs.root);
+    defer temp_dirs.removeTempDir(io, dirs.root);
 
     const output = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
 

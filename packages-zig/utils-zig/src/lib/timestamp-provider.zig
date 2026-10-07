@@ -26,12 +26,14 @@ pub const Date = struct {
         const minutes = @mod(@divFloor(millisecond_of_day, 60 * 1000), 60);
         const seconds = @mod(@divFloor(millisecond_of_day, 1000), 60);
         const milliseconds = @mod(millisecond_of_day, 1000);
+        // The longest year is a sign and six digits.
+        var year_buffer: [7]u8 = undefined;
         const year = if (civil_date.year >= 0 and civil_date.year <= 9999)
-            try std.fmt.allocPrint(allocator, "{d:0>4}", .{@as(u64, @intCast(civil_date.year))})
+            try std.fmt.bufPrint(&year_buffer, "{d:0>4}", .{@as(u64, @intCast(civil_date.year))})
         else if (civil_date.year < 0)
-            try std.fmt.allocPrint(allocator, "-{d:0>6}", .{@as(u64, @intCast(-civil_date.year))})
+            try std.fmt.bufPrint(&year_buffer, "-{d:0>6}", .{@as(u64, @intCast(-civil_date.year))})
         else
-            try std.fmt.allocPrint(allocator, "+{d:0>6}", .{@as(u64, @intCast(civil_date.year))});
+            try std.fmt.bufPrint(&year_buffer, "+{d:0>6}", .{@as(u64, @intCast(civil_date.year))});
         return std.fmt.allocPrint(allocator, "{s}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}.{d:0>3}Z", .{
             year,
             civil_date.month,

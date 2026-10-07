@@ -206,3 +206,12 @@ test "writeErrorChain shows the error under the name its stack shows" {
     try wrapped_error.writeErrorChain(&namedWriter, error.Thrown);
     try std.testing.expectEqualStrings("UnsupportedVersionError: No deserializer found for version 7", namedWriter.buffered());
 }
+
+test "formatErrorChain returns a slice the caller can free on its own" {
+    // std.testing.allocator fails the test when the freed slice is not the whole allocation.
+    throwTwoLevels() catch |err| {
+        const result = try wrapped_error.formatErrorChain(std.testing.allocator, err);
+        defer std.testing.allocator.free(result);
+        try std.testing.expect(std.mem.indexOf(u8, result, "root cause") != null);
+    };
+}

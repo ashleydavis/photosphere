@@ -50,7 +50,37 @@ pub const AppHandlers = struct {
     // The files of the app's bundled page, embedded in the app's library, for a shell that serves the page by asking the core
     // for each file (the MacOS, iOS and Android shells). Empty for an app whose shell embeds the page itself.
     ui_files: []const ui_files.UiFile,
+    // Turns the error a channel handler returned into the text of the error reply, for an app whose code reports the reason for
+    // a failure somewhere other than the error's name (a Zig error carries no message). It returns null when it has nothing to
+    // say about the error, and the reply then carries the error's name. It is called on the thread that handled the message,
+    // straight after the handler failed, and the text is used before the call returns.
+    describe_error: ?ErrorDescriber = null,
+    // Where the app keeps what it remembers while it runs, which the core holds and hands back to the app's handlers through
+    // `Core.app_state`. Null for an app that keeps nothing.
+    state: ?AppState = null,
+    // Called when a task has ended, after the page has been told, from the thread that ran it, with no lock held. The values are
+    // valid only during the call.
+    on_task_end: ?*const fn (core: *Core, end: types.TaskEnd) void = null,
+    // Called when a task has sent a message, after the page has been told, from the thread that sent it, with no lock held. The values
+    // are valid only during the call.
+    on_task_message: ?*const fn (core: *Core, sent: types.TaskSentMessage) void = null,
 };
+
+//
+// The state an app keeps in the core. The core makes it when it is created, after the task runner is running, and destroys it first
+// when it is destroyed, before the task runner stops, so what it owns (a timer thread, say) can stop while tasks can still be queued.
+//
+pub const AppState = struct {
+    // Makes the app's state. The core's `app_state` is null until this returns.
+    create: *const fn (core: *Core) anyerror!*anyopaque,
+    // Destroys the state `create` made.
+    destroy: *const fn (core: *Core, state: *anyopaque) void,
+};
+
+//
+// A function that gives the text of the error reply for an error a channel handler returned, or null to use the error's name.
+//
+pub const ErrorDescriber = types.ErrorDescriber;
 
 //
 // A request channel answered by a task: the page's request is queued as a task of this type, with the request's data as its input, and
@@ -97,6 +127,16 @@ pub const Core = struct {
     menu_json: []const u8,
     // The files of the app's bundled page, owned by the app.
     ui_files: []const ui_files.UiFile,
+    // Gives the text of an error reply, or null to use the error's name. Owned by the app.
+    describe_error: ?ErrorDescriber,
+    // The app's way of making and destroying its state, or null.
+    state_hooks: ?AppState,
+    // The app's state, made by `state_hooks.create`, or null when the app has none.
+    app_state: ?*anyopaque,
+    // The app's function for a task that ended, or null.
+    on_task_end: ?*const fn (core: *Core, end: types.TaskEnd) void,
+    // The app's function for a message a task sent, or null.
+    on_task_message: ?*const fn (core: *Core, sent: types.TaskSentMessage) void,
     // The shell's configuration. The strings in it are copies owned by the core.
     config: ZiggyConfig,
     // The owned copy of the app's URL prefix.
@@ -121,6 +161,10 @@ pub const Core = struct {
         errdefer allocator.destroy(core);
         core.allocator = allocator;
         core.threaded = .init_single_threaded;
+        // Code ported from TypeScript runs its operations against a timer, which needs the Io to start a task of its own (the retry
+        // of utils-zig does). Everything else still runs on the calling thread, and a cancel request still has no effect on it.
+        core.threaded.allocator = allocator;
+        core.threaded.concurrent_limit = .unlimited;
         const channels = try allocator.alloc(ChannelEntry, ziggy_channels.len + app.channels.len);
         errdefer allocator.free(channels);
         @memcpy(channels[0..ziggy_channels.len], &ziggy_channels);
@@ -131,6 +175,11 @@ pub const Core = struct {
         core.next_request_task = .init(0);
         core.menu_json = app.menu_json;
         core.ui_files = app.ui_files;
+        core.describe_error = app.describe_error;
+        core.state_hooks = app.state;
+        core.app_state = null;
+        core.on_task_end = app.on_task_end;
+        core.on_task_message = app.on_task_message;
         core.config = config;
         core.app_url_prefix = try allocator.dupeZ(u8, std.mem.span(config.app_url_prefix));
         errdefer allocator.free(core.app_url_prefix);
@@ -148,8 +197,19 @@ pub const Core = struct {
         }, app.tasks, .{
             .worker_threads = config.worker_threads,
             .max_concurrent_child_tasks = config.max_concurrent_child_tasks,
+            .describe_error = app.describe_error,
+            .observer = if (app.on_task_end != null or app.on_task_message != null) .{
+                .user_data = core,
+                .on_task_end = observeTaskEnd,
+                .on_task_message = observeTaskMessage,
+            } else null,
         }, core.config);
         errdefer core.runner.stop();
+        if (app.state) |hooks| {
+            core.app_state = try hooks.create(core);
+            core.runner.app_state = core.app_state;
+        }
+        errdefer if (core.app_state) |state| core.state_hooks.?.destroy(core, state);
         if (build_options.test_hooks) {
             if (config.test_mode) {
                 const control = try allocator.create(test_control.TestControl);
@@ -169,11 +229,15 @@ pub const Core = struct {
     // Cancels every running task, waits for the workers to stop and releases everything.
     //
     pub fn destroy(self: *Core) void {
+        if (self.app_state) |state| {
+            self.state_hooks.?.destroy(self, state);
+        }
         if (self.control) |control| {
             control.stop();
             self.allocator.destroy(control);
         }
         self.runner.stop();
+        self.threaded.deinit();
         self.dropped.deinit();
         self.allocator.free(self.channels);
         self.allocator.free(self.app_url_prefix);
@@ -260,7 +324,8 @@ pub const Core = struct {
             return;
         };
         const reply_data = found(self, arena, data) catch |err| {
-            self.reportError(arena, request_id, @errorName(err));
+            const described: ?[]const u8 = if (self.describe_error) |describe| describe(err) else null;
+            self.reportError(arena, request_id, described orelse @errorName(err));
             return;
         };
         if (request_id) |id| {
@@ -316,6 +381,20 @@ pub const Core = struct {
         self.deliver(event);
     }
 };
+
+fn observeTaskEnd(user_data: ?*anyopaque, end: types.TaskEnd) void {
+    const core: *Core = @ptrCast(@alignCast(user_data.?));
+    if (core.on_task_end) |on_task_end| {
+        on_task_end(core, end);
+    }
+}
+
+fn observeTaskMessage(user_data: ?*anyopaque, sent: types.TaskSentMessage) void {
+    const core: *Core = @ptrCast(@alignCast(user_data.?));
+    if (core.on_task_message) |on_task_message| {
+        on_task_message(core, sent);
+    }
+}
 
 fn emitFromRunner(user_data: ?*anyopaque, message: []const u8) void {
     const core: *Core = @ptrCast(@alignCast(user_data.?));

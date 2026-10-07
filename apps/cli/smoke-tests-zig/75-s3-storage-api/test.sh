@@ -9,8 +9,8 @@ DESCRIPTION="The Zig CloudStorage integration suite, against a local MinIO"
 # run it: it needs AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and TEST_S3_BUCKET, which this test
 # provides with the server it starts.
 #
-# The suite is built through apps/cli-zig's test-storage-integration step rather than in the storage
-# package on its own, so it reuses what the Zig unit tests compiled (the AWS SDK for C above all)
+# The suite is built through the root build.zig's test-integration step rather than on its own,
+# so it reuses what the Zig unit tests compiled (the AWS SDK for C above all)
 # instead of compiling it again. The suite's result is this test's result: a failure in there is a
 # real finding about the Zig CloudStorage.
 
@@ -50,7 +50,7 @@ test_s3_storage_api() {
     # Run through `bash -c` because invoke_command prefixes the command with an environment
     # assignment, and a shell cannot put one of those in front of a subshell.
     invoke_command "Run the Zig CloudStorage integration suite" \
-        "bash -c 'cd \"$REPO_ROOT\" && bun run --filter=cli-zig test:storage-integration'" 0
+        "bash -c 'cd \"$REPO_ROOT\" && zig build test-integration --summary all --test-timeout 20m'" 0
 
     test_passed
 }

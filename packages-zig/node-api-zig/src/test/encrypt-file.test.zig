@@ -8,11 +8,11 @@ const merkle_tree_zig = @import("merkle-tree-zig");
 const encryption = @import("encryption-zig");
 const node_api = @import("node-api-zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
+const fixture_keys = @import("fixture-keys.zig");
 const sync_helpers = @import("sync-test-helpers.zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const errors = utils.errors;
 const IMerkleTree = merkle_tree.IMerkleTree;
-const generateKeyPair = encryption.key_utils.generateKeyPair;
 const hashPublicKey = encryption.key_utils.hashPublicKey;
 const encryptFile = node_api.encrypt.encryptFile;
 const computeHash = node_api.hash.computeHash;
@@ -24,20 +24,13 @@ const Sha256 = std.crypto.hash.sha2.Sha256;
 const VALID_UUID = "12345678-1234-5678-9abc-123456789abc";
 
 //
-// Hash of the public key of the key pair used across all encryptFile tests, derived on first use
+// Gets the hash of the public key of the key pair used across all encryptFile tests, loaded from the fixture keys
 // (TypeScript: generated when the file loads).
 //
-var publicKeyHash: ?[32]u8 = null;
-
-//
-// Gets the hash of the public key of the tests, generating the key pair the first time.
-//
-fn getPublicKeyHash() ![]const u8 {
-    if (publicKeyHash == null) {
-        const encryptKeyPair = try generateKeyPair(std.heap.page_allocator, std.testing.io);
-        publicKeyHash = try hashPublicKey(std.heap.page_allocator, encryptKeyPair.publicKey);
-    }
-    return &publicKeyHash.?;
+fn getPublicKeyHash(allocator: std.mem.Allocator) ![]const u8 {
+    const encryptKeyPair = try fixture_keys.loadFixtureKeyPair(allocator, std.testing.io);
+    const digest = try hashPublicKey(allocator, encryptKeyPair.publicKey);
+    return try allocator.dupe(u8, &digest);
 }
 
 //
@@ -82,7 +75,7 @@ test "encryptFile writes file to writeStorage" {
     var tree = try buildTree(allocator, &.{"asset/f1"});
     try readStorage.write(allocator, io, "asset/f1", "application/octet-stream", "hello");
 
-    _ = try encryptFile(allocator, io, "asset/f1", readStorage, writeStorage, readStorage, try getPublicKeyHash(), &tree, null);
+    _ = try encryptFile(allocator, io, "asset/f1", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree, null);
 
     try std.testing.expect(try writeStorage.fileExists(allocator, io, "asset/f1"));
     const written = try writeStorage.read(allocator, io, "asset/f1");
@@ -115,7 +108,7 @@ test "encryptFile updates merkle tree entry after writing" {
     tree.dirty = false;
     try readStorage.write(allocator, io, "asset/f1", "application/octet-stream", content);
 
-    _ = try encryptFile(allocator, io, "asset/f1", readStorage, writeStorage, readStorage, try getPublicKeyHash(), &tree, null);
+    _ = try encryptFile(allocator, io, "asset/f1", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree, null);
 
     const info = try merkle_tree.getItemInfo(&tree, "asset/f1");
     try std.testing.expect(info != null);
@@ -138,7 +131,7 @@ test "encryptFile does not update merkle tree when file has no existing tree ent
     var tree = try buildTree(allocator, &.{});
     try readStorage.write(allocator, io, "asset/f1", "application/octet-stream", "no tree entry");
 
-    _ = try encryptFile(allocator, io, "asset/f1", readStorage, writeStorage, readStorage, try getPublicKeyHash(), &tree, null);
+    _ = try encryptFile(allocator, io, "asset/f1", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree, null);
 
     try std.testing.expect(try writeStorage.fileExists(allocator, io, "asset/f1"));
     try std.testing.expect(try merkle_tree.getItemInfo(&tree, "asset/f1") == null);
@@ -159,7 +152,7 @@ test "encryptFile does not update merkle tree for .db/ files" {
     var tree = try buildTree(allocator, &.{});
     try readStorage.write(allocator, io, ".db/something", "application/octet-stream", "db file");
 
-    _ = try encryptFile(allocator, io, ".db/something", readStorage, writeStorage, readStorage, try getPublicKeyHash(), &tree, null);
+    _ = try encryptFile(allocator, io, ".db/something", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree, null);
 
     try std.testing.expect(try writeStorage.fileExists(allocator, io, ".db/something"));
     // Tree should be unmodified (no entry for .db/ files)
@@ -181,6 +174,6 @@ test "encryptFile throws when source file does not exist" {
     const writeStorage = writeStore.asStorage();
     var tree = try buildTree(allocator, &.{});
 
-    try std.testing.expectError(error.Thrown, encryptFile(allocator, io, "missing/file.dat", readStorage, writeStorage, readStorage, try getPublicKeyHash(), &tree, null));
+    try std.testing.expectError(error.Thrown, encryptFile(allocator, io, "missing/file.dat", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree, null));
     try std.testing.expect(std.mem.indexOf(u8, errors.errorMessage(error.Thrown), "does not exist") != null);
 }

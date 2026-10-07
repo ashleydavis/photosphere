@@ -1,7 +1,7 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const encryption = @import("encryption-zig");
-const helpers = @import("test-helpers.zig");
+const fixtures = @import("fixtures.zig");
 
 const crypto = encryption.node_crypto;
 const key_utils = encryption.key_utils;
@@ -28,8 +28,8 @@ const TestKeys = struct {
 // Loads the fixture key pair and builds the key map.
 //
 fn loadTestKeys(allocator: std.mem.Allocator) !TestKeys {
-    const privateKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts-private.pem"));
-    const publicKey = try crypto.createPublicKey(allocator, try helpers.readFixture(allocator, "ts-public.pem"));
+    const privateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts-private.pem"));
+    const publicKey = try crypto.createPublicKey(allocator, try fixtures.readFixture(allocator, "ts-public.pem"));
     const keyHashHex = try allocator.dupe(u8, &std.fmt.bytesToHex(try key_utils.hashPublicKey(allocator, publicKey), .lower));
     var keyMap: IPrivateKeyMap = .empty;
     try keyMap.put(allocator, "default", privateKey);
@@ -44,7 +44,7 @@ fn encryptThroughStream(allocator: std.mem.Allocator, publicKey: *const crypto.P
     const input = try allocator.create(std.Io.Reader);
     input.* = std.Io.Reader.fixed(plain);
     const encryptionStream = try encrypt_stream.createEncryptionStream(allocator, std.testing.io, publicKey, input);
-    return helpers.readAll(allocator, encryptionStream.reader());
+    return fixtures.readAll(allocator, encryptionStream.reader());
 }
 
 //
@@ -54,7 +54,7 @@ fn decryptThroughStream(allocator: std.mem.Allocator, keyMap: *const IPrivateKey
     const input = try allocator.create(std.Io.Reader);
     input.* = std.Io.Reader.fixed(encrypted);
     const decryptionStream = try encrypt_stream.createDecryptionStream(allocator, keyMap, input);
-    return helpers.readAll(allocator, decryptionStream.reader());
+    return fixtures.readAll(allocator, decryptionStream.reader());
 }
 
 //
@@ -175,7 +175,7 @@ test "fails the stream rather than writing a file nothing can decrypt" {
 
     // The stream path needs its own cover: it is the one every file copy in the app goes through,
     // and it wraps the AES key in its own place rather than calling encryptBuffer.
-    const smallPublicKey = try crypto.createPublicKey(allocator, try helpers.readFixture(allocator, "ts-small-public.pem"));
+    const smallPublicKey = try crypto.createPublicKey(allocator, try fixtures.readFixture(allocator, "ts-small-public.pem"));
     try std.testing.expectError(error.ReadFailed, encryptThroughStream(allocator, smallPublicKey, "secret"));
     try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "wraps into 256 bytes and the file format requires 512") != null);
 }
@@ -184,7 +184,7 @@ test "fails an empty stream too, because flushing one still writes a file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const smallPublicKey = try crypto.createPublicKey(allocator, try helpers.readFixture(allocator, "ts-small-public.pem"));
+    const smallPublicKey = try crypto.createPublicKey(allocator, try fixtures.readFixture(allocator, "ts-small-public.pem"));
     try std.testing.expectError(error.ReadFailed, encryptThroughStream(allocator, smallPublicKey, ""));
     try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "wraps into 256 bytes") != null);
 }
@@ -213,8 +213,8 @@ test "fails when the new-format header is there and the map holds the wrong key"
     const keys = try loadTestKeys(allocator);
 
     // (Zig: the second TypeScript fixture key pair stands in for generateKeyPair.)
-    const otherPrivateKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts2-private.pem"));
-    const otherKeyHashHex = try helpers.readFixture(allocator, "ts2-public-hash.hex");
+    const otherPrivateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts2-private.pem"));
+    const otherKeyHashHex = try fixtures.readFixture(allocator, "ts2-public-hash.hex");
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, "secret");
     var wrongMap: IPrivateKeyMap = .empty;
     try wrongMap.put(allocator, otherKeyHashHex, otherPrivateKey);
@@ -234,7 +234,7 @@ test "passes plain data through when default key present but data is not encrypt
     //
     // Also for plain data longer than the legacy header.
     //
-    const longPlain = try helpers.makePlaintext(allocator, 5000);
+    const longPlain = try fixtures.makePlaintext(allocator, 5000);
     try std.testing.expectEqualSlices(u8, longPlain, try decryptThroughStream(allocator, &keys.keyMap, longPlain));
 }
 
@@ -243,7 +243,7 @@ test "decrypts correctly for every chunk size that splits the header" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const keys = try loadTestKeys(allocator);
-    const plain = try helpers.makePlaintext(allocator, 100);
+    const plain = try fixtures.makePlaintext(allocator, 100);
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, plain);
     const legacyPayload = encrypted[44..];
     const emptyMap: IPrivateKeyMap = .empty;
@@ -270,7 +270,7 @@ test "reading the decrypted stream in small pieces returns all data" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const keys = try loadTestKeys(allocator);
-    const plain = try helpers.makePlaintext(allocator, 200_000);
+    const plain = try fixtures.makePlaintext(allocator, 200_000);
     const encrypted = try encryptThroughStream(allocator, keys.publicKey, plain);
     var input = std.Io.Reader.fixed(encrypted);
     const decryptionStream = try encrypt_stream.createDecryptionStream(allocator, &keys.keyMap, &input);
@@ -291,7 +291,7 @@ test "a wrong key makes the decryption stream fail with the Node error" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const keys = try loadTestKeys(allocator);
-    const otherKey = try crypto.createPrivateKey(allocator, try helpers.readFixture(allocator, "ts2-private.pem"));
+    const otherKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts2-private.pem"));
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, "secret");
 
     //
@@ -302,7 +302,7 @@ test "a wrong key makes the decryption stream fail with the Node error" {
     try wrongMap.put(allocator, &keyHashHex, otherKey);
     var input = std.Io.Reader.fixed(encrypted);
     const decryptionStream = try encrypt_stream.createDecryptionStream(allocator, &wrongMap, &input);
-    try std.testing.expectError(error.ReadFailed, helpers.readAll(allocator, decryptionStream.reader()));
+    try std.testing.expectError(error.ReadFailed, fixtures.readAll(allocator, decryptionStream.reader()));
     try std.testing.expectEqual(error.Thrown, decryptionStream.transform.err.?);
 
     //
@@ -325,7 +325,7 @@ test "a decryption stream that failed keeps failing when read again" {
     var emptyMap: IPrivateKeyMap = .empty;
     var input = std.Io.Reader.fixed(encrypted);
     const decryptionStream = try encrypt_stream.createDecryptionStream(allocator, &emptyMap, &input);
-    try std.testing.expectError(error.ReadFailed, helpers.readAll(allocator, decryptionStream.reader()));
-    try std.testing.expectError(error.ReadFailed, helpers.readAll(allocator, decryptionStream.reader()));
+    try std.testing.expectError(error.ReadFailed, fixtures.readAll(allocator, decryptionStream.reader()));
+    try std.testing.expectError(error.ReadFailed, fixtures.readAll(allocator, decryptionStream.reader()));
     try std.testing.expectEqual(error.Thrown, decryptionStream.transform.err.?);
 }

@@ -1,7 +1,10 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const test_environment = @import("test-environment.zig");
+const mock_log = @import("mock-log.zig");
 const hash = node_api.hash;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
@@ -48,7 +51,7 @@ test "computeAssetHash returns the hash with the length and date of the file sta
 //
 fn writeTestFile(allocator: std.mem.Allocator, io: std.Io, workingDir: []const u8, name: []const u8, contents: []const u8) ![]const u8 {
     const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ workingDir, name });
-    try helpers.writeFile(io, filePath, contents);
+    try test_files.writeFile(io, filePath, contents);
     return filePath;
 }
 
@@ -84,8 +87,8 @@ test "streams the file through a JS hash when no native hasher is handed in" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const workingDir = try helpers.makeTempDir(allocator, io, "photosphere-hash-test");
-    defer helpers.removeTempDir(io, workingDir);
+    const workingDir = try temp_dirs.makeTempDir(allocator, io, "photosphere-hash-test");
+    defer temp_dirs.removeTempDir(io, workingDir);
     const contents = "the quick brown fox";
     const filePath = try writeTestFile(allocator, io, workingDir, "streamed.bin", contents);
 
@@ -99,8 +102,8 @@ test "uses the native hasher when one is handed in, and hands it the file's path
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const workingDir = try helpers.makeTempDir(allocator, io, "photosphere-hash-test");
-    defer helpers.removeTempDir(io, workingDir);
+    const workingDir = try temp_dirs.makeTempDir(allocator, io, "photosphere-hash-test");
+    defer temp_dirs.removeTempDir(io, workingDir);
     const filePath = try writeTestFile(allocator, io, workingDir, "native.bin", "the quick brown fox");
 
     // Deliberately answers something the streaming path could never produce, so the test can
@@ -124,8 +127,8 @@ test "the native path and the streaming path agree on the same bytes" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const workingDir = try helpers.makeTempDir(allocator, io, "photosphere-hash-test");
-    defer helpers.removeTempDir(io, workingDir);
+    const workingDir = try temp_dirs.makeTempDir(allocator, io, "photosphere-hash-test");
+    defer temp_dirs.removeTempDir(io, workingDir);
     // The one property that is not negotiable. These digests are the identity of every asset and
     // the key of the hash cache, so a native hash differing from the streamed one by a byte
     // would make every database already written look wrong, and silently: photos would
@@ -157,8 +160,8 @@ test "hashes an empty file the same way down both paths" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const workingDir = try helpers.makeTempDir(allocator, io, "photosphere-hash-test");
-    defer helpers.removeTempDir(io, workingDir);
+    const workingDir = try temp_dirs.makeTempDir(allocator, io, "photosphere-hash-test");
+    defer temp_dirs.removeTempDir(io, workingDir);
     const filePath = try writeTestFile(allocator, io, workingDir, "empty.bin", "");
 
     const streamed = try hash.computeFileHash(allocator, io, filePath, null);
@@ -190,8 +193,8 @@ test "getHashFromCache answers from an entry whose length and date match the fil
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const cacheDir = try helpers.makeTempDir(allocator, io, "hash-from-cache");
-    defer helpers.removeTempDir(io, cacheDir);
+    const cacheDir = try temp_dirs.makeTempDir(allocator, io, "hash-from-cache");
+    defer temp_dirs.removeTempDir(io, cacheDir);
     var cache = try node_api.hash_cache.HashCache.init(cacheDir, false);
     defer cache.deinit();
     _ = try cache.load(io);
@@ -218,8 +221,8 @@ test "getHashFromCache looks an item up under its identity and compares against 
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const cacheDir = try helpers.makeTempDir(allocator, io, "hash-from-cache-identity");
-    defer helpers.removeTempDir(io, cacheDir);
+    const cacheDir = try temp_dirs.makeTempDir(allocator, io, "hash-from-cache-identity");
+    defer temp_dirs.removeTempDir(io, cacheDir);
     var cache = try node_api.hash_cache.HashCache.init(cacheDir, false);
     defer cache.deinit();
     _ = try cache.load(io);
@@ -251,10 +254,10 @@ test "validateAndHash hashes a valid image" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try helpers.setupEnvironment(io);
-    const contents = try helpers.readFile(allocator, io, "../../test/test.png");
+    _ = try test_environment.setupEnvironment(io);
+    const contents = try test_files.readFile(allocator, io, "../test/test.png");
 
-    const hashed = (try hash.validateAndHash(allocator, io, "../../test/test.png", .{ .length = contents.len, .lastModified = 42 }, "image/png", "test.png")).?;
+    const hashed = (try hash.validateAndHash(allocator, io, "../test/test.png", .{ .length = contents.len, .lastModified = 42 }, "image/png", "test.png")).?;
 
     var expected: [32]u8 = undefined;
     Sha256.hash(contents, &expected, .{});
@@ -268,9 +271,13 @@ test "validateAndHash returns undefined for a file that fails its validation" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try helpers.setupEnvironment(io);
-    const workingDir = try helpers.makeTempDir(allocator, io, "validate-and-hash");
-    defer helpers.removeTempDir(io, workingDir);
+    _ = try test_environment.setupEnvironment(io);
+    const workingDir = try temp_dirs.makeTempDir(allocator, io, "validate-and-hash");
+    defer temp_dirs.removeTempDir(io, workingDir);
+    // The validation logs the failure; a passing test must write nothing to stderr, so the log is muted.
+    var mutedLog: mock_log.MutedLog = .{};
+    mutedLog.install();
+    defer mutedLog.uninstall();
     const filePath = try writeTestFile(allocator, io, workingDir, "broken.png", "this is not a png");
 
     try std.testing.expect(try hash.validateAndHash(allocator, io, filePath, .{ .length = 17, .lastModified = 42 }, "image/png", "broken.png") == null);

@@ -47,5 +47,5 @@ if [ ! -f "$WINDOWS_SDK_DIR/include/WebView2.h" ] || [ ! -f "$WINDOWS_SDK_DIR/$a
 fi
 
 (cd "$WINDOWS_EXAMPLE_DIR" && bun run bundle:ui)
-(cd "$WINDOWS_SHELL_DIR" && zig build "-Dtarget=$zig_target" "-Doptimize=$optimize" "-Dtest-hooks=$test_hooks" -p "$prefix")
+(cd "$WINDOWS_EXAMPLE_DIR/../.." && zig build ziggy-example-windows "-Dtarget=$zig_target" "-Doptimize=$optimize" "-Dtest-hooks=$test_hooks" -p "$prefix")
 echo "Built into $prefix/$WINDOWS_APP_DIR_NAME"

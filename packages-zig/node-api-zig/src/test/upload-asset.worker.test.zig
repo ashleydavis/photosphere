@@ -4,7 +4,12 @@ const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("task-queue-zig");
 const serialization_zig = @import("serialization-zig");
 const node_api = @import("node-api-zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const console_capture = @import("console-capture.zig");
+const test_environment = @import("test-environment.zig");
+const fixture_dirs = @import("fixture-dirs.zig");
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 const upload_asset_worker = node_api.upload_asset_worker;
 const uploadAssetHandler = upload_asset_worker.uploadAssetHandler;
 const IUploadAssetData = upload_asset_worker.IUploadAssetData;
@@ -98,13 +103,13 @@ const UploadTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try helpers.setupEnvironment(io);
-        self.tempDir = try helpers.makeTempDir(allocator, io, "upload-asset-worker");
+        _ = try test_environment.setupEnvironment(io);
+        self.tempDir = try temp_dirs.makeTempDir(allocator, io, "upload-asset-worker");
         self.databaseDir = try std.fmt.allocPrint(allocator, "{s}/db", .{self.tempDir});
         try std.Io.Dir.cwd().createDirPath(io, self.databaseDir);
-        self.contents = try helpers.readFile(allocator, io, "../../test/test.jpg");
+        self.contents = try test_files.readFile(allocator, io, "../test/test.jpg");
         self.filePath = try std.fmt.allocPrint(allocator, "{s}/photos/img.jpg", .{self.tempDir});
-        try helpers.writeFile(io, self.filePath, self.contents);
+        try test_files.writeFile(io, self.filePath, self.contents);
         self.uuidGenerator = try TestUuidGenerator.init(allocator);
         self.timestampProvider = .{};
         self.messages = .{
@@ -120,7 +125,7 @@ const UploadTest = struct {
     // Removes the directory.
     //
     fn deinit(self: *UploadTest) void {
-        helpers.removeTempDir(std.testing.io, self.tempDir);
+        temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
     }
 
@@ -154,7 +159,10 @@ const UploadTest = struct {
         const allocator = self.arena.allocator();
         const text = try std.json.Stringify.valueAlloc(allocator, data, .{ .emit_null_optional_fields = false });
         const taskData = try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
-        return uploadAssetHandler(allocator, std.testing.io, taskData, self.context.taskContext());
+        var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+        virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+        defer virtual_time.deinit();
+        return uploadAssetHandler(allocator, virtual_time.io(), taskData, self.context.taskContext());
     }
 
     //
@@ -179,7 +187,7 @@ const UploadTest = struct {
         const filePath = std.fmt.allocPrint(self.arena.allocator(), "{s}/{s}", .{ self.databaseDir, relativePath }) catch {
             return false;
         };
-        return helpers.fileExists(std.testing.io, filePath);
+        return test_files.fileExists(std.testing.io, filePath);
     }
 };
 
@@ -309,8 +317,8 @@ test "returned IAssetDatabaseData includes thumb fields when a thumbnail is prod
     var data = context.makeUploadAssetData();
     data.dryRun = true;
     data.contentType = "video/mp4";
-    const video = try helpers.readFile(context.arena.allocator(), std.testing.io, "../../test/multiple-files/test.mp4");
-    try helpers.writeFile(std.testing.io, context.filePath, video);
+    const video = try test_files.readFile(context.arena.allocator(), std.testing.io, "../test/multiple-files/test.mp4");
+    try test_files.writeFile(std.testing.io, context.filePath, video);
     data.fileStat.length = video.len;
 
     const result = try context.run(data);
@@ -344,8 +352,8 @@ test "when contentType starts with video/, getVideoDetails is called" {
     var data = context.makeUploadAssetData();
     data.dryRun = true;
     data.contentType = "video/mp4";
-    const video = try helpers.readFile(context.arena.allocator(), std.testing.io, "../../test/multiple-files/test.mp4");
-    try helpers.writeFile(std.testing.io, context.filePath, video);
+    const video = try test_files.readFile(context.arena.allocator(), std.testing.io, "../test/multiple-files/test.mp4");
+    try test_files.writeFile(std.testing.io, context.filePath, video);
     data.fileStat.length = video.len;
 
     const result = try context.run(data);
@@ -361,8 +369,13 @@ test "sends import-failed and cleans up on upload error" {
     try context.init();
     defer context.deinit();
     const allocator = context.arena.allocator();
+
+    // The failure is logged on the console; captured so nothing reaches the test program's stderr.
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    console_capture.captureStderr(&stderr_capture.writer);
+    defer console_capture.endConsoleCapture();
     // A file where the asset directory should be, so writing the asset fails.
-    try helpers.writeFile(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset", .{context.databaseDir}), "in the way");
+    try test_files.writeFile(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset", .{context.databaseDir}), "in the way");
     var data = context.makeUploadAssetData();
     // (Zig: not an image or a video, as TypeScript's getImageDetails mock returns nothing, so the failure is the
     // upload's.)
@@ -391,9 +404,9 @@ test "hashes the thumbnail and display from the files on disk, and never reads t
 
     // The hashes recorded are the hashes of the files as written, which in an unencrypted store are the files.
     var thumbDigest: [32]u8 = undefined;
-    Sha256.hash(try helpers.readFile(allocator, std.testing.io, try std.fmt.allocPrint(allocator, "{s}/thumb/asset-1", .{context.databaseDir})), &thumbDigest, .{});
+    Sha256.hash(try test_files.readFile(allocator, std.testing.io, try std.fmt.allocPrint(allocator, "{s}/thumb/asset-1", .{context.databaseDir})), &thumbDigest, .{});
     var displayDigest: [32]u8 = undefined;
-    Sha256.hash(try helpers.readFile(allocator, std.testing.io, try std.fmt.allocPrint(allocator, "{s}/display/asset-1", .{context.databaseDir})), &displayDigest, .{});
+    Sha256.hash(try test_files.readFile(allocator, std.testing.io, try std.fmt.allocPrint(allocator, "{s}/display/asset-1", .{context.databaseDir})), &displayDigest, .{});
     try std.testing.expectEqualStrings(&std.fmt.bytesToHex(thumbDigest, .lower), result.assetData.thumbHash.?);
     try std.testing.expectEqualStrings(&std.fmt.bytesToHex(displayDigest, .lower), result.assetData.displayHash.?);
 }
@@ -417,6 +430,11 @@ test "a store that holds a different length than was written refuses the asset" 
     var context: UploadTest = undefined;
     try context.init();
     defer context.deinit();
+
+    // The failure is logged on the console; captured so nothing reaches the test program's stderr.
+    var stderr_capture = std.Io.Writer.Allocating.init(context.arena.allocator());
+    console_capture.captureStderr(&stderr_capture.writer);
+    defer console_capture.endConsoleCapture();
     var data = context.makeUploadAssetData();
     // The stat says 1000 bytes; the store holds what the file really has.
     data.fileStat.length = 1000;
@@ -432,7 +450,7 @@ test "a store that cannot say what length its copy reads is not checked by lengt
     var data = context.makeUploadAssetData();
     data.fileStat.length = 1000;
     // An encrypted store cannot say what its copy reads without reading it.
-    data.storageDescriptor.encryptionKey = helpers.KEYS_DIR ++ "/ts-private.pem";
+    data.storageDescriptor.encryptionKey = fixture_dirs.KEYS_DIR ++ "/ts-private.pem";
 
     const result = try context.run(data);
 
@@ -466,7 +484,7 @@ const UploadDateWitness = struct {
         const self: *UploadDateWitness = @ptrCast(@alignCast(ptr));
         var buffer: [4096]u8 = undefined;
         const displayPath = std.fmt.bufPrint(&buffer, "{s}/display/asset-1", .{self.databaseDir}) catch unreachable;
-        self.displayExisted = helpers.fileExists(io, displayPath);
+        self.displayExisted = test_files.fileExists(io, displayPath);
         return .{
             .epochMilliseconds = 1700000000000,
         };

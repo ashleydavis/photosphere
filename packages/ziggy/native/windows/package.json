@@ -1,9 +1,0 @@
-{
-  "name": "ziggy-shell-windows",
-  "version": "1.0.0",
-  "description": "Ziggy's Windows shell: hosts WebView2 and the core library for an app.",
-  "private": true,
-  "scripts": {
-    "test": "zig build test --summary all"
-  }
-}

@@ -8,6 +8,7 @@ const merkle_tree_zig = @import("merkle-tree-zig");
 const encryption = @import("encryption-zig");
 const node_api = @import("node-api-zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
+const fixture_keys = @import("fixture-keys.zig");
 const sync_helpers = @import("sync-test-helpers.zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const errors = utils.errors;
@@ -15,7 +16,6 @@ const HashedItem = merkle_tree.HashedItem;
 const IMerkleTree = merkle_tree.IMerkleTree;
 const MerkleNode = merkle_tree.MerkleNode;
 const IKeyPair = encryption.key_utils.IKeyPair;
-const generateKeyPair = encryption.key_utils.generateKeyPair;
 const hashPublicKey = encryption.key_utils.hashPublicKey;
 const encrypt = node_api.encrypt.encrypt;
 const encryptableFiles = node_api.encrypt.encryptableFiles;
@@ -35,18 +35,10 @@ const FILES_TREE_PATH = ".db/files.dat";
 const VALID_UUID = "12345678-1234-5678-9abc-123456789abc";
 
 //
-// The key pair all the encrypt tests use, generated on first use (TypeScript: generated when the file loads).
+// Gets the key pair all the encrypt tests use, loaded from the fixture keys (TypeScript: generated when the file loads).
 //
-var encryptKeyPair: ?IKeyPair = null;
-
-//
-// Gets the key pair of the tests, generating it the first time.
-//
-fn getEncryptKeyPair() !IKeyPair {
-    if (encryptKeyPair == null) {
-        encryptKeyPair = try generateKeyPair(std.heap.page_allocator, std.testing.io);
-    }
-    return encryptKeyPair.?;
+fn getEncryptKeyPair(allocator: std.mem.Allocator) !IKeyPair {
+    return fixture_keys.loadFixtureKeyPair(allocator, std.testing.io);
 }
 
 //
@@ -220,7 +212,7 @@ test "encrypt copies all files from read storage to write storage and updates me
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
-    const keyPair = try getEncryptKeyPair();
+    const keyPair = try getEncryptKeyPair(allocator);
     var readStore = MemoryStorage.init(allocator);
     var writeStore = MemoryStorage.init(allocator);
     const readStorage = readStore.asStorage();
@@ -250,7 +242,7 @@ test "encrypt invokes progressCallback when provided" {
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
-    const keyPair = try getEncryptKeyPair();
+    const keyPair = try getEncryptKeyPair(allocator);
     var readStore = MemoryStorage.init(allocator);
     var writeStore = MemoryStorage.init(allocator);
     const readStorage = readStore.asStorage();
@@ -285,7 +277,7 @@ test "encrypt throws when merkle tree cannot be loaded" {
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
-    const keyPair = try getEncryptKeyPair();
+    const keyPair = try getEncryptKeyPair(allocator);
     var readStore = MemoryStorage.init(allocator);
     var writeStore = MemoryStorage.init(allocator);
     const readStorage = readStore.asStorage();
@@ -304,7 +296,7 @@ test "encrypt returns correct encrypted count for newly encrypted files" {
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
-    const keyPair = try getEncryptKeyPair();
+    const keyPair = try getEncryptKeyPair(allocator);
     var readStore = MemoryStorage.init(allocator);
     var writeStore = MemoryStorage.init(allocator);
     const readStorage = readStore.asStorage();
@@ -329,7 +321,7 @@ test "encrypt skips files already encrypted with the same key and returns correc
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
-    const keyPair = try getEncryptKeyPair();
+    const keyPair = try getEncryptKeyPair(allocator);
     var readStore = MemoryStorage.init(allocator);
     var writeStore = MemoryStorage.init(allocator);
     const readStorage = readStore.asStorage();
@@ -360,7 +352,7 @@ test "encrypt tree entries for tree-tracked files use logical hash, length, last
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
-    const keyPair = try getEncryptKeyPair();
+    const keyPair = try getEncryptKeyPair(allocator);
     var readStore = MemoryStorage.init(allocator);
     var writeStore = MemoryStorage.init(allocator);
     const readStorage = readStore.asStorage();

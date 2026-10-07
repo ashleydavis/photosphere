@@ -9,19 +9,18 @@ Coverage is measured with [kcov](https://github.com/SimonKagstrom/kcov), which r
 program and counts the lines it runs. kcov is not in the Ubuntu package archive of the development container, so it
 is built from source (it needs the libcurl headers even when its code-coverage uploads are never used).
 
-Every Zig `build.zig` takes a `-Dcoverage=<dir>` option. With it the unit test program is compiled with the LLVM
-backend (the debug info of Zig's own backend is not something kcov can read) and run under kcov, which writes a report
-of the package's own sources, not its tests or its dependencies, to `<dir>`:
+The `build.zig` at the root of the repository takes a `-Dcoverage=<dir>` option on the `test` step. With it the unit test
+program of the packages is compiled with the LLVM backend (the debug info of Zig's own backend is not something kcov can read)
+and run under kcov, which writes a report of the packages' own sources, not their tests or their dependencies, to `<dir>`:
 
 ```bash
-cd packages-zig/bdb-zig
-zig build test -Dcoverage=/tmp/coverage/bdb-zig
+zig build test -Dcoverage=/tmp/coverage/packages
 ```
 
-For `apps/cli-zig` pass `-Doptimize=Debug` as well, because the CLI builds in ReleaseSafe by default.
+`-Dtest-file=<package>/<file>.test.zig` limits the run to one test file. Coverage of the CLI (`apps/cli-zig`) is not measured by
+the root build yet.
 
-Each run leaves `cobertura.xml` in a subdirectory of `<dir>` per program kcov ran (`test`, and for node-utils-zig
-`termination-test`), with `index.html` beside it for reading in a browser.
+Each run leaves `cobertura.xml` in a subdirectory of `<dir>` per program kcov ran (`unit-tests`), with `index.html` beside it for reading in a browser.
 
 The storage package's integration tests run against a real S3 server. To include them, start the local MinIO server
 with `bun run s3-emulator start <state-dir>`, source `<state-dir>/env`, and run both steps with the variables the
@@ -30,7 +29,7 @@ integration tests read:
 ```bash
 AWS_ACCESS_KEY_ID=$S3_EMULATOR_ACCESS_KEY AWS_SECRET_ACCESS_KEY=$S3_EMULATOR_SECRET_KEY \
 AWS_ENDPOINT=http://127.0.0.1:$S3_EMULATOR_PORT AWS_REGION=us-east-1 TEST_S3_BUCKET=$S3_EMULATOR_BUCKET \
-zig build test test-integration -Dcoverage=/tmp/coverage/storage-zig
+zig build test test-integration -Dcoverage=/tmp/coverage/packages
 ```
 
 and stop the server afterwards with `bun run s3-emulator stop <state-dir>`.

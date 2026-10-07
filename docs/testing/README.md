@@ -103,9 +103,9 @@ bun run test:ziggy-example:and   # Android emulator or attached device
 bun run test:ziggy-example:ios   # iOS simulator (needs macOS with Xcode)
 ```
 
-The example page's TypeScript tests run with `bun run test`, and the Zig unit tests of Ziggy's core and the example's core with `bun run test:zig`. `bun run compile:zig` builds the Zig code and cross-builds it for every platform.
+The example page's TypeScript tests run with `bun run test`, and the Zig tests with `bun run test:zig`. `bun run compile:zig` builds the Zig code and cross-builds it for every platform.
 
-The Ziggy core's Zig unit tests run with `zig build test` in `packages-zig/photosphere-core`.
+`bun run test:zig` runs `zig build test` at the root of the repository: the unit tests of every package in `packages-zig`, of Ziggy and the example, and the tests of the Zig CLI, in one build. `-Dtest-file=<package>/<file>.test.zig` (for the CLI `-Dcli-test-file=<file>.test.zig`) runs one file.
 
 Run the mobile test harness's own tests, covering the device run lock, the work queue and worker pool, and the timeout helper. They drive shell rather than the app, so they need no device and take seconds:
 
