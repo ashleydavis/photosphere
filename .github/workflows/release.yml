@@ -1110,6 +1110,12 @@ jobs:
 
       # The native ImageMagick build (run_magick shim via CMake) and scripts/fetch-mobile-media-tools.sh
       # both require this exact NDK, which the android-frontend sync (run by test:and:unit) pulls in.
+      - name: Cache the Android NDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk/25.1.8937393
+          key: ${{ runner.os }}-android-ndk-25.1.8937393
+
       - name: Install Android NDK
         uses: ./.github/actions/retry-install
         with:
@@ -1239,6 +1245,12 @@ jobs:
 
       # The native ImageMagick build (run_magick shim via CMake) and scripts/fetch-mobile-media-tools.sh
       # both require this exact NDK, which bun run test:and pulls in via bun run sync.
+      - name: Cache the Android NDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk/25.1.8937393
+          key: ${{ runner.os }}-android-ndk-25.1.8937393
+
       - name: Install Android NDK
         uses: ./.github/actions/retry-install
         with:
@@ -1989,6 +2001,14 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
 
       # The CLI's own build, which compiles the AWS SDK for C and runs nothing. Every job that needs the AWS
       # SDK builds in this same mode, so one cache serves all of them: the Zig cache is keyed by optimisation
