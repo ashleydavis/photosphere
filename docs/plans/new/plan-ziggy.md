@@ -590,3 +590,4 @@ Zig, in Ziggy's Zig package tests (the dispatcher, the C interface, the task run
 - All globals must be removed and dependencies should be passed in.
 - Investigate creating a testing framework that automatically builds each test.zig file and runs tests in parallel. The idea is that it creates one binary per test.zig file.
 - Investigate why CLI tests (and other tests) take so long (100ms+). Claude has told me that it could not be bothered implementing my request to remove all real io, allocators and the like even though it worked over night doing god knows what.
+- Unit tests depend on the AWS SDK which makes them slow to start in the workflow. They shouldn't need to be dependent on it.
