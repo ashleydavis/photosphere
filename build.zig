@@ -103,8 +103,16 @@ pub fn build(b: *std.Build) !void {
     // slower in Debug.
     const optimize = b.option(std.builtin.OptimizeMode, "optimize", "Prioritize performance, safety, or binary size (default: ReleaseSafe)") orelse .ReleaseSafe;
 
+    // The AWS SDK for C builds for macOS only natively, so a build for another macOS target (the Ziggy example's macOS shell
+    // asks for one) registers Ziggy's steps alone. The steps of the packages and the tests are not registered, so asking for one
+    // fails with an unknown step instead of building a partial set.
+    if (target.result.os.tag == .macos and !(target.query.isNativeOs() and target.query.isNativeAbi())) {
+        try addZiggy(b, internalStep(b, "tests of Ziggy and of the Ziggy example"), target, optimize);
+        return;
+    }
     const ziggy_core = try addZiggyCore(b, target, optimize, false);
-    const modules = try addPackageModules(b, target, optimize, ziggy_core.module);
+    // Null means a lazy dependency is being fetched first: the build runs again once it has been, and this run registers nothing.
+    const modules = (try addPackageModules(b, target, optimize, ziggy_core.module)) orelse return;
 
     const test_step = b.step("test", "Run every Zig test: the unit tests of the packages and the tests of the CLI");
     const test_packages_step = internalStep(b, "unit tests of the packages");
@@ -146,14 +154,15 @@ pub fn build(b: *std.Build) !void {
 }
 
 //
-// Creates the module of every package, with the libraries the packages need, and returns them by name.
+// Creates the module of every package, with the libraries the packages need, and returns them by name. Returns null while a lazy
+// dependency is being fetched.
 //
 fn addPackageModules(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     ziggy_core: *std.Build.Module,
-) !std.StringHashMap(*std.Build.Module) {
+) !?std.StringHashMap(*std.Build.Module) {
     var modules = std.StringHashMap(*std.Build.Module).init(b.allocator);
     var crypto: ?*std.Build.Step.Compile = null;
     var ssl: ?*std.Build.Step.Compile = null;
@@ -186,7 +195,7 @@ fn addPackageModules(
             // The AWS SDK for C, which the S3 client binds to, over the libcrypto that encryption-zig builds. False means a lazy
             // dependency is being fetched first.
             if (!try aws_sdk.addAwsSdk(b, module, target, crypto.?)) {
-                return modules;
+                return null;
             }
         }
         if (std.mem.eql(u8, package.name, "lan-share-network-zig")) {
