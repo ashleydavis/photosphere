@@ -219,10 +219,16 @@ jobs:
               fi
           done
 
+      # The example's tests embed its built page, which the build refuses to compile without.
+      - name: Build the Ziggy example page
+        if: matrix.platform == 'linux' || matrix.platform == 'macos' || matrix.platform == 'windows'
+        shell: bash
+        run: bun run --filter=ziggy-example bundle:ui
+
       - name: Run the Zig unit tests
         if: matrix.platform == 'linux' || matrix.platform == 'macos' || matrix.platform == 'windows'
         shell: bash
-        run: bun run test:zig
+        run: zig build test-ziggy --summary all --test-timeout 20m
 
       # The Android scripts need JDK 17, as in the android jobs of release.yml, and the NDK those jobs install.
       - name: Setup JDK 17 (Android)
