@@ -74,6 +74,14 @@ jobs:
         with:
           run: bun install
 
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
       - name: Restore the Zig build caches
         uses: actions/cache/restore@v4
         with:
@@ -178,6 +186,14 @@ jobs:
         with:
           run: bun install
 
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
       - name: Restore the Zig build caches
         uses: actions/cache/restore@v4
         with:
@@ -215,6 +231,13 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+
+      - name: Cache the Android NDK
+        if: matrix.platform == 'android'
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk/25.1.8937393
+          key: ${{ runner.os }}-android-ndk-25.1.8937393
 
       - name: Install Android NDK (Android)
         if: matrix.platform == 'android'
@@ -322,6 +345,14 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: bun run --filter=ziggy-example setup
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
 
       - name: Restore the Zig build caches
         uses: actions/cache/restore@v4
@@ -434,9 +465,24 @@ jobs:
         shell: bash
         run: bun run --filter=ziggy-example setup
 
+      - name: Cache the Android NDK
+        if: matrix.platform == 'android'
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk/25.1.8937393
+          key: ${{ runner.os }}-android-ndk-25.1.8937393
+
       - name: Set up the Android SDK and NDK (Android)
         if: matrix.platform == 'android'
         run: bun run --filter=ziggy-example setup
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
 
       - name: Restore the Zig build caches
         uses: actions/cache/restore@v4
