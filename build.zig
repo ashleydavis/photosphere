@@ -103,10 +103,15 @@ pub fn build(b: *std.Build) !void {
     // slower in Debug.
     const optimize = b.option(std.builtin.OptimizeMode, "optimize", "Prioritize performance, safety, or binary size (default: ReleaseSafe)") orelse .ReleaseSafe;
 
-    // The AWS SDK for C builds for macOS only natively, so a build for another macOS target (the Ziggy example's macOS shell
-    // asks for one) registers Ziggy's steps alone. The steps of the packages and the tests are not registered, so asking for one
-    // fails with an unknown step instead of building a partial set.
-    if (target.result.os.tag == .macos and !(target.query.isNativeOs() and target.query.isNativeAbi())) {
+    // The AWS SDK for C builds for Linux and Windows, and for macOS only natively. For any other target (the Ziggy example's
+    // iOS and non-native macOS shells ask for them) only Ziggy's steps are registered. The steps of the packages and the tests
+    // are not registered, so asking for one fails with an unknown step instead of building a partial set.
+    const aws_sdk_supported = switch (target.result.os.tag) {
+        .linux, .windows => true,
+        .macos => target.query.isNativeOs() and target.query.isNativeAbi(),
+        else => false,
+    };
+    if (!aws_sdk_supported) {
         try addZiggy(b, internalStep(b, "tests of Ziggy and of the Ziggy example"), target, optimize);
         return;
     }
@@ -127,6 +132,9 @@ pub fn build(b: *std.Build) !void {
     const test_ziggy_step = internalStep(b, "tests of Ziggy and of the Ziggy example");
     try addZiggy(b, test_ziggy_step, target, optimize);
     test_step.dependOn(test_ziggy_step);
+    // Just the tests of Ziggy and of the Ziggy example, for the jobs that test the example alone.
+    const test_ziggy_named_step = b.step("test-ziggy", "Run the tests of Ziggy and of the Ziggy example");
+    test_ziggy_named_step.dependOn(test_ziggy_step);
 
     // Prints the time the build took after the tests: Zig's summary gives the time of each step and no total.
     const elapsed = b.allocator.create(ElapsedStep) catch @panic("out of memory");

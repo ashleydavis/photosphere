@@ -2131,6 +2131,11 @@ jobs:
               fi
           fi
 
+      # The Ziggy example's tests embed its built page, which the build refuses to compile without.
+      - name: Build the Ziggy example page
+        shell: bash
+        run: bun run --filter=ziggy-example bundle:ui
+
       # With the C libraries cached, a change to a package the others import recompiles the Zig code of
       # nearly every test program, which took 10 to 11 minutes on Windows (runs 685, 697, 699). A cold
       # build also compiles aws-lc, zlib-ng and the rest of the AWS SDK for C first, which took longer
@@ -2276,7 +2281,7 @@ jobs:
         shell: bash
         run: |
           echo "Testing version command after building..."
-          ../cli-zig/zig-out/bin/psi version
+          ../../zig-out/bin/psi version
       - name: Run the Zig CLI encrypted smoke tests
         timeout-minutes: 12
         working-directory: ./apps/cli
