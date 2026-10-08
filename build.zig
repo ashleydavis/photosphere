@@ -102,16 +102,18 @@ pub fn build(b: *std.Build) !void {
     // ReleaseSafe by default: the tests keep the safety checks, and the work of the database and storage tests is several times
     // slower in Debug.
     const optimize = b.option(std.builtin.OptimizeMode, "optimize", "Prioritize performance, safety, or binary size (default: ReleaseSafe)") orelse .ReleaseSafe;
-
-    // The AWS SDK for C builds for Linux and Windows, and for macOS only natively. For any other target (the Ziggy example's
-    // iOS and non-native macOS shells ask for them) only Ziggy's steps are registered. The steps of the packages and the tests
-    // are not registered, so asking for one fails with an unknown step instead of building a partial set.
-    const aws_sdk_supported = switch (target.result.os.tag) {
+    // The packages, the CLI and their tests are built for the machine running the build only: the AWS SDK for C builds for Linux
+    // and Windows, and for macOS natively, and zlib-ng for x86_64 on Windows. For any other target (the Ziggy example cross-builds
+    // its core for the Apple, Android, Windows and Linux platforms) only Ziggy's steps are registered. The steps of the packages
+    // and the tests are not registered, so asking for one fails with an unknown step instead of building a partial set.
+    const host = b.graph.host.result;
+    const is_host_platform = target.result.os.tag == host.os.tag and target.result.cpu.arch == host.cpu.arch and target.result.abi == host.abi;
+    const packages_supported = is_host_platform and switch (target.result.os.tag) {
         .linux, .windows => true,
         .macos => target.query.isNativeOs() and target.query.isNativeAbi(),
         else => false,
     };
-    if (!aws_sdk_supported) {
+    if (!packages_supported) {
         try addZiggy(b, internalStep(b, "tests of Ziggy"), internalStep(b, "tests of the Ziggy example"), target, optimize);
         return;
     }
