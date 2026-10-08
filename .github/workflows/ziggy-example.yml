@@ -478,9 +478,14 @@ jobs:
           path: /usr/local/lib/android/sdk/ndk/25.1.8937393
           key: ${{ runner.os }}-android-ndk-25.1.8937393
 
+      # Retried because the SDK manager downloads from Google and a download can arrive corrupt: ziggy-example-package
+      # (android) failed here with "Error on ZipFile unknown archive" while unpacking the Google APIs system image, on a
+      # commit whose other run of this same step had passed.
       - name: Set up the Android SDK and NDK (Android)
         if: matrix.platform == 'android'
-        run: bun run --filter=ziggy-example setup
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun run --filter=ziggy-example setup
 
       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
         uses: actions/cache@v4
