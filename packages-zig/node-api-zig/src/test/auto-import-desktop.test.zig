@@ -1,5 +1,6 @@
 const std = @import("std");
 const api = @import("api-zig");
+const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const auto_import_desktop = node_api.auto_import_desktop;
 const app_config = node_api.app_config;
@@ -79,7 +80,8 @@ test "planDesktopAutoImport chooses the default database location when none has 
     const config: IAppConfig = .{ .autoImportEnabled = true };
     const plan = try planDesktopAutoImport(arena.allocator(), config, &PHOTO_FOLDERS, APP_DATA_PATH);
     try std.testing.expect(plan.isNewDefault);
-    try std.testing.expectEqualStrings("/home/someone/.config/Photosphere/photosphere-default", plan.databasePath);
+    // Joined as the TypeScript test does (`path.join`): the Windows job failed expecting "/" separators.
+    try std.testing.expectEqualStrings(try node_utils.path.join(arena.allocator(), &.{ APP_DATA_PATH, auto_import_desktop.DEFAULT_DATABASE_FOLDER_NAME }), plan.databasePath);
 }
 
 test "planDesktopAutoImport uses the chosen default database when there is one" {
@@ -103,7 +105,8 @@ test "planDesktopAutoImport counts an empty stored default as none chosen" {
     };
     const plan = try planDesktopAutoImport(arena.allocator(), config, &PHOTO_FOLDERS, APP_DATA_PATH);
     try std.testing.expect(plan.isNewDefault);
-    try std.testing.expectEqualStrings("/home/someone/.config/Photosphere/photosphere-default", plan.databasePath);
+    // Joined as the TypeScript test does (`path.join`): the Windows job failed expecting "/" separators.
+    try std.testing.expectEqualStrings(try node_utils.path.join(arena.allocator(), &.{ APP_DATA_PATH, auto_import_desktop.DEFAULT_DATABASE_FOLDER_NAME }), plan.databasePath);
 }
 
 test "foldersAsSources turns folder paths into recursive folder sources" {
@@ -125,7 +128,8 @@ test "foldersAsSources with no folders gives no sources" {
 test "getDefaultDatabasePath sits under the application data directory" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    try std.testing.expectEqualStrings("/data/photosphere-default", try getDefaultDatabasePath(arena.allocator(), "/data"));
+    // Joined as the TypeScript test does (`path.join`): the Windows job failed expecting "/data/photosphere-default".
+    try std.testing.expectEqualStrings(try node_utils.path.join(arena.allocator(), &.{ "/data", auto_import_desktop.DEFAULT_DATABASE_FOLDER_NAME }), try getDefaultDatabasePath(arena.allocator(), "/data"));
 }
 
 // A stored source cannot be malformed once it is typed, so the malformed entry goes in as the document the config is
