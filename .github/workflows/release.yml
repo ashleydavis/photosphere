@@ -1288,6 +1288,19 @@ jobs:
       - name: Install what-changed
         uses: ./.github/actions/install-what-changed
 
+      # The emulator runner below downloads this system image once, with no retry, and a download can arrive corrupt:
+      # android-smoke-tests failed with "Error on ZipFile unknown archive" while it prepared the Google APIs Intel x86_64
+      # Atom System Image, before any test ran. Installing it here, retried, leaves the runner an image that is already
+      # installed. The licence step ends in "|| true" because `yes` is killed when sdkmanager stops reading, which
+      # fails a pipeline under pipefail. sdkmanager is called by its full path because a plain step does not have it on PATH
+      # ("sdkmanager: command not found", exit 127), as the NDK install above also does.
+      - name: Install the Android system image
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'system-images;android-35;google_apis;x86_64'
+
       - name: Run Android smoke tests
         timeout-minutes: 30
         uses: reactivecircus/android-emulator-runner@v2
