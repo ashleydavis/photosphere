@@ -1591,5 +1591,8 @@ test "getConfigDir is the same Unix-style path on Windows, so one support answer
     const home_variable = if (builtin.os.tag == .windows) "USERPROFILE" else "HOME";
     try environ_map.put(home_variable, "/some-home");
 
-    try std.testing.expectEqualStrings("/some-home/.config/photosphere", try fs.getConfigDir(allocator));
+    // Joined the way the TypeScript test does (`path.join`), because getConfigDir joins with the platform's own
+    // separator. The Windows job failed here (node-utils-zig fs test "getConfigDir is the same Unix-style path on
+    // Windows") expecting "/some-home/.config/photosphere" and finding "\some-home\.config\photosphere".
+    try std.testing.expectEqualStrings(try node_utils.path.join(allocator, &.{ "/some-home", ".config", "photosphere" }), try fs.getConfigDir(allocator));
 }

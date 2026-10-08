@@ -24,7 +24,9 @@ fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![
 // The path of the state file in the config directory.
 //
 fn statePath(allocator: std.mem.Allocator, configDir: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "{s}/state.yaml", .{configDir});
+    // Joined with the platform's separator, as getStatePath does. The Windows job failed in "getStatePath returns a
+    // string ending with state.yaml, beside the config file" expecting "/state.yaml" after a backslash path.
+    return node_utils.path.join(allocator, &.{ configDir, "state.yaml" });
 }
 
 //
