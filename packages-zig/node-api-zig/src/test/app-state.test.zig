@@ -14,7 +14,7 @@ const IAppState = app_state.IAppState;
 fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const u8 {
     _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.makeTempDir(allocator, io, name);
-    const configDir = try std.fmt.allocPrint(allocator, "{s}/config", .{dir});
+    const configDir = try std.fs.path.join(allocator, &.{ dir, "config" });
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
     try std.Io.Dir.cwd().createDirPath(io, configDir);
     return configDir;
