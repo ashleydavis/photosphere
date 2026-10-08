@@ -34,8 +34,11 @@ fn runZig(allocator: std.mem.Allocator, environment: *const std.process.Environ.
 // Expects the CLI to exit with the code and write the output.
 //
 fn expectResult(result: helpers.CliResult, expectedStdout: []const u8, expectedStderr: []const u8, expectedExitCode: u8) !void {
-    try std.testing.expectEqualStrings(expectedStdout, result.stdout);
+    // Stderr is checked before stdout so that a command that failed shows the error it wrote. The Windows unit test job
+    // failed in "secrets send and receive transfer a secret over the local network" with a stdout that stopped at the
+    // wait and ended in the bug report text, and the error behind it was in stderr, which was never reached.
     try std.testing.expectEqualStrings(expectedStderr, result.stderr);
+    try std.testing.expectEqualStrings(expectedStdout, result.stdout);
     try std.testing.expectEqual(expectedExitCode, result.exitCode);
 }
 

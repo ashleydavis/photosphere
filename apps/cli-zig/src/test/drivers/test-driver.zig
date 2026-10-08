@@ -42,9 +42,24 @@ fn expectArgumentCount(scenarioArguments: []const [:0]const u8, count: usize) !v
 }
 
 //
-// Runs the scenario named by the arguments.
+// Runs the scenario named by the arguments, and says what an error.Thrown was thrown for. A program that returns an error
+// prints only its name, and the name of this one carries nothing: the Windows unit test job failed in the share tests
+// (for example "dbs send says no device found when no receiver turns up before the discovery timeout") with a stderr of
+// "error: Thrown" and no way to tell which call had failed.
 //
 pub fn main(init: std.process.Init) !void {
+    runScenario(init) catch |err| {
+        if (err == error.Thrown) {
+            std.debug.print("{s}\n", .{utils.errors.lastErrorMessage()});
+        }
+        return err;
+    };
+}
+
+//
+// Runs the scenario named by the arguments.
+//
+fn runScenario(init: std.process.Init) !void {
     const io = init.io;
     const allocator = init.arena.allocator();
     node_utils.process_env.setEnvironMap(init.environ_map);
