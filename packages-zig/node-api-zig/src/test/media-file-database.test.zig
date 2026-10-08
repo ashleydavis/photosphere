@@ -81,10 +81,10 @@ test "createDatabase creates README.md, the files tree, the sort indexes and con
 
     try media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, "12345678-1234-4678-8abc-123456789abc");
 
-    try std.testing.expectEqualStrings(media_file_database.DATABASE_README_CONTENT, try test_files.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/README.md", .{dir})));
-    try std.testing.expectEqualStrings("{}", try test_files.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/.db/config.json", .{dir})));
-    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/indexes/metadata/hash_asc/tree.dat", .{dir})));
-    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/indexes/metadata/photoDate_desc/tree.dat", .{dir})));
+    try std.testing.expectEqualStrings(media_file_database.DATABASE_README_CONTENT, try test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ dir, "README.md" })));
+    try std.testing.expectEqualStrings("{}", try test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ dir, ".db", "config.json" })));
+    try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dir, ".db", "bson", "indexes", "metadata", "hash_asc", "tree.dat" })));
+    try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dir, ".db", "bson", "indexes", "metadata", "photoDate_desc", "tree.dat" })));
 
     const loaded = (try node_api.tree.loadMerkleTree(allocator, io, created.storage)).?;
     try std.testing.expectEqualStrings("12345678-1234-4678-8abc-123456789abc", loaded.id);
@@ -124,7 +124,7 @@ test "createDatabase throws when the directory already contains files" {
     const generators = try makeGenerators(allocator, io);
     const dir = try temp_dirs.makeTempDir(allocator, io, "create-database-full");
     defer temp_dirs.removeTempDir(io, dir);
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/something.txt", .{dir}), "x");
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ dir, "something.txt" }), "x");
     const created = try node_api.open_storage.openStorage(allocator, io, dir, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
     try std.testing.expectError(error.Thrown, media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, null));
@@ -167,12 +167,12 @@ test "ensureSortIndex builds the hash and photoDate sort indexes" {
     const generators = try makeGenerators(allocator, io);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    try std.Io.Dir.cwd().deleteTree(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/indexes", .{databaseDir}));
+    try std.Io.Dir.cwd().deleteTree(io, try std.fs.path.join(allocator, &.{ databaseDir, ".db", "bson", "indexes" }));
     const storage = try test_files.directoryStorage(allocator, io, databaseDir);
     const database = try media_file_database.createMediaFileDatabase(allocator, storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
     try media_file_database.ensureSortIndex(io, database.metadataCollection);
-    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/indexes/metadata/hash_asc/tree.dat", .{databaseDir})));
-    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/indexes/metadata/photoDate_desc/tree.dat", .{databaseDir})));
+    try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ databaseDir, ".db", "bson", "indexes", "metadata", "hash_asc", "tree.dat" })));
+    try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ databaseDir, ".db", "bson", "indexes", "metadata", "photoDate_desc", "tree.dat" })));
 }
 
 test "loadSortIndexes succeeds for an existing database" {
@@ -341,10 +341,10 @@ test "removeAsset removes the files, the tree entries and the record of an asset
     try media_file_database.removeAsset(allocator, io, storage, storage, "session", database.bsonDatabase, database.metadataCollection, V6_ASSET_ID, true);
 
     for ([_][]const u8{ "asset", "display", "thumb" }) |directory| {
-        const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}/{s}", .{ databaseDir, directory, V6_ASSET_ID });
+        const filePath = try std.fs.path.join(allocator, &.{ databaseDir, directory, V6_ASSET_ID });
         try std.testing.expect(!test_files.fileExists(io, filePath));
     }
-    try std.testing.expect(!test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/write.lock", .{databaseDir})));
+    try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ databaseDir, ".db", "write.lock" })));
 
     // The tree holds only the README, and its metadata counts no imports and names the asset as deleted.
     const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
@@ -406,7 +406,7 @@ test "removeAsset throws when another session holds the write lock" {
 
     try std.testing.expectError(error.Thrown, media_file_database.removeAsset(allocator, io, storage, storage, "session", database.bsonDatabase, database.metadataCollection, V6_ASSET_ID, true));
     try std.testing.expectEqualStrings("Failed to acquire write lock.", errors.lastErrorMessage());
-    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ databaseDir, V6_ASSET_ID })));
+    try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ databaseDir, "asset", V6_ASSET_ID })));
 }
 
 //
@@ -419,10 +419,20 @@ fn registerPathWithMissingKey(allocator: std.mem.Allocator, io: std.Io, database
     // Copied, because setEnv frees the value the environment held.
     const previous = try allocator.dupe(u8, test_environment.getEnvironment().get("PHOTOSPHERE_CONFIG_DIR").?);
     const configDir = try temp_dirs.makeTempDir(allocator, io, "check-database-exists-config");
-    // The path is a TOML literal string (single quotes) because a Windows path holds backslashes, which a basic
-    // string reads as escapes. The Windows job failed in "checkDatabaseExists does not catch a storage error" with
-    // "Invalid TOML document: unrecognized escape sequence" instead of the missing key message.
-    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "databases.toml" }), try std.fmt.allocPrint(allocator, "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = '{s}'\nencryption_key = \"missing-enc\"\n", .{databasePath}));
+    // Written by the TOML writer the app uses, so the path is quoted however TOML needs it: a Windows path holds
+    // backslashes, which a basic string reads as escapes. The Windows job failed in "checkDatabaseExists does not catch
+    // a storage error" with "Invalid TOML document: unrecognized escape sequence" instead of the missing key message
+    // when the text was formatted by hand.
+    var entry: std.json.ObjectMap = .empty;
+    try entry.put(allocator, "name", .{ .string = "db" });
+    try entry.put(allocator, "description", .{ .string = "" });
+    try entry.put(allocator, "path", .{ .string = databasePath });
+    try entry.put(allocator, "encryption_key", .{ .string = "missing-enc" });
+    var entries = std.json.Array.init(allocator);
+    try entries.append(.{ .object = entry });
+    var document: std.json.ObjectMap = .empty;
+    try document.put(allocator, "databases", .{ .array = entries });
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "databases.toml" }), try node_utils.toml.stringify(allocator, .{ .object = document }));
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
     return .{
         .previous = previous,
@@ -491,7 +501,7 @@ test "checkDatabaseExists is false when the path does not exist at all" {
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "check-database-exists-missing");
     defer temp_dirs.removeTempDir(io, tempDir);
 
-    try std.testing.expect(!try media_file_database.checkDatabaseExists(allocator, io, try std.fmt.allocPrint(allocator, "{s}/does-not-exist", .{tempDir})));
+    try std.testing.expect(!try media_file_database.checkDatabaseExists(allocator, io, try std.fs.path.join(allocator, &.{ tempDir, "does-not-exist" })));
 }
 
 test "checkDatabaseExists does not catch a storage error: it is not reported as no database" {

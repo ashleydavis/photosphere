@@ -1,7 +1,29 @@
 const std = @import("std");
+const node_utils = @import("node-utils-zig");
 const support = @import("test-support.zig");
 
 const TestApp = support.TestApp;
+
+//
+// The text of a databases.toml holding one entry, written by the TOML writer the app uses, so the path is quoted however TOML
+// needs it. A Windows path holds backslashes, which a TOML basic string reads as escapes: the Windows job failed in the
+// set-database-origin tests when the path was formatted into the text by hand. Returned memory belongs to the allocator.
+//
+fn databasesToml(allocator: std.mem.Allocator, name: []const u8, path: []const u8, origin: ?[]const u8) ![]const u8 {
+    var entry: std.json.ObjectMap = .empty;
+    try entry.put(allocator, "name", .{ .string = name });
+    try entry.put(allocator, "description", .{ .string = "" });
+    try entry.put(allocator, "path", .{ .string = path });
+    if (origin) |origin_text| {
+        try entry.put(allocator, "origin", .{ .string = origin_text });
+    }
+    var entries = std.json.Array.init(allocator);
+    try entries.append(.{ .object = entry });
+    var document: std.json.ObjectMap = .empty;
+    try document.put(allocator, "recent_database_names", .{ .array = std.json.Array.init(allocator) });
+    try document.put(allocator, "databases", .{ .array = entries });
+    return node_utils.toml.stringify(allocator, .{ .object = document });
+}
 
 //
 // Writes the test's databases.toml, in the settings directory the app reads (PHOTOSPHERE_CONFIG_DIR).
@@ -165,11 +187,9 @@ test "set-database-origin writes the origin to the database's config.json and to
     const allocator = std.testing.allocator;
     const database_path = try std.fs.path.join(allocator, &.{ app.tmp_path, "db-one" });
     defer allocator.free(database_path);
-    // The path is a TOML literal string (single quotes), which reads a backslash as itself. The Windows job failed here
-    // because a basic string reads the backslashes of a Windows path as escapes.
-    const toml = try std.fmt.allocPrint(allocator, "recent_database_names = []\n\n[[databases]]\nname = \"one\"\ndescription = \"\"\npath = '{s}'\n", .{database_path});
-    defer allocator.free(toml);
-    try writeDatabasesToml(&app, toml);
+    var toml_arena = std.heap.ArenaAllocator.init(allocator);
+    defer toml_arena.deinit();
+    try writeDatabasesToml(&app, try databasesToml(toml_arena.allocator(), "one", database_path, null));
     // Stringified rather than formatted, because JSON reads a backslash as an escape and a Windows path has them. The Windows job
     // failed with no reply to the request when the path went in as it was.
     const request = try std.json.Stringify.valueAlloc(allocator, .{
@@ -202,9 +222,9 @@ test "set-database-origin without an origin clears it from config.json and from 
     const allocator = std.testing.allocator;
     const database_path = try std.fs.path.join(allocator, &.{ app.tmp_path, "db-two" });
     defer allocator.free(database_path);
-    const toml = try std.fmt.allocPrint(allocator, "recent_database_names = []\n\n[[databases]]\nname = \"two\"\ndescription = \"\"\npath = '{s}'\norigin = \"/old\"\n", .{database_path});
-    defer allocator.free(toml);
-    try writeDatabasesToml(&app, toml);
+    var toml_arena = std.heap.ArenaAllocator.init(allocator);
+    defer toml_arena.deinit();
+    try writeDatabasesToml(&app, try databasesToml(toml_arena.allocator(), "two", database_path, "/old"));
     const config_path = try std.fs.path.join(allocator, &.{ database_path, ".db", "config.json" });
     defer allocator.free(config_path);
     try std.Io.Dir.cwd().createDirPath(std.testing.io, std.fs.path.dirname(config_path).?);

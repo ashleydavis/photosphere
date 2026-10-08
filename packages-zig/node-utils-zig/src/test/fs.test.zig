@@ -12,7 +12,8 @@ const errors = utils.errors;
 fn tempFilePath(allocator: std.mem.Allocator, io: std.Io, suffix: []const u8) ![]const u8 {
     var random_bytes: [8]u8 = undefined;
     io.random(&random_bytes);
-    return std.fmt.allocPrint(allocator, ".zig-cache/tmp/photosphere-fs-test-{x}-{s}", .{ std.mem.readInt(u64, &random_bytes, .little), suffix });
+    const fileName = try std.fmt.allocPrint(allocator, "photosphere-fs-test-{x}-{s}", .{ std.mem.readInt(u64, &random_bytes, .little), suffix });
+    return std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", fileName });
 }
 
 //
@@ -149,7 +150,7 @@ test "ensureDir creates nested directories and accepts existing ones" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const dirPath = try tempFilePath(allocator, io, "dir");
-    const nestedPath = try std.fmt.allocPrint(allocator, "{s}/a/b", .{dirPath});
+    const nestedPath = try std.fs.path.join(allocator, &.{ dirPath, "a", "b" });
 
     try fs.ensureDir(io, nestedPath);
     try std.testing.expect(fs.pathExists(io, nestedPath));
@@ -181,7 +182,7 @@ test "ensureFileDir creates the parent directory of a file" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const dirPath = try tempFilePath(allocator, io, "parent");
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/child/file.txt", .{dirPath});
+    const filePath = try std.fs.path.join(allocator, &.{ dirPath, "child", "file.txt" });
 
     try fs.ensureFileDir(io, filePath);
 
@@ -212,8 +213,8 @@ test "remove ignores missing paths and removes directory trees" {
     const dirPath = try tempFilePath(allocator, io, "tree");
 
     try fs.remove(io, dirPath);
-    try fs.outputFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/a/b.txt", .{dirPath}), "b");
-    try fs.outputFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/c.txt", .{dirPath}), "c");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ dirPath, "a", "b.txt" }), "b");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ dirPath, "c.txt" }), "c");
     try fs.remove(io, dirPath);
     try std.testing.expect(!fs.pathExists(io, dirPath));
 }
@@ -270,7 +271,7 @@ test "getProcessTmpDir returns PHOTOSPHERE_TMP_DIR/tmp when set, otherwise the s
         try std.testing.expectEqualStrings("/isolated/test/tmp", try fs.getProcessTmpDir(allocator, io));
 
         try environ_map.put("PHOTOSPHERE_TMP_DIR", "relative/dir");
-        const expected = try std.fmt.allocPrint(allocator, "{s}/relative/dir/tmp", .{currentPath});
+        const expected = try std.fs.path.join(allocator, &.{ currentPath, "relative", "dir", "tmp" });
         try std.testing.expectEqualStrings(expected, try fs.getProcessTmpDir(allocator, io));
     }
 }
