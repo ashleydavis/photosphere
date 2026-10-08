@@ -165,6 +165,9 @@ test "set-database-origin writes the origin to the database's config.json and to
     const allocator = std.testing.allocator;
     const database_path = try std.fmt.allocPrint(allocator, "{s}/db-one", .{app.tmp_path});
     defer allocator.free(database_path);
+    // Forward slashes, because the path goes into a TOML string and a JSON request, where a Windows backslash is an
+    // escape. The Windows job failed in "set-database-origin writes the origin..." with no reply to the request.
+    std.mem.replaceScalar(u8, database_path, '\\', '/');
     const toml = try std.fmt.allocPrint(allocator, "recent_database_names = []\n\n[[databases]]\nname = \"one\"\ndescription = \"\"\npath = \"{s}\"\n", .{database_path});
     defer allocator.free(toml);
     try writeDatabasesToml(&app, toml);
@@ -190,6 +193,8 @@ test "set-database-origin without an origin clears it from config.json and from 
     const allocator = std.testing.allocator;
     const database_path = try std.fmt.allocPrint(allocator, "{s}/db-two", .{app.tmp_path});
     defer allocator.free(database_path);
+    // Forward slashes: see the first set-database-origin test.
+    std.mem.replaceScalar(u8, database_path, '\\', '/');
     const toml = try std.fmt.allocPrint(allocator, "recent_database_names = []\n\n[[databases]]\nname = \"two\"\ndescription = \"\"\npath = \"{s}\"\norigin = \"/old\"\n", .{database_path});
     defer allocator.free(toml);
     try writeDatabasesToml(&app, toml);
@@ -223,6 +228,8 @@ test "set-database-origin for a path with no entry writes config.json and adds n
     const allocator = std.testing.allocator;
     const database_path = try std.fmt.allocPrint(allocator, "{s}/db-three", .{app.tmp_path});
     defer allocator.free(database_path);
+    // Forward slashes: see the first set-database-origin test.
+    std.mem.replaceScalar(u8, database_path, '\\', '/');
     const request = try std.fmt.allocPrint(allocator, "{{\"databasePath\":\"{s}\",\"origin\":\"/o\"}}", .{database_path});
     defer allocator.free(request);
     allocator.free(try app.requestOk("set-database-origin", request));
