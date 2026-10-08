@@ -736,7 +736,13 @@ pub const FileLogger = struct {
 // Appends text to a file, creating the file when it is not there (as fs.appendFile does).
 //
 pub fn appendToFile(io: std.Io, file_path: []const u8, content: []const u8) !void {
-    const file = try std.Io.Dir.cwd().createFile(io, file_path, .{ .truncate = false });
+    // Opened for reading as well, because file.length needs read access on Windows, where Zig opens a file with
+    // GENERIC_WRITE alone and the size query is refused. The Windows job failed with AccessDenied from this function
+    // in the file-logger tests and in "fps-measurement appends a row of the time and the frame rate".
+    const file = try std.Io.Dir.cwd().createFile(io, file_path, .{
+        .truncate = false,
+        .read = true,
+    });
     defer file.close(io);
     const length = try file.length(io);
     try file.writePositionalAll(io, content, length);
