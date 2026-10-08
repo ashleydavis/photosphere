@@ -228,7 +228,7 @@ jobs:
       - name: Run the Zig unit tests
         if: matrix.platform == 'linux' || matrix.platform == 'macos' || matrix.platform == 'windows'
         shell: bash
-        run: zig build test-ziggy --summary all --test-timeout 20m
+        run: zig build test-ziggy-example --summary all --test-timeout 20m
 
       # The Android scripts need JDK 17, as in the android jobs of release.yml, and the NDK those jobs install.
       - name: Setup JDK 17 (Android)

@@ -112,14 +112,14 @@ pub fn build(b: *std.Build) !void {
         else => false,
     };
     if (!aws_sdk_supported) {
-        try addZiggy(b, internalStep(b, "tests of Ziggy and of the Ziggy example"), target, optimize);
+        try addZiggy(b, internalStep(b, "tests of Ziggy"), internalStep(b, "tests of the Ziggy example"), target, optimize);
         return;
     }
     const ziggy_core = try addZiggyCore(b, target, optimize, false);
     // Null means a lazy dependency is being fetched first: the build runs again once it has been, and this run registers nothing.
     const modules = (try addPackageModules(b, target, optimize, ziggy_core.module)) orelse return;
 
-    const test_step = b.step("test", "Run every Zig test: the unit tests of the packages and the tests of the CLI");
+    const test_step = b.step("test", "Run every Zig test: the unit tests of the packages, the tests of the CLI and the tests of Ziggy");
     const test_packages_step = internalStep(b, "unit tests of the packages");
     const test_cli_step = internalStep(b, "tests of the CLI");
     test_step.dependOn(test_packages_step);
@@ -129,12 +129,15 @@ pub fn build(b: *std.Build) !void {
     try addOwnProcessTests(b, test_packages_step, modules, target, optimize, stand_ins);
     try addStorageIntegrationTests(b, modules, target, optimize);
     try addCli(b, test_cli_step, modules, target, optimize);
-    const test_ziggy_step = internalStep(b, "tests of Ziggy and of the Ziggy example");
-    try addZiggy(b, test_ziggy_step, target, optimize);
+    // The tests of Ziggy are part of the tests of Photosphere. The tests of the Ziggy example are not: they need its built page, and
+    // the Ziggy example's own workflow runs them with the tests of Ziggy through test-ziggy-example.
+    const test_ziggy_step = internalStep(b, "tests of Ziggy");
+    const test_ziggy_example_step = internalStep(b, "tests of the Ziggy example");
+    try addZiggy(b, test_ziggy_step, test_ziggy_example_step, target, optimize);
     test_step.dependOn(test_ziggy_step);
-    // Just the tests of Ziggy and of the Ziggy example, for the jobs that test the example alone.
-    const test_ziggy_named_step = b.step("test-ziggy", "Run the tests of Ziggy and of the Ziggy example");
-    test_ziggy_named_step.dependOn(test_ziggy_step);
+    const test_ziggy_example_named_step = b.step("test-ziggy-example", "Run the tests of Ziggy and of the Ziggy example");
+    test_ziggy_example_named_step.dependOn(test_ziggy_step);
+    test_ziggy_example_named_step.dependOn(test_ziggy_example_step);
 
     // Prints the time the build took after the tests: Zig's summary gives the time of each step and no total.
     const elapsed = b.allocator.create(ElapsedStep) catch @panic("out of memory");
@@ -867,12 +870,14 @@ const IImport = struct {
 };
 
 //
-// Builds Ziggy, the shell its apps stand on, and the Ziggy example app, and registers their tests. The platform shells that are not Zig
+// Builds Ziggy, the shell its apps stand on, and the Ziggy example app, and registers their tests: the tests of Ziggy under
+// framework_test_step and the tests of the example under example_test_step. The platform shells that are not Zig
 // (the Xcode projects and the Android project) are built by the scripts of the app, which ask this build for the core's libraries.
 //
 fn addZiggy(
     b: *std.Build,
-    test_step: *std.Build.Step,
+    framework_test_step: *std.Build.Step,
+    example_test_step: *std.Build.Step,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
 ) !void {
@@ -882,7 +887,7 @@ fn addZiggy(
 
     // The unit tests of Ziggy's core, which run the core with the test hooks compiled in.
     const core_test_binary_step = b.step("test-binary-ziggy-core", "Build the unit test program of Ziggy's core and install it to test-bin without running it");
-    try addDirectoryTests(b, test_step, "packages/ziggy/core", &.{.{ .name = "ziggy-core", .module = test_core.module }}, target, optimize, core_test_binary_step);
+    try addDirectoryTests(b, framework_test_step, "packages/ziggy/core", &.{.{ .name = "ziggy-core", .module = test_core.module }}, target, optimize, core_test_binary_step);
 
     // The unit tests of the parts of the shells that do not need the platform's libraries.
     const linux_tests_module = b.createModule(.{
@@ -890,7 +895,7 @@ fn addZiggy(
         .target = target,
         .optimize = optimize,
     });
-    test_step.dependOn(&b.addRunArtifact(b.addTest(.{
+    framework_test_step.dependOn(&b.addRunArtifact(b.addTest(.{
         .name = "ziggy-shell-linux",
         .root_module = linux_tests_module,
     })).step);
@@ -899,7 +904,7 @@ fn addZiggy(
         .target = b.graph.host,
         .optimize = optimize,
     });
-    test_step.dependOn(&b.addRunArtifact(b.addTest(.{
+    framework_test_step.dependOn(&b.addRunArtifact(b.addTest(.{
         .name = "ziggy-shell-windows",
         .root_module = windows_tests_module,
     })).step);
@@ -953,7 +958,7 @@ fn addZiggy(
     example_for_tests.addImport("ziggy-core", test_core.module);
     example_for_tests.addImport("page-files", try embedPage(b, test_core.module, "ziggy-core", "apps/ziggy-example/dist"));
     const example_test_binary_step = b.step("test-binary-ziggy-example-core", "Build the unit test program of the Ziggy example's core and install it to test-bin without running it");
-    try addDirectoryTests(b, test_step, "apps/ziggy-example/core", &.{
+    try addDirectoryTests(b, example_test_step, "apps/ziggy-example/core", &.{
         .{ .name = "ziggy-core", .module = test_core.module },
         .{ .name = "ziggy-example-core", .module = example_for_tests },
     }, target, optimize, example_test_binary_step);
