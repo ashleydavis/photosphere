@@ -422,7 +422,7 @@ fn registerPathWithMissingKey(allocator: std.mem.Allocator, io: std.Io, database
     // The path is a TOML literal string (single quotes) because a Windows path holds backslashes, which a basic
     // string reads as escapes. The Windows job failed in "checkDatabaseExists does not catch a storage error" with
     // "Invalid TOML document: unrecognized escape sequence" instead of the missing key message.
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/databases.toml", .{configDir}), try std.fmt.allocPrint(allocator, "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = '{s}'\nencryption_key = \"missing-enc\"\n", .{databasePath}));
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "databases.toml" }), try std.fmt.allocPrint(allocator, "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = '{s}'\nencryption_key = \"missing-enc\"\n", .{databasePath}));
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
     return .{
         .previous = previous,

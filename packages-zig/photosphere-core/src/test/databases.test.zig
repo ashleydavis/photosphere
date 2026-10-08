@@ -8,7 +8,7 @@ const TestApp = support.TestApp;
 //
 fn writeDatabasesToml(app: *TestApp, text: []const u8) !void {
     const allocator = std.testing.allocator;
-    const path = try std.fmt.allocPrint(allocator, "{s}/config/databases.toml", .{app.tmp_path});
+    const path = try std.fs.path.join(allocator, &.{ app.tmp_path, "config", "databases.toml" });
     defer allocator.free(path);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
         .sub_path = path,
@@ -21,7 +21,7 @@ fn writeDatabasesToml(app: *TestApp, text: []const u8) !void {
 //
 fn readTestFile(app: *TestApp, relative_path: []const u8) ![]u8 {
     const allocator = std.testing.allocator;
-    const path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ app.tmp_path, relative_path });
+    const path = try std.fs.path.join(allocator, &.{ app.tmp_path, relative_path });
     defer allocator.free(path);
     return try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, allocator, .unlimited);
 }
@@ -163,15 +163,19 @@ test "set-database-origin writes the origin to the database's config.json and to
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    const database_path = try std.fmt.allocPrint(allocator, "{s}/db-one", .{app.tmp_path});
+    const database_path = try std.fs.path.join(allocator, &.{ app.tmp_path, "db-one" });
     defer allocator.free(database_path);
-    // Forward slashes, because the path goes into a TOML string and a JSON request, where a Windows backslash is an
-    // escape. The Windows job failed in "set-database-origin writes the origin..." with no reply to the request.
-    std.mem.replaceScalar(u8, database_path, '\\', '/');
-    const toml = try std.fmt.allocPrint(allocator, "recent_database_names = []\n\n[[databases]]\nname = \"one\"\ndescription = \"\"\npath = \"{s}\"\n", .{database_path});
+    // The path is a TOML literal string (single quotes), which reads a backslash as itself. The Windows job failed here
+    // because a basic string reads the backslashes of a Windows path as escapes.
+    const toml = try std.fmt.allocPrint(allocator, "recent_database_names = []\n\n[[databases]]\nname = \"one\"\ndescription = \"\"\npath = '{s}'\n", .{database_path});
     defer allocator.free(toml);
     try writeDatabasesToml(&app, toml);
-    const request = try std.fmt.allocPrint(allocator, "{{\"databasePath\":\"{s}\",\"origin\":\"/the/origin\"}}", .{database_path});
+    // Stringified rather than formatted, because JSON reads a backslash as an escape and a Windows path has them. The Windows job
+    // failed with no reply to the request when the path went in as it was.
+    const request = try std.json.Stringify.valueAlloc(allocator, .{
+        .databasePath = database_path,
+        .origin = "/the/origin",
+    }, .{});
     defer allocator.free(request);
     const reply = try app.requestOk("set-database-origin", request);
     defer allocator.free(reply);
@@ -181,7 +185,12 @@ test "set-database-origin writes the origin to the database's config.json and to
     try std.testing.expect(std.mem.indexOf(u8, config_json, "\"origin\": \"/the/origin\"") != null);
     const find_reply = try app.requestOk("find-database", "\"one\"");
     defer allocator.free(find_reply);
-    const expected = try std.fmt.allocPrint(allocator, "{{\"name\":\"one\",\"description\":\"\",\"path\":\"{s}\",\"origin\":\"/the/origin\"}}", .{database_path});
+    const expected = try std.json.Stringify.valueAlloc(allocator, .{
+        .name = "one",
+        .description = "",
+        .path = database_path,
+        .origin = "/the/origin",
+    }, .{});
     defer allocator.free(expected);
     try std.testing.expectEqualStrings(expected, find_reply);
 }
@@ -191,21 +200,21 @@ test "set-database-origin without an origin clears it from config.json and from 
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    const database_path = try std.fmt.allocPrint(allocator, "{s}/db-two", .{app.tmp_path});
+    const database_path = try std.fs.path.join(allocator, &.{ app.tmp_path, "db-two" });
     defer allocator.free(database_path);
-    // Forward slashes: see the first set-database-origin test.
-    std.mem.replaceScalar(u8, database_path, '\\', '/');
-    const toml = try std.fmt.allocPrint(allocator, "recent_database_names = []\n\n[[databases]]\nname = \"two\"\ndescription = \"\"\npath = \"{s}\"\norigin = \"/old\"\n", .{database_path});
+    const toml = try std.fmt.allocPrint(allocator, "recent_database_names = []\n\n[[databases]]\nname = \"two\"\ndescription = \"\"\npath = '{s}'\norigin = \"/old\"\n", .{database_path});
     defer allocator.free(toml);
     try writeDatabasesToml(&app, toml);
-    const config_path = try std.fmt.allocPrint(allocator, "{s}/.db/config.json", .{database_path});
+    const config_path = try std.fs.path.join(allocator, &.{ database_path, ".db", "config.json" });
     defer allocator.free(config_path);
     try std.Io.Dir.cwd().createDirPath(std.testing.io, std.fs.path.dirname(config_path).?);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
         .sub_path = config_path,
         .data = "{\"origin\":\"/old\",\"other\":\"kept\"}",
     });
-    const request = try std.fmt.allocPrint(allocator, "{{\"databasePath\":\"{s}\"}}", .{database_path});
+    const request = try std.json.Stringify.valueAlloc(allocator, .{
+        .databasePath = database_path,
+    }, .{});
     defer allocator.free(request);
     const reply = try app.requestOk("set-database-origin", request);
     defer allocator.free(reply);
@@ -216,7 +225,11 @@ test "set-database-origin without an origin clears it from config.json and from 
     try std.testing.expect(std.mem.indexOf(u8, config_json, "\"other\": \"kept\"") != null);
     const find_reply = try app.requestOk("find-database", "\"two\"");
     defer allocator.free(find_reply);
-    const expected = try std.fmt.allocPrint(allocator, "{{\"name\":\"two\",\"description\":\"\",\"path\":\"{s}\"}}", .{database_path});
+    const expected = try std.json.Stringify.valueAlloc(allocator, .{
+        .name = "two",
+        .description = "",
+        .path = database_path,
+    }, .{});
     defer allocator.free(expected);
     try std.testing.expectEqualStrings(expected, find_reply);
 }
@@ -226,11 +239,12 @@ test "set-database-origin for a path with no entry writes config.json and adds n
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    const database_path = try std.fmt.allocPrint(allocator, "{s}/db-three", .{app.tmp_path});
+    const database_path = try std.fs.path.join(allocator, &.{ app.tmp_path, "db-three" });
     defer allocator.free(database_path);
-    // Forward slashes: see the first set-database-origin test.
-    std.mem.replaceScalar(u8, database_path, '\\', '/');
-    const request = try std.fmt.allocPrint(allocator, "{{\"databasePath\":\"{s}\",\"origin\":\"/o\"}}", .{database_path});
+    const request = try std.json.Stringify.valueAlloc(allocator, .{
+        .databasePath = database_path,
+        .origin = "/o",
+    }, .{});
     defer allocator.free(request);
     allocator.free(try app.requestOk("set-database-origin", request));
     const config_json = try readTestFile(&app, "db-three/.db/config.json");
