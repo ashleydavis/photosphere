@@ -59,7 +59,7 @@ fn makeUser(allocator: std.mem.Allocator, id: []const u8, name: []const u8, age:
 }
 
 //
-// Gets a record by id through its shard (TypeScript: getOne, which is not ported).
+// Gets a record by id through its shard.
 //
 fn getRecord(collection: *BsonCollection, id: []const u8) !?IInternalRecord {
     const shard = try collection.shard(try collection.getShardId(id));
@@ -74,7 +74,7 @@ test "should delete a record" {
     const collection = try newCollection(allocator, &storage);
     const user = try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "John Doe", 30, "user");
 
-    // (Zig: insertOne is not ported; setInternalRecord inserts the record.)
+    // (setInternalRecord inserts the record.)
     try collection.setInternalRecord(io, user);
 
     try std.testing.expect(try collection.deleteOne(io, user._id));
@@ -586,7 +586,7 @@ test "a shard with uncommitted writes is never dropped, because its records are 
     // Eviction frees records that can be read again from storage. A dirty shard's records cannot:
     // dropping one would silently lose the write.
     const user = try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "John Doe", 30, "user");
-    // (Zig: insertOne is not ported; setInternalRecord inserts the record.)
+    // (setInternalRecord inserts the record.)
     try collection.setInternalRecord(io, user);
 
     const dirtyShardId = try collection.getShardId(user._id);

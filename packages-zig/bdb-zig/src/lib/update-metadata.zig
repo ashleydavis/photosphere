@@ -115,7 +115,7 @@ pub fn updateMetadata(
 
 //
 // Returns `metadata.timestamp ?? 0` (No TypeScript counterpart: TypeScript reads the property inline). Throws for a
-// timestamp that is not a number, whose `+ 1` is not ported.
+// timestamp that is not a number.
 //
 fn metadataTimestamp(metadata: Metadata) !f64 {
     const value = metadata.get("timestamp") orelse .undefined;
@@ -134,7 +134,7 @@ fn metadataTimestamp(metadata: Metadata) !f64 {
 
 //
 // Returns `value || {}` for a metadata object (No TypeScript counterpart: TypeScript writes it inline). Throws for a
-// value that is neither a document nor missing, which is not ported.
+// value that is neither a document nor missing.
 //
 fn metadataObject(value: BsonValue) !Metadata {
     switch (value) {

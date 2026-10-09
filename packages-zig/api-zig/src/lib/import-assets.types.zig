@@ -82,5 +82,3 @@ pub const IImportAssetsResult = struct {
     failedCount: u64,
 };
 
-// Not ported: IImportSuccessMessage, IImportProgressMessage as types (the import sends them as the
-// JSON objects task messages are in Zig; see import-assets.worker.zig in node-api-zig).

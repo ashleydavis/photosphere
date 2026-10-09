@@ -1,9 +1,6 @@
 const serialization_zig = @import("serialization-zig");
 const bson = serialization_zig.bson;
 
-// Not ported: ISyncDatabaseData, ISyncSkippedMessage, ISyncCompletedMessage, ISyncBatchMessage (not used by psi
-// sync).
-
 //
 // The kind of a change (TypeScript: the string union of ISyncChange.type).
 //

@@ -81,8 +81,6 @@ const ITreeData = struct {
     treeNodes: TreeNodeMap,
 };
 
-// Not ported: IRangeOptions (findByRange is not reached by the CLI).
-
 //
 // Split internal nodes when they exceed 1.2x the key size.
 //
@@ -102,8 +100,6 @@ pub const DEFAULT_KEY_SIZE = 100;
 // Number of records to process per batch during index build.
 //
 const BUILD_BATCH_SIZE = 10000;
-
-// Not ported: BUILD_PROGRESS_INTERVAL (the progress callback is not ported, see build).
 
 //
 // Number of records per leaf page.
@@ -197,9 +193,6 @@ pub const ISortIndexResult = struct {
     // Previous page ID or undefined if this is the first page
     previousPageId: ?[]const u8 = null,
 };
-
-// Not ported: INodeKeyDistribution, ILeafStats, IInternalStats, ITreeAnalysis (only used by analyzeTreeStructure,
-// a debugging helper).
 
 //
 // The records of one leaf page (TypeScript: an array, shared by reference between the caches).
@@ -411,11 +404,8 @@ pub const SortIndex = struct {
         _ = try self.load(io);
     }
 
-    // Not ported: exists (not reached by the CLI).
-
     //
     // Ensures the index is loaded; builds it from collection data if it does not exist on disk.
-    // (Zig: the progressCallback parameter is not ported; ensureSortIndex passes none.)
     //
     pub fn ensure(self: *SortIndex, io: std.Io, collection: *IBsonCollection, sortDataType: SortDataType) !void {
         if (self.loaded) {
@@ -780,7 +770,6 @@ pub const SortIndex = struct {
         // The number of records added so far.
         recordsAdded: u32 = 0,
 
-        // Not ported: the performance timers and counters (only reported through the progress callback).
     };
 
     // Helper function to flush dirty nodes to disk
@@ -873,8 +862,6 @@ pub const SortIndex = struct {
 
         // If leaf exceeds split threshold, split it (keep in cache, don't save yet)
         if (@as(f64, @floatFromInt(leafRecords.items.len)) > PAGE_SIZE * LEAF_SPLIT_THRESHOLD) {
-            // Not ported: the progress callback message.
-
             // Split the node (splitLeafNodeInternal modifies leafRecords in place and returns the new node ID and entries)
             const splitResult = try self.splitLeafNodeInternal(io, leafId, leafNode, leafRecords);
 
@@ -908,8 +895,6 @@ pub const SortIndex = struct {
 
     //
     // Builds the sort index by directly inserting records from the collection.
-    // (Zig: the progressCallback parameter and the timing report it receives are not ported; ensureSortIndex passes
-    // no callback.)
     //
     pub fn build(self: *SortIndex, io: std.Io, collection: *IBsonCollection) !void {
         // Load checkpoint if it exists (incremental build)
@@ -1029,7 +1014,6 @@ pub const SortIndex = struct {
                     }
                 }
 
-                // Not ported: the progress callback report.
             }
 
             // Shard complete - mark it and update checkpoint
@@ -1056,8 +1040,6 @@ pub const SortIndex = struct {
 
         // Ensure index is marked as loaded
         self.loaded = true;
-
-        // Not ported: the final progress callback report.
 
         self.loaded = true;
     }
@@ -2344,8 +2326,6 @@ pub const SortIndex = struct {
         return results;
     }
 
-    // Not ported: findByRange (not reached by the CLI).
-
     //
     // Splits an internal node when it gets too large
     //
@@ -2430,5 +2410,4 @@ pub const SortIndex = struct {
         }
     }
 
-    // Not ported: formatValueForDisplay, visualizeTree, analyzeTreeStructure (debugging helpers).
 };

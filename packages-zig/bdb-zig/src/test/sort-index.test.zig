@@ -1089,9 +1089,6 @@ test "should handle date type sorting" {
     try std.testing.expectEqualStrings("2024-01-03T00:00:00.000Z", values[2].string);
 }
 
-// Not ported: "should return early on subsequent build calls when already loaded" (it passes a progress callback to
-// build, which is not ported).
-
 test "should handle mixed case string comparisons correctly" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -2139,7 +2136,6 @@ test "should verify logical sort order is maintained after page split" {
     // Scores should be in correct order (sorted)
     try std.testing.expectEqualSlices(f64, &.{ 10, 15, 20, 25, 30, 40, 50 }, try sortScores(allocator, allRecords.items));
 
-    // Not ported: the range query across the split page (findByRange is not used by the ported commands).
 }
 
 test "should maintain correct page ordering when multiple pages are split" {
@@ -2211,7 +2207,6 @@ test "should maintain correct page ordering when multiple pages are split" {
     }
     try std.testing.expect(foundScore);
 
-    // Not ported: the range query across the split pages (findByRange is not used by the ported commands).
 }
 
 //

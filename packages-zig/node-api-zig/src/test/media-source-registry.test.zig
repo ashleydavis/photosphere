@@ -13,7 +13,7 @@ const errors = utils.errors;
 
 //
 // A media source over a fixed list of items, so the registry can be tested without touching a filesystem or a
-// photo library. (Zig: only what the registry tests use; the composite tests that use the rest are not ported.)
+// photo library.
 //
 const ListMediaSource = struct {
     // Names the source (TypeScript: label).
@@ -213,8 +213,6 @@ test "the options are passed through to the builder" {
     try std.testing.expect(options.uuidGenerator.ptr == seenOptions.?.uuidGenerator.ptr);
 }
 
-// Not ported: "two types are presented as one composite source" and the CompositeMediaSource tests (psi add only
-// builds folder sources, so CompositeMediaSource is not ported; buildMediaSource throws when it would need one).
 test "two source types need the composite, which is not ported" {
     registry.clearMediaSourceBuilders();
     defer registry.clearMediaSourceBuilders();

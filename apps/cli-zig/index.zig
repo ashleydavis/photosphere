@@ -1,6 +1,5 @@
 //
-// Port of apps/cli/index.ts: the `psi` entry point. Every command of index.ts is ported, with its aliases, and so is
-// the `--version` option.
+// Port of apps/cli/index.ts: the `psi` entry point.
 // The help of these commands is rendered here by the commander port (src/lib/commander.zig).
 //
 
@@ -3080,9 +3079,6 @@ pub fn handleError(allocator: std.mem.Allocator, err: anyerror, errorType: ?[]co
     console.log("If you believe this behaviour is a bug, please report it with the following command:");
     console.log(pc.yellow(allocator, "   psi bug") catch "   psi bug");
 }
-
-// Not ported: the 'uncaughtException' and 'unhandledRejection' handlers (Zig has no uncaught exceptions;
-// every error is returned to main, which handles it like `main().catch`).
 
 //
 // The entry point: sets up the process globals, then runs the command line (`main().catch(...)`).

@@ -331,8 +331,6 @@ pub fn DeserializerEntry(comptime T: type, comptime ContextT: type) type {
     };
 }
 
-// Not ported: MigrationFunction, MigrationMap (no caller passes migrations to load).
-
 //
 // The range check `buffer.writeUInt32LE(value)` makes before BinarySerializer.writeUInt32 writes a JavaScript
 // number: a value outside 0 to 4294967295 throws the runtime's RangeError. (No TypeScript counterpart: the Zig
@@ -1423,8 +1421,7 @@ fn findDeserializer(comptime T: type, comptime ContextT: type, deserializers: []
 
 //
 // Loads data from storage. Prefers v6 layout [version][type][payload][checksum]; falls back to legacy [version][payload][checksum] for pre-v6 databases.
-// (Zig: `context` is passed to every deserializer; the `migrations` and `targetVersion` parameters are not ported
-// because no caller passes migrations, and without migrations they have no effect.)
+// (Zig: `context` is passed to every deserializer.)
 //
 pub fn load(
     comptime T: type,
@@ -1452,8 +1449,6 @@ pub fn load(
         availableVersions[index] = entry.version;
     }
     std.mem.sort(u32, availableVersions, {}, std.sort.desc(u32));
-    // Not ported: finalTargetVersion (only used by applyMigrations).
-
     var version: u32 = undefined;
     var payload: []const u8 = undefined;
 
@@ -1473,7 +1468,6 @@ pub fn load(
                 };
                 var binaryDeserializer = BinaryDeserializer.init(allocator, payload);
                 const data = try deserializerFunction(allocator, context, binaryDeserializer.asDeserializer());
-                // Not ported: applyMigrations (no caller passes migrations).
                 return data;
             }
         }
@@ -1495,7 +1489,6 @@ pub fn load(
             if (findDeserializer(T, ContextT, deserializers, legacyVersion)) |legacyDeserializer| {
                 var binaryDeserializer = BinaryDeserializer.init(allocator, legacyPayload);
                 if (legacyDeserializer(allocator, context, binaryDeserializer.asDeserializer())) |data| {
-                    // Not ported: applyMigrations (no caller passes migrations).
                     return data;
                 }
                 else |_| {
@@ -1516,8 +1509,6 @@ pub fn load(
 
     var binaryDeserializer = BinaryDeserializer.init(allocator, payload);
     const data = try deserializerFunction(allocator, context, binaryDeserializer.asDeserializer());
-
-    // Not ported: applyMigrations (no caller passes migrations).
 
     return data;
 }
@@ -1607,4 +1598,3 @@ pub fn verify(
     return .{ .valid = true, .size = buffer.len };
 }
 
-// Not ported: applyMigrations, findMigrationPath (only reached when load is given migrations, which no caller does).

@@ -539,8 +539,6 @@ fn copyStorageFile(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, 
     }
 }
 
-// Not ported: copyStorageDirRecursive (not called by upgradeCommand).
-
 //
 // Copies BSON from srcPrefix (v5 layout: <name>/ collection dirs, sort_indexes/) to destPrefix
 // with v6 layout (collections/, shards/, indexes/). Does not copy sort_indexes (rebuilt later).

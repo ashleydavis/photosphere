@@ -24,7 +24,7 @@ const errors = utils.errors;
 // Reads a field of the parsed S3 credentials (`parsed.region` and the like): null (undefined) when the credentials
 // have no such field or are not an object, as in TypeScript, and a TypeError when they are null. A field that is
 // there but is not text is thrown as an error naming the secret and the field (TypeScript would send it on as it
-// is, which is not ported).
+// is).
 //
 fn s3CredentialField(parsed: std.json.Value, secretName: []const u8, field: []const u8) !?[]const u8 {
     if (parsed == .null) {

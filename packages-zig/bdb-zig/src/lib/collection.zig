@@ -50,8 +50,6 @@ pub const DirtyCallback = struct {
 //
 const MAX_CACHED_SHARDS = 8;
 
-// Not ported: ISortIndexCreationOptions (not reached by the CLI).
-
 //
 // A record: a document with an `_id`.
 // (Zig: a record is the BSON document it is stored as; `_id` is its string field.)
@@ -714,8 +712,6 @@ pub const BsonCollection = struct {
         return true;
     }
 
-    // Not ported: replaceOne (not reached by the CLI).
-
     //
     // Sets an internal record directly, preserving all timestamps and metadata.
     // This is useful for sync operations where timestamps must be preserved exactly.
@@ -796,8 +792,6 @@ pub const BsonCollection = struct {
 
         return indexes.items;
     }
-
-    // Not ported: drop (not reached by the CLI).
 
     //
     // Flushes all pending writes to disk: dirty shards, merkle trees, and sort index pages.

@@ -38,6 +38,3 @@ pub const IShareDatabaseConfig = struct {
     geocodingKey: ?[]const u8 = null,
 };
 
-// Not ported: IReceiveShareTaskData, IReceiveShareTaskResult, IShareReceiverEndpoint, IFindReceiverTaskData,
-// IFindReceiverTaskResult, ISendPayloadTaskData and ISendPayloadTaskResult (the background tasks of the desktop app,
-// not used by the CLI).

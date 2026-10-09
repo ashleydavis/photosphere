@@ -18,8 +18,6 @@ const errors = utils.errors;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 
-// Not ported: MockStorage (TypeScript keeps it only for reference; no test uses it).
-
 //
 // Helper function to create a file hash.
 //
@@ -1213,5 +1211,3 @@ test "HashCache.save returns quietly when the update lock is held by somebody el
     try std.testing.expect(test_files.fileExists(io, cachePath));
 }
 
-// Not ported: "rethrows when the update fails for a reason that is not contention" (hash-cache-save.test.ts), which
-// makes the fault by mocking the fs/promises module; the Zig port has no module to mock.

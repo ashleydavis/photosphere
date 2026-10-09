@@ -14,8 +14,6 @@ const getQueueBackend = queue_backend.getQueueBackend;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const log = &utils.log.log;
 
-// Not ported: ITaskQueue (TaskQueue is its only implementation; Zig callers use TaskQueue directly).
-
 //
 // Thread-safe allocator for the queue's internal state, which backend callbacks update from worker
 // threads (the queue's own allocator may be an arena that is not thread-safe).

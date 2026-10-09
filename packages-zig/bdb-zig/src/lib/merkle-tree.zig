@@ -344,8 +344,6 @@ pub fn deleteDatabaseMerkleTree(allocator: std.mem.Allocator, io: std.Io, storag
     try storage.deleteFile(allocator, io, treeFilePath);
 }
 
-// Not ported: databaseMerkleTreeExists (not reached by the CLI).
-
 //
 // Gets the root hash for the database from its merkle tree.
 // Returns undefined if the database merkle tree doesn't exist or has no root hash.

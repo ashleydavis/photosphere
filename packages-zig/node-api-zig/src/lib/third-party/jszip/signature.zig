@@ -29,4 +29,3 @@ pub const ZIP64_CENTRAL_DIRECTORY_LOCATOR = "PK\x06\x07";
 //
 pub const ZIP64_CENTRAL_DIRECTORY_END = "PK\x06\x06";
 
-// Not ported: DATA_DESCRIPTOR (only used when writing a zip).

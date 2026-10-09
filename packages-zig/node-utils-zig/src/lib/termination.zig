@@ -257,8 +257,7 @@ fn watchSignals() void {
 // Initializes the termination handlers for the process.
 // The 'uncaughtException' handler is shutdownOnUncaughtException, which the code that throws an error nothing catches
 // calls, and the 'unhandledRejection' handler is shutdownOnUnhandledRejection, which a signal handler that throws
-// reaches. Not ported: the 'beforeExit' handler, which only logs (the commands always end in exit). The 'exit'
-// handler's log line is written by exitProcess.
+// reaches. The 'exit' handler's log line is written by exitProcess.
 //
 fn initializeTerminationHandlers(io: std.Io) !void {
     if (terminationCallbacksInitialized) {

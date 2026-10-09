@@ -10,7 +10,7 @@ const writeNumber = serialization_zig.js_number.writeNumber;
 // No TypeScript counterpart: stands in for the zod schemas the TypeScript tools declare their input with
 // (`inputSchema: { assetId: z.string(), ... }`), and for what the MCP TypeScript SDK does with them: the JSON Schema
 // that tools/list reports (zod-to-json-schema), and the check of the arguments of tools/call (zod 3 safeParse),
-// whose issues become the text of the "Input validation error". Only the zod types the tools use are ported.
+// whose issues become the text of the "Input validation error".
 //
 // The SDK checks the requests themselves with zod 4, whose issues are worded differently; invalidTypeIssue4 builds
 // those.

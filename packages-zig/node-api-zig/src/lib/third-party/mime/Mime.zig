@@ -3,9 +3,6 @@
 //
 // mime (c) 2023 Robert Kieffer, MIT license.
 //
-// Only what Photosphere uses is ported: the constructor's define() calls and getType(). Not ported: getExtension,
-// getAllExtensions, _freeze and _getTestState.
-//
 
 const std = @import("std");
 const utils_zig = @import("utils-zig");
@@ -31,8 +28,6 @@ pub const Mime = struct {
 
     // The MIME type of each extension (TypeScript: #extensionToType).
     extensionToType: std.StringHashMapUnmanaged([]const u8) = .empty,
-
-    // Not ported: #typeToExtension and #typeToExtensions (only read by getExtension and getAllExtensions).
 
     //
     // Creates a map from the type maps, defined in order (TypeScript: `new Mime(...args)`).

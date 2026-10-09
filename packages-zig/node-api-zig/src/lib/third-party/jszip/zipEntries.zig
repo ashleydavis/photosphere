@@ -65,9 +65,6 @@ pub const ZipEntries = struct {
     // The number of disks.
     disksCount: i64 = 0,
 
-    // Not ported: loadOptions (JSZip's defaults are what Photosphere uses: decodeFileName is utf8decode) and
-    // zip64ExtensibleData (read and never used).
-
     //
     // Check that the reader is on the specified signature.
     //

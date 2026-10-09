@@ -8,7 +8,7 @@ const std = @import("std");
 const flate = @import("flate.zig");
 
 //
-// A compression JSZip knows (only uncompressing is ported).
+// A compression JSZip knows.
 //
 pub const ICompression = struct {
     // The compression method as it is stored in a zip (two bytes, little endian).

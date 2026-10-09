@@ -33,9 +33,6 @@ pub fn computeHash(inputStream: *std.Io.Reader) ![Sha256.digest_length]u8 {
     return hashing.hasher.finalResult();
 }
 
-// Not ported: IPathBearingStream, IFileHashingCrypto (the native hasher is the mobile worker's crypto shim; in Bun
-// `crypto` is Node's, which has no hashFileSync).
-
 //
 // Hashes a whole file natively and returns the digest (TypeScript: `(filePath: string) => Buffer`).
 // (A Zig closure: `function` is called with `context`.)

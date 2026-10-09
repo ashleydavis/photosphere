@@ -7,9 +7,9 @@ const BufferStream = node_api.exif_parser_bufferstream.BufferStream;
 const BsonValue = @import("serialization-zig").bson.BsonValue;
 
 //
-// Tests ported from exif-parser 0.1.12's own test suite (test/test-exif.js and test/test-jpeg.js), with its test
-// images and expected tags copied into fixtures/exif-parser. test/test-date.js and test/test-simplify.js are not
-// ported: Photosphere turns simple values off, so the date and simplify modules are not ported.
+// Tests from exif-parser 0.1.12's own test suite (test/test-exif.js and test/test-jpeg.js), with its test
+// images and expected tags copied into fixtures/exif-parser. Photosphere turns simple values off, so the date and
+// simplify modules have no tests.
 //
 
 //

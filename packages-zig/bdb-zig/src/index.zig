@@ -5,8 +5,6 @@ pub const sort_index = @import("lib/sort-index.zig");
 pub const merge_records = @import("lib/merge-records.zig");
 pub const merkle_tree = @import("lib/merkle-tree.zig");
 pub const merkle_tree_ref = @import("lib/merkle-tree-ref.zig");
-// Not ported: tests/mock-database, tests/mock-collection (TypeScript test helpers).
-
 //
 // Not exported by the TypeScript index (collection.ts imports them); exported here so the tests can reach them.
 //

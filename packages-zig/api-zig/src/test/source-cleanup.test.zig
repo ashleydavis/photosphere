@@ -144,8 +144,6 @@ fn expectRequests(expected: []const []const []const u8, actual: []const []const 
     }
 }
 
-// Not ported: the selectConfirmedForCleanup tests (selectConfirmedForCleanup is not used by psi add).
-
 test "deletes everything in one request when it fits in a batch" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

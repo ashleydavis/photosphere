@@ -106,7 +106,7 @@ pub fn visualizeMerkleTree(allocator: std.mem.Allocator, writer: *std.Io.Writer,
 
 //
 // Writes a database metadata value like the template string `${value}` (String(value)). Only the primitive values
-// a tree's database metadata holds are ported; any other value throws.
+// a tree's database metadata holds are written; any other value throws.
 //
 fn writeMetadataValue(writer: *std.Io.Writer, value: bson.BsonValue) !void {
     switch (value) {

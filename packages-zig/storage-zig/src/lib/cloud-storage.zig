@@ -225,8 +225,8 @@ pub const CloudStorage = struct {
     // SHA-256 the server checks it against (see writeStreamHashed), which the signature never did.
     //
     // (Zig: the S3 client (the binding to aws-c-s3 in s3-client.zig) is configured with `maxAttempts: 1` and
-    // the connectionTimeout of the request handler; aws-c-s3 has no whole-request timeout, so requestTimeout is
-    // not ported. The photosphereUnsignedPayload middleware is the client signing every request that has a body
+    // the connectionTimeout of the request handler; aws-c-s3 has no whole-request timeout, so there is no
+    // requestTimeout. The photosphereUnsignedPayload middleware is the client signing every request that has a body
     // with "UNSIGNED-PAYLOAD".)
     //
     fn buildClient(io: std.Io, endpoint: ?[]const u8, credentials: ?IS3Credentials) S3Client {

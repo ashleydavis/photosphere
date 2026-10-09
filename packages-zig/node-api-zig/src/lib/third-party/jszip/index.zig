@@ -3,9 +3,6 @@
 // Afonso), the zip reader file-scanner.ts uses: `new JSZip()`, `loadAsync(buffer)`, `files` and a file's
 // `async("nodebuffer")`, with JSZip's default load options.
 //
-// Only reading is ported. Inflating goes through zlib-ng (see flate.zig), where JSZip uses pako, a JavaScript port of
-// zlib. Not ported: writing and generating zips, streams, the browser readers, and the options Photosphere never sets.
-//
 
 const std = @import("std");
 const load_module = @import("load.zig");

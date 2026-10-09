@@ -67,7 +67,7 @@ fn makeOriginDatabase(allocator: std.mem.Allocator, io: std.Io, workingDir: []co
 
 //
 // Applies a "set" op to a record of the metadata collection of the database at a path.
-// (Zig: applyDatabaseOps is not ported; this is what it does for a "set" op on the metadata collection.)
+// (This is what applyDatabaseOps does for a "set" op on the metadata collection.)
 //
 fn applySetOp(allocator: std.mem.Allocator, io: std.Io, clock: *SettableTimestampProvider, databasePath: []const u8, recordId: []const u8, fields: BsonDocument) !void {
     const created = try createStorage(allocator, io, databasePath, null, null);

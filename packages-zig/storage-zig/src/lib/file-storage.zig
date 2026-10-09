@@ -19,8 +19,6 @@ const ensureDir = node_utils.fs.ensureDir;
 const pathExists = node_utils.fs.pathExists;
 const remove = node_utils.fs.remove;
 
-// Not ported: IPathBearingStream (see writeStream).
-
 // Write lock timeout in milliseconds (10 seconds)
 const WRITE_LOCK_TIMEOUT_MS = 10000;
 
@@ -309,7 +307,7 @@ pub const FileStorage = struct {
     //
     // Copies a file from one location to another.
     // Src file path is a full path, dest path is relative to the storage root.
-    // (Zig: node-utils `copy` (fs-extra) is not ported; this copies a single file, directories are not supported.)
+    // (This copies a single file, directories are not supported.)
     //
     pub fn copyTo(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, srcPath: []const u8, destPath: []const u8) !void {
         _ = self;

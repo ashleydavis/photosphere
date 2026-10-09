@@ -18,7 +18,7 @@ var random_uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{}
 
 //
 // Creates the collection under test (TypeScript: the beforeEach block; the temporary directory it makes is
-// never used, so it is not ported).
+// never used).
 //
 fn newCollection(allocator: std.mem.Allocator, storage: *MemoryStorage) !*IBsonCollection {
     const db = try BsonDatabase.init(allocator, storage.asStorage(), "", random_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
@@ -39,7 +39,7 @@ fn makeDocument(allocator: std.mem.Allocator, id: ?[]const u8, name: []const u8,
 }
 
 //
-// Gets a record by id through its shard (TypeScript: getOne, which is not ported).
+// Gets a record by id through its shard.
 //
 fn getRecord(collection: *IBsonCollection, id: []const u8) !?bdb.shard.IInternalRecord {
     const shard = try collection.shard(try collection.getShardId(id));

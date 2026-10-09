@@ -149,9 +149,6 @@ test "writeErrorChain writes the chain to a writer" {
     try std.testing.expectEqualStrings("Error: outer: root cause\nCaused by:\nError: root cause", fixed_writer.buffered());
 }
 
-// Not ported: "should prepend the message when the stack omits it (JavaScriptCore stacks)" (Zig errors have
-// no stack; the "Error: <message>" line that stands in for it always contains the message).
-
 test "should not duplicate the message when the stack already contains it (V8 stacks)" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

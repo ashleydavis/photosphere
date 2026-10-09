@@ -2,7 +2,6 @@ const std = @import("std");
 
 //
 // Options for formatBytes (TypeScript: `{ binary?: boolean; decimals?: number; locale?: string }`).
-// Only the en-US locale is ported (it is the default and the only locale the CLI uses).
 //
 pub const IFormatBytesOptions = struct {
     // Use 1024-based units (KiB, MiB, ...) instead of 1000-based units (KB, MB, ...).
@@ -56,8 +55,6 @@ pub fn formatBytes(allocator: std.mem.Allocator, bytes: f64, options: IFormatByt
     const unit = if (!std.math.isNan(exponent) and exponent >= 0 and exponent < @as(f64, @floatFromInt(sizes.len))) sizes[@intFromFloat(exponent)] else "undefined";
     return std.fmt.allocPrint(allocator, "{s} {s}", .{ formatted, unit });
 }
-
-// Not ported: formatDuration, formatBitrate (not reached by the CLI).
 
 //
 // JavaScript Math.round: rounds half up (towards +Infinity).

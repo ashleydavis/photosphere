@@ -58,10 +58,6 @@ test "returns the defaults when there is nothing stored" {
     try expectSettings(DEFAULT_AUTO_IMPORT_SETTINGS, try normaliseAutoImportSettings(allocator, .null));
 }
 
-// Not ported: "does not hand out the shared defaults object". In Zig the settings hold a const slice, so
-// a caller cannot push into the defaults' sources through the settings it was handed, and a test of it
-// could not fail.
-
 test "leaves valid settings untouched" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

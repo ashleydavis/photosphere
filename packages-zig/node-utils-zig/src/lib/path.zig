@@ -3,7 +3,7 @@
 // "path". Node joins the segments and then normalizes the result: it resolves `.` and `..` segments, collapses
 // repeated separators and, on Windows, turns every `/` into `\`. `std.fs.path.join` does none of that, so the
 // TypeScript output cannot be matched with it. Only join and the normalize it calls, dirname, basename (without a
-// suffix), extname and isAbsolute are ported.
+// suffix), extname and isAbsolute.
 //
 
 const std = @import("std");

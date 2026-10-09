@@ -25,10 +25,8 @@ pub const ZipObject = struct {
     // entry.
     _data: ?CompressedObject,
 
-    // Not ported: comment, unixPermissions, dosPermissions, _dataBinary and options (not read by Photosphere).
-
     //
-    // Prepare the content in the asked type (only "nodebuffer" is ported, as the Zig bytes).
+    // Prepare the content in the asked type (only "nodebuffer", as the Zig bytes).
     //
     pub fn asyncNodeBuffer(self: *const ZipObject, allocator: std.mem.Allocator) ![]u8 {
         return self._decompressWorker(allocator);

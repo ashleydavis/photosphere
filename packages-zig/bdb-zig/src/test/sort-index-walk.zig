@@ -4,7 +4,7 @@ const bdb = @import("bdb-zig");
 const BsonValue = serialization_zig.bson.BsonValue;
 
 //
-// Returns the record ids of a sort index in page order (a stand in for walking getPage, which is not ported), reading
+// Returns the record ids of a sort index in page order (a stand in for walking getPage), reading
 // the leaves from the leaf cache or from storage.
 //
 pub fn walkSortIndex(allocator: std.mem.Allocator, io: std.Io, sortIndex: *bdb.sort_index.SortIndex) ![]const []const u8 {

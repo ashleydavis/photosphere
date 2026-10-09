@@ -45,7 +45,7 @@ const laterAssetBytes = "the-bytes-of-another-photo";
 
 //
 // Writes an asset file and records it in the database's merkle tree.
-// (Zig: writeAsset is not ported; this does what it does for a test, without the write lock.)
+// (This does what writeAsset does for a test, without the write lock.)
 //
 fn writeAsset(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, rawStorage: IStorage, id: []const u8, contentType: []const u8, buffer: []const u8) !void {
     const assetPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", id });

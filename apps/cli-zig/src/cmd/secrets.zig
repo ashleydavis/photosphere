@@ -209,9 +209,6 @@ pub const ISecretsReceiveOptions = struct {
     timeout: ?[]const u8 = null,
 };
 
-// Not ported: secretsCommand (the command group is registered in index.zig with the Zig commander, like every
-// other command).
-
 //
 // Validates a name the user typed (`if (!value || value.trim().length === 0) return 'Name is required'`).
 //

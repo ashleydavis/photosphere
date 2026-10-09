@@ -31,9 +31,6 @@ pub fn loadConfigFile(allocator: std.mem.Allocator, io: std.Io) !IConfigFile {
     return yamlToConfigFile(allocator, document);
 }
 
-// Not ported: saveConfigFile (it writes with writeYaml, which node-utils-zig does not port because the CLI does not
-// reach it, and nothing but a test or a first write in the TypeScript uses it; the app goes through updateConfigFile).
-
 //
 // The mutator updateConfigFile hands to updateYaml (the arrow function in TypeScript): it turns the document into the
 // configuration, lets the caller change it and turns it back into a document.
@@ -82,6 +79,3 @@ pub fn updateConfigFile(allocator: std.mem.Allocator, io: std.Io, mutator: anyty
 //
 pub const defaultConfigFile = config_format.defaultConfigFile;
 
-// Not ported: config.worker.ts (the read-config and write-config tasks). Only the mobile worker registers them
-// (mobile-worker-entry.ts), as it does state.worker.ts and databases-config.worker.ts, and the Zig task handlers
-// (task-handlers.zig) carry only the tasks the CLI and the desktop app run.

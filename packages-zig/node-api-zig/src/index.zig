@@ -49,8 +49,6 @@ pub const import_module = @import("lib/import.zig");
 pub const check = @import("lib/check.zig");
 pub const check_worker = @import("lib/check.worker.zig");
 pub const check_database_exists_worker = @import("lib/check-database-exists.worker.zig");
-// Not ported: zip-utils,
-// load-assets.worker.
 pub const resolve_storage_credentials = @import("lib/resolve-storage-credentials.zig");
 pub const open_storage = @import("lib/open-storage.zig");
 pub const databases_config = @import("lib/databases-config.zig");
@@ -67,10 +65,6 @@ pub const app_state_format = @import("lib/app-state-format.zig");
 pub const app_state = @import("lib/app-state.zig");
 pub const auto_import_desktop = @import("lib/auto-import-desktop.zig");
 pub const lazy_origin_storage = @import("lib/lazy-origin-storage.zig");
-// Not ported: desktop-config, get-database-summary.worker, move-assets.worker,
-// hash-file.worker, save-asset.worker, save-assets-batch.worker, create-database.worker,
-// sync-database.worker (not reached by the CLI).
-
 //
 // Files with no TypeScript counterpart (the arrow functions that are passed to retry, and the fetch stand-in).
 //
