@@ -2310,8 +2310,7 @@ pub const Upload = struct {
         const params = self.options.params;
         if (self.options.client.send != null) {
             // lib-storage sends its commands through the client's `send`, so a client whose `send` is replaced sees
-            // them. A body that fits in one part is sent as one PutObjectCommand carrying the params; the commands of a
-            // multipart upload are not ported to the ISend seam.
+            // them. A body that fits in one part is sent as one PutObjectCommand carrying the params.
             const body = switch (params.Body) {
                 .buffer => |buffer| buffer,
                 .stream => |stream| try stream.allocRemaining(allocator, .unlimited),

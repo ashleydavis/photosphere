@@ -9,7 +9,7 @@ const parseDate = serialization_zig.js_date.parseDate;
 const IBsonDatabase = bdb.database.BsonDatabase;
 
 //
-// A media file record (TypeScript: IAsset from asset.ts, which is not ported; Zig records are the BSON documents
+// A media file record (Zig records are the BSON documents
 // they are stored as).
 //
 pub const IAsset = BsonDocument;

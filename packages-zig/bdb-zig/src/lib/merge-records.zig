@@ -52,7 +52,7 @@ pub const MergeValue = struct {
 
 //
 // Reads a number that may be missing (TypeScript: the operand of `??`): null for a missing, undefined or null value.
-// (No TypeScript counterpart.) Throws for a value that is not a number, which is not ported.
+// (No TypeScript counterpart.) Throws for a value that is not a number.
 //
 fn optionalNumber(value: ?BsonValue) !?f64 {
     const present = value orelse {
@@ -87,7 +87,7 @@ fn truthyNumber(value: ?BsonValue) !?f64 {
 
 //
 // Reads a metadata object that may be missing (TypeScript: the operand of `?.`): null for a missing, undefined or null
-// value. (No TypeScript counterpart.) Throws for a value that is not an object, which is not ported.
+// value. (No TypeScript counterpart.) Throws for a value that is not an object.
 //
 fn optionalMetadata(value: ?BsonValue) !?Metadata {
     const present = value orelse {

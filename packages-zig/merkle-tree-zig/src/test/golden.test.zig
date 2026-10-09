@@ -264,7 +264,7 @@ fn summarizeTree(allocator: std.mem.Allocator, tree: *const IMerkleTree) !TreeSu
 }
 
 //
-// Returns the results without the "find" results (findItemNode is not ported, so "find" operations are not replayed).
+// Returns the results without the "find" results.
 //
 fn withoutFindResults(allocator: std.mem.Allocator, results: []const []const u8) ![]const []const u8 {
     var filtered: std.ArrayList([]const u8) = .empty;
@@ -398,7 +398,7 @@ fn replayScenario(allocator: std.mem.Allocator, scenario: Scenario) !ReplayResul
             }
         }
         else if (std.mem.eql(u8, operation.op, "find")) {
-            // Not replayed: findItemNode is not ported (not reached by the CLI).
+            // Find operations are not replayed.
         }
         else if (std.mem.eql(u8, operation.op, "pruneDiff")) {
             var other = merkle_tree.createTree(scenario.treeId);

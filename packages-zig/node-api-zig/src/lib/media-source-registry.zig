@@ -122,5 +122,3 @@ pub fn buildMediaSource(allocator: std.mem.Allocator, sources: []const IAutoImpo
     return errors.throwError("Not ported: CompositeMediaSource (psi add only builds folder sources).", .{});
 }
 
-// Not ported: parseCompositeCursor, ICompositeCursor, CompositeMediaSource, stampChildIndex, parseChildIndex,
-// withSourceId, IStampedSourceId (psi add only builds folder sources, which are one source type).

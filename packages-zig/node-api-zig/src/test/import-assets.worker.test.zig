@@ -866,9 +866,6 @@ test "a missing or nonsensical concurrency limit fails loudly rather than import
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "maxConcurrentChildTasks") != null);
 }
 
-// Not ported: "childQueue.shutdown is called in the finally block even when scanPaths throws" (TypeScript makes
-// the scan throw by mocking scanPaths; a real scan of a real folder does not throw).
-
 //
 // Releases the write lock another owner holds, once the import has waited for it for a second of the time of its Io. That time
 // is the one the back-off sleeps of the import move, so the import has certainly been refused the lock and is waiting by the
@@ -1213,9 +1210,6 @@ test "records the id of an asset the database already held, so it is not looked 
     try std.testing.expectEqualStrings("d0d0d0d0-0000-4000-8000-000000000000", (try cache.getHash(allocator, filePath)).?.assetId.?);
 }
 
-// Not ported: "writes the import record part way through a long import, not only at the end" (TypeScript counts
-// the calls to its mocked recordImports; how many writes made the record is not visible in the record).
-
 test "writes the import record once at the end of a short import" {
     var context: ImportTest = undefined;
     try context.init(hashFileReportsDefault);
@@ -1253,9 +1247,6 @@ test "a dry run records nothing, because it changed nothing" {
 
     try std.testing.expect(!test_files.fileExists(std.testing.io, try getImportRecordPath(context.arena.allocator(), context.databaseDir)));
 }
-
-// Not ported: "releases each file once the import has finished with it" and "releases a file the database already
-// held" (TypeScript mocks the automatic scanner to see release; the scanner of a folder releases nothing).
 
 test "reports what an automatic import is doing, so the panel has something to show" {
     var context: ImportTest = undefined;
@@ -1336,10 +1327,6 @@ test "names the database an automatic arrival landed in, which the gallery needs
     try std.testing.expectEqualStrings("automatic", arrivals[0].get("source").?.string);
 }
 
-// Not ported: "saves the hash cache as soon as the scanner has nothing left to import" and "does not save the hash
-// cache while the scanner still has work to hand over" (TypeScript counts the calls to its mocked save; a run
-// saves at its end as well, so the file on disk cannot tell the two apart).
-
 test "writes fewer assets than a batch holds rather than stranding them" {
     var context: ImportTest = undefined;
     try context.init(newFileUploads);
@@ -1360,7 +1347,3 @@ test "writes fewer assets than a batch holds rather than stranding them" {
     try std.testing.expectEqual(@as(u64, 1), node_api.media_file_database.getFilesImported(filesTree.databaseMetadata));
 }
 
-// Not ported: "does not give every photo its own database commit once the scanner is caught up", "drops the
-// database's cached pages when the database was last written by something else" and "keeps the database's cached
-// pages when nothing has written to it" (TypeScript counts the calls to its mocked commit and flush; the Zig
-// database has no seam to count them at).

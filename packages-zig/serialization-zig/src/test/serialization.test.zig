@@ -819,7 +819,6 @@ test "should detect corrupted BSON data" {
 
 // ---------------------------------------------------------------------------------------------------------------
 // Migration system
-// Not ported: the migration tests other than the one below (applyMigrations/findMigrationPath are not ported).
 // ---------------------------------------------------------------------------------------------------------------
 
 test "should work without migrations when versions match" {

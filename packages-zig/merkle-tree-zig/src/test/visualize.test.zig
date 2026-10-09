@@ -105,7 +105,7 @@ test "visualizeTree writes boolean, null and undefined database metadata like St
     const text = try visualize.visualizeTree(allocator, &tree);
     try std.testing.expect(std.mem.indexOf(u8, text, "Database Metadata:\n  yes: true\n  no: false\n  nothing: null\n  missing: undefined\n\n") != null);
 
-    // Other values are not ported, and say so.
+    // Other values throw.
     tree.databaseMetadata = try BsonDocument.fromFields(allocator, &.{.{ .key = "when", .value = .{ .date = 0 } }});
     try std.testing.expectError(error.Thrown, visualize.visualizeTree(allocator, &tree));
     try std.testing.expectEqualStrings("String() of a date database metadata value is not ported", utils.errors.lastErrorMessage());

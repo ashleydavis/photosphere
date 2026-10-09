@@ -54,7 +54,6 @@ fn convertNumber(value: anytype) !f64 {
         .int32 => |number| return @floatFromInt(number),
         // `fraction.numerator` of undefined or null throws a TypeError.
         .undefined, .null => return error.TypeError,
-        // Not ported: a string or a boolean component (JavaScript would concatenate or add it).
         else => return error.UnsupportedCoordinate,
     }
 }

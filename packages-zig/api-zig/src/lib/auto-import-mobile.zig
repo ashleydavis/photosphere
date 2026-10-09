@@ -5,10 +5,6 @@ const IAutoImportSettings = auto_import_settings.IAutoImportSettings;
 //
 // What the mobile app should do about automatic import, worked out from its settings alone.
 //
-// Only the part the config file needs is ported: the file's type and the pacing it holds. Not ported:
-// DEFAULT_DATABASE_FOLDER_NAME, DEFAULT_DATABASE_DISPLAY_NAME, AUTO_IMPORT_TASK_SOURCE, WHOLE_LIBRARY_SOURCES, IMobileAutoImportPlan
-// and planMobileAutoImport (the mobile apps' planner, which psi and the desktop app do not reach).
-//
 // (Zig: a number the file holds (the pacing) is a std.json.Value that is a number, so an integer stays an integer when
 // it is written back, the way a JavaScript number does.)
 //

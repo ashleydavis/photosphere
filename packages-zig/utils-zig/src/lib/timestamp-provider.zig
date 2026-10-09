@@ -3,7 +3,7 @@ const errors = @import("errors.zig");
 const format = @import("format.zig");
 
 //
-// A JavaScript `Date` (milliseconds since the Unix epoch). Only the methods that are used are ported.
+// A JavaScript `Date` (milliseconds since the Unix epoch).
 //
 pub const Date = struct {
     // Milliseconds since 1970-01-01T00:00:00.000Z (the value of `date.getTime()`).

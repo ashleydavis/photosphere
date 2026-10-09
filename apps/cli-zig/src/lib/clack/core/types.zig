@@ -18,4 +18,3 @@ pub const ClackState = enum {
     @"error",
 };
 
-// Not ported: ClackEvents (Zig prompts call their event handlers directly).

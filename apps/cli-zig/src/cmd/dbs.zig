@@ -644,9 +644,6 @@ fn promptOptional(allocator: std.mem.Allocator, io: std.Io, message: []const u8)
     return if (trimmed.len > 0) trimmed else null;
 }
 
-// Not ported: dbsCommand (the command group is registered in index.zig with the Zig commander, like every other
-// command).
-
 //
 // psi dbs list: table of all configured databases.
 //

@@ -13,8 +13,6 @@ const MediaSourceDeleteError = media_source.MediaSourceDeleteError;
 // about what a task believed it did; the hash being in the database is the database saying so.
 //
 
-// Not ported: IImportedSourceItem, selectConfirmedForCleanup (not used by psi add).
-
 //
 // What a cleanup run actually did.
 //

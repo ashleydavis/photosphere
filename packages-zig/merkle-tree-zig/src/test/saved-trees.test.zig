@@ -186,8 +186,7 @@ test "BufferSet and BufferMap iterate hashes that share XOR buckets in TypeScrip
     var map = BufferMap(u32).init(allocator);
     var addCount: usize = 0;
     for (fixture.steps) |step| {
-        // Only the leading "add" steps are replayed: delete and clear are not ported (not reached by psi replicate
-        // or psi verify).
+        // Only the leading "add" steps are replayed.
         if (!std.mem.eql(u8, step.op, "add")) {
             break;
         }

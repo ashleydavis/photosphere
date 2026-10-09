@@ -314,9 +314,6 @@ test "reports nothing fetched and nothing missing for a full database" {
     try expectResult(result, 0, 0);
 }
 
-// Not ported: "copies a file that takes longer than the default retry timeout to read" (it needs Jest's fake timers
-// to pass 45 seconds of reading; Zig has no fake clock for std.Io, and the real wait would be minutes).
-
 test "stops copying when the task is cancelled" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

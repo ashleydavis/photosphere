@@ -502,7 +502,7 @@ pub fn isObject(value: BsonValue) bool {
 
 //
 // Returns `Object.keys(value)` (also the keys `for (const key in value)` visits) for a document, a date or a number or
-// boolean primitive. Throws for the other values, whose own keys are not ported.
+// boolean primitive. Throws for the other values.
 //
 pub fn objectKeys(allocator: std.mem.Allocator, value: BsonValue) ![]const []const u8 {
     switch (value) {
@@ -526,7 +526,7 @@ pub fn objectKeys(allocator: std.mem.Allocator, value: BsonValue) ![]const []con
 
 //
 // Returns `value[key]` for a document (undefined when it has no such field) or a date (which has no own properties).
-// Throws for the other values, whose properties are not ported.
+// Throws for the other values.
 //
 pub fn getProperty(value: BsonValue, key: []const u8) !BsonValue {
     switch (value) {

@@ -3,11 +3,6 @@
 // (this file has no TypeScript counterpart in the repo). It starts the platform's opener for the target and
 // returns without waiting for it (`wait: false`).
 //
-// Not ported: the `app` and `wait` options, the default-browser lookup, and the WSL branch (under WSL the
-// package runs the Windows PowerShell from the WSL mount; here Linux always runs xdg-open).
-// The package's own bundled `xdg-open` is not ported: the compiled TypeScript CLI cannot reach it either
-// (it is not inside the compiled binary), so it runs the system `xdg-open`, as this port does.
-//
 
 const std = @import("std");
 const builtin = @import("builtin");

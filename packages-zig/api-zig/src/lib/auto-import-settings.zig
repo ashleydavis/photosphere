@@ -30,8 +30,6 @@ pub const IDeviceAlbumAutoImportSource = struct {
     albumId: []const u8,
 };
 
-// Not ported: ALL_DEVICE_MEDIA_ALBUM_ID (only the mobile apps use it).
-
 //
 // A place the auto-import task watches for new media.
 // (Zig: a tagged union; the tag is the TypeScript `type` discriminator.)

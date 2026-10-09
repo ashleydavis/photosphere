@@ -173,7 +173,7 @@ pub fn remove(io: std.Io, targetPath: []const u8) !void {
 // interleave their bytes into a corrupt result (the last rename wins, and every
 // intermediate state is a complete file). The temp name uses a fresh UUID so
 // overlapping writes to the same target never share a temp file.
-// The TypeScript `options` (encoding and mode) are not ported: data is written as given with default permissions.
+// The TypeScript `options` (encoding and mode) do not apply: data is written as given with default permissions.
 //
 pub fn outputFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, data: []const u8) !void {
     try ensureFileDir(io, filePath);
@@ -184,7 +184,7 @@ pub fn outputFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8
 
 //
 // Reads a JSON file and parses it. Like fs-extra's readJson.
-// The TypeScript `options` (encoding and flag) are not ported: the file is read as UTF-8.
+// The TypeScript `options` (encoding and flag) do not apply: the file is read as UTF-8.
 //
 pub fn readJson(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !std.json.Value {
     const data = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
@@ -234,8 +234,6 @@ pub fn readYaml(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) 
     }
     return parsed;
 }
-
-// Not ported: writeYaml (not reached by the CLI).
 
 //
 // The parse and serialize functions updateYaml hands to updateFileOptimistic (the arrow functions in
@@ -573,16 +571,12 @@ pub fn updateToml(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8
     try updateFileOptimistic(toml.TomlValue, allocator, io, filePath, fallback, mutator, &parse, &serialize, retries);
 }
 
-// Not ported: updateJson, emptyDir, copy (not used by the ported commands).
-
 //
 // Synchronous version: Ensures that the directory exists.
 //
 pub fn ensureDirSync(io: std.Io, dirPath: []const u8) !void {
     return ensureDir(io, dirPath);
 }
-
-// Not ported: removeSync, copySync (not reached by the CLI).
 
 //
 // Equivalent of Node's `os.tmpdir()`.

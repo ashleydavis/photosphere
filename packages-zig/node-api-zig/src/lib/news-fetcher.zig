@@ -58,8 +58,6 @@ pub const INewsItem = struct {
     action: ?INewsLink = null,
 };
 
-// Not ported: INewsFeed (the parsed feed is a std.json.Value here).
-
 //
 // Converts a JavaScript value to its string form for a template string (`${value}`): strings as they are, numbers
 // as JavaScript prints them, an array as its elements joined with commas (null and undefined elements as nothing),

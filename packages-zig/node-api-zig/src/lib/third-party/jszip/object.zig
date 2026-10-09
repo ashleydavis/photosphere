@@ -28,8 +28,6 @@ pub const IFileAddOptions = struct {
     // The DOS permissions, when the entry was made on DOS.
     dosPermissions: ?i64,
 
-    // Not ported: binary, optimizedBinaryString, comment and createFolders (load.js passes true, true, the comment
-    // and false, and none of them changes the entry Photosphere reads).
 };
 
 //

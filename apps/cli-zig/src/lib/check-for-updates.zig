@@ -10,8 +10,6 @@ const setLastShownUpdateVersion = node_api.news_state.setLastShownUpdateVersion;
 //
 const LATEST_RELEASE_URL = "https://api.github.com/repos/ashleydavis/photosphere/releases/latest";
 
-// Not ported: IGitHubReleaseResponse (the response is a std.json.Value here).
-
 //
 // The tag_name of the release response, or null when it is missing or not a string.
 //

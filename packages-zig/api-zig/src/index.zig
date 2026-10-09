@@ -20,7 +20,3 @@ pub const auto_import_mobile = @import("lib/auto-import-mobile.zig");
 pub const op = @import("lib/op.zig");
 pub const database_op = @import("lib/database-op.zig");
 
-// Not ported: database-update, load-assets, save-assets.types, asset,
-// database-op-record, retention-policy, sync-gate (not reached by the CLI). auto-import-mobile is ported only as far
-// as the config file needs (IAutoImportFile and the pacing); its planner is not.
-// IAsset (asset.ts) is only used as a type parameter of IBsonCollection<IAsset>; Zig records are BSON documents.

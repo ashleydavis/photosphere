@@ -57,7 +57,7 @@ fn imageMagickVersion(stdout: []const u8) []const u8 {
 }
 
 //
-// Wraps ImageMagick. Only the tool verification is ported.
+// Wraps ImageMagick.
 //
 pub const Image = struct {
     // The command used to convert images.
@@ -84,8 +84,6 @@ pub const Image = struct {
     pub fn init(filePath: []const u8) Image {
         return .{ .filePath = filePath };
     }
-
-    // Not ported: configure (Photosphere does not configure custom binaries).
 
     //
     // Initialize ImageMagick commands by checking system PATH
@@ -425,8 +423,6 @@ pub const Image = struct {
 
         return validation.actualOutputPath;
     }
-
-    // Not ported: saveAs, getDominantColorHistogram, getDominantColors, getPath (not used by psi add).
 
     //
     // Extract the dominant color from the image using ImageMagick

@@ -15,15 +15,6 @@
 // `error.CommanderError` or `error.Exit`, and the details (exit code, code and message) are kept on the root
 // command (`getCommanderError`).
 //
-// Not ported (psi does not use them): `.version()`, `.summary()`, `.usage(str)`, `.helpOption(flags)`,
-// `.configureHelp()`, `.showHelpAfterError()`, `.showSuggestionAfterError()`, `.allowUnknownOption()`,
-// `.allowExcessArguments()`, `.enablePositionalOptions()`, `.passThroughOptions()`,
-// `.storeOptionsAsProperties()`, `.combineFlagAndOptionalValue()`, `.executableDir()`, executable and default
-// subcommands, the `preSubcommand` and `postAction` hooks, variadic options, option choices, presets,
-// environment variables, implied and conflicting options, hidden options, argument defaults and parsers,
-// `addHelpText` with a function, `.optsWithGlobals()`, parse state save/restore, the legacy `command:*` events,
-// and the checks that throw for a program defined wrongly (psi's definitions are valid).
-//
 
 const std = @import("std");
 const utils = @import("utils-zig");
@@ -353,7 +344,6 @@ pub fn humanReadableArgName(allocator: std.mem.Allocator, argument: Argument) ![
 
 //
 // The life cycle events a hook can be added for.
-// Not ported: preSubcommand and postAction (psi does not use them).
 //
 pub const HookEvent = enum {
     // Called before the action handler of a command (or of any of its subcommands).
@@ -1034,7 +1024,6 @@ pub const Command = struct {
     //
     fn parseCommand(self: *Command, operandsSoFar: []const []const u8, unknownSoFar: []const []const u8) anyerror!void {
         const parsed = try self.parseOptions(unknownSoFar);
-        // Not ported: _parseOptionsEnv and _parseOptionsImplied (psi has no env or implied options).
         var operandList: std.ArrayList([]const u8) = .empty;
         try operandList.appendSlice(self.allocator, operandsSoFar);
         try operandList.appendSlice(self.allocator, parsed.operands);
@@ -1258,8 +1247,6 @@ pub const Command = struct {
                 break;
             }
 
-            // Not ported: activeVariadicOption (psi has no variadic options).
-
             if (maybeOption(arg)) {
                 // recognised option, call listener to assign value with possible custom processing
                 if (self.findOption(arg)) |found| {
@@ -1325,8 +1312,6 @@ pub const Command = struct {
             if (maybeOption(arg)) {
                 destIsUnknown = true;
             }
-
-            // Not ported: positional options and pass through options (psi does not enable them).
 
             // add arg
             if (destIsUnknown) {
@@ -1839,7 +1824,7 @@ pub const Help = struct {
     }
 
     //
-    // Get the subcommand summary to show in the list of subcommands (the description; summaries are not ported).
+    // Get the subcommand summary to show in the list of subcommands (the description).
     //
     pub fn subcommandDescription(self: *const Help, cmd: *const Command) []const u8 {
         _ = self;
@@ -1908,8 +1893,6 @@ pub const Help = struct {
             }
             try output.append(allocator, "");
         }
-
-        // Not ported: global options (showGlobalOptions is off).
 
         // Commands
         const commandList = try self.visibleCommands(allocator, cmd);

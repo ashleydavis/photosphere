@@ -23,11 +23,6 @@ const console = utils.console;
 // instead of waiting, and can write fewer bytes than it was given; both are the caller's to deal
 // with, and neither is dealt with by anything that writes a whole line and moves on.
 //
-// (Zig: the standard output and error of the Zig CLI are never made non-blocking (its workers are threads,
-// not Bun Workers), so utils-zig's console, which writes every byte of a line with a blocking write and
-// ignores the error of a reader that has gone away, already does what writeAll does here. Not ported:
-// pauseWord, RETRY_PAUSE_MS, outputGone, writeAll.)
-//
 
 //
 // Prints a line of the CLI's output.

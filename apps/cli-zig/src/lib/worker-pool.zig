@@ -11,10 +11,8 @@
 // - A handler error is a task failure, as in TypeScript. A panic ends the process; the worker's "error" event
 //   (handleWorkerError, then handleWorkerCrash) is used when a worker thread cannot be started, when its start-up
 //   fails (the test UUID generator or the session ID) and when a task's failure cannot be reported.
-// - Workers share the main thread's queue backend (WorkerQueueBackend is not ported), so a handler that
-//   queues child tasks adds them to this pool directly.
-//   So the "queue-task" message (IWorkerQueueTaskMessage, with its priority) and priorityOfRunningTask,
-//   which give a child task its parent's priority, are not ported.
+// - Workers share the main thread's queue backend, so a handler that queues child tasks adds them to this pool
+//   directly.
 // - Callbacks are invoked on the thread that completes the task (a worker thread or the timeout monitor)
 //   while the pool lock is held (see the threading contract in task-queue-zig queue-backend.zig).
 //
@@ -831,8 +829,6 @@ pub const WorkerPoolBun = struct {
 
         self.notifyCompletionCallbacks(fullResult);
         freeTask(poolTask);
-
-        // Not ported: broadcasting the completion to the workers (for WorkerQueueBackend, not ported).
 
         self.tryDispatchPending();
     }

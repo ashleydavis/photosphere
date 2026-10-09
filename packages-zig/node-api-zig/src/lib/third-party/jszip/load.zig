@@ -11,8 +11,6 @@ const ZipEntries = @import("zipEntries.zig").ZipEntries;
 const object = @import("object.zig");
 const Files = object.Files;
 
-// Not ported: checkEntryCRC32 (checkCRC32 is off by default, and Photosphere does not turn it on).
-
 //
 // Loads the zip into the files (JSZip: `zip.loadAsync(data)` resolving to the zip).
 //

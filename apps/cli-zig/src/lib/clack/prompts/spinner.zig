@@ -157,8 +157,7 @@ pub const Spinner = struct {
     }
 
     //
-    // Registers the signal listeners. Not ported: the 'uncaughtExceptionMonitor', 'unhandledRejection' and 'exit'
-    // listeners (Zig has no uncaught exceptions, rejections or exit event).
+    // Registers the signal listeners.
     //
     fn registerHooks(self: *Spinner) !void {
         try process_signals.on(.SIGINT, self.signalListener());

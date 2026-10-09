@@ -61,7 +61,7 @@ pub const IDebugMerkleTreeCommandOptions = struct {
 //
 // Helper function to truncate long string values and limit object fields for display
 // (Zig: the TypeScript default parameter values 100, 5 and false are passed by the caller. A string is cut after
-// maxLength UTF-16 code units, like `substring`. The objects whose own properties are not ported throw.)
+// maxLength UTF-16 code units, like `substring`.)
 //
 fn truncateLongStrings(allocator: std.mem.Allocator, obj: BsonValue, maxLength: usize, maxFields: usize, showAllFields: bool) !BsonValue {
     if (obj == .string) {
@@ -136,7 +136,7 @@ pub fn utf16Substring(allocator: std.mem.Allocator, text: []const u8, length: us
 //
 // Returns `Object.entries(value)` for an object (no TypeScript counterpart: the call is inline in
 // truncateLongStrings). A document gives its fields, a Date has no own properties and a Long has low, high and
-// unsigned. The other objects throw, because their own properties are not ported.
+// unsigned.
 //
 fn objectEntries(allocator: std.mem.Allocator, value: BsonValue) ![]const bson.BsonField {
     switch (value) {
@@ -448,7 +448,7 @@ fn readInputFile(allocator: std.mem.Allocator, io: std.Io, inputPath: []const u8
 
 //
 // Gets the fields of a parsed JSON object (TypeScript: the `as CollisionsData` and `as DuplicatesData` casts, which
-// check nothing). Anything but an object throws, because what TypeScript does with it is not ported.
+// check nothing). Anything but an object throws.
 //
 fn expectObject(value: BsonValue, description: []const u8) ![]const bson.BsonField {
     if (value != .document) {
@@ -458,8 +458,7 @@ fn expectObject(value: BsonValue, description: []const u8) ![]const bson.BsonFie
 }
 
 //
-// Gets the elements of a parsed JSON array. Anything but an array throws, because what TypeScript does with it is
-// not ported.
+// Gets the elements of a parsed JSON array. Anything but an array throws.
 //
 fn expectArray(value: BsonValue, description: []const u8) ![]const BsonValue {
     if (value != .array) {

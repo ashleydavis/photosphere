@@ -266,7 +266,6 @@ pub const Prompt = struct {
     // Shows the prompt and reads keys until it is submitted or cancelled.
     //
     pub fn prompt(self: *Prompt) !PromptOutcome {
-        // Not ported: the AbortSignal option (not used by the CLI).
         self.rl = readline.Interface.init(self.allocator);
 
         if (self.opts.initialUserInput) |initialUserInput| {
@@ -274,8 +273,6 @@ pub const Prompt = struct {
         }
 
         try setRawMode(self.input, true);
-        // Not ported: re-rendering on terminal resize.
-
         try self.render();
 
         self.resolveSubscribed = true;
@@ -354,8 +351,6 @@ pub const Prompt = struct {
                 try self.emitConfirm(std.ascii.toLower(text[0]) == 'y');
             }
         }
-
-        // Not ported: the 'key' event (no prompt used by the CLI subscribes to it).
 
         if (key_is_return) {
             if (self.opts.validate) |validate| {

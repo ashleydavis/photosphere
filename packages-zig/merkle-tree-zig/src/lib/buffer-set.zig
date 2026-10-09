@@ -149,8 +149,6 @@ pub const BufferSet = struct {
         return .{ .buckets = self._map.values(), .bucketIndex = 0, .bufferIndex = 0 };
     }
 
-    // Not ported: keys (not reached by the CLI)
-
     //
     // Iterates the [buffer, buffer] pairs of the set (TypeScript: `entries()`; a Set yields each value as both).
     //

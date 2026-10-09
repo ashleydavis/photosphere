@@ -1303,7 +1303,6 @@ pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, taskData: s
     const loadedKeys = try loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
     const created = try createStorage(allocator, io, data.storageDescriptor.databasePath, credentials.s3Config, loadedKeys.options);
 
-    // Not ported: countedStorage, the Proxy that counts what the database writes (its counters are never read).
     const bsonDatabase = try BsonDatabase.init(allocator, created.storage, ".db/bson", uuidGenerator, context.timestampProvider);
     const metadataCollection = try bsonDatabase.collection("metadata");
 

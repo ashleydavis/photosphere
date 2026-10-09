@@ -11,8 +11,8 @@
 // the same lock, so `func` never runs at the same time as the caller's other code. The debounced function's methods
 // must be called with the lock held.
 //
-// Only what throttle uses is ported: `func` takes no arguments and its result is not kept (the throttled function
-// in Photosphere returns nothing), and `wait` and `maxWait` are whole milliseconds.
+// The throttled function in Photosphere takes no arguments and returns nothing, and `wait` and `maxWait` are whole
+// milliseconds.
 //
 
 const std = @import("std");

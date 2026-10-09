@@ -33,7 +33,7 @@ pub const VideoToolStatus = struct {
 };
 
 //
-// Wraps ffprobe and ffmpeg. Only the tool verification is ported.
+// Wraps ffprobe and ffmpeg.
 //
 pub const Video = struct {
     // The command used to probe videos.
@@ -90,8 +90,6 @@ pub const Video = struct {
         const message = std.fmt.allocPrint(allocator, "ffprobe version: {s}", .{version}) catch return;
         utils.log.log.verbose(message);
     }
-
-    // Not ported: configure (Photosphere does not configure custom binaries).
 
     //
     // Verify that ffprobe is available
@@ -241,10 +239,8 @@ pub const Video = struct {
         return info.dimensions;
     }
 
-    // Not ported: getDuration, getPath (not used by psi add).
-
     //
-    // Extract a screenshot/thumbnail from the video at a specific time. Only the default options are ported (no
+    // Extract a screenshot/thumbnail from the video at a specific time. Only the default options are used (no
     // scaling, quality 85), which is how getVideoDetails calls it.
     //
     pub fn extractScreenshot(self: *Video, allocator: std.mem.Allocator, io: std.Io, outputPath: []const u8, timeInSeconds: f64) ![]const u8 {

@@ -1163,8 +1163,6 @@ pub fn getItemInfo(merkleTree: *const IMerkleTree, name: []const u8) !?IHashedDa
     };
 }
 
-// Not ported: findItemNode (not reached by the CLI)
-
 //
 // A 64-bit number split into 32-bit parts (TypeScript: `{ high: number, low: number }`).
 //
@@ -1230,8 +1228,6 @@ fn serializeMerkleNodeV5(node: *const MerkleNode, serializer: ISerializer, strin
     }
 }
 
-// Not ported: serializeMerkleNode (the version 4 writer is not used; trees are always saved in the current format).
-
 //
 // Serializes the merkle tree nodes (version 5 with string table).
 //
@@ -1245,8 +1241,6 @@ fn serializeMerkleV5(tree: *const IMerkleTree, serializer: ISerializer, stringTa
     // Recursively serialize the merkle tree (root nodeCount will indicate total nodes)
     try serializeMerkleNodeV5(merkle, serializer, stringTable, hashTable);
 }
-
-// Not ported: serializeMerkle (the version 4 writer is not used; trees are always saved in the current format).
 
 //
 // Serializes the sort tree metadata and nodes (version 5 with string table).
@@ -2436,8 +2430,6 @@ pub fn pruneTree(
 
     return prunedFiles.items;
 }
-
-// Not ported: deleteItems (only used by tests, not reached by the CLI).
 
 //
 // Checks a UUID string like the `uuid` package's `validate` (the regex in uuid/dist/cjs/regex.js).

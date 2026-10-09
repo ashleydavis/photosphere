@@ -525,5 +525,3 @@ pub fn stateFileToYaml(allocator: std.mem.Allocator, state: IStateFile) !std.jso
     return .{ .object = document };
 }
 
-// Not ported: defaultStateFile, IParsedStateFile, parseStateYamlChecked, buildStateYaml (the desktop app and the
-// mobile worker, not psi replicate or psi verify).

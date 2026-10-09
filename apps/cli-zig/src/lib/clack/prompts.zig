@@ -41,5 +41,3 @@ pub const TextOptions = text_module.TextOptions;
 pub const ValidateFn = @import("core/prompts/prompt.zig").ValidateFn;
 pub const MultilineValidateFn = @import("core/prompts/multiline.zig").MultilineValidateFn;
 pub const PromptInput = @import("third-party/readline.zig").PromptInput;
-// Not ported: autocomplete, group-multi-select, group, log, multi-select, path, progress-bar,
-// select-key, stream, task, task-log (not used by the ported commands).

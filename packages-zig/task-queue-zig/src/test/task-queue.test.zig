@@ -776,8 +776,6 @@ test "task data handling: should handle null data" {
     try std.testing.expect(received_data.? == .null);
 }
 
-// Not ported: "should handle undefined data" (std.json.Value has no undefined; JavaScript undefined data is not JSON).
-
 test "task data handling: should handle empty object data" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
@@ -1152,8 +1150,6 @@ test "error handling: should handle handler throwing non-Error objects" {
     try std.testing.expect(recorder.hasError.items[0]);
     try std.testing.expectEqualStrings("StringError", recorder.errorMessages.items[0]);
 }
-
-// Not ported: "should handle handler throwing null" (a Zig handler can only fail with an error value).
 
 test "error handling: should preserve error messages" {
     var fixture: Fixture = undefined;

@@ -59,4 +59,3 @@ pub const ResizeOptions = struct {
     maintainAspectRatio: ?bool = null,
 };
 
-// Not ported: ImageMagickConfig, VideoConfig (Image.configure and Video.configure are not ported).

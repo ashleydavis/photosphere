@@ -121,8 +121,6 @@ pub fn S_PASSWORD_MASK() []const u8 {
     return unicodeOr("\u{25AA}", "\u{2022}");
 }
 
-// Not ported: the checkbox, corner, connector and log symbols (used only by prompts that are not ported).
-
 //
 // The symbol for a prompt state, colored.
 //
@@ -137,7 +135,7 @@ pub fn symbol(allocator: std.mem.Allocator, state: State) ![]const u8 {
 
 //
 // The streams of a prompt (TypeScript: `input?: Readable; output?: Writable; signal?: AbortSignal`).
-// Null streams default to process.stdin and process.stdout. The AbortSignal is not ported.
+// Null streams default to process.stdin and process.stdout.
 //
 pub const CommonOptions = struct {
     // The input stream.

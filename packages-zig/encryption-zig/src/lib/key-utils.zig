@@ -55,11 +55,6 @@ pub fn generateKeyPair(allocator: std.mem.Allocator, io: std.Io) !IKeyPair {
     };
 }
 
-// Not ported: saveKeyPair (not reached by the CLI)
-// Not ported: loadPrivateKey (not reached by the CLI)
-// Not ported: loadPublicKey (not reached by the CLI)
-// Not ported: loadOrGenerateKeyPair (not reached by the CLI)
-
 //
 // Export a public key to SPKI PEM string (same format as .pub files and .db/encryption.pub).
 //
@@ -121,4 +116,3 @@ pub fn loadEncryptionKeysFromPem(allocator: std.mem.Allocator, keyPems: []const 
     };
 }
 
-// Not ported: loadEncryptionKeys (not reached by the CLI, which loads keys from the vault as PEM)

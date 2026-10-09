@@ -1,11 +1,6 @@
 //
 // Port of exif-parser 0.1.12 (index.js and lib/parser.js): parses the EXIF tags and the image size of a JPEG.
 //
-// Only what Photosphere uses is ported: `create` over a Node Buffer, `enableSimpleValues` and `parse` with the
-// default flags otherwise (tag names resolved, image size read, pointers hidden, binary tags skipped). Not ported:
-// lib/simplify.js and lib/date.js (TypeScript turns simple values off), lib/dom-bufferstream.js (for browsers), the
-// other flag setters and the thumbnail methods of ExifResult.
-//
 
 const std = @import("std");
 const serialization_zig = @import("serialization-zig");
@@ -54,7 +49,7 @@ pub const IParserFlags = struct {
 };
 
 //
-// The error parse gives for flags whose code was not ported.
+// The error parse gives for a flag it does not support.
 //
 pub const ParserError = error{FlagNotPorted};
 
@@ -113,7 +108,6 @@ pub const Parser = struct {
         }
 
         if (tagType == 0x0201 or tagType == 0x0202 or tagType == 0x0103) {
-            // Not ported: the thumbnail offset, length and type (read by the thumbnail methods of ExifResult).
             if (state.flags.hidePointers) {
                 return;
             }

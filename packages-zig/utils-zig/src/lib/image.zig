@@ -197,7 +197,6 @@ pub fn getVideoTransformation(allocator: std.mem.Allocator, metadata: anytype) !
 
     var rotation: ?[]const u8 = null;
 
-    // Not ported: iterating a `streams` value that is not an array (ffprobe's metadata has no `streams`).
     const streamList = switch (streams) {
         .array => |items| items,
         else => return null,

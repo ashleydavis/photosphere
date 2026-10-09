@@ -93,8 +93,6 @@ pub fn actionNamed(name: []const u8) ?Action {
     return std.meta.stringToEnum(Action, name);
 }
 
-// Not ported: updateSettings (not used by the CLI).
-
 //
 // Check if a key is an alias for a default action
 // (the TypeScript function takes a string or an array of possibly undefined strings).

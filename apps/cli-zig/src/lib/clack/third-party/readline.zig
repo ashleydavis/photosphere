@@ -4,8 +4,6 @@
 // - keypress parsing (`emitKeypressEvents`, which turns input bytes into `(char, key)` events),
 // - the line editing of a terminal `readline.Interface` (`line` and `cursor`, updated by `_ttyWrite`),
 // - PromptInput: the input stream with raw mode handling (`setRawMode`).
-// History, completion, undo/redo, yank and the output of the interface are not ported: the prompts create
-// the interface without an output and only read `line` and `cursor`.
 //
 
 const std = @import("std");
@@ -718,7 +716,6 @@ pub const Interface = struct {
             self.cursor = self.line.items.len;
         }
         else if (std.mem.eql(u8, name, "up") or std.mem.eql(u8, name, "down") or std.mem.eql(u8, name, "pageup") or std.mem.eql(u8, name, "pagedown")) {
-            // Not ported: history navigation (the prompts' interfaces have no history to navigate)
         }
         else {
             if (char) |text| {

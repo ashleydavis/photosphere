@@ -130,7 +130,6 @@ fn testBadReverseGeocode(lat: f64, lng: f64, expectedMsg: []const u8) !void {
 }
 
 test "reverse geocoding throws with bad arguments" {
-    // Not ported: undefined and null coordinates (ILocation holds numbers in Zig).
     try testBadReverseGeocode(-27.346439781693057, std.math.inf(f64), "Bad \"lng\" field: Infinity");
     try testBadReverseGeocode(-27.346439781693057, std.math.nan(f64), "Bad \"lng\" field: NaN");
 
@@ -234,7 +233,7 @@ test "convert exif coordinates - throws for values JavaScript cannot convert" {
         .values = &.{ .{ .array = &.{.null} }, .{ .array = &.{} } },
     }));
 
-    // A string or a boolean component is not ported.
+    // A string or a boolean component throws.
     try std.testing.expectError(error.UnsupportedCoordinate, reverse_geocode.convertExifCoordinates(TestDocument{
         .keys = &.{ "GPSLatitude", "GPSLongitude" },
         .values = &.{ .{ .array = &.{.{ .string = "1" }} }, .{ .array = &.{} } },

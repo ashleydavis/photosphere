@@ -417,8 +417,6 @@ test "load throws a YAMLException for what js-yaml refuses, and for the construc
         "- a\nb: 1\n",
     };
 
-    // Not ported: anchors and plain scalars that go on over several lines, which js-yaml reads
-    // (as "x", [1, "2 - 3"] and "x y"). Block scalars are ported (see the block scalar tests).
     const notPorted = [_][]const u8{ "a: &anchor x\n", "- 1\n- 2\n  - 3\n", "x\ny\n" };
     for (refused ++ notPorted) |source| {
         errdefer std.debug.print("case: {s}\n", .{source});

@@ -140,7 +140,7 @@ pub fn databasesConfigToToml(allocator: std.mem.Allocator, config: IDatabasesCon
 
 //
 // Returns true if the two names match case-insensitively.
-// (Zig: ASCII letters only; JavaScript's toLowerCase also lowers non-ASCII letters, which is not ported, as in
+// (Zig: ASCII letters only; JavaScript's toLowerCase also lowers non-ASCII letters, as in
 // fuzzy-match-zig.)
 //
 pub fn namesMatch(left: []const u8, right: []const u8) bool {

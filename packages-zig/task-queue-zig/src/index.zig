@@ -13,6 +13,3 @@ pub const pending_task_queue = @import("lib/pending-task-queue.zig");
 //
 pub const mock_worker_pool = @import("test/mock-worker-pool.zig");
 
-// Not ported: WorkerQueueBackend (worker-queue-backend.ts). Zig workers are threads of the same process
-// that share the main thread's backend (setQueueBackend is process-wide), and no task handler on the
-// psi replicate or psi verify path queues child tasks.

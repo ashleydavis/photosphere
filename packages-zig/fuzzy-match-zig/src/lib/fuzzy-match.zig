@@ -64,7 +64,7 @@ pub fn levenshteinDistance(allocator: std.mem.Allocator, left: []const u8, right
 // Returns candidates whose Levenshtein edit distance from the query is within
 // the threshold: distance > 0 && distance <= max(3, floor(query.length / 4)).
 // Comparison is case-insensitive (ASCII letters only: JavaScript's toLowerCase also lowers
-// non-ASCII letters, which is not ported).
+// non-ASCII letters).
 // The returned slice refers to the candidate strings and is allocated with `allocator`.
 //
 pub fn fuzzyMatch(allocator: std.mem.Allocator, query: []const u8, candidates: []const []const u8) ![]const []const u8 {

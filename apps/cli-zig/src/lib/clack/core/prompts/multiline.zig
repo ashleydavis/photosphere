@@ -248,10 +248,8 @@ pub const MultilinePrompt = struct {
     // cancels.
     //
     pub fn prompt(self: *MultilinePrompt) !PromptOutcome {
-        // Not ported: the AbortSignal option (not used by the CLI).
         try setRawMode(self.input, true);
 
-        // Not ported: re-rendering on terminal resize.
         try self.render();
 
         while (true) {

@@ -346,8 +346,6 @@ pub const PlaintextVault = struct {
     //
     vaultDir: []const u8,
 
-    // Not ported: vaultFilePath (only used by exists, which is not ported: not used by psi).
-
     //
     // Creates the vault (TypeScript: constructor(vaultDir = DEFAULT_VAULT_DIR); callers pass
     // DEFAULT_VAULT_DIR(allocator) for the default).
@@ -418,8 +416,6 @@ pub const PlaintextVault = struct {
 
         try updateVaultFile(allocator, io, self.vaultDir, DeleteSecretMutator{ .name = name });
     }
-
-    // Not ported: exists (not used by psi).
 
     //
     // The plaintext vault has no external tool dependencies.

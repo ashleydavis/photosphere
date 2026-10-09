@@ -34,24 +34,15 @@ const assetServerHandler = asset_server_worker.assetServerHandler;
 pub fn initTaskHandlers() !void {
     try create_auto_import_scanner.registerFolderMediaSourceBuilder();
     try cleanup_sources_worker.registerFolderMediaSourceBuilder();
-    // Not ported: test-job (not reached by the CLI).
     try registerHandler("verify-file", verifyFileHandler);
     try registerHandler("check-file", checkFileHandler);
-    // Not ported: load-assets (not reached by the CLI).
     try registerHandler("prefetch-database", prefetchDatabaseHandler);
     try registerHandler("upload-asset", uploadAssetHandler);
-    // Not ported: sync-database (not reached by the CLI).
     try registerHandler("replicate-database", replicateDatabaseHandler);
-    // Not ported: save-asset, save-assets-batch, create-database, create-default-database (not used by psi add,
-    // psi replicate or psi verify).
     try registerHandler("import-assets", importAssetsHandler);
     try registerHandler("hash-file", hashFileHandler);
     try registerHandler("asset-server", assetServerHandler);
-    // Not ported: get-database-summary, get-import-record, set-database-origin, move-assets,
-    // receive-share, find-receiver, send-payload, evict-originals (not used by psi add, psi replicate or
-    // psi verify).
     try registerHandler("check-database-exists", checkDatabaseExistsHandler);
     try registerHandler("cleanup-sources", cleanupSourcesHandler);
     try registerHandler("consolidate-database", consolidateDatabaseHandler);
-    // Not ported: reset-app-storage (not reached by the CLI).
 }
