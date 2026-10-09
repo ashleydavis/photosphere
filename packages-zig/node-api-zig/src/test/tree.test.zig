@@ -98,7 +98,7 @@ test "saveMerkleTree rebuilds a dirty tree and saves it to .db/files.dat" {
     const loaded = (try tree.loadMerkleTree(allocator, io, storage)).?;
     try std.testing.expectEqualStrings("12345678-1234-5678-9abc-123456789abc", loaded.id);
     try std.testing.expectEqualSlices(u8, merkleTree.merkle.?.hash, loaded.merkle.?.hash);
-    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/files.dat", .{dir})));
+    try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dir, ".db", "files.dat" })));
 }
 
 test "loadCollectionMerkleTree and loadShardMerkleTree load the BSON trees of a v6 database" {

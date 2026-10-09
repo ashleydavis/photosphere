@@ -68,8 +68,8 @@ test "verify detects removed and modified files" {
     const io = std.testing.io;
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    try std.Io.Dir.cwd().deleteFile(io, try std.fmt.allocPrint(allocator, "{s}/display/{s}", .{ databaseDir, ASSET_ID }));
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/thumb/{s}", .{ databaseDir, ASSET_ID }), "modified");
+    try std.Io.Dir.cwd().deleteFile(io, try std.fs.path.join(allocator, &.{ databaseDir, "display", ASSET_ID }));
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ databaseDir, "thumb", ASSET_ID }), "modified");
 
     const result = try runVerify(allocator, io, databaseDir, null, null);
 
@@ -119,7 +119,7 @@ test "verify reports a missing database record as a record mismatch" {
     const io = std.testing.io;
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    try std.Io.Dir.cwd().deleteFile(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/shards/96", .{databaseDir}));
+    try std.Io.Dir.cwd().deleteFile(io, try std.fs.path.join(allocator, &.{ databaseDir, ".db", "bson", "collections", "metadata", "shards", "96" }));
 
     const result = try runVerify(allocator, io, databaseDir, null, null);
 
@@ -137,7 +137,7 @@ test "verify ignores missing files and records of a partial database" {
     const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     const root = std.fs.path.dirname(sourceDir).?;
     defer temp_dirs.removeTempDir(io, root);
-    const partialDir = try std.fmt.allocPrint(allocator, "{s}/partial", .{root});
+    const partialDir = try std.fs.path.join(allocator, &.{ root, "partial" });
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     _ = try node_api.replicate_database.replicateDatabase(allocator, io, uuidGenerator.uuidGenerator(), .{ .sourcePath = sourceDir, .destPath = partialDir, .partial = true, .force = false }, null);
 
@@ -175,7 +175,7 @@ test "verifyDatabaseFiles reports a corrupted shard" {
     const io = std.testing.io;
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    const shardPath = try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/shards/96", .{databaseDir});
+    const shardPath = try std.fs.path.join(allocator, &.{ databaseDir, ".db", "bson", "collections", "metadata", "shards", "96" });
     const shard = try test_files.readFile(allocator, io, shardPath);
     shard[shard.len / 2] ^= 0xff;
     try test_files.writeFile(io, shardPath, shard);
@@ -201,13 +201,13 @@ test "verifyDatabaseFiles reports every kind of database file that is corrupted,
     // to be one.
     const flipped = [_][]const u8{ ".db/files.dat", ".db/bson/collections/metadata/shards/96.dat", ".db/bson/indexes/metadata/hash_asc/tree.dat" };
     for (flipped) |relativePath| {
-        const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ databaseDir, relativePath });
+        const filePath = try std.fs.path.join(allocator, &.{ databaseDir, relativePath });
         const contents = try test_files.readFile(allocator, io, filePath);
         contents[contents.len / 2] ^= 0xff;
         try test_files.writeFile(io, filePath, contents);
     }
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/collection.dat", .{databaseDir}), "short");
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/indexes/metadata/hash_asc/build.checkpoint", .{databaseDir}), "not a serialized file");
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ databaseDir, ".db", "bson", "collections", "metadata", "collection.dat" }), "short");
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ databaseDir, ".db", "bson", "indexes", "metadata", "hash_asc", "build.checkpoint" }), "not a serialized file");
     const storage = try test_files.directoryStorage(allocator, io, databaseDir);
 
     const result = try verify_module.verifyDatabaseFiles(allocator, io, storage, null);

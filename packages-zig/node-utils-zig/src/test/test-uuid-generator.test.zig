@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
 const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");

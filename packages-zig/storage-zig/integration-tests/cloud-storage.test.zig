@@ -751,9 +751,9 @@ test "CloudStorage Zig: a key with a leading slash is the key without it" {
     const location = try setUp();
     const bucket = bucketOf(location);
     const plainKey = try pathOf(allocator, &.{ location[bucket.len + 1 ..], "zig-leading-slash", "file.txt" });
-    const slashed = try std.fmt.allocPrint(allocator, "{s}//{s}", .{ bucket, plainKey });
-    const plain = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ bucket, plainKey });
-    const slashedDir = try std.fmt.allocPrint(allocator, "{s}//{s}", .{ bucket, std.fs.path.dirnamePosix(plainKey).? });
+    const slashed = try std.mem.concat(allocator, u8, &.{ bucket, "//", plainKey });
+    const plain = try std.fs.path.join(allocator, &.{ bucket, plainKey });
+    const slashedDir = try std.mem.concat(allocator, u8, &.{ bucket, "//", std.fs.path.dirnamePosix(plainKey).? });
 
     try shared_storage.write(allocator, io, slashed, "text/plain", "slashed");
     try std.testing.expectEqualStrings("slashed", (try shared_storage.read(allocator, io, plain)).?);
@@ -776,7 +776,7 @@ test "CloudStorage Zig: a key with a leading slash is the key without it" {
     try stream.reader().appendRemainingUnlimited(allocator, &content);
     try std.testing.expectEqualStrings("streamed", content.items);
 
-    const copied = try std.fmt.allocPrint(allocator, "{s}//{s}.copy", .{ bucket, plainKey });
+    const copied = try std.mem.concat(allocator, u8, &.{ bucket, "//", plainKey, ".copy" });
     try shared_storage.copyTo(allocator, io, slashed, copied);
     try std.testing.expectEqualStrings("streamed", (try shared_storage.read(allocator, io, copied)).?);
 
@@ -873,7 +873,11 @@ test "CloudStorage Zig: a lock older than the timeout is broken and taken, and t
 
     const lockFile = try pathOf(allocator, &.{ location, "zig-locks", "stale.lock" });
     const staleTimestamp = nowMilliseconds() - 60_000;
-    try shared_storage.write(allocator, io, lockFile, "application/json", try std.fmt.allocPrint(allocator, "{{\"owner\":\"dead-owner\",\"acquiredAt\":\"2020-01-01T00:00:00.000Z\",\"timestamp\":{d}}}", .{staleTimestamp}));
+    try shared_storage.write(allocator, io, lockFile, "application/json", try utils.json.stringify(allocator, .{
+        .owner = "dead-owner",
+        .acquiredAt = "2020-01-01T00:00:00.000Z",
+        .timestamp = staleTimestamp,
+    }));
 
     try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, lockFile, "new-owner"));
     try std.testing.expectEqualStrings("new-owner", (try shared_storage.checkWriteLock(allocator, io, lockFile)).?.owner);

@@ -48,7 +48,7 @@ const laterAssetBytes = "the-bytes-of-another-photo";
 // (Zig: writeAsset is not ported; this does what it does for a test, without the write lock.)
 //
 fn writeAsset(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, rawStorage: IStorage, id: []const u8, contentType: []const u8, buffer: []const u8) !void {
-    const assetPath = try std.fmt.allocPrint(allocator, "asset/{s}", .{id});
+    const assetPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", id });
     var merkleTree = (try tree.loadMerkleTree(allocator, io, assetStorage)).?;
     try assetStorage.write(allocator, io, assetPath, contentType, buffer);
     const assetInfo = (try assetStorage.info(allocator, io, assetPath)).?;
@@ -103,7 +103,7 @@ fn syncOneAsset(allocator: std.mem.Allocator, io: std.Io, workingDir: []const u8
     const clock = try allocator.create(SettableTimestampProvider);
     clock.* = .{ .current = 1767225600000 }; // 2026-01-01T00:00:00.000Z
 
-    const sourcePath = try std.fmt.allocPrint(allocator, "{s}/source", .{workingDir});
+    const sourcePath = try std.fs.path.join(allocator, &.{ workingDir, "source" });
     try std.Io.Dir.cwd().createDirPath(io, sourcePath);
     const source = try createStorage(allocator, io, sourcePath, null, null);
     const sourceDatabase = try media_file_database.createMediaFileDatabase(allocator, source.storage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
@@ -121,7 +121,7 @@ fn syncOneAsset(allocator: std.mem.Allocator, io: std.Io, workingDir: []const u8
     // Replicating one would not do: a replica arrives with the source's merkle tree, so it claims
     // to hold every file already and the sync copies nothing. Copying the id across is what
     // `replicate --force` does to a destination whose id does not match.
-    const targetPath = try std.fmt.allocPrint(allocator, "{s}/target", .{workingDir});
+    const targetPath = try std.fs.path.join(allocator, &.{ workingDir, "target" });
     try std.Io.Dir.cwd().createDirPath(io, targetPath);
     const target = try createStorage(allocator, io, targetPath, null, null);
     const targetDatabase = try media_file_database.createMediaFileDatabase(allocator, target.storage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
@@ -167,7 +167,7 @@ fn syncOneAsset(allocator: std.mem.Allocator, io: std.Io, workingDir: []const u8
 // The path of an asset's file.
 //
 fn assetPathOf(allocator: std.mem.Allocator, id: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "asset/{s}", .{id});
+    return storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", id });
 }
 
 test "a target that knows its own hash is not read back" {

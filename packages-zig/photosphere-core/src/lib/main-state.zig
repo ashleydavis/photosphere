@@ -288,7 +288,7 @@ pub const MainState = struct {
         utils.log.log.info(try std.fmt.allocPrint(arena, "Queuing sync task for \"{s}\"", .{database_path}));
         // No cancel source: the page lists this job but must not be able to stop it, because syncing is switched off from Settings and
         // a sync cancelled from a list would start again on the next timer anyway.
-        const job_id = try std.fmt.allocPrint(arena, "sync:{s}", .{database_path});
+        const job_id = try std.mem.concat(arena, u8, &.{ "sync:", database_path });
         const sync_data = try json_util.stringify(arena, .{
             .databasePath = database_path,
             .job = .{

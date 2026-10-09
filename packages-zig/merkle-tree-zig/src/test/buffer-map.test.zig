@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const errors = @import("utils-zig").errors;
 const BufferMap = merkle_tree_zig.buffer_map.BufferMap;

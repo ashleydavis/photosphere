@@ -32,7 +32,7 @@ const assetId = "11111111-2222-3333-4444-555555555555";
 // while an empty string is a value that competes on its timestamp like any other.
 //
 fn makeOriginDatabase(allocator: std.mem.Allocator, io: std.Io, workingDir: []const u8, clock: *SettableTimestampProvider, originDescription: ?[]const u8) ![]const u8 {
-    const originPath = try std.fmt.allocPrint(allocator, "{s}/origin", .{workingDir});
+    const originPath = try std.fs.path.join(allocator, &.{ workingDir, "origin" });
     try std.Io.Dir.cwd().createDirPath(io, originPath);
 
     const uuidGenerator = try sync_helpers.testUuidGenerator(allocator);
@@ -99,7 +99,7 @@ fn runEditAndSync(allocator: std.mem.Allocator, io: std.Io, workingDir: []const 
 
     // The replica, exactly as the app makes it: a replicate of the origin, which records the
     // origin path in the replica's own config.
-    const replicaPath = try std.fmt.allocPrint(allocator, "{s}/replica", .{workingDir});
+    const replicaPath = try std.fs.path.join(allocator, &.{ workingDir, "replica" });
     const sourceForReplicate = try createStorage(allocator, io, originPath, null, null);
     const sourceDbForReplicate = try media_file_database.createMediaFileDatabase(allocator, sourceForReplicate.storage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
     const destForReplicate = try createStorage(allocator, io, replicaPath, null, null);

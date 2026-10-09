@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 
 //
 // Draws a random pairing code (1000-9999) for one test.

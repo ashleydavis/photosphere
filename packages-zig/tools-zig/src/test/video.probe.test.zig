@@ -29,21 +29,21 @@ const FakeFfmpegDirectory = struct {
         const cwd = std.Io.Dir.cwd();
         try cwd.createDirPath(io, self.path);
         self.absolutePath = try cwd.realPathFileAlloc(io, self.path, allocator);
-        try cwd.writeFile(io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/probe.json", .{self.path}), .data = probeJson });
+        try cwd.writeFile(io, .{ .sub_path = try std.fs.path.join(allocator, &.{ self.path, "probe.json" }), .data = probeJson });
 
         // cmd.exe's `type` opens the name it is given itself, and it does not take a `/` as the separator before the
         // file name: `type "C:\dir/file"` fails with "The system cannot find the file specified." where a redirection
         // (`> "C:\dir/file"`) and the win32 API open the same file. The fake ffprobe is a .cmd that types the file, so
         // its path is joined with the separator of the platform it runs on.
         const probePath = try std.fs.path.join(allocator, &.{ self.absolutePath, "probe.json" });
-        const argumentsPath = try std.fmt.allocPrint(allocator, "{s}/arguments.txt", .{self.absolutePath});
+        const argumentsPath = try std.fs.path.join(allocator, &.{ self.absolutePath, "arguments.txt" });
         if (builtin.os.tag == .windows) {
-            try cwd.writeFile(io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/ffprobe.cmd", .{self.path}), .data = try std.fmt.allocPrint(allocator, "@type \"{s}\"\r\n", .{probePath}) });
-            try cwd.writeFile(io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/ffmpeg.cmd", .{self.path}), .data = try std.fmt.allocPrint(allocator, "@echo %*> \"{s}\"\r\n", .{argumentsPath}) });
+            try cwd.writeFile(io, .{ .sub_path = try std.fs.path.join(allocator, &.{ self.path, "ffprobe.cmd" }), .data = try std.fmt.allocPrint(allocator, "@type \"{s}\"\r\n", .{probePath}) });
+            try cwd.writeFile(io, .{ .sub_path = try std.fs.path.join(allocator, &.{ self.path, "ffmpeg.cmd" }), .data = try std.fmt.allocPrint(allocator, "@echo %*> \"{s}\"\r\n", .{argumentsPath}) });
         }
         else {
-            const ffprobePath = try std.fmt.allocPrint(allocator, "{s}/ffprobe", .{self.path});
-            const ffmpegPath = try std.fmt.allocPrint(allocator, "{s}/ffmpeg", .{self.path});
+            const ffprobePath = try std.fs.path.join(allocator, &.{ self.path, "ffprobe" });
+            const ffmpegPath = try std.fs.path.join(allocator, &.{ self.path, "ffmpeg" });
             try cwd.writeFile(io, .{ .sub_path = ffprobePath, .data = try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s' '{s}'\n", .{probeJson}) });
             try cwd.writeFile(io, .{ .sub_path = ffmpegPath, .data = try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s\\n' \"$*\" > '{s}'\n", .{argumentsPath}) });
             _ = try node_utils.exec.exec(allocator, io, try std.fmt.allocPrint(allocator, "chmod +x {s} {s}", .{ ffprobePath, ffmpegPath }));
@@ -63,7 +63,7 @@ const FakeFfmpegDirectory = struct {
     // Reads the arguments the fake ffmpeg was run with.
     //
     fn ffmpegArguments(self: *FakeFfmpegDirectory, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
-        const text = try std.Io.Dir.cwd().readFileAlloc(io, try std.fmt.allocPrint(allocator, "{s}/arguments.txt", .{self.path}), allocator, .unlimited);
+        const text = try std.Io.Dir.cwd().readFileAlloc(io, try std.fs.path.join(allocator, &.{ self.path, "arguments.txt" }), allocator, .unlimited);
         return std.mem.trimEnd(u8, text, " \r\n");
     }
 

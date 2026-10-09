@@ -292,7 +292,7 @@ pub fn listS3DirsHandler(context: *TaskContext, data: std.json.Value) anyerror!?
     };
     const credentials = try s3CredentialsFromSecret(context.arena, found_secret.value);
     var storage = CloudStorage.init(context.io(), bucket, credentials);
-    const path = try std.fmt.allocPrint(context.arena, "{s}/{s}", .{ bucket, prefix });
+    const path = try storage_zig.storage_factory.pathJoin(context.arena, &.{ bucket, prefix });
     const result = try storage.listDirs(context.arena, context.io(), path, 100, null);
     return try json_util.stringify(context.arena, result.names);
 }

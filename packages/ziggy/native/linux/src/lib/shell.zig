@@ -431,7 +431,7 @@ fn drainQueue(user_data: ?*anyopaque) callconv(.c) c.gboolean {
         const web_view = shell.web_view orelse {
             fatal("a message arrived from the core before the web view existed", .{});
         };
-        const script = std.fmt.allocPrint(std.heap.c_allocator, "window.__ziggyReceive({s});", .{pending.text}) catch @panic("out of memory delivering a message");
+        const script = std.mem.concat(std.heap.c_allocator, u8, &.{ "window.__ziggyReceive(", pending.text, ");" }) catch @panic("out of memory delivering a message");
         defer std.heap.c_allocator.free(script);
         c.webkit_web_view_evaluate_javascript(web_view, script.ptr, @intCast(script.len), null, null, null, null, null);
     }
@@ -447,11 +447,16 @@ fn osVersion(user_data: ?*anyopaque, buffer: [*c]u8, capacity: usize) callconv(.
     if (std.c.uname(&info) != 0) {
         return -1;
     }
-    const written = std.fmt.bufPrint(buffer[0..capacity], "\"{s} {s} {s}\"", .{
+    var version_buffer: [256]u8 = undefined;
+    const version = std.fmt.bufPrint(&version_buffer, "{s} {s} {s}", .{
         std.mem.sliceTo(&info.sysname, 0),
         std.mem.sliceTo(&info.release, 0),
         std.mem.sliceTo(&info.machine, 0),
     }) catch {
+        return -1;
+    };
+    // The version is written as a JSON string, so the JSON writer does the quoting and escaping.
+    const written = std.fmt.bufPrint(buffer[0..capacity], "{f}", .{std.json.fmt(version, .{})}) catch {
         return -1;
     };
     return @intCast(written.len);
@@ -631,9 +636,12 @@ fn performAction(shell: *Shell, action: []const u8) !void {
         c.webkit_web_view_execute_editing_command(web_view, command);
     }
     else {
-        const action_json = try std.json.Stringify.valueAlloc(std.heap.c_allocator, action, .{});
-        defer std.heap.c_allocator.free(action_json);
-        const message = try std.fmt.allocPrint(std.heap.c_allocator, "{{\"channel\":\"menu-action\",\"data\":{{\"action\":{s}}}}}", .{action_json});
+        const message = try std.json.Stringify.valueAlloc(std.heap.c_allocator, .{
+            .channel = "menu-action",
+            .data = .{
+                .action = action,
+            },
+        }, .{});
         defer std.heap.c_allocator.free(message);
         z.ziggy_post_message(shell.core, message.ptr, message.len);
     }

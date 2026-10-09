@@ -86,7 +86,7 @@ pub const MemoryStorage = struct {
                 continue;
             }
             const data = try directory.readFileAlloc(io, entry.path, self.allocator, .unlimited);
-            const storagePath = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ prefix, entry.path });
+            const storagePath = try std.fs.path.join(self.allocator, &.{ prefix, entry.path });
 
             // Storage paths use '/', but the walker joins the path with '\' on Windows.
             std.mem.replaceScalar(u8, storagePath, '\\', '/');
@@ -140,7 +140,7 @@ pub const MemoryStorage = struct {
     //
     pub fn isEmpty(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, path: []const u8) !bool {
         _ = io;
-        const pathPrefix = try std.fmt.allocPrint(allocator, "{s}/", .{path});
+        const pathPrefix = try std.mem.concat(allocator, u8, &.{ path, "/" });
         for (self.directories.keys()) |directory| {
             if (!std.mem.eql(u8, directory, path) and std.mem.startsWith(u8, directory, pathPrefix)) {
                 return false;
@@ -306,7 +306,7 @@ pub const MemoryStorage = struct {
     pub fn deleteDir(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, dirPath: []const u8) !void {
         _ = io;
         _ = self.directories.orderedRemove(dirPath);
-        const pathPrefix = try std.fmt.allocPrint(allocator, "{s}/", .{dirPath});
+        const pathPrefix = try std.mem.concat(allocator, u8, &.{ dirPath, "/" });
         var fileIndex: usize = 0;
         while (fileIndex < self.files.count()) {
             if (std.mem.startsWith(u8, self.files.keys()[fileIndex], pathPrefix)) {

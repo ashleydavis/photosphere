@@ -26,7 +26,7 @@ fn setup(allocator: std.mem.Allocator, io: std.Io, databasesToml: []const u8) ![
     const configDir = try temp_dirs.makeTempDir(allocator, io, "credentials-config");
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
     if (databasesToml.len > 0) {
-        try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/databases.toml", .{configDir}), databasesToml);
+        try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "databases.toml" }), databasesToml);
     }
     return configDir;
 }
@@ -43,7 +43,7 @@ fn setSecret(allocator: std.mem.Allocator, io: std.Io, name: []const u8, secretT
 // Reads one of the TypeScript generated keys of encryption-zig.
 //
 fn readKey(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const u8 {
-    return test_files.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ fixture_dirs.KEYS_DIR, name }));
+    return test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ fixture_dirs.KEYS_DIR, name }));
 }
 
 test "returns empty credentials for a local path with no database entry" {

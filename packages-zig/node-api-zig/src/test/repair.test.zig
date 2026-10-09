@@ -213,7 +213,7 @@ test "restores a missing file and a corrupted one from the source database" {
     try std.testing.expect(containsName(result.repaired, assetPath));
     try std.testing.expect(containsName(result.repaired, displayPath));
     try std.testing.expectEqual(@as(usize, 0), result.unrepaired.len);
-    try std.testing.expectEqualSlices(u8, try test_files.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ source.dir, displayPath })), try test_files.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ target.dir, displayPath })));
+    try std.testing.expectEqualSlices(u8, try test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ source.dir, displayPath })), try test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ target.dir, displayPath })));
     try std.testing.expect(containsName(recorder.messages.items, "Repairing missing file: " ++ assetPath));
     try std.testing.expect(containsName(recorder.messages.items, "Repairing corrupted file: " ++ displayPath));
 
@@ -275,7 +275,7 @@ test "a full repair hashes every file, and puts right the hash of a record" {
     const thumbName = "thumb/" ++ V6_ASSET_ID;
     const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, target.storage)).?;
     const thumbNode = merkle_tree_zig.merkle_tree.findItemInTree(filesTree.sort, thumbName).?;
-    const thumbPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ target.dir, thumbName });
+    const thumbPath = try std.fs.path.join(allocator, &.{ target.dir, thumbName });
     const thumb = try test_files.readFile(allocator, io, thumbPath);
     @memset(thumb[0..16], 0);
     try test_files.writeFile(io, thumbPath, thumb);

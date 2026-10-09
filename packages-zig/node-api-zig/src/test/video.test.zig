@@ -45,9 +45,9 @@ test "reads the date of a video from the JSON file beside it when the video has 
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "video-json-date");
     defer temp_dirs.removeTempDir(io, tempDir);
     var generator = try TestUuidGenerator.init(allocator);
-    const videoPath = try std.fmt.allocPrint(allocator, "{s}/video.mp4", .{tempDir});
+    const videoPath = try std.fs.path.join(allocator, &.{ tempDir, "video.mp4" });
     try test_files.writeFile(io, videoPath, try test_files.readFile(allocator, io, "../test/multiple-files/test.mp4"));
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}.json", .{videoPath}), "{\"photoTakenTime\":{\"timestamp\":\"1700000000\"}}");
+    try test_files.writeFile(io, try std.mem.concat(allocator, u8, &.{ videoPath, ".json" }), "{\"photoTakenTime\":{\"timestamp\":\"1700000000\"}}");
 
     const details = try getVideoDetails(allocator, io, videoPath, tempDir, "video/mp4", generator.uuidGenerator(), "video.mp4");
 
@@ -63,9 +63,9 @@ fn detailsWithJson(allocator: std.mem.Allocator, name: []const u8, json: []const
     _ = try test_environment.setupEnvironment(io);
     const tempDir = try temp_dirs.makeTempDir(allocator, io, name);
     var generator = try TestUuidGenerator.init(allocator);
-    const videoPath = try std.fmt.allocPrint(allocator, "{s}/video.mp4", .{tempDir});
+    const videoPath = try std.fs.path.join(allocator, &.{ tempDir, "video.mp4" });
     try test_files.writeFile(io, videoPath, try test_files.readFile(allocator, io, "../test/multiple-files/test.mp4"));
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}.json", .{videoPath}), json);
+    try test_files.writeFile(io, try std.mem.concat(allocator, u8, &.{ videoPath, ".json" }), json);
     const details = getVideoDetails(allocator, io, videoPath, tempDir, "video/mp4", generator.uuidGenerator(), "video.mp4");
     temp_dirs.removeTempDir(io, tempDir);
     return details;
@@ -138,10 +138,10 @@ test "reads what it can of the JSON file beside a video, as dayjs.unix(parseInt(
 
     // A QuickTime file keeps a location tag as written, and has no date of its own. The first place the location
     // matches /([+-]\d+\.\d+)([+-]\d+\.\d+)/ is "+1.5-2.5".
-    const videoPath = try std.fmt.allocPrint(allocator, "{s}/video.mov", .{tempDir});
+    const videoPath = try std.fs.path.join(allocator, &.{ tempDir, "video.mov" });
     const made = try std.process.run(allocator, io, .{ .argv = &.{ "ffmpeg", "-v", "quiet", "-f", "lavfi", "-i", "color=c=red:s=32x16:r=10:d=1", "-metadata", "location=+5 +5. -1.5x +1.5-2.5/", "-pix_fmt", "yuv420p", "-y", videoPath } });
     try std.testing.expect(made.term == .exited and made.term.exited == 0);
-    const jsonPath = try std.fmt.allocPrint(allocator, "{s}.json", .{videoPath});
+    const jsonPath = try std.mem.concat(allocator, u8, &.{ videoPath, ".json" });
 
     const cases = [_]IJsonDateCase{
         .{ .json = "{\"photoTakenTime\":{\"timestamp\":1700000000.7}}", .photoDate = "2023-11-14T22:13:20.000Z", .logged = "Parsed date 2023-11-14T22:13:20.000Z from timestamp 1700000000 in JSON file " },
@@ -194,9 +194,9 @@ test "a JSON file beside a video that holds null fails the video, as reading a p
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "video-json-null");
     defer temp_dirs.removeTempDir(io, tempDir);
     var generator = try TestUuidGenerator.init(allocator);
-    const videoPath = try std.fmt.allocPrint(allocator, "{s}/video.mp4", .{tempDir});
+    const videoPath = try std.fs.path.join(allocator, &.{ tempDir, "video.mp4" });
     try test_files.writeFile(io, videoPath, try test_files.readFile(allocator, io, "../test/multiple-files/test.mp4"));
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}.json", .{videoPath}), "null");
+    try test_files.writeFile(io, try std.mem.concat(allocator, u8, &.{ videoPath, ".json" }), "null");
 
     try std.testing.expectError(error.Thrown, getVideoDetails(allocator, io, videoPath, tempDir, "video/mp4", generator.uuidGenerator(), "video.mp4"));
     try std.testing.expectEqualStrings("null is not an object (evaluating 'photoData.photoTakenTime')", utils.errors.lastErrorMessage());

@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 const lan_share = @import("lan-share-network-zig");
 const pairing_code = @import("pairing-code.zig");
 const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
@@ -85,7 +86,12 @@ test "accepts payload with correct code hash" {
     try receiver.start(code);
 
     const codeHash = sha256Hex(code);
-    const body = try std.fmt.allocPrint(allocator, "{{\"codeHash\":\"{s}\",\"payload\":{{\"message\":\"hello\"}}}}", .{&codeHash});
+    const body = try utils.json.stringify(allocator, .{
+        .codeHash = &codeHash,
+        .payload = .{
+            .message = "hello",
+        },
+    });
 
     const response = try requestReceiver(allocator, &receiver, "POST", "/share-payload", body);
     try std.testing.expectEqual(@as(u16, 200), response.statusCode);
@@ -104,7 +110,12 @@ test "rejects payload with wrong code hash" {
     try receiver.start(try pairing_code.pairingCode());
 
     const wrongCodeHash = sha256Hex("0000");
-    const body = try std.fmt.allocPrint(allocator, "{{\"codeHash\":\"{s}\",\"payload\":{{\"message\":\"bad\"}}}}", .{&wrongCodeHash});
+    const body = try utils.json.stringify(allocator, .{
+        .codeHash = &wrongCodeHash,
+        .payload = .{
+            .message = "bad",
+        },
+    });
 
     const response = try requestReceiver(allocator, &receiver, "POST", "/share-payload", body);
     try std.testing.expectEqual(@as(u16, 403), response.statusCode);
@@ -123,7 +134,11 @@ test "aborts and returns 429 after exceeding the request budget" {
     try receiver.start(try pairing_code.pairingCode());
 
     const wrongCodeHash = sha256Hex("0000");
-    const body = try std.fmt.allocPrint(allocator, "{{\"codeHash\":\"{s}\",\"payload\":{{}}}}", .{&wrongCodeHash});
+    // An empty struct literal would serialise as an array, so the empty payload object is given as text.
+    const body = try utils.json.stringify(allocator, .{
+        .codeHash = &wrongCodeHash,
+        .payload = utils.json.Raw{ .text = "{}" },
+    });
 
     // Send MAX_REQUESTS+1 (6) requests: the 6th triggers the abort (count > 5).
     var lastStatus: u16 = 0;
@@ -153,7 +168,12 @@ test "does not abort when request count stays within budget" {
 
     // POST /share-payload with correct hash (request 2)
     const codeHash = sha256Hex(code);
-    const body = try std.fmt.allocPrint(allocator, "{{\"codeHash\":\"{s}\",\"payload\":{{\"message\":\"ok\"}}}}", .{&codeHash});
+    const body = try utils.json.stringify(allocator, .{
+        .codeHash = &codeHash,
+        .payload = .{
+            .message = "ok",
+        },
+    });
     const payloadStatus = (try requestReceiver(allocator, &receiver, "POST", "/share-payload", body)).statusCode;
     try std.testing.expectEqual(@as(u16, 200), payloadStatus);
 
@@ -224,7 +244,8 @@ test "a payload with a repeated key is read with its last value, as JSON.parse r
     try receiver.start(code);
 
     const codeHash = sha256Hex(code);
-    const body = try std.fmt.allocPrint(allocator, "{{\"codeHash\":\"wrong\",\"codeHash\":\"{s}\",\"payload\":{{\"message\":\"first\",\"message\":\"second\"}}}}", .{&codeHash});
+    // Hand-written because the point of the test is the duplicate keys, which a serialiser cannot produce.
+    const body = try std.mem.concat(allocator, u8, &.{ "{\"codeHash\":\"wrong\",\"codeHash\":\"", &codeHash, "\",\"payload\":{\"message\":\"first\",\"message\":\"second\"}}" });
 
     const response = try requestReceiver(allocator, &receiver, "POST", "/share-payload", body);
     try std.testing.expectEqual(@as(u16, 200), response.statusCode);
@@ -251,7 +272,10 @@ test "answers a body that is not JSON with 400 and a path it does not serve with
 
     // The receiver still takes the payload that follows.
     const codeHash = sha256Hex(code);
-    const body = try std.fmt.allocPrint(allocator, "{{\"codeHash\":\"{s}\",\"payload\":\"after\"}}", .{&codeHash});
+    const body = try utils.json.stringify(allocator, .{
+        .codeHash = &codeHash,
+        .payload = "after",
+    });
     try std.testing.expectEqual(@as(u16, 200), (try requestReceiver(allocator, &receiver, "POST", "/share-payload", body)).statusCode);
     try std.testing.expectEqualStrings("after", (try receiver.receive()).?.string);
 }
@@ -265,7 +289,11 @@ fn receivePayloadText(allocator: std.mem.Allocator, payloadText: []const u8) !?s
     defer receiver.deinit();
     try receiver.start(code);
     const codeHash = sha256Hex(code);
-    const body = try std.fmt.allocPrint(allocator, "{{\"codeHash\":\"{s}\",\"payload\":{s}}}", .{ &codeHash, payloadText });
+    // The payload text goes in verbatim (numbers written as fractions or too long for an integer must not be re-serialised).
+    const body = try utils.json.stringify(allocator, .{
+        .codeHash = &codeHash,
+        .payload = utils.json.Raw{ .text = payloadText },
+    });
     try std.testing.expectEqual(@as(u16, 200), (try requestReceiver(allocator, &receiver, "POST", "/share-payload", body)).statusCode);
     return receiver.receive();
 }

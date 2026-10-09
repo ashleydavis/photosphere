@@ -1,5 +1,6 @@
 const std = @import("std");
 const bdb = @import("bdb-zig");
+const storage_zig = @import("storage-zig");
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
 const fixtures = @import("fixtures.zig");
@@ -49,7 +50,7 @@ fn makeUser(allocator: std.mem.Allocator, id: []const u8, name: []const u8, age:
         ._id = id,
         .fields = try BsonDocument.fromFields(allocator, &.{
             .{ .key = "name", .value = .{ .string = name } },
-            .{ .key = "email", .value = .{ .string = try std.fmt.allocPrint(allocator, "{s}@example.com", .{name}) } },
+            .{ .key = "email", .value = .{ .string = try std.mem.concat(allocator, u8, &.{ name, "@example.com" }) } },
             .{ .key = "age", .value = .{ .number = age } },
             .{ .key = "role", .value = .{ .string = role } },
         }),
@@ -160,13 +161,13 @@ test "sortIndexes takes the field name from before the last _asc or _desc" {
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     const collection = try newCollection(allocator, &storage);
-    try storage.putFile("/indexes/users/photo_date_asc/tree.dat", "x");
-    try storage.putFile("/indexes/users/name_desc/tree.dat", "x");
-    try storage.putFile("/indexes/users/x_desc_asc/tree.dat", "x");
-    try storage.putFile("/indexes/users/_asc/tree.dat", "x");
-    try storage.putFile("/indexes/users/_desc/tree.dat", "x");
-    try storage.putFile("/indexes/users/plain/tree.dat", "x");
-    try storage.putFile("/indexes/users/ascending/tree.dat", "x");
+    try storage.putFile("indexes/users/photo_date_asc/tree.dat", "x");
+    try storage.putFile("indexes/users/name_desc/tree.dat", "x");
+    try storage.putFile("indexes/users/x_desc_asc/tree.dat", "x");
+    try storage.putFile("indexes/users/_asc/tree.dat", "x");
+    try storage.putFile("indexes/users/_desc/tree.dat", "x");
+    try storage.putFile("indexes/users/plain/tree.dat", "x");
+    try storage.putFile("indexes/users/ascending/tree.dat", "x");
 
     const indexes = try collection.sortIndexes(io);
 
@@ -193,7 +194,7 @@ test "sortIndexes reports no indexes when the collection has no index directory"
     try std.testing.expectEqual(@as(usize, 0), (try collection.sortIndexes(io)).len);
 
     // A directory that holds no index at all is reported as no indexes too.
-    try storage.putFile("/indexes/users/notes/readme.txt", "not a sort index");
+    try storage.putFile("indexes/users/notes/readme.txt", "not a sort index");
     try std.testing.expectEqual(@as(usize, 0), (try collection.sortIndexes(io)).len);
 }
 
@@ -414,7 +415,7 @@ test "getShardId matches the shard files of the test databases" {
     while (try shards.next(io)) |shardRecords| {
         for (shardRecords) |record| {
             const shardId = try collection.getShardId(record._id);
-            const shardPath = try std.fmt.allocPrint(allocator, "db/collections/metadata/shards/{s}", .{shardId});
+            const shardPath = try std.fs.path.join(allocator, &.{ "db", "collections", "metadata", "shards", shardId });
             try std.testing.expect(storage.getFile(shardPath) != null);
             const shard = try collection.shard(shardId);
             try std.testing.expect((try shard.record(io, record._id)) != null);
@@ -471,8 +472,8 @@ test "commit should flush dirty state and allow flush to succeed" {
 
     // The commit wrote the shard, its merkle tree and the collection merkle tree.
     const shardId = try collection.getShardId("123e4567-e89b-12d3-a456-426614174000");
-    try std.testing.expect(storage.getFile(try std.fmt.allocPrint(allocator, "collections/users/shards/{s}", .{shardId})) != null);
-    try std.testing.expect(storage.getFile(try std.fmt.allocPrint(allocator, "collections/users/shards/{s}.dat", .{shardId})) != null);
+    try std.testing.expect(storage.getFile(try std.fs.path.join(allocator, &.{ "collections", "users", "shards", shardId })) != null);
+    try std.testing.expect(storage.getFile(try storage_zig.storage_factory.pathJoin(allocator, &.{ "collections", "users", "shards", try std.mem.concat(allocator, u8, &.{ shardId, ".dat" }) })) != null);
     try std.testing.expect(storage.getFile("collections/users/collection.dat") != null);
 }
 
@@ -637,7 +638,7 @@ fn makeExternalUser(allocator: std.mem.Allocator, id: []const u8, name: []const 
         },
         .{
             .key = "email",
-            .value = .{ .string = try std.fmt.allocPrint(allocator, "{s}@example.com", .{name}) },
+            .value = .{ .string = try std.mem.concat(allocator, u8, &.{ name, "@example.com" }) },
         },
         .{
             .key = "age",
@@ -1070,7 +1071,7 @@ test "insertOne adds the record to every sort index the collection has, and sort
     try collection.setInternalRecord(io, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "Older", 40, "user"));
     try (try collection.sortIndex("age", .asc)).ensure(io, collection, .number);
     try (try collection.sortIndex("name", .desc)).ensure(io, collection, .string);
-    try storage.putFile("/indexes/users/notes/readme.txt", "not a sort index");
+    try storage.putFile("indexes/users/notes/readme.txt", "not a sort index");
     try collection.commit(io);
 
     var user = try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "Younger", 20, "user");

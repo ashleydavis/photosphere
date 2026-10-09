@@ -74,11 +74,11 @@ fn awaitOneTask(context: *task_runner.TaskContext, data: std.json.Value) anyerro
     const second = try context.queueChild("fail", .{});
     const first_completion = try context.awaitTask(first);
     const second_completion = try context.awaitTask(second);
-    return try std.fmt.allocPrint(context.arena, "{{\"first\":\"{s}\",\"firstResult\":{s},\"second\":\"{s}\",\"secondError\":\"{s}\"}}", .{
-        @tagName(first_completion.status),
-        first_completion.result_json orelse "null",
-        @tagName(second_completion.status),
-        second_completion.error_message orelse "",
+    return try ziggy.json_util.stringify(context.arena, .{
+        .first = @tagName(first_completion.status),
+        .firstResult = ziggy.json_util.Raw{ .text = first_completion.result_json orelse "null" },
+        .second = @tagName(second_completion.status),
+        .secondError = second_completion.error_message orelse "",
     });
 }
 

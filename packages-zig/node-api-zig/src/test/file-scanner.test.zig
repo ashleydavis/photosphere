@@ -1049,7 +1049,7 @@ test "should handle very long file paths" {
     while (level < 10) : (level += 1) {
         deepPath = if (deepPath.len == 0) try std.fmt.allocPrint(allocator, "level{d}", .{level}) else try std.fmt.allocPrint(allocator, "{s}/level{d}", .{ deepPath, level });
     }
-    const filePath = try context.write(try std.fmt.allocPrint(allocator, "{s}/image.png", .{deepPath}), &MINIMAL_PNG);
+    const filePath = try context.write(try std.fs.path.join(allocator, &.{ deepPath, "image.png" }), &MINIMAL_PNG);
 
     const scanned = try context.scan(context.testDir, defaultScannerOptions, null);
 

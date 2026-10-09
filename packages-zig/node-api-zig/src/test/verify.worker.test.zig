@@ -71,7 +71,7 @@ test "verifyFileHandler reports unmodified, removed and modified files" {
     const io = std.testing.io;
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ databaseDir, THUMB_PATH });
+    const filePath = try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH });
 
     // The copy has new timestamps, so the handler hashes the file and finds the content unchanged.
     const unmodified = try runHandler(allocator, io, databaseDir, THUMB_PATH, keepNode);
@@ -128,7 +128,7 @@ test "verifyFileHandler does not hash a file whose size and timestamp are unchan
     const original = (try storage.read(allocator, io, THUMB_PATH)).?;
     const corrupted = try allocator.dupe(u8, original);
     corrupted[0] ^= 0xff;
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ databaseDir, THUMB_PATH }), corrupted);
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH }), corrupted);
     const info = (try storage.info(allocator, io, THUMB_PATH)).?;
     const Adjust = struct {
         var lastModified: i64 = 0;
@@ -180,7 +180,7 @@ test "reports removed when the file no longer exists in storage" {
     const io = std.testing.io;
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    try std.Io.Dir.cwd().deleteFile(io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ databaseDir, THUMB_PATH }));
+    try std.Io.Dir.cwd().deleteFile(io, try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH }));
 
     const result = try runHandler(allocator, io, databaseDir, THUMB_PATH, changeSizeAndTimestamp);
 
@@ -203,7 +203,7 @@ test "reports unmodified when size and timestamp are unchanged" {
     const original = (try storage.read(allocator, io, THUMB_PATH)).?;
     const corrupted = try allocator.dupe(u8, original);
     corrupted[0] ^= 0xff;
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ databaseDir, THUMB_PATH }), corrupted);
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH }), corrupted);
     const info = (try storage.info(allocator, io, THUMB_PATH)).?;
     const Adjust = struct {
         var lastModified: i64 = 0;
@@ -227,7 +227,7 @@ test "reports modified when metadata and content hash both changed" {
     const io = std.testing.io;
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ databaseDir, THUMB_PATH }), "changed");
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH }), "changed");
 
     const result = try runHandler(allocator, io, databaseDir, THUMB_PATH, changeSizeAndTimestamp);
 

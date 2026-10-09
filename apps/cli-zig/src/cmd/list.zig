@@ -84,7 +84,7 @@ pub fn listCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
         const encryptionHeaders = try allocator.alloc(?[]const u8, pageRecords.len);
         for (pageRecords, 0..) |record, recordIndex| {
             const recordId = try js_value.toString(allocator, record.get("_id").?);
-            const hash = try readEncryptionHeader(allocator, io, rawAssetStorage, try std.fmt.allocPrint(allocator, "asset/{s}", .{recordId}));
+            const hash = try readEncryptionHeader(allocator, io, rawAssetStorage, try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", recordId }));
             encryptionHeaders[recordIndex] = hash;
         }
 

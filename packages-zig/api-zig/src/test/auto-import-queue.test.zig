@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 const api_zig = @import("api-zig");
 const AutoImportQueue = api_zig.auto_import_queue.AutoImportQueue;
 const IMediaItem = api_zig.media_source.IMediaItem;
@@ -10,7 +11,7 @@ const IMediaItem = api_zig.media_source.IMediaItem;
 fn mediaItem(allocator: std.mem.Allocator, sourceId: []const u8) !IMediaItem {
     return .{
         .sourceId = sourceId,
-        .filePath = try std.fmt.allocPrint(allocator, "/photos/{s}", .{sourceId}),
+        .filePath = try std.fs.path.join(allocator, &.{ "/photos", sourceId }),
         .displayName = sourceId,
         .contentType = "image/jpeg",
         .size = 1000,

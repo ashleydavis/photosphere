@@ -12,6 +12,7 @@
 const std = @import("std");
 const helpers = @import("test-helpers.zig");
 const cli = @import("cli-zig");
+const storage_zig = @import("storage-zig");
 
 //
 // Gets the absolute path of the built Zig CLI.
@@ -113,7 +114,7 @@ fn fileExists(path: []const u8) bool {
 //
 fn setup(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
     const root = try helpers.makeTempDir(allocator, name);
-    try helpers.copyDirectory(allocator, "../../test/dbs/v6", try std.fmt.allocPrint(allocator, "{s}/db", .{root}));
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", try std.fs.path.join(allocator, &.{ root, "db" }));
     return root;
 }
 
@@ -266,8 +267,8 @@ test "replicate copies the files back when the full mode is chosen at the prompt
     const root = try setup(allocator, "cli-d-replicate-full");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
     try expectResult(try runZig(allocator, environment, &.{ "remove", "--db", dest, asset_id, "--yes" }), try std.fmt.allocPrint(allocator, "\u{2713} Successfully removed asset {s} from database\n", .{asset_id}), "", 0);
 
@@ -278,7 +279,7 @@ test "replicate copies the files back when the full mode is chosen at the prompt
     try expectContains(result.stdout, "Total records copied:      1");
     try expectContains(result.stdout, "\u{2705} Replication completed successfully");
     // The full mode copied the asset file back, which the partial mode leaves for the origin to serve.
-    try expectFileExists(try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ dest, asset_id }));
+    try expectFileExists(try std.fs.path.join(allocator, &.{ dest, "asset", asset_id }));
 }
 
 //
@@ -293,8 +294,8 @@ test "replicate leaves the files for the origin when the partial mode is chosen 
     const root = try setup(allocator, "cli-d-replicate-partial");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
     _ = try runZig(allocator, environment, &.{ "remove", "--db", dest, asset_id, "--yes" });
 
@@ -302,7 +303,7 @@ test "replicate leaves the files for the origin when the partial mode is chosen 
 
     try std.testing.expectEqual(@as(u8, 0), result.exitCode);
     try expectFilesCopied(result.stdout, "0");
-    try std.testing.expect(!fileExists(try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ dest, asset_id })));
+    try std.testing.expect(!fileExists(try std.fs.path.join(allocator, &.{ dest, "asset", asset_id })));
 }
 
 //
@@ -316,8 +317,8 @@ test "replicate asks before overwriting a destination and cancels when the answe
     const root = try setup(allocator, "cli-d-replicate-no");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
     try expectResult(try runZig(allocator, environment, &.{ "remove", "--db", dest, asset_id, "--yes" }), try std.fmt.allocPrint(allocator, "\u{2713} Successfully removed asset {s} from database\n", .{asset_id}), "", 0);
     const destHashBefore = try runZig(allocator, environment, &.{ "root-hash", "--db", dest, "--yes" });
@@ -329,7 +330,7 @@ test "replicate asks before overwriting a destination and cancels when the answe
     try expectContains(result.stderr, try std.fmt.allocPrint(allocator, "\u{26A0}\u{FE0F}  The destination database already exists at {s}.\n    Replication will overwrite any changes made to the destination database.\n", .{dest}));
     try expectContains(result.stdout, "Replication cancelled.");
     try expectNotContains(result.stdout, "Replication completed successfully");
-    try std.testing.expect(!fileExists(try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ dest, asset_id })));
+    try std.testing.expect(!fileExists(try std.fs.path.join(allocator, &.{ dest, "asset", asset_id })));
     const destHashAfter = try runZig(allocator, environment, &.{ "root-hash", "--db", dest, "--yes" });
     try std.testing.expectEqualStrings(destHashBefore.stdout, destHashAfter.stdout);
 }
@@ -345,8 +346,8 @@ test "replicate overwrites the destination when the confirmation is answered yes
     const root = try setup(allocator, "cli-d-replicate-yes");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
     _ = try runZig(allocator, environment, &.{ "remove", "--db", dest, asset_id, "--yes" });
 
@@ -356,7 +357,7 @@ test "replicate overwrites the destination when the confirmation is answered yes
     try expectNotContains(result.stdout, "Replication cancelled.");
     try expectContains(result.stdout, "\u{2705} Replication completed successfully");
     try expectFilesCopied(result.stdout, "3");
-    try expectFileExists(try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ dest, asset_id }));
+    try expectFileExists(try std.fs.path.join(allocator, &.{ dest, "asset", asset_id }));
 }
 
 //
@@ -378,11 +379,11 @@ test "replicate refuses an encrypted destination whose key is not in the vault" 
     const root = try setup(allocator, "cli-d-replicate-key");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
     // The encryption marker is what says a database is encrypted.
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/.db/encryption.pub", .{dest}), .data = "a public key\n" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fs.path.join(allocator, &.{ dest, ".db", "encryption.pub" }), .data = "a public key\n" });
 
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "replicate", "--db", db, "--dest", dest, "--dest-key", "nosuchkey", "--yes" }), root, "<root>");
     result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
@@ -404,10 +405,10 @@ test "sync refuses an encrypted destination whose key is not in the vault" {
     const root = try setup(allocator, "cli-d-sync-key");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/.db/encryption.pub", .{dest}), .data = "a public key\n" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fs.path.join(allocator, &.{ dest, ".db", "encryption.pub" }), .data = "a public key\n" });
 
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "sync", "--db", db, "--dest", dest, "--dest-key", "nosuchkey", "--yes" }), root, "<root>");
     result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
@@ -466,8 +467,8 @@ test "verify reports a file that is in the database but no longer on disk" {
     const root = try setup(allocator, "cli-d-verify-removed");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const thumbPath = try std.fmt.allocPrint(allocator, "{s}/thumb/{s}", .{ db, asset_id });
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const thumbPath = try std.fs.path.join(allocator, &.{ db, "thumb", asset_id });
     try std.Io.Dir.cwd().deleteFile(std.testing.io, thumbPath);
 
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "verify", "--db", db, "--yes", "--full" }), db, "<db>");
@@ -509,9 +510,9 @@ test "verify reports a database file it cannot read" {
     const root = try setup(allocator, "cli-d-verify-corrupt");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/shards/96.dat", .{db}),
+        .sub_path = try std.fs.path.join(allocator, &.{ db, ".db", "bson", "collections", "metadata", "shards", "96.dat" }),
         .data = "corrupt",
     });
 
@@ -546,7 +547,7 @@ test "verify reports a path that is a file rather than a database" {
     const root = try helpers.makeTempDir(allocator, "cli-d-verify-plain");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const plain = try std.fmt.allocPrint(allocator, "{s}/plain.txt", .{root});
+    const plain = try std.fs.path.join(allocator, &.{ root, "plain.txt" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = plain, .data = "not a database\n" });
 
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "verify", "--db", plain, "--yes" }), plain, "<plain>");
@@ -575,8 +576,8 @@ test "add refuses a path that does not exist" {
     const root = try setup(allocator, "cli-d-add-missing");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const missing = try std.fmt.allocPrint(allocator, "{s}/photos", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const missing = try std.fs.path.join(allocator, &.{ root, "photos" });
 
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "add", "--db", db, "--yes", missing }), missing, "<missing>");
     result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
@@ -596,7 +597,7 @@ const source_photo_name = "photo.jpg";
 // Puts a copy of the asset file of test/dbs/v6 in <root>/photos, as the folder addCommand is given.
 //
 fn writeSourcePhoto(allocator: std.mem.Allocator, root: []const u8) ![]const u8 {
-    const photosDir = try std.fmt.allocPrint(allocator, "{s}/photos", .{root});
+    const photosDir = try std.fs.path.join(allocator, &.{ root, "photos" });
     try std.Io.Dir.cwd().createDirPath(std.testing.io, photosDir);
     const sourcePath = try std.fs.path.join(allocator, &.{ "../../test/dbs/v6/asset", asset_id });
     const photosDirHandle = try std.Io.Dir.cwd().openDir(std.testing.io, photosDir, .{});
@@ -627,7 +628,7 @@ const add_imported_summary =
 //
 fn setupAdd(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
     const root = try helpers.makeTempDir(allocator, name);
-    try helpers.copyDirectory(allocator, "../../test/dbs/no-assets", try std.fmt.allocPrint(allocator, "{s}/db", .{root}));
+    try helpers.copyDirectory(allocator, "../../test/dbs/no-assets", try std.fs.path.join(allocator, &.{ root, "db" }));
     _ = try writeSourcePhoto(allocator, root);
     return root;
 }
@@ -645,9 +646,9 @@ test "add deletes the source file the database already holds under --cleanup" {
     const root = try setupAdd(allocator, "cli-d-add-cleanup");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const photosDir = try std.fmt.allocPrint(allocator, "{s}/photos", .{root});
-    const photo = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ photosDir, source_photo_name });
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const photosDir = try std.fs.path.join(allocator, &.{ root, "photos" });
+    const photo = try std.fs.path.join(allocator, &.{ photosDir, source_photo_name });
 
     const firstRun = try normalize(allocator, try runZig(allocator, environment, &.{ "add", "--db", db, "--yes", photosDir }), root, "<root>");
     try std.testing.expectEqual(@as(u8, 0), firstRun.exitCode);
@@ -686,12 +687,12 @@ test "add refuses a database whose key is not in the vault" {
     const root = try setupAdd(allocator, "cli-d-add-key");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const photosDir = try std.fmt.allocPrint(allocator, "{s}/photos", .{root});
-    const photo = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ photosDir, source_photo_name });
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const photosDir = try std.fs.path.join(allocator, &.{ root, "photos" });
+    const photo = try std.fs.path.join(allocator, &.{ photosDir, source_photo_name });
     // The encryption marker is what says a database is encrypted.
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = try std.fmt.allocPrint(allocator, "{s}/.db/encryption.pub", .{db}),
+        .sub_path = try std.fs.path.join(allocator, &.{ db, ".db", "encryption.pub" }),
         .data = "a public key\n",
     });
 

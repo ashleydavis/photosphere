@@ -384,7 +384,7 @@ pub const SortIndex = struct {
         onDirty: ?DirtyCallback,
         onDrop: ?DirtyCallback,
     ) !SortIndex {
-        const indexDirectory = try std.fmt.allocPrint(allocator, "{s}/indexes/{s}/{s}_{s}", .{ baseDirectory, collectionName, fieldName, @tagName(direction) });
+        const indexDirectory = try storage_zig.storage_factory.pathJoin(allocator, &.{ baseDirectory, "indexes", collectionName, try std.mem.concat(allocator, u8, &.{ fieldName, "_", @tagName(direction) }) });
         return .{
             .allocator = allocator,
             .storage = storage,
@@ -392,8 +392,8 @@ pub const SortIndex = struct {
             .fieldName = fieldName,
             .direction = direction,
             .type = sortDataType,
-            .treeFilePath = try std.fmt.allocPrint(allocator, "{s}/tree.dat", .{indexDirectory}),
-            .checkpointFilePath = try std.fmt.allocPrint(allocator, "{s}/build.checkpoint", .{indexDirectory}),
+            .treeFilePath = try storage_zig.storage_factory.pathJoin(allocator, &.{ indexDirectory, "tree.dat" }),
+            .checkpointFilePath = try storage_zig.storage_factory.pathJoin(allocator, &.{ indexDirectory, "build.checkpoint" }),
             .uuidGenerator = uuidGenerator,
             .onDirtyCallback = onDirty,
             .onDropCallback = onDrop,
@@ -1282,7 +1282,7 @@ pub const SortIndex = struct {
         if (self.leafCache.get(pageId)) |cached| {
             return cached.records;
         }
-        const filePath = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.indexDirectory, pageId });
+        const filePath = try storage_zig.storage_factory.pathJoin(self.allocator, &.{ self.indexDirectory, pageId });
         const leafRecords = try serialization.load(
             *LeafRecords,
             self.allocator,
@@ -1337,7 +1337,7 @@ pub const SortIndex = struct {
             if (entry.dirty) {
                 if (entry.records.items.len == 0) {
                     // Leaf was marked for deletion.
-                    const filePath = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.indexDirectory, leafId });
+                    const filePath = try storage_zig.storage_factory.pathJoin(self.allocator, &.{ self.indexDirectory, leafId });
                     try self.storage.deleteFile(self.allocator, io, filePath);
                     try deletedLeafIds.append(self.allocator, leafId);
                 }
@@ -1347,7 +1347,7 @@ pub const SortIndex = struct {
                         self.allocator,
                         io,
                         self.storage,
-                        try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.indexDirectory, leafId }),
+                        try storage_zig.storage_factory.pathJoin(self.allocator, &.{ self.indexDirectory, leafId }),
                         entry.records,
                         1,
                         "IDXP",

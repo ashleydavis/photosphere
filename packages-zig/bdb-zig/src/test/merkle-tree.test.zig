@@ -53,7 +53,7 @@ test "hashRecord matches the hashes TypeScript stored for every test database re
             records = .empty;
             const storage = try allocator.create(MemoryStorage);
             storage.* = MemoryStorage.init(allocator);
-            try storage.loadDirectory(io, try std.fmt.allocPrint(allocator, "{s}/{s}/.db/bson", .{ fixtures.TEST_DBS_DIR, databaseName }), ".db/bson");
+            try storage.loadDirectory(io, try std.fs.path.join(allocator, &.{ fixtures.TEST_DBS_DIR, databaseName, ".db", "bson" }), ".db/bson");
             const database = try bdb.database.BsonDatabase.init(allocator, storage.asStorage(), ".db/bson", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
             const collection = try database.collection("metadata");
             var iterator = collection.iterateRecords();

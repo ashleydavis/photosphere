@@ -239,10 +239,10 @@ pub fn streamAssetToFile(
 //
 fn mapAssetTypeToStorageKey(allocator: std.mem.Allocator, @"type": []const u8, assetId: []const u8) ![]const u8 {
     if (std.mem.eql(u8, @"type", "display")) {
-        return std.fmt.allocPrint(allocator, "display/{s}", .{assetId});
+        return storage_zig.storage_factory.pathJoin(allocator, &.{ "display", assetId });
     }
     if (std.mem.eql(u8, @"type", "thumb")) {
-        return std.fmt.allocPrint(allocator, "thumb/{s}", .{assetId});
+        return storage_zig.storage_factory.pathJoin(allocator, &.{ "thumb", assetId });
     }
-    return std.fmt.allocPrint(allocator, "asset/{s}", .{assetId});
+    return storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", assetId });
 }

@@ -8,7 +8,7 @@ const TestApp = support.TestApp;
 //
 fn writeDatabasesToml(app: *TestApp, text: []const u8) !void {
     const allocator = std.testing.allocator;
-    const path = try std.fmt.allocPrint(allocator, "{s}/config/databases.toml", .{app.tmp_path});
+    const path = try std.fs.path.join(allocator, &.{ app.tmp_path, "config", "databases.toml" });
     defer allocator.free(path);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
         .sub_path = path,

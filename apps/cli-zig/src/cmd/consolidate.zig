@@ -153,7 +153,7 @@ pub fn consolidateCommand(allocator: std.mem.Allocator, io: std.Io, context: ICo
 
     // (Zig: the block's defers are the TypeScript finally, which shuts the queue down before the exit below.)
     {
-        const queue = try TaskQueue.init(allocator, io, uuidGenerator, try std.fmt.allocPrint(allocator, "consolidate-{s}", .{sessionId}));
+        const queue = try TaskQueue.init(allocator, io, uuidGenerator, try std.mem.concat(allocator, u8, &.{ "consolidate-", sessionId }));
         defer queue.deinit();
         defer queue.shutdown();
 

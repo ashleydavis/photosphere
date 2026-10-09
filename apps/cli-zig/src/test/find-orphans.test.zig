@@ -24,7 +24,7 @@ test "findOrphans lists the files that are not in the merkle tree, skipping .db,
     const io = std.testing.io;
     const root = try helpers.makeTempDir(allocator, "find-orphans");
     defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", db);
     try writeStray(allocator, db, "asset/orphan-1");
     try writeStray(allocator, db, ".db/stray");
@@ -48,7 +48,7 @@ test "findOrphans finds nothing in a database without strays" {
     const io = std.testing.io;
     const root = try helpers.makeTempDir(allocator, "find-orphans-none");
     defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", db);
 
     const created = try storage_zig.storage_factory.createStorage(allocator, io, db, null, null);

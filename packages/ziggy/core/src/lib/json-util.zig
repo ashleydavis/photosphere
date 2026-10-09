@@ -43,3 +43,21 @@ pub fn getInteger(value: std.json.Value, name: []const u8) ?i64 {
     }
     return field.integer;
 }
+
+//
+// A piece of JSON text that is already built. Put it in a value given to stringify and it is written out as it is, without being
+// parsed and written again, so the bytes of the text are kept.
+//
+pub const Raw = struct {
+    // The JSON text.
+    text: []const u8,
+
+    //
+    // Called by std.json when a Raw is written: writes the text as one JSON value.
+    //
+    pub fn jsonStringify(self: Raw, json_writer: anytype) !void {
+        try json_writer.beginWriteRaw();
+        try json_writer.writer.writeAll(self.text);
+        json_writer.endWriteRaw();
+    }
+};

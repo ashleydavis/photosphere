@@ -409,7 +409,7 @@ pub const BsonCollection = struct {
     // The sort index is created and cached synchronously; disk access is deferred until first operation.
     //
     pub fn sortIndex(self: *BsonCollection, fieldName: []const u8, direction: SortDirection) !*SortIndex {
-        const cacheKey = try std.fmt.allocPrint(self.allocator, "{s}_{s}", .{ fieldName, @tagName(direction) });
+        const cacheKey = try std.mem.concat(self.allocator, u8, &.{ fieldName, "_", @tagName(direction) });
         if (self.sortIndexCache.get(cacheKey)) |cached| {
             return cached;
         }
@@ -776,7 +776,7 @@ pub const BsonCollection = struct {
     // List all sort indexes for this collection
     //
     pub fn sortIndexes(self: *BsonCollection, io: std.Io) ![]ISortIndexInfo {
-        const collectionIndexPath = try std.fmt.allocPrint(self.allocator, "{s}/indexes/{s}", .{ self.baseDirectory, self.name });
+        const collectionIndexPath = try storage_zig.storage_factory.pathJoin(self.allocator, &.{ self.baseDirectory, "indexes", self.name });
 
         if (!try self.storage.dirExists(self.allocator, io, collectionIndexPath)) {
             return &.{};

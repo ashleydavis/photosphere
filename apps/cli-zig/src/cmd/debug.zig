@@ -4,6 +4,7 @@ const node_utils = @import("node-utils-zig");
 const serialization_zig = @import("serialization-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const bdb = @import("bdb-zig");
+const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
 const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
@@ -572,7 +573,7 @@ pub fn debugFindCollisionsCommand(allocator: std.mem.Allocator, io: std.Io, cont
     for (collisions.items) |collision| {
         var files: std.ArrayList(BsonValue) = .empty;
         for (collision.assetIds) |assetId| {
-            const filePath = try std.fmt.allocPrint(allocator, "asset/{s}", .{assetId});
+            const filePath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", assetId });
             const fileInfo = try getItemInfo(&merkleTree.?, filePath);
             if (fileInfo) |info| {
                 var time: std.Io.Writer.Allocating = .init(allocator);

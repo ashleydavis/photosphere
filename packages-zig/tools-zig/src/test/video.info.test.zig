@@ -115,8 +115,8 @@ test "extractScreenshot writes the frame the TypeScript ffmpeg command writes" {
     const dir = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/video-test-{x}", .{std.mem.readInt(u64, &random_bytes, .little)});
     try std.Io.Dir.cwd().createDirPath(std.testing.io, dir);
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
-    const screenshotPath = try std.fmt.allocPrint(allocator, "{s}/screenshot.jpg", .{dir});
-    const referencePath = try std.fmt.allocPrint(allocator, "{s}/reference.jpg", .{dir});
+    const screenshotPath = try std.fs.path.join(allocator, &.{ dir, "screenshot.jpg" });
+    const referencePath = try std.fs.path.join(allocator, &.{ dir, "reference.jpg" });
 
     var video = Video.init(allocator, std.testing.io, "../test/multiple-files/test.mp4");
     try std.testing.expectEqualStrings(screenshotPath, try video.extractScreenshot(allocator, std.testing.io, screenshotPath, 3.9372665));
@@ -180,7 +180,7 @@ test "getInfo reads the creation time of a silent video like TypeScript" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
 
     // A tenth of a second of 32x16 video at 10 frames a second, with no audio and a creation_time tag.
-    const videoPath = try std.fmt.allocPrint(allocator, "{s}/silent.mp4", .{dir});
+    const videoPath = try std.fs.path.join(allocator, &.{ dir, "silent.mp4" });
     _ = try runTool(allocator, &.{ "ffmpeg", "-v", "quiet", "-f", "lavfi", "-i", "color=c=red:s=32x16:r=10:d=0.1", "-metadata", "creation_time=2024-01-02T03:04:05.000000Z", "-pix_fmt", "yuv420p", "-y", videoPath });
 
     var video = Video.init(allocator, std.testing.io, videoPath);
@@ -204,7 +204,7 @@ test "getInfo fails for a file with no video stream" {
     try requireFfmpeg(allocator);
     const dir = try makeTempDir(allocator, "audio-only");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
-    const audioPath = try std.fmt.allocPrint(allocator, "{s}/audio.m4a", .{dir});
+    const audioPath = try std.fs.path.join(allocator, &.{ dir, "audio.m4a" });
     _ = try runTool(allocator, &.{ "ffmpeg", "-v", "quiet", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.1", "-y", audioPath });
 
     var video = Video.init(allocator, std.testing.io, audioPath);
@@ -230,7 +230,7 @@ test "extractScreenshot fails loudly when ffmpeg cannot write the screenshot" {
     try requireFfmpeg(allocator);
     const dir = try makeTempDir(allocator, "screenshot-fails");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
-    const screenshotPath = try std.fmt.allocPrint(allocator, "{s}/missing/screenshot.jpg", .{dir});
+    const screenshotPath = try std.fs.path.join(allocator, &.{ dir, "missing", "screenshot.jpg" });
     var video = Video.init(allocator, std.testing.io, "../test/multiple-files/test.mp4");
     try std.testing.expectError(error.Thrown, video.extractScreenshot(allocator, std.testing.io, screenshotPath, 0));
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to extract screenshot: Error: "));

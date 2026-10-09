@@ -225,7 +225,7 @@ pub fn pickDirectory(
 
         const trimmedName = utils.js_string.trim(subdirName.value);
         const subdirPath = try join(allocator, currentPath, trimmedName);
-        const relativePath = try std.fmt.allocPrint(allocator, "./{s}", .{trimmedName});
+        const relativePath = try std.fs.path.join(allocator, &.{ ".", trimmedName });
         mkdirRecursive(io, subdirPath) catch |err| {
             try outro(io, try pc.red(allocator, try std.fmt.allocPrint(allocator, "Failed to create directory: {s}", .{utils.errors.errorMessage(err)})), .{});
             return null;

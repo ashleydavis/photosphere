@@ -257,7 +257,7 @@ test "getProcessTmpDir returns PHOTOSPHERE_TMP_DIR/tmp when set, otherwise the s
         try std.testing.expectEqualStrings("C:\\isolated\\test\\tmp", try fs.getProcessTmpDir(allocator, io));
 
         try environ_map.put("PHOTOSPHERE_TMP_DIR", "relative\\dir");
-        const expected = try std.fmt.allocPrint(allocator, "{s}\\relative\\dir\\tmp", .{currentPath});
+        const expected = try std.mem.concat(allocator, u8, &.{ currentPath, "\\relative\\dir\\tmp" });
         try std.testing.expectEqualStrings(expected, try fs.getProcessTmpDir(allocator, io));
     }
     else {
@@ -377,7 +377,7 @@ test "leaves no temporary files behind after writing" {
     var dir = try std.Io.Dir.cwd().openDir(io, std.fs.path.dirname(filePath).?, .{ .iterate = true });
     defer dir.close(io);
     const baseName = std.fs.path.basename(filePath);
-    const tempPrefix = try std.fmt.allocPrint(allocator, "{s}.tmp-", .{baseName});
+    const tempPrefix = try std.mem.concat(allocator, u8, &.{ baseName, ".tmp-" });
     var leftoverTempFiles: usize = 0;
     var iterator = dir.iterate();
     while (try iterator.next(io)) |entry| {
@@ -684,7 +684,7 @@ test "updateFileRawOptimistic throws after the configured retries when the file 
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "kept changing") != null);
 
     // The lock is released on the way out.
-    const lockPath = try std.fmt.allocPrint(allocator, "{s}.lock", .{filePath});
+    const lockPath = try std.mem.concat(allocator, u8, &.{ filePath, ".lock" });
     try std.testing.expect(!fs.pathExists(io, lockPath));
 
     try std.Io.Dir.cwd().deleteFile(io, filePath);
@@ -1362,7 +1362,7 @@ test "mathRandom returns numbers in [0, 1) that vary like Math.random()" {
 // Creates the update lock of a file, as another process holding it would, last modified `ageMs` ago.
 //
 fn holdUpdateLock(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, ageMs: i64) ![]const u8 {
-    const lockPath = try std.fmt.allocPrint(allocator, "{s}.lock", .{filePath});
+    const lockPath = try std.mem.concat(allocator, u8, &.{ filePath, ".lock" });
     const lockFile = try std.Io.Dir.cwd().createFile(io, lockPath, .{});
     defer lockFile.close(io);
     const modified = std.Io.Timestamp.fromNanoseconds(@as(i96, std.Io.Timestamp.now(io, .real).toMilliseconds() - ageMs) * std.time.ns_per_ms);
@@ -1510,7 +1510,7 @@ test "an update lock that has gone stale but is a directory cannot be broken, an
     const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-raw-directory-lock.bin");
 
     // fs.rm(lockPath, { force: true }) refuses a directory (EISDIR), and so does the port.
-    const lockPath = try std.fmt.allocPrint(allocator, "{s}.lock", .{filePath});
+    const lockPath = try std.mem.concat(allocator, u8, &.{ filePath, ".lock" });
     try std.Io.Dir.cwd().createDirPath(io, lockPath);
     const modified = std.Io.Timestamp.fromNanoseconds(@as(i96, std.Io.Timestamp.now(io, .real).toMilliseconds() - 60_000) * std.time.ns_per_ms);
     try setDirectoryModified(io, lockPath, modified);

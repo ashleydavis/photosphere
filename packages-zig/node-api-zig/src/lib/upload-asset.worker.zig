@@ -452,9 +452,9 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
         assetDetails = try getImageDetails(allocator, io, filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
     }
 
-    const assetPath = try std.fmt.allocPrint(allocator, "asset/{s}", .{assetId});
-    const thumbPath = try std.fmt.allocPrint(allocator, "thumb/{s}", .{assetId});
-    const displayPath = try std.fmt.allocPrint(allocator, "display/{s}", .{assetId});
+    const assetPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", assetId });
+    const thumbPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "thumb", assetId });
+    const displayPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "display", assetId });
 
     if (getEnv("SIMULATE_FAILURE")) |simulateFailure| {
         if (std.mem.eql(u8, simulateFailure, "add-file") and mathRandom(io) < 0.1) {

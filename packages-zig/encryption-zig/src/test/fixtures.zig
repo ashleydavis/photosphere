@@ -4,7 +4,7 @@ const std = @import("std");
 // Reads a fixture file written by fixtures/generate.ts (tests run with the package directory as cwd).
 //
 pub fn readFixture(allocator: std.mem.Allocator, fileName: []const u8) ![]u8 {
-    const fixturePath = try std.fmt.allocPrint(allocator, "encryption-zig/src/test/fixtures/{s}", .{fileName});
+    const fixturePath = try std.fs.path.join(allocator, &.{ "encryption-zig", "src", "test", "fixtures", fileName });
     return std.Io.Dir.cwd().readFileAlloc(std.testing.io, fixturePath, allocator, .unlimited);
 }
 

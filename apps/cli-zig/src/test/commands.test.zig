@@ -4,6 +4,7 @@ const helpers = @import("test-helpers.zig");
 const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const node_path = @import("node-utils-zig").path;
+const utils = @import("utils-zig");
 const encryption = @import("encryption-zig");
 const cli = @import("cli-zig");
 
@@ -47,7 +48,7 @@ fn expectResult(result: helpers.CliResult, expectedStdout: []const u8, expectedS
 //
 fn setup(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
     const root = try helpers.makeTempDir(allocator, name);
-    try helpers.copyDirectory(allocator, "../../test/dbs/v6", try std.fmt.allocPrint(allocator, "{s}/db", .{root}));
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", try std.fs.path.join(allocator, &.{ root, "db" }));
     return root;
 }
 
@@ -182,7 +183,7 @@ test "verify prints the report of the TypeScript CLI" {
     const root = try setup(allocator, "cmd-verify");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     const result = try normalize(allocator, try runZig(allocator, environment, &.{ "verify", "--db", db, "--yes" }), db, "<db>");
     try expectResult(result, verify_v6_report, "", 0);
@@ -230,7 +231,7 @@ test "summary prints the report of the TypeScript CLI" {
     const root = try setup(allocator, "cmd-summary");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     // The root hashes the TypeScript implementation stored in the database's trees, and their combination.
     const storage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, db, null, null);
@@ -276,7 +277,7 @@ test "list prints the report of the TypeScript CLI" {
     const root = try setup(allocator, "cmd-list");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     const expected = try std.mem.replaceOwned(u8, allocator, list_v6_report, "{encryption}", "unencrypted");
     try expectResult(try runZig(allocator, environment, &.{ "list", "--db", db, "--yes" }), expected, "", 0);
@@ -302,7 +303,7 @@ test "list prints the report of the TypeScript CLI" {
     @memcpy(header[0..12], "PSEN\x01\x00\x00\x00A2CB");
     @memset(header[12..44], 0xab);
     @memcpy(header[44..48], "rest");
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/asset/89171cd9-a652-4047-b869-1154bf2c95a1", .{db}), .data = &header });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fs.path.join(allocator, &.{ db, "asset", "89171cd9-a652-4047-b869-1154bf2c95a1" }), .data = &header });
     const encrypted = try std.mem.replaceOwned(u8, allocator, list_v6_report, "{encryption}", "encrypted (key: abababababababababababababababababababababababababababababababab)");
     try expectResult(try runZig(allocator, environment, &.{ "list", "--db", db, "--yes" }), encrypted, "", 0);
 }
@@ -341,8 +342,8 @@ test "compare prints the report of the TypeScript CLI" {
     const root = try helpers.makeTempDir(allocator, "cmd-compare");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const source = try std.fmt.allocPrint(allocator, "{s}/1-asset", .{root});
-    const destination = try std.fmt.allocPrint(allocator, "{s}/1-asset-2", .{root});
+    const source = try std.fs.path.join(allocator, &.{ root, "1-asset" });
+    const destination = try std.fs.path.join(allocator, &.{ root, "1-asset-2" });
     try helpers.copyDirectory(allocator, "../../test/dbs/1-asset", source);
     try helpers.copyDirectory(allocator, "../../test/dbs/1-asset-2", destination);
 
@@ -362,7 +363,7 @@ test "remove deletes the asset like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-remove");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     const assetId = "89171cd9-a652-4047-b869-1154bf2c95a1";
 
     try expectResult(try runZig(allocator, environment, &.{ "rm", "--db", db, assetId, "--yes" }), "\u{2713} Successfully removed asset 89171cd9-a652-4047-b869-1154bf2c95a1 from database\n", "", 0);
@@ -370,7 +371,7 @@ test "remove deletes the asset like the TypeScript CLI" {
     // The files are gone, and the tree holds only README.md with the hash the TypeScript CLI leaves.
     const cwd = std.Io.Dir.cwd();
     for ([_][]const u8{ "asset", "display", "thumb" }) |directory| {
-        try std.testing.expectError(error.FileNotFound, cwd.statFile(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/{s}/{s}", .{ db, directory, assetId }), .{}));
+        try std.testing.expectError(error.FileNotFound, cwd.statFile(std.testing.io, try std.fs.path.join(allocator, &.{ db, directory, assetId }), .{}));
     }
     const summary = try runZig(allocator, environment, &.{ "summary", "--db", db, "--yes" });
     try std.testing.expect(std.mem.indexOf(u8, summary.stdout, "Files imported:   0\nTotal files:      1\nTotal size:       913 Bytes\n") != null);
@@ -393,7 +394,7 @@ test "export writes the asset files and prints the report of the TypeScript CLI"
     const root = try setup(allocator, "cmd-export");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     const assetId = "89171cd9-a652-4047-b869-1154bf2c95a1";
     const cwd = std.Io.Dir.cwd();
 
@@ -403,7 +404,7 @@ test "export writes the asset files and prints the report of the TypeScript CLI"
     try std.testing.expectEqualSlices(u8, try cwd.readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ db, assetId }), allocator, .unlimited), try cwd.readFileAlloc(std.testing.io, original, allocator, .unlimited));
 
     // The display and thumb versions to a directory, named after the original file with the type.
-    const outDir = try std.fmt.allocPrint(allocator, "{s}/out", .{root});
+    const outDir = try std.fs.path.join(allocator, &.{ root, "out" });
     const display = try node_path.join(allocator, &.{ outDir, "test_display.jpg" });
     try expectResult(try runZig(allocator, environment, &.{ "exp", "--db", db, assetId, outDir, "--type", "display", "--yes" }), try std.fmt.allocPrint(allocator, "\u{2713} Successfully exported display version of asset {s} to {s}\n", .{ assetId, display }), "", 0);
     try std.testing.expectEqualSlices(u8, try cwd.readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/display/{s}", .{ db, assetId }), allocator, .unlimited), try cwd.readFileAlloc(std.testing.io, display, allocator, .unlimited));
@@ -424,7 +425,7 @@ test "root-hash and database-id print the values of the TypeScript CLI" {
     const root = try setup(allocator, "cmd-root-hash");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     // The values the TypeScript CLI prints for test/dbs/v6.
     try expectResult(try runZig(allocator, environment, &.{ "root-hash", "--db", db, "--yes" }), "c18854777b06e1b0d499230db43f74b32bf937cd892c974b673621b979f40590\n", "", 0);
@@ -438,20 +439,20 @@ test "origin and set-origin read and write the origin like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-origin");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     try expectResult(try runZig(allocator, environment, &.{ "origin", "--db", db, "--yes" }), "(not set)\n", "", 0);
     try expectResult(try runZig(allocator, environment, &.{ "set-origin", "--db", db, "s3:bucket/x", "--yes" }), "\u{2713} Origin set to: s3:bucket/x\n", "", 0);
     try expectResult(try runZig(allocator, environment, &.{ "origin", "--db", db, "--yes" }), "s3:bucket/x\n", "", 0);
 
     // The config file the TypeScript CLI writes.
-    const config = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/.db/config.json", .{db}), allocator, .unlimited);
+    const config = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ db, ".db", "config.json" }), allocator, .unlimited);
     try std.testing.expectEqualStrings("{\n  \"origin\": \"s3:bucket/x\"\n}", config);
 
     // An origin that is not a string is logged as String() writes it.
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/.db/config.json", .{db}), .data = "{\"origin\":1e21}" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fs.path.join(allocator, &.{ db, ".db", "config.json" }), .data = "{\"origin\":1e21}" });
     try expectResult(try runZig(allocator, environment, &.{ "origin", "--db", db, "--yes" }), "1e+21\n", "", 0);
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/.db/config.json", .{db}), .data = "{\"origin\":[0.0000001,null]}" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fs.path.join(allocator, &.{ db, ".db", "config.json" }), .data = "{\"origin\":[0.0000001,null]}" });
     try expectResult(try runZig(allocator, environment, &.{ "origin", "--db", db, "--yes" }), "1e-7,\n", "", 0);
 }
 
@@ -536,7 +537,7 @@ test "info prints the report of the TypeScript CLI" {
     const root = try setup(allocator, "cmd-info");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     const lookups = [_][]const u8{ "426fab8dbdd88ead05220e0a73644b1d77c4591689701090926129af8ba45e7c", "89171cd9-a652-4047-b869-1154bf2c95a1", "00000000-0000-0000-0000-000000000000" };
     try expectResult(try runZig(allocator, environment, &.{ "info", lookups[0], lookups[1], lookups[2], "--db", db, "--yes" }), info_v6_report, "", 0);
@@ -546,7 +547,7 @@ test "info prints the report of the TypeScript CLI" {
     const file = try node_path.join(allocator, &.{ root, "test.png" });
     try std.Io.Dir.cwd().copyFile("../../test/test.png", std.Io.Dir.cwd(), file, std.testing.io, .{});
     const expected = try std.mem.replaceOwned(u8, allocator, info_png_report, "<file>", file);
-    const result = try runZig(allocator, environment, &.{ "info", file, try std.fmt.allocPrint(allocator, "{s}/missing.jpg", .{root}), "--yes" });
+    const result = try runZig(allocator, environment, &.{ "info", file, try std.fs.path.join(allocator, &.{ root, "missing.jpg" }), "--yes" });
     try expectResult(.{ .stdout = try normalizeModified(allocator, result.stdout), .stderr = result.stderr, .exitCode = result.exitCode }, expected, "", 0);
 }
 
@@ -596,9 +597,9 @@ test "verify reports a modified file like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-verify-modified");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = try std.fmt.allocPrint(allocator, "{s}/thumb/89171cd9-a652-4047-b869-1154bf2c95a1", .{db}),
+        .sub_path = try std.fs.path.join(allocator, &.{ db, "thumb", "89171cd9-a652-4047-b869-1154bf2c95a1" }),
         .data = "changed",
     });
 
@@ -629,7 +630,7 @@ test "verify reports a missing database like the TypeScript CLI" {
     const root = try helpers.makeTempDir(allocator, "cmd-verify-missing");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const missing = try std.fmt.allocPrint(allocator, "{s}/missing", .{root});
+    const missing = try std.fs.path.join(allocator, &.{ root, "missing" });
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "verify", "--db", missing, "--yes" }), missing, "<missing>");
     result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
     try expectResult(result, verify_missing_report, "", 1);
@@ -680,10 +681,10 @@ test "repair restores a modified file and prints the report of the TypeScript CL
     const root = try setup(allocator, "cmd-repair");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const src = try std.fmt.allocPrint(allocator, "{s}/src", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const src = try std.fs.path.join(allocator, &.{ root, "src" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", src);
-    const thumb = try std.fmt.allocPrint(allocator, "{s}/thumb/89171cd9-a652-4047-b869-1154bf2c95a1", .{db});
+    const thumb = try std.fs.path.join(allocator, &.{ db, "thumb", "89171cd9-a652-4047-b869-1154bf2c95a1" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
         .sub_path = thumb,
         .data = "changed",
@@ -692,7 +693,7 @@ test "repair restores a modified file and prints the report of the TypeScript CL
     const result = try normalize(allocator, try normalize(allocator, try runZig(allocator, environment, &.{ "repair", "--db", db, "--source", src, "--yes" }), src, "<src>"), db, "<db>");
     try expectResult(result, repair_modified_report, "", 0);
 
-    const original = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/thumb/89171cd9-a652-4047-b869-1154bf2c95a1", .{src}), allocator, .unlimited);
+    const original = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ src, "thumb", "89171cd9-a652-4047-b869-1154bf2c95a1" }), allocator, .unlimited);
     const repaired = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, thumb, allocator, .unlimited);
     try std.testing.expectEqualSlices(u8, original, repaired);
 }
@@ -704,7 +705,7 @@ test "repair without a source or an origin fails like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-repair-no-source");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     var result = try runZig(allocator, environment, &.{ "repair", "--db", db, "--yes" });
     result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
     try std.testing.expectEqual(@as(u8, 1), result.exitCode);
@@ -754,19 +755,19 @@ test "find-orphans prints the report of the TypeScript CLI" {
     const root = try setup(allocator, "cmd-find-orphans");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     const clean = try normalize(allocator, try runZig(allocator, environment, &.{ "find-orphans", "--db", db, "--yes" }), db, "<db>");
     try expectResult(clean, find_orphans_none_report, "", 0);
 
     const cwd = std.Io.Dir.cwd();
-    try cwd.createDirPath(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/other", .{db}));
+    try cwd.createDirPath(std.testing.io, try std.fs.path.join(allocator, &.{ db, "other" }));
     try cwd.writeFile(std.testing.io, .{
-        .sub_path = try std.fmt.allocPrint(allocator, "{s}/asset/orphan-1", .{db}),
+        .sub_path = try std.fs.path.join(allocator, &.{ db, "asset", "orphan-1" }),
         .data = "x",
     });
     try cwd.writeFile(std.testing.io, .{
-        .sub_path = try std.fmt.allocPrint(allocator, "{s}/other/file", .{db}),
+        .sub_path = try std.fs.path.join(allocator, &.{ db, "other", "file" }),
         .data = "x",
     });
     const result = try normalize(allocator, try runZig(allocator, environment, &.{ "find-orphans", "--db", db, "--yes" }), db, "<db>");
@@ -814,11 +815,11 @@ test "remove-orphans deletes the orphans and prints the report of the TypeScript
     const root = try setup(allocator, "cmd-remove-orphans");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     const cwd = std.Io.Dir.cwd();
-    const orphan = try std.fmt.allocPrint(allocator, "{s}/asset/orphan-1", .{db});
-    const other = try std.fmt.allocPrint(allocator, "{s}/other/file", .{db});
-    try cwd.createDirPath(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/other", .{db}));
+    const orphan = try std.fs.path.join(allocator, &.{ db, "asset", "orphan-1" });
+    const other = try std.fs.path.join(allocator, &.{ db, "other", "file" });
+    try cwd.createDirPath(std.testing.io, try std.fs.path.join(allocator, &.{ db, "other" }));
     try cwd.writeFile(std.testing.io, .{
         .sub_path = orphan,
         .data = "x",
@@ -832,7 +833,7 @@ test "remove-orphans deletes the orphans and prints the report of the TypeScript
     try expectResult(result, remove_orphans_report, "", 0);
     try std.testing.expectError(error.FileNotFound, cwd.access(std.testing.io, orphan, .{}));
     try std.testing.expectError(error.FileNotFound, cwd.access(std.testing.io, other, .{}));
-    try cwd.access(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset/89171cd9-a652-4047-b869-1154bf2c95a1", .{db}), .{});
+    try cwd.access(std.testing.io, try std.fs.path.join(allocator, &.{ db, "asset", "89171cd9-a652-4047-b869-1154bf2c95a1" }), .{});
 
     const again = try normalize(allocator, try runZig(allocator, environment, &.{ "remove-orphans", "--db", db, "--yes" }), db, "<db>");
     try expectResult(again, remove_orphans_none_report, "", 0);
@@ -914,7 +915,7 @@ test "upgrade upgrades the v5 database like the TypeScript CLI" {
     const root = try helpers.makeTempDir(allocator, "cmd-upgrade");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v5", db);
 
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "upgrade", "--db", db, "--yes" }), db, "<db>");
@@ -924,7 +925,7 @@ test "upgrade upgrades the v5 database like the TypeScript CLI" {
     // The root hash TypeScript's upgrade of the same database gives.
     const rootHash = try runZig(allocator, environment, &.{ "root-hash", "--db", db, "--yes" });
     try std.testing.expectEqualStrings("c18854777b06e1b0d499230db43f74b32bf937cd892c974b673621b979f40590\n", rootHash.stdout);
-    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/metadata", .{db}), .{}));
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(std.testing.io, try std.fs.path.join(allocator, &.{ db, "metadata" }), .{}));
 
     const again = try normalize(allocator, try runZig(allocator, environment, &.{ "upgrade", "--db", db, "--yes" }), db, "<db>");
     try expectResult(again, "\nUpgrading media file database...\n✓ Found database version 6\n✓ Database is already at the latest version (6)\n", "", 0);
@@ -977,8 +978,8 @@ test "sync synchronizes two databases like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-sync");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
     const assetId = "89171cd9-a652-4047-b869-1154bf2c95a1";
     try expectResult(try runZig(allocator, environment, &.{ "remove", "--db", dest, assetId, "--yes" }), "\u{2713} Successfully removed asset 89171cd9-a652-4047-b869-1154bf2c95a1 from database\n", "", 0);
@@ -988,7 +989,7 @@ test "sync synchronizes two databases like the TypeScript CLI" {
     try expectResult(result, sync_report, "", 0);
 
     // The asset the destination removed is gone from the source too, and the two hold the same files.
-    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ db, assetId }), .{}));
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(std.testing.io, try std.fs.path.join(allocator, &.{ db, "asset", assetId }), .{}));
     const sourceHash = try runZig(allocator, environment, &.{ "root-hash", "--db", db, "--yes" });
     const destHash = try runZig(allocator, environment, &.{ "root-hash", "--db", dest, "--yes" });
     try std.testing.expectEqualStrings("94f27ca43db9c872cfa4a377f3731cb42811e82ec48f2426a541643145a777b7\n", sourceHash.stdout);
@@ -1002,8 +1003,8 @@ test "sync does nothing for databases already in sync like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-sync-in-sync");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
 
     // Two copies of one database hold the same files and records, but have no state files yet, so the first
@@ -1022,12 +1023,12 @@ test "sync refuses an encrypted destination without a key like the TypeScript CL
     const root = try setup(allocator, "cmd-sync-encrypted");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
 
     // The encryption marker is what says a database is encrypted.
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/.db/encryption.pub", .{dest}), .data = "a public key\n" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fs.path.join(allocator, &.{ dest, ".db", "encryption.pub" }), .data = "a public key\n" });
 
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "sync", "--db", db, "--dest", dest, "--yes" }), root, "<root>");
     result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
@@ -1052,8 +1053,8 @@ test "sync rejects a key for an unencrypted destination like the TypeScript CLI"
     const root = try setup(allocator, "cmd-sync-key");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
 
     const result = try runZig(allocator, environment, &.{ "sync", "--db", db, "--dest", dest, "--dest-key", "k", "--yes" });
@@ -1072,8 +1073,8 @@ test "sync refuses databases that are not related like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-sync-unrelated");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const other = try std.fmt.allocPrint(allocator, "{s}/other", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const other = try std.fs.path.join(allocator, &.{ root, "other" });
     try helpers.copyDirectory(allocator, "../../test/dbs/1-asset", other);
 
     // The TypeScript CLI also prints the stack of each error of the chain, which Zig errors do not have.
@@ -1104,8 +1105,8 @@ test "sync --watch rejects an interval that is not a number like the TypeScript 
     const root = try setup(allocator, "cmd-sync-interval");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
 
     // The TypeScript CLI also prints the stack of the error, which Zig errors do not have.
@@ -1148,8 +1149,8 @@ test "consolidate creates a remote that does not exist, then finds it already jo
     const root = try setup(allocator, "cmd-consolidate-create");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const remote = try std.fmt.allocPrint(allocator, "{s}/remote", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const remote = try std.fs.path.join(allocator, &.{ root, "remote" });
 
     const created = try normalize(allocator, try runZig(allocator, environment, &.{ "consolidate", "--db", db, remote, "--yes" }), root, "<root>");
     try expectResult(created, try std.mem.concat(allocator, u8, &.{ try consolidateHeader(allocator, "remote"),
@@ -1178,8 +1179,8 @@ test "consolidate records a remote that is the same database as the origin like 
     const root = try setup(allocator, "cmd-consolidate-same");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const same = try std.fmt.allocPrint(allocator, "{s}/same", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const same = try std.fs.path.join(allocator, &.{ root, "same" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", same);
 
     const result = try normalize(allocator, try runZig(allocator, environment, &.{ "consolidate", "--db", db, same, "--yes" }), root, "<root>");
@@ -1196,8 +1197,8 @@ test "consolidate joins an unrelated remote like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-consolidate-unrelated");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const other = try std.fmt.allocPrint(allocator, "{s}/other", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const other = try std.fs.path.join(allocator, &.{ root, "other" });
     try helpers.copyDirectory(allocator, "../../test/dbs/1-asset-2", other);
 
     // The warning is the local write lock that replicating the remote down cannot take while consolidation holds it,
@@ -1221,7 +1222,7 @@ test "consolidate joins an unrelated remote like the TypeScript CLI" {
     }), "[W1:<task>] Failed to acquire write lock after 3 attempts. Lock is currently held by <holder>).\n", 0);
 
     // The remote holds its own photo and the one pushed, and the database is now a partial replica of it.
-    var assetDir = try std.Io.Dir.cwd().openDir(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset", .{other}), .{ .iterate = true });
+    var assetDir = try std.Io.Dir.cwd().openDir(std.testing.io, try std.fs.path.join(allocator, &.{ other, "asset" }), .{ .iterate = true });
     defer assetDir.close(std.testing.io);
     var assetCount: usize = 0;
     var assets = assetDir.iterate();
@@ -1244,13 +1245,13 @@ test "consolidate reports a remote it cannot lock like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-consolidate-locked");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const locked = try std.fmt.allocPrint(allocator, "{s}/locked", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const locked = try std.fs.path.join(allocator, &.{ root, "locked" });
     try helpers.copyDirectory(allocator, "../../test/dbs/1-asset-2", locked);
 
     // Another session holds the remote's write lock, with a timestamp that never times out.
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = try std.fmt.allocPrint(allocator, "{s}/.db/write.lock", .{locked}),
+        .sub_path = try std.fs.path.join(allocator, &.{ locked, ".db", "write.lock" }),
         .data = "{\"owner\":\"other-session\",\"acquiredAt\":\"2026-01-01T00:00:00.000Z\",\"timestamp\":9999999999999}",
     });
 
@@ -1323,8 +1324,8 @@ test "replicate prints the report of the TypeScript CLI and copies the files" {
     const root = try setup(allocator, "cmd-replicate");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const dest = try std.fmt.allocPrint(allocator, "{s}/replica", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const dest = try std.fs.path.join(allocator, &.{ root, "replica" });
 
     // The new replica already holds the README.md written when it is created, so the asset, display and thumb
     // files of the one asset are copied, with its one metadata record.
@@ -1332,8 +1333,8 @@ test "replicate prints the report of the TypeScript CLI and copies the files" {
     try expectResult(result, try replicateReport(allocator, "3", "1"), "", 0);
 
     const assetId = "89171cd9-a652-4047-b869-1154bf2c95a1";
-    const sourceAsset = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ db, assetId }), allocator, .unlimited);
-    const replicaAsset = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ dest, assetId }), allocator, .unlimited);
+    const sourceAsset = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ db, "asset", assetId }), allocator, .unlimited);
+    const replicaAsset = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ dest, "asset", assetId }), allocator, .unlimited);
     try std.testing.expectEqualSlices(u8, sourceAsset, replicaAsset);
 
     // Replicating again to an existing destination with --yes updates it, and it has nothing to copy.
@@ -1348,7 +1349,7 @@ test "replicate rejects --partial with --full like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-replicate-flags");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     const result = try runZig(allocator, environment, &.{ "replicate", "--db", db, "--dest", "/tmp/x", "--partial", "--full", "--yes" });
     try std.testing.expectEqual(@as(u8, 1), result.exitCode);
     try std.testing.expectEqualStrings("✗ --partial and --full cannot be used together. Please specify only one.\n", result.stderr);
@@ -1361,8 +1362,8 @@ test "replicate rejects a key for an unencrypted destination like the TypeScript
     const root = try setup(allocator, "cmd-replicate-key");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
 
     // The destination is another (unencrypted) database.
@@ -1464,8 +1465,8 @@ fn expectVersionReport(allocator: std.mem.Allocator, environment: *const std.pro
     else
         try std.fmt.allocPrint(allocator, "⚠️  Some dependencies are missing: {s}\nRun \"psi tools\" for installation instructions\n", .{try std.mem.join(allocator, ", ", missingTools.items)});
     const tempDir = try std.fs.path.join(allocator, &.{ root, "tmp", "photosphere" });
-    const expectedRest = try std.fmt.allocPrint(allocator, "\nDirectories:\n  Config: {s}/config\n  Temp: {s}\n  Log files: {s}\n  Cache: {s}\n\n{s}", .{
-        root,
+    const expectedRest = try std.fmt.allocPrint(allocator, "\nDirectories:\n  Config: {s}\n  Temp: {s}\n  Log files: {s}\n  Cache: {s}\n\n{s}", .{
+        try std.fs.path.join(allocator, &.{ root, "config" }),
         tempDir,
         try std.fs.path.join(allocator, &.{ tempDir, "logs" }),
         try expectedCacheDir(allocator, environment),
@@ -1502,7 +1503,7 @@ test "version written to a file is the report of the TypeScript CLI" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
 
-    const result = try runZigToFile(allocator, environment, &.{"version"}, try std.fmt.allocPrint(allocator, "{s}/zig.txt", .{root}));
+    const result = try runZigToFile(allocator, environment, &.{"version"}, try std.fs.path.join(allocator, &.{ root, "zig.txt" }));
     try std.testing.expectEqual(@as(u8, 0), result.exitCode);
     try expectVersionReport(allocator, environment, root, result.stdout);
 }
@@ -1540,7 +1541,7 @@ fn deterministicEnvironment(allocator: std.mem.Allocator, environment: *const st
 // of the bytes before it recomputed.
 //
 fn expectedEmptySortIndexTree(allocator: std.mem.Allocator, indexDirName: []const u8, indexId: []const u8) ![]const u8 {
-    const fixturePath = try std.fmt.allocPrint(allocator, "../../test/dbs/no-assets/.db/bson/indexes/metadata/{s}/tree.dat", .{indexDirName});
+    const fixturePath = try std.fs.path.join(allocator, &.{ "..", "..", "test", "dbs", "no-assets", ".db", "bson", "indexes", "metadata", indexDirName, "tree.dat" });
     const fixture = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, fixturePath, allocator, .unlimited);
 
     // The index id is the first string of the header, after the version, the "IDXT" type code, a reserved word,
@@ -1602,8 +1603,8 @@ test "init prints the report of the TypeScript CLI and creates the database it c
     const root = try helpers.makeTempDir(allocator, "cmd-init");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const deterministic = try deterministicEnvironment(allocator, environment, try std.fmt.allocPrint(allocator, "{s}/ids", .{root}));
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const deterministic = try deterministicEnvironment(allocator, environment, try std.fs.path.join(allocator, &.{ root, "ids" }));
 
     // The UUIDs are those TestUuidGenerator (packages/node-utils/src/lib/test-uuid-generator.ts) gives for each
     // counter, as recorded from it in packages-zig/utils-zig/src/test/fixtures/test-uuid-generator.json. The
@@ -1614,7 +1615,7 @@ test "init prints the report of the TypeScript CLI and creates the database it c
 
     // A database with the identity of another database: the counter gives the session id (5) and the ids of the
     // two sort indexes (6 and 7).
-    const related = try std.fmt.allocPrint(allocator, "{s}/related", .{root});
+    const related = try std.fs.path.join(allocator, &.{ root, "related" });
     const databaseId = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
     const relatedResult = try normalize(allocator, try runZig(allocator, deterministic, &.{ "i", "--db", related, "--database-id", databaseId, "-y" }), related, "<db>");
     try expectResult(relatedResult, init_report, "", 0);
@@ -1642,7 +1643,7 @@ test "init refuses a directory that is not empty like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-init-not-empty");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "init", "--db", db, "--yes" }), db, "<db>");
     result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
@@ -1656,7 +1657,7 @@ test "init rejects a malformed --database-id like the TypeScript CLI" {
     const root = try helpers.makeTempDir(allocator, "cmd-init-database-id");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     // normaliseDatabaseId (apps/cli/src/lib/init-cmd.ts) throws, and the error handler of apps/cli/index.ts logs
     // it and exits with 1.
@@ -1705,7 +1706,7 @@ test "init creates an encrypted database with a generated key like the TypeScrip
     const root = try helpers.makeTempDir(allocator, "cmd-init-encrypted");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     const result = try normalize(allocator, try runZig(allocator, environment, &.{ "init", "--db", db, "--key", "zig-key", "--generate-key", "--yes" }), db, "<db>");
     try expectResult(result, init_encrypted_report, "", 0);
@@ -1767,7 +1768,7 @@ test "encrypt encrypts the database in place, then skips what it already encrypt
     const root = try setup(allocator, "cmd-encrypt");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     // test/dbs/v6 holds 11 files that encryptableFiles (packages/node-api/src/lib/encrypt.ts) yields: the asset,
     // display and thumb files, and 8 files under .db/bson.
@@ -1794,7 +1795,7 @@ test "encrypt without a key fails like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-encrypt-no-key");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     const withoutKey = try normalize(allocator, try runZig(allocator, environment, &.{ "encrypt", "--db", db, "--yes" }), root, "<root>");
     try expectEncryptFailure(allocator, withoutKey, "✗ Encryption requires --key.\n");
@@ -1811,7 +1812,7 @@ test "encrypt reports a missing database like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-encrypt-no-db");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const missingDb = try std.fmt.allocPrint(allocator, "{s}/nodb", .{root});
+    const missingDb = try std.fs.path.join(allocator, &.{ root, "nodb" });
 
     const result = try normalize(allocator, try runZig(allocator, environment, &.{ "encrypt", "--db", missingDb, "--key", "zig-key", "--generate-key", "--yes" }), root, "<root>");
     try expectEncryptFailure(allocator, result, "✗ No database found at: <root>/nodb\n");
@@ -1836,7 +1837,7 @@ test "decrypt decrypts the database in place like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-decrypt");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     const encrypted = try runZig(allocator, environment, &.{ "encrypt", "--db", db, "--key", "zig-key", "--generate-key", "--yes" });
     try expectResult(encrypted, "\n✅ Encrypted 11 files, 0 were already encrypted.\n", "", 0);
@@ -1870,7 +1871,7 @@ test "decrypt without a key fails like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-decrypt-no-key");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     const withoutKey = try normalize(allocator, try runZig(allocator, environment, &.{ "decrypt", "--db", db, "--yes" }), root, "<root>");
     try expectEncryptFailure(allocator, withoutKey, "✗ Decryption requires --key.\n");
@@ -1887,11 +1888,11 @@ test "decrypt reports a database that is not encrypted like the TypeScript CLI" 
     const root = try setup(allocator, "cmd-decrypt-plain");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
-    const missingDb = try std.fmt.allocPrint(allocator, "{s}/nodb", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const missingDb = try std.fs.path.join(allocator, &.{ root, "nodb" });
 
     // The key must be in the vault for the database to be checked, so it is generated by encrypting another copy.
-    const other = try std.fmt.allocPrint(allocator, "{s}/other", .{root});
+    const other = try std.fs.path.join(allocator, &.{ root, "other" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", other);
     const encryptOther = try runZig(allocator, environment, &.{ "encrypt", "--db", other, "--key", "zig-key", "--generate-key", "--yes" });
     try expectResult(encryptOther, "\n✅ Encrypted 11 files, 0 were already encrypted.\n", "", 0);
@@ -2333,7 +2334,7 @@ fn checkNextSteps(allocator: std.mem.Allocator, hasFilesToAdd: bool) ![]const u8
 fn setupCheck(allocator: std.mem.Allocator, name: []const u8) !*std.process.Environ.Map {
     const root = try setup(allocator, name);
     const environment = try helpers.cliEnvironment(allocator, root);
-    try environment.put("PHOTOSPHERE_CACHE_DIR", try std.fmt.allocPrint(allocator, "{s}/cache", .{root}));
+    try environment.put("PHOTOSPHERE_CACHE_DIR", try std.fs.path.join(allocator, &.{ root, "cache" }));
     return environment;
 }
 
@@ -2344,7 +2345,7 @@ test "check reports which files are already in the database like the TypeScript 
     const environment = try setupCheck(allocator, "cmd-check");
     const root = std.fs.path.dirname(environment.get("PHOTOSPHERE_CACHE_DIR").?).?;
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     // test/dbs/v6 holds test.jpg (its one asset) and not test.png.
     const result = try normalize(allocator, try runZig(allocator, environment, &.{ "check", "--db", db, "../../test/test.jpg", "../../test/test.png", "--yes" }), db, "<db>");
@@ -2388,7 +2389,7 @@ test "check scans a directory like the TypeScript CLI" {
     const environment = try setupCheck(allocator, "cmd-check-directory");
     const root = std.fs.path.dirname(environment.get("PHOTOSPHERE_CACHE_DIR").?).?;
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     // test/multiple-files holds 2 images and a video, and a zip of 2 more images, none of them in test/dbs/v6.
     const result = try normalize(allocator, try runZig(allocator, environment, &.{ "check", "--db", db, "../../test/multiple-files", "--yes" }), db, "<db>");
@@ -2415,7 +2416,7 @@ test "check reports a file it cannot hash like the TypeScript CLI" {
     const environment = try setupCheck(allocator, "cmd-check-failed");
     const root = std.fs.path.dirname(environment.get("PHOTOSPHERE_CACHE_DIR").?).?;
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     // The scanner resolves the path it is given (path.resolve in TypeScript), which gives it the separator of the
     // platform, so the path is joined with that separator to be the one the CLI reports.
     const broken = try std.fs.path.join(allocator, &.{ root, "broken.png" });
@@ -2435,7 +2436,7 @@ test "check reports a file it cannot hash like the TypeScript CLI" {
     const logEnd = std.mem.indexOfScalarPos(u8, result.stdout, logStart, '\n').?;
     // The CLI environment sets the temp directory to <root>/tmp, and the CLI joins the rest on with path.join, which
     // on Windows also normalizes the separators of the segments it is given, so the expectation is built the same way.
-    const logDir = try node_path.join(allocator, &.{ try std.fmt.allocPrint(allocator, "{s}/tmp", .{root}), "photosphere", "logs" });
+    const logDir = try node_path.join(allocator, &.{ try std.fs.path.join(allocator, &.{ root, "tmp" }), "photosphere", "logs" });
     try std.testing.expect(std.mem.startsWith(u8, result.stdout[logStart..logEnd], logDir));
     const stdout = try std.mem.concat(allocator, u8, &.{ result.stdout[0..logStart], "<log file>", result.stdout[logEnd..] });
 
@@ -2473,7 +2474,7 @@ test "check reports a missing database like the TypeScript CLI" {
     const root = try helpers.makeTempDir(allocator, "cmd-check-missing");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const missing = try std.fmt.allocPrint(allocator, "{s}/missing", .{root});
+    const missing = try std.fs.path.join(allocator, &.{ root, "missing" });
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "check", "--db", missing, "../../test/test.jpg", "--yes" }), missing, "<missing>");
     result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
     try expectResult(result, verify_missing_report, "", 1);
@@ -2731,8 +2732,8 @@ test "mcp answers an MCP session like the TypeScript CLI" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = try std.fmt.allocPrint(allocator, "{s}/config/databases.toml", .{root}),
-        .data = try std.fmt.allocPrint(allocator, "[[databases]]\nname = 'photos'\ndescription = 'My photos'\npath = '{s}/db'\n", .{root}),
+        .sub_path = try std.fs.path.join(allocator, &.{ root, "config", "databases.toml" }),
+        .data = try helpers.databasesToml(allocator, "photos", "My photos", try std.fs.path.join(allocator, &.{ root, "db" })),
     });
 
     // src/test/fixtures/mcp-session.jsonl is an MCP session with every tool of test/dbs/v6, <ROOT> standing for the
@@ -2749,8 +2750,8 @@ test "mcp answers an MCP session like the TypeScript CLI" {
     }, expected, "Photosphere MCP server running\n", 0);
 
     // save_media_file wrote the thumbnail of the asset (130,591 bytes).
-    const thumb = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/out/thumb.jpg", .{root}), allocator, .unlimited);
-    const storedThumb = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/db/thumb/89171cd9-a652-4047-b869-1154bf2c95a1", .{root}), allocator, .unlimited);
+    const thumb = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ root, "out", "thumb.jpg" }), allocator, .unlimited);
+    const storedThumb = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ root, "db", "thumb", "89171cd9-a652-4047-b869-1154bf2c95a1" }), allocator, .unlimited);
     try std.testing.expectEqual(@as(usize, 130591), thumb.len);
     try std.testing.expectEqualSlices(u8, storedThumb, thumb);
 }
@@ -2797,9 +2798,9 @@ const secrets_seed_vault =
 //
 fn setupSecrets(allocator: std.mem.Allocator, root: []const u8) !*std.process.Environ.Map {
     const environment = try helpers.cliEnvironment(allocator, root);
-    const vaultDir = try std.fmt.allocPrint(allocator, "{s}/vault", .{root});
+    const vaultDir = try std.fs.path.join(allocator, &.{ root, "vault" });
     try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{vaultDir}), .data = secrets_seed_vault });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fs.path.join(allocator, &.{ vaultDir, "vault.json" }), .data = secrets_seed_vault });
     return environment;
 }
 
@@ -2846,9 +2847,9 @@ test "secrets view shows S3 credentials as JSON.parse and Object.entries read th
     const root = try helpers.makeTempDir(allocator, "cmd-secrets-entries");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const vaultDir = try std.fmt.allocPrint(allocator, "{s}/vault", .{root});
+    const vaultDir = try std.fs.path.join(allocator, &.{ root, "vault" });
     try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{vaultDir}), .data = 
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fs.path.join(allocator, &.{ vaultDir, "vault.json" }), .data = 
         \\{"keys":{"name":"keys","type":"s3-credentials","value":"{\"b\":1,\"2\":1e21,\"b\":\"last\",\"1\":[1,null,2]}"},"null":{"name":"null","type":"s3-credentials","value":"null"},"text":{"name":"text","type":"s3-credentials","value":"\"h\u00e9\ud83d\ude00\""}}
     });
 
@@ -2870,7 +2871,7 @@ test "secrets view --raw writes only the bare value, like the TypeScript CLI" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
     const multiLineValue = "-----BEGIN PRIVATE KEY-----\nABC\n-----END PRIVATE KEY-----";
-    const keyFile = try std.fmt.allocPrint(allocator, "{s}/enc.key", .{root});
+    const keyFile = try std.fs.path.join(allocator, &.{ root, "enc.key" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = keyFile, .data = multiLineValue });
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "import", "--yes", "--private-key", keyFile }), "\u{2713} Key imported as \"enc\".\n", "", 0);
 
@@ -2943,7 +2944,7 @@ test "secrets add and edit store and change secrets like the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "edit", "--yes", "--name", "test-secret" }), "", "\u{2717} --new-name, --value, or --value-file is required with --yes\n", 1);
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "edit", "--yes", "--name", "test-secret", "--value", "updated" }), "\u{2713} Secret \"test-secret\" updated.\n", "", 0);
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "edit", "--yes", "--name", "test-secret", "--new-name", " renamed " }), "\u{2713} Secret \"renamed\" updated.\n", "", 0);
-    const valueFile = try std.fmt.allocPrint(allocator, "{s}/value.txt", .{root});
+    const valueFile = try std.fs.path.join(allocator, &.{ root, "value.txt" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = valueFile, .data = "line1\nline2\n" });
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "edit", "--yes", "--name", "renamed", "--value-file", valueFile }), "\u{2713} Secret \"renamed\" updated.\n", "", 0);
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--yes", "--name", "renamed", "--raw" }), "line1\nline2\n", "", 0);
@@ -2967,7 +2968,7 @@ test "secrets send and receive transfer a secret over the local network like the
     std.testing.io.random(&randomBytes);
     const code = try std.fmt.allocPrint(allocator, "{d}", .{1000 + std.mem.readInt(u32, &randomBytes, .little) % 9000});
 
-    const receiverOutput = try std.fmt.allocPrint(allocator, "{s}/receiver.txt", .{receiverRoot});
+    const receiverOutput = try std.fs.path.join(allocator, &.{ receiverRoot, "receiver.txt" });
     const receiverThread = try std.Thread.spawn(.{}, runReceiver, .{ receiverEnvironment, "secrets", code, receiverOutput });
     const sendResult = try runZig(allocator, senderEnvironment, &.{ "secrets", "send", "--yes", "--name", "s3a", "--code", code });
     receiverThread.join();
@@ -3236,7 +3237,7 @@ test "debug merkle-tree prints the trees and records like the TypeScript CLI" {
     const root = try setup(allocator, "cmd-debug-merkle-tree");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     const result = try runZig(allocator, environment, &.{ "debug", "merkle-tree", "--db", db, "--yes", "--records" });
     try expectResult(result, debug_merkle_tree_v6_records, "", 0);
@@ -3268,7 +3269,7 @@ test "debug finds and removes a duplicate asset, then rebuilds the sort indexes,
     const root = try setup(allocator, "cmd-debug-duplicates");
     defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     // A second asset file with the same content as the first, both given the same modified time.
     const originalPath = try std.fs.path.join(allocator, &.{ db, "asset", debug_original_asset });
@@ -3323,7 +3324,7 @@ test "debug find-collisions writes an absolute --output path like the TypeScript
     const root = try setup(allocator, "cmd-debug-collisions-output");
     defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     const outputPath = try std.Io.Dir.cwd().realPathFileAlloc(io, root, allocator);
     const absoluteOutput = try node_path.join(allocator, &.{ outputPath, "out.json" });
 
@@ -3340,7 +3341,7 @@ test "debug find-duplicates reports an input file it cannot read like the TypeSc
     const root = try setup(allocator, "cmd-debug-duplicates-missing");
     defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     const inputPath = try node_path.join(allocator, &.{ db, "collisions.json" });
 
     const missing = try runZig(allocator, environment, &.{ "debug", "find-duplicates", "--db", db, "--yes" });
@@ -3388,7 +3389,7 @@ test "hash-cache tools record, read back and remove entries like the TypeScript 
     // hashCacheDirCommand (apps/cli/src/cmd/hash-cache-tools.ts) prints getHashCacheDir(db): <cache>/<16 hex digits
     // of the database path's hash>/hash-cache.
     const dirResult = try runZig(allocator, environment, &.{ "hash-cache", "dir", "--db", db });
-    const cachePrefix = try std.fmt.allocPrint(allocator, "{s}{c}", .{ try std.fs.path.join(allocator, &.{ root, "cache" }), std.fs.path.sep });
+    const cachePrefix = try std.mem.concat(allocator, u8, &.{ try std.fs.path.join(allocator, &.{ root, "cache" }), &.{std.fs.path.sep} });
     try std.testing.expect(std.mem.startsWith(u8, dirResult.stdout, cachePrefix));
     try std.testing.expect(std.mem.endsWith(u8, dirResult.stdout, try std.fmt.allocPrint(allocator, "{c}hash-cache\n", .{std.fs.path.sep})));
     try std.testing.expectEqual(cachePrefix.len + 16 + "/hash-cache\n".len, dirResult.stdout.len);
@@ -3588,13 +3589,13 @@ const dbs_seed_config =
 fn setupDbs(allocator: std.mem.Allocator, root: []const u8, vaultJson: []const u8) !*std.process.Environ.Map {
     const environment = try helpers.cliEnvironment(allocator, root);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = try std.fmt.allocPrint(allocator, "{s}/config/databases.toml", .{root}),
+        .sub_path = try std.fs.path.join(allocator, &.{ root, "config", "databases.toml" }),
         .data = dbs_seed_config,
     });
-    const vaultDir = try std.fmt.allocPrint(allocator, "{s}/vault", .{root});
+    const vaultDir = try std.fs.path.join(allocator, &.{ root, "vault" });
     try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{vaultDir}),
+        .sub_path = try std.fs.path.join(allocator, &.{ vaultDir, "vault.json" }),
         .data = vaultJson,
     });
     return environment;
@@ -3612,7 +3613,7 @@ const dbs_seed_vault =
 // Reads databases.toml from a test root.
 //
 fn readDatabasesToml(allocator: std.mem.Allocator, root: []const u8) ![]const u8 {
-    return std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/config/databases.toml", .{root}), allocator, .unlimited);
+    return std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "databases.toml" }), allocator, .unlimited);
 }
 
 //
@@ -3737,10 +3738,10 @@ test "dbs add and edit store databases like the TypeScript CLI" {
     const root = try helpers.makeTempDir(allocator, "cmd-dbs-add");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const vaultDir = try std.fmt.allocPrint(allocator, "{s}/vault", .{root});
+    const vaultDir = try std.fs.path.join(allocator, &.{ root, "vault" });
     try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{vaultDir}),
+        .sub_path = try std.fs.path.join(allocator, &.{ vaultDir, "vault.json" }),
         .data = dbs_seed_vault,
     });
 
@@ -3804,18 +3805,30 @@ test "dbs send and receive transfer a database and its secrets over the local ne
 
     // The encryption key is shared with its public key, which the sender derives from it, so it must be a real one.
     const privateKeyPem = (try encryption.node_crypto.generateKeyPairSync(allocator, std.testing.io, 2048)).privateKey;
-    var senderVault: std.json.ObjectMap = .empty;
-    try senderVault.put(allocator, "s3a", try vaultEntry(allocator, "s3a", "s3-credentials", "{\"region\":\"us-east-1\",\"accessKeyId\":\"AK\",\"secretAccessKey\":\"SK\"}"));
-    try senderVault.put(allocator, "my-key", try vaultEntry(allocator, "my-key", "encryption-key", privateKeyPem));
-    try senderVault.put(allocator, "geo", try vaultEntry(allocator, "geo", "api-key", "geo-value"));
-    const senderEnvironment = try setupDbs(allocator, senderRoot, try std.json.Stringify.valueAlloc(allocator, std.json.Value{ .object = senderVault }, .{}));
+    const senderEnvironment = try setupDbs(allocator, senderRoot, try utils.json.stringify(allocator, .{
+        .s3a = .{
+            .name = "s3a",
+            .type = "s3-credentials",
+            .value = "{\"region\":\"us-east-1\",\"accessKeyId\":\"AK\",\"secretAccessKey\":\"SK\"}",
+        },
+        .@"my-key" = .{
+            .name = "my-key",
+            .type = "encryption-key",
+            .value = privateKeyPem,
+        },
+        .geo = .{
+            .name = "geo",
+            .type = "api-key",
+            .value = "geo-value",
+        },
+    }));
 
     // The receiver already holds a secret named geo, which is reused rather than overwritten.
     const receiverEnvironment = try helpers.cliEnvironment(allocator, receiverRoot);
-    const receiverVaultDir = try std.fmt.allocPrint(allocator, "{s}/vault", .{receiverRoot});
+    const receiverVaultDir = try std.fs.path.join(allocator, &.{ receiverRoot, "vault" });
     try std.Io.Dir.cwd().createDirPath(std.testing.io, receiverVaultDir);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{receiverVaultDir}),
+        .sub_path = try std.fs.path.join(allocator, &.{ receiverVaultDir, "vault.json" }),
         .data = "{\"geo\":{\"name\":\"geo\",\"type\":\"api-key\",\"value\":\"receiver-geo\"}}",
     });
 
@@ -3825,7 +3838,7 @@ test "dbs send and receive transfer a database and its secrets over the local ne
     std.testing.io.random(&randomBytes);
     const code = try std.fmt.allocPrint(allocator, "{d}", .{1000 + std.mem.readInt(u32, &randomBytes, .little) % 9000});
 
-    const receiverOutput = try std.fmt.allocPrint(allocator, "{s}/receiver.txt", .{receiverRoot});
+    const receiverOutput = try std.fs.path.join(allocator, &.{ receiverRoot, "receiver.txt" });
     const receiverThread = try std.Thread.spawn(.{}, runReceiver, .{ receiverEnvironment, "dbs", code, receiverOutput });
     const sendResult = try runZig(allocator, senderEnvironment, &.{ "dbs", "send", "--yes", "--name", "photos", "--code", code });
     receiverThread.join();
@@ -3927,17 +3940,6 @@ test "dbs send and receive transfer a database and its secrets over the local ne
 }
 
 //
-// A secret as the plaintext vault's vault.json holds it.
-//
-fn vaultEntry(allocator: std.mem.Allocator, name: []const u8, secretType: []const u8, value: []const u8) !std.json.Value {
-    var entry: std.json.ObjectMap = .empty;
-    try entry.put(allocator, "name", .{ .string = name });
-    try entry.put(allocator, "type", .{ .string = secretType });
-    try entry.put(allocator, "value", .{ .string = value });
-    return .{ .object = entry };
-}
-
-//
 // The header newsCommand (apps/cli/src/cmd/news.ts) prints before the feed, for the "dev" version (which
 // getLatestVersion never looks up, so no network is used).
 //
@@ -3947,7 +3949,7 @@ const news_header = "\n📋 Photosphere News\n\nRunning version: vdev\n\n";
 // Writes the news feed the CLI test environment reads (<root>/news.yaml).
 //
 fn writeNewsFeed(allocator: std.mem.Allocator, root: []const u8, feed: []const u8) !void {
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/news.yaml", .{root}), .data = feed });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fs.path.join(allocator, &.{ root, "news.yaml" }), .data = feed });
 }
 
 test "news prints the whole feed, newest first, marking the new items, like the TypeScript CLI" {
@@ -4009,7 +4011,7 @@ test "news prints the whole feed, newest first, marking the new items, like the 
         \\     Docs: https://example.com/docs
         \\
     , "", 0);
-    const state = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/config/state.yaml", .{root}), allocator, .unlimited);
+    const state = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.yaml" }), allocator, .unlimited);
     try std.testing.expectEqualStrings("news:\n  shown_news_ids:\n    - first\n    - second\n    - third\n", state);
 
     // A feed that cannot be read shows no items.
@@ -4303,7 +4305,7 @@ test "debug find-duplicates reports an input that is a directory with the messag
     const root = try setup(allocator, "cmd-debug-duplicates-directory");
     defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     const inputPath = try node_path.join(allocator, &.{ db, "input-dir" });
     try std.Io.Dir.cwd().createDirPath(io, inputPath);
 

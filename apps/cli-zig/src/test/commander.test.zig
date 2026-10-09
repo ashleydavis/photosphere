@@ -181,7 +181,7 @@ fn recordParser(context: *IParserContext, value: ?[]const u8, previous: ?OptionV
     try stringify.endObject();
     try recorder.events.append(recorder.allocator, json.written());
     return .{
-        .string = try std.fmt.allocPrint(recorder.allocator, "parsed:{s}", .{value orelse "undefined"}),
+        .string = try std.mem.concat(recorder.allocator, u8, &.{ "parsed:", value orelse "undefined" }),
     };
 }
 

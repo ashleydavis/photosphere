@@ -502,15 +502,15 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
     const metadataDirs = try assetStorage.listDirs(allocator, io, ".db/bson/collections", 1000, null);
     const collections = metadataDirs.names;
     for (collections) |collectionName| {
-        const collectionDir = try std.fmt.allocPrint(allocator, ".db/bson/collections/{s}", .{collectionName});
+        const collectionDir = try storage_zig.storage_factory.pathJoin(allocator, &.{ ".db", "bson", "collections", collectionName });
 
         // Count collection.dat
-        if (try assetStorage.fileExists(allocator, io, try std.fmt.allocPrint(allocator, "{s}/collection.dat", .{collectionDir}))) {
+        if (try assetStorage.fileExists(allocator, io, try storage_zig.storage_factory.pathJoin(allocator, &.{ collectionDir, "collection.dat" }))) {
             expectedTotal += 1;
         }
 
         // Count all other files in the collection (v6: shards/ subdir)
-        const collectionFiles = try assetStorage.listFiles(allocator, io, try std.fmt.allocPrint(allocator, "{s}/shards", .{collectionDir}), 10000, null);
+        const collectionFiles = try assetStorage.listFiles(allocator, io, try storage_zig.storage_factory.pathJoin(allocator, &.{ collectionDir, "shards" }), 10000, null);
         expectedTotal += collectionFiles.names.len;
     }
 
@@ -518,11 +518,11 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
     if (try assetStorage.dirExists(allocator, io, ".db/bson/indexes")) {
         const sortIndexCollections = try assetStorage.listDirs(allocator, io, ".db/bson/indexes", 1000, null);
         for (sortIndexCollections.names) |collectionName| {
-            const sortIndexCollectionDir = try std.fmt.allocPrint(allocator, ".db/bson/indexes/{s}", .{collectionName});
+            const sortIndexCollectionDir = try storage_zig.storage_factory.pathJoin(allocator, &.{ ".db", "bson", "indexes", collectionName });
             const indexDirs = try assetStorage.listDirs(allocator, io, sortIndexCollectionDir, 1000, null);
 
             for (indexDirs.names) |indexDirName| {
-                const indexDir = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ sortIndexCollectionDir, indexDirName });
+                const indexDir = try storage_zig.storage_factory.pathJoin(allocator, &.{ sortIndexCollectionDir, indexDirName });
                 const indexFiles = try assetStorage.listFiles(allocator, io, indexDir, 10000, null);
                 // Exclude build.checkpoint files
                 for (indexFiles.names) |fileName| {
@@ -558,10 +558,10 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
 
     // 2. For each collection, verify all files
     for (collections) |collectionName| {
-        const collectionDir = try std.fmt.allocPrint(allocator, ".db/bson/collections/{s}", .{collectionName});
+        const collectionDir = try storage_zig.storage_factory.pathJoin(allocator, &.{ ".db", "bson", "collections", collectionName });
 
         // 3a. Verify collection.dat (collection merkle tree - no checksum)
-        const collectionDatPath = try std.fmt.allocPrint(allocator, "{s}/collection.dat", .{collectionDir});
+        const collectionDatPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ collectionDir, "collection.dat" });
         if (try assetStorage.fileExists(allocator, io, collectionDatPath)) {
             log.verbose(try std.fmt.allocPrint(allocator, "Verifying {s}", .{collectionDatPath}));
             state.result.totalFiles += 1;
@@ -576,9 +576,9 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
             try state.reportProgress();
         }
         // 3b. Get all files in the collection directory (v6: shards/ subdir)
-        const collectionFiles = try assetStorage.listFiles(allocator, io, try std.fmt.allocPrint(allocator, "{s}/shards", .{collectionDir}), 10000, null);
+        const collectionFiles = try assetStorage.listFiles(allocator, io, try storage_zig.storage_factory.pathJoin(allocator, &.{ collectionDir, "shards" }), 10000, null);
         for (collectionFiles.names) |fileName| {
-            const filePath = try std.fmt.allocPrint(allocator, "{s}/shards/{s}", .{ collectionDir, fileName });
+            const filePath = try storage_zig.storage_factory.pathJoin(allocator, &.{ collectionDir, "shards", fileName });
             state.result.totalFiles += 1;
             if (std.mem.endsWith(u8, fileName, ".dat")) {
                 // Shard merkle tree file (no checksum)
@@ -620,11 +620,11 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
         const sortIndexCollections = try assetStorage.listDirs(allocator, io, ".db/bson/indexes", 1000, null);
 
         for (sortIndexCollections.names) |collectionName| {
-            const sortIndexCollectionDir = try std.fmt.allocPrint(allocator, ".db/bson/indexes/{s}", .{collectionName});
+            const sortIndexCollectionDir = try storage_zig.storage_factory.pathJoin(allocator, &.{ ".db", "bson", "indexes", collectionName });
             const indexDirs = try assetStorage.listDirs(allocator, io, sortIndexCollectionDir, 1000, null);
 
             for (indexDirs.names) |indexDirName| {
-                const indexDir = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ sortIndexCollectionDir, indexDirName });
+                const indexDir = try storage_zig.storage_factory.pathJoin(allocator, &.{ sortIndexCollectionDir, indexDirName });
 
                 // Get all files in the index directory
                 const indexFiles = try assetStorage.listFiles(allocator, io, indexDir, 10000, null);
@@ -635,7 +635,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
                         continue;
                     }
 
-                    const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ indexDir, fileName });
+                    const filePath = try storage_zig.storage_factory.pathJoin(allocator, &.{ indexDir, fileName });
                     state.result.totalFiles += 1;
 
                     // files.dat and page files (all have checksum)

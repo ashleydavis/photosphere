@@ -69,7 +69,7 @@ pub const IAddCommandOptions = struct {
 // `value.toString().padStart(4)` for a count. (No TypeScript counterpart.)
 //
 fn padCount(allocator: std.mem.Allocator, value: f64) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "{d: >4}", .{value});
+    return utils.format.padStart(allocator, try utils.format.numberToString(allocator, value), 4, ' ');
 }
 
 //
@@ -306,7 +306,7 @@ fn cleanUpImportedSources(
     settings: IAutoImportSettings,
     sessionId: []const u8,
 ) !usize {
-    const queue = try TaskQueue.init(allocator, io, uuidGenerator, try std.fmt.allocPrint(allocator, "cleanup-{s}", .{sessionId}));
+    const queue = try TaskQueue.init(allocator, io, uuidGenerator, try std.mem.concat(allocator, u8, &.{ "cleanup-", sessionId }));
     defer queue.deinit();
     defer queue.shutdown();
 

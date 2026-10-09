@@ -124,7 +124,7 @@ fn makeData(allocator: std.mem.Allocator, databasePath: []const u8, remotePath: 
 // The path of a file in a directory.
 //
 fn pathIn(allocator: std.mem.Allocator, dir: []const u8, fileName: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "{s}/{s}", .{ dir, fileName });
+    return std.fs.path.join(allocator, &.{ dir, fileName });
 }
 
 //

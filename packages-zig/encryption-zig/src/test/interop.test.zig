@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 const encryption = @import("encryption-zig");
 const fixtures = @import("fixtures.zig");
 

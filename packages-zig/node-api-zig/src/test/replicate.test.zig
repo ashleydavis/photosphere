@@ -151,8 +151,8 @@ fn makeStorages(allocator: std.mem.Allocator, io: std.Io) !StoragePair {
     const dir = try temp_dirs.makeTempDir(allocator, io, "replicate-storages");
     return .{
         .dir = dir,
-        .storage1 = try test_files.directoryStorage(allocator, io, try std.fmt.allocPrint(allocator, "{s}/one", .{dir})),
-        .storage2 = try test_files.directoryStorage(allocator, io, try std.fmt.allocPrint(allocator, "{s}/two", .{dir})),
+        .storage1 = try test_files.directoryStorage(allocator, io, try std.fs.path.join(allocator, &.{ dir, "one" })),
+        .storage2 = try test_files.directoryStorage(allocator, io, try std.fs.path.join(allocator, &.{ dir, "two" })),
     };
 }
 
@@ -160,14 +160,14 @@ fn makeStorages(allocator: std.mem.Allocator, io: std.Io) !StoragePair {
 // The path of a shard tree.
 //
 fn shardPath(allocator: std.mem.Allocator, collection: []const u8, shardId: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(allocator, ".db/bson/collections/{s}/shards/{s}.dat", .{ collection, shardId });
+    return storage_zig.storage_factory.pathJoin(allocator, &.{ ".db", "bson", "collections", collection, "shards", try std.mem.concat(allocator, u8, &.{ shardId, ".dat" }) });
 }
 
 //
 // The path of a collection tree.
 //
 fn collCollectionPath(allocator: std.mem.Allocator, collection: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(allocator, ".db/bson/collections/{s}/collection.dat", .{collection});
+    return std.fs.path.join(allocator, &.{ ".db", "bson", "collections", collection, "collection.dat" });
 }
 
 test "returns empty array for empty nodes" {
@@ -458,9 +458,9 @@ fn makeReplicateFixture(allocator: std.mem.Allocator, io: std.Io) !*ReplicateFix
     fixture.dir = try temp_dirs.makeTempDir(allocator, io, "replicate");
     fixture.uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     fixture.timestampProvider = .{};
-    fixture.sourceAsset = try test_files.directoryStorage(allocator, io, try std.fmt.allocPrint(allocator, "{s}/source", .{fixture.dir}));
-    fixture.destAsset = try test_files.directoryStorage(allocator, io, try std.fmt.allocPrint(allocator, "{s}/dest", .{fixture.dir}));
-    const bdbStorage = try test_files.directoryStorage(allocator, io, try std.fmt.allocPrint(allocator, "{s}/bdb", .{fixture.dir}));
+    fixture.sourceAsset = try test_files.directoryStorage(allocator, io, try std.fs.path.join(allocator, &.{ fixture.dir, "source" }));
+    fixture.destAsset = try test_files.directoryStorage(allocator, io, try std.fs.path.join(allocator, &.{ fixture.dir, "dest" }));
+    const bdbStorage = try test_files.directoryStorage(allocator, io, try std.fs.path.join(allocator, &.{ fixture.dir, "bdb" }));
     fixture.sourceBdb = try bdb.database.BsonDatabase.init(allocator, bdbStorage, "", fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
     return fixture;
 }
@@ -787,7 +787,7 @@ test "replicate copies a v6 database, reports progress, and a second replicate c
     defer temp_dirs.removeTempDir(io, fixture.dir);
     const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(sourceDir).?);
-    const destDir = try std.fmt.allocPrint(allocator, "{s}/replica", .{fixture.dir});
+    const destDir = try std.fs.path.join(allocator, &.{ fixture.dir, "replica" });
     const source = try node_api.open_storage.openStorage(allocator, io, sourceDir, null, null);
     const dest = try node_api.open_storage.openStorage(allocator, io, destDir, null, null);
     const sourceDb = try node_api.media_file_database.createMediaFileDatabase(allocator, source.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
@@ -811,8 +811,9 @@ test "replicate copies a v6 database, reports progress, and a second replicate c
 
     const config = (try node_api.open_storage.openStorage(allocator, io, destDir, null, null)).rawStorage;
     const configData = (try config.read(allocator, io, ".db/config.json")).?;
-    const expectedConfig = try std.fmt.allocPrint(allocator, "{{\n  \"origin\": {f}\n}}", .{std.json.fmt(sourceDir, .{})});
-    try std.testing.expectEqualStrings(expectedConfig, configData);
+    try std.testing.expectEqualStrings(try std.json.Stringify.valueAlloc(allocator, .{
+        .origin = sourceDir,
+    }, .{ .whitespace = .indent_2 }), configData);
 
     // The replication time and the content hash are in the state file.
     const state = (try api.database_state.loadDatabaseState(allocator, io, config)).?;
@@ -834,15 +835,15 @@ test "replicate with a path filter only copies the matching files" {
     defer temp_dirs.removeTempDir(io, fixture.dir);
     const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(sourceDir).?);
-    const destDir = try std.fmt.allocPrint(allocator, "{s}/replica", .{fixture.dir});
+    const destDir = try std.fs.path.join(allocator, &.{ fixture.dir, "replica" });
     const source = try node_api.open_storage.openStorage(allocator, io, sourceDir, null, null);
     const dest = try node_api.open_storage.openStorage(allocator, io, destDir, null, null);
     const sourceDb = try node_api.media_file_database.createMediaFileDatabase(allocator, source.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
 
     const result = try replicate_module.replicate(allocator, io, sourceDir, source.storage, sourceDb.bsonDatabase, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), dest.storage, dest.rawStorage, .{ .pathFilter = "thumb" }, null);
     try std.testing.expectEqual(@as(u64, 1), result.copiedFiles);
-    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/thumb/89171cd9-a652-4047-b869-1154bf2c95a1", .{destDir})));
-    try std.testing.expect(!test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/asset/89171cd9-a652-4047-b869-1154bf2c95a1", .{destDir})));
+    try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ destDir, "thumb", "89171cd9-a652-4047-b869-1154bf2c95a1" })));
+    try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ destDir, "asset", "89171cd9-a652-4047-b869-1154bf2c95a1" })));
 }
 
 //
@@ -893,11 +894,11 @@ test "a file the destination lacks arrives under its own name" {
     const fixture = try makeReplicateFixture(allocator, io);
     defer temp_dirs.removeTempDir(io, fixture.dir);
     const dbId = try fixture.uuidGenerator.generate(allocator, io);
-    const source = try makeDatabase(allocator, io, try std.fmt.allocPrint(allocator, "{s}/dup-source", .{fixture.dir}), dbId, &.{
+    const source = try makeDatabase(allocator, io, try std.fs.path.join(allocator, &.{ fixture.dir, "dup-source" }), dbId, &.{
         .{ .name = "asset/first-import", .contents = PHOTO },
         .{ .name = "asset/second-import", .contents = PHOTO },
     });
-    const destination = try makeDatabase(allocator, io, try std.fmt.allocPrint(allocator, "{s}/dup-dest", .{fixture.dir}), dbId, &.{
+    const destination = try makeDatabase(allocator, io, try std.fs.path.join(allocator, &.{ fixture.dir, "dup-dest" }), dbId, &.{
         .{ .name = "asset/second-import", .contents = PHOTO },
     });
 
@@ -916,10 +917,10 @@ test "a name only the destination has is the one pruned from its tree" {
     const fixture = try makeReplicateFixture(allocator, io);
     defer temp_dirs.removeTempDir(io, fixture.dir);
     const dbId = try fixture.uuidGenerator.generate(allocator, io);
-    const source = try makeDatabase(allocator, io, try std.fmt.allocPrint(allocator, "{s}/dup-source", .{fixture.dir}), dbId, &.{
+    const source = try makeDatabase(allocator, io, try std.fs.path.join(allocator, &.{ fixture.dir, "dup-source" }), dbId, &.{
         .{ .name = "asset/second-import", .contents = PHOTO },
     });
-    const destination = try makeDatabase(allocator, io, try std.fmt.allocPrint(allocator, "{s}/dup-dest", .{fixture.dir}), dbId, &.{
+    const destination = try makeDatabase(allocator, io, try std.fs.path.join(allocator, &.{ fixture.dir, "dup-dest" }), dbId, &.{
         .{ .name = "asset/first-import", .contents = PHOTO },
         .{ .name = "asset/second-import", .contents = PHOTO },
     });
@@ -954,12 +955,12 @@ test "is not marked partial" {
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(originPath).?);
 
     // The phone's replica: partial, and marked so.
-    const partialPath = try std.fmt.allocPrint(allocator, "{s}/partial", .{fixture.dir});
+    const partialPath = try std.fs.path.join(allocator, &.{ fixture.dir, "partial" });
     const partialTree = try replicateTo(allocator, io, fixture, originPath, partialPath, true);
     try std.testing.expect(node_api.media_file_database.isPartialDatabase(partialTree.databaseMetadata));
 
     // A lost origin rebuilt from it, in full.
-    const rebuiltTree = try replicateTo(allocator, io, fixture, partialPath, try std.fmt.allocPrint(allocator, "{s}/rebuilt", .{fixture.dir}), false);
+    const rebuiltTree = try replicateTo(allocator, io, fixture, partialPath, try std.fs.path.join(allocator, &.{ fixture.dir, "rebuilt" }), false);
 
     try std.testing.expect(rebuiltTree.databaseMetadata.?.get("isPartial").?.boolean == false);
 }
@@ -973,10 +974,10 @@ test "keeps the rest of the source's metadata" {
     defer temp_dirs.removeTempDir(io, fixture.dir);
     const originPath = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(originPath).?);
-    const partialPath = try std.fmt.allocPrint(allocator, "{s}/partial", .{fixture.dir});
+    const partialPath = try std.fs.path.join(allocator, &.{ fixture.dir, "partial" });
     const partialTree = try replicateTo(allocator, io, fixture, originPath, partialPath, true);
 
-    const rebuiltTree = try replicateTo(allocator, io, fixture, partialPath, try std.fmt.allocPrint(allocator, "{s}/rebuilt", .{fixture.dir}), false);
+    const rebuiltTree = try replicateTo(allocator, io, fixture, partialPath, try std.fs.path.join(allocator, &.{ fixture.dir, "rebuilt" }), false);
 
     try std.testing.expectEqual(node_api.media_file_database.getFilesImported(partialTree.databaseMetadata), node_api.media_file_database.getFilesImported(rebuiltTree.databaseMetadata));
 }

@@ -447,7 +447,7 @@ fn start(shell: *Shell, allocator: std.mem.Allocator) !u8 {
         return error.UiHasNoIndexPage;
     }
     const query: []const u8 = if (shell.test_mode) "?testMode=1" else "";
-    const page_url_utf8 = try std.fmt.allocPrint(allocator, "{s}index.html{s}", .{ app_url_prefix, query });
+    const page_url_utf8 = try std.mem.concat(allocator, u8, &.{ app_url_prefix, "index.html", query });
     defer allocator.free(page_url_utf8);
     shell.page_url = try std.unicode.utf8ToUtf16LeAllocZ(allocator, page_url_utf8);
     var inject_script_length: usize = 0;
@@ -465,7 +465,7 @@ fn start(shell: *Shell, allocator: std.mem.Allocator) !u8 {
     if (created != c.ERROR_SUCCESS and created != c.ERROR_ALREADY_EXISTS) {
         return error.DataDirectoryFailed;
     }
-    const user_data_folder = try std.fmt.allocPrint(allocator, "{s}\\WebView2", .{shell.data_directory});
+    const user_data_folder = try std.fs.path.join(allocator, &.{ shell.data_directory, "WebView2" });
     defer allocator.free(user_data_folder);
     const wide_user_data_folder = try std.unicode.utf8ToUtf16LeAllocZ(allocator, user_data_folder);
     defer allocator.free(wide_user_data_folder);
@@ -739,7 +739,7 @@ fn drainQueue(shell: *Shell) void {
         const web_view = shell.web_view orelse {
             fatal("a message arrived from the core before the web view existed", .{});
         };
-        const script = std.fmt.allocPrint(allocator, "window.__ziggyReceive({s});", .{text}) catch @panic("out of memory delivering a message");
+        const script = std.mem.concat(allocator, u8, &.{ "window.__ziggyReceive(", text, ");" }) catch @panic("out of memory delivering a message");
         defer allocator.free(script);
         const wide_script = std.unicode.utf8ToUtf16LeAllocZ(allocator, script) catch {
             fatal("a message from the core is not valid UTF-8", .{});
@@ -940,7 +940,7 @@ fn appendMenuItems(shell: *Shell, allocator: std.mem.Allocator, win32_menu: c.HM
             var shortcut_buffer: [64]u8 = undefined;
             const shortcut = try accelerator_lib.formatShortcut(&shortcut_buffer, parsed.modifiers, key_name);
             allocator.free(text);
-            text = try std.fmt.allocPrint(allocator, "{s}\t{s}", .{ escaped, shortcut });
+            text = try std.mem.concat(allocator, u8, &.{ escaped, "\t", shortcut });
         }
         const wide_text = try std.unicode.utf8ToUtf16LeAllocZ(allocator, text);
         defer allocator.free(wide_text);

@@ -26,6 +26,7 @@
 //
 
 const std = @import("std");
+const utils = @import("utils-zig");
 const builtin = @import("builtin");
 const node_utils = @import("node-utils-zig");
 const js_string = @import("utils-zig").js_string;
@@ -345,9 +346,9 @@ pub const Argument = struct {
 pub fn humanReadableArgName(allocator: std.mem.Allocator, argument: Argument) ![]const u8 {
     const dots = if (argument.variadic) "..." else "";
     if (argument.required) {
-        return std.fmt.allocPrint(allocator, "<{s}{s}>", .{ argument.name(), dots });
+        return std.mem.concat(allocator, u8, &.{ "<", argument.name(), dots, ">" });
     }
-    return std.fmt.allocPrint(allocator, "[{s}{s}]", .{ argument.name(), dots });
+    return std.mem.concat(allocator, u8, &.{ "[", argument.name(), dots, "]" });
 }
 
 //
@@ -908,7 +909,7 @@ pub const Command = struct {
         // store default value
         if (added.negate) {
             // --no-foo is special and defaults foo to true, unless a --foo option is already defined
-            const positiveLongFlag = try std.fmt.allocPrint(self.allocator, "--{s}", .{added.long.?[5..]});
+            const positiveLongFlag = try std.mem.concat(self.allocator, u8, &.{ "--", added.long.?[5..] });
             if (self.findOption(positiveLongFlag) == null) {
                 try self.setOptionValue(attributeName, added.defaultValue orelse .{ .boolean = true });
             }
@@ -1288,7 +1289,7 @@ pub const Command = struct {
 
             // Look for combo options following single dash, eat first one if known.
             if (arg.len > 2 and arg[0] == '-' and arg[1] != '-') {
-                const shortFlag = try std.fmt.allocPrint(self.allocator, "-{c}", .{arg[1]});
+                const shortFlag = try std.mem.concat(self.allocator, u8, &.{ "-", arg[1..2] });
                 if (self.findOption(shortFlag)) |found| {
                     if (found.required or found.optional) {
                         // option with value following in same argument
@@ -1297,7 +1298,7 @@ pub const Command = struct {
                     else {
                         // boolean option, emit and put back remainder of arg for further processing
                         try self.emitOption(found, .none);
-                        try args.insert(self.allocator, 0, try std.fmt.allocPrint(self.allocator, "-{s}", .{arg[2..]}));
+                        try args.insert(self.allocator, 0, try std.mem.concat(self.allocator, u8, &.{ "-", arg[2..] }));
                     }
                     continue;
                 }
@@ -1818,7 +1819,7 @@ pub const Help = struct {
         // Usage
         var cmdName = cmd.commandName;
         if (cmd.getAlias()) |aliasName| {
-            cmdName = try std.fmt.allocPrint(allocator, "{s}|{s}", .{ cmdName, aliasName });
+            cmdName = try std.mem.concat(allocator, u8, &.{ cmdName, "|", aliasName });
         }
         var ancestorCmdNames: []const u8 = "";
         var ancestor = cmd.parent;
@@ -1965,7 +1966,7 @@ pub const Help = struct {
         const itemIndent = 2;
         const itemIndentStr = "  ";
         if (itemDescription.len == 0) {
-            return std.fmt.allocPrint(allocator, "{s}{s}", .{ itemIndentStr, term });
+            return std.mem.concat(allocator, u8, &.{ itemIndentStr, term });
         }
 
         // Pad the term out to a consistent width, so descriptions are aligned.
@@ -2352,7 +2353,7 @@ pub fn suggestSimilar(allocator: std.mem.Allocator, word: []const u8, candidates
     var shown: std.ArrayList([]const u8) = .empty;
     for (similar.items) |candidate| {
         if (searchingOptions) {
-            try shown.append(allocator, try std.fmt.allocPrint(allocator, "--{s}", .{candidate}));
+            try shown.append(allocator, try std.mem.concat(allocator, u8, &.{ "--", candidate }));
         }
         else {
             try shown.append(allocator, candidate);

@@ -7,6 +7,7 @@
 //
 
 const std = @import("std");
+const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const memory_storage = @import("memory-storage.zig");
 const saved_file = @import("saved-file.zig");
@@ -35,7 +36,7 @@ const TEST_DBS_DIR = "../test/dbs";
 // Reads a fixture file.
 //
 fn readFixture(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
-    const fixturePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ FIXTURES_DIR, name });
+    const fixturePath = try std.fs.path.join(allocator, &.{ FIXTURES_DIR, name });
     return std.Io.Dir.cwd().readFileAlloc(io, fixturePath, allocator, .unlimited);
 }
 
@@ -147,7 +148,7 @@ test "saves every tree in test/dbs byte-identical to TypeScript saveTree" {
         const typeCode = try reader.take(try reader.takeInt(u32, .little));
         const expected = try reader.take(try reader.takeInt(u32, .little));
 
-        const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ TEST_DBS_DIR, relativePath });
+        const filePath = try std.fs.path.join(allocator, &.{ TEST_DBS_DIR, relativePath });
         const original = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
         const tree = try loadTreeBytes(allocator, original, typeCode);
         const actual = try saveTreeBytes(allocator, &tree, typeCode);
@@ -165,7 +166,7 @@ test "saves the trees TypeScript saved for the scenarios byte-identical" {
     const allocator = arena.allocator();
 
     for ([_][]const u8{ "empty", "files", "names", "records", "shards" }) |name| {
-        const expected = try readFixture(allocator, try std.fmt.allocPrint(allocator, "scenario-{s}.dat", .{name}));
+        const expected = try readFixture(allocator, try std.mem.concat(allocator, u8, &.{ "scenario-", name, ".dat" }));
         const tree = try loadTreeBytes(allocator, expected, "FTRE");
         saved_file.expectSavedFileMatches(expected, try saveTreeBytes(allocator, &tree, "FTRE")) catch |err| {
             std.debug.print("Saved scenario tree differs from TypeScript: {s}\n", .{name});

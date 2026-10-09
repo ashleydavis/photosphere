@@ -10,6 +10,7 @@
 //
 
 const std = @import("std");
+const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const serialization_zig = @import("serialization-zig");
 const memory_storage = @import("memory-storage.zig");
@@ -163,7 +164,7 @@ const ScenariosFixture = struct {
 // Reads and parses a JSON fixture.
 //
 fn readFixture(comptime T: type, allocator: std.mem.Allocator, name: []const u8) !T {
-    const fixturePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ FIXTURES_DIR, name });
+    const fixturePath = try std.fs.path.join(allocator, &.{ FIXTURES_DIR, name });
     const text = try std.Io.Dir.cwd().readFileAlloc(io, fixturePath, allocator, .unlimited);
     return std.json.parseFromSliceLeaky(T, allocator, text, .{ .ignore_unknown_fields = true });
 }
@@ -460,7 +461,7 @@ test "loads every tree in test/dbs v2 to v6 like TypeScript" {
     const fixture = try readFixture(TestDbTreesFixture, allocator, "test-db-trees.json");
     try std.testing.expectEqual(@as(usize, 14), fixture.trees.len);
     for (fixture.trees) |testDbTree| {
-        const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ TEST_DBS_DIR, testDbTree.file });
+        const filePath = try std.fs.path.join(allocator, &.{ TEST_DBS_DIR, testDbTree.file });
         const tree = try loadTreeFile(allocator, filePath, testDbTree.typeCode);
         expectSummary(testDbTree.summary, try summarizeTree(allocator, &tree)) catch |err| {
             std.debug.print("Tree differs from TypeScript: {s}\n", .{testDbTree.file});
@@ -476,7 +477,7 @@ test "loadTreeVersion reads the version of every tree in test/dbs" {
 
     const fixture = try readFixture(TestDbTreesFixture, allocator, "test-db-trees.json");
     for (fixture.trees) |testDbTree| {
-        const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ TEST_DBS_DIR, testDbTree.file });
+        const filePath = try std.fs.path.join(allocator, &.{ TEST_DBS_DIR, testDbTree.file });
         const bytes = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
         var storage = MemoryStorage.init(allocator);
         try storage.putFile("tree.dat", bytes);
@@ -545,7 +546,7 @@ test "loads the trees TypeScript saved identically" {
 
     const fixture = try readFixture(ScenariosFixture, allocator, "scenarios.json");
     for (fixture.scenarios) |scenario| {
-        const filePath = try std.fmt.allocPrint(allocator, "{s}/scenario-{s}.dat", .{ FIXTURES_DIR, scenario.name });
+        const filePath = try std.fs.path.join(allocator, &.{ FIXTURES_DIR, try std.mem.concat(allocator, u8, &.{ "scenario-", scenario.name, ".dat" }) });
         const tree = try loadTreeFile(allocator, filePath, "FTRE");
         var expected = scenario.checkpoints[scenario.checkpoints.len - 1];
 
@@ -569,7 +570,7 @@ test "trees Zig saves load back exactly like the trees TypeScript loaded" {
     // recorded for the original tree in test-db-trees.json (apart from the version, which saving upgrades).
     const testDbFixture = try readFixture(TestDbTreesFixture, allocator, "test-db-trees.json");
     for (testDbFixture.trees) |testDbTree| {
-        const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ TEST_DBS_DIR, testDbTree.file });
+        const filePath = try std.fs.path.join(allocator, &.{ TEST_DBS_DIR, testDbTree.file });
         const tree = try loadTreeFile(allocator, filePath, testDbTree.typeCode);
         const reloaded = try loadTreeBytes(allocator, try saveTreeBytes(allocator, &tree, testDbTree.typeCode), testDbTree.typeCode);
         var expected = testDbTree.summary;
@@ -594,7 +595,7 @@ test "saves the replayed scenario trees byte-identical to the trees TypeScript s
     const scenarioFixture = try readFixture(ScenariosFixture, allocator, "scenarios.json");
     for (scenarioFixture.scenarios) |scenario| {
         const replay = try replayScenario(allocator, scenario);
-        const filePath = try std.fmt.allocPrint(allocator, "{s}/scenario-{s}.dat", .{ FIXTURES_DIR, scenario.name });
+        const filePath = try std.fs.path.join(allocator, &.{ FIXTURES_DIR, try std.mem.concat(allocator, u8, &.{ "scenario-", scenario.name, ".dat" }) });
         const expected = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
         const actual = try saveTreeBytes(allocator, &replay.tree, "FTRE");
         saved_file.expectSavedFileMatches(expected, actual) catch |err| {

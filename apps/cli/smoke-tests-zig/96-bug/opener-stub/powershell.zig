@@ -15,7 +15,7 @@ pub fn main(init: std.process.Init) !void {
     };
     const arguments = try init.minimal.args.toSlice(allocator);
     const recorded = try std.mem.join(allocator, "\n", arguments[1..]);
-    const partialPath = try std.fmt.allocPrint(allocator, "{s}.partial", .{capturePath});
+    const partialPath = try std.mem.concat(allocator, u8, &.{ capturePath, ".partial" });
     const cwd = std.Io.Dir.cwd();
     try cwd.writeFile(io, .{ .sub_path = partialPath, .data = recorded });
     try cwd.rename(partialPath, cwd, capturePath, io);

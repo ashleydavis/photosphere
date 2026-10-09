@@ -135,7 +135,13 @@ test "a multi-megabyte payload round trips unchanged" {
     for (payload, 0..) |*byte, index| {
         byte.* = 'a' + @as(u8, @intCast(index % 26));
     }
-    const message = try std.fmt.allocPrint(std.testing.allocator, "{{\"id\":8,\"channel\":\"echo\",\"data\":{{\"blob\":\"{s}\"}}}}", .{payload});
+    const message = try ziggy.json_util.stringify(std.testing.allocator, .{
+        .id = 8,
+        .channel = "echo",
+        .data = .{
+            .blob = payload,
+        },
+    });
     defer std.testing.allocator.free(message);
     core.postMessage(message);
     const reply = try lastMessage(&shell);
@@ -288,11 +294,15 @@ test "get-dropped-paths replies with the paths of the last drop, and an empty ar
     defer core.destroy();
     core.postMessage("{\"id\":1,\"channel\":\"get-dropped-paths\",\"data\":null}");
     try shell.expectMessageContaining("{\"id\":1,\"ok\":true,\"data\":[]}");
-    const paths_json = try std.json.Stringify.valueAlloc(std.testing.allocator, &[_][]const u8{path}, .{});
+    const paths_json = try ziggy.json_util.stringify(std.testing.allocator, &[_][]const u8{path});
     defer std.testing.allocator.free(paths_json);
     try core.filesDropped(paths_json);
     core.postMessage("{\"id\":2,\"channel\":\"get-dropped-paths\",\"data\":null}");
-    const expected = try std.fmt.allocPrint(std.testing.allocator, "{{\"id\":2,\"ok\":true,\"data\":{s}}}", .{paths_json});
+    const expected = try ziggy.json_util.stringify(std.testing.allocator, .{
+        .id = 2,
+        .ok = true,
+        .data = ziggy.json_util.Raw{ .text = paths_json },
+    });
     defer std.testing.allocator.free(expected);
     try shell.expectMessageContaining(expected);
 }
@@ -403,7 +413,9 @@ fn destroyTestState(core: *ziggy.core.Core, state: *anyopaque) void {
 fn readStateTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
     const record: *ObserverRecord = @ptrCast(@alignCast(context.appState().?));
-    return try std.fmt.allocPrint(context.arena, "{{\"ends\":{d}}}", .{record.ends.items.len});
+    return try ziggy.json_util.stringify(context.arena, .{
+        .ends = record.ends.items.len,
+    });
 }
 
 fn recordTaskEnd(core: *ziggy.core.Core, end: ziggy.types.TaskEnd) void {

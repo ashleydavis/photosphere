@@ -82,9 +82,7 @@ pub fn processCwd(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 }
 
 //
-// Equivalent of JavaScript `value.toFixed(2)`: a negative value is written with a minus sign (also when it rounds
-// to zero, `-0.00`), then the integer n for which n / 100 is closest to the magnitude (the larger n on a tie) is
-// picked, using the exact binary value of the double.
+// Equivalent of JavaScript `value.toFixed(2)` (the implementation lives in utils-zig).
 //
 pub fn toFixed2(allocator: std.mem.Allocator, value: f64) ![]const u8 {
     const sign: []const u8 = if (value < 0) "-" else "";
@@ -205,8 +203,8 @@ pub const FileLogger = struct {
                 character.* = '-';
             }
         }
-        const logFile = try node_utils.path.join(allocator, &.{ logsDir, try std.fmt.allocPrint(allocator, "psi-{s}.log", .{timestamp}) });
-        const errorLogFile = try node_utils.path.join(allocator, &.{ logsDir, try std.fmt.allocPrint(allocator, "psi-{s}-errors.log", .{timestamp}) });
+        const logFile = try node_utils.path.join(allocator, &.{ logsDir, try std.mem.concat(allocator, u8, &.{ "psi-", timestamp, ".log" }) });
+        const errorLogFile = try node_utils.path.join(allocator, &.{ logsDir, try std.mem.concat(allocator, u8, &.{ "psi-", timestamp, "-errors.log" }) });
 
         // Create the logger instance
         const logger = try allocator.create(FileLogger);

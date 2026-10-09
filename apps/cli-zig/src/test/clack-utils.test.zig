@@ -32,7 +32,7 @@ test "limitOptions shows a window with ellipses" {
     const Style = struct {
         fn style(styleAllocator: std.mem.Allocator, context: *anyopaque, option: []const u8, active: bool) anyerror![]const u8 {
             _ = context;
-            return std.fmt.allocPrint(styleAllocator, "{s}{s}", .{ if (active) ">" else " ", option });
+            return std.mem.concat(styleAllocator, u8, &.{ if (active) ">" else " ", option });
         }
     };
     var context: u8 = 0;

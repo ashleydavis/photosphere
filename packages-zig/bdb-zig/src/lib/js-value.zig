@@ -5,6 +5,7 @@ const BsonValue = bson.BsonValue;
 const BsonDocument = bson.BsonDocument;
 const errors = @import("utils-zig").errors;
 const js_string = @import("utils-zig").js_string;
+const hex = @import("utils-zig").hex;
 
 //
 // No TypeScript counterpart: the JavaScript language semantics that the bdb TypeScript code relies on implicitly
@@ -369,7 +370,7 @@ pub fn applyToJson(allocator: std.mem.Allocator, value: BsonValue) !BsonValue {
             return .{ .string = encoder.encode(encoded, binary.data) };
         },
         .objectId => |objectId| {
-            return .{ .string = try std.fmt.allocPrint(allocator, "{x}", .{&objectId}) };
+            return .{ .string = try hex.toHex(allocator, &objectId) };
         },
         .int64 => |number| {
             // A Long has no toJSON; JSON.stringify writes its own properties (high, low, unsigned).

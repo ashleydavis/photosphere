@@ -127,7 +127,10 @@ pub fn helloLongHandler(context: *TaskContext, data: std.json.Value) anyerror!?[
     }
     try context.checkCancelled();
     try sendJobProgress(context, job, started_at, "long task finished");
-    return try std.fmt.allocPrint(context.arena, "{{\"steps\":{d},\"children\":{d}}}", .{ step, child_ids.items.len });
+    return try json_util.stringify(context.arena, .{
+        .steps = step,
+        .children = child_ids.items.len,
+    });
 }
 
 //
@@ -144,7 +147,9 @@ pub fn helloChildHandler(context: *TaskContext, data: std.json.Value) anyerror!?
         try context.checkCancelled();
         try context.io().sleep(.fromMilliseconds(10), .awake);
     }
-    return try std.fmt.allocPrint(context.arena, "{{\"index\":{d}}}", .{index});
+    return try json_util.stringify(context.arena, .{
+        .index = index,
+    });
 }
 
 //
@@ -199,5 +204,7 @@ pub fn backgroundCountHandler(context: *TaskContext, data: std.json.Value) anyer
         try context.io().sleep(.fromMilliseconds(100), .awake);
         elapsed += 100;
     }
-    return try std.fmt.allocPrint(context.arena, "{{\"steps\":{d}}}", .{step});
+    return try json_util.stringify(context.arena, .{
+        .steps = step,
+    });
 }

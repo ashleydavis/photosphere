@@ -48,7 +48,7 @@ fn placeholderWithFirstInverted(allocator: std.mem.Allocator, placeholderText: [
         const rest = try std.fmt.allocPrint(allocator, "\u{FFFD}{s}", .{placeholderText[4..]});
         return std.fmt.allocPrint(allocator, "{s}{s}", .{ try color.inverse(allocator, "\u{FFFD}"), try color.dim(allocator, rest) });
     }
-    return std.fmt.allocPrint(allocator, "{s}{s}", .{ try color.inverse(allocator, placeholderText[0..firstLength]), try color.dim(allocator, placeholderText[firstLength..]) });
+    return std.mem.concat(allocator, u8, &.{ try color.inverse(allocator, placeholderText[0..firstLength]), try color.dim(allocator, placeholderText[firstLength..]) });
 }
 
 //

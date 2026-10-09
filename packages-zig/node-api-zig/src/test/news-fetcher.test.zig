@@ -153,7 +153,7 @@ test "reads from disk for file:// URLs" {
     const io = std.testing.io;
     const dir = try temp_dirs.makeTempDir(allocator, io, "news-fetcher");
     defer temp_dirs.removeTempDir(io, dir);
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/news feed.yaml", .{dir});
+    const filePath = try std.fs.path.join(allocator, &.{ dir, "news feed.yaml" });
     try test_files.writeFile(io, filePath,
         \\items:
         \\  - id: a
@@ -171,7 +171,7 @@ test "reads from disk for file:// URLs" {
     const forwardSlashDir = try allocator.dupe(u8, dir);
     std.mem.replaceScalar(u8, forwardSlashDir, '\\', '/');
     const slashBeforeDrive = if (std.mem.startsWith(u8, forwardSlashDir, "/")) "" else "/";
-    const url = try std.fmt.allocPrint(allocator, "file://{s}{s}/news%20feed.yaml", .{ slashBeforeDrive, forwardSlashDir });
+    const url = try std.mem.concat(allocator, u8, &.{ "file://", slashBeforeDrive, forwardSlashDir, "/news%20feed.yaml" });
     const items = try fetchNews(allocator, io, url);
     try std.testing.expectEqual(@as(usize, 1), items.len);
     try std.testing.expectEqualStrings("From file", items[0].message);
@@ -188,7 +188,7 @@ test "a link label that is not a string is printed as a JavaScript template stri
     const io = std.testing.io;
     const dir = try temp_dirs.makeTempDir(allocator, io, "news-fetcher-labels");
     defer temp_dirs.removeTempDir(io, dir);
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/feed.yaml", .{dir});
+    const filePath = try std.fs.path.join(allocator, &.{ dir, "feed.yaml" });
     try test_files.writeFile(io, filePath,
         \\items:
         \\  - id: a
@@ -201,7 +201,7 @@ test "a link label that is not a string is printed as a JavaScript template stri
     const forwardSlashPath = try allocator.dupe(u8, filePath);
     std.mem.replaceScalar(u8, forwardSlashPath, '\\', '/');
     const slashBeforeDrive = if (std.mem.startsWith(u8, forwardSlashPath, "/")) "" else "/";
-    const items = try fetchNews(allocator, io, try std.fmt.allocPrint(allocator, "file://{s}{s}", .{ slashBeforeDrive, forwardSlashPath }));
+    const items = try fetchNews(allocator, io, try std.mem.concat(allocator, u8, &.{ "file://", slashBeforeDrive, forwardSlashPath }));
 
     // `${1e21}` is "1e+21", and `${[1, null, "b"]}` is "1,,b".
     try std.testing.expectEqualStrings("1e+21", items[0].link.?.label);
@@ -247,7 +247,7 @@ test "writes the label and url of a link as a template string would" {
     const io = std.testing.io;
     const dir = try temp_dirs.makeTempDir(allocator, io, "news-fetcher-links");
     defer temp_dirs.removeTempDir(io, dir);
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/news.yaml", .{dir});
+    const filePath = try std.fs.path.join(allocator, &.{ dir, "news.yaml" });
     try test_files.writeFile(io, filePath,
         \\items:
         \\  - id: array-and-float
@@ -277,7 +277,7 @@ test "writes the label and url of a link as a template string would" {
     const forwardSlashPath = try allocator.dupe(u8, filePath);
     std.mem.replaceScalar(u8, forwardSlashPath, '\\', '/');
     const slashBeforeDrive = if (std.mem.startsWith(u8, forwardSlashPath, "/")) "" else "/";
-    const items = try fetchNews(allocator, io, try std.fmt.allocPrint(allocator, "file://{s}{s}", .{ slashBeforeDrive, forwardSlashPath }));
+    const items = try fetchNews(allocator, io, try std.mem.concat(allocator, u8, &.{ "file://", slashBeforeDrive, forwardSlashPath }));
 
     try std.testing.expectEqual(@as(usize, 5), items.len);
     try std.testing.expectEqualStrings("a,,2", items[0].link.?.label);

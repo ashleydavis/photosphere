@@ -11,7 +11,16 @@ fn createCore(shell: *FakeShell, data_dir: [*:0]const u8) !*ziggy.core.Core {
 }
 
 fn addTask(core: *ziggy.core.Core, id: []const u8, task_type: []const u8, data: []const u8) !void {
-    const message = try std.fmt.allocPrint(std.testing.allocator, "{{\"channel\":\"add-task\",\"data\":{{\"taskId\":\"{s}\",\"taskType\":\"{s}\",\"source\":\"src\",\"data\":{s},\"priority\":0}}}}", .{ id, task_type, data });
+    const message = try ziggy.json_util.stringify(std.testing.allocator, .{
+        .channel = "add-task",
+        .data = .{
+            .taskId = id,
+            .taskType = task_type,
+            .source = "src",
+            .data = ziggy.json_util.Raw{ .text = data },
+            .priority = 0,
+        },
+    });
     defer std.testing.allocator.free(message);
     core.postMessage(message);
 }
@@ -48,7 +57,13 @@ test "payload-stats reports the length and checksum of a multi-megabyte payload"
     const payload = try std.testing.allocator.alloc(u8, 5 * 1024 * 1024);
     defer std.testing.allocator.free(payload);
     @memset(payload, 'x');
-    const message = try std.fmt.allocPrint(std.testing.allocator, "{{\"id\":1,\"channel\":\"payload-stats\",\"data\":{{\"text\":\"{s}\"}}}}", .{payload});
+    const message = try ziggy.json_util.stringify(std.testing.allocator, .{
+        .id = 1,
+        .channel = "payload-stats",
+        .data = .{
+            .text = payload,
+        },
+    });
     defer std.testing.allocator.free(message);
     core.postMessage(message);
     const reply = try shell.messageAt(std.testing.allocator, 0);

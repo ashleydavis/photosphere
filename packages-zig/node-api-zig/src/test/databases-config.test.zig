@@ -22,14 +22,14 @@ fn useNewConfigDir(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 // Writes databases.toml in the config dir.
 //
 fn writeToml(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8, text: []const u8) !void {
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/databases.toml", .{configDir}), text);
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "databases.toml" }), text);
 }
 
 //
 // Reads databases.toml from the config dir.
 //
 fn readToml(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8) ![]const u8 {
-    return test_files.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/databases.toml", .{configDir}));
+    return test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ configDir, "databases.toml" }));
 }
 
 test "the paths of databases.toml and state.yaml are joined and normalized as path.join does" {
@@ -39,7 +39,7 @@ test "the paths of databases.toml and state.yaml are joined and normalized as pa
     const io = std.testing.io;
     const configDir = try useNewConfigDir(allocator, io);
     defer temp_dirs.removeTempDir(io, configDir);
-    const unnormalized = try std.fmt.allocPrint(allocator, "{s}/./sub/..//", .{configDir});
+    const unnormalized = try std.mem.concat(allocator, u8, &.{ configDir, "/./sub/..//" });
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", unnormalized);
 
     const expectedDatabases = try node_utils.path.join(allocator, &.{ configDir, "databases.toml" });
@@ -61,7 +61,7 @@ test "returns default config when no file exists" {
 
     try std.testing.expectEqual(@as(usize, 0), config.databases.len);
     try std.testing.expectEqual(@as(usize, 0), config.recentDatabaseNames.len);
-    try std.testing.expect(!test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/databases.toml", .{configDir})));
+    try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ configDir, "databases.toml" })));
 }
 
 test "returns config from TOML when file exists" {

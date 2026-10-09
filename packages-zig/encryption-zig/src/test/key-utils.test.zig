@@ -11,8 +11,8 @@ const crypto = encryption.node_crypto;
 //
 fn loadFixturePem(allocator: std.mem.Allocator, prefix: []const u8) !key_utils.IEncryptionKeyPem {
     return key_utils.IEncryptionKeyPem{
-        .privateKeyPem = try fixtures.readFixture(allocator, try std.fmt.allocPrint(allocator, "{s}-private.pem", .{prefix})),
-        .publicKeyPem = try fixtures.readFixture(allocator, try std.fmt.allocPrint(allocator, "{s}-public.pem", .{prefix})),
+        .privateKeyPem = try fixtures.readFixture(allocator, try std.mem.concat(allocator, u8, &.{ prefix, "-private.pem" })),
+        .publicKeyPem = try fixtures.readFixture(allocator, try std.mem.concat(allocator, u8, &.{ prefix, "-public.pem" })),
     };
 }
 
@@ -62,7 +62,7 @@ test "hashPublicKey equals the TypeScript hash for the same key" {
     const prefixes = [_][]const u8{ "ts", "ts2" };
     for (prefixes) |prefix| {
         const keyPem = try loadFixturePem(allocator, prefix);
-        const expectedHex = try fixtures.readFixture(allocator, try std.fmt.allocPrint(allocator, "{s}-public-hash.hex", .{prefix}));
+        const expectedHex = try fixtures.readFixture(allocator, try std.mem.concat(allocator, u8, &.{ prefix, "-public-hash.hex" }));
         const fromPublic = try key_utils.hashPublicKey(allocator, try crypto.createPublicKey(allocator, keyPem.publicKeyPem));
         try std.testing.expectEqualStrings(expectedHex, &std.fmt.bytesToHex(fromPublic, .lower));
         const privateKey = try crypto.createPrivateKey(allocator, keyPem.privateKeyPem);

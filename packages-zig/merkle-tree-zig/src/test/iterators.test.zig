@@ -4,6 +4,7 @@
 //
 
 const std = @import("std");
+const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const merkle_verify = @import("merkle-verify.zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
@@ -68,7 +69,7 @@ fn paddedFileNames(allocator: std.mem.Allocator, count: usize, width: usize) ![]
         const digits = try std.fmt.allocPrint(allocator, "{d}", .{index});
         const padding = try allocator.alloc(u8, width -| digits.len);
         @memset(padding, '0');
-        name.* = try std.fmt.allocPrint(allocator, "file_{s}{s}", .{ padding, digits });
+        name.* = try std.mem.concat(allocator, u8, &.{ "file_", padding, digits });
     }
     return names;
 }

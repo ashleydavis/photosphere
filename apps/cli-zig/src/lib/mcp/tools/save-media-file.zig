@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
 const api = @import("api-zig");
 const protocol = @import("../protocol.zig");

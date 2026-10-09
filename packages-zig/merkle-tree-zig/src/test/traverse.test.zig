@@ -5,6 +5,7 @@
 //
 
 const std = @import("std");
+const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const merkle_verify = @import("merkle-verify.zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;

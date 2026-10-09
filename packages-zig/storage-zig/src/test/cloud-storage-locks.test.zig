@@ -30,12 +30,14 @@ fn noSuchKey() anyerror {
 // A lock object body as S3 hands it back, naming its owner and when it was taken.
 //
 fn lockBody(allocator: std.mem.Allocator, owner: []const u8, timestamp: i64) !S3CommandOutput {
-    const body = try std.fmt.allocPrint(allocator, "{{\"owner\":\"{s}\",\"acquiredAt\":\"{s}\",\"timestamp\":{d}}}", .{
-        owner,
-        try (Date{ .epochMilliseconds = timestamp }).toISOString(allocator),
-        timestamp,
-    });
-    return .{ .GetObject = .{ .Body = body, .ContentRange = null } };
+    return .{ .GetObject = .{
+        .Body = try utils.json.stringify(allocator, .{
+            .owner = owner,
+            .acquiredAt = try (Date{ .epochMilliseconds = timestamp }).toISOString(allocator),
+            .timestamp = timestamp,
+        }),
+        .ContentRange = null,
+    } };
 }
 
 //

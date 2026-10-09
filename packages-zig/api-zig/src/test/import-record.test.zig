@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 const api_zig = @import("api-zig");
 const import_record = api_zig.import_record;
 const IImportRecord = import_record.IImportRecord;
@@ -15,7 +16,7 @@ const serializeImportRecord = import_record.serializeImportRecord;
 //
 fn makeEntry(allocator: std.mem.Allocator, logicalPath: []const u8, source: ImportSource) !IImportRecordEntry {
     return .{
-        .assetId = try std.fmt.allocPrint(allocator, "asset-{s}", .{logicalPath}),
+        .assetId = try std.mem.concat(allocator, u8, &.{ "asset-", logicalPath }),
         .logicalPath = logicalPath,
         .outcome = .imported,
         .importedAt = "2026-01-01T00:00:00.000Z",

@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 const core = @import("../core/index.zig");
 const color = @import("../../picocolors.zig");
 const common = @import("common.zig");

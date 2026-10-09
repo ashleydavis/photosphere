@@ -99,7 +99,7 @@ test "reports exists=false when the path does not exist at all" {
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "check-db-exists-missing");
     defer temp_dirs.removeTempDir(io, tempDir);
 
-    const result = try run(allocator, io, &testContext, try std.fmt.allocPrint(allocator, "{s}/does-not-exist", .{tempDir}));
+    const result = try run(allocator, io, &testContext, try std.fs.path.join(allocator, &.{ tempDir, "does-not-exist" }));
 
     try std.testing.expect(!result.exists);
 }

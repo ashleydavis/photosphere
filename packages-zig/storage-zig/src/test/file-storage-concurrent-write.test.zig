@@ -110,7 +110,7 @@ test "both writes complete and the file holds one writer's content in full" {
     const tempDir = try test_files.makeTempDir(allocator, std.testing.io, "temp-test-concurrent-write");
     defer test_files.removeTempDir(std.testing.io, tempDir);
     var storage = FileStorage.init(tempDir);
-    const target = try std.fmt.allocPrint(allocator, "{s}/files.dat", .{tempDir});
+    const target = try std.fs.path.join(allocator, &.{ tempDir, "files.dat" });
 
     try writeTwiceAtOnce(allocator, &storage, target, false);
 
@@ -124,7 +124,7 @@ test "both stream writes complete and the file holds one writer's content in ful
     const tempDir = try test_files.makeTempDir(allocator, std.testing.io, "temp-test-concurrent-write");
     defer test_files.removeTempDir(std.testing.io, tempDir);
     var storage = FileStorage.init(tempDir);
-    const target = try std.fmt.allocPrint(allocator, "{s}/files.dat", .{tempDir});
+    const target = try std.fs.path.join(allocator, &.{ tempDir, "files.dat" });
 
     try writeTwiceAtOnce(allocator, &storage, target, true);
 
@@ -138,7 +138,7 @@ test "no staging files are left behind" {
     const tempDir = try test_files.makeTempDir(allocator, std.testing.io, "temp-test-concurrent-write");
     defer test_files.removeTempDir(std.testing.io, tempDir);
     var storage = FileStorage.init(tempDir);
-    const target = try std.fmt.allocPrint(allocator, "{s}/files.dat", .{tempDir});
+    const target = try std.fs.path.join(allocator, &.{ tempDir, "files.dat" });
 
     try writeTwiceAtOnce(allocator, &storage, target, false);
 

@@ -36,7 +36,7 @@ const Fixture = struct {
         const allocator = self.arena.allocator();
         self.tempDir = try test_files.makeTempDir(allocator, io, "read-encryption-header");
         self.fileStorage = FileStorage.init("fs:");
-        self.filePath = try std.fmt.allocPrint(allocator, "{s}/some/file.dat", .{self.tempDir});
+        self.filePath = try std.fs.path.join(allocator, &.{ self.tempDir, "some", "file.dat" });
     }
 
     //

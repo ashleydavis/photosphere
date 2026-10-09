@@ -232,7 +232,7 @@ test "resize writes the image the TypeScript resize command writes" {
 
     // The same bytes as the command TypeScript builds: `<convert> "<file>" -resize <w>x<h> -strip -quality <q> jpeg:"<output>"`.
     const referencePath = try std.fs.path.join(allocator, &.{ tempDir, "reference.jpg" });
-    _ = try runImageMagick(allocator, "convert", &.{ "../test/test.jpg", "-resize", "1333x1000", "-strip", "-quality", "95", try std.fmt.allocPrint(allocator, "jpeg:{s}", .{referencePath}) });
+    _ = try runImageMagick(allocator, "convert", &.{ "../test/test.jpg", "-resize", "1333x1000", "-strip", "-quality", "95", try std.mem.concat(allocator, u8, &.{ "jpeg:", referencePath }) });
     try std.testing.expect(std.mem.eql(u8, try readFile(allocator, referencePath), try readFile(allocator, outputPath)));
 
     // A second resize to the same path is refused.
