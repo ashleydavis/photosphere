@@ -263,6 +263,10 @@ pub const IStorage = struct {
         // Releases a write lock for the specified file.
         releaseWriteLock: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!void,
 
+        // Refreshes a write lock for the specified file, updating its timestamp.
+        // Fails if the lock is no longer owned by the specified owner.
+        refreshWriteLock: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) anyerror!void,
+
         // How many bytes reading the file described by fileInfo hands out, or null when this storage
         // cannot say.
         readableLength: *const fn (ptr: *anyopaque, fileInfo: IFileInfo) ?u64,
@@ -274,8 +278,6 @@ pub const IStorage = struct {
         // The SHA-256 of a stored file, when the store can say what it is without sending the file's bytes back.
         // Null when it cannot, and null for a file that is not there.
         storedHash: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!?[]const u8,
-
-        // Not ported: refreshWriteLock (not reached by psi add, psi replicate, psi verify or psi sync).
     };
 
     //
@@ -457,6 +459,14 @@ pub const IStorage = struct {
     pub fn releaseWriteLock(self: IStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!void {
         return self.vtable.releaseWriteLock(self.ptr, allocator, io, filePath);
     }
+
+    //
+    // Refreshes a write lock for the specified file, updating its timestamp.
+    // Fails if the lock is no longer owned by the specified owner.
+    //
+    pub fn refreshWriteLock(self: IStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) anyerror!void {
+        return self.vtable.refreshWriteLock(self.ptr, allocator, io, filePath, owner);
+    }
 };
 
 //
@@ -589,6 +599,13 @@ pub fn implement(comptime Implementation: type) *const IStorage.VTable {
         }
 
         //
+        // Forwards refreshWriteLock.
+        //
+        fn refreshWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) anyerror!void {
+            return cast(ptr).refreshWriteLock(allocator, io, filePath, owner);
+        }
+
+        //
         // Forwards readableLength.
         //
         fn readableLength(ptr: *anyopaque, fileInfo: IFileInfo) ?u64 {
@@ -629,6 +646,7 @@ pub fn implement(comptime Implementation: type) *const IStorage.VTable {
             .checkWriteLock = checkWriteLock,
             .acquireWriteLock = acquireWriteLock,
             .releaseWriteLock = releaseWriteLock,
+            .refreshWriteLock = refreshWriteLock,
             .readableLength = readableLength,
             .writeStreamHashed = writeStreamHashed,
             .storedHash = storedHash,

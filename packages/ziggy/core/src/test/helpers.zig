@@ -61,7 +61,7 @@ fn parentTask(context: *task_runner.TaskContext, data: std.json.Value) anyerror!
     const parent_name = ziggy.json_util.getString(data, "name") orelse "parent";
     var index: i64 = 0;
     while (index < children) : (index += 1) {
-        _ = try context.queueChild("child", .{ .name = parent_name, .ms = child_ms });
+        _ = try context.queueChild("child", .{ .name = parent_name, .ms = child_ms }, null);
     }
     context.awaitAllTasks();
     try context.sendMessage(.{ .allChildrenDone = parent_name });
@@ -70,8 +70,8 @@ fn parentTask(context: *task_runner.TaskContext, data: std.json.Value) anyerror!
 
 fn awaitOneTask(context: *task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
-    const first = try context.queueChild("child-result", .{});
-    const second = try context.queueChild("fail", .{});
+    const first = try context.queueChild("child-result", .{}, null);
+    const second = try context.queueChild("fail", .{}, null);
     const first_completion = try context.awaitTask(first);
     const second_completion = try context.awaitTask(second);
     return try ziggy.json_util.stringify(context.arena, .{
@@ -98,8 +98,8 @@ fn childTask(context: *task_runner.TaskContext, data: std.json.Value) anyerror!?
 
 fn blockedParentTask(context: *task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
-    _ = try context.queueChild("child", .{ .name = "blocked", .ms = 100000 });
-    _ = try context.queueChild("child", .{ .name = "blocked", .ms = 100000 });
+    _ = try context.queueChild("child", .{ .name = "blocked", .ms = 100000 }, null);
+    _ = try context.queueChild("child", .{ .name = "blocked", .ms = 100000 }, null);
     context.awaitAllTasks();
     try context.checkCancelled();
     return null;

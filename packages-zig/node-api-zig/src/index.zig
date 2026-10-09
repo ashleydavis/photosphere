@@ -1,4 +1,8 @@
 pub const media_file_database = @import("lib/media-file-database.zig");
+pub const apply_database_ops = @import("lib/apply-database-ops.zig");
+pub const asset_server_core = @import("lib/asset-server-core.zig");
+pub const asset_server_routes = @import("lib/asset-server-routes.zig");
+pub const asset_server_worker = @import("lib/asset-server.worker.zig");
 pub const image = @import("lib/image.zig");
 pub const video = @import("lib/video.zig");
 pub const validation = @import("lib/validation.zig");
@@ -46,7 +50,7 @@ pub const check = @import("lib/check.zig");
 pub const check_worker = @import("lib/check.worker.zig");
 pub const check_database_exists_worker = @import("lib/check-database-exists.worker.zig");
 // Not ported: zip-utils,
-// load-assets.worker, apply-database-ops.
+// load-assets.worker.
 pub const resolve_storage_credentials = @import("lib/resolve-storage-credentials.zig");
 pub const open_storage = @import("lib/open-storage.zig");
 pub const databases_config = @import("lib/databases-config.zig");

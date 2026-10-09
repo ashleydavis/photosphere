@@ -21,6 +21,29 @@ const ZiggyConfig = types.ZiggyConfig;
 pub const TaskHandler = *const fn (context: *TaskContext, data: std.json.Value) anyerror!?[]const u8;
 
 //
+// How urgent a task is, as TaskPriority is in the task-queue package: interactive is something the user is waiting on, and goes ahead
+// of every background task already waiting; background is everything else.
+//
+pub const TaskPriority = enum {
+    // Something the user is waiting on.
+    interactive,
+    // Work that happens on its own.
+    background,
+};
+
+//
+// Works out what priority a child task runs at (resolveTaskPriority): one it asked for always wins, which is what lets a
+// long-running child opt back down to background, and otherwise it runs at its parent's priority, so an import's children can
+// never overtake something the user is waiting on.
+//
+pub fn resolveTaskPriority(requested: ?TaskPriority, parent_priority: TaskPriority) TaskPriority {
+    if (requested) |priority| {
+        return priority;
+    }
+    return parent_priority;
+}
+
+//
 // Whether a task type keeps the app running when the app is not in the foreground. A task of a keep-alive type that is queued or
 // running makes the core ask the shell to keep the app running, until the last such task ends.
 //
@@ -54,6 +77,19 @@ pub const EventSink = struct {
 };
 
 //
+// How the runner reaches handlers that are not in its list, for an app whose handlers are registered somewhere else (the queue backend
+// uses it for the handlers registered with task-queue-zig).
+//
+pub const FallbackHandler = struct {
+    // The handler source's own pointer, passed back on every call.
+    user_data: ?*anyopaque,
+    // Whether it has a handler for the task type.
+    handles: *const fn (user_data: ?*anyopaque, task_type: []const u8) bool,
+    // Runs the handler for the task, with the same meaning of the result and the errors as a TaskHandler.
+    run: *const fn (user_data: ?*anyopaque, context: *TaskContext, data: std.json.Value) anyerror!?[]const u8,
+};
+
+//
 // The settings of a runner.
 //
 pub const TaskRunnerOptions = struct {
@@ -65,6 +101,9 @@ pub const TaskRunnerOptions = struct {
     describe_error: ?types.ErrorDescriber,
     // Told of every task that ends and every message a task sends. Null when the app has no use for them.
     observer: ?types.TaskObserver,
+    // Where to find a handler for a task type that has no entry in the handlers. Null when there is no such place, and such a task then
+    // fails as an unknown type.
+    fallback_handler: ?FallbackHandler,
 };
 
 //
@@ -97,6 +136,14 @@ const TaskState = enum {
 };
 
 //
+// The error of a failed task in a task-completed event, laid out like the fields of a JavaScript Error that survive JSON.
+//
+const ErrorObject = struct {
+    // The text of the error.
+    message: []const u8,
+};
+
+//
 // One task, queued or running or finished. Children stay in their parent's list until the parent is released, so a
 // parent can await one after it has finished.
 //
@@ -109,10 +156,12 @@ const Task = struct {
     source: []u8,
     // The task's input data as JSON text.
     data_json: []u8,
-    // Higher runs first.
-    priority: i32,
-    // Queue order, which breaks ties between equal priorities.
-    sequence: u64,
+    // Where the task goes in the queue: an interactive task ahead of everything waiting, a background task at the end.
+    priority: TaskPriority,
+    // Whether a handler was called for the task. A task cancelled while it waited in the queue never starts.
+    started: bool,
+    // The thread running the task while it runs.
+    thread_id: ?std.Thread.Id,
     // Set when the task's source is cancelled. Only ever set on a task that already exists.
     cancelled: std.atomic.Value(bool),
     // The task that queued this one.
@@ -151,6 +200,13 @@ pub const TaskContext = struct {
     //
     pub fn taskId(self: *TaskContext) []const u8 {
         return self.task.id;
+    }
+
+    //
+    // The task type string of the task, for a handler that serves several types.
+    //
+    pub fn taskType(self: *TaskContext) []const u8 {
+        return self.task.task_type;
     }
 
     //
@@ -221,12 +277,13 @@ pub const TaskContext = struct {
     }
 
     //
-    // Queues a child task and returns its id. Waits, running other children of this task, while the limit on child
-    // tasks in flight is reached. Returns error.Cancelled when this task has been cancelled.
+    // Queues a child task and returns its id. The child runs at the priority it asks for, or at this task's when it asks for none.
+    // Waits, running other children of this task, while the limit on child tasks in flight is reached. Returns error.Cancelled
+    // when this task has been cancelled.
     //
-    pub fn queueChild(self: *TaskContext, task_type: []const u8, data: anytype) ![]const u8 {
+    pub fn queueChild(self: *TaskContext, task_type: []const u8, data: anytype, priority: ?TaskPriority) ![]const u8 {
         const data_json = try json_util.stringify(self.arena, data);
-        const child_id = try self.runner.queueChild(self.task, task_type, data_json);
+        const child_id = try self.runner.queueChild(self.task, task_type, data_json, priority);
         return try self.arena.dupe(u8, child_id);
     }
 
@@ -320,10 +377,11 @@ pub const TaskRunner = struct {
     queue: std.ArrayList(*Task),
     // Top level tasks that have not finished.
     live: std.ArrayList(*Task),
+    // Every task, top level or child, that is running, in the order the tasks started. A task that waits for its children while it runs
+    // one of them on its own thread is followed by that child, so the last task on a thread is the one running there now.
+    running: std.ArrayList(*Task),
     // The worker threads.
     workers: std.ArrayList(std.Thread),
-    // The number of tasks queued so far, which orders the queue.
-    next_sequence: u64,
     // Set once shutdown has begun.
     shutting_down: bool,
     // Answers dialogs for a test, when the test hooks provide it.
@@ -351,8 +409,8 @@ pub const TaskRunner = struct {
             .changed = .init,
             .queue = .empty,
             .live = .empty,
+            .running = .empty,
             .workers = .empty,
-            .next_sequence = 0,
             .shutting_down = false,
             .pick_override = null,
             .silent = .init(false),
@@ -389,13 +447,14 @@ pub const TaskRunner = struct {
         self.workers.deinit(self.allocator);
         self.queue.deinit(self.allocator);
         self.live.deinit(self.allocator);
+        self.running.deinit(self.allocator);
     }
 
     //
     // Queues a top level task and returns at once. The ids of live tasks must be unique. When reply_id_json is given, the task
     // answers the page request with that id: its end is reported as that request's reply, and no task-completed event is sent.
     //
-    pub fn addTask(self: *TaskRunner, task_id: []const u8, task_type: []const u8, source: []const u8, data_json: []const u8, priority: i32, reply_id_json: ?[]const u8) !void {
+    pub fn addTask(self: *TaskRunner, task_id: []const u8, task_type: []const u8, source: []const u8, data_json: []const u8, priority: TaskPriority, reply_id_json: ?[]const u8) !void {
         const task = try self.createTask(task_id, task_type, source, data_json, priority, null);
         if (reply_id_json) |reply_id| {
             task.reply_id_json = try self.allocator.dupe(u8, reply_id);
@@ -411,11 +470,9 @@ pub const TaskRunner = struct {
                 return error.DuplicateTaskId;
             }
         }
-        task.sequence = self.next_sequence;
-        self.next_sequence += 1;
         try self.live.append(self.allocator, task);
         errdefer _ = self.live.pop();
-        try self.queue.append(self.allocator, task);
+        try self.enqueue(task);
         if (task.keep_alive) {
             self.keep_alive_count += 1;
             if (self.keep_alive_count == 1) {
@@ -485,6 +542,26 @@ pub const TaskRunner = struct {
         }
     }
 
+    //
+    // The priority of the task running on the calling thread, or null when no task of this runner is. An app that lets a handler queue
+    // a task through some other route than the task context uses it to give that task its parent's priority, as the Electron pool does
+    // with priorityOfRunningTask.
+    //
+    pub fn priorityOfRunningTask(self: *TaskRunner) ?TaskPriority {
+        const thread_id = std.Thread.getCurrentId();
+        self.lock();
+        defer self.unlock();
+        var index = self.running.items.len;
+        while (index > 0) {
+            index -= 1;
+            const task = self.running.items[index];
+            if (task.thread_id == thread_id) {
+                return task.priority;
+            }
+        }
+        return null;
+    }
+
     fn lock(self: *TaskRunner) void {
         self.mutex.lockUncancelable(self.io);
     }
@@ -503,7 +580,7 @@ pub const TaskRunner = struct {
         }
     }
 
-    fn createTask(self: *TaskRunner, task_id: []const u8, task_type: []const u8, source: []const u8, data_json: []const u8, priority: i32, parent: ?*Task) !*Task {
+    fn createTask(self: *TaskRunner, task_id: []const u8, task_type: []const u8, source: []const u8, data_json: []const u8, priority: TaskPriority, parent: ?*Task) !*Task {
         const task = try self.allocator.create(Task);
         errdefer self.allocator.destroy(task);
         const id = try self.allocator.dupe(u8, task_id);
@@ -519,7 +596,8 @@ pub const TaskRunner = struct {
             .source = source_copy,
             .data_json = data_copy,
             .priority = priority,
-            .sequence = 0,
+            .started = false,
+            .thread_id = null,
             .cancelled = .init(false),
             .parent = parent,
             .keep_alive = parent == null and self.kindOf(task_type) == .keep_alive,
@@ -560,26 +638,33 @@ pub const TaskRunner = struct {
     }
 
     //
-    // Removes the queued task that should run next from the queue and returns it. A task is picked from all of
-    // the queue, or, when a parent is given, only from the parent's own children. The caller holds the lock.
+    // Puts a task into the one queue: an interactive task at the head and a background task at the end, as the pools of the
+    // Electron and Bun apps do (insertTaskByPriority). A second interactive task therefore goes in front of the first one still
+    // waiting, and background tasks keep their arrival order. The caller holds the lock.
+    //
+    fn enqueue(self: *TaskRunner, task: *Task) !void {
+        if (task.priority == .interactive) {
+            try self.queue.insert(self.allocator, 0, task);
+        }
+        else {
+            try self.queue.append(self.allocator, task);
+        }
+    }
+
+    //
+    // Removes the queued task at the head of the queue and returns it. The head is taken from all of the queue, or, when a
+    // parent is given, from the parent's own children only. The caller holds the lock.
     //
     fn takeNext(self: *TaskRunner, parent: ?*Task) ?*Task {
-        var best_index: ?usize = null;
+        var next_index: ?usize = null;
         for (self.queue.items, 0..) |task, index| {
             if (parent != null and task.parent != parent) {
                 continue;
             }
-            if (best_index) |best| {
-                const best_task = self.queue.items[best];
-                if (task.priority > best_task.priority or (task.priority == best_task.priority and task.sequence < best_task.sequence)) {
-                    best_index = index;
-                }
-            }
-            else {
-                best_index = index;
-            }
+            next_index = index;
+            break;
         }
-        const index = best_index orelse {
+        const index = next_index orelse {
             return null;
         };
         const task = self.queue.orderedRemove(index);
@@ -610,6 +695,10 @@ pub const TaskRunner = struct {
     // Runs one task on the calling thread to its end and reports its completion.
     //
     fn runTask(self: *TaskRunner, task: *Task) void {
+        self.lock();
+        task.thread_id = std.Thread.getCurrentId();
+        self.running.append(self.allocator, task) catch @panic("out of memory recording a running task");
+        self.unlock();
         var arena_state = std.heap.ArenaAllocator.init(self.allocator);
         defer arena_state.deinit();
         const arena = arena_state.allocator();
@@ -627,6 +716,9 @@ pub const TaskRunner = struct {
             completion.status = .cancelled;
         }
         else {
+            self.lock();
+            task.started = true;
+            self.unlock();
             completion = self.callHandler(&context, arena);
         }
         // A parent never ends while a child is still running.
@@ -643,13 +735,21 @@ pub const TaskRunner = struct {
                 break;
             }
         }
-        const found = handler orelse {
+        var fallback: ?FallbackHandler = null;
+        if (handler == null) {
+            if (self.options.fallback_handler) |candidate| {
+                if (candidate.handles(candidate.user_data, task.task_type)) {
+                    fallback = candidate;
+                }
+            }
+        }
+        if (handler == null and fallback == null) {
             return .{
                 .status = .failed,
                 .result_json = null,
                 .error_message = "UnknownTaskType",
             };
-        };
+        }
         const parsed = std.json.parseFromSliceLeaky(std.json.Value, arena, task.data_json, .{}) catch {
             return .{
                 .status = .failed,
@@ -657,7 +757,7 @@ pub const TaskRunner = struct {
                 .error_message = "InvalidTaskData",
             };
         };
-        const result = found(context, parsed) catch |err| {
+        const result = (if (handler) |found| found(context, parsed) else fallback.?.run(fallback.?.user_data, context, parsed)) catch |err| {
             if (err == error.Cancelled) {
                 return .{
                     .status = .cancelled,
@@ -706,11 +806,20 @@ pub const TaskRunner = struct {
                 .input_json = task.data_json,
                 .status = completion.status,
                 .error_message = completion.error_message,
+                .result_json = completion.result_json,
+                .started = task.started,
             });
         }
         const result_copy: ?[]u8 = if (completion.result_json) |text| self.allocator.dupe(u8, text) catch @panic("out of memory recording a task completion") else null;
         const error_copy: ?[]u8 = if (completion.error_message) |text| self.allocator.dupe(u8, text) catch @panic("out of memory recording a task completion") else null;
         self.lock();
+        for (self.running.items, 0..) |running_task, index| {
+            if (running_task == task) {
+                _ = self.running.orderedRemove(index);
+                break;
+            }
+        }
+        task.thread_id = null;
         task.state = .done;
         task.completion = .{
             .status = completion.status,
@@ -741,7 +850,7 @@ pub const TaskRunner = struct {
         }
     }
 
-    fn queueChild(self: *TaskRunner, parent: *Task, task_type: []const u8, data_json: []const u8) ![]const u8 {
+    fn queueChild(self: *TaskRunner, parent: *Task, task_type: []const u8, data_json: []const u8, priority: ?TaskPriority) ![]const u8 {
         self.lock();
         defer self.unlock();
         if (parent.cancelled.load(.acquire)) {
@@ -753,13 +862,11 @@ pub const TaskRunner = struct {
         }
         var id_buffer: [512]u8 = undefined;
         const child_id = try std.fmt.bufPrint(&id_buffer, "{s}.c{d}", .{ parent.id, parent.next_child });
-        const child = try self.createTask(child_id, task_type, parent.source, data_json, parent.priority, parent);
+        const child = try self.createTask(child_id, task_type, parent.source, data_json, resolveTaskPriority(priority, parent.priority), parent);
         errdefer self.destroyTask(child);
-        child.sequence = self.next_sequence;
-        self.next_sequence += 1;
         try parent.children.append(self.allocator, child);
         errdefer _ = parent.children.pop();
-        try self.queue.append(self.allocator, child);
+        try self.enqueue(child);
         parent.next_child += 1;
         parent.inflight_children += 1;
         self.changed.broadcast(self.io);
@@ -863,18 +970,33 @@ pub const TaskRunner = struct {
     }
 
 
+    //
+    // Tells the page a task has ended, with the payload the Electron main process sends: `{taskId, result}`, where result is the
+    // full ITaskResult (taskId, status, errorMessage, outputs, type, inputs). TaskStatus has no cancelled, so a cancelled task is
+    // reported as failed with the error message "Cancelled". The runner knows the task's type and input, so they come from it.
+    //
     fn emitTaskCompleted(self: *TaskRunner, task: *Task, completion: Completion) void {
         if (self.silent.load(.acquire)) {
             return;
         }
+        const error_message: ?[]const u8 = switch (completion.status) {
+            .succeeded => null,
+            .cancelled => "Cancelled",
+            .failed => completion.error_message orelse "Failed",
+        };
         const event = json_util.stringify(self.allocator, .{
             .channel = "task-completed",
             .data = .{
                 .taskId = task.id,
-                .source = task.source,
-                .status = @tagName(completion.status),
-                .result = if (completion.result_json) |text| json_util.Raw{ .text = text } else null,
-                .@"error" = if (completion.result_json == null) completion.error_message else null,
+                .result = .{
+                    .taskId = task.id,
+                    .status = if (completion.status == .succeeded) "succeeded" else "failed",
+                    .@"error" = if (error_message) |text| ErrorObject{ .message = text } else null,
+                    .errorMessage = error_message,
+                    .outputs = if (completion.result_json) |text| json_util.Raw{ .text = text } else null,
+                    .type = task.task_type,
+                    .inputs = json_util.Raw{ .text = task.data_json },
+                },
             },
         }) catch @panic("out of memory building a task event");
         defer self.allocator.free(event);

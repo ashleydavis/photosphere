@@ -82,7 +82,37 @@ pub fn acquireWriteLock(allocator: std.mem.Allocator, io: std.Io, rawStorage: IS
     return false;
 }
 
-// Not ported: refreshWriteLock (not reached by the CLI).
+//
+// Refreshes the write lock (the `() => rawStorage.refreshWriteLock(".db/write.lock", sessionId)` of TypeScript).
+//
+const RefreshWriteLockOperation = struct {
+    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    pub const source = "() => rawStorage.refreshWriteLock(\".db/write.lock\", sessionId)";
+
+    // Allocator for the storage implementation's temporary data.
+    allocator: std.mem.Allocator,
+
+    // The storage holding the lock.
+    rawStorage: IStorage,
+
+    // The owner of the lock.
+    sessionId: []const u8,
+
+    //
+    // Refreshes the lock.
+    //
+    pub fn run(self: *RefreshWriteLockOperation, io: std.Io) !void {
+        return self.rawStorage.refreshWriteLock(self.allocator, io, ".db/write.lock", self.sessionId);
+    }
+};
+
+//
+// Refreshes the write lock to prevent timeout.
+//
+pub fn refreshWriteLock(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, sessionId: []const u8) !void {
+    var operation: RefreshWriteLockOperation = .{ .allocator = allocator, .rawStorage = rawStorage, .sessionId = sessionId };
+    try retry(io, &operation, 3, 1_000, 2, LOCK_REQUEST_TIMEOUT_MS, "Failed to refresh the database write lock");
+}
 
 //
 // Releases the write lock for the database (the `() => rawStorage.releaseWriteLock(".db/write.lock")` of TypeScript).

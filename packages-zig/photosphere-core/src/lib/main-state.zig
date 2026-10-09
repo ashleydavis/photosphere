@@ -15,6 +15,7 @@
 const std = @import("std");
 const ziggy = @import("ziggy-core");
 const utils = @import("utils-zig");
+const node_api = @import("node-api-zig");
 
 const Core = ziggy.core.Core;
 const TaskContext = ziggy.task_runner.TaskContext;
@@ -103,6 +104,9 @@ pub const MainState = struct {
     // Makes the state and starts the periodic sync (`startPeriodicSync()` after `initWorkers()` in main.ts), which runs for the life of the app.
     //
     pub fn create(core: *Core) anyerror!*MainState {
+        // The handlers ported from the TypeScript workers register with task-queue-zig, which is where the runner finds them (initWorkers of
+        // main.ts starts the workers that register them).
+        try node_api.task_handlers.initTaskHandlers();
         const state = try core.allocator.create(MainState);
         errdefer core.allocator.destroy(state);
         state.* = .{
@@ -297,7 +301,7 @@ pub const MainState = struct {
             },
         });
         const task_id = try self.uuid_generator.generate(arena, self.io);
-        try self.core.runner.addTask(task_id, "sync-database", database_path, sync_data, 0, null);
+        try self.core.runner.addTask(task_id, "sync-database", database_path, sync_data, .background, null);
     }
 
     //
@@ -348,7 +352,7 @@ pub const MainState = struct {
         var arena_state = std.heap.ArenaAllocator.init(self.allocator);
         defer arena_state.deinit();
         const task_id = try self.uuid_generator.generate(arena_state.allocator(), self.io);
-        try self.core.runner.addTask(task_id, "ensure-auto-import", ENSURE_AUTO_IMPORT_TASK_SOURCE, "null", 0, null);
+        try self.core.runner.addTask(task_id, "ensure-auto-import", ENSURE_AUTO_IMPORT_TASK_SOURCE, "null", .background, null);
     }
 };
 

@@ -51,6 +51,7 @@ test "every method joins the prefix and the path" {
     try std.testing.expect((try storage.checkWriteLock(allocator, io, ".db/write.lock")) == null);
     try std.testing.expect(try storage.acquireWriteLock(allocator, io, ".db/write.lock", "owner-1"));
     try storage.releaseWriteLock(allocator, io, ".db/write.lock");
+    try storage.refreshWriteLock(allocator, io, ".db/write.lock", "owner-1");
 
     const expected = [_][]const u8{
         "isEmpty /db",
@@ -70,6 +71,7 @@ test "every method joins the prefix and the path" {
         "checkWriteLock /db/.db/write.lock",
         "acquireWriteLock /db/.db/write.lock owner-1",
         "releaseWriteLock /db/.db/write.lock",
+        "refreshWriteLock /db/.db/write.lock owner-1",
     };
     try std.testing.expectEqual(expected.len, recording.calls.items.len);
     for (expected, recording.calls.items) |expectedCall, actualCall| {

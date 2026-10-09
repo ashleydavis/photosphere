@@ -106,7 +106,7 @@ pub fn helloLongHandler(context: *TaskContext, data: std.json.Value) anyerror!?[
             const child_id = try context.queueChild("hello-child", .{
                 .index = child_ids.items.len,
                 .job = job,
-            });
+            }, null);
             try child_ids.append(context.arena, child_id);
         }
         try context.io().sleep(.fromMilliseconds(step_ms), .awake);
@@ -117,7 +117,7 @@ pub fn helloLongHandler(context: *TaskContext, data: std.json.Value) anyerror!?[
         const child_id = try context.queueChild("hello-child", .{
             .index = child_ids.items.len,
             .job = job,
-        });
+        }, null);
         try child_ids.append(context.arena, child_id);
     }
     for (child_ids.items) |child_id| {

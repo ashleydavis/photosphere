@@ -232,4 +232,13 @@ pub const RecordingStorage = struct {
         _ = io;
         try self.record("releaseWriteLock", filePath);
     }
+
+    //
+    // Records refreshWriteLock.
+    //
+    pub fn refreshWriteLock(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
+        _ = allocator;
+        _ = io;
+        try self.calls.append(self.allocator, try std.fmt.allocPrint(self.allocator, "refreshWriteLock {s} {s}", .{ filePath, owner }));
+    }
 };

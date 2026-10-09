@@ -180,6 +180,11 @@ pub const TaskEnd = struct {
     status: TaskStatus,
     // The text of the error, when it failed.
     error_message: ?[]const u8,
+    // The JSON text of the result, when it succeeded with one.
+    result_json: ?[]const u8,
+    // Whether a handler was called for the task. A task cancelled while it waited in the queue never started, and the Electron pool
+    // reports no completion for one.
+    started: bool,
 };
 
 //

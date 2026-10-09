@@ -370,6 +370,17 @@ pub const ThrowingStorage = struct {
         _ = filePath;
         return self.unexpected();
     }
+
+    //
+    // Throws.
+    //
+    pub fn refreshWriteLock(self: *ThrowingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
+        _ = allocator;
+        _ = io;
+        _ = filePath;
+        _ = owner;
+        return self.unexpected();
+    }
 };
 
 //
@@ -390,6 +401,12 @@ pub const SpyStorage = struct {
 
     // Added to the length info reports (the encryption's overhead of an encrypted store).
     infoLengthOverhead: u64 = 0,
+
+    // When set, info answers that a file is not there once it has answered this many questions.
+    infoHiddenAfter: ?u32 = null,
+
+    // The number of questions info has been asked.
+    infoCalls: u32 = 0,
 
     // True when readableLength says it cannot say, as encrypted storage does.
     readableLengthUnknown: bool = false,
@@ -496,6 +513,12 @@ pub const SpyStorage = struct {
     //
     pub fn info(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?IFileInfo {
         try self.askedAbout.append(self.allocator, try self.allocator.dupe(u8, filePath));
+        self.infoCalls += 1;
+        if (self.infoHiddenAfter) |hiddenAfter| {
+            if (self.infoCalls > hiddenAfter) {
+                return null;
+            }
+        }
         var fileInfo = try self.inner.info(allocator, io, filePath) orelse {
             return null;
         };
@@ -575,6 +598,13 @@ pub const SpyStorage = struct {
     //
     pub fn releaseWriteLock(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !void {
         return self.inner.releaseWriteLock(allocator, io, filePath);
+    }
+
+    //
+    // Passes refreshWriteLock through.
+    //
+    pub fn refreshWriteLock(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
+        return self.inner.refreshWriteLock(allocator, io, filePath, owner);
     }
 
     //

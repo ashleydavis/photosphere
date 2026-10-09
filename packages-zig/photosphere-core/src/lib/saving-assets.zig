@@ -79,7 +79,7 @@ const IBatchOutputs = struct {
 // and resolves with its result).
 //
 fn runChildTask(context: *TaskContext, task_type: []const u8, data: anytype) !ziggy.types.Completion {
-    const task_id = try context.queueChild(task_type, data);
+    const task_id = try context.queueChild(task_type, data, null);
     return try context.awaitTask(task_id);
 }
 
@@ -107,7 +107,7 @@ pub fn saveAssetHandler(context: *TaskContext, data: std.json.Value) anyerror!?[
         .databasePath = database_path,
     });
     const task_id = try state.uuid_generator.generate(context.arena, context.io());
-    try state.core.runner.addTask(task_id, "save-asset", database_path, save_data, 0, null);
+    try state.core.runner.addTask(task_id, "save-asset", database_path, save_data, .background, null);
     return try context.arena.dupe(u8, "null");
 }
 

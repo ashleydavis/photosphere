@@ -27,6 +27,7 @@ const BsonDatabase = bdb.database.BsonDatabase;
 const IBsonCollection = bdb.collection.IBsonCollection;
 const BsonDocument = bson.BsonDocument;
 const BsonValue = bson.BsonValue;
+const IFileStat = @import("file-scanner.zig").IFileStat;
 const tools = @import("tools-zig");
 const Image = tools.Image;
 const ILocation = utils.reverse_geocode.ILocation;
@@ -39,7 +40,24 @@ pub fn extractDominantColorFromThumbnail(allocator: std.mem.Allocator, io: std.I
     return try image.getDominantColor(allocator, io);
 }
 
-// Not ported: FileValidator (not used by the ported commands).
+//
+// A function that validates a file.
+// (Zig: a closure; `function` is called with `context`. The strings are only valid during the call.)
+//
+pub const FileValidator = struct {
+    // The state of the validator, passed to function.
+    context: ?*anyopaque,
+
+    // The validator function.
+    function: *const fn (context: ?*anyopaque, io: std.Io, filePath: []const u8, fileStat: IFileStat, contentType: []const u8, zipFilePath: ?[]const u8) anyerror!bool,
+
+    //
+    // Invokes the validator.
+    //
+    pub fn call(self: FileValidator, io: std.Io, filePath: []const u8, fileStat: IFileStat, contentType: []const u8, zipFilePath: ?[]const u8) anyerror!bool {
+        return self.function(self.context, io, filePath, fileStat, contentType, zipFilePath);
+    }
+};
 
 //
 // Progress callback for the add operation.
@@ -578,8 +596,339 @@ pub fn getDatabaseSummary(allocator: std.mem.Allocator, io: std.Io, assetStorage
     };
 }
 
-// Not ported: streamAsset, writeAsset, writeAssetStream, writeAssetStreamVerified (not reached by the ported
-// commands).
+//
+// Streams an asset from the database.
+// This is used by the REST API server to read assets.
+// (Zig: the stream is destroyed by the caller, with IReadStream.destroy.)
+//
+pub fn streamAsset(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, assetId: []const u8, assetType: []const u8) !storage_zig.storage.IReadStream {
+    const assetPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ assetType, assetId });
+    return assetStorage.readStream(allocator, io, assetPath);
+}
+
+//
+// Counts one more imported file in the database metadata of a merkle tree, creating the metadata when the tree has none.
+// (No TypeScript counterpart: writeAsset and writeAssetStream write this out inline. `filesImported++` is `filesImported = Number(filesImported) + 1`.)
+//
+fn countImportedFile(allocator: std.mem.Allocator, merkleTree: *IMerkleTree) !void {
+    var databaseMetadata = merkleTree.databaseMetadata orelse try emptyDatabaseMetadata(allocator);
+    const filesImported = databaseMetadata.get("filesImported") orelse BsonValue.undefined;
+    const filesImportedNumber = bdb.js_value.toNumber(allocator, filesImported) catch std.math.nan(f64);
+    try databaseMetadata.put(allocator, "filesImported", .{ .number = filesImportedNumber + 1 });
+    merkleTree.databaseMetadata = databaseMetadata;
+}
+
+//
+// Writes an asset from a buffer with a specific asset ID.
+// This is used by the REST API server to add assets uploaded via HTTP.
+//
+pub fn writeAsset(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    assetStorage: IStorage,
+    rawStorage: IStorage,
+    sessionId: []const u8,
+    assetId: []const u8,
+    assetType: []const u8,
+    contentType: ?[]const u8,
+    buffer: []const u8,
+) !void {
+    const assetPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ assetType, assetId });
+
+    if (!try api.write_lock.acquireWriteLock(allocator, io, rawStorage, sessionId, 3)) {
+        return errors.throwError("Failed to acquire write lock.", .{});
+    }
+    const result = writeAssetUnderLock(allocator, io, assetStorage, rawStorage, sessionId, assetType, assetPath, contentType, buffer);
+    try api.write_lock.releaseWriteLock(allocator, io, rawStorage);
+    return result;
+}
+
+//
+// The try and catch blocks of writeAsset, run holding the write lock.
+// (No TypeScript counterpart: the blocks are written inline; Zig needs them as a function to release the lock in the finally
+// block whether they failed or not.)
+//
+fn writeAssetUnderLock(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    assetStorage: IStorage,
+    rawStorage: IStorage,
+    sessionId: []const u8,
+    assetType: []const u8,
+    assetPath: []const u8,
+    contentType: ?[]const u8,
+    buffer: []const u8,
+) !void {
+    writeAssetTry(allocator, io, assetStorage, rawStorage, sessionId, assetType, assetPath, contentType, buffer) catch |err| {
+        log.exception(try std.fmt.allocPrint(allocator, "Failed to add asset \"{s}\" from buffer", .{assetPath}), err);
+        var deleteOperation: retry_operations.DeleteFileOperation("() => assetStorage.deleteFile(assetPath)") = .{
+            .allocator = allocator,
+            .storage = assetStorage,
+            .filePath = assetPath,
+        };
+        try retry(io, &deleteOperation, 3, 1_000, 2, 30_000, null);
+        return err;
+    };
+}
+
+//
+// The try block of writeAsset.
+//
+fn writeAssetTry(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    assetStorage: IStorage,
+    rawStorage: IStorage,
+    sessionId: []const u8,
+    assetType: []const u8,
+    assetPath: []const u8,
+    contentType: ?[]const u8,
+    buffer: []const u8,
+) !void {
+    var loadOperation: retry_operations.LoadMerkleTreeOperation("() => loadMerkleTree(assetStorage)") = .{
+        .allocator = allocator,
+        .storage = assetStorage,
+    };
+    var merkleTree: IMerkleTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
+        return errors.throwError("Failed to load media file database.", .{});
+    };
+
+    var writeOperation: retry_operations.WriteOperation("() => assetStorage.write(assetPath, contentType, buffer)") = .{
+        .allocator = allocator,
+        .storage = assetStorage,
+        .fileName = assetPath,
+        .contentType = contentType,
+        .data = buffer,
+    };
+    try retry(io, &writeOperation, 3, 1_000, 2, 30_000, null);
+
+    var infoOperation: retry_operations.InfoOperation("() => assetStorage.info(assetPath)") = .{
+        .allocator = allocator,
+        .storage = assetStorage,
+        .fileName = assetPath,
+    };
+    const assetInfo = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
+        return errors.throwError("Failed to get info for file \"{s}\"", .{assetPath});
+    };
+
+    var hashOperation: retry_operations.ComputeAssetHashOperation("async () => computeAssetHash(await assetStorage.readStream(assetPath), assetInfo)") = .{
+        .allocator = allocator,
+        .storage = assetStorage,
+        .fileName = assetPath,
+        .fileInfo = assetInfo,
+    };
+    const hashedAsset = try retry(io, &hashOperation, 3, 1_000, 2, 30_000, null);
+
+    try api.write_lock.refreshWriteLock(allocator, io, rawStorage, sessionId);
+
+    merkleTree = try merkle_tree.addItem(allocator, &merkleTree, .{
+        .name = assetPath,
+        .hash = hashedAsset.hash,
+        .length = hashedAsset.length,
+        .lastModified = hashedAsset.lastModified,
+    });
+
+    if (std.mem.eql(u8, assetType, "asset")) {
+        try countImportedFile(allocator, &merkleTree);
+    }
+
+    var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(merkleTree, assetStorage)") = .{
+        .allocator = allocator,
+        .merkleTree = &merkleTree,
+        .storage = assetStorage,
+    };
+    try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
+    try tree.stampDatabaseModified(allocator, io, assetStorage, rawStorage);
+}
+
+//
+// Writes an asset from a readable byte stream (same lock / merkle behavior as writeAsset).
+// Callers that know the byte length (e.g. from Content-Length) should pass it for storage backends that use a size hint.
+//
+pub fn writeAssetStream(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    assetStorage: IStorage,
+    rawStorage: IStorage,
+    sessionId: []const u8,
+    assetId: []const u8,
+    assetType: []const u8,
+    contentType: ?[]const u8,
+    inputStream: *std.Io.Reader,
+    contentLength: ?u64,
+) !void {
+    const assetPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ assetType, assetId });
+
+    if (!try api.write_lock.acquireWriteLock(allocator, io, rawStorage, sessionId, 3)) {
+        return errors.throwError("Failed to acquire write lock.", .{});
+    }
+    const result = writeAssetStreamUnderLock(allocator, io, assetStorage, rawStorage, sessionId, assetType, assetPath, contentType, inputStream, contentLength);
+    try api.write_lock.releaseWriteLock(allocator, io, rawStorage);
+    return result;
+}
+
+//
+// The try and catch blocks of writeAssetStream, run holding the write lock. (No TypeScript counterpart: see writeAssetUnderLock.)
+//
+fn writeAssetStreamUnderLock(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    assetStorage: IStorage,
+    rawStorage: IStorage,
+    sessionId: []const u8,
+    assetType: []const u8,
+    assetPath: []const u8,
+    contentType: ?[]const u8,
+    inputStream: *std.Io.Reader,
+    contentLength: ?u64,
+) !void {
+    writeAssetStreamTry(allocator, io, assetStorage, rawStorage, sessionId, assetType, assetPath, contentType, inputStream, contentLength) catch |err| {
+        log.exception(try std.fmt.allocPrint(allocator, "Failed to add asset \"{s}\" from stream", .{assetPath}), err);
+        var deleteOperation: retry_operations.DeleteFileOperation("() => assetStorage.deleteFile(assetPath)") = .{
+            .allocator = allocator,
+            .storage = assetStorage,
+            .filePath = assetPath,
+        };
+        try retry(io, &deleteOperation, 3, 1_000, 2, 30_000, null);
+        return err;
+    };
+}
+
+//
+// The try block of writeAssetStream.
+//
+fn writeAssetStreamTry(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    assetStorage: IStorage,
+    rawStorage: IStorage,
+    sessionId: []const u8,
+    assetType: []const u8,
+    assetPath: []const u8,
+    contentType: ?[]const u8,
+    inputStream: *std.Io.Reader,
+    contentLength: ?u64,
+) !void {
+    var loadOperation: retry_operations.LoadMerkleTreeOperation("() => loadMerkleTree(assetStorage)") = .{
+        .allocator = allocator,
+        .storage = assetStorage,
+    };
+    var merkleTree: IMerkleTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
+        return errors.throwError("Failed to load media file database.", .{});
+    };
+
+    var writeOperation: retry_operations.WriteStreamOperation("() => assetStorage.writeStream(assetPath, contentType, inputStream, contentLength)") = .{
+        .allocator = allocator,
+        .storage = assetStorage,
+        .fileName = assetPath,
+        .contentType = contentType,
+        .inputStream = inputStream,
+        .contentLength = contentLength,
+    };
+    try retry(io, &writeOperation, 3, 1_000, 2, 30_000, null);
+
+    var infoOperation: retry_operations.InfoOperation("() => assetStorage.info(assetPath)") = .{
+        .allocator = allocator,
+        .storage = assetStorage,
+        .fileName = assetPath,
+    };
+    const assetInfo = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null);
+    if (assetInfo == null or assetInfo.?.length == 0) {
+        return errors.throwError("Asset data is empty", .{});
+    }
+
+    var hashOperation: retry_operations.ComputeAssetHashOperation("async () => computeAssetHash(await assetStorage.readStream(assetPath), assetInfo)") = .{
+        .allocator = allocator,
+        .storage = assetStorage,
+        .fileName = assetPath,
+        .fileInfo = assetInfo.?,
+    };
+    const hashedAsset = try retry(io, &hashOperation, 3, 1_000, 2, 30_000, null);
+
+    try api.write_lock.refreshWriteLock(allocator, io, rawStorage, sessionId);
+
+    merkleTree = try merkle_tree.addItem(allocator, &merkleTree, .{
+        .name = assetPath,
+        .hash = hashedAsset.hash,
+        .length = hashedAsset.length,
+        .lastModified = hashedAsset.lastModified,
+    });
+
+    if (std.mem.eql(u8, assetType, "asset")) {
+        try countImportedFile(allocator, &merkleTree);
+    }
+
+    var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(merkleTree, assetStorage)") = .{
+        .allocator = allocator,
+        .merkleTree = &merkleTree,
+        .storage = assetStorage,
+    };
+    try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
+    try tree.stampDatabaseModified(allocator, io, assetStorage, rawStorage);
+}
+
+//
+// Writes an asset stream to the destination storage and then verifies the written file is
+// byte-for-byte identical to the source file before resolving. Hashes both source and dest
+// and throws if they do not match, ensuring the source is never deleted until the copy is confirmed intact.
+//
+pub fn writeAssetStreamVerified(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    sourceStorage: IStorage,
+    destStorage: IStorage,
+    destRawStorage: IStorage,
+    sessionId: []const u8,
+    sourceAssetId: []const u8,
+    destAssetId: []const u8,
+    assetType: []const u8,
+    contentType: ?[]const u8,
+    inputStream: *std.Io.Reader,
+    contentLength: ?u64,
+) !void {
+    try writeAssetStream(allocator, io, destStorage, destRawStorage, sessionId, destAssetId, assetType, contentType, inputStream, contentLength);
+
+    const sourceAssetPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ assetType, sourceAssetId });
+    const destAssetPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ assetType, destAssetId });
+
+    var sourceInfoOperation: retry_operations.InfoOperation("() => sourceStorage.info(sourceAssetPath)") = .{
+        .allocator = allocator,
+        .storage = sourceStorage,
+        .fileName = sourceAssetPath,
+    };
+    const sourceInfo = try retry(io, &sourceInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
+        return errors.throwError("Verification failed: source file \"{s}\" is no longer accessible after write.", .{sourceAssetPath});
+    };
+
+    var destInfoOperation: retry_operations.InfoOperation("() => destStorage.info(destAssetPath)") = .{
+        .allocator = allocator,
+        .storage = destStorage,
+        .fileName = destAssetPath,
+    };
+    const destInfo = try retry(io, &destInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
+        return errors.throwError("Verification failed: destination file \"{s}\" not found after write.", .{destAssetPath});
+    };
+
+    var sourceHashOperation: retry_operations.ComputeAssetHashOperation("async () => computeAssetHash(await sourceStorage.readStream(sourceAssetPath), sourceInfo)") = .{
+        .allocator = allocator,
+        .storage = sourceStorage,
+        .fileName = sourceAssetPath,
+        .fileInfo = sourceInfo,
+    };
+    const sourceHash = try retry(io, &sourceHashOperation, 3, 1_000, 2, 30_000, null);
+
+    var destHashOperation: retry_operations.ComputeAssetHashOperation("async () => computeAssetHash(await destStorage.readStream(destAssetPath), destInfo)") = .{
+        .allocator = allocator,
+        .storage = destStorage,
+        .fileName = destAssetPath,
+        .fileInfo = destInfo,
+    };
+    const destHash = try retry(io, &destHashOperation, 3, 1_000, 2, 30_000, null);
+
+    if (!std.mem.eql(u8, sourceHash.hash, destHash.hash)) {
+        return errors.throwError("Verification failed: hash mismatch for \"{s}\" of asset \"{s}\" -- destination copy is corrupt.", .{ assetType, sourceAssetId });
+    }
+}
 
 //
 // Removes an asset: its files from the files tree and storage, and its record from the metadata collection.
@@ -699,7 +1048,41 @@ fn removeAssetUnderLock(
     try tree.stampDatabaseModified(allocator, io, assetStorage, rawStorage);
 }
 
-// Not ported: isDatabasePartial, createLazyDatabaseStorage (not reached by the ported commands).
+//
+// Returns true if the database at the given path is a partial replica (lazy database).
+// Checks the isPartial flag stored in the merkle tree's database metadata.
+//
+pub fn isDatabasePartial(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions) !bool {
+    const created = try storage_zig.storage_factory.createStorage(allocator, io, databasePath, s3Config, storageOptions);
+    const merkleTree = try tree.loadMerkleTree(allocator, io, created.storage);
+    return merkleTree != null and isPartialDatabase(merkleTree.?.databaseMetadata);
+}
+
+//
+// Creates storage for the given database path. If the database is a partial replica with a
+// known origin, wraps the local storage in a LazyOriginStorage so that missing files are
+// fetched from the origin and cached locally on first access.
+//
+pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions) !IStorage {
+    const created = try storage_zig.storage_factory.createStorage(allocator, io, databasePath, s3Config, storageOptions);
+
+    const config = try api.database_config.loadDatabaseConfig(allocator, io, created.rawStorage);
+    const origin = configOrigin(config) orelse {
+        return created.storage;
+    };
+
+    const merkleTree = try tree.loadMerkleTree(allocator, io, created.storage);
+    if (merkleTree == null or !isPartialDatabase(merkleTree.?.databaseMetadata)) {
+        return created.storage;
+    }
+
+    const credentials = try resolve_storage_credentials.resolveStorageCredentials(allocator, io, origin, null, null);
+    const loadedKeys = try encryption.key_utils.loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
+    const originStorage = (try storage_zig.storage_factory.createStorage(allocator, io, origin, credentials.s3Config, loadedKeys.options)).storage;
+    const lazyStorage = try allocator.create(LazyOriginStorage);
+    lazyStorage.* = LazyOriginStorage.init(created.storage, originStorage);
+    return lazyStorage.storage();
+}
 
 //
 // Wraps an already-open local storage so that files a partial database does not hold are fetched

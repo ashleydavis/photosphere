@@ -207,7 +207,7 @@ test "switching automatic import on creates the default database and starts the 
 
     try expectReply(&app, "set-config", "{\"key\":\"autoImportEnabled\",\"value\":false}", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_out.writer.buffered(), "Stopping automatic import.") != null);
-    try app.shell.expectMessageContaining("\"status\":\"cancelled\"");
+    try app.shell.expectMessageContaining("\"errorMessage\":\"Cancelled\"");
     state.lock();
     defer state.unlock();
     try std.testing.expect(!state.auto_import_running);

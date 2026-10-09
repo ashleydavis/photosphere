@@ -112,6 +112,7 @@ test "the other methods forward to the wrapped storage unchanged" {
     try std.testing.expect((try storage.checkWriteLock(allocator, io, "p")) == null);
     try std.testing.expect(try storage.acquireWriteLock(allocator, io, "p", "owner-1"));
     try storage.releaseWriteLock(allocator, io, "p");
+    try storage.refreshWriteLock(allocator, io, "p", "owner-1");
     const expected = [_][]const u8{
         "isEmpty p",
         "listFiles p",
@@ -125,6 +126,7 @@ test "the other methods forward to the wrapped storage unchanged" {
         "checkWriteLock p",
         "acquireWriteLock p owner-1",
         "releaseWriteLock p",
+        "refreshWriteLock p owner-1",
     };
     try std.testing.expectEqual(expected.len, recording.calls.items.len);
     for (expected, recording.calls.items) |expectedCall, actualCall| {

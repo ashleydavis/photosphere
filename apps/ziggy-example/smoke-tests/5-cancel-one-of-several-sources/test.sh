@@ -10,9 +10,9 @@ wait_for_text event-log "task-message hello-long-1 "
 wait_for_text event-log "task-message hello-long-2 "
 wait_for_text event-log "task-message hello-long-3 "
 click cancel-many-first
-wait_for_text event-log "task-completed hello-long-1 cancelled"
+wait_for_text event-log "task-completed hello-long-1 failed Cancelled"
 wait_for_text event-log "task-completed hello-long-2 succeeded" 60
 wait_for_text event-log "task-completed hello-long-3 succeeded" 60
-expect_text_absent event-log "task-completed hello-long-2 cancelled"
-expect_text_absent event-log "task-completed hello-long-3 cancelled"
+expect_text_absent event-log "task-completed hello-long-2 failed Cancelled"
+expect_text_absent event-log "task-completed hello-long-3 failed Cancelled"
 wait_for_empty jobs

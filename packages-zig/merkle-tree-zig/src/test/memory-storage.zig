@@ -74,6 +74,7 @@ pub const MemoryStorage = struct {
         .checkWriteLock = checkWriteLock,
         .acquireWriteLock = acquireWriteLock,
         .releaseWriteLock = releaseWriteLock,
+        .refreshWriteLock = refreshWriteLock,
         .readableLength = readableLength,
         .writeStreamHashed = writeStreamHashed,
         .storedHash = storedHash,
@@ -293,6 +294,18 @@ pub const MemoryStorage = struct {
         _ = allocator;
         _ = io;
         _ = filePath;
+        return error.NotImplemented;
+    }
+
+    //
+    // Not implemented.
+    //
+    fn refreshWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) anyerror!void {
+        _ = ptr;
+        _ = allocator;
+        _ = io;
+        _ = filePath;
+        _ = owner;
         return error.NotImplemented;
     }
 };

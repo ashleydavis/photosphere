@@ -15,4 +15,4 @@ expect_text_absent media-status "failed"
 
 # Cancelling the source stops the server, and nothing else is left running.
 click cancel-media
-wait_for_text event-log "task-completed media-server-1 cancelled"
+wait_for_text event-log "task-completed media-server-1 failed Cancelled"

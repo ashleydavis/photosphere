@@ -120,13 +120,13 @@ test "resetSyncState to the database that is already open cancels nothing, and t
     state.is_sync_running = true;
     state.sync_debounce_at = state.now() + 100_000;
     state.unlock();
-    app.core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"long-1\",\"taskType\":\"spin\",\"source\":\"/the/open/db\",\"data\":null,\"priority\":0}}");
+    app.core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"long-1\",\"taskType\":\"spin\",\"source\":\"/the/open/db\",\"data\":null,\"priority\":\"background\"}}");
     try app.shell.expectMessageContaining("\"channel\":\"task-message\"");
     try state.resetSyncState("/the/open/db");
     app.shell.sleepMs(100);
-    try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("\"status\":\"cancelled\""));
+    try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("\"errorMessage\":\"Cancelled\""));
     try std.testing.expect(!isSyncRunning(state));
     try std.testing.expect(debounceDeadline(state) == null);
     try state.resetSyncState("/another/db");
-    try app.shell.expectMessageContaining("\"status\":\"cancelled\"");
+    try app.shell.expectMessageContaining("\"errorMessage\":\"Cancelled\"");
 }

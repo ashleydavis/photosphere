@@ -9,6 +9,7 @@ const cleanup_sources_worker = @import("cleanup-sources.worker.zig");
 const prefetch_database_worker = @import("prefetch-database.worker.zig");
 const consolidate_database_worker = @import("consolidate-database.worker.zig");
 const check_database_exists_worker = @import("check-database-exists.worker.zig");
+const asset_server_worker = @import("asset-server.worker.zig");
 const create_auto_import_scanner = @import("create-auto-import-scanner.zig");
 const registerHandler = task_queue_zig.worker.registerHandler;
 const verifyFileHandler = verify_worker.verifyFileHandler;
@@ -21,6 +22,7 @@ const cleanupSourcesHandler = cleanup_sources_worker.cleanupSourcesHandler;
 const prefetchDatabaseHandler = prefetch_database_worker.prefetchDatabaseHandler;
 const consolidateDatabaseHandler = consolidate_database_worker.consolidateDatabaseHandler;
 const checkDatabaseExistsHandler = check_database_exists_worker.checkDatabaseExistsHandler;
+const assetServerHandler = asset_server_worker.assetServerHandler;
 
 //
 // Register all task handlers
@@ -44,7 +46,8 @@ pub fn initTaskHandlers() !void {
     // psi replicate or psi verify).
     try registerHandler("import-assets", importAssetsHandler);
     try registerHandler("hash-file", hashFileHandler);
-    // Not ported: get-database-summary, get-import-record, set-database-origin, move-assets, asset-server,
+    try registerHandler("asset-server", assetServerHandler);
+    // Not ported: get-database-summary, get-import-record, set-database-origin, move-assets,
     // receive-share, find-receiver, send-payload, evict-originals (not used by psi add, psi replicate or
     // psi verify).
     try registerHandler("check-database-exists", checkDatabaseExistsHandler);

@@ -197,5 +197,10 @@ pub const StoragePrefixWrapper = struct {
         return self.wrappedStorage.releaseWriteLock(allocator, io, try self.makeFullPath(allocator, filePath));
     }
 
-    // Not ported: refreshWriteLock (not reached by the CLI).
+    //
+    // Refreshes a write lock for the specified file, updating its timestamp.
+    //
+    pub fn refreshWriteLock(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
+        return self.wrappedStorage.refreshWriteLock(allocator, io, try self.makeFullPath(allocator, filePath), owner);
+    }
 };

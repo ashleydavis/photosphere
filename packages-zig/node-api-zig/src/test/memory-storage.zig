@@ -396,6 +396,25 @@ pub const MemoryStorage = struct {
         _ = io;
         _ = self.locks.orderedRemove(filePath);
     }
+
+    //
+    // Refreshes the write lock for a lock file (fails when it is not held, or held by another owner).
+    //
+    pub fn refreshWriteLock(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
+        _ = allocator;
+        const existingLock = self.locks.get(filePath) orelse {
+            return error.LockDoesNotExist;
+        };
+        if (!std.mem.eql(u8, existingLock.owner, owner)) {
+            return error.LockOwnedByAnotherOwner;
+        }
+        const timestamp = std.Io.Clock.real.now(io).toMilliseconds();
+        self.locks.getPtr(filePath).?.* = .{
+            .owner = existingLock.owner,
+            .acquiredAt = .{ .epochMilliseconds = timestamp },
+            .timestamp = timestamp,
+        };
+    }
 };
 
 //

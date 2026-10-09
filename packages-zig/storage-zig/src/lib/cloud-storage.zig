@@ -961,5 +961,59 @@ pub const CloudStorage = struct {
         }
     }
 
-    // Not ported: refreshWriteLock (not reached by the CLI).
+    //
+    // Refreshes a write lock for the specified file, updating its timestamp.
+    // Throws an error if the lock is no longer owned by the specified owner.
+    //
+    pub fn refreshWriteLock(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
+
+        const timestamp = std.Io.Clock.real.now(io).toMilliseconds();
+        const processId = storage_module.processId();
+
+        if (log.verboseEnabled()) {
+            log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},REFRESH_ATTEMPT,{d},{s},{s}", .{ timestamp, processId, owner, filePath }));
+        }
+
+        const parsed = try self.parsePath(filePath);
+        var key = parsed.key;
+        if (std.mem.startsWith(u8, key, "/")) {
+            key = key[1..]; // Remove leading slash.
+        }
+
+        // (Zig: TypeScript wraps the body in one try/catch; here the body is a function so its failure can be logged and rethrown.)
+        self.refreshWriteLockUnlogged(allocator, io, filePath, owner, timestamp, parsed.bucket, key) catch |err| {
+            if (log.verboseEnabled()) {
+                log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},REFRESH_FAILED,{d},{s},{s},error:{s}", .{ timestamp, processId, owner, filePath, errors.errorMessage(err) }));
+            }
+            return err;
+        };
+
+        if (log.verboseEnabled()) {
+            log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},REFRESH_SUCCESS,{d},{s},{s}", .{ timestamp, processId, owner, filePath }));
+        }
+    }
+
+    //
+    // The try block of refreshWriteLock. (No TypeScript counterpart: see refreshWriteLock.)
+    //
+    fn refreshWriteLockUnlogged(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8, timestamp: i64, bucket: []const u8, key: []const u8) !void {
+        // Check if lock exists and we own it
+        const existingLock = try self.checkWriteLock(allocator, io, filePath) orelse {
+            return errors.throwError("Cannot refresh write lock: lock does not exist for {s}", .{filePath});
+        };
+
+        if (!std.mem.eql(u8, existingLock.owner, owner)) {
+            return errors.throwError("Cannot refresh write lock: lock is owned by {s}, not {s} for {s}", .{ existingLock.owner, owner, filePath });
+        }
+
+        // Update the lock with new timestamp
+        const lockInfo: LockFileContent = .{
+            .owner = owner,
+            .acquiredAt = try (Date{ .epochMilliseconds = std.Io.Clock.real.now(io).toMilliseconds() }).toISOString(allocator),
+            .timestamp = timestamp,
+        };
+        const lockBody = try std.json.Stringify.valueAlloc(allocator, lockInfo, .{});
+
+        try self.s3.putObject(allocator, io, bucket, key, lockBody, "application/json", null, null, null);
+    }
 };

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Cancelling the source of a long task stops it early: it completes as cancelled and sends no more output.
+# Cancelling the source of a long task stops it early: it completes as failed with the message Cancelled and sends no more output.
 
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
@@ -9,7 +9,7 @@ type_into child-count 2
 click start-long
 wait_for_text output "long task step 3"
 click cancel-source
-wait_for_text event-log "task-completed hello-long-1 cancelled"
+wait_for_text event-log "task-completed hello-long-1 failed Cancelled"
 steps_at_cancel="$(count_in output "long task step")"
 sleep 2
 steps_later="$(count_in output "long task step")"

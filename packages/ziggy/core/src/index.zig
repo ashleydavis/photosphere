@@ -6,6 +6,7 @@ pub const types = @import("lib/types.zig");
 pub const json_util = @import("lib/json-util.zig");
 pub const origin_check = @import("lib/origin-check.zig");
 pub const task_runner = @import("lib/task-runner.zig");
+pub const queue_backend = @import("lib/queue-backend.zig");
 pub const core = @import("lib/core.zig");
 pub const ziggy_api = @import("lib/ziggy-api.zig");
 pub const jni = @import("lib/jni.zig");

@@ -9,6 +9,8 @@ const build_options = @import("build_options");
 const types = @import("types.zig");
 const json_util = @import("json-util.zig");
 const task_runner = @import("task-runner.zig");
+const queue_backend = @import("queue-backend.zig");
+const task_queue = @import("task-queue-zig");
 const origin_check = @import("origin-check.zig");
 const test_control = @import("test-control.zig");
 const ui_files = @import("ui-files.zig");
@@ -145,6 +147,8 @@ pub const Core = struct {
     data_dir: [:0]u8,
     // The task runner.
     runner: task_runner.TaskRunner,
+    // The IQueueBackend that code written against task-queue-zig talks to, backed by the runner.
+    queue_backend: *queue_backend.ZiggyQueueBackend,
     // The files the user last dropped on the window, for getPathForFile.
     dropped: dropped_files.DroppedFiles,
     // The test control connection, only in a test hooks build and only when the shell is in test mode.
@@ -191,6 +195,8 @@ pub const Core = struct {
         core.dropped = dropped_files.DroppedFiles.init(allocator);
         errdefer core.dropped.deinit();
         core.control = null;
+        core.queue_backend = try queue_backend.ZiggyQueueBackend.create(allocator, core.threaded.io(), &core.runner);
+        errdefer core.queue_backend.destroy();
         try core.runner.start(allocator, core.threaded.io(), .{
             .user_data = core,
             .emit = emitFromRunner,
@@ -198,13 +204,16 @@ pub const Core = struct {
             .worker_threads = config.worker_threads,
             .max_concurrent_child_tasks = config.max_concurrent_child_tasks,
             .describe_error = app.describe_error,
-            .observer = if (app.on_task_end != null or app.on_task_message != null) .{
+            .fallback_handler = queue_backend.fallbackHandler(core.queue_backend),
+            .observer = .{
                 .user_data = core,
                 .on_task_end = observeTaskEnd,
                 .on_task_message = observeTaskMessage,
-            } else null,
+            },
         }, core.config);
         errdefer core.runner.stop();
+        task_queue.queue_backend.setQueueBackend(core.queue_backend.queueBackend());
+        errdefer task_queue.queue_backend.setQueueBackend(null);
         if (app.state) |hooks| {
             core.app_state = try hooks.create(core);
             core.runner.app_state = core.app_state;
@@ -237,6 +246,8 @@ pub const Core = struct {
             self.allocator.destroy(control);
         }
         self.runner.stop();
+        task_queue.queue_backend.setQueueBackend(null);
+        self.queue_backend.destroy();
         self.threaded.deinit();
         self.dropped.deinit();
         self.allocator.free(self.channels);
@@ -347,7 +358,7 @@ pub const Core = struct {
         const id_json = json_util.stringify(arena, id) catch @panic("out of memory building a request");
         const data_json = json_util.stringify(arena, data) catch @panic("out of memory building a request");
         const task_id = std.fmt.allocPrint(arena, "request-{d}", .{self.next_request_task.fetchAdd(1, .monotonic)}) catch @panic("out of memory building a request");
-        self.runner.addTask(task_id, entry.task_type, "request", data_json, 0, id_json) catch |err| {
+        self.runner.addTask(task_id, entry.task_type, "request", data_json, .interactive, id_json) catch |err| {
             self.reportError(arena, id, @errorName(err));
         };
     }
@@ -390,6 +401,7 @@ pub const Core = struct {
 
 fn observeTaskEnd(user_data: ?*anyopaque, end: types.TaskEnd) void {
     const core: *Core = @ptrCast(@alignCast(user_data.?));
+    core.queue_backend.taskEnded(end);
     if (core.on_task_end) |on_task_end| {
         on_task_end(core, end);
     }
@@ -397,6 +409,7 @@ fn observeTaskEnd(user_data: ?*anyopaque, end: types.TaskEnd) void {
 
 fn observeTaskMessage(user_data: ?*anyopaque, sent: types.TaskSentMessage) void {
     const core: *Core = @ptrCast(@alignCast(user_data.?));
+    core.queue_backend.messageSent(sent);
     if (core.on_task_message) |on_task_message| {
         on_task_message(core, sent);
     }
@@ -431,17 +444,43 @@ fn addTaskHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) a
     const source = json_util.getString(data, "source") orelse {
         return error.MissingSource;
     };
-    const priority: i64 = json_util.getInteger(data, "priority") orelse 0;
+    const priority_field: std.json.Value = if (data.object.get("priority")) |field| field else .null;
+    const priority = switch (priority_field) {
+        .null => try priorityFromText(null),
+        .string => |text| try priorityFromText(text),
+        else => return error.UnknownPriority,
+    };
     const task_data: std.json.Value = if (data.object.get("data")) |value| value else .null;
     const data_json = try json_util.stringify(arena, task_data);
-    try core.runner.addTask(task_id, task_type, source, data_json, @intCast(priority), null);
+    try core.runner.addTask(task_id, task_type, source, data_json, priority, null);
     return try arena.dupe(u8, "{}");
 }
 
-fn cancelTasksHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
-    const source = json_util.getString(data, "source") orelse {
-        return error.MissingSource;
+//
+// Turns the priority of an add-task request into the runner's TaskPriority. The page sends TaskPriority, "interactive" or
+// "background", as the Electron renderer does, and leaves it out when the task has no preference, which runs as background.
+//
+pub fn priorityFromText(text: ?[]const u8) !task_runner.TaskPriority {
+    const priority = text orelse {
+        return .background;
     };
+    if (std.mem.eql(u8, priority, "interactive")) {
+        return .interactive;
+    }
+    if (std.mem.eql(u8, priority, "background")) {
+        return .background;
+    }
+    return error.UnknownPriority;
+}
+
+//
+// Cancels the tasks queued under a source. The page sends the source as a bare string, as the Electron renderer does.
+//
+fn cancelTasksHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
+    if (data != .string) {
+        return error.MissingSource;
+    }
+    const source = data.string;
     core.runner.cancelSource(source);
     return try arena.dupe(u8, "{}");
 }

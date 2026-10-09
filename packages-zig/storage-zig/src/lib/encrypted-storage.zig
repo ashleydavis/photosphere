@@ -225,7 +225,12 @@ pub const EncryptedStorage = struct {
         return self.wrappedStorage.releaseWriteLock(allocator, io, filePath);
     }
 
-    // Not ported: refreshWriteLock (not reached by the CLI).
+    //
+    // Refreshes a write lock for the specified file, updating its timestamp.
+    //
+    pub fn refreshWriteLock(self: *EncryptedStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
+        return self.wrappedStorage.refreshWriteLock(allocator, io, filePath, owner);
+    }
 };
 
 //
