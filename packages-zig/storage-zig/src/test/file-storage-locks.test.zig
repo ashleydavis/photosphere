@@ -830,6 +830,89 @@ test "a lock whose acquiredAt is not a date reads as corrupt and the lock is tak
     try std.testing.expectEqualStrings("new-owner", lockInfo.owner);
 }
 
+// describe('refreshWriteLock')
+
+test "refreshWriteLock updates the timestamp of a lock the owner holds and keeps the owner" {
+    var fixture: Fixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const allocator = fixture.arena.allocator();
+    const io = std.testing.io;
+    const lockFilePath = try fixture.path("refresh.lock");
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, lockFilePath, "owner-1"));
+    const before = try fixture.readLockFile(lockFilePath);
+
+    try io.sleep(.fromMilliseconds(20), .awake);
+    try fixture.storage.refreshWriteLock(allocator, io, lockFilePath, "owner-1");
+
+    const after = try fixture.readLockFile(lockFilePath);
+    try std.testing.expectEqualStrings("owner-1", after.owner);
+    try std.testing.expect(after.timestamp > before.timestamp);
+    const lockInfo = (try fixture.storage.checkWriteLock(allocator, io, lockFilePath)).?;
+    try std.testing.expectEqualStrings("owner-1", lockInfo.owner);
+}
+
+test "refreshWriteLock fails when there is no lock" {
+    var fixture: Fixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const allocator = fixture.arena.allocator();
+    const lockFilePath = try fixture.path("none.lock");
+
+    try std.testing.expectError(error.Thrown, fixture.storage.refreshWriteLock(allocator, std.testing.io, lockFilePath, "owner-1"));
+    const message = try std.fmt.allocPrint(allocator, "Cannot refresh write lock: lock does not exist for {s}", .{lockFilePath});
+    try std.testing.expectEqualStrings(message, utils.errors.errorMessage(error.Thrown));
+    try std.testing.expect(!pathExists(std.testing.io, lockFilePath));
+}
+
+test "refreshWriteLock fails when another owner holds the lock, and leaves the lock as it was" {
+    var fixture: Fixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const allocator = fixture.arena.allocator();
+    const io = std.testing.io;
+    const lockFilePath = try fixture.path("other.lock");
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, lockFilePath, "owner-1"));
+    const before = try fixture.readLockFile(lockFilePath);
+
+    try std.testing.expectError(error.Thrown, fixture.storage.refreshWriteLock(allocator, io, lockFilePath, "owner-2"));
+    const message = try std.fmt.allocPrint(allocator, "Cannot refresh write lock: lock is owned by owner-1, not owner-2 for {s}", .{lockFilePath});
+    try std.testing.expectEqualStrings(message, utils.errors.errorMessage(error.Thrown));
+
+    const after = try fixture.readLockFile(lockFilePath);
+    try std.testing.expectEqualStrings("owner-1", after.owner);
+    try std.testing.expectEqual(before.timestamp, after.timestamp);
+}
+
+test "refreshWriteLock logs the attempt, the success and the failure" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tempDir = try test_files.makeTempDir(allocator, io, "temp-test-refresh-log");
+    defer test_files.removeTempDir(io, tempDir);
+    var storage = FileStorage.init(tempDir);
+
+    var recordingLog: RecordingLog = .{
+        .messages = std.Io.Writer.Allocating.init(allocator),
+        .verbose_enabled = true,
+    };
+    const previousLog = utils.log.log;
+    utils.log.setLog(recordingLog.ilog());
+    defer utils.log.setLog(previousLog);
+
+    const lockFilePath = try std.fs.path.join(allocator, &.{ tempDir, "logged-refresh.lock" });
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, lockFilePath, "owner-1"));
+    try storage.refreshWriteLock(allocator, io, lockFilePath, "owner-1");
+    try std.testing.expectError(error.Thrown, storage.refreshWriteLock(allocator, io, lockFilePath, "owner-2"));
+
+    const messages = recordingLog.messages.written();
+    try std.testing.expect(std.mem.indexOf(u8, messages, "REFRESH_ATTEMPT") != null);
+    try std.testing.expect(std.mem.indexOf(u8, messages, "REFRESH_SUCCESS") != null);
+    try std.testing.expect(std.mem.indexOf(u8, messages, "REFRESH_FAILED") != null);
+    try std.testing.expect(std.mem.indexOf(u8, messages, "error:Cannot refresh write lock: lock is owned by owner-1, not owner-2") != null);
+}
+
 //
 // Refuses its first allocation and serves every later one from the parent. (std.testing.FailingAllocator refuses
 // every allocation from its fail index on, so it cannot make one read fail and the next succeed.)
@@ -888,8 +971,8 @@ test "a lock that is refused to be read once, and then reads fine, is held and n
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const tempDir = try helpers.makeTempDir(allocator, io, "temp-test-lock-read-twice");
-    defer helpers.removeTempDir(io, tempDir);
+    const tempDir = try test_files.makeTempDir(allocator, io, "temp-test-lock-read-twice");
+    defer test_files.removeTempDir(io, tempDir);
     var storage = FileStorage.init(tempDir);
 
     const lockFilePath = try std.fmt.allocPrint(allocator, "{s}/held.lock", .{tempDir});
@@ -921,8 +1004,8 @@ test "a lock path that is a dangling symbolic link is refused as taken, and the 
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const tempDir = try helpers.makeTempDir(allocator, io, "temp-test-lock-dangling-link");
-    defer helpers.removeTempDir(io, tempDir);
+    const tempDir = try test_files.makeTempDir(allocator, io, "temp-test-lock-dangling-link");
+    defer test_files.removeTempDir(io, tempDir);
     var storage = FileStorage.init(tempDir);
 
     const lockFilePath = try std.fmt.allocPrint(allocator, "{s}/linked.lock", .{tempDir});

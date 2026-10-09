@@ -291,6 +291,11 @@ const MockStorage = struct {
         _ = .{ self, allocator, storageIo, filePath };
         return error.NotImplemented;
     }
+
+    pub fn refreshWriteLock(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, filePath: []const u8, owner: []const u8) !void {
+        _ = .{ self, allocator, storageIo, filePath, owner };
+        return error.NotImplemented;
+    }
 };
 
 //

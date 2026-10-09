@@ -342,3 +342,59 @@ test "a lock refused while a live one is held is logged with its age and owner" 
     try std.testing.expect(std.mem.indexOf(u8, messages, "age:") != null);
     try std.testing.expect(std.mem.indexOf(u8, messages, "owner:owner-a") != null);
 }
+
+//
+// Handler: the lock is there and the owner holding it is owner-a; a write is accepted.
+//
+fn ownLockHandler(sender: *Sender, name: []const u8) anyerror!S3CommandOutput {
+    if (std.mem.eql(u8, name, "PutObjectCommand")) {
+        return .none;
+    }
+    return lockBody(sender.allocator, "owner-a", now() - 5_000);
+}
+
+test "refreshWriteLock writes the lock again, unconditionally, when the owner holds it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var sender: Sender = undefined;
+    var storage = createStorage(arena.allocator(), &sender, ownLockHandler);
+    defer storage.s3.deinit();
+
+    try storage.refreshWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-a");
+
+    try std.testing.expect(sender.wasSent("GetObjectCommand"));
+    try std.testing.expect(sender.wasSent("PutObjectCommand"));
+}
+
+test "refreshWriteLock fails, and writes nothing, when another owner holds the lock" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var sender: Sender = undefined;
+    var storage = createStorage(arena.allocator(), &sender, ownLockHandler);
+    defer storage.s3.deinit();
+
+    try std.testing.expectError(error.Thrown, storage.refreshWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-b"));
+    try std.testing.expectEqualStrings("Cannot refresh write lock: lock is owned by owner-a, not owner-b for test-bucket/db/.db/write.lock", utils.errors.errorMessage(error.Thrown));
+    try std.testing.expect(!sender.wasSent("PutObjectCommand"));
+}
+
+//
+// Handler: there is no lock object.
+//
+fn noLockHandler(sender: *Sender, name: []const u8) anyerror!S3CommandOutput {
+    _ = sender;
+    _ = name;
+    return noSuchKey();
+}
+
+test "refreshWriteLock fails when there is no lock" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var sender: Sender = undefined;
+    var storage = createStorage(arena.allocator(), &sender, noLockHandler);
+    defer storage.s3.deinit();
+
+    try std.testing.expectError(error.Thrown, storage.refreshWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-a"));
+    try std.testing.expectEqualStrings("Cannot refresh write lock: lock does not exist for test-bucket/db/.db/write.lock", utils.errors.errorMessage(error.Thrown));
+    try std.testing.expect(!sender.wasSent("PutObjectCommand"));
+}

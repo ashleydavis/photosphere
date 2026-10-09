@@ -101,6 +101,15 @@ The task runner runs handlers on a pool of threads inside the core. It provides 
 - The shell passes the worker thread count and one child task limit, which applies to every parent task, to `ziggy_create`.
 - Children run on the same pool as their parent. A parent that waits for children gives up its place on a worker thread while it waits, so the pool cannot deadlock when every worker is held by a waiting parent.
 - Cancelling a source cancels its queued and running tasks, including children. A failed child makes `awaitTask` return its failure to the parent.
+- There is one queue. An interactive task goes at the head of it and a background task at the end, so a second interactive task goes in front of the first one still waiting and background tasks keep their arrival order. A child runs at the priority it asks for, and otherwise at its parent's.
+
+### Task queue interfaces
+
+The core depends on two shared packages, `task-queue-zig` (the Zig port of the task-queue package) and `utils-zig`, and on no app. It implements the `IQueueBackend` of `task-queue-zig` on top of its runner (`queue-backend.zig`), so code written against `TaskQueue` and `IQueueBackend` runs on it unchanged, and it sets that backend as the one `task-queue-zig` hands out for the life of the core.
+
+- A handler registered with `task-queue-zig` (`worker.registerHandler`, with its `ITaskContext`) runs on the runner for any task type the app has no entry of its own for. The app registers its handlers before it queues work. A task type that nothing is registered for fails as `UnknownTaskType`.
+- A task a handler queues through the backend runs at the priority of the task running on that thread, unless it asks for one, as `priorityOfRunningTask` of the Electron pool does.
+- `onTaskComplete` callbacks are told of a task that ran, with its type, input and outputs, and a cancelled one as failed with the message `Cancelled`. A task cancelled while it waited in the queue is not reported to them, as in the Electron pool, though the page is told.
 
 ### Keep-alive tasks
 
@@ -114,8 +123,8 @@ The core counts the keep-alive tasks that are queued or running, and calls one h
 
 ## Messages that belong to Ziggy
 
-- `add-task` and `cancel-tasks` from the page, which queue and cancel tasks.
-- `task-message` and `task-completed` to the page, which report a task's messages and its end.
+- `add-task` and `cancel-tasks` from the page, which queue and cancel tasks. They carry the payloads of the Electron app, so the same page code runs on both. `add-task` takes `{taskType, data, source, taskId, priority}`, where `priority` is `"interactive"` or `"background"` and a missing one runs as background. `cancel-tasks` takes the source as a bare string.
+- `task-message` and `task-completed` to the page, which report a task's messages and its end. `task-message` carries `{taskId, source, message}`. `task-completed` carries `{taskId, result}`, where `result` has the fields of `ITaskResult`: `taskId`, `status` (`succeeded` or `failed`), `error` and `errorMessage` when it failed, `outputs`, `type` and `inputs`. `ITaskResult` has no cancelled status, so a cancelled task is reported as failed with the error message `Cancelled`.
 - `get-platform`, which reports `platformKind` (`desktop` or `mobile`) so the platform layer does not sniff the user agent.
 - `get-dropped-paths`, which the inject script sends when files are dropped on the window, and which replies with the real paths of the files in the last drop as an array of strings. A page cannot read a path from a File, and WebKitGTK gives the page no Files and hides the file addresses, so on a desktop the shell reads the paths of a drop and reports them to the core (`ziggy_files_dropped`) before the page's drop event runs: Linux reads them from `drag-data-received`, MacOS from the drag pasteboard, and Windows has WebView2 hand over the dropped Files, which have their paths. The inject script catches the drop, asks for the paths, and fires the drop again holding one empty File per path that it made and remembers the path of, and `window.ziggy.getPathForFile(file)` answers from that memory, synchronously, as Electron's does. A phone has no drop. See [the drag and drop findings](../../../docs/ziggy-drag-and-drop-findings.md) for the evidence on each platform.
 
@@ -210,7 +219,7 @@ Photosphere lives here:
 - **User interface:** the shared `packages/user-interface`, with its platform layer in `apps/photosphere-frontend`. The layer implements the shared UI's `IQueueBackend` (the queue backend) and `IPlatformContext` (the platform provider) on top of `window.ziggy`.
 - **Zig packages:** the existing ports of the TypeScript packages in `packages-zig/*`. The rest of the non-UI TypeScript is ported into them, each Zig file beside the Zig package that mirrors the TypeScript package it came from.
 
-**Asset server:** images, video and asset writes go through an HTTP server on loopback that the core runs, not through JSON messages. It binds `127.0.0.1` at a port the operating system chooses and serves `GET /asset`, `POST /asset` and `POST /apply-database-ops`. The core reports the port to the page in an `asset-server-ready` message, which is also passed to the page as the `restApiUrl` query parameter.
+**Asset server:** images, video and asset writes go through an HTTP server on loopback that the core runs, not through JSON messages. It is the `asset-server` task (`packages-zig/node-api-zig/src/lib/asset-server.worker.zig`), which the page queues like any other task. It binds `127.0.0.1` at a port the operating system chooses and serves `GET /asset`, `POST /asset` and `POST /apply-database-ops` with the status codes and headers of the Express server it ports, including a CORS header that allows any origin (the page's origin is `ziggy-app://app` or `https://ziggy-app.invalid`, never `file://`). Like that server it ignores a `Range` header and answers the whole asset, and `POST /apply-database-ops` reads a JSON body of at most the size `express.json()` reads. The task reports the port to the page in an `asset-server-ready` task message, which is also passed to the page as the `restApiUrl` query parameter. A connection serves one request and is closed. The HTTP server is `node-utils-zig`'s `http_server`, built on `std.http.Server`, and the routes and the core are `node-api-zig`'s `asset_server_routes` and `asset_server_core`; `rest-api-zig` is the port of `createAssetServer`, for a caller that wants the server without a task. Cancelling the task closes the server, waiting for requests that are being answered.
 
 **Messages:** every message other than Ziggy's own is Photosphere's: databases, secrets, config, state, import, sharing, notifications, pickers and the mobile permission and export calls. Photosphere's generic command channel for named actions is `main-command`.
 

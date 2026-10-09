@@ -45,7 +45,7 @@ fn waitFor(app: *TestApp, text: []const u8) !void {
 // test that sets what the state remembers about automatic import by hand is not undone by it.
 //
 fn waitForStartupCheck(app: *TestApp) !void {
-    try app.shell.expectMessageContaining("\"source\":\"ensure-auto-import\",\"status\":\"succeeded\"");
+    try app.shell.expectMessageContaining("\"status\":\"succeeded\",\"outputs\":null,\"type\":\"ensure-auto-import\"");
 }
 
 test "notify-database-opened adds an entry for a database that has none, with the origin from its config.json" {
@@ -225,14 +225,14 @@ test "resetSyncState cancels the tasks of the database that was open when anothe
             .taskType = "spin",
             .source = first_path,
             .data = null,
-            .priority = 0,
+            .priority = "background",
         },
     });
     defer allocator.free(message);
     app.core.postMessage(message);
     try waitFor(&app, "\"channel\":\"task-message\"");
     allocator.free(try app.requestOk("notify-database-opened", second_json));
-    try waitFor(&app, "\"status\":\"cancelled\"");
+    try waitFor(&app, "\"errorMessage\":\"Cancelled\"");
 }
 
 test "a failed import tells the user, and an automatic import that stops clears what is remembered about it" {
@@ -246,6 +246,8 @@ test "a failed import tells the user, and an automatic import that stops clears 
         .input_json = "{}",
         .status = .failed,
         .error_message = "disk on fire",
+        .result_json = null,
+        .started = true,
     });
     try waitFor(&app, "{\"channel\":\"show-notification\",\"data\":{\"message\":\"Import failed: disk on fire\",\"color\":\"danger\",\"duration\":8000}}");
     try waitForStartupCheck(&app);
@@ -262,6 +264,8 @@ test "a failed import tells the user, and an automatic import that stops clears 
         .input_json = "{}",
         .status = .failed,
         .error_message = "crashed",
+        .result_json = null,
+        .started = true,
     });
     state.lock();
     defer state.unlock();
@@ -283,6 +287,8 @@ test "a replication that worked registers its destination and tells the user, an
         .input_json = "{\"destPath\":\"/replicas/copy\",\"sourcePath\":\"/photos\",\"destEncryptionKey\":\"key-1\"}",
         .status = .succeeded,
         .error_message = null,
+        .result_json = null,
+        .started = true,
     });
     try waitFor(&app, "{\"channel\":\"databases-changed\",\"data\":null}");
     try waitFor(&app, "{\"channel\":\"show-notification\",\"data\":{\"message\":\"Replication completed for \\\"copy\\\"\",\"color\":\"success\"}}");
@@ -299,6 +305,8 @@ test "a replication that worked registers its destination and tells the user, an
         .input_json = "{\"destPath\":\"/replicas/other\"}",
         .status = .failed,
         .error_message = null,
+        .result_json = null,
+        .started = true,
     });
     try waitFor(&app, "\"message\":\"Replication failed: Unknown error\"");
     try std.testing.expect((try node_api.databases_config.findDatabase(arena.allocator(), std.testing.io, "other")) == null);
@@ -319,6 +327,8 @@ test "a sync that fails tells the page it completed, and one that succeeds does 
         .input_json = "{\"databasePath\":\"/db\"}",
         .status = .succeeded,
         .error_message = null,
+        .result_json = null,
+        .started = true,
     });
     state.lock();
     try std.testing.expect(!state.is_sync_running);
@@ -331,6 +341,8 @@ test "a sync that fails tells the page it completed, and one that succeeds does 
         .input_json = "{\"databasePath\":\"/db\"}",
         .status = .failed,
         .error_message = "offline",
+        .result_json = null,
+        .started = true,
     });
     try waitFor(&app, "{\"channel\":\"sync-completed\",\"data\":null}");
 }
@@ -530,6 +542,8 @@ test "a sync that succeeded with an input that is not JSON is reported, not igno
         .input_json = "this is not json",
         .status = .succeeded,
         .error_message = null,
+        .result_json = null,
+        .started = true,
     });
     const logged = app.console_out.writer.buffered();
     const logged_errors = app.console_err.writer.buffered();
@@ -548,6 +562,8 @@ test "an import that failed with an empty error message says the error is unknow
         .input_json = "{}",
         .status = .failed,
         .error_message = "",
+        .result_json = null,
+        .started = true,
     });
     try waitFor(&app, "\"message\":\"Import failed: Unknown error\"");
 }
@@ -577,6 +593,8 @@ test "a sync that succeeded queues the eviction of originals only for the databa
         .input_json = "{\"databasePath\":\"/another/db\"}",
         .status = .succeeded,
         .error_message = null,
+        .result_json = null,
+        .started = true,
     });
     app.shell.sleepMs(100);
     try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("\"evicting\""));
@@ -587,6 +605,8 @@ test "a sync that succeeded queues the eviction of originals only for the databa
         .input_json = "{\"databasePath\":\"/the/default/db\"}",
         .status = .succeeded,
         .error_message = null,
+        .result_json = null,
+        .started = true,
     });
     try waitFor(&app, "\"evicting\":{\"databasePath\":\"/the/default/db\",\"sessionId\":");
 }
@@ -603,6 +623,8 @@ test "a replication of a database that is already listed does not list it again 
         .input_json = "{\"destPath\":\"/replicas/twice\",\"sourcePath\":\"/photos\"}",
         .status = .succeeded,
         .error_message = null,
+        .result_json = null,
+        .started = true,
     };
     main_process.onTaskEnd(app.core, end);
     try waitFor(&app, "Replication completed for");

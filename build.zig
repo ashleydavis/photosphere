@@ -19,6 +19,50 @@ const IPackage = struct {
 };
 
 //
+// The packages Ziggy's core depends on, which are shared with every other package that uses them: the task queue (the interfaces the app's
+// task handlers are written against) and what it is built on. They are made once, so that a registry or a singleton in one of them is the
+// same one for Ziggy and for the app.
+//
+const IQueueModules = struct {
+    // utils-zig.
+    utils: *std.Build.Module,
+    // node-utils-zig.
+    node_utils: *std.Build.Module,
+    // task-queue-zig.
+    task_queue: *std.Build.Module,
+};
+
+//
+// Makes the modules of the packages Ziggy's core depends on, for any target.
+//
+fn addQueueModules(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) IQueueModules {
+    const utils = b.addModule("utils-zig", .{
+        .root_source_file = b.path("packages-zig/utils-zig/src/index.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const node_utils = b.addModule("node-utils-zig", .{
+        .root_source_file = b.path("packages-zig/node-utils-zig/src/index.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    node_utils.addImport("utils-zig", utils);
+    const task_queue = b.addModule("task-queue-zig", .{
+        .root_source_file = b.path("packages-zig/task-queue-zig/src/index.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    task_queue.addImport("utils-zig", utils);
+    task_queue.addImport("node-utils-zig", node_utils);
+    return .{
+        .utils = utils,
+        .node_utils = node_utils,
+        .task_queue = task_queue,
+    };
+}
+
+//
 // Every Zig package in this directory, each after the packages it depends on.
 //
 const packages = [_]IPackage{
@@ -37,6 +81,7 @@ const packages = [_]IPackage{
     .{ .name = "lan-share-network-zig", .dependencies = &.{ "utils-zig", "node-utils-zig", "encryption-zig" }, .link_libc = true },
     .{ .name = "api-zig", .dependencies = &.{ "utils-zig", "storage-zig", "serialization-zig", "task-queue-zig", "vault-zig", "lan-share-core-zig", "node-utils-zig", "encryption-zig", "bdb-zig" }, .link_libc = false },
     .{ .name = "node-api-zig", .dependencies = &.{ "utils-zig", "node-utils-zig", "encryption-zig", "serialization-zig", "storage-zig", "merkle-tree-zig", "bdb-zig", "api-zig", "task-queue-zig", "vault-zig", "tools-zig" }, .link_libc = false },
+    .{ .name = "rest-api-zig", .dependencies = &.{ "utils-zig", "node-utils-zig", "node-api-zig" }, .link_libc = false },
     .{ .name = "photosphere-core", .dependencies = &.{ "utils-zig", "node-utils-zig", "tools-zig", "encryption-zig", "storage-zig", "vault-zig", "task-queue-zig", "serialization-zig", "merkle-tree-zig", "bdb-zig", "api-zig", "node-api-zig" }, .link_libc = true },
 };
 
@@ -114,12 +159,13 @@ pub fn build(b: *std.Build) !void {
         else => false,
     };
     if (!packages_supported) {
-        try addZiggy(b, internalStep(b, "tests of Ziggy"), internalStep(b, "tests of the Ziggy example"), target, optimize);
+        try addZiggy(b, internalStep(b, "tests of Ziggy"), internalStep(b, "tests of the Ziggy example"), target, optimize, addQueueModules(b, target, optimize));
         return;
     }
-    const ziggy_core = try addZiggyCore(b, target, optimize, false);
+    const queue_modules = addQueueModules(b, target, optimize);
+    const ziggy_core = try addZiggyCore(b, target, optimize, false, queue_modules);
     // Null means a lazy dependency is being fetched first: the build runs again once it has been, and this run registers nothing.
-    const modules = (try addPackageModules(b, target, optimize, ziggy_core.module)) orelse return;
+    const modules = (try addPackageModules(b, target, optimize, queue_modules, ziggy_core.module)) orelse return;
 
     const test_step = b.step("test", "Run every Zig test: the unit tests of the packages, the tests of the CLI and the tests of Ziggy");
     const test_packages_step = internalStep(b, "unit tests of the packages");
@@ -135,7 +181,7 @@ pub fn build(b: *std.Build) !void {
     // the Ziggy example's own workflow runs them with the tests of Ziggy through test-ziggy-example.
     const test_ziggy_step = internalStep(b, "tests of Ziggy");
     const test_ziggy_example_step = internalStep(b, "tests of the Ziggy example");
-    try addZiggy(b, test_ziggy_step, test_ziggy_example_step, target, optimize);
+    try addZiggy(b, test_ziggy_step, test_ziggy_example_step, target, optimize, queue_modules);
     test_step.dependOn(test_ziggy_step);
     const test_ziggy_example_named_step = b.step("test-ziggy-example", "Run the tests of Ziggy and of the Ziggy example");
     test_ziggy_example_named_step.dependOn(test_ziggy_step);
@@ -174,6 +220,7 @@ fn addPackageModules(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    queue: IQueueModules,
     ziggy_core: *std.Build.Module,
 ) !?std.StringHashMap(*std.Build.Module) {
     var modules = std.StringHashMap(*std.Build.Module).init(b.allocator);
@@ -181,6 +228,12 @@ fn addPackageModules(
     var ssl: ?*std.Build.Step.Compile = null;
 
     for (packages) |package| {
+        // The packages Ziggy's core uses were made before it, and are the ones every other package imports.
+        const shared: ?*std.Build.Module = if (std.mem.eql(u8, package.name, "utils-zig")) queue.utils else if (std.mem.eql(u8, package.name, "node-utils-zig")) queue.node_utils else if (std.mem.eql(u8, package.name, "task-queue-zig")) queue.task_queue else null;
+        if (shared) |shared_module| {
+            try modules.put(package.name, shared_module);
+            continue;
+        }
         const module = b.addModule(package.name, .{
             .root_source_file = b.path(b.fmt("packages-zig/{s}/src/index.zig", .{package.name})),
             .target = target,
@@ -307,7 +360,11 @@ fn addUnitTests(
     test_module.addImport("openssl", encryption.import_table.get("openssl").?);
     const storage = modules.get("storage-zig").?;
     test_module.addImport(aws_sdk.aws_c_module_name, storage.import_table.get(aws_sdk.aws_c_module_name).?);
-    const test_ziggy_core = try addZiggyCore(b, target, optimize, true);
+    const test_ziggy_core = try addZiggyCore(b, target, optimize, true, .{
+        .utils = modules.get("utils-zig").?,
+        .node_utils = modules.get("node-utils-zig").?,
+        .task_queue = modules.get("task-queue-zig").?,
+    });
     test_module.addImport("ziggy-core", test_ziggy_core.module);
 
     // The directory to write a kcov line-coverage report of the unit tests to (see docs/zig-test-coverage.md). The tests are then
@@ -649,6 +706,7 @@ fn addZiggyCore(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     test_hooks: bool,
+    queue: IQueueModules,
 ) !IZiggyCore {
     const options = b.addOptions();
     options.addOption(bool, "test_hooks", test_hooks);
@@ -660,6 +718,8 @@ fn addZiggyCore(
         .link_libc = true,
     });
     module.addOptions("build_options", options);
+    module.addImport("utils-zig", queue.utils);
+    module.addImport("task-queue-zig", queue.task_queue);
     module.addAnonymousImport("ziggy-inject", .{
         .root_source_file = b.path("packages/ziggy/bridge/inject/ziggy-inject.js"),
     });
@@ -884,14 +944,18 @@ fn addZiggy(
     example_test_step: *std.Build.Step,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    queue: IQueueModules,
 ) !void {
     const test_hooks = b.option(bool, "test-hooks", "Build the test hooks (the test control connection) into the app (never for a release)") orelse false;
-    const core = try addZiggyCore(b, target, optimize, test_hooks);
-    const test_core = try addZiggyCore(b, target, optimize, true);
+    const core = try addZiggyCore(b, target, optimize, test_hooks, queue);
+    const test_core = try addZiggyCore(b, target, optimize, true, queue);
 
     // The unit tests of Ziggy's core, which run the core with the test hooks compiled in.
     const core_test_binary_step = b.step("test-binary-ziggy-core", "Build the unit test program of Ziggy's core and install it to test-bin without running it");
-    try addDirectoryTests(b, framework_test_step, "packages/ziggy/core", &.{.{ .name = "ziggy-core", .module = test_core.module }}, target, optimize, core_test_binary_step);
+    try addDirectoryTests(b, framework_test_step, "packages/ziggy/core", &.{
+        .{ .name = "ziggy-core", .module = test_core.module },
+        .{ .name = "task-queue-zig", .module = queue.task_queue },
+    }, target, optimize, core_test_binary_step);
 
     // The unit tests of the parts of the shells that do not need the platform's libraries.
     const linux_tests_module = b.createModule(.{

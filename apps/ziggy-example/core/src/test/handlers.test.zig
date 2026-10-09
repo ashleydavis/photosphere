@@ -18,7 +18,7 @@ fn addTask(core: *ziggy.core.Core, id: []const u8, task_type: []const u8, data: 
             .taskType = task_type,
             .source = "src",
             .data = ziggy.json_util.Raw{ .text = data },
-            .priority = 0,
+            .priority = "background",
         },
     });
     defer std.testing.allocator.free(message);
@@ -143,7 +143,7 @@ test "hello-short sends an output message and a job-progress message then comple
     try addTask(core, "t1", "hello-short", "{\"job\":{\"id\":\"job-1\",\"name\":\"Short job\",\"cancelSource\":\"src\"}}");
     const output = try indexOfMessage(&shell, "\"message\":{\"type\":\"output\",\"text\":\"hello from a short task\"}");
     const progress = try indexOfMessage(&shell, "\"message\":{\"type\":\"job-progress\",\"job\":{\"id\":\"job-1\",\"name\":\"Short job\",\"cancelSource\":\"src\"},\"startedAt\":");
-    const completed = try indexOfMessage(&shell, "\"status\":\"succeeded\",\"result\":\"short task done\"");
+    const completed = try indexOfMessage(&shell, "\"status\":\"succeeded\",\"outputs\":\"short task done\"");
     try std.testing.expect(output < progress);
     try std.testing.expect(progress < completed);
     try shell.expectMessageContaining("\"progressMessage\":\"short task working\"}");
@@ -177,14 +177,14 @@ test "hello-long sends output and progress at every step, starts its children an
     const core = try createCore(&shell, "/tmp");
     defer core.destroy();
     try addTask(core, "long", "hello-long", "{\"durationMs\":200,\"stepMs\":50,\"children\":3,\"job\":{\"id\":\"job-1\",\"name\":\"Long job\",\"cancelSource\":\"src\"}}");
-    try shell.expectMessageContaining("\"taskId\":\"long\",\"source\":\"src\",\"status\":\"succeeded\",\"result\":{\"steps\":4,\"children\":3}");
+    try shell.expectMessageContaining("\"result\":{\"taskId\":\"long\",\"status\":\"succeeded\",\"outputs\":{\"steps\":4,\"children\":3}");
     try std.testing.expectEqual(@as(usize, 4), shell.countContaining("\"taskId\":\"long\",\"source\":\"src\",\"message\":{\"type\":\"output\",\"text\":\"long task step"));
     try std.testing.expectEqual(@as(usize, 3), shell.countContaining("child long.c"));
-    try std.testing.expectEqual(@as(usize, 3), shell.countContaining("\"status\":\"succeeded\",\"result\":{\"index\":"));
+    try std.testing.expectEqual(@as(usize, 3), shell.countContaining("\"status\":\"succeeded\",\"outputs\":{\"index\":"));
     // The children report under the parent's job id.
     try std.testing.expect(shell.countContaining("\"taskId\":\"long.c0\",\"source\":\"src\",\"message\":{\"type\":\"job-progress\",\"job\":{\"id\":\"job-1\"") == 1);
     // The parent's completion is the last thing that happens.
-    try std.testing.expect(shell.indexOfContaining("\"taskId\":\"long\",\"source\":\"src\",\"status\"").? > shell.indexOfContaining("\"taskId\":\"long.c2\",\"source\":\"src\",\"status\"").?);
+    try std.testing.expect(shell.indexOfContaining("\"result\":{\"taskId\":\"long\",\"status\"").? > shell.indexOfContaining("\"result\":{\"taskId\":\"long.c2\",\"status\"").?);
 }
 
 test "hello-long with no children and more children than steps both complete" {
@@ -194,9 +194,9 @@ test "hello-long with no children and more children than steps both complete" {
     const core = try createCore(&shell, "/tmp");
     defer core.destroy();
     try addTask(core, "a", "hello-long", "{\"durationMs\":50,\"stepMs\":50,\"children\":0}");
-    try shell.expectMessageContaining("\"taskId\":\"a\",\"source\":\"src\",\"status\":\"succeeded\",\"result\":{\"steps\":1,\"children\":0}");
+    try shell.expectMessageContaining("\"result\":{\"taskId\":\"a\",\"status\":\"succeeded\",\"outputs\":{\"steps\":1,\"children\":0}");
     try addTask(core, "b", "hello-long", "{\"durationMs\":50,\"stepMs\":50,\"children\":5}");
-    try shell.expectMessageContaining("\"taskId\":\"b\",\"source\":\"src\",\"status\":\"succeeded\",\"result\":{\"steps\":1,\"children\":5}");
+    try shell.expectMessageContaining("\"result\":{\"taskId\":\"b\",\"status\":\"succeeded\",\"outputs\":{\"steps\":1,\"children\":5}");
 }
 
 test "cancelling hello-long stops it early and its children are cancelled" {
@@ -207,8 +207,8 @@ test "cancelling hello-long stops it early and its children are cancelled" {
     defer core.destroy();
     try addTask(core, "long", "hello-long", "{\"durationMs\":60000,\"stepMs\":20,\"children\":2}");
     try shell.expectMessageContaining("long task step 3");
-    core.postMessage("{\"channel\":\"cancel-tasks\",\"data\":{\"source\":\"src\"}}");
-    try shell.expectMessageContaining("\"taskId\":\"long\",\"source\":\"src\",\"status\":\"cancelled\"");
+    core.postMessage("{\"channel\":\"cancel-tasks\",\"data\":\"src\"}");
+    try shell.expectMessageContaining("\"status\":\"failed\",\"error\":{\"message\":\"Cancelled\"},\"errorMessage\":\"Cancelled\"");
     try std.testing.expect(shell.countContaining("\"taskId\":\"long\",\"source\":\"src\",\"message\":{\"type\":\"output\",\"text\":\"long task step") < 100);
 }
 
@@ -219,7 +219,7 @@ test "hello-fail completes as failed" {
     const core = try createCore(&shell, "/tmp");
     defer core.destroy();
     try addTask(core, "t1", "hello-fail", "null");
-    try shell.expectMessageContaining("\"status\":\"failed\",\"error\":\"HelloFailure\"");
+    try shell.expectMessageContaining("\"status\":\"failed\",\"error\":{\"message\":\"HelloFailure\"},\"errorMessage\":\"HelloFailure\"");
 }
 
 test "os-version returns what the shell's native host callback answers" {
@@ -229,7 +229,7 @@ test "os-version returns what the shell's native host callback answers" {
     const core = try createCore(&shell, "/tmp");
     defer core.destroy();
     try addTask(core, "t1", "os-version", "null");
-    try shell.expectMessageContaining("\"status\":\"succeeded\",\"result\":\"Test OS 1.0\"");
+    try shell.expectMessageContaining("\"status\":\"succeeded\",\"outputs\":\"Test OS 1.0\"");
 }
 
 test "os-version fails clearly when the shell provides no native host callback" {
@@ -241,7 +241,7 @@ test "os-version fails clearly when the shell provides no native host callback" 
     const core = try ziggy.core.Core.create(std.testing.allocator, config, example.app);
     defer core.destroy();
     try addTask(core, "t1", "os-version", "null");
-    try shell.expectMessageContaining("\"status\":\"failed\",\"error\":\"HostCallbackMissing\"");
+    try shell.expectMessageContaining("\"status\":\"failed\",\"error\":{\"message\":\"HostCallbackMissing\"},\"errorMessage\":\"HostCallbackMissing\"");
 }
 
 test "the keep-alive background task counts in a file in the data directory and asks the shell to keep the app running, and the normal one does not" {

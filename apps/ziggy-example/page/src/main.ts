@@ -44,23 +44,37 @@ interface IOutputMessage {
 }
 
 //
+// The result of a task inside a task-completed event, as the Electron renderer receives it (ITaskResult).
+//
+interface ITaskResult {
+    // The task that ended.
+    taskId: string;
+
+    // How it ended. A cancelled task is reported as failed with the error message "Cancelled".
+    status: "succeeded" | "failed";
+
+    // Why it failed, when it did.
+    errorMessage?: string;
+
+    // What it returned, when it succeeded with a result.
+    outputs?: IJsonValue;
+
+    // The task type.
+    type: string;
+
+    // The data the task was queued with.
+    inputs: IJsonValue;
+}
+
+//
 // What a task-completed event carries.
 //
 interface ITaskCompletedEvent {
     // The task that ended.
     taskId: string;
 
-    // The source the task was queued under.
-    source: string;
-
-    // How it ended.
-    status: "succeeded" | "failed" | "cancelled";
-
-    // What it returned, when it succeeded with a result.
-    result?: IJsonValue;
-
-    // Why it failed, when it did.
-    error?: string;
+    // The full result of the task.
+    result: ITaskResult;
 }
 
 //
@@ -138,7 +152,7 @@ function queueTask(taskType: string, source: string, data: IJsonValue): string {
         taskType,
         source,
         data,
-        priority: 0,
+        priority: "background",
     });
     return taskId;
 }
@@ -181,10 +195,10 @@ function startTasks(): void {
         }
     });
     element("cancel-source").addEventListener("click", () => {
-        window.ziggy.send("cancel-tasks", { source: "long-source" });
+        window.ziggy.send("cancel-tasks", "long-source");
     });
     element("cancel-many-first").addEventListener("click", () => {
-        window.ziggy.send("cancel-tasks", { source: "many-1" });
+        window.ziggy.send("cancel-tasks", "many-1");
     });
     element("start-fail").addEventListener("click", () => {
         queueTask("hello-fail", "fail-source", null);
@@ -291,7 +305,7 @@ function startMedia(): void {
         queueTask("media-server", "media-source", null);
     });
     element("cancel-media").addEventListener("click", () => {
-        window.ziggy.send("cancel-tasks", { source: "media-source" });
+        window.ziggy.send("cancel-tasks", "media-source");
     });
 }
 
@@ -385,11 +399,11 @@ function listenForEvents(): void {
         }
     });
     window.ziggy.onMessage<ITaskCompletedEvent>("task-completed", event => {
-        appendTo("event-log", `task-completed ${event.taskId} ${event.status}${event.error ? ` ${event.error}` : ""}`);
+        appendTo("event-log", `task-completed ${event.taskId} ${event.result.status}${event.result.errorMessage ? ` ${event.result.errorMessage}` : ""}`);
         jobList = applyTaskCompleted(jobList, event.taskId);
         renderJobs();
-        if (event.taskId.startsWith("os-version") && event.status === "succeeded") {
-            element("edge-result").textContent = `operating system: ${String(event.result)}`;
+        if (event.taskId.startsWith("os-version") && event.result.status === "succeeded") {
+            element("edge-result").textContent = `operating system: ${String(event.result.outputs)}`;
         }
     });
 }

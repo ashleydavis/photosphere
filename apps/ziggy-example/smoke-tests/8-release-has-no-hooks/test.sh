@@ -13,7 +13,7 @@ for file in $(ziggy_platform_artifact_files test); do
     if ! grep -a -q "InvalidCommand" "$file"; then
         fail "the test build $file has no control connection, so this check proves nothing"
     fi
-    if ! grep -a -q -F '"channel":"test-command"' "$file"; then
+    if ! grep -a -q "PageDidNotAnswer" "$file"; then
         fail "the test build $file has no test command channel, so this check proves nothing"
     fi
 done
@@ -21,8 +21,8 @@ for file in $(ziggy_platform_artifact_files release); do
     if grep -a -q "InvalidCommand" "$file"; then
         fail "the release build $file contains the control connection"
     fi
-    # The page names the event too, and it is embedded in the executable, so this looks for the core's own message text.
-    if grep -a -q -F '"channel":"test-command"' "$file"; then
+    # The page names the event too, and it is embedded in the executable, so this looks for an error name that only the core's test command code has.
+    if grep -a -q "PageDidNotAnswer" "$file"; then
         fail "the release build $file contains the test command channel"
     fi
 done

@@ -64,7 +64,7 @@ fn fetch(allocator: std.mem.Allocator, port: u16, request: []const u8) ![]u8 {
 // Starts the media-server task, waits for its "media-server" message and returns the port in it.
 //
 fn startServer(shell: *FakeShell, core: *ziggy.core.Core) !u16 {
-    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"media-1\",\"taskType\":\"media-server\",\"source\":\"media\",\"data\":null,\"priority\":0}}");
+    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"media-1\",\"taskType\":\"media-server\",\"source\":\"media\",\"data\":null,\"priority\":\"background\"}}");
     try shell.expectMessageContaining("\"type\":\"media-server\"");
     const message = try shell.messageAt(std.testing.allocator, shell.indexOfContaining("\"type\":\"media-server\"").?);
     defer std.testing.allocator.free(message);
@@ -111,7 +111,7 @@ test "the media server serves the image whole, the video by range, and stops whe
     const idle = try (try std.Io.net.IpAddress.parseIp4("127.0.0.1", port)).connect(idle_threaded.io(), .{ .mode = .stream });
     defer idle.close(idle_threaded.io());
 
-    core.postMessage("{\"channel\":\"cancel-tasks\",\"data\":{\"source\":\"media\"}}");
+    core.postMessage("{\"channel\":\"cancel-tasks\",\"data\":\"media\"}");
     try shell.expectMessageContaining("task-completed");
-    try shell.expectMessageContaining("\"status\":\"cancelled\"");
+    try shell.expectMessageContaining("\"errorMessage\":\"Cancelled\"");
 }

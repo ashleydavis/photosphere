@@ -235,7 +235,12 @@ pub const LazyOriginStorage = struct {
         try self.local.releaseWriteLock(allocator, io, filePath);
     }
 
-    // Not ported: refreshWriteLock (IStorage in storage-zig does not have it).
+    //
+    // Refreshes the local write lock.
+    //
+    pub fn refreshWriteLock(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
+        try self.local.refreshWriteLock(allocator, io, filePath, owner);
+    }
 };
 
 //

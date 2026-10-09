@@ -109,3 +109,19 @@ test "acquireWriteLock reports a lock held for more than a minute in minutes, wi
 
     try std.testing.expect(std.mem.startsWith(u8, stderr_capture.written(), "Failed to acquire write lock after 1 attempts. Lock is currently held by \"other-owner\" since 90m ago (acquired at "));
 }
+
+test "refreshWriteLock keeps the lock for the session and moves its timestamp on" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    try std.testing.expect(try write_lock.acquireWriteLock(allocator, io, storage.asStorage(), "session-1", 1));
+    const before = (try storage.asStorage().checkWriteLock(allocator, io, LOCK_PATH)).?;
+
+    try io.sleep(.fromMilliseconds(20), .awake);
+    try write_lock.refreshWriteLock(allocator, io, storage.asStorage(), "session-1");
+
+    const after = (try storage.asStorage().checkWriteLock(allocator, io, LOCK_PATH)).?;
+    try std.testing.expectEqualStrings("session-1", after.owner);
+    try std.testing.expect(after.timestamp > before.timestamp);
+}

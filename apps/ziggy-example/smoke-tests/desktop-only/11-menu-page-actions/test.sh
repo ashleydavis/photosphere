@@ -17,7 +17,7 @@ wait_for_text event-log "task-completed hello-short-1 succeeded"
 choose_menu_item start-long
 wait_for_text output "long task step 2"
 choose_menu_item cancel-long
-wait_for_text event-log "task-completed hello-long-2 cancelled"
+wait_for_text event-log "task-completed hello-long-2 failed Cancelled"
 
 choose_menu_item start-many
 wait_for_text event-log "task-message hello-long-3 "

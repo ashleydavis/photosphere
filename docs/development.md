@@ -60,7 +60,8 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - lan-share-network-zig - Zig port of the network side of lan-share
         - merkle-tree-zig - Zig port of merkle-tree
         - node-api-zig - Zig port of node-api
-        - node-utils-zig - Zig port of node-utils
+        - node-utils-zig - Zig port of node-utils (also the HTTP server glue the asset server runs on)
+        - rest-api-zig - Zig port of rest-api (the asset server)
         - serialization-zig - Zig port of serialization
         - storage-zig - Zig port of storage
         - task-queue-zig - Zig port of task-queue

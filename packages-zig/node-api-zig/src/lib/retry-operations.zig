@@ -299,3 +299,73 @@ pub fn DeleteFileOperation(comptime sourceText: []const u8) type {
         }
     };
 }
+
+//
+// `() => storage.writeStream(fileName, contentType, inputStream, contentLength)`.
+//
+pub fn WriteStreamOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        pub const source = sourceText;
+
+        // Allocates the storage implementation's temporary data.
+        allocator: std.mem.Allocator,
+
+        // The storage to write to.
+        storage: IStorage,
+
+        // The file to write.
+        fileName: []const u8,
+
+        // The content type of the file.
+        contentType: ?[]const u8,
+
+        // The stream to write from.
+        inputStream: *std.Io.Reader,
+
+        // The number of bytes the stream will hold, when known.
+        contentLength: ?u64,
+
+        //
+        // Writes the stream to the file.
+        //
+        pub fn run(self: *@This(), io: std.Io) !void {
+            return self.storage.writeStream(self.allocator, io, self.fileName, self.contentType, self.inputStream, self.contentLength);
+        }
+    };
+}
+
+//
+// `async () => computeAssetHash(await storage.readStream(fileName), fileInfo)`.
+//
+pub fn ComputeAssetHashOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        pub const source = sourceText;
+
+        // Allocates the hash and the storage implementation's temporary data.
+        allocator: std.mem.Allocator,
+
+        // The storage holding the file.
+        storage: IStorage,
+
+        // The file to hash.
+        fileName: []const u8,
+
+        // The information about the file.
+        fileInfo: IFileInfo,
+
+        //
+        // Streams the file and hashes it.
+        //
+        pub fn run(self: *@This(), io: std.Io) !merkle_tree_zig.merkle_tree.IHashedData {
+            const readStream = try self.storage.readStream(self.allocator, io, self.fileName);
+            defer readStream.destroy(io);
+            return hash.computeAssetHash(self.allocator, readStream.reader(), .{
+                .contentType = self.fileInfo.contentType,
+                .length = self.fileInfo.length,
+                .lastModified = self.fileInfo.lastModified,
+            });
+        }
+    };
+}

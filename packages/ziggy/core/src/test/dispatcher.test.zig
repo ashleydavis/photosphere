@@ -448,7 +448,7 @@ test "an app observes the end of a task and the messages it sent, and keeps its 
     const core = try ziggy.core.Core.create(std.testing.allocator, shell.config(1, 1), observed_app);
     defer core.destroy();
     const record: *ObserverRecord = @ptrCast(@alignCast(core.app_state.?));
-    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"t1\",\"taskType\":\"quick\",\"source\":\"src\",\"data\":{\"a\":1},\"priority\":0}}");
+    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"t1\",\"taskType\":\"quick\",\"source\":\"src\",\"data\":{\"a\":1},\"priority\":\"background\"}}");
     var waited_ms: u32 = 0;
     while (waited_ms < 20_000) : (waited_ms += 2) {
         record.mutex.lockUncancelable(core.io());
@@ -482,6 +482,6 @@ test "a task handler reaches the app's state through its context" {
     };
     const core = try ziggy.core.Core.create(std.testing.allocator, shell.config(1, 1), state_app);
     defer core.destroy();
-    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"t2\",\"taskType\":\"read-state\",\"source\":\"src\",\"data\":null,\"priority\":0}}");
-    try shell.expectMessageContaining("\"result\":{\"ends\":");
+    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"t2\",\"taskType\":\"read-state\",\"source\":\"src\",\"data\":null,\"priority\":\"background\"}}");
+    try shell.expectMessageContaining("\"outputs\":{\"ends\":");
 }

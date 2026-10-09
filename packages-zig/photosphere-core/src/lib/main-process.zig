@@ -249,7 +249,7 @@ fn enqueueEvictOriginals(core: *Core, arena: std.mem.Allocator, database_path: [
         .sessionId = session_id,
     });
     const task_id = try state.uuid_generator.generate(arena, core.io());
-    try core.runner.addTask(task_id, "evict-originals", AUTO_IMPORT_TASK_SOURCE, evict_data, 0, null);
+    try core.runner.addTask(task_id, "evict-originals", AUTO_IMPORT_TASK_SOURCE, evict_data, .background, null);
 }
 
 //
@@ -271,7 +271,7 @@ fn createDefaultDatabase(context: *TaskContext, database_path: []const u8) !void
         // The user switched automatic import on and photos are about to start arriving in this database, so it is asked for on screen
         // as well as on disk. The same thing a phone's pass asks for, said the same way: in the request that makes the database.
         .open = true,
-    });
+    }, null);
     const completion = try context.awaitTask(task_id);
     if (completion.status != .succeeded) {
         return utils.errors.throwError("Failed to create the default photo database at \"{s}\": {s}", .{ database_path, completion.error_message orelse "" });
@@ -398,7 +398,7 @@ pub fn ensureAutoImport(context: *TaskContext) !void {
         defer state.unlock();
         state.freeOwned(&state.auto_import_task_id);
     }
-    try state.core.runner.addTask(task_id, "import-assets", AUTO_IMPORT_TASK_SOURCE, import_data, 0, null);
+    try state.core.runner.addTask(task_id, "import-assets", AUTO_IMPORT_TASK_SOURCE, import_data, .background, null);
 }
 
 //
