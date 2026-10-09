@@ -378,3 +378,21 @@ test "stringify refuses null where smol-toml does, with smol-toml's messages" {
         .null,
     })));
 }
+
+test "stringifyStruct writes a struct, a tuple of tables and escapes a backslash path like stringify" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const text = try toml.stringifyStruct(allocator, .{
+        .databases = .{
+            .{
+                .name = "db",
+                .path = "C:\\photos\\one",
+                .count = 3,
+                .skipped = @as(?u8, null),
+            },
+        },
+    });
+    try std.testing.expectEqualStrings("[[databases]]\nname = \"db\"\npath = \"C:\\\\photos\\\\one\"\ncount = 3\n", text);
+}

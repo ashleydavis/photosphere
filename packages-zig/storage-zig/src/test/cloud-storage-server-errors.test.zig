@@ -799,7 +799,11 @@ const RecordingLog = struct {
 //
 fn staleLock(allocator: std.mem.Allocator) ![]const u8 {
     const timestamp = std.Io.Clock.real.now(std.testing.io).toMilliseconds() - 60_000;
-    return std.fmt.allocPrint(allocator, "{{\"owner\":\"dead-owner\",\"acquiredAt\":\"2020-01-01T00:00:00.000Z\",\"timestamp\":{d}}}", .{timestamp});
+    return utils.json.stringify(allocator, .{
+        .owner = "dead-owner",
+        .acquiredAt = "2020-01-01T00:00:00.000Z",
+        .timestamp = timestamp,
+    });
 }
 
 test "a lock is taken, released, and refused when the server fails, and the verbose log says each, for a key with a leading slash" {

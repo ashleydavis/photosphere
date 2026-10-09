@@ -85,7 +85,7 @@ const Directories = struct {
 fn makeDirectories(allocator: std.mem.Allocator, io: std.Io) !Directories {
     const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     const root = std.fs.path.dirname(sourceDir).?;
-    return .{ .root = root, .source = sourceDir, .dest = try std.fmt.allocPrint(allocator, "{s}/dest", .{root}) };
+    return .{ .root = root, .source = sourceDir, .dest = try std.fs.path.join(allocator, &.{ root, "dest" }) };
 }
 
 //
@@ -99,7 +99,7 @@ fn makeData(allocator: std.mem.Allocator, data: IReplicateDatabaseData) !std.jso
 // Reads a file of a directory.
 //
 fn readFileIn(allocator: std.mem.Allocator, io: std.Io, dir: []const u8, name: []const u8) ![]const u8 {
-    return test_files.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ dir, name }));
+    return test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ dir, name }));
 }
 
 test "opens source storage via openStorage with sourcePath and sourceEncryptionKey" {
@@ -114,7 +114,7 @@ test "opens source storage via openStorage with sourcePath and sourceEncryptionK
 
     // Make an encrypted copy, then replicate the encrypted copy back to a plain database with the source key.
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .destEncryptionKey = keyFile, .partial = false, .force = false }), recording.context.taskContext());
-    const plainDir = try std.fmt.allocPrint(allocator, "{s}/plain", .{dirs.root});
+    const plainDir = try std.fs.path.join(allocator, &.{ dirs.root, "plain" });
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.dest, .destPath = plainDir, .sourceEncryptionKey = keyFile, .partial = false, .force = false }), recording.context.taskContext());
 
     const assetPath = "asset/" ++ ASSET_ID;
@@ -154,9 +154,9 @@ test "forwards partial flag to replicate() when partial is true" {
     const dest = try node_api.open_storage.openStorage(allocator, io, dirs.dest, null, null);
     const destTree = (try node_api.tree.loadMerkleTree(allocator, io, dest.storage)).?;
     try std.testing.expect(node_api.media_file_database.isPartialDatabase(destTree.databaseMetadata));
-    try std.testing.expect(!test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ dirs.dest, ASSET_ID })));
-    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/shards/96.dat", .{dirs.dest})));
-    try std.testing.expect(!test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/shards/96", .{dirs.dest})));
+    try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dirs.dest, "asset", ASSET_ID })));
+    try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dirs.dest, ".db", "bson", "collections", "metadata", "shards", "96.dat" })));
+    try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dirs.dest, ".db", "bson", "collections", "metadata", "shards", "96" })));
 }
 
 test "forwards partial flag to replicate() when partial is false" {
@@ -173,8 +173,8 @@ test "forwards partial flag to replicate() when partial is false" {
     const dest = try node_api.open_storage.openStorage(allocator, io, dirs.dest, null, null);
     const destTree = (try node_api.tree.loadMerkleTree(allocator, io, dest.storage)).?;
     try std.testing.expect(!node_api.media_file_database.isPartialDatabase(destTree.databaseMetadata));
-    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/asset/{s}", .{ dirs.dest, ASSET_ID })));
-    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/bson/collections/metadata/shards/96", .{dirs.dest})));
+    try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dirs.dest, "asset", ASSET_ID })));
+    try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dirs.dest, ".db", "bson", "collections", "metadata", "shards", "96" })));
 }
 
 test "forwards pathFilter to replicate() options" {
@@ -189,8 +189,8 @@ test "forwards pathFilter to replicate() options" {
     const output = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false, .pathFilter = "display/" ++ ASSET_ID }), recording.context.taskContext());
 
     try std.testing.expectEqual(@as(i64, 1), output.object.get("copiedFiles").?.integer);
-    try std.testing.expect(test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/display/{s}", .{ dirs.dest, ASSET_ID })));
-    try std.testing.expect(!test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/thumb/{s}", .{ dirs.dest, ASSET_ID })));
+    try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dirs.dest, "display", ASSET_ID })));
+    try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dirs.dest, "thumb", ASSET_ID })));
 }
 
 test "emits a replicate-progress task message for each progress callback fired by replicate()" {
@@ -206,10 +206,16 @@ test "emits a replicate-progress task message for each progress callback fired b
 
     // (The job-progress messages that follow each one are left out when the task carries no job tag.)
     try std.testing.expectEqual(@as(usize, 4), recording.messages.items.len);
-    const firstMessage = try std.fmt.allocPrint(allocator, "{{\"type\":\"replicate-progress\",\"databasePath\":{f},\"progress\":\"Copied 1\"}}", .{std.json.fmt(dirs.source, .{})});
-    try std.testing.expectEqualStrings(firstMessage, recording.messages.items[0]);
-    const lastMessage = try std.fmt.allocPrint(allocator, "{{\"type\":\"replicate-progress\",\"databasePath\":{f},\"progress\":\"Copied 3 files, 1 records\"}}", .{std.json.fmt(dirs.source, .{})});
-    try std.testing.expectEqualStrings(lastMessage, recording.messages.items[3]);
+    try std.testing.expectEqualStrings(try utils.json.stringify(allocator, .{
+        .type = "replicate-progress",
+        .databasePath = dirs.source,
+        .progress = "Copied 1",
+    }), recording.messages.items[0]);
+    try std.testing.expectEqualStrings(try utils.json.stringify(allocator, .{
+        .type = "replicate-progress",
+        .databasePath = dirs.source,
+        .progress = "Copied 3 files, 1 records",
+    }), recording.messages.items[3]);
 }
 
 //
@@ -317,7 +323,7 @@ test "does not write encryption.pub when destination is not encrypted" {
 
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = true, .force = false }), recording.context.taskContext());
 
-    try std.testing.expect(!test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/.db/encryption.pub", .{dirs.dest})));
+    try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dirs.dest, ".db", "encryption.pub" })));
 }
 
 test "returns the IReplicationResult from replicate()" {

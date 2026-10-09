@@ -3,6 +3,7 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const bdb = @import("bdb-zig");
+const storage_zig = @import("storage-zig");
 const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const log = &utils.log.log;
@@ -52,12 +53,12 @@ pub const IExportCommandOptions = struct {
 //
 fn getAssetStoragePath(allocator: std.mem.Allocator, assetId: []const u8, assetType: []const u8) ![]const u8 {
     if (std.mem.eql(u8, assetType, "display")) {
-        return std.fmt.allocPrint(allocator, "display/{s}", .{assetId});
+        return storage_zig.storage_factory.pathJoin(allocator, &.{ "display", assetId });
     }
     if (std.mem.eql(u8, assetType, "thumb")) {
-        return std.fmt.allocPrint(allocator, "thumb/{s}", .{assetId});
+        return storage_zig.storage_factory.pathJoin(allocator, &.{ "thumb", assetId });
     }
-    return std.fmt.allocPrint(allocator, "asset/{s}", .{assetId});
+    return storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", assetId });
 }
 
 //
@@ -73,7 +74,7 @@ fn getOutputFileName(allocator: std.mem.Allocator, originalName: []const u8, ass
 
     // `path.basename(originalName, ext)`: the suffix is removed unless it is the whole name.
     const base = if (ext.len > 0 and ext.len < fullBase.len and std.mem.endsWith(u8, fullBase, ext)) fullBase[0 .. fullBase.len - ext.len] else fullBase;
-    return std.fmt.allocPrint(allocator, "{s}_{s}{s}", .{ base, assetType, ext });
+    return std.mem.concat(allocator, u8, &.{ base, "_", assetType, ext });
 }
 
 //

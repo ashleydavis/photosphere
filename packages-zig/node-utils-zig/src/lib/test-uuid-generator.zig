@@ -31,7 +31,7 @@ pub const TestUuidGenerator = struct {
         const counterFilePath = try path.join(allocator, &.{ testTmpDir, "photosphere-test-uuid-counter" });
         return .{
             .counterFilePath = counterFilePath,
-            .lockFilePath = try std.fmt.allocPrint(allocator, "{s}.lock", .{counterFilePath}),
+            .lockFilePath = try std.mem.concat(allocator, u8, &.{ counterFilePath, ".lock" }),
         };
     }
 

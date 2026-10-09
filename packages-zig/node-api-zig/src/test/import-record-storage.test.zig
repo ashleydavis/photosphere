@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
@@ -17,7 +18,7 @@ const recordImports = node_api.import_record_storage.recordImports;
 //
 fn makeEntry(allocator: std.mem.Allocator, logicalPath: []const u8, source: ImportSource) !IImportRecordEntry {
     return .{
-        .assetId = try std.fmt.allocPrint(allocator, "asset-{s}", .{logicalPath}),
+        .assetId = try std.mem.concat(allocator, u8, &.{ "asset-", logicalPath }),
         .logicalPath = logicalPath,
         .outcome = .imported,
         .importedAt = "2026-01-01T00:00:00.000Z",
@@ -48,8 +49,8 @@ const RecordTest = struct {
         const io = std.testing.io;
         _ = try test_environment.setupEnvironment(io);
         self.runRoot = try temp_dirs.makeTempDir(allocator, io, "import-record-test");
-        try test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", try std.fmt.allocPrint(allocator, "{s}/cache", .{self.runRoot}));
-        self.databasePath = try std.fmt.allocPrint(allocator, "{s}/photos", .{self.runRoot});
+        try test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", try std.fs.path.join(allocator, &.{ self.runRoot, "cache" }));
+        self.databasePath = try std.fs.path.join(allocator, &.{ self.runRoot, "photos" });
     }
 
     //
@@ -225,7 +226,7 @@ test "a record that cannot be written does not fail the import" {
     // The cache root is a file, so the directory the record needs cannot be created.
     const blockedDir = try temp_dirs.makeTempDir(allocator, io, "import-record-blocked");
     defer temp_dirs.removeTempDir(io, blockedDir);
-    const blockedRoot = try std.fmt.allocPrint(allocator, "{s}/cache", .{blockedDir});
+    const blockedRoot = try std.fs.path.join(allocator, &.{ blockedDir, "cache" });
     try test_files.writeFile(io, blockedRoot, "not a directory");
     try test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", blockedRoot);
 

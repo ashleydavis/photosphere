@@ -440,7 +440,7 @@ fn writeJpegWithExif(allocator: std.mem.Allocator, io: std.Io, dir: []const u8, 
     try jpeg.appendSlice(allocator, "Exif\x00\x00");
     try jpeg.appendSlice(allocator, tiff.items);
     try jpeg.appendSlice(allocator, original[2..]);
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/exif.jpg", .{dir});
+    const filePath = try std.fs.path.join(allocator, &.{ dir, "exif.jpg" });
     try test_files.writeFile(io, filePath, jpeg.items);
     return filePath;
 }

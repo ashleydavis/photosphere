@@ -51,7 +51,7 @@ pub const TextPrompt = struct {
         const s2_length = string_width.decodeAt(userInput, self.cursor()).length;
         const s2 = userInput[self.cursor() .. self.cursor() + s2_length];
         const s3 = userInput[self.cursor() + s2_length ..];
-        return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ s1, try picocolors.inverse(allocator, s2), s3 });
+        return std.mem.concat(allocator, u8, &.{ s1, try picocolors.inverse(allocator, s2), s3 });
     }
 
     //

@@ -71,7 +71,7 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []con
 
     // Extract screenshot at 1 second or middle of video
     var video = Video.init(allocator, io, videoPath);
-    const screenshotPath = try path.join(allocator, &.{ tempDir, try std.fmt.allocPrint(allocator, "thumb_{s}.jpg", .{try uuidGenerator.generate(allocator, io)}) });
+    const screenshotPath = try path.join(allocator, &.{ tempDir, try std.mem.concat(allocator, u8, &.{ "thumb_", try uuidGenerator.generate(allocator, io), ".jpg" }) });
     const duration = assetInfo.duration;
     const screenshotTime = @min(if (duration != null and isTruthy(duration.?)) duration.? / 2 else 1, 300); // Max 5 minutes
     const screenshotStartedAt = dateNow(io);
@@ -112,7 +112,7 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []con
         //
         // See if we can get photo date from the JSON file.
         //
-        const jsonFilePath = try std.fmt.allocPrint(allocator, "{s}.json", .{filePath});
+        const jsonFilePath = try std.mem.concat(allocator, u8, &.{ filePath, ".json" });
         if (pathExists(io, jsonFilePath)) {
             const jsonFileData = try std.Io.Dir.cwd().readFileAlloc(io, jsonFilePath, allocator, .unlimited);
             const photoData = try jsonParse(allocator, jsonFileData);

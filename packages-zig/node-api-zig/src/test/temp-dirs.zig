@@ -59,7 +59,7 @@ pub fn copyDirectory(allocator: std.mem.Allocator, io: std.Io, sourcePath: []con
 //
 pub fn copyTestDatabase(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const u8 {
     const tempDir = try makeTempDir(allocator, io, name);
-    const databaseDir = try std.fmt.allocPrint(allocator, "{s}/db", .{tempDir});
-    try copyDirectory(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ fixture_dirs.TEST_DBS_DIR, name }), databaseDir);
+    const databaseDir = try std.fs.path.join(allocator, &.{ tempDir, "db" });
+    try copyDirectory(allocator, io, try std.fs.path.join(allocator, &.{ fixture_dirs.TEST_DBS_DIR, name }), databaseDir);
     return databaseDir;
 }

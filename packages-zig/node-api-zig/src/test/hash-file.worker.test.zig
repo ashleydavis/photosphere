@@ -84,9 +84,9 @@ const HandlerTest = struct {
         forgetSharedHashCaches();
         self.tempDir = try temp_dirs.makeTempDir(allocator, io, "hash-file-worker");
         self.contents = try test_files.readFile(allocator, io, "../test/test.png");
-        self.filePath = try std.fmt.allocPrint(allocator, "{s}/photos/img.png", .{self.tempDir});
+        self.filePath = try std.fs.path.join(allocator, &.{ self.tempDir, "photos", "img.png" });
         try test_files.writeFile(io, self.filePath, self.contents);
-        self.hashCacheDir = try std.fmt.allocPrint(allocator, "{s}/hash-cache", .{self.tempDir});
+        self.hashCacheDir = try std.fs.path.join(allocator, &.{ self.tempDir, "hash-cache" });
         self.uuidGenerator = try TestUuidGenerator.init(allocator);
         self.timestampProvider = .{};
         self.messages = .{};

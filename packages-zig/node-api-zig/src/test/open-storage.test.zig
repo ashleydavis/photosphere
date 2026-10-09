@@ -1,5 +1,6 @@
 const std = @import("std");
 const vault_zig = @import("vault-zig");
+const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
@@ -16,7 +17,7 @@ fn setup(allocator: std.mem.Allocator, io: std.Io, databasesToml: []const u8) ![
     const configDir = try temp_dirs.makeTempDir(allocator, io, "open-storage-config");
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
     if (databasesToml.len > 0) {
-        try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/databases.toml", .{configDir}), databasesToml);
+        try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "databases.toml" }), databasesToml);
     }
     return configDir;
 }
@@ -82,7 +83,16 @@ test "returns storage, rawStorage, encryptionKeyPems, s3Config, storageOptions, 
     const io = std.testing.io;
     const dir = try temp_dirs.makeTempDir(allocator, io, "open-storage-all");
     defer temp_dirs.removeTempDir(io, dir);
-    const configDir = try setup(allocator, io, try std.fmt.allocPrint(allocator, "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = '{s}'\ngeocoding_key = \"open-storage-geo\"\n", .{dir}));
+    const configDir = try setup(allocator, io, try node_utils.toml.stringifyStruct(allocator, .{
+        .databases = .{
+            .{
+                .name = "db",
+                .description = "",
+                .path = dir,
+                .geocoding_key = "open-storage-geo",
+            },
+        },
+    }));
     defer temp_dirs.removeTempDir(io, configDir);
     const vault = try vault_zig.get_vault.getVault("plaintext");
     try vault.set(allocator, io, .{ .name = "open-storage-geo", .type = "api-key", .value = "google-api-key" });

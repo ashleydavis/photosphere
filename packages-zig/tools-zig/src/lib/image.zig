@@ -354,7 +354,7 @@ pub const Image = struct {
         const width = options.width;
         const height = options.height;
         const maintainAspectRatio = options.maintainAspectRatio orelse true;
-        const baseOutputPath = try join(allocator, &.{ tempDir, try std.fmt.allocPrint(allocator, "temp_resize_{s}", .{try uuidGenerator.generate(allocator, io)}) });
+        const baseOutputPath = try join(allocator, &.{ tempDir, try std.mem.concat(allocator, u8, &.{ "temp_resize_", try uuidGenerator.generate(allocator, io) }) });
         const outputPath1 = try std.mem.concat(allocator, u8, &.{ baseOutputPath, ".", options.ext });
         const outputPath2 = try std.mem.concat(allocator, u8, &.{ baseOutputPath, "-0.", options.ext });
 

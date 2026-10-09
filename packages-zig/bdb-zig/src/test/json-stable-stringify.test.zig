@@ -45,7 +45,7 @@ test "stringify matches json-stable-stringify for every record in the test datab
             records = .empty;
             var storage = try allocator.create(MemoryStorage);
             storage.* = MemoryStorage.init(allocator);
-            const databaseDir = try std.fmt.allocPrint(allocator, "{s}/{s}/.db/bson", .{ fixtures.TEST_DBS_DIR, databaseName });
+            const databaseDir = try std.fs.path.join(allocator, &.{ fixtures.TEST_DBS_DIR, databaseName, ".db", "bson" });
             try storage.loadDirectory(io, databaseDir, ".db/bson");
             const database = try bdb.database.BsonDatabase.init(allocator, storage.asStorage(), ".db/bson", testUuidGenerator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
             const collection = try database.collection("metadata");

@@ -161,7 +161,11 @@ pub const TestApp = struct {
         const allocator = std.testing.allocator;
         const id = self.next_request_id;
         self.next_request_id += 1;
-        const message = try std.fmt.allocPrint(allocator, "{{\"id\":{d},\"channel\":\"{s}\",\"data\":{s}}}", .{ id, channel, data_json });
+        const message = try utils.json.stringify(allocator, .{
+            .id = id,
+            .channel = channel,
+            .data = utils.json.Raw{ .text = data_json },
+        });
         defer allocator.free(message);
         self.core.postMessage(message);
         const reply_start = try std.fmt.allocPrint(allocator, "{{\"id\":{d},\"ok\":", .{id});

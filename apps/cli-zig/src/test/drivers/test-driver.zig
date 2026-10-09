@@ -70,7 +70,7 @@ fn runScenario(init: std.process.Init) !void {
     // under another name and renamed into place, so a test waiting for it never reads half of it.
     if (node_utils.process_env.getEnv("PHOTOSPHERE_TEST_OPENER_RECORD")) |recordPath| {
         const recorded = try std.mem.join(allocator, "\n", arguments[1..]);
-        const partialPath = try std.fmt.allocPrint(allocator, "{s}.partial", .{recordPath});
+        const partialPath = try std.mem.concat(allocator, u8, &.{ recordPath, ".partial" });
         const cwd = std.Io.Dir.cwd();
         try cwd.writeFile(io, .{ .sub_path = partialPath, .data = recorded });
         try cwd.rename(partialPath, cwd, recordPath, io);

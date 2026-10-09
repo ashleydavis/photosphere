@@ -43,7 +43,7 @@ test "walkDirectory yields the files of a directory before the files of its subd
     defer test_files.removeTempDir(io, tempDir);
     const files = [_][]const u8{ "b.txt", "a.txt", "asset/10", "asset/2", "asset/deep/x", "display/1", ".db/tree.dat", ".db/bson/db.dat", "node_modules/m", ".git/HEAD", "sub/.DS_Store" };
     for (files) |file| {
-        try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ tempDir, file }), "x");
+        try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ tempDir, file }), "x");
     }
     var fileStorage = FileStorage.init("fs:");
     var wrapper = try StoragePrefixWrapper.init(allocator, fileStorage.storage(), tempDir);

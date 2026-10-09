@@ -133,9 +133,9 @@ pub const FileLogger = struct {
         @memcpy(&file_timestamp, start_iso[0..19]);
         std.mem.replaceScalar(u8, &file_timestamp, ':', '-');
         std.mem.replaceScalar(u8, &file_timestamp, '.', '-');
-        const log_name = try std.fmt.allocPrint(allocator, "photosphere-{s}.log", .{file_timestamp});
+        const log_name = try std.mem.concat(allocator, u8, &.{ "photosphere-", &file_timestamp, ".log" });
         defer allocator.free(log_name);
-        const error_log_name = try std.fmt.allocPrint(allocator, "photosphere-{s}-errors.log", .{file_timestamp});
+        const error_log_name = try std.mem.concat(allocator, u8, &.{ "photosphere-", &file_timestamp, "-errors.log" });
         defer allocator.free(error_log_name);
         const logger = try allocator.create(FileLogger);
         errdefer allocator.destroy(logger);

@@ -34,7 +34,7 @@ test "replicateDatabase runs the replicate-database task and returns its result 
     const onProgress: ReplicateProgressCallback = .{ .context = &recorder, .function = recordProgress };
     const result = try replicateDatabase(allocator, io, uuidGenerator.uuidGenerator(), .{
         .sourcePath = sourceDir,
-        .destPath = try std.fmt.allocPrint(allocator, "{s}/dest", .{root}),
+        .destPath = try std.fs.path.join(allocator, &.{ root, "dest" }),
         .partial = false,
         .force = false,
     }, &onProgress);
@@ -60,8 +60,8 @@ test "replicateDatabase throws the task error message when replication fails" {
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
 
     try std.testing.expectError(error.Thrown, replicateDatabase(allocator, io, uuidGenerator.uuidGenerator(), .{
-        .sourcePath = try std.fmt.allocPrint(allocator, "{s}/missing", .{root}),
-        .destPath = try std.fmt.allocPrint(allocator, "{s}/dest", .{root}),
+        .sourcePath = try std.fs.path.join(allocator, &.{ root, "missing" }),
+        .destPath = try std.fs.path.join(allocator, &.{ root, "dest" }),
         .partial = false,
         .force = false,
     }, null));
@@ -165,7 +165,7 @@ fn replicateRecorded(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 
     _ = try replicateDatabase(allocator, io, uuidGenerator.uuidGenerator(), .{
         .sourcePath = sourceDir,
-        .destPath = try std.fmt.allocPrint(allocator, "{s}/backup/my-database", .{root}),
+        .destPath = try std.fs.path.join(allocator, &.{ root, "backup", "my-database" }),
         .partial = false,
         .force = false,
     }, null);
@@ -214,9 +214,12 @@ test "tags the task with a job named after the destination that cancels by the s
     const allocator = arena.allocator();
     const io = std.testing.io;
     const sourceDir = try replicateRecorded(allocator, io);
-    const destPath = try std.fmt.allocPrint(allocator, "{s}/backup/my-database", .{std.fs.path.dirname(sourceDir).?});
+    const destPath = try std.fs.path.join(allocator, &.{ std.fs.path.dirname(sourceDir).?, "backup", "my-database" });
 
     const inputs = try std.json.parseFromSliceLeaky(std.json.Value, allocator, recorded.inputs.items[0], .{});
-    const expectedJob = try std.fmt.allocPrint(allocator, "{{\"id\":{f},\"name\":\"Replicating to my-database\",\"cancelSource\":{f}}}", .{ std.json.fmt(try std.fmt.allocPrint(allocator, "replicate:{s}", .{destPath}), .{}), std.json.fmt(sourceDir, .{}) });
-    try std.testing.expectEqualStrings(expectedJob, try std.json.Stringify.valueAlloc(allocator, inputs.object.get("job").?, .{}));
+    try std.testing.expectEqualStrings(try utils.json.stringify(allocator, .{
+        .id = try std.mem.concat(allocator, u8, &.{ "replicate:", destPath }),
+        .name = "Replicating to my-database",
+        .cancelSource = sourceDir,
+    }), try std.json.Stringify.valueAlloc(allocator, inputs.object.get("job").?, .{}));
 }

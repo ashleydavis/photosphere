@@ -50,7 +50,7 @@ test "computeAssetHash returns the hash with the length and date of the file sta
 // A directory that lives for the length of the test, holding the files that get hashed.
 //
 fn writeTestFile(allocator: std.mem.Allocator, io: std.Io, workingDir: []const u8, name: []const u8, contents: []const u8) ![]const u8 {
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ workingDir, name });
+    const filePath = try std.fs.path.join(allocator, &.{ workingDir, name });
     try test_files.writeFile(io, filePath, contents);
     return filePath;
 }

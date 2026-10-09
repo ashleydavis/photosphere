@@ -898,11 +898,11 @@ fn stringifyTable(allocator: std.mem.Allocator, tableKey: ?[]const u8, object: s
             if (tables.items.len != 0) {
                 try tables.append(allocator, '\n');
             }
-            const array_key = if (prefix.len != 0) try std.fmt.allocPrint(allocator, "{s}.{s}", .{ prefix, key }) else key;
+            const array_key = if (prefix.len != 0) try std.mem.concat(allocator, u8, &.{ prefix, ".", key }) else key;
             try tables.appendSlice(allocator, try stringifyArrayTable(allocator, value.array, array_key, depth - 1));
         }
         else if (value == .object) {
-            const table_key = if (prefix.len != 0) try std.fmt.allocPrint(allocator, "{s}.{s}", .{ prefix, key }) else key;
+            const table_key = if (prefix.len != 0) try std.mem.concat(allocator, u8, &.{ prefix, ".", key }) else key;
             if (tables.items.len != 0) {
                 try tables.append(allocator, '\n');
             }
@@ -924,7 +924,7 @@ fn stringifyTable(allocator: std.mem.Allocator, tableKey: ?[]const u8, object: s
                 preamble = try std.fmt.allocPrint(allocator, "[{s}]\n{s}", .{ table_key, preamble });
             }
             else {
-                preamble = try std.fmt.allocPrint(allocator, "[{s}]", .{table_key});
+                preamble = try std.mem.concat(allocator, u8, &.{ "[", table_key, "]" });
             }
         }
     }
@@ -949,4 +949,14 @@ pub fn stringify(allocator: std.mem.Allocator, value: TomlValue) ![]const u8 {
         return std.fmt.allocPrint(allocator, "{s}\n", .{text});
     }
     return text;
+}
+
+//
+// Converts a struct (or anything std.json can serialise to an object) to TOML text, like `stringify` does for a TomlValue.
+// The fields are written in the order they are declared, a tuple becomes an array, and an optional field that is null is
+// left out. This is the TOML counterpart of `utils.json.stringify`.
+//
+pub fn stringifyStruct(allocator: std.mem.Allocator, value: anytype) ![]const u8 {
+    const json_text = try utils.json.stringify(allocator, value);
+    return stringify(allocator, try std.json.parseFromSliceLeaky(TomlValue, allocator, json_text, .{}));
 }

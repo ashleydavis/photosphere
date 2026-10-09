@@ -1950,7 +1950,7 @@ pub fn endpointHref(allocator: std.mem.Allocator, endpoint: []const u8) ![]const
     }
     for (special_url_schemes) |scheme| {
         if (std.ascii.eqlIgnoreCase(uri.scheme, scheme)) {
-            return std.fmt.allocPrint(allocator, "{s}/", .{endpoint});
+            return std.mem.concat(allocator, u8, &.{ endpoint, "/" });
         }
     }
     return endpoint;

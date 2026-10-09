@@ -79,13 +79,13 @@ pub const PasswordPrompt = struct {
         }
         const userInput = self.prompt.userInput;
         if (self.cursor() >= userInput.len) {
-            return std.fmt.allocPrint(allocator, "{s}{s}", .{ try self.masked(allocator), try picocolors.inverse(allocator, try picocolors.hidden(allocator, "_")) });
+            return std.mem.concat(allocator, u8, &.{ try self.masked(allocator), try picocolors.inverse(allocator, try picocolors.hidden(allocator, "_")) });
         }
         const pieces = try self.maskedUnits(allocator, userInput);
         const unitsBefore = (try self.maskedUnits(allocator, userInput[0..self.cursor()])).len;
         const s1 = try std.mem.concat(allocator, u8, pieces[0..unitsBefore]);
         const rest = try std.mem.concat(allocator, u8, pieces[unitsBefore + 1 ..]);
-        return std.fmt.allocPrint(allocator, "{s}{s}{s}", .{ s1, try picocolors.inverse(allocator, pieces[unitsBefore]), rest });
+        return std.mem.concat(allocator, u8, &.{ s1, try picocolors.inverse(allocator, pieces[unitsBefore]), rest });
     }
 
     //

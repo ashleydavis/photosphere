@@ -18,3 +18,5 @@ pub const batch_generator = @import("lib/batch-generator.zig");
 pub const standard_streams = @import("lib/standard-streams.zig");
 pub const js_string = @import("lib/js-string.zig");
 pub const js_number = @import("lib/js-number.zig");
+pub const json = @import("lib/json.zig");
+pub const hex = @import("lib/hex.zig");

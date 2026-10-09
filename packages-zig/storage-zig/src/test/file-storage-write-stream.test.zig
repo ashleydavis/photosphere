@@ -26,8 +26,8 @@ test "a file-backed stream is written byte for byte" {
     for (contents, 0..) |*byte, index| {
         byte.* = @intCast(index % 251);
     }
-    const sourcePath = try std.fmt.allocPrint(allocator, "{s}/source.bin", .{tempDir});
-    const copiedPath = try std.fmt.allocPrint(allocator, "{s}/copied.bin", .{tempDir});
+    const sourcePath = try std.fs.path.join(allocator, &.{ tempDir, "source.bin" });
+    const copiedPath = try std.fs.path.join(allocator, &.{ tempDir, "copied.bin" });
     try test_files.writeFile(io, sourcePath, contents);
 
     const stream = try storage.readStream(allocator, io, sourcePath);
@@ -50,7 +50,7 @@ test "a stream with no path behind it is still piped through" {
     // An encrypting stream is one of these: it carries no path, because what it produces is not any file on disk.
     // Taking the copy path for it would write the wrong bytes.
     const contents = "not backed by any file";
-    const pipedPath = try std.fmt.allocPrint(allocator, "{s}/piped.bin", .{tempDir});
+    const pipedPath = try std.fs.path.join(allocator, &.{ tempDir, "piped.bin" });
     var input = std.Io.Reader.fixed(contents);
     try storage.writeStream(allocator, io, pipedPath, "application/octet-stream", &input, null);
 
@@ -67,8 +67,8 @@ test "an empty file-backed stream produces an empty file, not a missing one" {
     defer test_files.removeTempDir(io, tempDir);
     var storage = FileStorage.init(tempDir);
 
-    const sourcePath = try std.fmt.allocPrint(allocator, "{s}/empty-source.bin", .{tempDir});
-    const copyPath = try std.fmt.allocPrint(allocator, "{s}/empty-copy.bin", .{tempDir});
+    const sourcePath = try std.fs.path.join(allocator, &.{ tempDir, "empty-source.bin" });
+    const copyPath = try std.fs.path.join(allocator, &.{ tempDir, "empty-copy.bin" });
     try test_files.writeFile(io, sourcePath, "");
 
     const stream = try storage.readStream(allocator, io, sourcePath);

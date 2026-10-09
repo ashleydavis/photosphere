@@ -628,7 +628,7 @@ fn registerDatabases(environment: *TestEnvironment, entries: []const @import("no
     var toml: std.json.ObjectMap = .empty;
     try toml.put(allocator, "databases", .{ .array = databases });
     try toml.put(allocator, "recent_database_names", .{ .array = std.json.Array.init(allocator) });
-    try @import("node-utils-zig").fs.writeToml(allocator, std.testing.io, try std.fmt.allocPrint(allocator, "{s}/databases.toml", .{configDir}), .{ .object = toml });
+    try @import("node-utils-zig").fs.writeToml(allocator, std.testing.io, try std.fs.path.join(allocator, &.{ configDir, "databases.toml" }), .{ .object = toml });
 }
 
 test "resolveDatabaseEntry matches the path first, then the name ignoring case" {
@@ -710,7 +710,7 @@ test "loadDatabase loads a database by path or registered name" {
     try requireMediaTools(allocator);
     const root = try helpers.makeTempDir(allocator, "load-database");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    const dbDir = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const dbDir = try std.fs.path.join(allocator, &.{ root, "db" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dbDir);
     try registerDatabases(&environment, &.{.{ .name = "MyPhotos", .description = "", .path = dbDir }});
     var stdout_capture = std.Io.Writer.Allocating.init(allocator);
@@ -779,7 +779,7 @@ test "createDatabase creates an empty database with the given identity" {
     try requireMediaTools(allocator);
     const root = try helpers.makeTempDir(allocator, "create-database");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    const dbDir = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const dbDir = try std.fs.path.join(allocator, &.{ root, "db" });
 
     var uuidGenerator = utils.random_uuid_generator.RandomUuidGenerator{};
     var timestampProvider = utils.timestamp_provider.TimestampProvider{};
@@ -810,13 +810,13 @@ test "createDatabase writes the public key marker of an encrypted database" {
     try vault.set(allocator, std.testing.io, .{ .name = "create-key", .type = "encryption-key", .value = privateKeyPem });
     const root = try helpers.makeTempDir(allocator, "create-database-encrypted");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    const dbDir = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const dbDir = try std.fs.path.join(allocator, &.{ root, "db" });
 
     var uuidGenerator = utils.random_uuid_generator.RandomUuidGenerator{};
     var timestampProvider = utils.timestamp_provider.TimestampProvider{};
     var options: init_cmd.ICreateCommandOptions = .{ .base = .{ .yes = true, .key = "create-key" } };
     const created = try init_cmd.createDatabase(allocator, std.testing.io, dbDir, &options, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session");
-    const marker = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/.db/encryption.pub", .{dbDir}), allocator, .unlimited);
+    const marker = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ dbDir, ".db", "encryption.pub" }), allocator, .unlimited);
     try std.testing.expectEqualStrings(publicKeyPem, marker);
     try std.testing.expect(try created.assetStorage.fileExists(allocator, std.testing.io, ".db/files.dat"));
 }

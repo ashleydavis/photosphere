@@ -177,7 +177,7 @@ pub fn remove(io: std.Io, targetPath: []const u8) !void {
 //
 pub fn outputFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, data: []const u8) !void {
     try ensureFileDir(io, filePath);
-    const tempPath = try std.fmt.allocPrint(allocator, "{s}.tmp-{s}", .{ filePath, try randomUUID(allocator, io) });
+    const tempPath = try std.mem.concat(allocator, u8, &.{ filePath, ".tmp-", try randomUUID(allocator, io) });
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = tempPath, .data = data });
     try renameIntoPlace(io, tempPath, filePath);
 }
@@ -424,7 +424,7 @@ fn updateFileRawAttempt(allocator: std.mem.Allocator, io: std.Io, filePath: []co
     const currentBytes = try readRawFileBytes(allocator, io, filePath);
     const updatedBytes = try mutator.run(allocator, currentBytes);
 
-    const tempPath = try std.fmt.allocPrint(allocator, "{s}.tmp-{s}", .{ filePath, try randomUUID(allocator, io) });
+    const tempPath = try std.mem.concat(allocator, u8, &.{ filePath, ".tmp-", try randomUUID(allocator, io) });
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = tempPath, .data = updatedBytes });
 
     // If the file is unchanged since we read it, publish our version atomically.
@@ -460,7 +460,7 @@ fn updateFileRawAttempt(allocator: std.mem.Allocator, io: std.Io, filePath: []co
 pub fn updateFileRawOptimistic(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, mutator: anytype, retries: u32) !void {
     // The lock lives beside the file, so the directory has to exist before we can take it.
     try ensureFileDir(io, filePath);
-    const lockPath = try std.fmt.allocPrint(allocator, "{s}.lock", .{filePath});
+    const lockPath = try std.mem.concat(allocator, u8, &.{ filePath, ".lock" });
 
     var attempt: u32 = 0;
     while (attempt <= retries) : (attempt += 1) {

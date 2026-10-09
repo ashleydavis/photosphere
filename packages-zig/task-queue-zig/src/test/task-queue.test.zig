@@ -664,7 +664,10 @@ test "parallel execution: should execute tasks in parallel up to maxWorkers" {
     // Add 5 tasks with 2 workers: should execute in batches.
     var task_number: i64 = 1;
     while (task_number <= 5) : (task_number += 1) {
-        const data = try json(fixture.allocator(), try std.fmt.allocPrint(fixture.allocator(), "{{\"id\":{d},\"sleep\":true}}", .{task_number}));
+        const data = try json(fixture.allocator(), try utils.json.stringify(fixture.allocator(), .{
+            .id = task_number,
+            .sleep = true,
+        }));
         _ = try fixture.queue.addTask("test-task", data, null, null);
     }
 
@@ -689,7 +692,10 @@ test "parallel execution: should respect maxWorkers limit" {
     // Add 10 tasks with maxWorkers=2.
     var task_number: i64 = 1;
     while (task_number <= 10) : (task_number += 1) {
-        const data = try json(fixture.allocator(), try std.fmt.allocPrint(fixture.allocator(), "{{\"id\":{d},\"sleep\":true}}", .{task_number}));
+        const data = try json(fixture.allocator(), try utils.json.stringify(fixture.allocator(), .{
+            .id = task_number,
+            .sleep = true,
+        }));
         _ = try queueWithLimit.addTask("test-task", data, null, null);
     }
 
@@ -716,7 +722,9 @@ test "parallel execution: should process tasks in FIFO order" {
     // Add tasks in order.
     var task_number: i64 = 1;
     while (task_number <= 5) : (task_number += 1) {
-        const data = try json(fixture.allocator(), try std.fmt.allocPrint(fixture.allocator(), "{{\"id\":{d}}}", .{task_number}));
+        const data = try json(fixture.allocator(), try utils.json.stringify(fixture.allocator(), .{
+            .id = task_number,
+        }));
         _ = try singleQueue.addTask("test-task", data, null, null);
     }
 
@@ -1065,7 +1073,7 @@ test "constructor options: should use custom UUID generator" {
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
     var environ_map = std.process.Environ.Map.init(fixture.allocator());
-    try environ_map.put("TEST_TMP_DIR", try std.fmt.allocPrint(fixture.allocator(), ".zig-cache/tmp/{s}", .{tmp_dir.sub_path}));
+    try environ_map.put("TEST_TMP_DIR", try std.fs.path.join(fixture.allocator(), &.{ ".zig-cache", "tmp", &tmp_dir.sub_path }));
     node_utils.process_env.setEnvironMap(&environ_map);
     defer node_utils.process_env.setEnvironMap(null);
 

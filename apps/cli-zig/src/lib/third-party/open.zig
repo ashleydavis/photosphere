@@ -33,7 +33,7 @@ pub const IOpenCommand = struct {
 //
 pub fn powerShellPath(allocator: std.mem.Allocator) ![]const u8 {
     const systemRoot = nonEmptyEnv("SYSTEMROOT") orelse nonEmptyEnv("windir") orelse "C:\\Windows";
-    return std.fmt.allocPrint(allocator, "{s}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", .{systemRoot});
+    return node_utils.path.win32.join(allocator, &.{ systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe" });
 }
 
 //

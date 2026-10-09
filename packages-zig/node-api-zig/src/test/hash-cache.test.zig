@@ -523,14 +523,14 @@ test "returns undefined when an entry runs past the end of the data" {
 // Reads and decodes the cache file written to a directory.
 //
 fn readCacheFile(allocator: std.mem.Allocator, cacheDir: []const u8) !?[]IHashCacheEntry {
-    return HashCache.decodeEntries(allocator, try test_files.readFile(allocator, std.testing.io, try std.fmt.allocPrint(allocator, "{s}/hash-cache-x.dat", .{cacheDir})));
+    return HashCache.decodeEntries(allocator, try test_files.readFile(allocator, std.testing.io, try std.fs.path.join(allocator, &.{ cacheDir, "hash-cache-x.dat" })));
 }
 
 //
 // Writes a cache file containing the supplied entries, as if another instance had saved it.
 //
 fn writeCacheFile(allocator: std.mem.Allocator, cacheDir: []const u8, entries: []const IHashCacheEntry) !void {
-    try test_files.writeFile(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/hash-cache-x.dat", .{cacheDir}), try HashCache.encodeEntries(allocator, entries));
+    try test_files.writeFile(std.testing.io, try std.fs.path.join(allocator, &.{ cacheDir, "hash-cache-x.dat" }), try HashCache.encodeEntries(allocator, entries));
 }
 
 //
@@ -1172,7 +1172,7 @@ test "is discarded rather than read, whatever its version number says" {
     std.mem.writeInt(u32, fileBytes[0..4], 999, .little);
     // The checksum covers the version, so it has to be recomputed or the file is rejected for
     // being corrupt instead, which would prove nothing about the version check.
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/hash-cache-x.dat", .{context.cacheDir}), try rechecksum(allocator, fileBytes));
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ context.cacheDir, "hash-cache-x.dat" }), try rechecksum(allocator, fileBytes));
 
     const loaded = try context.hashCache.load(io);
 
@@ -1198,8 +1198,8 @@ test "HashCache.save returns quietly when the update lock is held by somebody el
 
     // Hold the lock the way another writer would, and leave it held. It stays well inside the
     // staleness threshold for the duration of this test, so it is never broken.
-    const cachePath = try std.fmt.allocPrint(allocator, "{s}/hash-cache-x.dat", .{context.cacheDir});
-    const lockPath = try std.fmt.allocPrint(allocator, "{s}.lock", .{cachePath});
+    const cachePath = try std.fs.path.join(allocator, &.{ context.cacheDir, "hash-cache-x.dat" });
+    const lockPath = try std.mem.concat(allocator, u8, &.{ cachePath, ".lock" });
     try test_files.writeFile(io, lockPath, "");
 
     try context.hashCache.save(io);

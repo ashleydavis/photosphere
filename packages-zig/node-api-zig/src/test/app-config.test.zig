@@ -15,7 +15,7 @@ const IConfigTheme = node_api.config_format.IConfigTheme;
 fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const u8 {
     _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.makeTempDir(allocator, io, name);
-    const configDir = try std.fmt.allocPrint(allocator, "{s}/config", .{dir});
+    const configDir = try std.fs.path.join(allocator, &.{ dir, "config" });
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
     return configDir;
 }
@@ -24,14 +24,14 @@ fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![
 // Writes the config file in the config directory.
 //
 fn writeConfig(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8, text: []const u8) !void {
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/config.yaml", .{configDir}), text);
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "config.yaml" }), text);
 }
 
 //
 // Reads the config file in the config directory.
 //
 fn readConfig(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8) ![]const u8 {
-    return test_files.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/config.yaml", .{configDir}));
+    return test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ configDir, "config.yaml" }));
 }
 
 //
@@ -136,7 +136,7 @@ test "loadAppConfig returns an empty config when no file exists, and writes noth
     const config = try app_config.loadAppConfig(allocator, io);
 
     try std.testing.expectEqual(@as(usize, 0), (try app_config.appConfigSettings(allocator, config)).count());
-    try std.testing.expect(!test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/config.yaml", .{configDir})));
+    try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ configDir, "config.yaml" })));
 }
 
 test "loadAppConfig returns the config from the document when the file exists" {

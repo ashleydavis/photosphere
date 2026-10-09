@@ -63,10 +63,10 @@ const IToolsTestEnvironment = struct {
             return error.RequiredToolsMissing;
         }
         self.root = try helpers.makeTempDir(allocator, name);
-        try helpers.copyDirectory(allocator, "../../test/dbs/v6", try std.fmt.allocPrint(allocator, "{s}/db", .{self.root}));
-        const configDir = try std.fmt.allocPrint(allocator, "{s}/config", .{self.root});
+        try helpers.copyDirectory(allocator, "../../test/dbs/v6", try std.fs.path.join(allocator, &.{ self.root, "db" }));
+        const configDir = try std.fs.path.join(allocator, &.{ self.root, "config" });
         try std.Io.Dir.cwd().createDirPath(io, configDir);
-        const tmpDir = try std.fmt.allocPrint(allocator, "{s}/tmp", .{self.root});
+        const tmpDir = try std.fs.path.join(allocator, &.{ self.root, "tmp" });
         try std.Io.Dir.cwd().createDirPath(io, tmpDir);
 
         self.environ_map = std.process.Environ.Map.init(allocator);
@@ -76,7 +76,7 @@ const IToolsTestEnvironment = struct {
             try self.environ_map.put("PATH", searchPath);
         }
         try self.environ_map.put("PHOTOSPHERE_CONFIG_DIR", configDir);
-        try self.environ_map.put("PHOTOSPHERE_CACHE_DIR", try std.fmt.allocPrint(allocator, "{s}/cache", .{self.root}));
+        try self.environ_map.put("PHOTOSPHERE_CACHE_DIR", try std.fs.path.join(allocator, &.{ self.root, "cache" }));
         try self.environ_map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
         try self.environ_map.put("PHOTOSPHERE_VAULT_DIR", try helpers.emptySharedVaultDir(allocator));
         // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows.
@@ -122,8 +122,8 @@ const IToolsTestEnvironment = struct {
     fn registerDatabase(self: *IToolsTestEnvironment, name: []const u8, description: []const u8) !void {
         const allocator = self.arena.allocator();
         try std.Io.Dir.cwd().writeFile(io, .{
-            .sub_path = try std.fmt.allocPrint(allocator, "{s}/config/databases.toml", .{self.root}),
-            .data = try std.fmt.allocPrint(allocator, "[[databases]]\nname = '{s}'\ndescription = '{s}'\npath = '{s}/db'\n", .{ name, description, self.root }),
+            .sub_path = try std.fs.path.join(allocator, &.{ self.root, "config", "databases.toml" }),
+            .data = try helpers.databasesToml(allocator, name, description, try std.fs.path.join(allocator, &.{ self.root, "db" })),
         });
     }
 
@@ -131,7 +131,7 @@ const IToolsTestEnvironment = struct {
     // The path of the test's database, as a tool reports it.
     //
     fn databasePath(self: *IToolsTestEnvironment) ![]const u8 {
-        return std.fmt.allocPrint(self.arena.allocator(), "{s}/db", .{self.root});
+        return std.fs.path.join(self.arena.allocator(), &.{ self.root, "db" });
     }
 
     //
@@ -139,7 +139,15 @@ const IToolsTestEnvironment = struct {
     //
     fn call(self: *IToolsTestEnvironment, toolName: []const u8, argumentsJson: []const u8) !IToolText {
         const allocator = self.arena.allocator();
-        const request = try std.fmt.allocPrint(allocator, "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{{\"name\":\"{s}\",\"arguments\":{s}}}}}", .{ toolName, argumentsJson });
+        const request = try utils.json.stringify(allocator, .{
+            .jsonrpc = "2.0",
+            .id = 1,
+            .method = "tools/call",
+            .params = .{
+                .name = toolName,
+                .arguments = utils.json.Raw{ .text = argumentsJson },
+            },
+        });
         const answer = (try self.server.handleMessage(allocator, io, request)).?;
         const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, answer, .{});
         const result = parsed.object.get("result").?.object;
@@ -350,19 +358,19 @@ test "save_media_file writes the original, display or thumbnail file of a media 
     const allocator = environment.arena.allocator();
 
     try environment.openDatabase();
-    const escapedRoot = try std.mem.replaceOwned(u8, allocator, environment.root, "\\", "\\\\");
     const kinds = [_][]const u8{ "original", "display", "thumb" };
+    const escapedRoot = try std.mem.replaceOwned(u8, allocator, environment.root, "\\", "\\\\");
     const storagePrefixes = [_][]const u8{ "asset", "display", "thumb" };
     const sizes = [_]usize{ 2049800, 696014, 130591 };
     for (kinds, storagePrefixes, sizes) |kind, storagePrefix, size| {
-        const outputPath = try std.fmt.allocPrint(allocator, "{s}/out/{s}/file.bin", .{ environment.root, kind });
+        const outputPath = try std.fs.path.join(allocator, &.{ environment.root, "out", kind, "file.bin" });
         try environment.expectText(
             "save_media_file",
             try std.fmt.allocPrint(allocator, "{{\"assetId\":\"{s}\",\"outputPath\":\"{s}/out/{s}/file.bin\",\"type\":\"{s}\"}}", .{ v6_asset_id, escapedRoot, kind, kind }),
             try std.fmt.allocPrint(allocator, "Wrote {d} bytes to {s}", .{ size, outputPath }),
         );
         const written = try std.Io.Dir.cwd().readFileAlloc(io, outputPath, allocator, .unlimited);
-        const stored = try std.Io.Dir.cwd().readFileAlloc(io, try std.fmt.allocPrint(allocator, "{s}/db/{s}/{s}", .{ environment.root, storagePrefix, v6_asset_id }), allocator, .unlimited);
+        const stored = try std.Io.Dir.cwd().readFileAlloc(io, try std.fs.path.join(allocator, &.{ environment.root, "db", storagePrefix, v6_asset_id }), allocator, .unlimited);
         try std.testing.expectEqualSlices(u8, stored, written);
     }
 
@@ -374,7 +382,10 @@ test "save_media_file writes the original, display or thumbnail file of a media 
     );
 
     // A media file that is not stored fails the tool.
-    const missing = try environment.call("save_media_file", try std.fmt.allocPrint(allocator, "{{\"assetId\":\"missing\",\"outputPath\":\"{s}/missing.bin\"}}", .{escapedRoot}));
+    const missing = try environment.call("save_media_file", try utils.json.stringify(allocator, .{
+        .assetId = "missing",
+        .outputPath = try std.fs.path.join(allocator, &.{ environment.root, "missing.bin" }),
+    }));
     try std.testing.expect(missing.isError);
 }
 

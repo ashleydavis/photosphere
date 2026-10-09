@@ -68,7 +68,7 @@ const MultilineRender = struct {
                 return try std.fmt.allocPrint(allocator, "{s}{s}  {s}", .{ title, try color.gray(allocator, S_BAR()), try color.dim(allocator, summary) });
             },
             .cancel => {
-                return try std.fmt.allocPrint(allocator, "{s}{s}", .{ title, try color.gray(allocator, S_BAR()) });
+                return try std.mem.concat(allocator, u8, &.{ title, try color.gray(allocator, S_BAR()) });
             },
             else => {
                 var linesText: std.ArrayList([]const u8) = .empty;

@@ -45,14 +45,14 @@ test "addPaths imports a file into a new database, then finds it already there" 
     // A new, empty database and a folder holding one photo.
     const root = try temp_dirs.makeTempDir(allocator, io, "add-paths");
     defer temp_dirs.removeTempDir(io, root);
-    const databaseDir = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const databaseDir = try std.fs.path.join(allocator, &.{ root, "db" });
     const created = try @import("storage-zig").storage_factory.createStorage(allocator, io, databaseDir, null, null);
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider());
     try media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, uuidGenerator.uuidGenerator(), database.metadataCollection, null);
-    const photosDir = try std.fmt.allocPrint(allocator, "{s}/photos", .{root});
+    const photosDir = try std.fs.path.join(allocator, &.{ root, "photos" });
     try std.Io.Dir.cwd().createDirPath(io, photosDir);
-    try std.Io.Dir.cwd().copyFile("../test/test.jpg", std.Io.Dir.cwd(), try std.fmt.allocPrint(allocator, "{s}/photo.jpg", .{photosDir}), io, .{});
+    try std.Io.Dir.cwd().copyFile("../test/test.jpg", std.Io.Dir.cwd(), try std.fs.path.join(allocator, &.{ photosDir, "photo.jpg" }), io, .{});
 
     var progressLog: IProgressLog = .{ .calls = 0, .lastFilesAdded = 0 };
     const summary = try addPaths(allocator, io, uuidGenerator.uuidGenerator(), .{ .databasePath = databaseDir }, &.{photosDir}, null, "session-1", false, .{ .context = &progressLog, .function = recordProgress }, null);

@@ -23,7 +23,7 @@ pub fn useTestVault() !void {
         vault_directory = std.testing.tmpDir(.{});
         var map = std.process.Environ.Map.init(std.heap.smp_allocator);
         try map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
-        try map.put("PHOTOSPHERE_VAULT_DIR", try std.fmt.allocPrint(std.heap.smp_allocator, ".zig-cache/tmp/{s}", .{vault_directory.?.sub_path}));
+        try map.put("PHOTOSPHERE_VAULT_DIR", try std.fs.path.join(std.heap.smp_allocator, &.{ ".zig-cache", "tmp", &vault_directory.?.sub_path }));
         environment = map;
     }
     node_utils.process_env.setEnvironMap(&environment.?);

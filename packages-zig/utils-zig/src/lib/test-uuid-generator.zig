@@ -1,5 +1,6 @@
 const std = @import("std");
 const uuid_generator = @import("uuid-generator.zig");
+const format = @import("format.zig");
 
 //
 // Equivalent of the JavaScript ToUint32 conversion (used by `>>>` and `>>> 0`) of a number.

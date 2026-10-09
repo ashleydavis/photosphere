@@ -632,23 +632,23 @@ const PushState = struct {
         const unaccounted = elapsed - self.millisecondsAskingAboutTheSource - self.millisecondsWriting
             - self.millisecondsUpdatingTheTree - self.millisecondsSavingTheTree
             - self.millisecondsDiffingTheTrees - self.millisecondsDecidingWhetherToCopy - self.millisecondsLogging;
-        log.info(try std.fmt.allocPrint(self.allocator, "Sync timings: {{\"filesCopied\":{d},\"leavesVisited\":{d},\"nodesVisited\":{d},\"bytesCopied\":{d},\"elapsedMs\":{d},\"copyFileMs\":{d},\"diffMs\":{d},\"decideMs\":{d},\"openSourceMs\":{d},\"sourceInfoMs\":{d},\"writeMs\":{d},\"treeUpdateMs\":{d},\"treeSaveMs\":{d},\"loggingMs\":{d},\"unaccountedMs\":{d}}}", .{
-            self.filesCopied,
-            self.leavesVisited,
-            self.nodesVisited,
-            self.bytesCopied,
-            elapsed,
-            self.millisecondsInsideCopyFile,
-            self.millisecondsDiffingTheTrees,
-            self.millisecondsDecidingWhetherToCopy,
-            self.millisecondsOpeningTheSource,
-            self.millisecondsAskingAboutTheSource,
-            self.millisecondsWriting,
-            self.millisecondsUpdatingTheTree,
-            self.millisecondsSavingTheTree,
-            self.millisecondsLogging,
-            unaccounted,
-        }));
+        log.info(try std.mem.concat(self.allocator, u8, &.{ "Sync timings: ", try utils.json.stringify(self.allocator, .{
+            .filesCopied = self.filesCopied,
+            .leavesVisited = self.leavesVisited,
+            .nodesVisited = self.nodesVisited,
+            .bytesCopied = self.bytesCopied,
+            .elapsedMs = elapsed,
+            .copyFileMs = self.millisecondsInsideCopyFile,
+            .diffMs = self.millisecondsDiffingTheTrees,
+            .decideMs = self.millisecondsDecidingWhetherToCopy,
+            .openSourceMs = self.millisecondsOpeningTheSource,
+            .sourceInfoMs = self.millisecondsAskingAboutTheSource,
+            .writeMs = self.millisecondsWriting,
+            .treeUpdateMs = self.millisecondsUpdatingTheTree,
+            .treeSaveMs = self.millisecondsSavingTheTree,
+            .loggingMs = self.millisecondsLogging,
+            .unaccountedMs = unaccounted,
+        }) }));
         self.millisecondsLogging += now(self.io) - loggedAt;
     }
 

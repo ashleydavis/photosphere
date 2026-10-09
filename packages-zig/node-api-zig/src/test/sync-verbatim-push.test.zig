@@ -54,8 +54,8 @@ const IDatabaseKeys = struct {
 fn makeKeys(allocator: std.mem.Allocator, name: []const u8) !IDatabaseKeys {
     const cwd = std.Io.Dir.cwd();
     const io = std.testing.io;
-    const privateKeyPem = try cwd.readFileAlloc(io, try std.fmt.allocPrint(allocator, "{s}/{s}-private.pem", .{ fixture_dirs.KEYS_DIR, name }), allocator, .unlimited);
-    const publicKeyPem = try cwd.readFileAlloc(io, try std.fmt.allocPrint(allocator, "{s}/{s}-public.pem", .{ fixture_dirs.KEYS_DIR, name }), allocator, .unlimited);
+    const privateKeyPem = try cwd.readFileAlloc(io, try std.fs.path.join(allocator, &.{ fixture_dirs.KEYS_DIR, try std.mem.concat(allocator, u8, &.{ name, "-private.pem" }) }), allocator, .unlimited);
+    const publicKeyPem = try cwd.readFileAlloc(io, try std.fs.path.join(allocator, &.{ fixture_dirs.KEYS_DIR, try std.mem.concat(allocator, u8, &.{ name, "-public.pem" }) }), allocator, .unlimited);
     const loaded = try encryption.key_utils.loadEncryptionKeysFromPem(allocator, &.{.{
         .privateKeyPem = privateKeyPem,
         .publicKeyPem = publicKeyPem,

@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 const builtin = @import("builtin");
 const cli = @import("cli-zig");
 const helpers = @import("test-helpers.zig");
@@ -81,14 +82,14 @@ const seed_vault =
 fn setup(allocator: std.mem.Allocator, root: []const u8, databasesConfig: ?[]const u8) !*std.process.Environ.Map {
     const environment = try helpers.cliEnvironment(allocator, root);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = try std.fmt.allocPrint(allocator, "{s}/config/databases.toml", .{root}),
+        .sub_path = try std.fs.path.join(allocator, &.{ root, "config", "databases.toml" }),
         .data = databasesConfig orelse "databases = []\nrecent_database_names = []\n",
     });
     // The plaintext vault keeps vault.json in the directory PHOTOSPHERE_VAULT_DIR names, which is the test root
     // itself (a directory of its own under the root would have to be created first, and this test needs no other).
     try environment.put("PHOTOSPHERE_VAULT_DIR", root);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{root}),
+        .sub_path = try std.fs.path.join(allocator, &.{ root, "vault.json" }),
         .data = seed_vault,
     });
     return environment;
@@ -163,7 +164,7 @@ test "secrets import --yes stores a key file under its name without the .key ext
     const root = try helpers.makeTempDir(allocator, "clic-secrets-import");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try setup(allocator, root, seed_config);
-    const keyFile = try std.fmt.allocPrint(allocator, "{s}/mykey.key", .{root});
+    const keyFile = try std.fs.path.join(allocator, &.{ root, "mykey.key" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = keyFile, .data = "PEM-BODY" });
 
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "import", "--yes", "--private-key", keyFile }), "\u{2713} Key imported as \"mykey\".\n", "", 0);
@@ -180,7 +181,7 @@ test "debug build-sort-index lists, drops and rebuilds the indexes of a database
     const root = try helpers.makeTempDir(allocator, "clic-sort-index");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", db);
 
     // The v6 fixture carries both indexes, so the found/deleted counts take their plural branch.
@@ -214,7 +215,7 @@ test "debug build-files-tree rebuilds the tree from the files on storage" {
     const root = try helpers.makeTempDir(allocator, "clic-files-tree");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     try helpers.copyDirectory(allocator, "../../test/dbs/no-assets", db);
 
     // The only file the no-assets fixture holds is its README, so the count is one.
@@ -236,7 +237,7 @@ test "debug build-files-tree and debug merkle-tree refuse a directory that is no
     const root = try helpers.makeTempDir(allocator, "clic-not-a-db");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     try std.Io.Dir.cwd().createDirPath(std.testing.io, db);
 
     // Both commands say the same thing. The temp directory they leave behind carries a UUID of its own, so only the
@@ -266,7 +267,7 @@ test "debug remove-duplicates names the input file it cannot read" {
     const root = try helpers.makeTempDir(allocator, "clic-rm-dupes");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", db);
 
     // With no --input the duplicates report is read from <db>/duplicates.json, which this database does not have.
@@ -364,7 +365,7 @@ test "upgrade takes a v5 database all the way to the current version" {
     const root = try helpers.makeTempDir(allocator, "clic-upgrade-v5");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v5", db);
 
     const result = try runZig(allocator, environment, &.{ "upgrade", "--db", db, "--yes" });
@@ -547,7 +548,7 @@ test "secrets add and edit refuse a bad type, a name in the vault, an empty chan
     const root = try helpers.makeTempDir(allocator, "clic-secrets-refuse");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try setup(allocator, root, seed_config);
-    const missing = try std.fmt.allocPrint(allocator, "{s}/missing.pem", .{root});
+    const missing = try std.fs.path.join(allocator, &.{ root, "missing.pem" });
 
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "add", "--yes", "--name", "new", "--type", "bogus", "--value", "v" }), "", "\u{2717} Invalid secret type \"bogus\". Must be one of: api-key, s3-credentials, encryption-key, plain\n", 1);
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "add", "--yes", "--name", "s3a", "--type", "plain", "--value", "v" }), "", "\u{2717} A secret named \"s3a\" already exists. Use \"secrets edit\" to update it.\n", 1);
@@ -602,7 +603,7 @@ test "upgrade refuses a directory that is not a database" {
     const root = try helpers.makeTempDir(allocator, "clic-upgrade-nodb");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const notADatabase = try std.fmt.allocPrint(allocator, "{s}/not-a-database", .{root});
+    const notADatabase = try std.fs.path.join(allocator, &.{ root, "not-a-database" });
     try std.Io.Dir.cwd().createDirPath(std.testing.io, notADatabase);
 
     const result = try runZig(allocator, environment, &.{ "upgrade", "--db", notADatabase, "--yes" });
@@ -619,12 +620,12 @@ test "upgrade reports a merkle tree it cannot read and changes nothing" {
     const root = try helpers.makeTempDir(allocator, "clic-upgrade-corrupt");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fmt.allocPrint(allocator, "{s}/db", .{root});
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", db);
 
     // A files.dat cut off after its magic and one length reads as a node length of 1163023430 bytes, so loadTree
     // cannot return a tree and the version of the database cannot be read.
-    const filesDat = try std.fmt.allocPrint(allocator, "{s}/.db/files.dat", .{db});
+    const filesDat = try std.fs.path.join(allocator, &.{ db, ".db", "files.dat" });
     const contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, filesDat, allocator, .unlimited);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = filesDat, .data = contents[0..12] });
 

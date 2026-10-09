@@ -55,10 +55,10 @@ pub fn setupEnvironment(io: std.Io) ![]const u8 {
     process_dir = try temp_dirs.makeTempDir(process_allocator, io, "process");
     const map = try process_allocator.create(std.process.Environ.Map);
     map.* = try std.testing.environ.createMap(process_allocator);
-    try map.put("PHOTOSPHERE_CONFIG_DIR", try std.fmt.allocPrint(process_allocator, "{s}/config", .{process_dir}));
+    try map.put("PHOTOSPHERE_CONFIG_DIR", try std.fs.path.join(process_allocator, &.{ process_dir, "config" }));
     try map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
-    try map.put("PHOTOSPHERE_VAULT_DIR", try std.fmt.allocPrint(process_allocator, "{s}/vault", .{process_dir}));
-    try map.put("TEST_TMP_DIR", try std.fmt.allocPrint(process_allocator, "{s}/test-tmp", .{process_dir}));
+    try map.put("PHOTOSPHERE_VAULT_DIR", try std.fs.path.join(process_allocator, &.{ process_dir, "vault" }));
+    try map.put("TEST_TMP_DIR", try std.fs.path.join(process_allocator, &.{ process_dir, "test-tmp" }));
     // The scratch space the code under test writes to (an uploaded asset's resized copies, a session's temporary files) is inside the
     // directory this process owns, so two test programs running at once cannot reach each other's files.
     try map.put("PHOTOSPHERE_TMP_DIR", process_dir);

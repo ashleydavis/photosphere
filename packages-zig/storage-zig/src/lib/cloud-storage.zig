@@ -5,6 +5,7 @@ const storage_module = @import("storage.zig");
 const s3_client = @import("s3-client.zig");
 const s3_range_readable_stream = @import("s3-range-readable-stream.zig");
 const s3_path = @import("s3-path.zig");
+const storage_factory = @import("storage-factory.zig");
 
 const errors = utils.errors;
 const IFileInfo = storage_module.IFileInfo;
@@ -311,7 +312,7 @@ pub const CloudStorage = struct {
             }
 
             if (!std.mem.endsWith(u8, key, "/")) {
-                key = try std.fmt.allocPrint(allocator, "{s}/", .{key}); // Ensure the path ends with a slash.
+                key = try std.mem.concat(allocator, u8, &.{ key, "/" }); // Ensure the path ends with a slash.
             }
         }
 
@@ -358,7 +359,7 @@ pub const CloudStorage = struct {
         }
         else {
             if (!std.mem.endsWith(u8, key, "/")) {
-                key = try std.fmt.allocPrint(allocator, "{s}/", .{key}); // Ensure the path ends with a slash.
+                key = try std.mem.concat(allocator, u8, &.{ key, "/" }); // Ensure the path ends with a slash.
             }
 
             if (std.mem.startsWith(u8, key, "/")) {
@@ -439,7 +440,7 @@ pub const CloudStorage = struct {
             }
 
             if (!std.mem.endsWith(u8, key, "/")) {
-                key = try std.fmt.allocPrint(allocator, "{s}/", .{key}); // Ensure the path ends with a slash for directory check
+                key = try std.mem.concat(allocator, u8, &.{ key, "/" }); // Ensure the path ends with a slash for directory check
             }
         }
 
@@ -740,7 +741,7 @@ pub const CloudStorage = struct {
 
         // Make sure the key ends with a slash to indicate a directory
         if (!std.mem.endsWith(u8, key, "/")) {
-            key = try std.fmt.allocPrint(allocator, "{s}/", .{key});
+            key = try std.mem.concat(allocator, u8, &.{ key, "/" });
         }
 
         // (Zig: every failure inside the TypeScript try block returns, like the empty catch block.)
@@ -795,7 +796,7 @@ pub const CloudStorage = struct {
             destKey = destKey[1..]; // Remove leading slash.
         }
 
-        const copySource = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ source.bucket, srcKey });
+        const copySource = try storage_factory.pathJoin(allocator, &.{ source.bucket, srcKey });
         self.s3.copyObject(allocator, io, destination.bucket, copySource, destKey) catch |err| {
             const message = try causeMessage(allocator, err);
             return errors.throwWrappedError("Failed to copy from {s} to {s}: {s}", .{ srcPath, destPath, message });

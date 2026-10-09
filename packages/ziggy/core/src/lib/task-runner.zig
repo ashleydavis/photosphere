@@ -822,11 +822,14 @@ pub const TaskRunner = struct {
         if (self.silent.load(.acquire)) {
             return;
         }
-        const id = try json_util.stringify(self.allocator, task.id);
-        defer self.allocator.free(id);
-        const source = try json_util.stringify(self.allocator, task.source);
-        defer self.allocator.free(source);
-        const event = try std.fmt.allocPrint(self.allocator, "{{\"channel\":\"task-message\",\"data\":{{\"taskId\":{s},\"source\":{s},\"message\":{s}}}}}", .{ id, source, message_json });
+        const event = try json_util.stringify(self.allocator, .{
+            .channel = "task-message",
+            .data = .{
+                .taskId = task.id,
+                .source = task.source,
+                .message = json_util.Raw{ .text = message_json },
+            },
+        });
         defer self.allocator.free(event);
         self.sink.emit(self.sink.user_data, event);
         if (self.options.observer) |observer| {
@@ -845,15 +848,16 @@ pub const TaskRunner = struct {
         if (self.silent.load(.acquire)) {
             return;
         }
-        const event = switch (completion.status) {
-            .succeeded => std.fmt.allocPrint(self.allocator, "{{\"id\":{s},\"ok\":true,\"data\":{s}}}", .{ reply_id_json, completion.result_json orelse "null" }),
-            .cancelled => std.fmt.allocPrint(self.allocator, "{{\"id\":{s},\"ok\":false,\"error\":\"Cancelled\"}}", .{reply_id_json}),
-            .failed => blk: {
-                const message_json = json_util.stringify(self.allocator, completion.error_message orelse "Failed") catch @panic("out of memory building a reply");
-                defer self.allocator.free(message_json);
-                break :blk std.fmt.allocPrint(self.allocator, "{{\"id\":{s},\"ok\":false,\"error\":{s}}}", .{ reply_id_json, message_json });
+        const event = json_util.stringify(self.allocator, .{
+            .id = json_util.Raw{ .text = reply_id_json },
+            .ok = completion.status == .succeeded,
+            .data = if (completion.status == .succeeded) json_util.Raw{ .text = completion.result_json orelse "null" } else null,
+            .@"error" = switch (completion.status) {
+                .succeeded => null,
+                .cancelled => "Cancelled",
+                .failed => completion.error_message orelse "Failed",
             },
-        } catch @panic("out of memory building a reply");
+        }) catch @panic("out of memory building a reply");
         defer self.allocator.free(event);
         self.sink.emit(self.sink.user_data, event);
     }
@@ -863,21 +867,16 @@ pub const TaskRunner = struct {
         if (self.silent.load(.acquire)) {
             return;
         }
-        const id = json_util.stringify(self.allocator, task.id) catch @panic("out of memory building a task event");
-        defer self.allocator.free(id);
-        const source = json_util.stringify(self.allocator, task.source) catch @panic("out of memory building a task event");
-        defer self.allocator.free(source);
-        var detail: []u8 = &.{};
-        defer if (detail.len > 0) self.allocator.free(detail);
-        if (completion.result_json) |result| {
-            detail = std.fmt.allocPrint(self.allocator, ",\"result\":{s}", .{result}) catch @panic("out of memory building a task event");
-        }
-        else if (completion.error_message) |error_message| {
-            const error_json = json_util.stringify(self.allocator, error_message) catch @panic("out of memory building a task event");
-            defer self.allocator.free(error_json);
-            detail = std.fmt.allocPrint(self.allocator, ",\"error\":{s}", .{error_json}) catch @panic("out of memory building a task event");
-        }
-        const event = std.fmt.allocPrint(self.allocator, "{{\"channel\":\"task-completed\",\"data\":{{\"taskId\":{s},\"source\":{s},\"status\":\"{s}\"{s}}}}}", .{ id, source, @tagName(completion.status), detail }) catch @panic("out of memory building a task event");
+        const event = json_util.stringify(self.allocator, .{
+            .channel = "task-completed",
+            .data = .{
+                .taskId = task.id,
+                .source = task.source,
+                .status = @tagName(completion.status),
+                .result = if (completion.result_json) |text| json_util.Raw{ .text = text } else null,
+                .@"error" = if (completion.result_json == null) completion.error_message else null,
+            },
+        }) catch @panic("out of memory building a task event");
         defer self.allocator.free(event);
         self.sink.emit(self.sink.user_data, event);
     }

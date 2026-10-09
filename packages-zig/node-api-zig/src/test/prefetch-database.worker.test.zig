@@ -99,7 +99,7 @@ const Directories = struct {
 fn makePartialReplica(allocator: std.mem.Allocator, io: std.Io, testContext: *TestContext, withOrigin: bool) !Directories {
     const origin = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     const root = std.fs.path.dirname(origin).?;
-    const local = try std.fmt.allocPrint(allocator, "{s}/local", .{root});
+    const local = try std.fs.path.join(allocator, &.{ root, "local" });
     _ = try replicateDatabaseHandler(allocator, io, try node_api.replicate_database.replicateDatabaseDataToJson(allocator, .{
         .sourcePath = origin,
         .destPath = local,
@@ -132,7 +132,7 @@ fn makePartialReplica(allocator: std.mem.Allocator, io: std.Io, testContext: *Te
 // The path of a file in a directory.
 //
 fn pathIn(allocator: std.mem.Allocator, dir: []const u8, fileName: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "{s}/{s}", .{ dir, fileName });
+    return std.fs.path.join(allocator, &.{ dir, fileName });
 }
 
 //

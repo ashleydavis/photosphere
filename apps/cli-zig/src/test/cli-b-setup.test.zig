@@ -920,7 +920,7 @@ test "limitOptions clamps a maxItems below five and hides nothing when everythin
     const Style = struct {
         fn style(style_allocator: std.mem.Allocator, context: *anyopaque, option: []const u8, active: bool) anyerror![]const u8 {
             _ = context;
-            return std.fmt.allocPrint(style_allocator, "{s}{s}", .{ if (active) ">" else " ", option });
+            return std.mem.concat(style_allocator, u8, &.{ if (active) ">" else " ", option });
         }
     };
     var context: u8 = 0;
@@ -1039,10 +1039,10 @@ test "parseWatchInterval refuses an interval that is empty, infinite or not a nu
 // Points the environment at a news feed of the given YAML and a config directory of its own.
 //
 fn useNewsFeed(allocator: std.mem.Allocator, environ_map: *std.process.Environ.Map, root: []const u8, feed: []const u8) !void {
-    const config_dir = try std.fmt.allocPrint(allocator, "{s}/config", .{root});
+    const config_dir = try std.fs.path.join(allocator, &.{ root, "config" });
     try std.Io.Dir.cwd().createDirPath(io, config_dir);
     try environ_map.put("PHOTOSPHERE_CONFIG_DIR", config_dir);
-    const feed_path = try std.fmt.allocPrint(allocator, "{s}/news.yaml", .{root});
+    const feed_path = try std.fs.path.join(allocator, &.{ root, "news.yaml" });
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = feed_path, .data = feed });
     try environ_map.put("PHOTOSPHERE_NEWS_URL", try helpers.fileUrl(allocator, feed_path));
 }
@@ -1113,7 +1113,7 @@ test "getAllNews marks only the items already shown, and is empty when the feed 
     try std.testing.expect(!unchanged[1].seen);
 
     // A feed that cannot be read gives an empty feed and no item, rather than an error.
-    try environ_map.put("PHOTOSPHERE_NEWS_URL", try helpers.fileUrl(allocator, try std.fmt.allocPrint(allocator, "{s}/no-such-feed.yaml", .{root})));
+    try environ_map.put("PHOTOSPHERE_NEWS_URL", try helpers.fileUrl(allocator, try std.fs.path.join(allocator, &.{ root, "no-such-feed.yaml" })));
     try std.testing.expectEqual(@as(usize, 0), (cli.check_for_news.getAllNews(allocator, io)).len);
     try std.testing.expect(cli.check_for_news.checkForNews(allocator, io) == null);
 }

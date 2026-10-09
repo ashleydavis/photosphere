@@ -1,7 +1,8 @@
 const std = @import("std");
 const node_api = @import("node-api-zig");
 const node_utils = @import("node-utils-zig");
-const errors = @import("utils-zig").errors;
+const utils = @import("utils-zig");
+const errors = utils.errors;
 const api = @import("api-zig");
 const config_format = node_api.config_format;
 const IConfigFile = config_format.IConfigFile;
@@ -228,7 +229,9 @@ test "yamlToConfigFile: every theme the file may name is read" {
     const allocator = arena.allocator();
 
     for (config_format.ALLOWED_THEMES) |theme| {
-        const document = try std.fmt.allocPrint(allocator, "{{\"theme\":\"{s}\"}}", .{@tagName(theme)});
+        const document = try utils.json.stringify(allocator, .{
+            .theme = @tagName(theme),
+        });
         const config = try config_format.yamlToConfigFile(allocator, try parseJson(allocator, document));
         try std.testing.expectEqual(theme, config.theme.?);
     }

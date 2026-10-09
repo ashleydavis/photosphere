@@ -13,8 +13,8 @@ const TestApp = support.TestApp;
 //
 fn makeDatabase(app: *TestApp, name: []const u8, config_json: []const u8) ![]u8 {
     const allocator = std.testing.allocator;
-    const database_path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ app.tmp_path, name });
-    const config_path = try std.fmt.allocPrint(allocator, "{s}/.db/config.json", .{database_path});
+    const database_path = try std.fs.path.join(allocator, &.{ app.tmp_path, name });
+    const config_path = try std.fs.path.join(allocator, &.{ database_path, ".db", "config.json" });
     defer allocator.free(config_path);
     try std.Io.Dir.cwd().createDirPath(std.testing.io, std.fs.path.dirname(config_path).?);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
@@ -55,7 +55,7 @@ test "notify-database-opened adds an entry for a database that has none, with th
     const allocator = std.testing.allocator;
     const database_path = try makeDatabase(&app, "opened-new", "{\"origin\":\"/the/origin\"}");
     defer allocator.free(database_path);
-    const path_json = try std.json.Stringify.valueAlloc(allocator, database_path, .{});
+    const path_json = try utils.json.stringify(allocator, database_path);
     defer allocator.free(path_json);
     const reply = try app.requestOk("notify-database-opened", path_json);
     defer allocator.free(reply);
@@ -83,9 +83,14 @@ test "notify-database-opened refreshes the origin of a database that is already 
     const allocator = std.testing.allocator;
     const database_path = try makeDatabase(&app, "opened-existing", "{\"origin\":\"/new/origin\"}");
     defer allocator.free(database_path);
-    const path_json = try std.json.Stringify.valueAlloc(allocator, database_path, .{});
+    const path_json = try utils.json.stringify(allocator, database_path);
     defer allocator.free(path_json);
-    const entry_json = try std.fmt.allocPrint(allocator, "{{\"name\":\"listed\",\"description\":\"mine\",\"path\":{s},\"origin\":\"/old/origin\"}}", .{path_json});
+    const entry_json = try utils.json.stringify(allocator, .{
+        .name = "listed",
+        .description = "mine",
+        .path = database_path,
+        .origin = "/old/origin",
+    });
     defer allocator.free(entry_json);
     allocator.free(try app.requestOk("add-database", entry_json));
     allocator.free(try app.requestOk("notify-database-opened", path_json));
@@ -114,7 +119,7 @@ test "notify-database-closed forgets the database to reopen and the open databas
     const allocator = std.testing.allocator;
     const database_path = try makeDatabase(&app, "closed-one", "{}");
     defer allocator.free(database_path);
-    const path_json = try std.json.Stringify.valueAlloc(allocator, database_path, .{});
+    const path_json = try utils.json.stringify(allocator, database_path);
     defer allocator.free(path_json);
     allocator.free(try app.requestOk("notify-database-opened", path_json));
     const reply = try app.requestOk("notify-database-closed", "null");
@@ -139,7 +144,7 @@ test "main-command set-sync-allowed records the decision, and an edit then queue
     state.sync_debounce_ms = 30;
     const database_path = try makeDatabase(&app, "sync-me", "{}");
     defer allocator.free(database_path);
-    const path_json = try std.json.Stringify.valueAlloc(allocator, database_path, .{});
+    const path_json = try utils.json.stringify(allocator, database_path);
     defer allocator.free(path_json);
     allocator.free(try app.requestOk("notify-database-opened", path_json));
     // Syncing is not allowed yet, so an edit queues nothing.
@@ -208,14 +213,21 @@ test "resetSyncState cancels the tasks of the database that was open when anothe
     defer allocator.free(first_path);
     const second_path = try makeDatabase(&app, "reset-second", "{}");
     defer allocator.free(second_path);
-    const first_json = try std.json.Stringify.valueAlloc(allocator, first_path, .{});
+    const first_json = try utils.json.stringify(allocator, first_path);
     defer allocator.free(first_json);
-    const second_json = try std.json.Stringify.valueAlloc(allocator, second_path, .{});
+    const second_json = try utils.json.stringify(allocator, second_path);
     defer allocator.free(second_json);
     allocator.free(try app.requestOk("notify-database-opened", first_json));
-    const add_task = try std.fmt.allocPrint(allocator, "{{\"taskId\":\"long-1\",\"taskType\":\"spin\",\"source\":{s},\"data\":null,\"priority\":0}}", .{first_json});
-    defer allocator.free(add_task);
-    const message = try std.fmt.allocPrint(allocator, "{{\"channel\":\"add-task\",\"data\":{s}}}", .{add_task});
+    const message = try utils.json.stringify(allocator, .{
+        .channel = "add-task",
+        .data = .{
+            .taskId = "long-1",
+            .taskType = "spin",
+            .source = first_path,
+            .data = null,
+            .priority = 0,
+        },
+    });
     defer allocator.free(message);
     app.core.postMessage(message);
     try waitFor(&app, "\"channel\":\"task-message\"");
@@ -357,7 +369,7 @@ test "the periodic sync queues a sync for the open database when syncing is allo
     const allocator = std.testing.allocator;
     const database_path = try makeDatabase(&app, "periodic", "{}");
     defer allocator.free(database_path);
-    const path_json = try std.json.Stringify.valueAlloc(allocator, database_path, .{});
+    const path_json = try utils.json.stringify(allocator, database_path);
     defer allocator.free(path_json);
     allocator.free(try app.requestOk("notify-database-opened", path_json));
     const state = main_state.fromCore(app.core);
@@ -429,7 +441,7 @@ fn waitForCount(app: *TestApp, text: []const u8, wanted: usize) !void {
 test "automatic import that was switched on before the app started is started by the app itself" {
     var app: TestApp = undefined;
     const allocator = std.testing.allocator;
-    const database_path = try std.fmt.allocPrint(allocator, "/nowhere/startup-default-db", .{});
+    const database_path = try allocator.dupe(u8, "/nowhere/startup-default-db");
     defer allocator.free(database_path);
     const config_yaml = try autoImportConfigYaml(allocator, database_path);
     defer allocator.free(config_yaml);
@@ -446,7 +458,7 @@ test "automatic import that was switched on before the app started is started by
 test "automatic import is started again by the periodic check after its task died" {
     var app: TestApp = undefined;
     const allocator = std.testing.allocator;
-    const database_path = try std.fmt.allocPrint(allocator, "/nowhere/restart-default-db", .{});
+    const database_path = try allocator.dupe(u8, "/nowhere/restart-default-db");
     defer allocator.free(database_path);
     const config_yaml = try autoImportConfigYaml(allocator, database_path);
     defer allocator.free(config_yaml);
@@ -465,7 +477,7 @@ test "automatic import is started again by the periodic check after its task die
 test "a failure to start automatic import at startup is logged, not lost" {
     var app: TestApp = undefined;
     const allocator = std.testing.allocator;
-    const database_path = try std.fmt.allocPrint(allocator, "/nowhere/failing-default-db", .{});
+    const database_path = try allocator.dupe(u8, "/nowhere/failing-default-db");
     defer allocator.free(database_path);
     const config_yaml = try autoImportConfigYaml(allocator, database_path);
     defer allocator.free(config_yaml);
@@ -487,7 +499,7 @@ test "a failure to start automatic import at startup is logged, not lost" {
 test "an automatic import that ends the moment it starts is not remembered as running" {
     var app: TestApp = undefined;
     const allocator = std.testing.allocator;
-    const database_path = try std.fmt.allocPrint(allocator, "/nowhere/short-lived-db", .{});
+    const database_path = try allocator.dupe(u8, "/nowhere/short-lived-db");
     defer allocator.free(database_path);
     const config_yaml = try autoImportConfigYaml(allocator, database_path);
     defer allocator.free(config_yaml);

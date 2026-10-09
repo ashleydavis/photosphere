@@ -301,7 +301,7 @@ const ReplicateFilesState = struct {
             std.mem.replaceScalar(u8, normalizedFileName, '\\', '/');
 
             // Check if the file matches the filter (exact match or starts with filter + '/')
-            const filterPrefix = try std.fmt.allocPrint(self.allocator, "{s}/", .{pathFilter});
+            const filterPrefix = try std.mem.concat(self.allocator, u8, &.{ pathFilter, "/" });
             if (!std.mem.eql(u8, normalizedFileName, pathFilter) and !std.mem.startsWith(u8, normalizedFileName, filterPrefix)) {
                 return;
             }

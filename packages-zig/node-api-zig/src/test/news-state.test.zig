@@ -14,7 +14,7 @@ const state_file = node_api.state_file;
 fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const u8 {
     _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.makeTempDir(allocator, io, name);
-    const configDir = try std.fmt.allocPrint(allocator, "{s}/config", .{dir});
+    const configDir = try std.fs.path.join(allocator, &.{ dir, "config" });
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
     return configDir;
 }
@@ -24,14 +24,14 @@ fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![
 //
 fn writeState(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8, text: []const u8) !void {
     try std.Io.Dir.cwd().createDirPath(io, configDir);
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/state.yaml", .{configDir}), text);
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "state.yaml" }), text);
 }
 
 //
 // Reads the state file.
 //
 fn readState(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8) ![]const u8 {
-    return test_files.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/state.yaml", .{configDir}));
+    return test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ configDir, "state.yaml" }));
 }
 
 //
@@ -176,7 +176,7 @@ test "is a no-op for empty input" {
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-add-empty");
     try news_state.addShownNewsIds(allocator, io, &.{});
-    try std.testing.expect(!test_files.fileExists(io, try std.fmt.allocPrint(allocator, "{s}/state.yaml", .{configDir})));
+    try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ configDir, "state.yaml" })));
 }
 
 test "appends new ids to the existing list" {

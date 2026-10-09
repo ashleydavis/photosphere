@@ -48,7 +48,7 @@ test "an image the media tools cannot read is not valid" {
     _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.makeTempDir(allocator, io, "validation");
     defer temp_dirs.removeTempDir(io, dir);
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/broken.png", .{dir});
+    const filePath = try std.fs.path.join(allocator, &.{ dir, "broken.png" });
     try test_files.writeFile(io, filePath, "not a png");
 
     // The validation logs the failure; a passing test must write nothing to stderr, so the log is muted.
@@ -149,7 +149,7 @@ test "a video the media tools cannot read is not valid" {
 
     const dir = try temp_dirs.makeTempDir(allocator, io, "validation-video");
     defer temp_dirs.removeTempDir(io, dir);
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/broken.mp4", .{dir});
+    const filePath = try std.fs.path.join(allocator, &.{ dir, "broken.mp4" });
     try test_files.writeFile(io, filePath, "not a video");
 
     const outcome = try validateCapturing(allocator, io, filePath, "video/mp4");

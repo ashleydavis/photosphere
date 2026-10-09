@@ -12,8 +12,8 @@ const MockLog = @import("mock-log.zig").MockLog;
 fn setup(allocator: std.mem.Allocator, root: []const u8, feed: []const u8) !*std.process.Environ.Map {
     const map = try allocator.create(std.process.Environ.Map);
     map.* = std.process.Environ.Map.init(allocator);
-    try map.put("PHOTOSPHERE_CONFIG_DIR", try std.fmt.allocPrint(allocator, "{s}/config", .{root}));
-    const feedPath = try std.fmt.allocPrint(allocator, "{s}/news.yaml", .{root});
+    try map.put("PHOTOSPHERE_CONFIG_DIR", try std.fs.path.join(allocator, &.{ root, "config" }));
+    const feedPath = try std.fs.path.join(allocator, &.{ root, "news.yaml" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = feedPath, .data = feed });
     try map.put("PHOTOSPHERE_NEWS_URL", try helpers.fileUrl(allocator, feedPath));
     node_utils.process_env.setEnvironMap(map);
@@ -81,7 +81,7 @@ test "printNotifications prints the next unseen news item once" {
     capture.clearRetainingCapacity();
     try cli.print_notifications.printNotifications(allocator, std.testing.io, false);
     try std.testing.expectEqualStrings("", capture.written());
-    const state = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/config/state.yaml", .{root}), allocator, .unlimited);
+    const state = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.yaml" }), allocator, .unlimited);
     try std.testing.expectEqualStrings("news:\n  shown_news_ids:\n    - first\n    - second\n", state);
 }
 
@@ -122,7 +122,7 @@ test "prints nothing when quiet is set, and does not even check" {
     try std.testing.expectEqual(@as(usize, 0), mock.callCount(.info));
 
     // The news was not even checked, so it is not recorded as shown.
-    try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/config/state.yaml", .{root})));
+    try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.yaml" })));
 }
 
 test "does not record any update when no update is available" {

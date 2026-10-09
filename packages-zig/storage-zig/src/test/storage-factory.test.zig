@@ -14,7 +14,7 @@ const key_utils = encryption.key_utils;
 // Reads a key fixture of encryption-zig (tests run with the package directory as cwd).
 //
 fn readKeyFixture(allocator: std.mem.Allocator, fileName: []const u8) ![]u8 {
-    const fixturePath = try std.fmt.allocPrint(allocator, "encryption-zig/src/test/fixtures/{s}", .{fileName});
+    const fixturePath = try std.fs.path.join(allocator, &.{ "encryption-zig", "src", "test", "fixtures", fileName });
     return std.Io.Dir.cwd().readFileAlloc(std.testing.io, fixturePath, allocator, .unlimited);
 }
 
@@ -230,7 +230,7 @@ test "normalizedPath resolves a relative bare path against the current directory
     const result = try createStorage(allocator, std.testing.io, "some/../relative/./path/", null, null);
     const currentPath = try std.process.currentPathAlloc(std.testing.io, allocator);
     std.mem.replaceScalar(u8, currentPath, '\\', '/');
-    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{s}/relative/path", .{currentPath}), result.normalizedPath);
+    try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ currentPath, "relative", "path" }), result.normalizedPath);
 }
 
 // describe('with encryption options')

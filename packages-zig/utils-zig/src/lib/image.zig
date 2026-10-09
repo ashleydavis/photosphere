@@ -51,7 +51,7 @@ fn toOrientation(allocator: std.mem.Allocator, value: anytype) std.mem.Allocator
         .boolean => |boolean| .{ .other = if (boolean) "true" else "false" },
         .array => |items| .{ .other = try arrayToString(allocator, items) },
         .document => .{ .other = "[object Object]" },
-        else => .{ .other = try std.fmt.allocPrint(allocator, "{s}", .{@tagName(value)}) },
+        else => .{ .other = try allocator.dupe(u8, @tagName(value)) },
     };
 }
 

@@ -34,7 +34,7 @@ const WRITE_LOCK_TIMEOUT_MS = 10000;
 //
 fn temporaryWritePath(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) ![]const u8 {
     var uuidGenerator: RandomUuidGenerator = .{};
-    return std.fmt.allocPrint(allocator, "{s}.{s}.tmp", .{ filePath, try uuidGenerator.generate(allocator, io) });
+    return std.mem.concat(allocator, u8, &.{ filePath, ".", try uuidGenerator.generate(allocator, io), ".tmp" });
 }
 
 //

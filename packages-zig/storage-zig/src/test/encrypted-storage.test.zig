@@ -45,7 +45,7 @@ test "write encrypts, read decrypts and info returns the raw on-disk length" {
     try std.testing.expectEqualStrings("fs:", storage.location);
 
     const plain = try test_files.makeData(allocator, 1000);
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/file.bin", .{tempDir});
+    const filePath = try std.fs.path.join(allocator, &.{ tempDir, "file.bin" });
     try storage.write(allocator, io, filePath, null, plain);
 
     const raw = (try fileStorage.read(allocator, io, filePath)).?;
@@ -53,7 +53,7 @@ test "write encrypts, read decrypts and info returns the raw on-disk length" {
     try std.testing.expectEqual(computeEncryptedLength(plain.len), raw.len);
     try std.testing.expectEqualSlices(u8, plain, (try storage.read(allocator, io, filePath)).?);
     try std.testing.expectEqual(@as(u64, raw.len), (try storage.info(allocator, io, filePath)).?.length);
-    try std.testing.expect((try storage.read(allocator, io, try std.fmt.allocPrint(allocator, "{s}/missing", .{tempDir}))) == null);
+    try std.testing.expect((try storage.read(allocator, io, try std.fs.path.join(allocator, &.{ tempDir, "missing" }))) == null);
 }
 
 test "readStream decrypts and writeStream encrypts" {
@@ -67,7 +67,7 @@ test "readStream decrypts and writeStream encrypts" {
     const encryptedStorage = try makeEncryptedStorage(allocator, fileStorage.storage());
 
     const plain = try test_files.makeData(allocator, 300 * 1024 + 5);
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/stream.bin", .{tempDir});
+    const filePath = try std.fs.path.join(allocator, &.{ tempDir, "stream.bin" });
     var input = std.Io.Reader.fixed(plain);
     try encryptedStorage.writeStream(allocator, io, filePath, null, &input, plain.len);
     const raw = (try fileStorage.read(allocator, io, filePath)).?;
@@ -87,7 +87,7 @@ test "unencrypted files are read unchanged" {
     defer test_files.removeTempDir(io, tempDir);
     var fileStorage = FileStorage.init("fs:");
     const encryptedStorage = try makeEncryptedStorage(allocator, fileStorage.storage());
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/plain.txt", .{tempDir});
+    const filePath = try std.fs.path.join(allocator, &.{ tempDir, "plain.txt" });
     try fileStorage.write(allocator, io, filePath, null, "not encrypted");
     try std.testing.expectEqualStrings("not encrypted", (try encryptedStorage.read(allocator, io, filePath)).?);
 }
@@ -198,7 +198,7 @@ test "EncryptedStorage reads the files TypeScript encrypted" {
     try std.testing.expectEqualSlices(u8, plain17, try makeFixturePlaintext(allocator, 17));
 
     for (ts_encrypted_files) |tsFile| {
-        const fixturePath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ encryption_fixtures_dir, tsFile.fileName });
+        const fixturePath = try std.fs.path.join(allocator, &.{ encryption_fixtures_dir, tsFile.fileName });
         const encrypted = try std.Io.Dir.cwd().readFileAlloc(io, fixturePath, allocator, .unlimited);
         try std.testing.expectEqual(tsFile.encryptedLength, encrypted.len);
         try created.rawStorage.write(allocator, io, tsFile.fileName, null, encrypted);
@@ -223,9 +223,9 @@ test "EncryptedStorage writes files with the header and length TypeScript writes
 
     for (ts_encrypted_files) |tsFile| {
         const plain = try makeFixturePlaintext(allocator, tsFile.plainSize);
-        const writeName = try std.fmt.allocPrint(allocator, "zig-write-{s}", .{tsFile.fileName});
+        const writeName = try std.mem.concat(allocator, u8, &.{ "zig-write-", tsFile.fileName });
         try created.storage.write(allocator, io, writeName, null, plain);
-        const streamName = try std.fmt.allocPrint(allocator, "zig-stream-{s}", .{tsFile.fileName});
+        const streamName = try std.mem.concat(allocator, u8, &.{ "zig-stream-", tsFile.fileName });
         var input = std.Io.Reader.fixed(plain);
         try created.storage.writeStream(allocator, io, streamName, null, &input, null);
 
@@ -271,7 +271,7 @@ test "writeStreamHashed writes the stream without the hash, and the bytes make t
     const encryptedStorage = try makeEncryptedStorage(allocator, fileStorage.storage());
 
     const contents = "a thumbnail's worth of bytes";
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/thumb/one.jpg", .{tempDir});
+    const filePath = try std.fs.path.join(allocator, &.{ tempDir, "thumb", "one.jpg" });
     var input = std.Io.Reader.fixed(contents);
     try std.testing.expectEqual(false, try encryptedStorage.writeStreamHashed(allocator, io, filePath, "image/jpeg", &input, null, &([_]u8{7} ** 32)));
 
@@ -379,7 +379,7 @@ test "a write given no length declares none to the store underneath" {
     const encryptedStorage = try makeEncryptedStorage(allocator, lengthRecordingInterface(&underlying, &vtable));
 
     const contents = "a thumbnail's worth of bytes";
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/thumb/one.jpg", .{tempDir});
+    const filePath = try std.fs.path.join(allocator, &.{ tempDir, "thumb", "one.jpg" });
     var input = std.Io.Reader.fixed(contents);
     _ = try encryptedStorage.writeStreamHashed(allocator, io, filePath, "image/jpeg", &input, null, &([_]u8{7} ** 32));
 
@@ -405,7 +405,7 @@ test "a write given a length declares what the ciphertext will come to" {
     const encryptedStorage = try makeEncryptedStorage(allocator, lengthRecordingInterface(&underlying, &vtable));
 
     const contents = "a thumbnail's worth of bytes";
-    const filePath = try std.fmt.allocPrint(allocator, "{s}/thumb/two.jpg", .{tempDir});
+    const filePath = try std.fs.path.join(allocator, &.{ tempDir, "thumb", "two.jpg" });
     var input = std.Io.Reader.fixed(contents);
     try encryptedStorage.storage().writeStream(allocator, io, filePath, "image/jpeg", &input, contents.len);
 

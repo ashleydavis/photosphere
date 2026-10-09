@@ -66,7 +66,7 @@ pub fn saveShardMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage: IS
     }
 
     const shardFilePath = try pathJoin(allocator, &.{ bsonDbPath, "collections", collectionName, "shards", shardId });
-    const treeFilePath = try std.fmt.allocPrint(allocator, "{s}.dat", .{shardFilePath});
+    const treeFilePath = try std.mem.concat(allocator, u8, &.{ shardFilePath, ".dat" });
     try merkle_tree.saveTree(allocator, io, treeFilePath, tree, storage, "COLT");
 }
 
@@ -75,7 +75,7 @@ pub fn saveShardMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage: IS
 //
 pub fn deleteShardMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, bsonDbPath: []const u8, collectionName: []const u8, shardId: []const u8) !void {
     const shardFilePath = try pathJoin(allocator, &.{ bsonDbPath, "collections", collectionName, "shards", shardId });
-    const treeFilePath = try std.fmt.allocPrint(allocator, "{s}.dat", .{shardFilePath});
+    const treeFilePath = try std.mem.concat(allocator, u8, &.{ shardFilePath, ".dat" });
     try storage.deleteFile(allocator, io, treeFilePath);
 }
 
@@ -84,7 +84,7 @@ pub fn deleteShardMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage: 
 //
 pub fn loadShardMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, bsonDbPath: []const u8, collectionName: []const u8, shardId: []const u8) !?IMerkleTree {
     const shardFilePath = try pathJoin(allocator, &.{ bsonDbPath, "collections", collectionName, "shards", shardId });
-    const treeFilePath = try std.fmt.allocPrint(allocator, "{s}.dat", .{shardFilePath});
+    const treeFilePath = try std.mem.concat(allocator, u8, &.{ shardFilePath, ".dat" });
     return merkle_tree.loadTree(allocator, io, treeFilePath, storage, "COLT");
 }
 

@@ -2500,7 +2500,7 @@ test "an index of several pages is loaded from disk with its internal keys, and 
 
     // The file of the second page is lost: the page is still in the tree, but has no records.
     const secondPageId = (try loaded.getPage(io, null)).nextPageId.?;
-    _ = fixture.storage.files.orderedRemove(try std.fmt.allocPrint(allocator, "db/indexes/test_collection/score_asc/{s}", .{secondPageId}));
+    _ = fixture.storage.files.orderedRemove(try std.fs.path.join(allocator, &.{ "db", "indexes", "test_collection", "score_asc", secondPageId }));
     const reloaded = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     try std.testing.expect(try reloaded.load(io));
     const secondPage = try reloaded.getPage(io, secondPageId);

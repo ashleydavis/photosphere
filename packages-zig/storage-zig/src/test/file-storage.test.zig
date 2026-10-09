@@ -40,7 +40,7 @@ const Fixture = struct {
     // Gets a path inside the temporary directory.
     //
     fn path(fixture: *Fixture, relativePath: []const u8) ![]const u8 {
-        return std.fmt.allocPrint(fixture.arena.allocator(), "{s}/{s}", .{ fixture.tempDir, relativePath });
+        return std.fs.path.join(fixture.arena.allocator(), &.{ fixture.tempDir, relativePath });
     }
 };
 

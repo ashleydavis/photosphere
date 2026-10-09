@@ -573,5 +573,5 @@ pub fn createGitHubIssueUrl(allocator: std.mem.Allocator, title: []const u8, bod
     try appendFormEncoded(allocator, &params, body);
     try params.appendSlice(allocator, "&labels=bug");
 
-    return std.fmt.allocPrint(allocator, "{s}?{s}", .{ baseUrl, params.items });
+    return std.mem.concat(allocator, u8, &.{ baseUrl, "?", params.items });
 }

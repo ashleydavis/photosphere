@@ -3,7 +3,9 @@
 //
 
 const std = @import("std");
+const utils = @import("utils-zig");
 const builtin = @import("builtin");
+const node_utils = @import("node-utils-zig");
 
 //
 // Reads and parses a JSON fixture from src/test/fixtures (the tests run with the package directory as cwd).
@@ -62,7 +64,7 @@ pub fn makeTempDir(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
     const path = if (builtin.os.tag == .windows)
         try std.fs.path.join(allocator, &.{ try std.process.currentPathAlloc(std.testing.io, allocator), ".zig-cache", "tmp-tests", dirName })
     else
-        try std.fmt.allocPrint(allocator, "/tmp/{s}", .{dirName});
+        try std.fs.path.join(allocator, &.{ "/tmp", dirName });
     try std.Io.Dir.cwd().createDirPath(std.testing.io, path);
     return path;
 }
@@ -234,19 +236,19 @@ pub fn cliEnvironment(allocator: std.mem.Allocator, root: []const u8) !*std.proc
             }
         }
     }
-    const configDir = try std.fmt.allocPrint(allocator, "{s}/config", .{root});
+    const configDir = try std.fs.path.join(allocator, &.{ root, "config" });
     try std.Io.Dir.cwd().createDirPath(std.testing.io, configDir);
     try map.put("PHOTOSPHERE_CONFIG_DIR", configDir);
     // picocolors turns colour on for every process on Windows; the expected output of the tests has none.
     try map.put("NO_COLOR", "1");
     try map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
-    try map.put("PHOTOSPHERE_VAULT_DIR", try std.fmt.allocPrint(allocator, "{s}/vault", .{root}));
-    const tmpDir = try std.fmt.allocPrint(allocator, "{s}/tmp", .{root});
+    try map.put("PHOTOSPHERE_VAULT_DIR", try std.fs.path.join(allocator, &.{ root, "vault" }));
+    const tmpDir = try std.fs.path.join(allocator, &.{ root, "tmp" });
     try std.Io.Dir.cwd().createDirPath(std.testing.io, tmpDir);
     // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows.
     try map.put("TMPDIR", tmpDir);
     try map.put("TEMP", tmpDir);
-    const feed = try std.fmt.allocPrint(allocator, "{s}/news.yaml", .{root});
+    const feed = try std.fs.path.join(allocator, &.{ root, "news.yaml" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = feed, .data = "items: []\n" });
     try map.put("PHOTOSPHERE_NEWS_URL", try fileUrl(allocator, feed));
     return map;
@@ -259,7 +261,7 @@ pub fn fileUrl(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
     const forwardSlashPath = try allocator.dupe(u8, path);
     std.mem.replaceScalar(u8, forwardSlashPath, '\\', '/');
     const slashBeforeDrive = if (std.mem.startsWith(u8, forwardSlashPath, "/")) "" else "/";
-    return std.fmt.allocPrint(allocator, "file://{s}{s}", .{ slashBeforeDrive, forwardSlashPath });
+    return std.mem.concat(allocator, u8, &.{ "file://", slashBeforeDrive, forwardSlashPath });
 }
 
 //
@@ -491,4 +493,20 @@ pub fn runTestDriver(allocator: std.mem.Allocator, scenarioArguments: []const []
 //
 pub fn parseDriverResult(comptime T: type, allocator: std.mem.Allocator, result: IDriverResult) !T {
     return std.json.parseFromSliceLeaky(T, allocator, result.resultJson, .{ .allocate = .alloc_always });
+}
+
+//
+// The text of a databases.toml holding one entry, written by the TOML writer the app uses so the path is quoted however TOML
+// needs it. A Windows path holds backslashes, which a TOML basic string reads as escapes. Returned memory belongs to the allocator.
+//
+pub fn databasesToml(allocator: std.mem.Allocator, name: []const u8, description: []const u8, path: []const u8) ![]const u8 {
+    return node_utils.toml.stringifyStruct(allocator, .{
+        .databases = .{
+            .{
+                .name = name,
+                .description = description,
+                .path = path,
+            },
+        },
+    });
 }

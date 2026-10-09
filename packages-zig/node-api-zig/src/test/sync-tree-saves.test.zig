@@ -14,6 +14,7 @@
 //
 
 const std = @import("std");
+const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const sync_helpers = @import("sync-test-helpers.zig");

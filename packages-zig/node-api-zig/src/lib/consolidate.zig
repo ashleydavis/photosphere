@@ -307,7 +307,7 @@ fn pushAbsentAssets(
         };
 
         for (ASSET_FILE_PREFIXES) |prefix| {
-            const fileName = try std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, assetId });
+            const fileName = try std.mem.concat(allocator, u8, &.{ prefix, assetId });
             if (!try copyAssetFile(allocator, io, fileName, localStorage, remoteStorage)) {
                 continue;
             }
@@ -375,7 +375,7 @@ fn joinAsPartialReplica(
     // would leave a copy nothing refers to.
     for (plan.presentAssetIds) |assetId| {
         for (ASSET_FILE_PREFIXES) |prefix| {
-            const fileName = try std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, assetId });
+            const fileName = try std.mem.concat(allocator, u8, &.{ prefix, assetId });
             if (try localStorage.fileExists(allocator, io, fileName)) {
                 var deleteOperation: retry_operations.DeleteFileOperation("() => localStorage.deleteFile(fileName)") = .{
                     .allocator = allocator,

@@ -435,7 +435,7 @@ fn hashFileReportsDefault(backend: *MockBackend, allocator: std.mem.Allocator, t
     if (std.mem.eql(u8, taskType, "hash-file")) {
         return .{
             .status = .Succeeded,
-            .outputs = try std.fmt.allocPrint(allocator, "{{\"hash\":\"{s}\",\"hashFromCache\":false,\"hashMs\":0,\"cacheLookupMs\":0,\"taskMs\":0,\"cacheLoadMs\":0,\"bytesHashed\":0}}", .{DEFAULT_HASH}),
+            .outputs = try hashOutputs(allocator, DEFAULT_HASH),
         };
     }
     return null;
@@ -445,7 +445,15 @@ fn hashFileReportsDefault(backend: *MockBackend, allocator: std.mem.Allocator, t
 // The outputs of a hash-file task reporting a hash.
 //
 fn hashOutputs(allocator: std.mem.Allocator, hash: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "{{\"hash\":\"{s}\",\"hashFromCache\":false,\"hashMs\":0,\"cacheLookupMs\":0,\"taskMs\":0,\"cacheLoadMs\":0,\"bytesHashed\":0}}", .{hash});
+    return try utils.json.stringify(allocator, .{
+        .hash = hash,
+        .hashFromCache = false,
+        .hashMs = 0,
+        .cacheLookupMs = 0,
+        .taskMs = 0,
+        .cacheLoadMs = 0,
+        .bytesHashed = 0,
+    });
 }
 
 //
@@ -457,7 +465,29 @@ fn uploadOutputs(allocator: std.mem.Allocator, data: std.json.Value) ![]const u8
         .key = "_id",
         .value = .{ .string = assetId },
     }});
-    return std.fmt.allocPrint(allocator, "{{\"assetData\":{{\"assetId\":\"{s}\",\"assetPath\":\"asset/{s}\",\"assetHash\":\"{s}\",\"assetLength\":1000,\"assetLastModified\":1704067200000,\"assetRecord\":\"{s}\"}},\"totalSize\":1000,\"taskMs\":0,\"metadataMs\":0,\"microMs\":0,\"thumbnailMs\":0,\"displayMs\":0,\"uploadMs\":0,\"geocodeMs\":0,\"dominantColorMs\":0,\"otherMs\":0,\"openStorageMs\":0,\"probeMs\":0,\"isVideo\":false}}", .{ assetId, assetId, NEW_HASH, try encodeAssetRecord(allocator, assetRecord) });
+    return try utils.json.stringify(allocator, .{
+        .assetData = .{
+            .assetId = assetId,
+            .assetPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", assetId }),
+            .assetHash = NEW_HASH,
+            .assetLength = 1000,
+            .assetLastModified = 1704067200000,
+            .assetRecord = try encodeAssetRecord(allocator, assetRecord),
+        },
+        .totalSize = 1000,
+        .taskMs = 0,
+        .metadataMs = 0,
+        .microMs = 0,
+        .thumbnailMs = 0,
+        .displayMs = 0,
+        .uploadMs = 0,
+        .geocodeMs = 0,
+        .dominantColorMs = 0,
+        .otherMs = 0,
+        .openStorageMs = 0,
+        .probeMs = 0,
+        .isVideo = false,
+    });
 }
 
 //
@@ -911,7 +941,7 @@ test "after a successful upload, merkle-tree.addItem and metadataCollection.inse
     const storage = try test_files.directoryStorage(allocator, io, context.databaseDir);
     const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
     try std.testing.expect(node_api.media_file_database.getFilesImported(filesTree.databaseMetadata) == 1);
-    try std.testing.expect(@import("merkle-tree-zig").merkle_tree.findItemInTree(filesTree.sort, try std.fmt.allocPrint(allocator, "asset/{s}", .{assetId})) != null);
+    try std.testing.expect(@import("merkle-tree-zig").merkle_tree.findItemInTree(filesTree.sort, try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", assetId })) != null);
 
     const reopened = try node_api.media_file_database.createMediaFileDatabase(allocator, storage, context.uuidGenerator.uuidGenerator(), context.timestampProvider.timestampProvider());
     var found = false;

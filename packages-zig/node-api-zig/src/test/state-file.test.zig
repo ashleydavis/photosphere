@@ -13,7 +13,7 @@ const std_json = std.json;
 fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const u8 {
     _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.makeTempDir(allocator, io, name);
-    const configDir = try std.fmt.allocPrint(allocator, "{s}/config", .{dir});
+    const configDir = try std.fs.path.join(allocator, &.{ dir, "config" });
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
     return configDir;
 }
@@ -22,7 +22,7 @@ fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![
 // Writes the state file in the config directory.
 //
 fn writeState(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8, text: []const u8) !void {
-    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/state.yaml", .{configDir}), text);
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "state.yaml" }), text);
 }
 
 //

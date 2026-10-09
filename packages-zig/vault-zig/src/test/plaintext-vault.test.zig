@@ -30,7 +30,7 @@ const TempDir = struct {
 //
 fn makeTempDir(allocator: std.mem.Allocator) !TempDir {
     const tmp_dir = std.testing.tmpDir(.{ .iterate = true });
-    const path = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/{s}", .{tmp_dir.sub_path});
+    const path = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tmp_dir.sub_path });
     return .{ .tmp_dir = tmp_dir, .path = path };
 }
 

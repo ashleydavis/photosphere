@@ -3,13 +3,27 @@ const ziggy = @import("ziggy-core");
 const helpers = @import("helpers.zig");
 
 fn addTask(core: *ziggy.core.Core, id: []const u8, task_type: []const u8, source: []const u8, data: []const u8, priority: i32) !void {
-    const message = try std.fmt.allocPrint(std.testing.allocator, "{{\"channel\":\"add-task\",\"data\":{{\"taskId\":\"{s}\",\"taskType\":\"{s}\",\"source\":\"{s}\",\"data\":{s},\"priority\":{d}}}}}", .{ id, task_type, source, data, priority });
+    const message = try ziggy.json_util.stringify(std.testing.allocator, .{
+        .channel = "add-task",
+        .data = .{
+            .taskId = id,
+            .taskType = task_type,
+            .source = source,
+            .data = ziggy.json_util.Raw{ .text = data },
+            .priority = priority,
+        },
+    });
     defer std.testing.allocator.free(message);
     core.postMessage(message);
 }
 
 fn cancelSource(core: *ziggy.core.Core, source: []const u8) !void {
-    const message = try std.fmt.allocPrint(std.testing.allocator, "{{\"channel\":\"cancel-tasks\",\"data\":{{\"source\":\"{s}\"}}}}", .{source});
+    const message = try ziggy.json_util.stringify(std.testing.allocator, .{
+        .channel = "cancel-tasks",
+        .data = .{
+            .source = source,
+        },
+    });
     defer std.testing.allocator.free(message);
     core.postMessage(message);
 }
@@ -456,7 +470,9 @@ fn hostRequestTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value
     const method = ziggy.json_util.getString(data, "method").?;
     const reply = try context.hostRequest(method, "{\"key\":\"value\"}");
     if (!reply.succeeded) {
-        return try std.fmt.allocPrint(context.arena, "{{\"failedBecause\":\"{s}\"}}", .{reply.text});
+        return try ziggy.json_util.stringify(context.arena, .{
+            .failedBecause = reply.text,
+        });
     }
     return try context.arena.dupe(u8, reply.text);
 }

@@ -170,7 +170,7 @@ fn runSecretToolSearchOne(allocator: std.mem.Allocator, io: std.Io, keychainName
 // is visible in keychain GUI tools instead of a JSON wrapper.
 //
 fn runSecretToolStore(allocator: std.mem.Allocator, io: std.Io, keychainName: []const u8, secretType: []const u8, value: []const u8) !void {
-    const label_arg = try std.fmt.allocPrint(allocator, "--label={s}", .{keychainName});
+    const label_arg = try std.mem.concat(allocator, u8, &.{ "--label=", keychainName });
     const result = try keychain_types.spawn(allocator, io, &.{
         SECRET_TOOL,  "store",
         label_arg,    "service",

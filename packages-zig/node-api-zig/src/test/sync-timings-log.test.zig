@@ -11,6 +11,8 @@
 //
 
 const std = @import("std");
+const utils = @import("utils-zig");
+const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const sync_helpers = @import("sync-test-helpers.zig");
@@ -52,7 +54,7 @@ fn deletedAssetIds(allocator: std.mem.Allocator, count: usize) ![]const []const 
 fn assetPaths(allocator: std.mem.Allocator, assetIds: []const []const u8) ![]const []const u8 {
     const paths = try allocator.alloc([]const u8, assetIds.len);
     for (assetIds, 0..) |assetId, index| {
-        paths[index] = try std.fmt.allocPrint(allocator, "asset/{s}", .{assetId});
+        paths[index] = try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", assetId });
     }
     return paths;
 }

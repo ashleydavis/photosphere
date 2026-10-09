@@ -353,8 +353,11 @@ pub const Core = struct {
     }
 
     fn sendReply(self: *Core, arena: std.mem.Allocator, id: std.json.Value, reply_data: []const u8) !void {
-        const id_json = try json_util.stringify(arena, id);
-        const reply = try std.fmt.allocPrint(arena, "{{\"id\":{s},\"ok\":true,\"data\":{s}}}", .{ id_json, reply_data });
+        const reply = try json_util.stringify(arena, .{
+            .id = id,
+            .ok = true,
+            .data = json_util.Raw{ .text = reply_data },
+        });
         self.deliver(reply);
     }
 
@@ -362,20 +365,23 @@ pub const Core = struct {
     // Answers a request with an error reply, or, when there is nothing to reply to, sends a core-error event.
     //
     fn reportError(self: *Core, arena: std.mem.Allocator, id: ?std.json.Value, error_name: []const u8) void {
-        const name_json = json_util.stringify(arena, error_name) catch {
-            @panic("out of memory building an error message");
-        };
         if (id) |id_value| {
-            const id_json = json_util.stringify(arena, id_value) catch {
-                @panic("out of memory building an error message");
-            };
-            const reply = std.fmt.allocPrint(arena, "{{\"id\":{s},\"ok\":false,\"error\":{s}}}", .{ id_json, name_json }) catch {
+            const reply = json_util.stringify(arena, .{
+                .id = id_value,
+                .ok = false,
+                .@"error" = error_name,
+            }) catch {
                 @panic("out of memory building an error message");
             };
             self.deliver(reply);
             return;
         }
-        const event = std.fmt.allocPrint(arena, "{{\"channel\":\"core-error\",\"data\":{{\"error\":{s}}}}}", .{name_json}) catch {
+        const event = json_util.stringify(arena, .{
+            .channel = "core-error",
+            .data = .{
+                .@"error" = error_name,
+            },
+        }) catch {
             @panic("out of memory building an error message");
         };
         self.deliver(event);
@@ -470,8 +476,12 @@ fn menuActionHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value
     const action = json_util.getString(data, "action") orelse {
         return error.MissingAction;
     };
-    const action_json = try json_util.stringify(arena, action);
-    const event = try std.fmt.allocPrint(arena, "{{\"channel\":\"menu-action\",\"data\":{{\"action\":{s}}}}}", .{action_json});
+    const event = try json_util.stringify(arena, .{
+        .channel = "menu-action",
+        .data = .{
+            .action = action,
+        },
+    });
     core.deliver(event);
     return try arena.dupe(u8, "{}");
 }

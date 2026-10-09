@@ -2,6 +2,7 @@ const std = @import("std");
 const ziggy = @import("ziggy-core");
 const support = @import("test-support.zig");
 const main_state = @import("../lib/main-state.zig");
+const utils = @import("utils-zig");
 
 const TestApp = support.TestApp;
 
@@ -172,11 +173,12 @@ test "switching automatic import on creates the default database and starts the 
     });
     defer app.stop();
     const allocator = std.testing.allocator;
-    const database_path = try std.fmt.allocPrint(allocator, "{s}/default-db", .{app.tmp_path});
+    const database_path = try std.fs.path.join(allocator, &.{ app.tmp_path, "default-db" });
     defer allocator.free(database_path);
-    const database_path_json = try std.json.Stringify.valueAlloc(allocator, database_path, .{});
-    defer allocator.free(database_path_json);
-    const path_request = try std.fmt.allocPrint(allocator, "{{\"key\":\"defaultDatabasePath\",\"value\":{s}}}", .{database_path_json});
+    const path_request = try utils.json.stringify(allocator, .{
+        .key = "defaultDatabasePath",
+        .value = database_path,
+    });
     defer allocator.free(path_request);
     try expectReply(&app, "set-config", path_request, "null");
     try expectReply(&app, "set-config", "{\"key\":\"autoImportSources\",\"value\":[{\"type\":\"folder\",\"path\":\"/watched\",\"recurse\":true}]}", "null");

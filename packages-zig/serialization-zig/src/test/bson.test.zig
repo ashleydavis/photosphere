@@ -20,7 +20,7 @@ const io = std.testing.io;
 // Reads a BSON fixture file.
 //
 fn readBsonFixture(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
-    const fixture_path = try std.fmt.allocPrint(allocator, "serialization-zig/src/test/fixtures/bson/{s}", .{name});
+    const fixture_path = try std.fs.path.join(allocator, &.{ "serialization-zig", "src", "test", "fixtures", "bson", name });
     return std.Io.Dir.cwd().readFileAlloc(io, fixture_path, allocator, .unlimited);
 }
 
@@ -45,13 +45,13 @@ fn array(allocator: std.mem.Allocator, elements: []const BsonValue) !BsonValue {
 // Returns the deserialized document.
 //
 fn expectFixture(allocator: std.mem.Allocator, name: []const u8, expected_document: ?BsonDocument) !BsonDocument {
-    const expected_bytes = try readBsonFixture(allocator, try std.fmt.allocPrint(allocator, "{s}.bson", .{name}));
+    const expected_bytes = try readBsonFixture(allocator, try std.mem.concat(allocator, u8, &.{ name, ".bson" }));
     if (expected_document) |value| {
         const actual_bytes = try bson.serialize(allocator, value);
         try std.testing.expectEqualSlices(u8, expected_bytes, actual_bytes);
     }
     const decoded = try bson.deserialize(allocator, expected_bytes);
-    const reencoded_expected = try readBsonFixture(allocator, try std.fmt.allocPrint(allocator, "{s}.reencoded.bson", .{name}));
+    const reencoded_expected = try readBsonFixture(allocator, try std.mem.concat(allocator, u8, &.{ name, ".reencoded.bson" }));
     try std.testing.expectEqualSlices(u8, reencoded_expected, try bson.serialize(allocator, decoded));
     return decoded;
 }

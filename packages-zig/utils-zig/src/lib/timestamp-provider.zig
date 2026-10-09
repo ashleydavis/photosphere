@@ -1,5 +1,6 @@
 const std = @import("std");
 const errors = @import("errors.zig");
+const format = @import("format.zig");
 
 //
 // A JavaScript `Date` (milliseconds since the Unix epoch). Only the methods that are used are ported.

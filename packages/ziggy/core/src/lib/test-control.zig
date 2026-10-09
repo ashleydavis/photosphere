@@ -258,7 +258,9 @@ pub const TestControl = struct {
                 return;
             };
             const answer = self.handleLine(line) catch |err| blk: {
-                const text = std.fmt.allocPrint(self.allocator, "{{\"error\":\"{s}\"}}", .{@errorName(err)}) catch {
+                const text = json_util.stringify(self.allocator, .{
+                    .@"error" = @errorName(err),
+                }) catch {
                     return;
                 };
                 break :blk text;
@@ -323,7 +325,9 @@ pub const TestControl = struct {
             };
             const paths_json = try json_util.stringify(arena, paths);
             self.files_dropped(self.deliver_user_data, paths_json) catch |err| {
-                return try std.fmt.allocPrint(self.allocator, "{{\"error\":\"{s}\"}}", .{@errorName(err)});
+                return try json_util.stringify(self.allocator, .{
+                    .@"error" = @errorName(err),
+                });
             };
             return try self.allocator.dupe(u8, "{\"ok\":true}");
         }
@@ -369,7 +373,13 @@ pub const TestControl = struct {
             self.answer = null;
         }
         self.mutex.unlock(self.io);
-        const event = try std.fmt.allocPrint(arena, "{{\"channel\":\"test-command\",\"data\":{{\"requestId\":{d},\"command\":{s}}}}}", .{ request, command_json });
+        const event = try json_util.stringify(arena, .{
+            .channel = "test-command",
+            .data = .{
+                .requestId = request,
+                .command = json_util.Raw{ .text = command_json },
+            },
+        });
         self.deliver(self.deliver_user_data, event);
         const deadline = std.Io.Clock.awake.now(self.io).addDuration(.fromMilliseconds(answer_timeout_ms));
         self.mutex.lockUncancelable(self.io);

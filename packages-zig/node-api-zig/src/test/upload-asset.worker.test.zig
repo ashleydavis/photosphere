@@ -105,10 +105,10 @@ const UploadTest = struct {
         const io = std.testing.io;
         _ = try test_environment.setupEnvironment(io);
         self.tempDir = try temp_dirs.makeTempDir(allocator, io, "upload-asset-worker");
-        self.databaseDir = try std.fmt.allocPrint(allocator, "{s}/db", .{self.tempDir});
+        self.databaseDir = try std.fs.path.join(allocator, &.{ self.tempDir, "db" });
         try std.Io.Dir.cwd().createDirPath(io, self.databaseDir);
         self.contents = try test_files.readFile(allocator, io, "../test/test.jpg");
-        self.filePath = try std.fmt.allocPrint(allocator, "{s}/photos/img.jpg", .{self.tempDir});
+        self.filePath = try std.fs.path.join(allocator, &.{ self.tempDir, "photos", "img.jpg" });
         try test_files.writeFile(io, self.filePath, self.contents);
         self.uuidGenerator = try TestUuidGenerator.init(allocator);
         self.timestampProvider = .{};
@@ -157,7 +157,7 @@ const UploadTest = struct {
     //
     fn runRaw(self: *UploadTest, data: IUploadAssetData) !std.json.Value {
         const allocator = self.arena.allocator();
-        const text = try std.json.Stringify.valueAlloc(allocator, data, .{ .emit_null_optional_fields = false });
+        const text = try utils.json.stringify(allocator, data);
         const taskData = try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
         var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
         virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
@@ -184,7 +184,7 @@ const UploadTest = struct {
     // Whether a file exists in the database.
     //
     fn databaseHas(self: *UploadTest, relativePath: []const u8) bool {
-        const filePath = std.fmt.allocPrint(self.arena.allocator(), "{s}/{s}", .{ self.databaseDir, relativePath }) catch {
+        const filePath = std.fs.path.join(self.arena.allocator(), &.{ self.databaseDir, relativePath }) catch {
             return false;
         };
         return test_files.fileExists(std.testing.io, filePath);
@@ -375,7 +375,7 @@ test "sends import-failed and cleans up on upload error" {
     console_capture.captureStderr(&stderr_capture.writer);
     defer console_capture.endConsoleCapture();
     // A file where the asset directory should be, so writing the asset fails.
-    try test_files.writeFile(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/asset", .{context.databaseDir}), "in the way");
+    try test_files.writeFile(std.testing.io, try std.fs.path.join(allocator, &.{ context.databaseDir, "asset" }), "in the way");
     var data = context.makeUploadAssetData();
     // (Zig: not an image or a video, as TypeScript's getImageDetails mock returns nothing, so the failure is the
     // upload's.)
@@ -404,9 +404,9 @@ test "hashes the thumbnail and display from the files on disk, and never reads t
 
     // The hashes recorded are the hashes of the files as written, which in an unencrypted store are the files.
     var thumbDigest: [32]u8 = undefined;
-    Sha256.hash(try test_files.readFile(allocator, std.testing.io, try std.fmt.allocPrint(allocator, "{s}/thumb/asset-1", .{context.databaseDir})), &thumbDigest, .{});
+    Sha256.hash(try test_files.readFile(allocator, std.testing.io, try std.fs.path.join(allocator, &.{ context.databaseDir, "thumb", "asset-1" })), &thumbDigest, .{});
     var displayDigest: [32]u8 = undefined;
-    Sha256.hash(try test_files.readFile(allocator, std.testing.io, try std.fmt.allocPrint(allocator, "{s}/display/asset-1", .{context.databaseDir})), &displayDigest, .{});
+    Sha256.hash(try test_files.readFile(allocator, std.testing.io, try std.fs.path.join(allocator, &.{ context.databaseDir, "display", "asset-1" })), &displayDigest, .{});
     try std.testing.expectEqualStrings(&std.fmt.bytesToHex(thumbDigest, .lower), result.assetData.thumbHash.?);
     try std.testing.expectEqualStrings(&std.fmt.bytesToHex(displayDigest, .lower), result.assetData.displayHash.?);
 }

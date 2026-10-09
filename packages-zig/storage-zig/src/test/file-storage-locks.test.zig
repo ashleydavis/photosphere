@@ -47,7 +47,7 @@ const Fixture = struct {
     // Gets a path inside the temporary directory.
     //
     fn path(fixture: *Fixture, relativePath: []const u8) ![]const u8 {
-        return std.fmt.allocPrint(fixture.arena.allocator(), "{s}/{s}", .{ fixture.tempDir, relativePath });
+        return std.fs.path.join(fixture.arena.allocator(), &.{ fixture.tempDir, relativePath });
     }
 
     //
@@ -453,7 +453,11 @@ test "should create valid JSON lock files" {
 
     // The keys are in the order JSON.stringify writes them.
     const lockContent = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, lockFilePath, allocator, .unlimited);
-    const expected = try std.fmt.allocPrint(allocator, "{{\"owner\":\"user123\",\"acquiredAt\":\"{s}\",\"timestamp\":{d}}}", .{ lockData.acquiredAt, lockData.timestamp });
+    const expected = try utils.json.stringify(allocator, .{
+        .owner = "user123",
+        .acquiredAt = lockData.acquiredAt,
+        .timestamp = lockData.timestamp,
+    });
     try std.testing.expectEqualStrings(expected, lockContent);
 }
 
@@ -519,7 +523,7 @@ test "should work with complex file paths" {
 
     for (complexPaths) |relativePath| {
         const lockFilePath = try fixture.path(relativePath);
-        const owner = try std.fmt.allocPrint(allocator, "owner-{s}", .{relativePath});
+        const owner = try std.mem.concat(allocator, u8, &.{ "owner-", relativePath });
 
         try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, owner));
 
@@ -538,7 +542,11 @@ test "a lock older than the timeout is broken and taken" {
     const allocator = fixture.arena.allocator();
     const lockFilePath = try fixture.path("stale.lock");
     const staleTimestamp = std.Io.Clock.real.now(std.testing.io).toMilliseconds() - 60_000;
-    try test_files.writeFile(std.testing.io, lockFilePath, try std.fmt.allocPrint(allocator, "{{\"owner\":\"old-owner\",\"acquiredAt\":\"2020-01-01T00:00:00.000Z\",\"timestamp\":{d}}}", .{staleTimestamp}));
+    try test_files.writeFile(std.testing.io, lockFilePath, try utils.json.stringify(allocator, .{
+        .owner = "old-owner",
+        .acquiredAt = "2020-01-01T00:00:00.000Z",
+        .timestamp = staleTimestamp,
+    }));
 
     try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "new-owner"));
 
@@ -658,7 +666,11 @@ test "every step of taking a lock is written to the verbose log, and a lock that
     // A stale lock and a corrupt one are broken; an empty one being written is left alone.
     const staleTimestamp = std.Io.Clock.real.now(io).toMilliseconds() - 60_000;
     const stalePath = try fixture.path("verbose-stale.lock");
-    try test_files.writeFile(io, stalePath, try std.fmt.allocPrint(allocator, "{{\"owner\":\"old\",\"acquiredAt\":\"2020-01-01T00:00:00.000Z\",\"timestamp\":{d}}}", .{staleTimestamp}));
+    try test_files.writeFile(io, stalePath, try utils.json.stringify(allocator, .{
+        .owner = "old",
+        .acquiredAt = "2020-01-01T00:00:00.000Z",
+        .timestamp = staleTimestamp,
+    }));
     try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, stalePath, "new"));
     const corruptPath = try fixture.path("verbose-corrupt.lock");
     try test_files.writeFile(io, corruptPath, "invalid json");
@@ -780,7 +792,7 @@ test "a refused lock is logged with the age and the owner of the lock in the way
     utils.log.setLog(recordingLog.ilog());
     defer utils.log.setLog(previousLog);
 
-    const lockFilePath = try std.fmt.allocPrint(allocator, "{s}/logged.lock", .{tempDir});
+    const lockFilePath = try std.fs.path.join(allocator, &.{ tempDir, "logged.lock" });
     try std.testing.expect(try storage.acquireWriteLock(allocator, io, lockFilePath, "first-owner"));
     try std.testing.expect(!try storage.acquireWriteLock(allocator, io, lockFilePath, "second-owner"));
 
@@ -805,7 +817,7 @@ test "a lock whose acquiredAt is not a date reads as corrupt and the lock is tak
     defer test_files.removeTempDir(io, tempDir);
     var storage = FileStorage.init(tempDir);
 
-    const lockFilePath = try std.fmt.allocPrint(allocator, "{s}/bad-date.lock", .{tempDir});
+    const lockFilePath = try std.fs.path.join(allocator, &.{ tempDir, "bad-date.lock" });
     try test_files.writeFile(io, lockFilePath, "{\"owner\":\"old-owner\",\"acquiredAt\":\"not a date\",\"timestamp\":1}");
 
     // The lock cannot be read as one.

@@ -12,6 +12,7 @@
 //
 
 const std = @import("std");
+const utils = @import("utils-zig");
 const builtin = @import("builtin");
 const helpers = @import("test-helpers.zig");
 const cli = @import("cli-zig");

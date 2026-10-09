@@ -139,7 +139,7 @@ pub fn createStorage(allocator: std.mem.Allocator, io: std.Io, rootPath: []const
             const encryptedStorage = try allocator.create(EncryptedStorage);
             encryptedStorage.* = EncryptedStorage.init(storage.location, storage, storageOptions.decryptionKeyMap.?, storageOptions.encryptionPublicKey.?);
             storage = encryptedStorage.storage();
-            storageType = try std.fmt.allocPrint(allocator, "encrypted-{s}", .{storageType});
+            storageType = try std.mem.concat(allocator, u8, &.{ "encrypted-", storageType });
         }
     }
 

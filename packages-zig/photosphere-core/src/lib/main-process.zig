@@ -359,7 +359,7 @@ pub fn ensureAutoImport(context: *TaskContext) !void {
     // The import task itself, fed by a scanner that watches the configured folders. There used to be a separate `auto-import` task that
     // ran a loop and started one of these for every handful of photos it released; one task doing both is what removed that cost.
     const session_id = try state.uuid_generator.generate(arena, io);
-    const job_id = try std.fmt.allocPrint(arena, "auto-import:{s}", .{plan.databasePath});
+    const job_id = try std.mem.concat(arena, u8, &.{ "auto-import:", plan.databasePath });
     const import_data = try json_util.stringify(arena, .{
         .paths = [_][]const u8{},
         .storageDescriptor = .{

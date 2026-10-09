@@ -51,13 +51,13 @@ const FakeImageMagickDirectory = struct {
         const cwd = std.Io.Dir.cwd();
         try cwd.createDirPath(io, self.path);
         const absolutePath = try cwd.realPathFileAlloc(io, self.path, allocator);
-        const argumentsPath = try std.fmt.allocPrint(allocator, "{s}/arguments.txt", .{absolutePath});
+        const argumentsPath = try std.fs.path.join(allocator, &.{ absolutePath, "arguments.txt" });
         for ([_][]const u8{ "magick", "convert" }) |name| {
             if (builtin.os.tag == .windows) {
-                try cwd.writeFile(io, .{ .sub_path = try std.fmt.allocPrint(allocator, "{s}/{s}.cmd", .{ self.path, name }), .data = try std.fmt.allocPrint(allocator, "@echo %*> \"{s}\"\r\n", .{argumentsPath}) });
+                try cwd.writeFile(io, .{ .sub_path = try std.fs.path.join(allocator, &.{ self.path, try std.mem.concat(allocator, u8, &.{ name, ".cmd" }) }), .data = try std.fmt.allocPrint(allocator, "@echo %*> \"{s}\"\r\n", .{argumentsPath}) });
             }
             else {
-                const scriptPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ self.path, name });
+                const scriptPath = try std.fs.path.join(allocator, &.{ self.path, name });
                 try cwd.writeFile(io, .{ .sub_path = scriptPath, .data = try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s\\n' \"$*\" > '{s}'\n", .{argumentsPath}) });
                 _ = try node_utils.exec.exec(allocator, io, try std.fmt.allocPrint(allocator, "chmod +x {s}", .{scriptPath}));
             }
@@ -72,7 +72,7 @@ const FakeImageMagickDirectory = struct {
     // Reads the arguments the last fake command was run with.
     //
     fn arguments(self: *FakeImageMagickDirectory, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
-        const text = try std.Io.Dir.cwd().readFileAlloc(io, try std.fmt.allocPrint(allocator, "{s}/arguments.txt", .{self.path}), allocator, .unlimited);
+        const text = try std.Io.Dir.cwd().readFileAlloc(io, try std.fs.path.join(allocator, &.{ self.path, "arguments.txt" }), allocator, .unlimited);
         return std.mem.trimEnd(u8, text, " \r\n");
     }
 
@@ -117,11 +117,11 @@ const FakeOutputTools = struct {
         const absolutePath = try cwd.realPathFileAlloc(io, self.path, allocator);
         for (names) |name| {
             // The marker that remembers the command has been run, so the second call can tell it from the first.
-            const markerPath = try std.fmt.allocPrint(allocator, "{s}/called-{s}", .{ absolutePath, name });
+            const markerPath = try std.fs.path.join(allocator, &.{ absolutePath, try std.mem.concat(allocator, u8, &.{ "called-", name }) });
             const subPath = if (builtin.os.tag == .windows)
-                try std.fmt.allocPrint(allocator, "{s}/{s}.cmd", .{ self.path, name })
+                try std.fs.path.join(allocator, &.{ self.path, try std.mem.concat(allocator, u8, &.{ name, ".cmd" }) })
             else
-                try std.fmt.allocPrint(allocator, "{s}/{s}", .{ self.path, name });
+                try std.fs.path.join(allocator, &.{ self.path, name });
             if (builtin.os.tag == .windows) {
                 // `echo(` is what prints an empty line in cmd.exe, where a bare `echo` with no text after it prints
                 // "ECHO is off." instead. The marker is checked with `if exist` on a line of its own, so `exit /b 1`
