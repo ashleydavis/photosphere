@@ -19,13 +19,13 @@ const pathJoin = storage_factory.pathJoin;
 // storage.listDirs(dirPath, 1000, next)".
 //
 // The listing was not slow. The walk runs interleaved with the copies it feeds, and on the phone
-// those copies block the embedded engine's thread inside synchronous host calls: the failing task
+// those copies held the thread inside long blocking calls: the failing task
 // reported 193 seconds of run time with 81 milliseconds of pumping and 14 of waiting for events, so
-// for most of those three minutes no JavaScript ran at all. A wall-clock timeout then measures time
+// for most of those three minutes the walk did not run at all. A wall-clock timeout then measures time
 // the listing was never given, and all three of `retry`'s attempts expired inside the same 80
 // milliseconds, one after another, without the listing having had a chance between them.
 //
-// So this is slack for an engine that stops running JavaScript while it moves bytes, not an estimate
+// So this is slack for a thread that stops running the walk while it moves bytes, not an estimate
 // of how long a listing takes. It is minutes rather than the ninety of LARGE_FILE_TIMEOUT because a
 // listing that genuinely never answers should still be given up on inside a pass rather than holding
 // one open for an hour and a half.
@@ -41,8 +41,8 @@ pub const IOrderedFile = struct {
 };
 
 //
-// A pattern that paths are tested against (TypeScript: a RegExp and `pattern.test(fullPath)`).
-// Zig has no regular expressions, so each pattern is a function that returns true when the path matches.
+// A pattern that paths are tested against. Zig has no regular expressions, so each pattern is a function that
+// returns true when the path matches.
 //
 pub const IgnorePattern = *const fn (fullPath: []const u8) bool;
 
@@ -73,10 +73,10 @@ pub fn matchesDsStore(fullPath: []const u8) bool {
 pub const default_ignore_patterns = [_]IgnorePattern{ matchesNodeModules, matchesGit, matchesDsStore };
 
 //
-// The retried file listing (TypeScript: `() => storage.listFiles(dirPath, 1000, next)`).
+// The retried file listing.
 //
 const ListFilesOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text that names this operation in the retry timeout message (read by retryOnce).
     pub const source = "() => storage.listFiles(dirPath, 1000, next)";
 
     // The storage to list.
@@ -100,10 +100,10 @@ const ListFilesOperation = struct {
 };
 
 //
-// The retried directory listing (TypeScript: `() => storage.listDirs(dirPath, 1000, next)`).
+// The retried directory listing.
 //
 const ListDirsOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text that names this operation in the retry timeout message (read by retryOnce).
     pub const source = "() => storage.listDirs(dirPath, 1000, next)";
 
     // The storage to list.
@@ -127,7 +127,7 @@ const ListDirsOperation = struct {
 };
 
 //
-// The progress through one directory of the walk (one level of the TypeScript generator recursion).
+// The progress through one directory of the walk (one level of the recursion).
 //
 const WalkFrame = struct {
     // The directory being walked.
@@ -150,7 +150,7 @@ const WalkFrame = struct {
 };
 
 //
-// Walks a directory structure; call `next` for each file (TypeScript: the async generator returned by walkDirectory).
+// Walks a directory structure; call `next` for each file.
 //
 pub const DirectoryWalker = struct {
     // Allocates paths and listings.
@@ -248,7 +248,7 @@ pub const DirectoryWalker = struct {
                 continue;
             }
 
-            // TypeScript: `while (next)`, so an empty continuation token ends the listing like a missing one.
+            // An empty continuation token ends the listing like a missing one.
             if (frame.next != null and frame.next.?.len > 0) {
                 // The next batch of this listing.
                 frame.fetched = false;
@@ -272,8 +272,8 @@ pub const DirectoryWalker = struct {
 // Recursively walks a directory structure and adds file paths to the provided queue
 // @param dirPath Directory path to start walking from
 // @param queue Queue to add file paths to
-// @param ignorePatterns RegExp patterns to ignore
-// (Zig: returns a walker whose `next` yields the files; pass default_ignore_patterns for the TypeScript default.)
+// @param ignorePatterns Patterns of paths to ignore
+// Returns a walker whose `next` yields the files; pass default_ignore_patterns for the usual ignore list.
 //
 pub fn walkDirectory(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, dirPath: []const u8, ignorePatterns: []const IgnorePattern) !DirectoryWalker {
     var walker: DirectoryWalker = .{

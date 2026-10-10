@@ -61,7 +61,7 @@ const SAVE_RETRIES = 20;
 
 //
 // Allocates what a HashCache keeps: its buffer, lookup table and changeset, which are replaced and freed as the
-// cache changes, so they cannot live in an arena. (No TypeScript counterpart: garbage collection.)
+// cache changes, so they cannot live in an arena.
 //
 const cache_allocator = std.heap.smp_allocator;
 
@@ -195,29 +195,28 @@ pub const IHashToCache = struct {
 };
 
 //
-// Node's `buf.readUInt32LE(offset)`. (No TypeScript counterpart.)
+// Reads an unsigned 32 bit little endian integer at an offset.
 //
 fn readUInt32LE(buffer: []const u8, offset: usize) u32 {
     return std.mem.readInt(u32, buffer[offset..][0..4], .little);
 }
 
 //
-// Node's `buf.writeUInt32LE(value, offset)`. (No TypeScript counterpart.)
+// Writes an unsigned 32 bit little endian integer at an offset.
 //
 fn writeUInt32LE(buffer: []u8, value: u32, offset: usize) void {
     std.mem.writeInt(u32, buffer[offset..][0..4], value, .little);
 }
 
 //
-// Node's `buf.readUIntLE(offset, 6)`. (No TypeScript counterpart.)
+// Reads an unsigned 48 bit little endian integer at an offset.
 //
 fn readUInt48LE(buffer: []const u8, offset: usize) u64 {
     return std.mem.readInt(u48, buffer[offset..][0..6], .little);
 }
 
 //
-// Node's `buf.writeUIntLE(value, offset, 6)`, which throws a RangeError for a value that does not fit 48 bits.
-// (No TypeScript counterpart.)
+// Writes an unsigned 48 bit little endian integer at an offset. A value that does not fit 48 bits is an error.
 //
 fn writeUInt48LE(buffer: []u8, value: i128, offset: usize) !void {
     if (value < 0 or value >= (1 << 48)) {
@@ -228,8 +227,7 @@ fn writeUInt48LE(buffer: []u8, value: i128, offset: usize) !void {
 }
 
 //
-// A sorted list of entries, with the arena their keys and asset ids live in. (No TypeScript counterpart: TypeScript
-// returns the array.)
+// A sorted list of entries, with the arena their keys and asset ids live in.
 //
 const IDecodedEntries = struct {
     // Owns the keys and asset ids.
@@ -280,7 +278,7 @@ pub const HashCache = struct {
     isReadonly: bool,
 
     //
-    // Creates a new hash cache (TypeScript: the constructor).
+    // Creates a new hash cache.
     // The directory is copied. Free the cache with deinit.
     //
     pub fn init(cacheDir: []const u8, isReadonly: bool) !HashCache {
@@ -291,7 +289,7 @@ pub const HashCache = struct {
     }
 
     //
-    // Frees the cache. (No TypeScript counterpart: garbage collection.)
+    // Frees the cache.
     //
     pub fn deinit(self: *HashCache) void {
         if (self.buffer) |buffer| {
@@ -307,7 +305,7 @@ pub const HashCache = struct {
     }
 
     //
-    // Frees the changeset's upserts. (No TypeScript counterpart: `pendingUpserts.clear()`.)
+    // Frees the changeset's upserts.
     //
     fn clearPendingUpserts(self: *HashCache) void {
         for (self.pendingUpserts.keys(), self.pendingUpserts.values()) |key, entry| {
@@ -320,7 +318,7 @@ pub const HashCache = struct {
     }
 
     //
-    // Frees the changeset's removals. (No TypeScript counterpart: `pendingRemovals.clear()`.)
+    // Frees the changeset's removals.
     //
     fn clearPendingRemovals(self: *HashCache) void {
         for (self.pendingRemovals.keys()) |key| {
@@ -330,8 +328,7 @@ pub const HashCache = struct {
     }
 
     //
-    // Puts an entry in the changeset's upserts (`pendingUpserts.set(key, entry)`), copying its key and asset id.
-    // (No TypeScript counterpart.)
+    // Puts an entry in the changeset's upserts, copying its key and asset id.
     //
     fn setPendingUpsert(self: *HashCache, key: []const u8, entry: IHashCacheEntry) !void {
         const ownedAssetId = if (entry.assetId) |assetId| try cache_allocator.dupe(u8, assetId) else null;
@@ -354,7 +351,7 @@ pub const HashCache = struct {
     }
 
     //
-    // Removes a key from the changeset's upserts (`pendingUpserts.delete(key)`). (No TypeScript counterpart.)
+    // Removes a key from the changeset's upserts.
     //
     fn deletePendingUpsert(self: *HashCache, key: []const u8) void {
         if (self.pendingUpserts.fetchOrderedRemove(key)) |removed| {
@@ -366,7 +363,7 @@ pub const HashCache = struct {
     }
 
     //
-    // Removes a key from the changeset's removals (`pendingRemovals.delete(key)`). (No TypeScript counterpart.)
+    // Removes a key from the changeset's removals.
     //
     fn deletePendingRemoval(self: *HashCache, key: []const u8) void {
         if (self.pendingRemovals.fetchOrderedRemove(key)) |removed| {
@@ -375,7 +372,7 @@ pub const HashCache = struct {
     }
 
     //
-    // Adds a key to the changeset's removals (`pendingRemovals.add(key)`). (No TypeScript counterpart.)
+    // Adds a key to the changeset's removals.
     //
     fn addPendingRemoval(self: *HashCache, key: []const u8) !void {
         if (self.pendingRemovals.contains(key)) {
@@ -453,7 +450,7 @@ pub const HashCache = struct {
     // header and checksum, of an unsupported version, failing their checksum, or describing an
     // entry that runs past the end of the data. Callers treat that as "start fresh" and do the
     // logging, so this stays free of side effects and of any dependency on instance state.
-    // (Zig: the keys and asset ids are copied into the allocator.)
+    // The keys and asset ids are copied into the allocator.
     //
     pub fn decodeEntries(allocator: std.mem.Allocator, fileBytes: ?[]const u8) !?[]IHashCacheEntry {
         const bytes = fileBytes orelse {
@@ -560,7 +557,7 @@ pub const HashCache = struct {
     // Loads the hash cache from storage.
     // This function is 100% safe - it will never throw exceptions.
     // If there's any problem loading the cache, it logs the error and starts fresh.
-    // (Zig: running out of memory still fails.)
+    // Running out of memory still fails.
     //
     pub fn load(self: *HashCache, io: std.Io) !bool {
         var arena = std.heap.ArenaAllocator.init(cache_allocator);
@@ -579,7 +576,7 @@ pub const HashCache = struct {
     }
 
     //
-    // The body of load's try block. (No TypeScript counterpart: Zig needs it as a function to catch its errors.)
+    // The body of load's try block. It is a function so load can catch its errors.
     //
     fn loadFrom(self: *HashCache, allocator: std.mem.Allocator, io: std.Io, cachePath: []const u8) !bool {
         // Check if file exists first
@@ -722,7 +719,7 @@ pub const HashCache = struct {
     }
 
     //
-    // The mutator save hands to updateFileRawOptimistic (TypeScript: the arrow function), which merges this
+    // The mutator save hands to updateFileRawOptimistic, which merges this
     // instance's changes onto whatever is on disk.
     //
     const SaveMutator = struct {
@@ -762,7 +759,7 @@ pub const HashCache = struct {
     };
 
     //
-    // Sort predicate: `first.key.localeCompare(second.key)`. (No TypeScript counterpart.)
+    // Sort predicate: orders entries by key.
     //
     fn entryLessThan(context: void, first: IHashCacheEntry, second: IHashCacheEntry) bool {
         _ = context;
@@ -799,14 +796,14 @@ pub const HashCache = struct {
                 // What this fixes: a fault here used to be indistinguishable from contention, so a
                 // broken save looked exactly like a busy one and reported nothing.
                 //
-                // Why it was needed: on mobile the fs shim had no `open`, so taking the update lock
-                // threw a TypeError on every single save. This catch used to take everything and
-                // return, so the cache directory sat permanently empty, and every automatic import
-                // re-hashed every photo it had already imported, for ever, with nothing to find.
+                // Why it was needed: a save that could not take the update lock used to be swallowed
+                // here along with contention, so the cache directory sat permanently empty, and every
+                // automatic import re-hashed every photo it had already imported, for ever, with
+                // nothing to find.
                 //
                 // How it targets the problem: contention keeps the quiet path it has always had,
-                // and everything else surfaces, so the next missing shim function fails loudly and
-                // names itself instead of costing an hour a run in silence.
+                // and everything else surfaces, so the next failure names itself instead of
+                // costing an hour a run in silence.
                 return err;
             }
 
@@ -822,7 +819,7 @@ pub const HashCache = struct {
     }
 
     //
-    // Gets the key of the entry at an offset. (No TypeScript counterpart: `buffer.toString('utf8', ...)` inline.)
+    // Gets the key of the entry at an offset.
     //
     fn keyAt(buffer: []const u8, entryOffset: usize) []const u8 {
         const keyLength = readUInt32LE(buffer, entryOffset);
@@ -897,7 +894,7 @@ pub const HashCache = struct {
     // Retrieves a hash from the cache
     //
     // Returns what the cache knows about the file path, or the source id of a photo library item, or undefined
-    // when it holds nothing under that key. (Zig: the hash and asset id are copied into the allocator.)
+    // when it holds nothing under that key. The hash and asset id are copied into the allocator.
     //
     pub fn getHash(self: *HashCache, allocator: std.mem.Allocator, key: []const u8) !?ICachedHash {
         if (!self.initialized) {
@@ -1243,7 +1240,7 @@ pub const HashCache = struct {
 
     //
     // Gets all entries from the cache
-    // (Zig: the keys, hashes and asset ids are copied into the allocator.)
+    // The keys, hashes and asset ids are copied into the allocator.
     //
     pub fn getAllEntries(self: *HashCache, allocator: std.mem.Allocator) ![]IHashCacheListing {
         var entries: std.ArrayList(IHashCacheListing) = .empty;
@@ -1309,20 +1306,19 @@ const ILoadedHashCache = struct {
     fileLength: i64,
 
     // When the cache file was last modified when it was read (nanoseconds since the epoch, finer than the
-    // TypeScript's fractional milliseconds; -1 when there was no file).
+    // fractional milliseconds; -1 when there was no file).
     fileLastModified: i128,
 };
 
 //
 // The read-only cache held for each directory, so a second reader of the same cache does not read
 // the file again.
-// (Zig: kept per thread. Each TypeScript worker has its own module state, and each Zig worker is a thread.)
+// Kept per thread, because each worker is a thread with its own cache state.
 //
 threadlocal var loadedHashCaches: std.StringHashMapUnmanaged(ILoadedHashCache) = .empty;
 
 //
-// TODO: compares the cache file's modified time in nanoseconds, where the TypeScript compares mtimeMs, a double
-// that cannot tell apart two times less than about a quarter of a microsecond apart.
+// The cache file's modified time is compared in nanoseconds.
 //
 // Returns a read-only hash cache for a directory, reading the file only when it has changed.
 //
@@ -1386,7 +1382,7 @@ pub fn loadSharedHashCache(io: std.Io, cacheDir: []const u8) !*HashCache {
 // Forgets every cache held, so the next reader loads from the file again.
 //
 // Exported for tests, which need each one to start from nothing rather than from what the test
-// before it left behind. (Zig: forgets the caches of the calling thread.)
+// before it left behind. Forgets the caches of the calling thread.
 //
 pub fn forgetSharedHashCaches() void {
     var iterator = loadedHashCaches.iterator();

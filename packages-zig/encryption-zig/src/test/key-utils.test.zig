@@ -2,12 +2,13 @@ const std = @import("std");
 const encryption = @import("encryption-zig");
 const utils = @import("utils-zig");
 const fixtures = @import("fixtures.zig");
+const mock_log = @import("mock-log.zig");
 
 const key_utils = encryption.key_utils;
 const crypto = encryption.node_crypto;
 
 //
-// Loads a fixture PEM pair written by fixtures/generate.ts ("ts" or "ts2").
+// Loads a committed fixture PEM pair ("ts" or "ts2").
 //
 fn loadFixturePem(allocator: std.mem.Allocator, prefix: []const u8) !key_utils.IEncryptionKeyPem {
     return key_utils.IEncryptionKeyPem{
@@ -55,7 +56,7 @@ test "produces different hashes for different keys" {
     try std.testing.expect(!std.mem.eql(u8, &hash1, &hash2));
 }
 
-test "hashPublicKey equals the TypeScript hash for the same key" {
+test "hashPublicKey equals the fixture hash for the same key" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -71,7 +72,7 @@ test "hashPublicKey equals the TypeScript hash for the same key" {
     }
 }
 
-test "exportPublicKeyToPem reproduces the TypeScript PEM" {
+test "exportPublicKeyToPem reproduces the fixture PEM" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -139,7 +140,7 @@ test "builds encrypting storage options from a key pair" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // (Zig: the TypeScript fixture key pair stands in for generateKeyPair, which is slow in Debug builds.)
+    // (The fixture key pair stands in for a generated key pair, which is slow in Debug builds.)
     const keyPem = try loadFixturePem(allocator, "ts");
     const result = try key_utils.loadEncryptionKeysFromPem(allocator, &.{keyPem});
 
@@ -158,4 +159,107 @@ test "reports no encryption for an empty key list" {
     try std.testing.expect(!result.isEncrypted);
     try std.testing.expect(result.options.decryptionKeyMap == null);
     try std.testing.expect(result.options.encryptionPublicKey == null);
+}
+
+//
+// Gets the absolute path of a directory made by std.testing.tmpDir.
+//
+fn tempDirPath(allocator: std.mem.Allocator, tmpDir: std.testing.TmpDir) ![]const u8 {
+    const currentPath = try std.process.currentPathAlloc(std.testing.io, allocator);
+    return std.fs.path.join(allocator, &.{ currentPath, ".zig-cache", "tmp", &tmpDir.sub_path });
+}
+
+//
+// Builds a key pair from a committed fixture, because generating one is slow in Debug builds.
+//
+fn fixtureKeyPair(allocator: std.mem.Allocator) !key_utils.IKeyPair {
+    const keyPem = try loadFixturePem(allocator, "ts");
+    return key_utils.IKeyPair{
+        .privateKey = try crypto.createPrivateKey(allocator, keyPem.privateKeyPem),
+        .publicKey = try crypto.createPublicKey(allocator, keyPem.publicKeyPem),
+    };
+}
+
+test "saveKeyPair writes the private key and the public key beside it, creating the directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmpDir = std.testing.tmpDir(.{});
+    defer tmpDir.cleanup();
+
+    const keyFilePath = try std.fs.path.join(allocator, &.{ try tempDirPath(allocator, tmpDir), "nested", "key" });
+    const keyPair = try fixtureKeyPair(allocator);
+    try key_utils.saveKeyPair(allocator, std.testing.io, keyPair, keyFilePath);
+
+    const keyPem = try loadFixturePem(allocator, "ts");
+    const privateOnDisk = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, keyFilePath, allocator, .unlimited);
+    const publicOnDisk = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.mem.concat(allocator, u8, &.{ keyFilePath, ".pub" }), allocator, .unlimited);
+    try std.testing.expectEqualStrings(try crypto.exportPrivateKey(allocator, keyPair.privateKey, .pem), privateOnDisk);
+    try std.testing.expectEqualStrings(keyPem.publicKeyPem, publicOnDisk);
+}
+
+test "loadPrivateKey and loadPublicKey return null for a file that does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmpDir = std.testing.tmpDir(.{});
+    defer tmpDir.cleanup();
+
+    const missingPath = try std.fs.path.join(allocator, &.{ try tempDirPath(allocator, tmpDir), "missing" });
+    try std.testing.expect(key_utils.loadPrivateKey(allocator, std.testing.io, missingPath) == null);
+    try std.testing.expect(key_utils.loadPublicKey(allocator, std.testing.io, missingPath) == null);
+}
+
+test "loadPrivateKey returns null for a file that is not a key" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var mockLog: mock_log.MockLog = .{};
+    mockLog.install();
+    defer mockLog.uninstall();
+    var tmpDir = std.testing.tmpDir(.{});
+    defer tmpDir.cleanup();
+
+    const keyFilePath = try std.fs.path.join(allocator, &.{ try tempDirPath(allocator, tmpDir), "bad" });
+    try tmpDir.dir.writeFile(std.testing.io, .{
+        .sub_path = "bad",
+        .data = "not a key",
+    });
+    try std.testing.expect(key_utils.loadPrivateKey(allocator, std.testing.io, keyFilePath) == null);
+    try std.testing.expectEqual(@as(u32, 1), mockLog.exceptionCalls);
+}
+
+test "loadOrGenerateKeyPair loads a saved pair and does not generate when disabled" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmpDir = std.testing.tmpDir(.{});
+    defer tmpDir.cleanup();
+
+    const keyFilePath = try std.fs.path.join(allocator, &.{ try tempDirPath(allocator, tmpDir), "key" });
+    try std.testing.expect((try key_utils.loadOrGenerateKeyPair(allocator, std.testing.io, keyFilePath, false)) == null);
+
+    const keyPair = try fixtureKeyPair(allocator);
+    try key_utils.saveKeyPair(allocator, std.testing.io, keyPair, keyFilePath);
+    const loaded = (try key_utils.loadOrGenerateKeyPair(allocator, std.testing.io, keyFilePath, false)).?;
+    const savedHash = try key_utils.hashPublicKey(allocator, keyPair.publicKey);
+    const loadedHash = try key_utils.hashPublicKey(allocator, loaded.publicKey);
+    try std.testing.expectEqualSlices(u8, &savedHash, &loadedHash);
+}
+
+test "loadOrGenerateKeyPair generates and saves a pair when none exists and generation is enabled" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmpDir = std.testing.tmpDir(.{});
+    defer tmpDir.cleanup();
+
+    const keyFilePath = try std.fs.path.join(allocator, &.{ try tempDirPath(allocator, tmpDir), "key" });
+    const generated = (try key_utils.loadOrGenerateKeyPair(allocator, std.testing.io, keyFilePath, true)).?;
+    try std.testing.expectEqual(@as(usize, 512), generated.publicKey.modulusLength());
+
+    const reloaded = (try key_utils.loadOrGenerateKeyPair(allocator, std.testing.io, keyFilePath, false)).?;
+    const generatedHash = try key_utils.hashPublicKey(allocator, generated.publicKey);
+    const reloadedHash = try key_utils.hashPublicKey(allocator, reloaded.publicKey);
+    try std.testing.expectEqualSlices(u8, &generatedHash, &reloadedHash);
 }

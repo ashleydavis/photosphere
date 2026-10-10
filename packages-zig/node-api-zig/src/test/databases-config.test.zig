@@ -109,7 +109,7 @@ test "coerces missing recent_database_names to []" {
     try std.testing.expectEqual(@as(usize, 0), config.recentDatabaseNames.len);
 }
 
-test "converts snake_case TOML fields to camelCase TypeScript fields" {
+test "converts snake_case TOML fields to camelCase fields" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -234,7 +234,7 @@ test "returns the databases array from config" {
 }
 
 
-test "loadDatabasesConfig reads a databases.toml written by TypeScript like TypeScript does" {
+test "loadDatabasesConfig reads a databases.toml as the desktop app writes it" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -242,16 +242,15 @@ test "loadDatabasesConfig reads a databases.toml written by TypeScript like Type
     const configDir = try useNewConfigDir(allocator, io);
     defer temp_dirs.removeTempDir(io, configDir);
 
-    // The config TypeScript's updateDatabasesConfig was handed: every optional field on the first entry, none on
+    // The config that is written: every optional field on the first entry, none on
     // the second, and strings that TOML has to escape.
     const configJson =
         \\{"databases":[{"name":"Photos \"main\"","description":"My photos","path":"/home/me/photos","origin":"s3:bucket:/x","s3Key":"s3-creds","encryptionKey":"enc","geocodingKey":"geo"},{"name":"b","description":"","path":"C:\\data\\b"}],"recentDatabaseNames":["b","Photos \"main\""],"lastDatabase":"/home/me/photos"}
     ;
 
-    // The file it writes: databasesConfigToToml (packages/node-api/src/lib/databases-config.ts) gives
-    // `{ databases, recent_database_names, last_database }` with each entry's keys in databaseEntryToToml's order, and
-    // smol-toml's stringify puts the plain keys first, then each array of tables as `[[databases]]` blocks separated
-    // by a blank line, with every string written as JSON.stringify writes it.
+    // The file it writes holds `{ databases, recent_database_names, last_database }` with each entry's keys in a fixed
+    // order, with the plain keys first, then each array of tables as `[[databases]]` blocks separated
+    // by a blank line, with every string written as JSON writes it.
     try writeToml(allocator, io, configDir,
         \\recent_database_names = [ "b", "Photos \"main\"" ]
         \\last_database = "/home/me/photos"
@@ -272,10 +271,11 @@ test "loadDatabasesConfig reads a databases.toml written by TypeScript like Type
         \\
     );
 
-    // TypeScript's loadDatabasesConfig reads back the config it was handed (tomlToDatabasesConfig undoes
-    // databasesConfigToToml).
+    // loadDatabasesConfig reads back the config that was written.
     const loaded = try databases_config.loadDatabasesConfig(allocator, io);
-    try std.testing.expectEqualStrings(configJson, try std.json.Stringify.valueAlloc(allocator, loaded, .{ .emit_null_optional_fields = false }));
+    try std.testing.expectEqualStrings(configJson, try std.json.Stringify.valueAlloc(allocator, loaded, .{
+        .emit_null_optional_fields = false,
+    }));
 }
 
 test "converts camelCase fields to snake_case" {
@@ -332,7 +332,7 @@ test "round trips a config through TOML and back unchanged" {
 }
 
 //
-// The config as JSON (the `toEqual` of the TypeScript tests).
+// The config as JSON.
 //
 fn configAsJson(allocator: std.mem.Allocator, config: databases_config.IDatabasesConfig) ![]const u8 {
     return std.json.Stringify.valueAlloc(allocator, config, .{
@@ -654,7 +654,7 @@ test "idempotent when name not found and recents already clean" {
     try std.testing.expectEqualStrings("alpha", written.recentDatabaseNames[0]);
 }
 
-test "addDatabaseEntry writes databases.toml as TypeScript writes it" {
+test "addDatabaseEntry writes databases.toml as the desktop app writes it" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -673,9 +673,8 @@ test "addDatabaseEntry writes databases.toml as TypeScript writes it" {
         .geocodingKey = "geo",
     });
 
-    // What TypeScript's addDatabaseEntry writes for the same file and entry (smol-toml's stringify of
-    // databasesConfigToToml: the plain keys first, then each entry as a `[[databases]]` block, in
-    // databaseEntryToToml's key order).
+    // What addDatabaseEntry writes for the same file and entry: the plain keys first, then each entry as a
+    // `[[databases]]` block, in a fixed key order.
     try std.testing.expectEqualStrings(
         \\recent_database_names = [ "b", "Photos \"main\"" ]
         \\last_database = "/home/me/photos"
@@ -699,8 +698,7 @@ test "addDatabaseEntry writes databases.toml as TypeScript writes it" {
 
 //
 // tomlEntryToDatabaseEntry reads a TOML entry object into the in-memory entry type. The three keys it always copies
-// read as "" when they are absent or are not text (TypeScript copies whatever is there, so a hand-edited entry that
-// omits one leaves it undefined), and each optional key is carried over only when it is text.
+// read as "" when they are absent or are not text, and each optional key is carried over only when it is text.
 //
 test "tomlEntryToDatabaseEntry carries the three required keys and the optional ones that are there" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -731,8 +729,7 @@ test "tomlEntryToDatabaseEntry carries the three required keys and the optional 
 
 //
 // The optional keys are carried only when they are text, and an entry that is not an object at all reads as one with
-// every key empty. In TypeScript an optional key holding a number would be carried as that number, and an entry that
-// is not an object would have its properties read as undefined.
+// every key empty.
 //
 test "tomlEntryToDatabaseEntry drops an optional key that is not text, and reads a non-object entry as all empty" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -956,10 +953,18 @@ test "the last database survives every other edit to the file" {
     defer temp_dirs.removeTempDir(io, configDir);
     try writeToml(allocator, io, configDir, "recent_database_names = [ \"alpha\" ]\nlast_database = \"/a\"\n\n[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n");
 
-    try databases_config.addDatabaseEntry(allocator, io, .{ .name = "beta", .description = "", .path = "/b" });
+    try databases_config.addDatabaseEntry(allocator, io, .{
+        .name = "beta",
+        .description = "",
+        .path = "/b",
+    });
     try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io)).?);
 
-    try databases_config.updateDatabaseEntry(allocator, io, "beta", .{ .name = "gamma", .description = "", .path = "/b" });
+    try databases_config.updateDatabaseEntry(allocator, io, "beta", .{
+        .name = "gamma",
+        .description = "",
+        .path = "/b",
+    });
     try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io)).?);
 
     try databases_config.markDatabaseOpened(allocator, io, "alpha");
@@ -1004,6 +1009,50 @@ test "setting the last opened database leaves the databases and recents lists ex
     try std.testing.expectEqual(@as(usize, 2), written.recentDatabaseNames.len);
     try std.testing.expectEqualStrings("beta", written.recentDatabaseNames[0]);
     try std.testing.expectEqualStrings("alpha", written.recentDatabaseNames[1]);
+}
+
+test "the last opened database is undefined when there is no file at all" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const configDir = try useNewConfigDir(allocator, io);
+    defer temp_dirs.removeTempDir(io, configDir);
+
+    try std.testing.expect((try databases_config.getLastDatabase(allocator, io)) == null);
+}
+
+test "the last opened database reads back the path that was set" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const configDir = try useNewConfigDir(allocator, io);
+    defer temp_dirs.removeTempDir(io, configDir);
+    try writeToml(allocator, io, configDir, "recent_database_names = [ \"alpha\" ]\n\n[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n");
+
+    try databases_config.setLastDatabase(allocator, io, "/a");
+
+    try std.testing.expect(std.mem.indexOf(u8, try readToml(allocator, io, configDir), "last_database = \"/a\"") != null);
+    try std.testing.expectEqualStrings("/a", (try databases_config.getLastDatabase(allocator, io)).?);
+}
+
+test "setting the last opened database to undefined removes the key rather than writing an empty string" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const configDir = try useNewConfigDir(allocator, io);
+    defer temp_dirs.removeTempDir(io, configDir);
+
+    // An empty string would send the app looking for a database whose path is nothing, where an absent key is what
+    // "no database is open" has always meant on disk.
+    try writeToml(allocator, io, configDir, "recent_database_names = [ \"alpha\" ]\nlast_database = \"/a\"\n\n[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n");
+
+    try databases_config.setLastDatabase(allocator, io, null);
+
+    try std.testing.expect(std.mem.indexOf(u8, try readToml(allocator, io, configDir), "last_database") == null);
+    try std.testing.expect((try databases_config.getLastDatabase(allocator, io)) == null);
 }
 
 test "the last opened database round-trips through the TOML conversions in both directions" {

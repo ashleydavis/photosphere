@@ -18,7 +18,7 @@ const IReplicateDatabaseData = @import("api-zig").replicate_database_types.IRepl
 const ASSET_ID = "89171cd9-a652-4047-b869-1154bf2c95a1";
 
 //
-// A task context whose sendMessage records the messages (TypeScript: makeContext with a jest.fn sendMessage).
+// A task context whose sendMessage records the messages.
 //
 const RecordingContext = struct {
     // Deterministic uuids.
@@ -135,7 +135,7 @@ test "opens destination storage via openStorage with destPath, destEncryptionKey
     // destS3Key is only used for s3: destinations (see resolve-storage-credentials tests); here it is ignored.
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .destEncryptionKey = keyFile, .destS3Key = "dest-s3", .partial = false, .force = false }), recording.context.taskContext());
 
-    const dest = try node_api.open_storage.openStorage(allocator, io, dirs.dest, keyFile, null);
+    const dest = try node_api.open_storage.openStorage(allocator, io, dirs.dest, keyFile, null, null);
     const assetPath = "asset/" ++ ASSET_ID;
     try std.testing.expectEqualStrings(try readFileIn(allocator, io, dirs.source, assetPath), (try dest.storage.read(allocator, io, assetPath)).?);
 }
@@ -151,7 +151,7 @@ test "forwards partial flag to replicate() when partial is true" {
 
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = true, .force = false }), recording.context.taskContext());
 
-    const dest = try node_api.open_storage.openStorage(allocator, io, dirs.dest, null, null);
+    const dest = try node_api.open_storage.openStorage(allocator, io, dirs.dest, null, null, null);
     const destTree = (try node_api.tree.loadMerkleTree(allocator, io, dest.storage)).?;
     try std.testing.expect(node_api.media_file_database.isPartialDatabase(destTree.databaseMetadata));
     try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dirs.dest, "asset", ASSET_ID })));
@@ -170,7 +170,7 @@ test "forwards partial flag to replicate() when partial is false" {
 
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
 
-    const dest = try node_api.open_storage.openStorage(allocator, io, dirs.dest, null, null);
+    const dest = try node_api.open_storage.openStorage(allocator, io, dirs.dest, null, null, null);
     const destTree = (try node_api.tree.loadMerkleTree(allocator, io, dest.storage)).?;
     try std.testing.expect(!node_api.media_file_database.isPartialDatabase(destTree.databaseMetadata));
     try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dirs.dest, "asset", ASSET_ID })));

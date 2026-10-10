@@ -37,7 +37,7 @@ pub fn getDatabaseCacheDir(allocator: std.mem.Allocator, databasePath: []const u
 //
 // Where this machine keeps its record of what it imported into one database.
 //
-// This is the only place the path is worked out. Nothing else derives it, in TypeScript or in a
+// This is the only place the path is worked out. Nothing else derives it, in code or in a
 // smoke test's shell, because a second derivation goes stale silently the moment this one changes.
 //
 pub fn getImportRecordPath(allocator: std.mem.Allocator, databasePath: []const u8) ![]const u8 {

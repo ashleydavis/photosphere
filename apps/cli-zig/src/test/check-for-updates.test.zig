@@ -13,7 +13,7 @@ test "tagName reads the release response as response.json() and the tag_name che
 
     try std.testing.expectEqualStrings("v1.2.3", check_for_updates.tagName(allocator, "{\"tag_name\":\"v1.2.3\"}").?);
 
-    // JSON.parse keeps the last value of a repeated key.
+    // The last value of a repeated key is kept.
     try std.testing.expectEqualStrings("v2.0.0", check_for_updates.tagName(allocator, "{\"tag_name\":\"v1.2.3\",\"tag_name\":\"v2.0.0\"}").?);
 
     // An empty tag, a tag that is not a string, a body that is not an object and a body that is not JSON give none.
@@ -24,7 +24,7 @@ test "tagName reads the release response as response.json() and the tag_name che
 }
 
 //
-// Points the config dir at a path in the root (TypeScript: the mocked setLastShownUpdateVersion of node-api).
+// Points the config dir at a path in the root.
 //
 fn setConfigDir(allocator: std.mem.Allocator, configDir: []const u8) !void {
     const map = try allocator.create(std.process.Environ.Map);
@@ -65,7 +65,7 @@ test "markUpdateAsShown swallows persistence errors" {
     mock.install();
     defer mock.uninstall();
 
-    // A file where the config dir should be, so the state file cannot be written (TypeScript: setLastShownUpdateVersion rejects with "disk full").
+    // A file where the config dir should be, so the state file cannot be written (as when the disk is full).
     check_for_updates.markUpdateAsShown(allocator, std.testing.io, "1.3.0");
 
     try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fs.path.join(allocator, &.{ blocker, "state.yaml" })));

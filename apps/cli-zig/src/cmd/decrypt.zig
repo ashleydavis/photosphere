@@ -33,7 +33,7 @@ const IDecryptProgress = node_api.decrypt.IDecryptProgress;
 const configureLog = log_module.configureLog;
 
 //
-// Options of the decrypt command (TypeScript: IDecryptCommandOptions extends IBaseCommandOptions).
+// Options of the decrypt command.
 // The base options, which include `key` (the encryption key file(s) used to read the source database,
 // comma-separated), are in `base`.
 //
@@ -43,7 +43,7 @@ pub const IDecryptCommandOptions = struct {
 };
 
 //
-// Writes a decrypt progress message (TypeScript: the `(msg) => writeProgress(msg)` arrow function).
+// Writes a decrypt progress message.
 //
 fn onDecryptProgress(context: ?*anyopaque, message: []const u8) void {
     _ = context;

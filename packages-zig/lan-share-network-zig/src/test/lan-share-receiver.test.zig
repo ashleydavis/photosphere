@@ -11,8 +11,7 @@ const sha256Hex = lan_share.lan_share_sender.sha256Hex;
 const receiver_module = lan_share.lan_share_receiver;
 
 //
-// Makes one HTTPS request to the receiver on this machine (the `https.request` calls of the TypeScript tests, with
-// `rejectUnauthorized: false`).
+// Makes one HTTPS request to the receiver on this machine, without verifying its certificate.
 //
 fn requestReceiver(allocator: std.mem.Allocator, receiver: *const LanShareReceiver, method: []const u8, path: []const u8, body: ?[]const u8) !https.IResponse {
     const connection = try https.Connection.connect(allocator, .{ .address = .{ 127, 0, 0, 1 }, .port = receiver.httpsPort });
@@ -31,8 +30,8 @@ test "cancel resolves receive with null" {
     const result = try receiver.receive();
     try std.testing.expect(result == null);
 
-    // Jest's default 5 second test timeout, which is what failed the TypeScript test when cancel did not end
-    // the receive and it waited out its 60 second timeout instead.
+    // A cancel ends the receive at once. Failing here means cancel did not end the receive and it waited out its
+    // 60 second timeout instead.
     try std.testing.expect(std.Io.Clock.awake.now(std.testing.io).toMilliseconds() - startedAt < 5000);
 }
 
@@ -51,7 +50,7 @@ test "receive times out and returns null" {
     const result = try receiver.receive();
     try std.testing.expect(result == null);
 
-    // The TypeScript test's 10 second timeout.
+    // The 10 second limit for the receive to end.
     try std.testing.expect(std.Io.Clock.awake.now(io).toMilliseconds() - startedAt < 10000);
 
     // The receiver waited out its timeout: the virtual clock moved at least that far.
@@ -182,8 +181,8 @@ test "does not abort when request count stays within budget" {
 }
 
 //
-// The certificate tests below have no TypeScript counterpart: the TypeScript receiver's certificate is only ever
-// checked by Node's TLS stack in the round trip. They cover the ported ASN.1 builder directly.
+// The certificate tests below cover the ASN.1 builder directly, where the round trip only has the certificate
+// checked by the TLS stack.
 //
 
 test "encodeAsn1Oid encodes sha256WithRSAEncryption" {
@@ -234,7 +233,7 @@ test "generateSelfSignedCert makes a certificate the HTTPS server loads, with th
     context.deinit();
 }
 
-test "a payload with a repeated key is read with its last value, as JSON.parse reads it" {
+test "a payload with a repeated key is read with its last value" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

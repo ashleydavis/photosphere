@@ -151,8 +151,7 @@ fn makeItem(comptime sourceId: []const u8, createdAtMs: i64) IMediaItem {
 const TEST_START_MS = 1700000000000;
 
 //
-// What a test overrides in the deps, and what the hooks recorded (TypeScript: the overrides object and the
-// variables its arrow functions close over).
+// What a test overrides in the deps, and what the hooks recorded.
 //
 const Hooks = struct {
     // Allocates what the hooks record.
@@ -237,7 +236,7 @@ const Hooks = struct {
 };
 
 //
-// The state each test starts from (TypeScript: the beforeEach of the describe block).
+// The state each test starts from.
 //
 const ScannerTest = struct {
     // Holds the test's allocations.

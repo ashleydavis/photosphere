@@ -31,7 +31,7 @@ pub const TerminationCallback = struct {
 };
 
 //
-// List of registered termination callbacks (a growable list like the JavaScript array, allocated
+// List of registered termination callbacks (a growable list, allocated
 // from the process-wide allocator because registerTerminationCallback takes no allocator).
 //
 var terminationCallbacks: std.ArrayListUnmanaged(TerminationCallback) = .empty;
@@ -46,9 +46,7 @@ pub fn invokeTerminationCallbacks(io: std.Io, exitCode: u8) !void {
 }
 
 //
-// Ends the process with the exit code like `process.exit(code)`, which emits the 'exit' event: once the termination
-// handlers are initialized, the 'exit' handler logs the exit code.
-// (No TypeScript counterpart: process.exit and the 'exit' handler of initializeTerminationHandlers.)
+// Ends the process with the exit code: once the termination handlers are initialized, the exit code is logged first.
 //
 fn exitProcess(code: u8) noreturn {
     if (terminationCallbacksInitialized) {
@@ -138,7 +136,7 @@ const ctrl_c_event: std.os.windows.DWORD = 0;
 extern "kernel32" fn SetConsoleCtrlHandler(handlerRoutine: ?*const fn (ctrlType: std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL, add: std.os.windows.BOOL) callconv(.winapi) std.os.windows.BOOL;
 
 //
-// The Windows console control handler: like Node on Windows, Ctrl+C is delivered as SIGINT (recorded for the
+// The Windows console control handler: Ctrl+C is delivered as SIGINT (recorded for the
 // signal watcher thread). Other events are not handled, so they terminate the process as usual.
 //
 fn handleConsoleCtrl(ctrlType: std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL {
@@ -151,7 +149,7 @@ fn handleConsoleCtrl(ctrlType: std.os.windows.DWORD) callconv(.winapi) std.os.wi
 }
 
 //
-// Handles a termination signal like the TypeScript `process.on('SIGTERM' | 'SIGINT')` handlers.
+// Handles a termination signal (SIGTERM or SIGINT).
 //
 fn shutdownOnSignal(io: std.Io, signalName: []const u8, cleanupFailedCode: u8) noreturn {
     utils.log.log.verbose(if (std.mem.eql(u8, signalName, "SIGTERM")) "SIGTERM received. Shutting down gracefully..." else "SIGINT received. Shutting down...");
@@ -167,11 +165,10 @@ fn shutdownOnSignal(io: std.Io, signalName: []const u8, cleanupFailedCode: u8) n
 }
 
 //
-// Ends the process for an error that nothing catches (TypeScript: an uncaught exception, which Zig does not have, so
-// the code that throws one calls this). Once the termination handlers are initialized it is the
-// `process.on('uncaughtException')` handler: the error is logged, the termination callbacks run and the process exits
-// with EXIT_UNCAUGHT_EXCEPTION (EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED when they throw). Before that it is Bun's own
-// handling, which prints the error to stderr and exits with 1.
+// Ends the process for an error that nothing catches. Zig has no uncaught exceptions, so the code that throws one
+// calls this. Once the termination handlers are initialized the error is logged, the termination callbacks run and
+// the process exits with EXIT_UNCAUGHT_EXCEPTION (EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED when they throw). Before
+// that it prints the error to stderr and exits with 1.
 //
 pub fn shutdownOnUncaughtException(io: std.Io, err: anyerror) noreturn {
     if (!terminationCallbacksInitialized) {
@@ -193,12 +190,11 @@ pub fn shutdownOnUncaughtException(io: std.Io, err: anyerror) noreturn {
 }
 
 //
-// Handles an error thrown out of a signal handler. In TypeScript the async signal handler's promise
-// rejects, which the `process.on('unhandledRejection')` handler turns into this shutdown.
+// Handles an error thrown out of a signal handler: logs it, runs the termination callbacks and exits.
 //
 fn shutdownOnUnhandledRejection(io: std.Io, err: anyerror) noreturn {
-    // `new Error(reason)`: the reason is the error the signal handler threw, and String() of it is
-    // "<name>: <message>". The message is copied out first since recording the new error overwrites it.
+    // The reason is the error the signal handler threw, as "<name>: <message>". The message is copied out first
+    // since recording the new error overwrites it.
     var reasonBuffer: [4096]u8 = undefined;
     const reasonName = if (err == error.Thrown or err == error.FatalError) utils.errors.lastErrorName() else "Error";
     const reason = std.fmt.bufPrint(&reasonBuffer, "{s}: {s}", .{ reasonName, utils.errors.errorMessage(err) }) catch reasonBuffer[0..];
@@ -269,7 +265,7 @@ fn initializeTerminationHandlers(io: std.Io) !void {
 
     if (builtin.os.tag == .windows) {
         //
-        // Listen for Ctrl+C (Node emits it as SIGINT on Windows; SIGTERM is never received on Windows)
+        // Listen for Ctrl+C (delivered as SIGINT on Windows; SIGTERM is never received on Windows)
         //
         if (SetConsoleCtrlHandler(handleConsoleCtrl, .TRUE) == .FALSE) {
             return std.os.windows.unexpectedError(std.os.windows.GetLastError());

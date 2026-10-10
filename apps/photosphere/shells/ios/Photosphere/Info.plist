@@ -30,6 +30,20 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photosphere reads your photo library so it can import your photos into your own database and keep a backup copy of them.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Photosphere saves photos back to your photo library when you export them.</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>au.com.codecapers.photosphere.auto-import</string>
+		<string>au.com.codecapers.photosphere.background-sync</string>
+		<string>au.com.codecapers.photosphere.background-prefetch</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>processing</string>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

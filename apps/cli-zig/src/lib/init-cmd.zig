@@ -66,9 +66,9 @@ const select = prompts.select;
 const multiline = prompts.multiline;
 
 //
-// The number of CPUs, counted as `os.cpus().length` counts them: on Linux, every CPU /proc/stat lists, whichever of
-// them this process may run on. (Zig: std.Thread.getCpuCount counts only the CPUs the process may run on, so a
-// process pinned to one CPU got a single worker.)
+// The number of CPUs: on Linux, every CPU /proc/stat lists, whichever of them this process may run on.
+// (std.Thread.getCpuCount counts only the CPUs the process may run on, so a process pinned to one CPU would get a
+// single worker.)
 //
 pub fn cpuCount(allocator: std.mem.Allocator, io: std.Io) !usize {
     if (builtin.os.tag != .linux) {
@@ -102,11 +102,10 @@ fn jsonString(object: std.json.ObjectMap, name: []const u8) ?[]const u8 {
 }
 
 //
-// Converts the JSON of a stored S3 credentials secret to IS3Credentials
-// (TypeScript: `{ region: parsed.region, accessKeyId: parsed.accessKeyId, ... }`).
+// Converts the JSON of a stored S3 credentials secret to IS3Credentials.
 //
 fn parseS3Credentials(allocator: std.mem.Allocator, json: []const u8) !IS3Credentials {
-    // JSON.parse keeps the last value of a repeated key.
+    // The last value of a repeated key is kept.
     const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, json, .{
         .duplicate_field_behavior = .use_last,
     }) catch |err| {
@@ -131,8 +130,7 @@ fn parseS3Credentials(allocator: std.mem.Allocator, json: []const u8) !IS3Creden
 }
 
 //
-// True when the text is a UUID
-// (TypeScript: `/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(text)`).
+// True when the text is a UUID: hexadecimal digits in groups of 8, 4, 4, 4 and 12 separated by hyphens.
 //
 fn isUuid(value: []const u8) bool {
     if (value.len != 36) {
@@ -163,7 +161,7 @@ fn isUuid(value: []const u8) bool {
 pub fn normaliseDatabaseId(databaseId: ?[]const u8) !?[]const u8 {
     const value = databaseId orelse return null;
 
-    // JavaScript's trim() removes the whitespace and line terminators.
+    // The whitespace and line terminators are removed.
     const trimmed = utils.js_string.trim(value);
     if (trimmed.len == 0) {
         return utils.errors.throwError("--database-id was given with no value. Leave it off to create a database with a new identity of its own.", .{});
@@ -493,8 +491,7 @@ fn validateKeyName(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
 }
 
 //
-// Generates a new RSA-4096 key pair and returns the private key as PKCS#8 PEM
-// (TypeScript: `generateKeyPair().privateKey.export({ type: 'pkcs8', format: 'pem' })`).
+// Generates a new RSA-4096 key pair and returns the private key as PKCS#8 PEM.
 //
 fn generatePrivateKeyPem(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
     const keyPair = try generateKeyPair(allocator, io);
@@ -504,7 +501,6 @@ fn generatePrivateKeyPem(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 //
 // Prompts for encryption settings. Either selects an existing vault key or
 // generates a new RSA-4096 key pair and stores it in the vault.
-// (TypeScript default message: 'Would you like to encrypt your database?'.)
 //
 pub fn promptForEncryption(allocator: std.mem.Allocator, io: std.Io, message: []const u8) !IEncryptionPromptResult {
     const wantEncryption = try confirm(allocator, io, .{
@@ -910,7 +906,7 @@ pub const IBaseCommandOptions = struct {
     // Number of worker threads to use for parallel processing.
     // Defaults to the number of CPU cores.
     // Supported by commands that use the task queue (e.g., verify, check).
-    // (Declared as a number in TypeScript, but commander passes the command line text.)
+    // (Held as text, because that is what the command line gives.)
     //
     workers: ?[]const u8 = null,
 
@@ -918,14 +914,13 @@ pub const IBaseCommandOptions = struct {
     // Task timeout in milliseconds.
     // Supported by commands that use the task queue (e.g., verify).
     // Defaults to 40 minutes (2400000ms).
-    // (Declared as a number in TypeScript, but commander passes the command line text.)
+    // (Held as text, because that is what the command line gives.)
     //
     timeout: ?[]const u8 = null,
 };
 
 //
-// Options for creating a new database
-// (TypeScript: ICreateCommandOptions extends IBaseCommandOptions; the base options are in `base`).
+// Options for creating a new database (the base options are in `base`).
 //
 pub const ICreateCommandOptions = struct {
     // The options shared by every command.
@@ -969,7 +964,7 @@ pub const ICommandContext = struct {
 };
 
 //
-// Equivalent of JavaScript `Number(text)` for the numeric options (NaN when the text is not a number).
+// Converts the text of a numeric option to a number (NaN when the text is not a number).
 //
 pub fn jsNumber(textValue: []const u8) f64 {
     return utils.js_number.stringToNumber(textValue);
@@ -1012,8 +1007,7 @@ fn cleanupOnTermination(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror
 
 //
 // Wraps a command function to inject common dependencies.
-// TypeScript returns a wrapper that does this before calling the command; in Zig the caller (index.zig)
-// calls initContext with the parsed options and then calls the command with the returned context.
+// The caller (index.zig) calls initContext with the parsed options and then calls the command with the returned context.
 // Everything is allocated with the allocator, which must live until the process exits.
 //
 pub fn initContext(allocator: std.mem.Allocator, io: std.Io, options: IBaseCommandOptions) !ICommandContext {
@@ -1057,8 +1051,7 @@ pub fn initContext(allocator: std.mem.Allocator, io: std.Io, options: IBaseComma
     // Worker pool defaults to number of CPUs if not specified
     //
     // TODO: the import-assets task waits for its child tasks in the same pool, so with one worker (--workers 1, or a
-    // machine with one CPU) the only worker waits on tasks nothing is left to run and the import never ends. The
-    // TypeScript CLI hangs the same way; the port keeps that behaviour until the TypeScript is fixed.
+    // machine with one CPU) the only worker waits on tasks nothing is left to run and the import never ends.
     const workers: f64 = if (options.workers) |workersText| jsNumber(workersText) else @floatFromInt(try cpuCount(allocator, io));
     const timeout: f64 = if (options.timeout) |timeoutText| jsNumber(timeoutText) else 2400000;
     const workerPool = try WorkerPoolBun.init(io, workers, timeout, .{
@@ -1126,8 +1119,7 @@ pub const IInitResult = struct {
 };
 
 //
-// Formats the lines of a "Did you mean" list
-// (TypeScript: `similarNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')`).
+// Formats the lines of a "Did you mean" list: a bullet and the cyan name on each line.
 //
 fn didYouMeanList(allocator: std.mem.Allocator, similarNames: []const []const u8) ![]const u8 {
     var lines: std.ArrayList([]const u8) = .empty;
@@ -1139,7 +1131,7 @@ fn didYouMeanList(allocator: std.mem.Allocator, similarNames: []const []const u8
 
 //
 // Shared database loading function for CLI commands.
-// (TypeScript default: allowOlderVersions = false; callers pass it.)
+// (Callers pass allowOlderVersions.)
 //
 pub fn loadDatabase(
     allocator: std.mem.Allocator,

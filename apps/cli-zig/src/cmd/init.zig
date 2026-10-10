@@ -12,12 +12,12 @@ const ICommandContext = init_cmd.ICommandContext;
 const intro = prompts.intro;
 
 //
-// Options of the init command (TypeScript: IInitCommandOptions extends ICreateCommandOptions).
+// Options of the init command.
 //
 pub const IInitCommandOptions = ICreateCommandOptions;
 
 //
-// Formats a message into the allocator (TypeScript: a template literal).
+// Formats a message into the allocator.
 //
 fn text(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) ![]const u8 {
     return std.fmt.allocPrint(allocator, fmt, args);

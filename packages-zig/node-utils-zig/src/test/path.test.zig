@@ -3,7 +3,7 @@ const node_utils = @import("node-utils-zig");
 const path = node_utils.path;
 
 //
-// Path segments and what Bun's path.posix.join and path.win32.join return for them (see fixtures/generate.ts).
+// Path segments and what Bun's path.posix.join and path.win32.join return for them.
 //
 const JoinCase = struct {
     // The segments passed to join.
@@ -273,5 +273,37 @@ test "path.posix.normalize and path.win32.normalize match Node" {
         errdefer std.debug.print("case: {s}\n", .{case.path});
         try std.testing.expectEqualStrings(case.posix, try path.posix.normalize(allocator, case.path));
         try std.testing.expectEqualStrings(case.win32, try path.win32.normalize(allocator, case.path));
+    }
+}
+
+test "path.normalize uses the rules of the platform the program runs on" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const expected = if (@import("builtin").os.tag == .windows) "a\\b\\c\\" else "a/b/c/";
+    try std.testing.expectEqualStrings(expected, try path.normalize(allocator, "a//b/./c/"));
+}
+
+test "path.resolve makes a path absolute against the current directory and drops a trailing separator" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const currentDirectory = try std.process.currentPathAlloc(io, allocator);
+
+    try std.testing.expectEqualStrings(currentDirectory, try path.resolve(allocator, io, ""));
+    try std.testing.expectEqualStrings(try path.join(allocator, &.{ currentDirectory, "a", "c" }), try path.resolve(allocator, io, "a/b/../c/"));
+    try std.testing.expectEqualStrings(try path.join(allocator, &.{ currentDirectory, "x" }), try path.resolve(allocator, io, "./x"));
+    try std.testing.expectEqualStrings(currentDirectory, try path.resolve(allocator, io, currentDirectory));
+
+    if (@import("builtin").os.tag == .windows) {
+        try std.testing.expectEqualStrings("C:\\a\\b", try path.resolve(allocator, io, "C:\\a\\b\\"));
+        try std.testing.expectEqualStrings("C:\\", try path.resolve(allocator, io, "C:\\"));
+    }
+    else {
+        try std.testing.expectEqualStrings("/a/b", try path.resolve(allocator, io, "/a/b/"));
+        try std.testing.expectEqualStrings("/", try path.resolve(allocator, io, "/"));
+        try std.testing.expectEqualStrings("/a", try path.resolve(allocator, io, "/a/b/.."));
     }
 }

@@ -1,10 +1,8 @@
 //
-// Port of the parts of the third-party `commander` package (v13.1.0) that the psi CLI (apps/cli/index.ts and
-// apps/cli/src) uses. This file has no TypeScript counterpart in the repo: it stands in for lib/command.js,
-// lib/help.js, lib/option.js, lib/argument.js, lib/error.js and lib/suggestSimilar.js, and keeps their parsing
-// rules, error messages, exit codes and help layout.
+// The command line parser of the psi CLI, following the parts of the third-party `commander` package (v13.1.0)
+// that the CLI uses: its parsing rules, error messages, exit codes and help layout.
 //
-// A command line is built by chaining calls onto a `Command`, like in index.ts. The builder methods panic when
+// A command line is built by chaining calls onto a `Command`. The builder methods panic when
 // out of memory instead of returning an error, so that a definition stays one chain of calls: the command tree
 // is built once at startup and nothing else could run without that memory.
 //
@@ -2092,7 +2090,7 @@ fn decodeCodepoint(text: []const u8, index: usize) IDecodedCodepoint {
 }
 
 //
-// True for the characters JavaScript's `\s` matches (and `trimStart` removes).
+// True for the characters the regular expression class `\s` matches (and a trim removes).
 //
 pub fn isJsWhitespace(codepoint: u21) bool {
     return switch (codepoint) {
@@ -2118,7 +2116,7 @@ fn trimStartJs(text: []const u8) []const u8 {
 }
 
 //
-// The length of a string in JavaScript (UTF-16 code units).
+// The length of a string in UTF-16 code units.
 //
 pub fn jsLength(text: []const u8) usize {
     var length: usize = 0;
@@ -2204,7 +2202,7 @@ pub fn stringifyOptionValue(allocator: std.mem.Allocator, value: OptionValue) ![
 const maxDistance = 3;
 
 //
-// The UTF-16 code units of a string (what JavaScript indexes a string by).
+// The UTF-16 code units of a string.
 //
 fn utf16Units(allocator: std.mem.Allocator, text: []const u8) ![]const u16 {
     var units: std.ArrayList(u16) = .empty;
@@ -2226,7 +2224,7 @@ fn utf16Units(allocator: std.mem.Allocator, text: []const u8) ![]const u16 {
 
 //
 // The optimal string alignment distance (Damerau-Levenshtein, no substring edited more than once), counted in
-// UTF-16 code units like JavaScript.
+// UTF-16 code units.
 //
 pub fn editDistance(allocator: std.mem.Allocator, firstText: []const u8, secondText: []const u8) !usize {
     const first = try utf16Units(allocator, firstText);

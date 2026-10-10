@@ -1,5 +1,5 @@
 //
-// Tests for the lengths a push hands over (port of src/test/lib/sync-encrypted-lengths.test.ts).
+// Tests for the lengths a push hands over.
 //
 // A database that is encrypted at rest holds ciphertext and reads out plaintext, and the plaintext's
 // length cannot be worked back out of the ciphertext's, so the store says it cannot say. Taking the

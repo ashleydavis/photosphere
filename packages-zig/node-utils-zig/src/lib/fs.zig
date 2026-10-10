@@ -6,12 +6,10 @@ const toml = @import("toml.zig");
 const yaml = @import("yaml.zig");
 const process_env = @import("process-env.zig");
 const path = @import("path.zig");
+const node_fs = @import("node-fs.zig");
 
 //
-// Sleeps for the given number of milliseconds. Kept local rather than imported from the `utils`
-// package so this low-level module does not pull the whole `utils` barrel (and its ESM-only
-// transitive dependencies) into `node-utils`'s test path.
-// (Zig: takes fractional milliseconds like setTimeout, which the randomized backoff passes.)
+// Sleeps for the given number of milliseconds. It takes fractional milliseconds, which the randomized backoff passes.
 //
 fn sleep(io: std.Io, timeMs: f64) !void {
     try io.sleep(.fromNanoseconds(@intFromFloat(timeMs * std.time.ns_per_ms)), .awake);
@@ -87,7 +85,7 @@ fn renameIntoPlace(io: std.Io, tempPath: []const u8, filePath: []const u8) !void
     var attempt: u32 = 0;
     while (true) : (attempt += 1) {
         cwd.rename(tempPath, cwd, filePath, io) catch |err| {
-            // (Zig: EPERM is PermissionDenied, EACCES is AccessDenied and EBUSY is FileBusy.)
+            // EPERM is PermissionDenied, EACCES is AccessDenied and EBUSY is FileBusy.
             const refusedForContention = err == error.PermissionDenied or err == error.AccessDenied or err == error.FileBusy;
             if (!refusedForContention or attempt >= RENAME_RETRY_ATTEMPTS) {
                 return err;
@@ -173,7 +171,7 @@ pub fn remove(io: std.Io, targetPath: []const u8) !void {
 // interleave their bytes into a corrupt result (the last rename wins, and every
 // intermediate state is a complete file). The temp name uses a fresh UUID so
 // overlapping writes to the same target never share a temp file.
-// The TypeScript `options` (encoding and mode) do not apply: data is written as given with default permissions.
+// There are no options for encoding or mode: data is written as given with default permissions.
 //
 pub fn outputFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, data: []const u8) !void {
     try ensureFileDir(io, filePath);
@@ -184,7 +182,7 @@ pub fn outputFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8
 
 //
 // Reads a JSON file and parses it. Like fs-extra's readJson.
-// The TypeScript `options` (encoding and flag) do not apply: the file is read as UTF-8.
+// There are no options for encoding or flag: the file is read as UTF-8.
 //
 pub fn readJson(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !std.json.Value {
     const data = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
@@ -236,8 +234,20 @@ pub fn readYaml(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) 
 }
 
 //
-// The parse and serialize functions updateYaml hands to updateFileOptimistic (the arrow functions in
-// TypeScript).
+// Writes an object to a YAML file, creating parent directories as needed.
+//
+// It goes through outputFile, so the bytes land in a temporary file that is then renamed over the
+// target. That is what stops a crash part way through a write leaving half a config behind, and on
+// Windows it is what retries the rename the operating system refuses while a reader or a virus
+// scanner still holds the target open.
+//
+pub fn writeYaml(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, object: std.json.Value) !void {
+    const yamlString = try yaml.dump(allocator, object);
+    try outputFile(allocator, io, filePath, yamlString);
+}
+
+//
+// The parse and serialize functions updateYaml hands to updateFileOptimistic.
 //
 const YamlParse = struct {
     // The value an empty document parses to.
@@ -283,6 +293,24 @@ pub fn updateYaml(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8
 }
 
 //
+// How writeJson indents the JSON it writes: `.minified` writes it on one line, and the others indent each level by
+// that many spaces or a tab.
+//
+pub const IJsonWhitespace = @FieldType(std.json.Stringify.Options, "whitespace");
+
+//
+// Writes an object to a JSON file. Like fs-extra's writeJson.
+// There are no options for encoding or mode: the file is written as UTF-8 with default permissions. `spaces` is how
+// the JSON is indented, where `.minified` writes it on one line.
+//
+pub fn writeJson(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, object: std.json.Value, spaces: IJsonWhitespace) !void {
+    const jsonString = try std.json.Stringify.valueAlloc(allocator, object, .{
+        .whitespace = spaces,
+    });
+    try outputFile(allocator, io, filePath, jsonString);
+}
+
+//
 // Reads a file's raw bytes, or null when it does not exist yet.
 //
 fn readRawFileBytes(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]const u8 {
@@ -321,7 +349,7 @@ fn fileFingerprint(io: std.Io, filePath: []const u8) !?IFileFingerprint {
         }
         return err;
     };
-    // (Zig: stats.mtime.getTime() is the modification time in whole milliseconds, truncated towards zero.)
+    // The modification time in whole milliseconds, truncated towards zero.
     return .{
         .modifiedMs = stats.mtime.toMilliseconds(),
         .size = stats.size,
@@ -414,8 +442,7 @@ fn takeUpdateLock(io: std.Io, lockPath: []const u8) !bool {
 }
 
 //
-// One pass of the body of updateFileRawOptimistic, run while the update lock is held (the `try` block
-// in TypeScript). Returns true when the result was published.
+// One pass of the body of updateFileRawOptimistic, run while the update lock is held. Returns true when the result was published.
 //
 fn updateFileRawAttempt(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, mutator: anytype) !bool {
     const fingerprintBefore = try fileFingerprint(io, filePath);
@@ -452,7 +479,7 @@ fn updateFileRawAttempt(allocator: std.mem.Allocator, io: std.Io, filePath: []co
 // coming later. Waiting and retrying both back off with a randomized, growing delay, so writers
 // that collide spread out instead of colliding again in lockstep.
 //
-// In Zig the mutator (TypeScript: `(current: Buffer | undefined) => Buffer`) is a value with a method
+// Zig has no closures, so the mutator is a value with a method
 // `run(self, allocator, current: ?[]const u8) ![]const u8`.
 //
 pub fn updateFileRawOptimistic(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, mutator: anytype, retries: u32) !void {
@@ -484,7 +511,7 @@ pub fn updateFileRawOptimistic(allocator: std.mem.Allocator, io: std.Io, filePat
 
 //
 // The mutator updateFileOptimistic hands to updateFileRawOptimistic: it parses the current bytes,
-// applies the caller's mutator and serializes the result (the arrow function in TypeScript).
+// applies the caller's mutator and serializes the result.
 //
 fn OptimisticMutator(comptime ContentType: type, comptime MutatorT: type, comptime ParseT: type, comptime SerializeT: type) type {
     return struct {
@@ -531,8 +558,7 @@ pub fn updateFileOptimistic(comptime ContentType: type, allocator: std.mem.Alloc
 }
 
 //
-// The parse and serialize functions updateToml hands to updateFileOptimistic (the arrow functions in
-// TypeScript).
+// The parse and serialize functions updateToml hands to updateFileOptimistic.
 //
 const TomlParse = struct {
     //
@@ -572,10 +598,105 @@ pub fn updateToml(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8
 }
 
 //
+// The parse and serialize functions updateJson hands to updateFileOptimistic.
+//
+const JsonParse = struct {
+    //
+    // Parses the text (`JSON.parse(raw)`), which keeps the last value of a repeated key.
+    //
+    pub fn run(self: *const JsonParse, allocator: std.mem.Allocator, raw: []const u8) !std.json.Value {
+        _ = self;
+        return std.json.parseFromSliceLeaky(std.json.Value, allocator, raw, .{
+            .duplicate_field_behavior = .use_last,
+        });
+    }
+};
+
+//
+// Serializes the value (`JSON.stringify(value)`).
+//
+const JsonSerialize = struct {
+    //
+    // Writes the value on one line.
+    //
+    pub fn run(self: *const JsonSerialize, allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
+        _ = self;
+        return std.json.Stringify.valueAlloc(allocator, value, .{});
+    }
+};
+
+//
+// Updates a JSON file as an optimistic read-modify-write. Same semantics as updateToml,
+// but for JSON files.
+//
+// In Zig the mutator is a value with a method `run(self, allocator, current: std.json.Value) !std.json.Value`.
+//
+pub fn updateJson(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, fallback: std.json.Value, mutator: anytype, retries: u32) !void {
+    const parse: JsonParse = .{};
+    const serialize: JsonSerialize = .{};
+    try updateFileOptimistic(std.json.Value, allocator, io, filePath, fallback, mutator, &parse, &serialize, retries);
+}
+
+//
+// Ensures a directory is empty. Deletes directory contents if it exists. Like fs-extra's emptyDir.
+//
+pub fn emptyDir(allocator: std.mem.Allocator, io: std.Io, dirPath: []const u8) !void {
+    const exists = pathExists(io, dirPath);
+    if (!exists) {
+        try ensureDir(io, dirPath);
+        return;
+    }
+
+    const entries = try node_fs.readdir(allocator, io, dirPath);
+    for (entries) |entry| {
+        const entryPath = try path.join(allocator, &.{ dirPath, entry });
+        try remove(io, entryPath);
+    }
+}
+
+//
+// Copies a file or directory. Works like fs-extra's copy.
+//
+pub fn copy(allocator: std.mem.Allocator, io: std.Io, src: []const u8, dest: []const u8) !void {
+    const cwd = std.Io.Dir.cwd();
+    const srcStats = try cwd.statFile(io, src, .{});
+
+    if (srcStats.kind == .directory) {
+        // Copy directory recursively
+        try ensureDir(io, dest);
+        const entries = try node_fs.readdir(allocator, io, src);
+        for (entries) |entry| {
+            const srcPath = try path.join(allocator, &.{ src, entry });
+            const destPath = try path.join(allocator, &.{ dest, entry });
+            try copy(allocator, io, srcPath, destPath);
+        }
+    }
+    else {
+        // Copy file
+        try ensureFileDir(io, dest);
+        try cwd.copyFile(src, cwd, dest, io, .{});
+    }
+}
+
+//
 // Synchronous version: Ensures that the directory exists.
 //
 pub fn ensureDirSync(io: std.Io, dirPath: []const u8) !void {
     return ensureDir(io, dirPath);
+}
+
+//
+// Synchronous version: Removes a file or directory.
+//
+pub fn removeSync(io: std.Io, targetPath: []const u8) !void {
+    return remove(io, targetPath);
+}
+
+//
+// Synchronous version: Copies a file or directory.
+//
+pub fn copySync(allocator: std.mem.Allocator, io: std.Io, src: []const u8, dest: []const u8) !void {
+    return copy(allocator, io, src, dest);
 }
 
 //
@@ -643,10 +764,9 @@ pub fn getProcessTmpDir(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 }
 
 //
-// TODO: on Windows USERPROFILE only, where Bun falls back to the profile directory Windows reports.
-//
-// Equivalent of Bun's `os.homedir()`: $HOME, or when that is unset or empty the home directory of the user's passwd
-// entry (an empty string when there is none). On Windows %USERPROFILE%, or an empty string when it is not set.
+// Returns the user's home directory: $HOME, or when that is unset or empty the home directory of the user's passwd
+// entry (an empty string when there is none). On Windows %USERPROFILE%, or an empty string when it is not set (the
+// profile directory that Windows itself reports is not looked up).
 //
 pub fn osHomedir() []const u8 {
     if (builtin.os.tag == .windows) {

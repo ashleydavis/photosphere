@@ -23,9 +23,8 @@ const errors = utils.errors;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 //
-// (Zig: TypeScript mocks fs, hash, storage, image, video, node-utils, resolve-storage-credentials,
-// media-file-database and utils. The Zig port has no modules to mock, so these tests run the handler over a real
-// photo, a real database directory and the real media tools, and check what it wrote and returned.)
+// These tests run the handler over a real photo, a real database directory and the real media tools, and check
+// what it wrote and returned.
 //
 
 //
@@ -313,7 +312,7 @@ test "returned IAssetDatabaseData includes thumb fields when a thumbnail is prod
     var context: UploadTest = undefined;
     try context.init();
     defer context.deinit();
-    // (Zig: a video has a thumbnail and no display version, which is the case TypeScript stages with its mock.)
+    // (A video has a thumbnail and no display version.)
     var data = context.makeUploadAssetData();
     data.dryRun = true;
     data.contentType = "video/mp4";
@@ -377,8 +376,7 @@ test "sends import-failed and cleans up on upload error" {
     // A file where the asset directory should be, so writing the asset fails.
     try test_files.writeFile(std.testing.io, try std.fs.path.join(allocator, &.{ context.databaseDir, "asset" }), "in the way");
     var data = context.makeUploadAssetData();
-    // (Zig: not an image or a video, as TypeScript's getImageDetails mock returns nothing, so the failure is the
-    // upload's.)
+    // (Not an image or a video, so the failure is the upload's.)
     data.contentType = "application/octet-stream";
 
     try std.testing.expectError(error.Thrown, context.run(data));
@@ -390,9 +388,8 @@ test "sends import-failed and cleans up on upload error" {
 
 //
 // Reading the three copies back out of the store to learn their hashes was the unaccounted half
-// of every import into an encrypted database: the bytes came back through the engine's own
-// JavaScript decryption and SHA-256 at about a fifth of a megabyte a second on a Pixel 6, seven
-// seconds a photo and seven and a half minutes for one 87MB video, as long again as writing them.
+// of every import into an encrypted database: the bytes came back through software decryption and
+// SHA-256, which is slow, as long again as writing them.
 //
 test "hashes the thumbnail and display from the files on disk, and never reads the store back" {
     var context: UploadTest = undefined;
@@ -497,7 +494,7 @@ const UploadDateWitness = struct {
     };
 };
 
-test "the upload date is read once the files are uploaded, as the TypeScript builds the record after them" {
+test "the upload date is read once the files are uploaded" {
     var context: UploadTest = undefined;
     try context.init();
     defer context.deinit();

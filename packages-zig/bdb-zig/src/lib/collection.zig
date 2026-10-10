@@ -30,7 +30,7 @@ const serialization_js_number = @import("serialization-zig").js_number;
 
 //
 // A callback that tells the owner of an object that the object became dirty
-// (TypeScript: the `onDirty: () => void` arrow functions passed to constructors).
+// (passed to the constructors of the objects that report to a collection or database).
 //
 pub const DirtyCallback = struct {
     // The object to notify.
@@ -128,7 +128,7 @@ const NUM_SHARDS = 100;
 pub const IBsonCollection = BsonCollection;
 
 //
-// The field and direction of a sort index (TypeScript: the anonymous `{ fieldName, direction }` type).
+// The field and direction of a sort index.
 //
 pub const ISortIndexInfo = struct {
     // The indexed field.
@@ -139,10 +139,10 @@ pub const ISortIndexInfo = struct {
 };
 
 //
-// The options of updateOne (TypeScript: the anonymous `{ upsert?: boolean; timestamp?: number }` type).
+// The options of updateOne.
 //
 pub const IUpdateOptions = struct {
-    // Creates the record when it does not exist (null is TypeScript's undefined, which does not upsert).
+    // Creates the record when it does not exist (null does not upsert).
     upsert: ?bool = null,
 
     // Unix timestamp in milliseconds for field metadata (null means the current time from the timestamp provider).
@@ -150,7 +150,7 @@ pub const IUpdateOptions = struct {
 };
 
 //
-// Iterates all records of a collection shard by shard (TypeScript: the iterateRecords async generator).
+// Iterates all records of a collection shard by shard.
 //
 pub const RecordIterator = struct {
     // The collection being iterated.
@@ -187,7 +187,7 @@ pub const RecordIterator = struct {
 };
 
 //
-// Iterates the non-empty shards of a collection (TypeScript: the iterateShards async generator).
+// Iterates the non-empty shards of a collection.
 //
 pub const ShardIterator = struct {
     // The collection being iterated.
@@ -257,8 +257,7 @@ pub const ShardIterator = struct {
 };
 
 //
-// What the onDrop callback given to a sort index needs to evict it from the cache
-// (TypeScript: the closure `() => this.sortIndexCache.delete(cacheKey)` captures these).
+// What the onDrop callback given to a sort index needs to evict it from the cache.
 //
 const ISortIndexDropContext = struct {
     // The collection whose sort index cache holds the sort index.
@@ -321,9 +320,8 @@ pub const BsonCollection = struct {
     // Bounded, and least-recently-used first out. A shard holds every record in it, so an unbounded
     // cache holds the whole collection once enough of it has been touched, and a sync's record merge
     // touches every differing shard on both sides. Measured on a Pixel 6 against a database of 8,231
-    // photos, that merge aborted the app three times: "Scudo ERROR: internal map failure (error
-    // desc=Out of memory)", `malloc` failing inside the embedded engine, thirteen to eighteen minutes
-    // in, having pushed nothing.
+    // photos, an unbounded cache made that merge run out of memory ("Scudo ERROR: internal map failure
+    // (error desc=Out of memory)"), thirteen to eighteen minutes in, having pushed nothing.
     shardCache: std.StringArrayHashMapUnmanaged(*BsonShard) = .empty,
 
     // Lazily-created ref for this collection's merkle tree.
@@ -380,7 +378,7 @@ pub const BsonCollection = struct {
     }
 
     //
-    // The onDirty callback given to sort indexes (TypeScript: `() => this.markDirty()`).
+    // The onDirty callback given to sort indexes.
     //
     fn markDirtyCallback(context: *anyopaque) void {
         const self: *BsonCollection = @ptrCast(@alignCast(context));
@@ -388,7 +386,7 @@ pub const BsonCollection = struct {
     }
 
     //
-    // The onDrop callback given to sort indexes (TypeScript: `() => this.sortIndexCache.delete(cacheKey)`).
+    // The onDrop callback given to sort indexes.
     //
     fn evictSortIndexCallback(context: *anyopaque) void {
         const dropContext: *ISortIndexDropContext = @ptrCast(@alignCast(context));
@@ -480,7 +478,7 @@ pub const BsonCollection = struct {
     }
 
     //
-    // The merkle ref loader (TypeScript: the first arrow function in merkleTree()).
+    // The merkle ref loader.
     //
     fn merkleLoader(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!?IMerkleTree {
         const self: *BsonCollection = @ptrCast(@alignCast(context));
@@ -579,15 +577,13 @@ pub const BsonCollection = struct {
     //
     // Insert a new record into the collection.
     // Throws an error if a document with the same ID already exists.
-    // (Zig: options.timestamp is the `timestamp` parameter, null when not given; a record without an `_id` gets one
-    // written into it, as TypeScript assigns record._id.)
+    // The timestamp parameter is null when not given; a record without an `_id` gets one written into it.
     //
     pub fn insertOne(self: *BsonCollection, io: std.Io, record: *IRecord, timestamp: ?i64) !void {
         const existingId = record.get("_id");
         if (existingId == null or existingId.? != .string or existingId.?.string.len == 0) {
 
-            // TODO: an _id that is not a string is replaced with a new UUID, where the TypeScript keeps a truthy one (and
-            // then fails in getShardId).
+            // TODO: an _id that is not a string is replaced with a new UUID.
             try record.put(self.allocator, "_id", .{ .string = try self.uuidGenerator.generate(self.allocator, io) });
         }
         const recordId = record.get("_id").?.string;
@@ -756,7 +752,7 @@ pub const BsonCollection = struct {
 
     //
     // Returns the field name and direction of a sort index directory named "fieldname_direction"
-    // (TypeScript: `dir.match(/^(.+)_(asc|desc)$/)`), or null when the name does not match.
+    // or null when the name does not match.
     //
     fn parseSortIndexDirectory(directoryName: []const u8) ?ISortIndexInfo {
         if (std.mem.endsWith(u8, directoryName, "_asc") and directoryName.len > "_asc".len) {
@@ -860,8 +856,7 @@ pub const BsonCollection = struct {
 };
 
 //
-// Formats a number like `String(number)` (TypeScript: `shardId.toString()` and the template string of the token).
-// (No TypeScript counterpart.)
+// Formats a number like `String(number)`.
 //
 fn jsNumberToString(allocator: std.mem.Allocator, number: f64) ![]const u8 {
     var output: std.Io.Writer.Allocating = .init(allocator);

@@ -12,7 +12,7 @@ const ICommandContext = init_cmd.ICommandContext;
 const removeAsset = node_api.media_file_database.removeAsset;
 
 //
-// Options of the remove command (TypeScript: IRemoveCommandOptions extends IBaseCommandOptions).
+// Options of the remove command.
 // The base options are in `base`.
 //
 pub const IRemoveCommandOptions = struct {

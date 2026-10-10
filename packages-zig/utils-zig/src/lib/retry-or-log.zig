@@ -7,8 +7,8 @@ const OperationResult = retry_module.OperationResult;
 //
 // Retries a failing operation a number of times. If all retries fail,
 // logs the error and returns undefined instead of throwing.
-// (Zig: the operation is a value with a method `run(self, io: std.Io) !ReturnT`, as for retry, and
-// undefined is null. The TypeScript defaults are maxAttempts 3, waitTimeMS 1000 and waitTimeScale 2.)
+// (The operation is a value with a method `run(self, io: std.Io) !ReturnT`, as for retry, and
+// undefined is null. Callers conventionally pass maxAttempts 3, waitTimeMS 1000 and waitTimeScale 2.)
 //
 pub fn retryOrLog(io: std.Io, operation: anytype, errorMessage: []const u8, maxAttempts: u32, waitTimeMS: u64, waitTimeScale: u64) !?OperationResult(@TypeOf(operation)) {
     var attemptsLeft = maxAttempts;
@@ -34,6 +34,6 @@ pub fn retryOrLog(io: std.Io, operation: anytype, errorMessage: []const u8, maxA
         }
     }
 
-    // This should never be reached, but TypeScript needs it for type safety
+    // This should never be reached.
     return null;
 }

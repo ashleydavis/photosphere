@@ -5,7 +5,7 @@ const toml = node_utils.toml;
 const errors = utils.errors;
 
 //
-// A TOML document and the value smol-toml parses it to (see fixtures/generate.ts).
+// A TOML document and the value it parses to.
 //
 const ParseCase = struct {
     // Name of the case.
@@ -14,12 +14,12 @@ const ParseCase = struct {
     // The TOML document.
     toml: []const u8,
 
-    // The value smol-toml returns, as JSON.
+    // The value the document parses to, as JSON.
     json: std.json.Value,
 };
 
 //
-// An object and the text smol-toml stringifies it to (see fixtures/generate.ts).
+// An object and the text it stringifies to.
 //
 const StringifyCase = struct {
     // Name of the case.
@@ -28,7 +28,7 @@ const StringifyCase = struct {
     // The object, as JSON.
     object: std.json.Value,
 
-    // The TOML text smol-toml produces.
+    // The TOML text the object stringifies to.
     toml: []const u8,
 };
 
@@ -44,7 +44,7 @@ fn numberValue(value: std.json.Value) ?f64 {
 }
 
 //
-// Compares two dynamic values (integers and floats compare numerically, like JavaScript numbers).
+// Compares two dynamic values (integers and floats compare numerically).
 // When `ordered` is true the keys of tables must also be in the same order.
 //
 fn expectValuesEqual(expected: std.json.Value, actual: std.json.Value, ordered: bool) !void {
@@ -77,7 +77,7 @@ fn expectValuesEqual(expected: std.json.Value, actual: std.json.Value, ordered: 
     }
 }
 
-test "parse matches smol-toml for the golden documents" {
+test "parse reads the golden documents" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -95,7 +95,7 @@ test "parse matches smol-toml for the golden documents" {
     }
 }
 
-test "stringify matches smol-toml for the golden objects" {
+test "stringify writes the golden objects" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -171,7 +171,7 @@ test "stringify rejects values that are not tables" {
     try std.testing.expectEqualStrings("stringify can only be called with an object", errors.lastErrorMessage());
 }
 
-test "parse reads every escape, and the newline forms of multi-line strings, like smol-toml" {
+test "parse reads every escape, and the newline forms of multi-line strings" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -183,7 +183,7 @@ test "parse reads every escape, and the newline forms of multi-line strings, lik
     try std.testing.expectEqualStrings("line", (try toml.parse(allocator, "a = \"\"\"\r\nline\"\"\"\n")).object.get("a").?.string);
     try std.testing.expectEqualStrings("one two", (try toml.parse(allocator, "a = \"\"\"one \\\n    two\"\"\"\n")).object.get("a").?.string);
 
-    // An escape smol-toml does not know, and one cut off by the end of the document.
+    // An escape that is not known, and one cut off by the end of the document.
     for ([_][]const u8{ "a = \"\\q\"\n", "a = \"\\" }) |document| {
         try std.testing.expectError(error.Thrown, toml.parse(allocator, document));
         try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "Invalid TOML document: "));
@@ -191,7 +191,7 @@ test "parse reads every escape, and the newline forms of multi-line strings, lik
 }
 
 //
-// A value and the TOML text smol-toml stringifies `{ a: value }` to.
+// A value and the TOML text that `{ a: value }` stringifies to.
 //
 const IValueStringifyCase = struct {
     // The value of a.
@@ -201,7 +201,7 @@ const IValueStringifyCase = struct {
     toml: []const u8,
 };
 
-test "stringify writes the numbers JSON cannot hold like smol-toml" {
+test "stringify writes the numbers JSON cannot hold" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -227,7 +227,7 @@ test "stringify writes an empty table as one newline and refuses null in an arra
     const allocator = arena.allocator();
     try std.testing.expectEqualStrings("\n", try toml.stringify(allocator, .{ .object = .empty }));
 
-    // smol-toml throws reading Object.keys of the null.
+    // Taking the keys of the null throws.
     var array = std.json.Array.init(allocator);
     try array.append(.null);
     var object: std.json.ObjectMap = .empty;
@@ -235,7 +235,7 @@ test "stringify writes an empty table as one newline and refuses null in an arra
     try std.testing.expectError(error.Thrown, toml.stringify(allocator, .{ .object = object }));
 }
 
-test "stringify refuses tables and arrays nested deeper than smol-toml's maximum depth" {
+test "stringify refuses tables and arrays nested deeper than the maximum depth" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -272,22 +272,22 @@ test "stringify refuses tables and arrays nested deeper than smol-toml's maximum
     try std.testing.expectEqualStrings("Could not stringify the object: maximum object depth exceeded", errors.lastErrorMessage());
 }
 
-test "parse reads the escape character and escapes in multi-line strings like smol-toml" {
+test "parse reads the escape character and escapes in multi-line strings" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // smol-toml.parse('a = "x\\ey"') is { a: "x\u001by" }, and a tab escape in a multi-line string is a tab.
+    // Parsing 'a = "x\\ey"' gives { a: "x\u001by" }, and a tab escape in a multi-line string is a tab.
     try std.testing.expectEqualStrings("x\x1by", (try toml.parse(allocator, "a = \"x\\ey\"\n")).object.get("a").?.string);
     try std.testing.expectEqualStrings("p\tq", (try toml.parse(allocator, "a = \"\"\"p\\tq\"\"\"\n")).object.get("a").?.string);
 }
 
-test "stringify refuses null inside a nested array like smol-toml" {
+test "stringify refuses null inside a nested array" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // smol-toml.stringify({ a: [[1, null]] }) throws "arrays cannot contain null or undefined values".
+    // Stringifying { a: [[1, null]] } throws "arrays cannot contain null or undefined values".
     var inner = std.json.Array.init(allocator);
     try inner.append(.{
         .integer = 1,
@@ -307,12 +307,12 @@ test "stringify refuses null inside a nested array like smol-toml" {
     try std.testing.expectEqualStrings("arrays cannot contain null or undefined values", errors.lastErrorMessage());
 }
 
-test "stringify leaves out keys whose value is null, like smol-toml" {
+test "stringify leaves out keys whose value is null" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // smol-toml.stringify({ a: null }) is "\n", and stringify({ a: [{ b: null }] }) is "[[a]]\n".
+    // Stringifying { a: null } gives "\n", and stringifying { a: [{ b: null }] } gives "[[a]]\n".
     var nullValue: std.json.ObjectMap = .empty;
     try nullValue.put(allocator, "a", .null);
     try std.testing.expectEqualStrings("\n", try toml.stringify(allocator, .{
@@ -357,7 +357,7 @@ fn jsonArray(allocator: std.mem.Allocator, values: []const std.json.Value) !std.
     };
 }
 
-test "stringify refuses null where smol-toml does, with smol-toml's messages" {
+test "stringify refuses null where it cannot be written, with its messages" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

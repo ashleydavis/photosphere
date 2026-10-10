@@ -26,10 +26,12 @@ fn writeState(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8, t
 }
 
 //
-// The desktop section as JSON (what the TypeScript tests compare with toEqual).
+// The desktop section as JSON.
 //
 fn desktopJson(allocator: std.mem.Allocator, state: state_format.IStateFile) ![]const u8 {
-    return std.json.Stringify.valueAlloc(allocator, state.desktop, .{ .emit_null_optional_fields = false });
+    return std.json.Stringify.valueAlloc(allocator, state.desktop, .{
+        .emit_null_optional_fields = false,
+    });
 }
 
 //
@@ -93,27 +95,51 @@ test "isUiStateValue takes booleans, numbers, strings and arrays of strings, and
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    try std.testing.expect(state_format.isUiStateValue(.{ .bool = true }));
-    try std.testing.expect(state_format.isUiStateValue(.{ .float = 1.5 }));
-    try std.testing.expect(state_format.isUiStateValue(.{ .integer = 7 }));
-    try std.testing.expect(state_format.isUiStateValue(.{ .string = "value" }));
+    try std.testing.expect(state_format.isUiStateValue(.{
+        .bool = true,
+    }));
+    try std.testing.expect(state_format.isUiStateValue(.{
+        .float = 1.5,
+    }));
+    try std.testing.expect(state_format.isUiStateValue(.{
+        .integer = 7,
+    }));
+    try std.testing.expect(state_format.isUiStateValue(.{
+        .string = "value",
+    }));
 
     var strings = std_json.Array.init(allocator);
-    try strings.append(.{ .string = "a" });
-    try strings.append(.{ .string = "b" });
-    try std.testing.expect(state_format.isUiStateValue(.{ .array = strings }));
+    try strings.append(.{
+        .string = "a",
+    });
+    try strings.append(.{
+        .string = "b",
+    });
+    try std.testing.expect(state_format.isUiStateValue(.{
+        .array = strings,
+    }));
 
     var mixed = std_json.Array.init(allocator);
-    try mixed.append(.{ .string = "a" });
-    try mixed.append(.{ .bool = true });
-    try std.testing.expect(!state_format.isUiStateValue(.{ .array = mixed }));
+    try mixed.append(.{
+        .string = "a",
+    });
+    try mixed.append(.{
+        .bool = true,
+    });
+    try std.testing.expect(!state_format.isUiStateValue(.{
+        .array = mixed,
+    }));
 
     var nulls = std_json.Array.init(allocator);
     try nulls.append(.null);
-    try std.testing.expect(!state_format.isUiStateValue(.{ .array = nulls }));
+    try std.testing.expect(!state_format.isUiStateValue(.{
+        .array = nulls,
+    }));
 
     try std.testing.expect(!state_format.isUiStateValue(.null));
-    try std.testing.expect(!state_format.isUiStateValue(.{ .object = .empty }));
+    try std.testing.expect(!state_format.isUiStateValue(.{
+        .object = .empty,
+    }));
 }
 
 //

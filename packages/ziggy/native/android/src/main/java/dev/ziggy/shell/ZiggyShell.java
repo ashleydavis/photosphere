@@ -3,9 +3,11 @@ package dev.ziggy.shell;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.IntentSender;
 import android.content.pm.ApplicationInfo;
 import android.content.ClipData;
 import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.provider.OpenableColumns;
 import android.os.Build;
@@ -33,6 +35,7 @@ import java.util.concurrent.BlockingQueue;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.json.JSONArray;
@@ -73,12 +76,33 @@ public final class ZiggyShell implements ZiggyHost {
     // The core's handle, or 0 before it is created and after it is destroyed. Guarded by coreLock.
     private long handle;
 
+    // True once the page has finished loading, so window.__ziggyReceive exists. Only the main thread reads or writes it.
+    private boolean pageReady;
+
+    // The messages the core sent before the page finished loading, held for the main thread to deliver when it has.
+    private final ArrayList<String> beforePage = new ArrayList<String>();
+
     // Set once the core has been destroyed, so nothing queued for the main thread reaches the web view afterwards.
     private volatile boolean destroyed;
+
+    // Guards the keep-alive state below.
+    private final Object keepAliveMutex = new Object();
+
+    // Whether the core last asked for the app to be kept running.
+    private boolean keepAliveWanted;
+
+    // Whether the system refused the last start of the keep-alive service, so the shell asks again when the activity resumes.
+    private boolean keepAliveRefused;
+
+    // Answers the core's host requests, or null when the app gave none.
+    private volatile HostRequestHandler hostRequestHandler;
 
     // The request codes of the three pickers, which are the activity's to tell apart in onActivityResult. They are the
     // pick kinds added to this base.
     private static final int PICK_REQUEST_CODE_BASE = 0x5A00;
+
+    // The request code of an activity started by startActivityAndWait.
+    private static final int ACTIVITY_REQUEST_CODE = 0x5A80;
 
     // Held while a picker is on screen, so only one is shown at a time. The system shows one document picker at a time anyway.
     private final Object pickMutex = new Object();
@@ -88,6 +112,10 @@ public final class ZiggyShell implements ZiggyHost {
 
     // The request code of the picker on screen.
     private volatile int pendingPickRequestCode;
+
+    // Whether the activity that last answered finished with RESULT_OK, which an activity that returns no data (a system confirmation)
+    // answers with. Written by onActivityResult before it releases the waiting thread.
+    private volatile boolean lastActivityResultOk;
 
     // What a picker answers when it is dismissed with no choice, or the shell is being destroyed under it.
     private static final Intent NOTHING_PICKED = new Intent();
@@ -126,7 +154,8 @@ public final class ZiggyShell implements ZiggyHost {
         }
 
         configureWebView();
-        webView.loadUrl(APP_URL_PREFIX + "index.html" + (testMode ? "?testMode=1" : ""));
+        String query = new String(ZiggyNative.pageQuery(created), StandardCharsets.UTF_8);
+        webView.loadUrl(APP_URL_PREFIX + "index.html" + (query.isEmpty() ? "" : "?" + query));
     }
 
     // Destroys the core once. After it returns nothing more is delivered to the page. Call it from onDestroy.
@@ -252,6 +281,10 @@ public final class ZiggyShell implements ZiggyHost {
                 if (destroyed) {
                     return;
                 }
+                if (!pageReady) {
+                    beforePage.add(text);
+                    return;
+                }
                 webView.evaluateJavascript("window.__ziggyReceive(" + text + ");", null);
             }
         });
@@ -262,15 +295,103 @@ public final class ZiggyShell implements ZiggyHost {
         return JSONObject.quote("Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ") " + Build.MANUFACTURER + " " + Build.MODEL);
     }
 
+
+    // What the keep-alive service's notification says, as the app supplied it. Null until the app calls setKeepAliveNotification, in
+    // which case the service uses wording of its own.
+    private String[] keepAliveNotificationText;
+
+    // Sets what the keep-alive service's ongoing notification says, which is the app's to word because only it knows what its background
+    // work is. Call it before start. The channel name and description are what the system settings show for the notification.
+    public void setKeepAliveNotification(String channelName, String channelDescription, String title, String text) {
+        keepAliveNotificationText = new String[] { channelName, channelDescription, title, text };
+    }
+
+    // The intent that starts or stops the keep-alive service, carrying the wording the app supplied.
+    private Intent keepAliveIntent() {
+        Intent intent = new Intent(activity, ZiggyKeepAliveService.class);
+        if (keepAliveNotificationText != null) {
+            intent.putExtra(ZiggyKeepAliveService.EXTRA_CHANNEL_NAME, keepAliveNotificationText[0]);
+            intent.putExtra(ZiggyKeepAliveService.EXTRA_CHANNEL_DESCRIPTION, keepAliveNotificationText[1]);
+            intent.putExtra(ZiggyKeepAliveService.EXTRA_TITLE, keepAliveNotificationText[2]);
+            intent.putExtra(ZiggyKeepAliveService.EXTRA_TEXT, keepAliveNotificationText[3]);
+        }
+        return intent;
+    }
     // Starts or stops the foreground service that keeps the process running while the core has tasks the app must be kept running
-    // for. Starting happens when the task is queued, which is while the app is in the foreground, as Android requires.
+    // for. Starting happens when the task is queued, which is while the app is in the foreground, as Android requires. From Android 12
+    // an app that is not in the foreground yet is refused, and it can be refused as the app launches, before the system counts it as
+    // foreground. The refusal is logged, and the start is asked for again when the activity resumes (see onResume).
     @Override
     public void keepAlive(boolean keepRunning) {
-        Intent intent = new Intent(activity, ZiggyKeepAliveService.class);
-        if (keepRunning) {
-            activity.startForegroundService(intent);
-        } else {
-            activity.stopService(intent);
+        synchronized (keepAliveMutex) {
+            boolean neverStarted = keepAliveRefused;
+            keepAliveWanted = keepRunning;
+            keepAliveRefused = false;
+            Intent intent = keepAliveIntent();
+            if (!keepRunning) {
+                if (neverStarted) {
+                    return;
+                }
+                // The service is asked to end itself rather than stopped from here, because a stop that reaches it before it has
+                // answered its own start with startForeground crashes the app, and a task that ends at once makes that race likely.
+                // When the system refuses the request (the app is in the background), no start is waiting for an answer, so the
+                // service is stopped directly.
+                intent.putExtra(ZiggyKeepAliveService.EXTRA_STOP, true);
+                try {
+                    activity.startForegroundService(intent);
+                } catch (RuntimeException refused) {
+                    activity.stopService(intent);
+                }
+                return;
+            }
+            try {
+                activity.startForegroundService(intent);
+            } catch (RuntimeException refused) {
+                keepAliveRefused = true;
+                Log.w(TAG, "The system refused to start the keep-alive service, which happens when the app is not in the foreground yet. It is asked for again when the app resumes.", refused);
+            }
+        }
+    }
+
+    // Tells the shell the activity has resumed, which is a moment the system allows a foreground service to start. If the system
+    // refused the keep-alive service earlier, and the core still wants it, it is started now. The activity calls this from onResume.
+    public void onResume() {
+        synchronized (keepAliveMutex) {
+            if (!keepAliveWanted || !keepAliveRefused) {
+                return;
+            }
+            Log.i(TAG, "Asking for the keep-alive service again now the app is resumed.");
+            keepAliveRefused = false;
+            try {
+                activity.startForegroundService(keepAliveIntent());
+            } catch (RuntimeException refused) {
+                keepAliveRefused = true;
+                Log.w(TAG, "The system refused to start the keep-alive service even though the app has resumed.", refused);
+            }
+        }
+    }
+
+    // Gives the shell the object that answers the core's host requests. Call it before start. Without one, every host request is
+    // answered as a failure that says so.
+    public void setHostRequestHandler(HostRequestHandler handler) {
+        hostRequestHandler = handler;
+    }
+
+    @Override
+    public byte[] hostRequest(byte[] method, byte[] requestJson) {
+        String methodName = new String(method, StandardCharsets.UTF_8);
+        HostRequestHandler handler = hostRequestHandler;
+        if (handler == null) {
+            return HostRequestAnswer.failed("This app's Android shell has no handler for the request " + methodName + ".");
+        }
+        try {
+            return HostRequestAnswer.succeeded(handler.handle(methodName, new String(requestJson, StandardCharsets.UTF_8)));
+        } catch (HostRequestException failure) {
+            Log.w(TAG, "The host request " + methodName + " failed: " + failure.getMessage(), failure);
+            return HostRequestAnswer.failed(failure.getMessage());
+        } catch (RuntimeException error) {
+            Log.e(TAG, "The host request " + methodName + " threw", error);
+            return HostRequestAnswer.failed("The host request " + methodName + " failed: " + error);
         }
     }
 
@@ -295,8 +416,83 @@ public final class ZiggyShell implements ZiggyHost {
         if (waiting == null || requestCode != pendingPickRequestCode) {
             return false;
         }
+        lastActivityResultOk = resultCode == Activity.RESULT_OK;
         waiting.offer(resultCode == Activity.RESULT_OK && data != null ? data : NOTHING_PICKED);
         return true;
+    }
+
+    // Starts an activity for the app's own host request handlers and waits for it to finish, from a thread that is not the main
+    // thread. Returns the activity's result data, or null when the user backed out, the activity gave no data or the shell is being
+    // destroyed. It shares the one slot the pickers use, so only one such activity is on screen at a time.
+    public Intent startActivityAndWait(final Intent request) throws InterruptedException, ActivityNotFoundException {
+        synchronized (pickMutex) {
+            final int requestCode = ACTIVITY_REQUEST_CODE;
+            final BlockingQueue<Intent> answer = new ArrayBlockingQueue<Intent>(1);
+            final ActivityNotFoundException[] notFound = new ActivityNotFoundException[1];
+            pendingPickRequestCode = requestCode;
+            pendingPick = answer;
+            try {
+                if (destroyed) {
+                    return null;
+                }
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            activity.startActivityForResult(request, requestCode);
+                        } catch (ActivityNotFoundException error) {
+                            notFound[0] = error;
+                            answer.offer(NOTHING_PICKED);
+                        }
+                    }
+                });
+                Intent result = answer.take();
+                if (notFound[0] != null) {
+                    throw notFound[0];
+                }
+                return result == NOTHING_PICKED ? null : result;
+            } finally {
+                pendingPick = null;
+            }
+        }
+    }
+
+    // Starts a system confirmation given as an IntentSender (a PendingIntent's) and waits for the user to answer it, from a thread that
+    // is not the main thread. Returns whether the user accepted it (RESULT_OK), and false when they declined, the confirmation could
+    // not be shown or the shell is being destroyed. It shares the one slot the pickers use.
+    public boolean startIntentSenderAndWait(final IntentSender sender) throws InterruptedException {
+        synchronized (pickMutex) {
+            final int requestCode = ACTIVITY_REQUEST_CODE;
+            final BlockingQueue<Intent> answer = new ArrayBlockingQueue<Intent>(1);
+            final IntentSender.SendIntentException[] failure = new IntentSender.SendIntentException[1];
+            pendingPickRequestCode = requestCode;
+            pendingPick = answer;
+            lastActivityResultOk = false;
+            try {
+                if (destroyed) {
+                    return false;
+                }
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            activity.startIntentSenderForResult(sender, requestCode, null, 0, 0, 0);
+                        } catch (IntentSender.SendIntentException error) {
+                            failure[0] = error;
+                            answer.offer(NOTHING_PICKED);
+                        }
+                    }
+                });
+                answer.take();
+                if (failure[0] != null) {
+                    Log.e(TAG, "Could not present the confirmation", failure[0]);
+                    return false;
+                }
+                return lastActivityResultOk;
+            } finally {
+                pendingPick = null;
+            }
+        }
     }
 
     @Override
@@ -443,6 +639,22 @@ public final class ZiggyShell implements ZiggyHost {
     // Decides every navigation and request with the core's origin check: the app's own page loads, http, https and mailto
     // links open in the system browser, and everything else is blocked.
     private final class ZiggyWebViewClient extends WebViewClient {
+        @Override
+        public void onPageStarted(WebView view, String url, Bitmap favicon) {
+            pageReady = false;
+        }
+
+        // The injected script ran at document start, so window.__ziggyReceive exists now: the messages the core sent while the
+        // page was loading are delivered in the order they were sent.
+        @Override
+        public void onPageFinished(WebView view, String url) {
+            pageReady = true;
+            for (String text : beforePage) {
+                webView.evaluateJavascript("window.__ziggyReceive(" + text + ");", null);
+            }
+            beforePage.clear();
+        }
+
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             String url = request.getUrl().toString();

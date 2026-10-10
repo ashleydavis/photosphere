@@ -11,8 +11,8 @@ const IMcpToolContext = cli.mcp_types.IMcpToolContext;
 const io = std.testing.io;
 
 //
-// The tests of the tools of `psi mcp` (apps/cli/src/lib/mcp/tools), called through the server the command creates,
-// against a copy of test/dbs/v6. The expected texts are the ones the TypeScript tools return for test/dbs/v6.
+// The tests of the tools of `psi mcp`, called through the server the command creates,
+// against a copy of test/dbs/v6. The expected texts are the ones the tools return for test/dbs/v6.
 //
 
 //
@@ -57,7 +57,7 @@ const IToolsTestEnvironment = struct {
         // answer for the rest of the process, so a test that ran before this one and replaced the environment can
         // leave it believing no ImageMagick is installed when one is.
         tools.Image.resetInitialization();
-        const status = try tools.verifyTools(allocator, io);
+        const status = try tools.verifyTools(allocator, io, null);
         if (!status.allAvailable) {
             std.debug.print("This test needs ImageMagick and ffmpeg installed. Missing: {s}\n", .{try std.mem.join(allocator, ", ", status.missingTools)});
             return error.RequiredToolsMissing;
@@ -305,7 +305,7 @@ test "get_media_file_info returns the record of a media file, or says that it is
     const result = try environment.call("get_media_file_info", "{\"assetId\":\"" ++ v6_asset_id ++ "\"}");
     try std.testing.expect(!result.isError);
 
-    // The whole record, as JSON.stringify(asset, null, 2) writes it: the same as the TypeScript CLI's answer in the
+    // The whole record, written as JSON indented by 2 spaces: the same as the recorded answer in the
     // session of mcp-session-expected.jsonl (id 9).
     const expected = try std.Io.Dir.cwd().readFileAlloc(io, "src/test/fixtures/mcp-session-expected.jsonl", allocator, .unlimited);
     var lines = std.mem.splitScalar(u8, expected, '\n');

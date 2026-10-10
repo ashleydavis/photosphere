@@ -1,5 +1,5 @@
 //
-// Tests for parseS3ListPath (port of src/tests/s3-path.test.ts).
+// Tests for parseS3ListPath.
 //
 
 const std = @import("std");

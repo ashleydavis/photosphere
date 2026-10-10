@@ -47,7 +47,7 @@ pub fn registerImportMediaFilesTool(server: *McpServer, toolContext: *IMcpToolCo
 }
 
 //
-// The handler of `import_media_files` (TypeScript: the arrow function given to registerTool). The import runs with
+// The handler of `import_media_files`. The import runs with
 // the context's allocator, because addPaths hands what it allocates to a termination callback that outlives the call.
 //
 fn importMediaFiles(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {

@@ -7,10 +7,10 @@ const ExceptionLog = @import("exception-log.zig").ExceptionLog;
 const virtual_time_io = @import("virtual-time-io.zig");
 
 //
-// A fake operation (the jest.fn() of the TypeScript tests): fails a number of times, then succeeds.
+// A fake operation: fails a number of times, then succeeds.
 //
 const MockOperation = struct {
-    // The Bun toString() of the TypeScript operation this stands in for (read by retryOnce).
+    // The text that names this operation in the timeout message (read by retryOnce).
     pub const source = "async () => {\n  await operation();\n}";
 
     // Number of times run has been called.
@@ -56,7 +56,7 @@ const MockOperation = struct {
 // An operation that returns a number.
 //
 const NumberOperation = struct {
-    // The Bun toString() of the TypeScript operation this stands in for (read by retryOnce).
+    // The text that names this operation in the timeout message (read by retryOnce).
     pub const source = "() => operation()";
 
     // The value returned.
@@ -72,10 +72,10 @@ const NumberOperation = struct {
 };
 
 //
-// An operation that returns nothing (TypeScript: resolves with undefined).
+// An operation that returns nothing.
 //
 const VoidOperation = struct {
-    // The Bun toString() of the TypeScript operation this stands in for (read by retryOnce).
+    // The text that names this operation in the timeout message (read by retryOnce).
     pub const source = "() => operation()";
 
     // Number of times run has been called.
@@ -94,7 +94,7 @@ const VoidOperation = struct {
 // An operation that fails with a Zig runtime error rather than a thrown message.
 //
 const RuntimeErrorOperation = struct {
-    // The Bun toString() of the TypeScript operation this stands in for (read by retryOnce).
+    // The text that names this operation in the timeout message (read by retryOnce).
     pub const source = "() => operation()";
 
     // Unused.
@@ -114,7 +114,7 @@ const RuntimeErrorOperation = struct {
 // An operation that fails with each of a sequence of messages in turn, then succeeds.
 //
 const SequenceOperation = struct {
-    // The Bun toString() of the TypeScript operation this stands in for (read by retryOnce).
+    // The text that names this operation in the timeout message (read by retryOnce).
     pub const source = "() => operation()";
 
     // Number of times run has been called.
@@ -141,7 +141,7 @@ const SequenceOperation = struct {
 // whitespace is collapsed.
 //
 const LongSourceOperation = struct {
-    // The Bun toString() of the TypeScript operation this stands in for (read by retryOnce).
+    // The text that names this operation in the timeout message (read by retryOnce).
     pub const source = "() =>" ++ ("\n   x" ** 120);
 
     // Unused.
@@ -159,10 +159,10 @@ const LongSourceOperation = struct {
 
 //
 // An operation that keeps its thread busy for a while without reaching a cancelation point
-// (TypeScript: synchronous work, which no timer can interrupt).
+// (synchronous work, which no timer can interrupt).
 //
 const BusyOperation = struct {
-    // The Bun toString() of the TypeScript operation this stands in for (read by retryOnce).
+    // The text that names this operation in the timeout message (read by retryOnce).
     pub const source = "() => operation()";
 
     // How long the operation keeps busy, in milliseconds.
@@ -216,8 +216,7 @@ test "should succeed on first attempt" {
     var operation: MockOperation = .{};
     const start = std.Io.Clock.awake.now(io);
 
-    // A wait long enough that a sleep could not go unnoticed on a slow machine
-    // (TypeScript mocks sleep and counts the calls instead).
+    // A wait long enough that a sleep could not go unnoticed on a slow machine.
     const result = try retry_module.retry(io, &operation, 3, 10_000, 2, 30_000, null);
 
     try std.testing.expectEqualStrings("success", result);
@@ -230,7 +229,7 @@ test "should succeed after retries" {
     backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
     defer backoff_time.deinit();
     const io = backoff_time.io();
-    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    // Mock log so the retry warnings do not reach stderr.
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -251,7 +250,7 @@ test "should throw error after all retries exhausted" {
     backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
     defer backoff_time.deinit();
     const io = backoff_time.io();
-    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    // Mock log so the retry warnings do not reach stderr.
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -271,7 +270,7 @@ test "should throw error after all retries exhausted" {
 
 test "should use default maxAttempts of 3" {
     const io = std.testing.io;
-    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    // Mock log so the retry warnings do not reach stderr.
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -291,7 +290,7 @@ test "should use default waitTimeMS of 1000" {
     backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
     defer backoff_time.deinit();
     const io = backoff_time.io();
-    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    // Mock log so the retry warnings do not reach stderr.
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -309,7 +308,7 @@ test "should use default waitTimeScale of 2" {
     backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
     defer backoff_time.deinit();
     const io = backoff_time.io();
-    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    // Mock log so the retry warnings do not reach stderr.
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -327,7 +326,7 @@ test "should work with custom waitTimeScale" {
     backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
     defer backoff_time.deinit();
     const io = backoff_time.io();
-    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    // Mock log so the retry warnings do not reach stderr.
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -345,7 +344,7 @@ test "should not sleep on last attempt" {
     backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
     defer backoff_time.deinit();
     const io = backoff_time.io();
-    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    // Mock log so the retry warnings do not reach stderr.
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -355,8 +354,7 @@ test "should not sleep on last attempt" {
     var operation: MockOperation = .{ .alwaysFails = true };
     const start = std.Io.Clock.awake.now(io);
 
-    // A scale large enough that a sleep after the last attempt could not go unnoticed on a slow machine
-    // (TypeScript mocks sleep and counts the calls instead).
+    // A scale large enough that a sleep after the last attempt could not go unnoticed on a slow machine.
     try std.testing.expectError(error.Thrown, retry_module.retry(io, &operation, 2, 100, 100, 30_000, null));
 
     try std.testing.expectEqual(@as(u32, 2), operation.calls);
@@ -369,7 +367,7 @@ test "should not sleep on last attempt" {
 
 test "should throw error immediately when maxAttempts is 1" {
     const io = std.testing.io;
-    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    // Mock log so the retry warnings do not reach stderr.
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -379,8 +377,7 @@ test "should throw error immediately when maxAttempts is 1" {
     var operation: MockOperation = .{ .alwaysFails = true };
     const start = std.Io.Clock.awake.now(io);
 
-    // A wait long enough that a sleep could not go unnoticed on a slow machine
-    // (TypeScript mocks sleep and counts the calls instead).
+    // A wait long enough that a sleep could not go unnoticed on a slow machine.
     try std.testing.expectError(error.Thrown, retry_module.retry(io, &operation, 1, 10_000, 2, 30_000, null));
 
     try std.testing.expectEqualStrings("Operation failed", errors.lastErrorMessage());
@@ -435,7 +432,7 @@ test "should retry when operation times out" {
     backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
     defer backoff_time.deinit();
     const io = backoff_time.io();
-    // Mock log (TypeScript: jest.mock of the log module) so the retry warnings do not reach stderr.
+    // Mock log so the retry warnings do not reach stderr.
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
@@ -496,6 +493,29 @@ test "should throw original error when errorContext is not provided" {
     var operation: RuntimeErrorOperation = .{};
 
     try std.testing.expectError(error.FileNotFound, retry_module.retry(io, &operation, 1, 1_000, 2, 30_000, null));
+}
+
+test "rejectAfter should reject with timeout message" {
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.virtual);
+    defer backoff_time.deinit();
+    const io = backoff_time.io();
+
+    try std.testing.expectError(error.Thrown, retry_module.rejectAfter(void, io, 100));
+
+    try std.testing.expectEqualStrings("Operation timed out after 100ms", errors.lastErrorMessage());
+}
+
+test "rejectAfter should wait for the given duration" {
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.virtual);
+    defer backoff_time.deinit();
+    const io = backoff_time.io();
+    const start = std.Io.Clock.awake.now(io);
+
+    try std.testing.expectError(error.Thrown, retry_module.rejectAfter(void, io, 500));
+
+    try std.testing.expect(elapsedMilliseconds(io, start) >= 500);
 }
 
 test "retryOnce should resolve with the operation result" {

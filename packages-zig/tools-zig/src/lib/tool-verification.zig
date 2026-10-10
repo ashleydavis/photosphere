@@ -1,4 +1,6 @@
 const std = @import("std");
+const node_utils = @import("node-utils-zig");
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const Image = @import("image.zig").Image;
 const Video = @import("video.zig").Video;
 
@@ -39,11 +41,11 @@ pub const ToolsStatus = struct {
 //
 // Check the availability of all required tools
 //
-pub fn verifyTools(allocator: std.mem.Allocator, io: std.Io) !ToolsStatus {
+pub fn verifyTools(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !ToolsStatus {
     // Serialize tool verification to avoid race conditions
-    const magickStatus = try Image.verifyImageMagick(allocator, io);
-    const ffprobeStatus = Video.verifyFfprobe(allocator, io);
-    const ffmpegStatus = Video.verifyFfmpeg(allocator, io);
+    const magickStatus = try Image.verifyImageMagick(allocator, io, tools);
+    const ffprobeStatus = Video.verifyFfprobe(allocator, io, tools);
+    const ffmpegStatus = Video.verifyFfmpeg(allocator, io, tools);
 
     var missingTools: std.ArrayList([]const u8) = .empty;
 

@@ -1,6 +1,6 @@
 //
-// TypeScript ends each listing loop with `while (next)`, so a storage that answers an empty continuation token ends the
-// listing like one that answers none. These tests list through a storage that answers "" where it would answer
+// Each listing loop ends when the continuation token is empty, so a storage that answers an empty continuation token
+// ends the listing like one that answers none. These tests list through a storage that answers "" where it would answer
 // nothing, and fail if anything asks it for the page after an empty token.
 //
 

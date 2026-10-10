@@ -26,7 +26,7 @@ const IInternalRecord = shard_zig.IInternalRecord;
 const JsPrimitive = js_value.JsPrimitive;
 
 //
-// The direction of a sort index (TypeScript: 'asc' | 'desc'; @tagName gives the string).
+// The direction of a sort index (@tagName gives the string, 'asc' or 'desc').
 //
 pub const SortDirection = enum {
     // Ascending.
@@ -37,7 +37,7 @@ pub const SortDirection = enum {
 };
 
 //
-// The data type of a sorted field (TypeScript: 'date' | 'string' | 'number').
+// The data type of a sorted field ('date', 'string' or 'number').
 //
 pub const SortDataType = enum {
     // Dates (Date objects or date strings).
@@ -51,7 +51,7 @@ pub const SortDataType = enum {
 };
 
 //
-// The tree nodes of a sort index keyed by page id (TypeScript: Map<string, IBTreeNode>).
+// The tree nodes of a sort index keyed by page id.
 //
 pub const TreeNodeMap = std.StringArrayHashMapUnmanaged(*IBTreeNode);
 
@@ -137,8 +137,7 @@ const IFieldValue = struct {
 };
 
 //
-// Gets a record field (TypeScript: `record.fields[fieldName]`) with its identity; null when the field is missing or
-// undefined.
+// Gets a record field with its identity; null when the field is missing or undefined.
 //
 fn getFieldValue(fields: BsonDocument, fieldName: []const u8) ?IFieldValue {
     for (fields.fields.items) |*field| {
@@ -195,7 +194,7 @@ pub const ISortIndexResult = struct {
 };
 
 //
-// The records of one leaf page (TypeScript: an array, shared by reference between the caches).
+// The records of one leaf page (an array, shared by reference between the caches).
 //
 pub const LeafRecords = std.ArrayList(ISortedIndexEntry);
 
@@ -254,14 +253,14 @@ const IBuildCheckpoint = struct {
 };
 
 //
-// Returns true when a page id is set (TypeScript: a truthy string; the empty string counts as not set).
+// Returns true when a page id is set (the empty string counts as not set).
 //
 fn isSet(pageId: ?[]const u8) bool {
     return pageId != null and pageId.?.len > 0;
 }
 
 //
-// Returns true when two optional page ids are the same string (TypeScript: `===` on string | undefined).
+// Returns true when two optional page ids are the same string, or both are missing.
 //
 fn samePageId(left: ?[]const u8, right: ?[]const u8) bool {
     if (left == null or right == null) {
@@ -271,7 +270,7 @@ fn samePageId(left: ?[]const u8, right: ?[]const u8) bool {
 }
 
 //
-// Returns the index of a page id in a list of children, or null (TypeScript: `children.indexOf(id)` returning -1).
+// Returns the index of a page id in a list of children, or null when it is not there.
 //
 fn indexOfChild(children: []const []const u8, pageId: []const u8) ?usize {
     for (children, 0..) |childId, childIndex| {
@@ -283,7 +282,7 @@ fn indexOfChild(children: []const []const u8, pageId: []const u8) ?usize {
 }
 
 //
-// Returns the index of the entry with the given record id, or null (TypeScript: findIndex returning -1).
+// Returns the index of the entry with the given record id, or null when there is none.
 //
 fn findEntryIndex(leafRecords: *const LeafRecords, recordId: []const u8) ?usize {
     for (leafRecords.items, 0..) |entry, entryIndex| {
@@ -554,7 +553,7 @@ pub const SortIndex = struct {
     }
 
     //
-    // Recursively set parents for all children (TypeScript: the setParentsForChildren arrow function).
+    // Recursively set parents for all children.
     //
     fn setParentsForChildren(self: *SortIndex, nodeId: []const u8) void {
         const node = self.treeNodes.get(nodeId) orelse {
@@ -755,7 +754,7 @@ pub const SortIndex = struct {
     }
 
     //
-    // The state shared by the helper functions of build (TypeScript: the locals captured by its arrow functions).
+    // The state shared by the helper functions of build.
     //
     const BuildState = struct {
         // Local cache for batched writes - only keeps pages being actively modified
@@ -1067,14 +1066,13 @@ pub const SortIndex = struct {
     }
 
     //
-    // Returns the result of a comparison for the sort direction (TypeScript: `this.direction === 'asc' ? x : -x`).
+    // Returns the result of a comparison for the sort direction (negated when descending).
     //
     // Compare values depending on the sort direction and type.
     // If type is 'date', string values will be converted to Date objects before comparison.
     // If type is 'string', values will be compared as strings.
     // If type is 'number', values will be compared as numbers.
     // If type is not set, it will be inferred from the values.
-    // (Zig: the TypeScript parameters a and b are named first and second.)
     //
     fn compareValues(self: *SortIndex, first: BsonValue, second: BsonValue) !i32 {
         var valueA: JsPrimitive = undefined;
@@ -1128,8 +1126,8 @@ pub const SortIndex = struct {
 
         // Convert values based on the specified or inferred type
         if (inferredType == .date) {
-            // (Zig: `new Date(string)` never throws, so the TypeScript try/catch fallbacks are not needed. A value that
-            // is not converted is kept and converted with ToPrimitive, as the comparison operators below do.)
+            // (Parsing a date string never throws, so no fallback is needed. A value that is not converted is kept and
+            // converted with ToPrimitive, as the comparison operators below do.)
             valueA = try js_value.toPrimitive(self.allocator, first);
             if (first == .string) {
                 valueA = .{ .number = js_value.parseDate(first.string) };
@@ -2037,7 +2035,7 @@ pub const SortIndex = struct {
     }
 
     //
-    // The result of splitLeafNodeInternal (TypeScript: an anonymous object type).
+    // The result of splitLeafNodeInternal.
     //
     const ISplitResult = struct {
         // The id of the new leaf node.
@@ -2048,8 +2046,8 @@ pub const SortIndex = struct {
     };
 
     //
-    // Sorts entries by value with a stable insertion sort (TypeScript: `records.sort((a, b) => compareValues(...))`;
-    // Array.prototype.sort is stable and compareValues can throw, so std.mem.sort cannot be used).
+    // Sorts entries by value with a stable insertion sort (the sort must be stable and compareValues can throw, so
+    // std.mem.sort cannot be used).
     //
     fn sortEntries(self: *SortIndex, entries: []ISortedIndexEntry) !void {
         var index: usize = 1;
@@ -2171,7 +2169,7 @@ pub const SortIndex = struct {
     }
 
     //
-    // Converts a leaf entry to a query result (TypeScript: `({ _id: entry._id, ...entry.fields })`).
+    // Converts a leaf entry to a query result (the record id followed by the fields).
     //
     fn toSortIndexRecord(self: *SortIndex, entry: ISortedIndexEntry) !ISortIndexRecord {
         var result: BsonDocument = .empty;
@@ -2183,7 +2181,7 @@ pub const SortIndex = struct {
     }
 
     //
-    // Appends the entries of a leaf whose value is strictly equal to value (TypeScript: `filter(entry => entry.value === value)`).
+    // Appends the entries of a leaf whose value is strictly equal to value.
     // Returns the number of entries appended.
     //
     fn appendMatches(self: *SortIndex, matchingEntries: *std.ArrayList(ISortedIndexEntry), leafRecords: *const LeafRecords, value: BsonValue, valueIdentity: ?*const BsonValue) !usize {

@@ -18,7 +18,7 @@ const IStorageOptions = encryption.encryption_types.IStorageOptions;
 
 //
 // Join paths.
-// (Zig: the paths are passed as a slice, `pathJoin(allocator, &.{ a, b })`.)
+// (The paths are passed as a slice, `pathJoin(allocator, &.{ a, b })`.)
 //
 pub fn pathJoin(allocator: std.mem.Allocator, paths: []const []const u8) ![]const u8 {
     var joined: std.ArrayList(u8) = .empty;
@@ -34,7 +34,7 @@ pub fn pathJoin(allocator: std.mem.Allocator, paths: []const []const u8) ![]cons
         first = false;
     }
 
-    // Remove trailing slashes (TypeScript: `.replace(/\/+$/, '')`).
+    // Remove trailing slashes.
     var length = joined.items.len;
     while (length > 0 and joined.items[length - 1] == '/') {
         length -= 1;
@@ -88,7 +88,7 @@ fn resolvePath(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]co
 
 //
 // Creates the appropriate storage implementation based on the prefix in the path.
-// (Zig: the storage objects are allocated with the allocator and live as long as its memory.)
+// (The storage objects are allocated with the allocator and live as long as its memory.)
 //
 pub fn createStorage(allocator: std.mem.Allocator, io: std.Io, rootPath: []const u8, s3Config: ?IS3Credentials, options: ?IStorageOptions) !ICreateStorageResult {
     if (rootPath.len == 0) {

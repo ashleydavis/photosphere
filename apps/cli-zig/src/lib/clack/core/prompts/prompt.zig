@@ -21,7 +21,7 @@ const setRawMode = utils.setRawMode;
 const settings = utils.settings;
 
 //
-// The function that renders a frame of the prompt (TypeScript: `render(this)`); null renders nothing.
+// The function that renders a frame of the prompt; null renders nothing.
 //
 pub const RenderFn = struct {
     // The state of the render function.
@@ -50,7 +50,7 @@ pub const ValidateFn = struct {
 };
 
 //
-// Options shared by every prompt (TypeScript: PromptOptions).
+// Options shared by every prompt.
 //
 pub const PromptOptions = struct {
     // Renders the frames of the prompt.
@@ -70,7 +70,7 @@ pub const PromptOptions = struct {
 };
 
 //
-// The concrete prompt that receives the events of the base prompt (the TypeScript subclass).
+// The concrete prompt that receives the events of the base prompt.
 //
 pub const PromptKind = union(enum) {
     // A ConfirmPrompt.
@@ -87,7 +87,7 @@ pub const PromptKind = union(enum) {
 };
 
 //
-// How the prompt finished (TypeScript: the promise resolves with the value or CANCEL_SYMBOL).
+// How the prompt finished: with a submitted value or cancelled.
 //
 pub const PromptOutcome = enum {
     // The value was submitted.
@@ -99,7 +99,7 @@ pub const PromptOutcome = enum {
 
 //
 // The base of every prompt: reads keys, keeps the state and renders frames.
-// TypeScript subscribes event handlers; in Zig the events are dispatched to the concrete prompt (`kind`).
+// The events are dispatched to the concrete prompt (`kind`).
 //
 pub const Prompt = struct {
     // Allocator for frames and input (an arena owned by the caller).
@@ -151,7 +151,7 @@ pub const Prompt = struct {
     userInput: []const u8,
 
     //
-    // Creates the base prompt (TypeScript: constructor(options, trackValue = true)).
+    // Creates the base prompt.
     //
     pub fn init(allocator: std.mem.Allocator, options: PromptOptions, trackValue: bool, kind: PromptKind) Prompt {
         return .{

@@ -1,12 +1,11 @@
 //
 // The failure paths of the replicate, sync, verify and add commands (apps/cli-zig/src/cmd/replicate.zig,
-// sync.zig, verify.zig and add.zig against apps/cli/src/cmd/replicate.ts, sync.ts, verify.ts and add.ts).
+// sync.zig, verify.zig and add.zig).
 //
-// The reports the tests expect are written out here from the TypeScript CLI: the "✗ Path does not exist" of
-// addCommand (apps/cli/src/cmd/add.ts), the "No database found" of loadDatabase (apps/cli/src/lib/init-cmd.ts),
-// the "✗ Encryption key ... not found" of replicateCommand and syncCommand, the "Removed files:" and
-// "Invalid database files:" sections of verifyCommand (apps/cli/src/cmd/verify.ts) and the "Source files deleted: "
-// line addCommand writes under --cleanup, which has no count behind it in the TypeScript either.
+// The reports the tests expect are written out here: the "✗ Path does not exist" of addCommand, the
+// "No database found" of loadDatabase, the "✗ Encryption key ... not found" of replicateCommand and syncCommand,
+// the "Removed files:" and "Invalid database files:" sections of verifyCommand and the "Source files deleted: "
+// line addCommand writes under --cleanup, which has no count behind it.
 //
 
 const std = @import("std");
@@ -146,7 +145,7 @@ const no = "n";
 
 //
 // The number of files each mode of replicate copied, read from the "Total files copied" line of the report of
-// replicateCommand (apps/cli/src/cmd/replicate.ts), for a destination whose one asset was removed before the run:
+// replicateCommand, for a destination whose one asset was removed before the run:
 // a full replication copies the asset, display and thumb file back (3), a partial one copies no file and
 // fetches the asset and display files from the origin on demand instead (0).
 //
@@ -218,7 +217,7 @@ fn expectStartsWith(haystack: []const u8, prefix: []const u8) !void {
 }
 
 //
-// The prompt the mode select is: replicateCommand (apps/cli/src/cmd/replicate.ts) asks which mode to use when
+// The prompt the mode select is: replicateCommand asks which mode to use when
 // neither --partial nor --full was given and --yes was not either.
 //
 const mode_prompt_text = "How would you like to replicate the database?";
@@ -308,7 +307,7 @@ test "replicate leaves the files for the origin when the partial mode is chosen 
 
 //
 // The confirmation before an existing destination is overwritten, answered no: replicateCommand writes
-// "Replication cancelled." and ends without copying anything (apps/cli/src/cmd/replicate.zig).
+// "Replication cancelled." and ends without copying anything (apps/cli-zig/src/cmd/replicate.zig).
 //
 test "replicate asks before overwriting a destination and cancels when the answer is no" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -362,7 +361,7 @@ test "replicate overwrites the destination when the confirmation is answered yes
 
 //
 // What replicateCommand prints when the destination is an encrypted database and the key it was given is not in
-// the vault (apps/cli/src/cmd/replicate.ts: the resolveKeyPemsWithPrompt of the existing destination).
+// the vault.
 //
 const replicate_missing_key_error =
     \\✗ Encryption key "nosuchkey" not found. Use "psi secrets list" to see available keys.
@@ -396,7 +395,7 @@ test "replicate refuses an encrypted destination whose key is not in the vault" 
 
 //
 // What syncCommand prints when the destination is an encrypted database and the key it was given is not in the
-// vault (apps/cli/src/cmd/sync.ts: the resolveKeyPemsWithPrompt of the existing destination).
+// vault.
 //
 test "sync refuses an encrypted destination whose key is not in the vault" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -426,7 +425,7 @@ test "sync refuses an encrypted destination whose key is not in the vault" {
 
 //
 // configOrigin (apps/cli-zig/src/cmd/sync.zig) reads `config?.origin` the way syncCommand
-// (apps/cli/src/cmd/sync.ts) does: a missing config, a config that is not an object, an object with no origin and
+// needs it: a missing config, a config that is not an object, an object with no origin and
 // an origin that is not a string all give no destination, and only a string gives one.
 //
 test "configOrigin reads a string origin and nothing else" {
@@ -525,7 +524,7 @@ test "verify reports a database file it cannot read" {
 }
 
 //
-// What loadDatabase (apps/cli/src/lib/init-cmd.ts) prints for a path that is a file rather than a database
+// What loadDatabase prints for a path that is a file rather than a database
 // directory: there is no .db folder in it, so there is no database there either.
 //
 const verify_plain_file_report =
@@ -557,7 +556,7 @@ test "verify reports a path that is a file rather than a database" {
 }
 
 //
-// What addCommand prints for a path that is not there (apps/cli/src/cmd/add.ts checks every path it was given
+// What addCommand prints for a path that is not there (it checks every path it was given
 // before it loads the database, so nothing else is printed and nothing is imported).
 //
 const add_missing_path_error =
@@ -636,8 +635,7 @@ fn setupAdd(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
 //
 // addCommand under --cleanup deletes the source files the database holds, which is what cleanUpImportedSources
 // (apps/cli-zig/src/cmd/add.zig) does: the second run finds the photo already imported, deletes it from the disk
-// and writes the count of what it deleted. The TypeScript writes that line with no count behind it, and this port
-// mirrors that (see the TODO at apps/cli-zig/src/cmd/add.zig).
+// and writes the line with no count behind it.
 //
 test "add deletes the source file the database already holds under --cleanup" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -659,7 +657,7 @@ test "add deletes the source file the database already holds under --cleanup" {
 
     try std.testing.expectEqual(@as(u8, 0), secondRun.exitCode);
     try expectContains(secondRun.stdout, "Looking for source files the database already holds...");
-    // The line the TypeScript writes with no count behind it, which this port mirrors.
+    // The line is written with no count behind it.
     try expectContains(secondRun.stdout, "Source files deleted: \n");
     try expectContains(secondRun.stdout, "Files added:      0\nFiles ignored:    0\nFiles failed:     0\nAlready added:    1\n");
     // The source file is gone from the disk, which is what the run was for.
@@ -668,7 +666,7 @@ test "add deletes the source file the database already holds under --cleanup" {
 
 //
 // The same run against a database that says it is encrypted while the key it was given is not in the vault, which
-// is what a missing or emptied vault looks like: loadDatabase (apps/cli/src/lib/init-cmd.ts) stops addCommand
+// is what a missing or emptied vault looks like: loadDatabase stops addCommand
 // before it imports anything, so the photo the run was given is left where it was.
 //
 const add_missing_key_report =

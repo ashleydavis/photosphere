@@ -26,7 +26,7 @@ pub fn registerCloseDatabaseTool(server: *McpServer, toolContext: *IMcpToolConte
 }
 
 //
-// The handler of `close_database` (TypeScript: the arrow function given to registerTool).
+// The handler of `close_database`.
 //
 fn closeDatabase(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     _ = io;

@@ -1,7 +1,6 @@
 //
 // The files the user last dropped on the window, as the shell reported them. A page cannot learn the path of a dropped file: a web
-// view gives it no File with a path (WebKitGTK gives no File at all), so the page asks the core for the paths of the last drop, which is
-// what Electron's webUtils.getPathForFile gives an app that has the real path.
+// view gives it no File with a path (WebKitGTK gives no File at all), so the page asks the core for the paths of the last drop.
 //
 
 const std = @import("std");

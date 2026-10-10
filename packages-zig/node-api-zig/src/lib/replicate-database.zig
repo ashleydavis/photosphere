@@ -14,7 +14,7 @@ const IReplicateProgressMessage = api.replicate_database_types.IReplicateProgres
 
 //
 // Progress callback fired for each progress message emitted by the replicate-database worker.
-// (Zig: a closure; `function` is called with `context`. The progress string is only valid during the call.)
+// A closure: `function` is called with `context`. The progress string is only valid during the call.
 //
 pub const ReplicateProgressCallback = struct {
     // The state of the callback, passed to function.
@@ -32,8 +32,8 @@ pub const ReplicateProgressCallback = struct {
 };
 
 //
-// Converts the replicate-database task data to the JSON value that is queued (like JSON.stringify, optional keys
-// that are not set are left out). (No TypeScript counterpart: TypeScript queues the object itself.)
+// Converts the replicate-database task data to the JSON value that is queued (optional keys
+// that are not set are left out).
 //
 pub fn replicateDatabaseDataToJson(allocator: std.mem.Allocator, data: IReplicateDatabaseData) !std.json.Value {
     const text = try std.json.Stringify.valueAlloc(allocator, data, .{ .emit_null_optional_fields = false });
@@ -41,8 +41,7 @@ pub fn replicateDatabaseDataToJson(allocator: std.mem.Allocator, data: IReplicat
 }
 
 //
-// Forwards replicate-progress task messages to the ReplicateProgressCallback
-// (TypeScript: the `({ message }) => { onProgress(message.progress); }` arrow function).
+// Forwards replicate-progress task messages to the ReplicateProgressCallback.
 //
 fn onReplicateProgressMessage(context: ?*anyopaque, data: ITaskMessageData) anyerror!void {
     const onProgress: *const ReplicateProgressCallback = @ptrCast(@alignCast(context.?));
@@ -62,8 +61,7 @@ fn onReplicateProgressMessage(context: ?*anyopaque, data: ITaskMessageData) anye
 }
 
 //
-// The last non-empty part of a path split on either separator
-// (TypeScript: `path.split(/[\\/]/).filter(Boolean).pop()`), or null when there is none.
+// The last non-empty part of a path split on either separator, or null when there is none.
 //
 fn lastPathPart(path: []const u8) ?[]const u8 {
     var parts = std.mem.tokenizeAny(u8, path, "\\/");
@@ -79,8 +77,7 @@ fn lastPathPart(path: []const u8) ?[]const u8 {
 // Both the CLI and the desktop dialog call this: it encapsulates the TaskQueue dance (subscribe,
 // addTask, awaitTask, shutdown) so callers do not duplicate it.
 //
-// The task is queued against the registered IQueueBackend (set up at process startup by the caller:
-// WorkerPoolBun in the CLI, ElectronRendererQueueBackend in the renderer).
+// The task is queued against the registered IQueueBackend (set up at process startup by the caller).
 //
 // Throws the task error message when replication fails; returns the replication summary on success.
 //

@@ -1,5 +1,5 @@
 //
-// No TypeScript counterpart: `JSON.parse`, producing the JavaScript value it returns as a BsonValue (the model of a
+// JSON parsing with the semantics of `JSON.parse`, producing the value it returns as a BsonValue (the model of a
 // JavaScript value, see bson.zig). Numbers are JS numbers, objects keep JavaScript's property order (array index keys
 // first in ascending order, then the other keys in the order they first appear) and a repeated key keeps its first
 // position with its last value.
@@ -40,7 +40,7 @@ fn toJsValue(allocator: std.mem.Allocator, value: std.json.Value) !BsonValue {
 }
 
 //
-// Parses JSON text like `JSON.parse(text)`.
+// Parses JSON text with the semantics of `JSON.parse(text)`.
 //
 pub fn jsonParse(allocator: std.mem.Allocator, text: []const u8) !BsonValue {
     const value = try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{

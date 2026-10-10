@@ -42,3 +42,11 @@ The core's `keep_alive` callback reaches `ZiggyBridge`, which takes a background
 - Save: iOS has no dialog for choosing where to save a file, so the callback fails and the core replies to the request with an error.
 
 A loopback server the page loads media from needs `NSAllowsLocalNetworking` in the app's `Info.plist`.
+
+## Host requests
+
+A host request is how the core asks the app's own code for something only the platform can do (a permission prompt, the keychain, a share sheet), named by a method. The app gives `ZiggyBridge.setHostRequestHandler` an object that conforms to `ZiggyHostRequestHandler` before `start`. The core calls it from a worker thread with the method name and the JSON text of its argument, and the handler returns the JSON text of the answer or throws `ZiggyHostRequestError` with a reason in words the user can act on. The handler may block, for instance on a permission dialog, because the core's worker thread waits and the main thread does not. The shell knows no method names. With no handler set the core has no host request callback, and a request fails with a message saying so.
+
+## Starting work from the app
+
+When the system wakes the app with no page on screen (a background task, for instance) the app starts work in the core itself. `ZiggyBridge.request(channel:data:completion:)` makes a request as the page's `invoke` does, and its reply goes to the completion and not to the page. `ZiggyBridge.send(channel:data:)` is the one-way form. `keepRunningChanged` is called on the main thread each time the core says the app must be kept running or no longer must be.

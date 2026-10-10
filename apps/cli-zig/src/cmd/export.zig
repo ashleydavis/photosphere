@@ -27,7 +27,7 @@ pub const AssetType = enum {
 };
 
 //
-// Options of the export command (TypeScript: IExportCommandOptions extends IBaseCommandOptions).
+// Options of the export command.
 // The base options are in `base`.
 //
 pub const IExportCommandOptions = struct {
@@ -36,7 +36,7 @@ pub const IExportCommandOptions = struct {
 
     //
     // Type of asset to export (original, display, thumb).
-    // (Zig: the text of the option, because commander passes any text through.)
+    // The text of the option, because the command line parser passes any text through.
     //
     type: ?[]const u8 = null,
 };
@@ -44,12 +44,10 @@ pub const IExportCommandOptions = struct {
 //
 // Construct the storage path based on asset type.
 //
-// Separated by "/", the way every other caller writes it (asset-query.ts, upload-asset.worker.ts,
-// repair.ts, list.ts). A storage path is not a filesystem path, so path.join is wrong: on Windows
-// it returned "asset\<id>" while the object had been written at "asset/<id>", so exporting out of
-// S3 looked for a key that does not exist. On Linux and macOS path.join happens to produce "/",
-// which is why this only ever failed on Windows.
-// (Zig: a type that is not one of the three is `default`, the original.)
+// Separated by "/", the way every other caller writes it. A storage path is not a filesystem path, so a
+// platform path join is wrong: on Windows it would give "asset\<id>" while the object is written at
+// "asset/<id>", so exporting out of S3 would look for a key that does not exist.
+// A type that is not one of the three is `default`, the original.
 //
 fn getAssetStoragePath(allocator: std.mem.Allocator, assetId: []const u8, assetType: []const u8) ![]const u8 {
     if (std.mem.eql(u8, assetType, "display")) {
@@ -78,8 +76,7 @@ fn getOutputFileName(allocator: std.mem.Allocator, originalName: []const u8, ass
 }
 
 //
-// Streams a file from storage to a new local file (TypeScript:
-// `pipeline(await assetStorage.readStream(assetStoragePath), createWriteStream(outputFilePath))`).
+// Streams a file from storage to a new local file.
 // Both streams are finished before it returns.
 //
 fn streamToFile(io: std.Io, storage: IStorage, allocator: std.mem.Allocator, storagePath: []const u8, outputFilePath: []const u8) !void {
@@ -112,7 +109,7 @@ pub fn exportCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
     // A partial database may have dropped this original locally because the origin holds it. Reading
     // through origin-backed storage is what fetches it back, so exporting works whether the file is
     // on this machine or only on the remote.
-    const assetStorage = try openLazyOriginStorage(allocator, io, localStorage, rawAssetStorage);
+    const assetStorage = try openLazyOriginStorage(allocator, io, localStorage, rawAssetStorage, null);
 
     const asset = try metadataCollection.getOne(io, assetId) orelse {
         log.@"error"(try std.fmt.allocPrint(allocator, "Asset {s} not found in database.", .{assetId}));

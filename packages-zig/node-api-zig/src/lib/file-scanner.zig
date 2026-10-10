@@ -107,8 +107,8 @@ pub const SimpleFileCallback = struct {
 pub const ScannerOptions = struct {
     //
     // Patterns to ignore during scanning (default: [/\.db/])
-    // (Zig: every pattern Photosphere passes is a regular expression of literal text, which matches a name that
-    // contains that text anywhere, so a pattern is written as the text itself.)
+    // Every pattern Photosphere passes is literal text, which matches a name that contains that text anywhere,
+    // so a pattern is written as the text itself.
     //
     ignorePatterns: ?[]const []const u8 = null,
 };
@@ -162,8 +162,7 @@ fn shouldIncludeFile(contentType: []const u8) bool {
 }
 
 //
-// Gets the MIME type of a path (TypeScript: `mime.getType(path)`).
-// (No TypeScript counterpart: mime is imported as a default export.)
+// Gets the MIME type of a path.
 //
 fn getMimeType(allocator: std.mem.Allocator, filePath: []const u8) !?[]const u8 {
     const mime = try mime_module.mime();
@@ -171,7 +170,7 @@ fn getMimeType(allocator: std.mem.Allocator, filePath: []const u8) !?[]const u8 
 }
 
 //
-// A directory entry that walkDirectory sorts (TypeScript: the Dirent it filters and sorts).
+// A directory entry that walkDirectory filters and sorts.
 //
 const IDirectoryEntry = struct {
     // The name of the entry.
@@ -187,7 +186,7 @@ fn entryLessThan(context: void, left: IDirectoryEntry, right: IDirectoryEntry) b
 }
 
 //
-// Visits each file found by walkDirectory (TypeScript: the body of the `for await` loop over the generator).
+// Visits each file found by walkDirectory.
 //
 const OrderedFileVisitor = struct {
     // The state of the visitor, passed to function.
@@ -199,7 +198,7 @@ const OrderedFileVisitor = struct {
 
 //
 // Walks a directory recursively and yields files in alphanumeric order
-// (Zig: each file is handed to the visitor, in the order the TypeScript generator yields them.)
+// Each file is handed to the visitor, in that order.
 //
 fn walkDirectory(allocator: std.mem.Allocator, io: std.Io, dirPath: []const u8, ignorePatterns: []const []const u8, visitor: OrderedFileVisitor) anyerror!void {
     if (!pathExists(io, dirPath)) {
@@ -245,7 +244,7 @@ fn walkDirectory(allocator: std.mem.Allocator, io: std.Io, dirPath: []const u8, 
 }
 
 //
-// Whether a name matches one of the ignore patterns (TypeScript: the isIgnored arrow function in walkDirectory).
+// Whether a name matches one of the ignore patterns.
 //
 fn isIgnored(name: []const u8, ignorePatterns: []const []const u8) bool {
     for (ignorePatterns) |pattern| {
@@ -257,7 +256,7 @@ fn isIgnored(name: []const u8, ignorePatterns: []const []const u8) bool {
 }
 
 //
-// The patterns walkDirectory ignores when it is given none (TypeScript: its default parameter value).
+// The patterns walkDirectory ignores when it is given none.
 //
 const DEFAULT_WALK_IGNORE_PATTERNS = [_][]const u8{
     "node_modules",
@@ -311,9 +310,9 @@ fn formatZipProgressPath(allocator: std.mem.Allocator, zipPathStack: []const []c
 }
 
 //
-// JavaScript's `text.length > maximum ? text.substring(0, maximum) : text`, where the length counts UTF-16 code
-// units. A cut that splits a character outside the Basic Multilingual Plane keeps its high surrogate, which is
-// written out as U+FFFD, so that is what the cut part ends with. (No TypeScript counterpart.)
+// Cuts text to a maximum length, where the length counts UTF-16 code units. A cut that splits a character
+// outside the Basic Multilingual Plane keeps its high surrogate, which is written out as U+FFFD, so that is
+// what the cut part ends with.
 //
 fn truncateUtf16(allocator: std.mem.Allocator, text: []const u8, maximum: usize) ![]const u8 {
     var units: usize = 0;
@@ -334,8 +333,7 @@ fn truncateUtf16(allocator: std.mem.Allocator, text: []const u8, maximum: usize)
 }
 
 //
-// Node's `fs.stat` for a path: the kind, size and modified time of what the path leads to (following links), or
-// the error Node reports. (No TypeScript counterpart: TypeScript calls fs.stat.)
+// The kind, size and modified time of what a path leads to (following links), or the error the stat reports.
 //
 fn statPath(io: std.Io, filePath: []const u8) !std.Io.File.Stat {
     return std.Io.Dir.cwd().statFile(io, filePath, .{}) catch |err| {
@@ -347,9 +345,7 @@ fn statPath(io: std.Io, filePath: []const u8) !std.Io.File.Stat {
 }
 
 //
-// The modified time of a stat, as a JavaScript Date holds it (whole milliseconds, truncated towards zero as the
-// Date constructor truncates mtimeMs, so a time before 1970 rounds up).
-// (No TypeScript counterpart: TypeScript reads `stats.mtime`.)
+// The modified time of a stat in whole milliseconds, truncated towards zero, so a time before 1970 rounds up.
 //
 fn statModifiedTime(stat: std.Io.File.Stat) i64 {
     return stat.mtime.toMilliseconds();
@@ -414,7 +410,7 @@ fn scanZipFile(
             const zipFileInfo: IFileStat = .{
                 .contentType = contentType,
                 .length = 0, // We can't reliably get the uncompressed size from JSZip.
-                // TypeScript: `zipObject.date || fileStat.lastModified`; a Date is always truthy, so fileStat is never read.
+                // The zip entry's date is always set, so the file's own modified time is never read.
                 .lastModified = zipObject.date,
             };
 
@@ -450,7 +446,7 @@ fn scanZipFile(
 
 //
 // The body of scanZipFile's try block for a nested zip: extracts it to a temporary file and scans that.
-// (No TypeScript counterpart: the try block is written inline; Zig needs it as a function to catch its errors.)
+// It is a function so scanZipFile can catch its errors.
 //
 fn extractNestedZip(
     allocator: std.mem.Allocator,
@@ -503,7 +499,7 @@ fn extractNestedZip(
 
 //
 // The body of scanZipFile's try block for a media file: extracts it to a temporary file and visits it.
-// (No TypeScript counterpart: the try block is written inline; Zig needs it as a function to catch its errors.)
+// It is a function so scanZipFile can catch its errors.
 //
 fn extractFile(
     allocator: std.mem.Allocator,
@@ -554,7 +550,7 @@ fn extractFile(
 }
 
 //
-// What scanDirectory's loop over walkDirectory needs (TypeScript: the variables the loop body closes over).
+// What scanDirectory's loop over walkDirectory needs.
 //
 const DirectoryScan = struct {
     // Allocates everything the scan keeps.
@@ -760,7 +756,7 @@ fn scanPathInternal(
 }
 
 //
-// TODO: a file name that is not valid UTF-8 keeps its bytes, where Node decodes it to U+FFFD (the hash cache keys
+// TODO: a file name that is not valid UTF-8 keeps its bytes, where decoding it would give U+FFFD (the hash cache keys
 // and zip entry names likewise).
 //
 // Scans a list of files or directories

@@ -84,7 +84,7 @@ pub const IParsedPath = struct {
 
 //
 // Records a runtime (non-thrown) Zig error as the most recent error so that it can be the cause of a WrappedError,
-// then returns its message (TypeScript: `err.message`), copied so it can be formatted into the new message.
+// then returns its message, copied so it can be formatted into the new message.
 //
 fn causeMessage(allocator: std.mem.Allocator, err: anyerror) ![]const u8 {
     if (err != error.Thrown and err != error.FatalError) {
@@ -94,8 +94,7 @@ fn causeMessage(allocator: std.mem.Allocator, err: anyerror) ![]const u8 {
 }
 
 //
-// Returns true when the most recent error is S3's "not found" (TypeScript:
-// `err.name === "NotFound" || err.$metadata?.httpStatusCode === 404`).
+// Returns true when the most recent error is S3's "not found" (the error is named "NotFound" or has HTTP status 404).
 //
 fn isNotFound(err: anyerror) bool {
     if (err != error.Thrown) {
@@ -105,7 +104,7 @@ fn isNotFound(err: anyerror) bool {
 }
 
 //
-// Returns true when the most recent error is S3's "NoSuchKey" (TypeScript: `err.name === "NoSuchKey"`).
+// Returns true when the most recent error is S3's "NoSuchKey".
 //
 fn isNoSuchKey(err: anyerror) bool {
     return err == error.Thrown and std.mem.eql(u8, errors.lastErrorName(), "NoSuchKey");
@@ -125,7 +124,6 @@ fn lastPathPart(name: []const u8) []const u8 {
 // Decodes base64 like the runtime's `Buffer.from(text, "base64")`, which never fails: characters outside the
 // standard and URL-safe alphabets are skipped, decoding stops at the first "=", and a trailing group of two or three
 // characters gives one or two bytes (a lone trailing character gives none).
-// (No TypeScript counterpart: stands in for the Buffer of the JavaScript runtime.)
 //
 pub fn bufferFromBase64(allocator: std.mem.Allocator, text: []const u8) ![]u8 {
     var decoded: std.ArrayList(u8) = .empty;
@@ -180,12 +178,12 @@ pub const CloudStorage = struct {
 
     //
     // AWS S3 client.
-    // (Zig: held by value, so a CloudStorage must not be moved once it has been used.)
+    // Held by value, so a CloudStorage must not be moved once it has been used.
     //
     s3: S3Client,
 
     //
-    // Creates cloud storage (TypeScript: `new CloudStorage(location, credentials)`).
+    // Creates cloud storage.
     //
     pub fn init(io: std.Io, location: []const u8, credentials: ?IS3Credentials) CloudStorage {
         var endpoint: ?[]const u8 = null;
@@ -224,10 +222,9 @@ pub const CloudStorage = struct {
     // server. Nothing is given up by not signing the body, because every file this writes carries a
     // SHA-256 the server checks it against (see writeStreamHashed), which the signature never did.
     //
-    // (Zig: the S3 client (the binding to aws-c-s3 in s3-client.zig) is configured with `maxAttempts: 1` and
-    // the connectionTimeout of the request handler; aws-c-s3 has no whole-request timeout, so there is no
-    // requestTimeout. The photosphereUnsignedPayload middleware is the client signing every request that has a body
-    // with "UNSIGNED-PAYLOAD".)
+    // The S3 client (the binding to aws-c-s3 in s3-client.zig) is configured with a single attempt and
+    // a connection timeout; aws-c-s3 has no whole-request timeout, so there is no
+    // request timeout. The client signs every request that has a body with "UNSIGNED-PAYLOAD".
     //
     fn buildClient(io: std.Io, endpoint: ?[]const u8, credentials: ?IS3Credentials) S3Client {
         var config: s3_client.IS3ClientConfig = .{
@@ -248,7 +245,7 @@ pub const CloudStorage = struct {
     }
 
     //
-    // Gets the IStorage interface of this storage (TypeScript: the class implements IStorage).
+    // Gets the IStorage interface of this storage.
     //
     pub fn storage(self: *CloudStorage) IStorage {
         return .{ .ptr = self, .vtable = storage_module.implement(CloudStorage), .location = self.location };
@@ -425,8 +422,7 @@ pub const CloudStorage = struct {
         const parsed = try self.parsePath(dirPath);
         var key = parsed.key;
 
-        // TODO: mirrors the TypeScript until both are fixed: parsePath throws for an empty key, so this branch can
-        // never run.
+        // parsePath throws for an empty key, so this branch can never run.
         if (key.len == 0) {
             // Empty path is ok, bucket always exists if we've gotten this far
             return true;
@@ -542,9 +538,9 @@ pub const CloudStorage = struct {
             // is the expensive half of the work: the mobile shims recognise a file-backed stream
             // piped into a request and have the file sent from disk to the socket natively, which
             // only happens if the stream reaches the request unread.
-            // (Zig: aws-c-s3 reads the body of a single PutObject into one buffer before it sends it, so the stream is
+            // aws-c-s3 reads the body of a single PutObject into one buffer before it sends it, so the stream is
             // read into memory here and handed over as that buffer. It is page allocated so it does not grow the
-            // caller's arena.)
+            // caller's arena.
             const body = inputStream.allocRemaining(std.heap.page_allocator, .unlimited) catch |err| {
                 const message = try causeMessage(allocator, err);
                 return errors.throwWrappedError("Failed to write stream to {s}: {s}", .{ filePath, message });
@@ -634,7 +630,7 @@ pub const CloudStorage = struct {
             const message = try causeMessage(allocator, err);
             return errors.throwWrappedError("Failed to read {s}: {s}", .{ filePath, message });
         };
-        // (Zig: the S3 client returns no Body for an empty object, where the SDK's Body gives an empty buffer.)
+        // The S3 client returns no Body for an empty object, so an empty buffer is returned.
         return response.Body orelse try allocator.alloc(u8, 0);
     }
 
@@ -744,7 +740,7 @@ pub const CloudStorage = struct {
             key = try std.mem.concat(allocator, u8, &.{ key, "/" });
         }
 
-        // (Zig: every failure inside the TypeScript try block returns, like the empty catch block.)
+        // Every failure while listing and deleting returns without raising an error.
         var isTruncated = true;
         var continuationToken: ?[]const u8 = null;
 
@@ -805,7 +801,7 @@ pub const CloudStorage = struct {
 
     //
     // TODO: a lock file whose JSON has fields of other types (no owner, a string timestamp, an acquiredAt that is not
-    // toISOString output) is unreadable here, where the TypeScript carries undefined, NaN or an Invalid Date forward.
+    // toISOString output) is unreadable here.
     //
     // Checks if a write lock is acquired for the specified file.
     // Returns the lock information if it exists, undefined otherwise.
@@ -825,7 +821,7 @@ pub const CloudStorage = struct {
             const message = try causeMessage(allocator, err);
             return errors.throwWrappedError("Failed to check write lock for {s}: {s}", .{ filePath, message });
         };
-        // (Zig: the S3 client returns no Body for an empty object, which is the empty string of transformToString.)
+        // The S3 client returns no Body for an empty object, which reads as the empty string.
         const lockContent = response.Body orelse "";
         if (lockContent.len > 0) {
             return parseLockContent(allocator, lockContent) catch |err| {
@@ -964,6 +960,7 @@ pub const CloudStorage = struct {
     //
     // Refreshes a write lock for the specified file, updating its timestamp.
     // Throws an error if the lock is no longer owned by the specified owner.
+    // The body is a function, refreshWriteLockUnlogged, so that its failure can be logged and rethrown.
     //
     pub fn refreshWriteLock(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
 
@@ -980,7 +977,6 @@ pub const CloudStorage = struct {
             key = key[1..]; // Remove leading slash.
         }
 
-        // (Zig: TypeScript wraps the body in one try/catch; here the body is a function so its failure can be logged and rethrown.)
         self.refreshWriteLockUnlogged(allocator, io, filePath, owner, timestamp, parsed.bucket, key) catch |err| {
             if (log.verboseEnabled()) {
                 log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},REFRESH_FAILED,{d},{s},{s},error:{s}", .{ timestamp, processId, owner, filePath, errors.errorMessage(err) }));
@@ -994,7 +990,7 @@ pub const CloudStorage = struct {
     }
 
     //
-    // The try block of refreshWriteLock. (No TypeScript counterpart: see refreshWriteLock.)
+    // The body of refreshWriteLock, see refreshWriteLock.
     //
     fn refreshWriteLockUnlogged(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8, timestamp: i64, bucket: []const u8, key: []const u8) !void {
         // Check if lock exists and we own it

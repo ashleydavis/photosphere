@@ -32,7 +32,7 @@ pub fn registerGetDatabaseSummaryTool(server: *McpServer, toolContext: *IMcpTool
 }
 
 //
-// The handler of `get_database_summary` (TypeScript: the arrow function given to registerTool).
+// The handler of `get_database_summary`.
 //
 fn getDatabaseSummaryHandler(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     _ = arguments;

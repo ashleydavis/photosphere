@@ -19,8 +19,7 @@ const IsCancelledCallback = replicate_module.IsCancelledCallback;
 const IReplicateDatabaseData = api.replicate_database_types.IReplicateDatabaseData;
 
 //
-// Sends a replicate-progress task message (TypeScript: the progressCallback arrow function in
-// replicateDatabaseHandler, which captures data and context).
+// Sends a replicate-progress task message for replicateDatabaseHandler.
 //
 const ProgressMessageSender = struct {
     // The task context used to send the message.
@@ -35,18 +34,37 @@ const ProgressMessageSender = struct {
     // When the handler started (runStartedAt).
     runStartedAt: i64,
 
+    // The error the first failed message ended with, or null when none has failed. (Zig: the progress callback returns
+    // nothing, so a message that fails to send records its error here and the handler throws it once replicate has
+    // returned.)
+    failure: ?anyerror = null,
+
+    // The error message the first failed message ended with.
+    errorRecord: errors.ErrorRecord = .{},
+
     //
     // Sends one progress message.
     //
     fn send(callbackContext: ?*anyopaque, progress: ?[]const u8) void {
         const self: *ProgressMessageSender = @ptrCast(@alignCast(callbackContext.?));
+        if (self.failure != null) {
+            return;
+        }
+        self.sendMessages(progress) catch |err| {
+            self.failure = err;
+            errors.captureError(&self.errorRecord);
+        };
+    }
+
+    //
+    // Sends the replicate-progress message and the job progress for one progress line.
+    //
+    fn sendMessages(self: *ProgressMessageSender, progress: ?[]const u8) !void {
         var buffer: [16 * 1024]u8 = undefined;
         var bufferAllocator = std.heap.FixedBufferAllocator.init(&buffer);
         const allocator = bufferAllocator.allocator();
         var message: std.json.ObjectMap = .empty;
-        message.ensureTotalCapacity(allocator, 3) catch {
-            return;
-        };
+        try message.ensureTotalCapacity(allocator, 3);
         message.putAssumeCapacity("type", .{ .string = "replicate-progress" });
         message.putAssumeCapacity("databasePath", .{ .string = self.databasePath });
         message.putAssumeCapacity("progress", .{ .string = progress orelse "" });
@@ -55,14 +73,12 @@ const ProgressMessageSender = struct {
         // The same line again, as the job the interface lists and can cancel, so a replication can
         // be watched after its dialog has been closed. Indeterminate: replicate() reports what it is
         // copying, not how much is left.
-        sendJobProgress(allocator, self.context, self.job, self.runStartedAt, progress) catch {
-            return;
-        };
+        try sendJobProgress(allocator, self.context, self.job, self.runStartedAt, progress);
     }
 };
 
 //
-// Answers whether the task has been cancelled (TypeScript: the `() => context.isCancelled()` arrow function).
+// Answers whether the task has been cancelled.
 //
 fn isTaskCancelled(callbackContext: ?*anyopaque) bool {
     const context: *const ITaskContext = @ptrCast(@alignCast(callbackContext.?));
@@ -71,7 +87,6 @@ fn isTaskCancelled(callbackContext: ?*anyopaque) bool {
 
 //
 // Converts the replication result to the JSON value returned as the task output.
-// (No TypeScript counterpart: TypeScript returns the object itself.)
 //
 pub fn replicationResultToJson(allocator: std.mem.Allocator, result: IReplicationResult) !std.json.Value {
     const text = try std.json.Stringify.valueAlloc(allocator, result, .{});
@@ -83,7 +98,7 @@ pub fn replicationResultToJson(allocator: std.mem.Allocator, result: IReplicatio
 // Wraps the pure replicate() function, opening source and destination storage via the unified
 // openStorage helper. Forwards progress strings via replicate-progress task messages and returns
 // the replication summary as task output.
-// (Zig: the task data and output are JSON values holding IReplicateDatabaseData and IReplicationResult.)
+// The task data and output are JSON values holding IReplicateDatabaseData and IReplicationResult.
 //
 pub fn replicateDatabaseHandler(
     allocator: std.mem.Allocator,
@@ -108,7 +123,7 @@ pub fn replicateDatabaseHandler(
     // Open source storage. When the source is registered in databases.json its credentials come
     // from there; otherwise data.sourceEncryptionKey (file path or vault name) supplies the key.
     //
-    const source = try openStorage(allocator, io, data.sourcePath, data.sourceEncryptionKey, null);
+    const source = try openStorage(allocator, io, data.sourcePath, data.sourceEncryptionKey, null, context.hostRequester);
     const sourceStorage = source.storage;
     const sourceDb = try createMediaFileDatabase(allocator, sourceStorage, uuidGenerator, timestampProvider);
 
@@ -122,6 +137,7 @@ pub fn replicateDatabaseHandler(
         data.destPath,
         data.destEncryptionKey,
         data.destS3Key,
+        context.hostRequester,
     );
     const destStorage = dest.storage;
     const destRawStorage = dest.rawStorage;
@@ -129,8 +145,16 @@ pub fn replicateDatabaseHandler(
 
     log.info(try std.fmt.allocPrint(allocator, "Replication started from {s} to {s}", .{ data.sourcePath, data.destPath }));
 
-    var progressMessageSender: ProgressMessageSender = .{ .context = context, .databasePath = data.sourcePath, .job = data.job, .runStartedAt = runStartedAt };
-    const progressCallback: ProgressCallback = .{ .context = &progressMessageSender, .function = ProgressMessageSender.send };
+    var progressMessageSender: ProgressMessageSender = .{
+        .context = context,
+        .databasePath = data.sourcePath,
+        .job = data.job,
+        .runStartedAt = runStartedAt,
+    };
+    const progressCallback: ProgressCallback = .{
+        .context = &progressMessageSender,
+        .function = ProgressMessageSender.send,
+    };
 
     const result = try replicate(
         allocator,
@@ -146,10 +170,18 @@ pub fn replicateDatabaseHandler(
             .force = data.force,
             .partial = data.partial,
             .pathFilter = data.pathFilter,
-            .isCancelled = .{ .context = @constCast(&context), .function = isTaskCancelled },
+            .isCancelled = .{
+                .context = @constCast(&context),
+                .function = isTaskCancelled,
+            },
         },
         progressCallback,
     );
+
+    if (progressMessageSender.failure) |failure| {
+        errors.restoreError(&progressMessageSender.errorRecord);
+        return failure;
+    }
 
     //
     // If the destination is encrypted, write the public key PEM so the database can be opened later.

@@ -295,7 +295,7 @@ const MemoryStorage = struct {
 };
 
 //
-// A scenario recorded by generate.ts from the TypeScript implementation.
+// A scenario recorded in the fixtures file.
 //
 const IScenario = struct {
     // Name of the scenario.
@@ -310,11 +310,11 @@ const IScenario = struct {
     // The config passed to saveDatabaseConfig or the partial passed to updateDatabaseConfig.
     config: IDatabaseConfig,
 
-    // The bytes TypeScript wrote to .db/config.json.
+    // The bytes expected in .db/config.json.
     expected: []const u8,
 };
 
-test "saveDatabaseConfig and updateDatabaseConfig write the same bytes as TypeScript" {
+test "saveDatabaseConfig and updateDatabaseConfig write the bytes recorded in the scenarios" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -372,7 +372,7 @@ test "loadDatabaseConfig reads every field" {
     try std.testing.expectEqual(@as(i64, 5), config.get("unknown").?.integer);
 }
 
-test "loadDatabaseConfig keeps the last value of a repeated key, as JSON.parse does" {
+test "loadDatabaseConfig keeps the last value of a repeated key" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -435,4 +435,15 @@ test "updateDatabaseConfig overwrites existing values in place" {
     try memory_storage.files.put(allocator, ".db/config.json", "{\n  \"origin\": \"first\",\n  \"lastModifiedAt\": \"m\"\n}");
     try database_config.updateDatabaseConfig(allocator, io, memory_storage.storage(), .{ .origin = "second" });
     try std.testing.expectEqualStrings("{\n  \"origin\": \"second\",\n  \"lastModifiedAt\": \"m\"\n}", memory_storage.files.get(".db/config.json").?);
+}
+
+test "updateDatabaseConfig with no origin removes the existing origin and keeps the other keys" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var memory_storage = MemoryStorage.init(allocator);
+    try memory_storage.files.put(allocator, ".db/config.json", "{\n  \"origin\": \"first\",\n  \"lastModifiedAt\": \"m\"\n}");
+    try database_config.updateDatabaseConfig(allocator, io, memory_storage.storage(), .{ .origin = null });
+    try std.testing.expectEqualStrings("{\n  \"lastModifiedAt\": \"m\"\n}", memory_storage.files.get(".db/config.json").?);
 }

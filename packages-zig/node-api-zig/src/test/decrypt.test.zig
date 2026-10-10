@@ -1,5 +1,5 @@
 //
-// Tests for decryptableFiles and decrypt (port of src/test/lib/decrypt.test.ts).
+// Tests for decryptableFiles and decrypt.
 //
 
 const std = @import("std");
@@ -82,7 +82,7 @@ fn contains(names: []const []const u8, name: []const u8) bool {
 }
 
 //
-// A progress callback that ignores the messages (TypeScript: `() => {}`).
+// A progress callback that ignores the messages.
 //
 fn ignoreProgress(context: ?*anyopaque, message: []const u8) void {
     _ = context;
@@ -98,7 +98,7 @@ const noProgress: IDecryptProgress = .{
 };
 
 //
-// The messages a progress callback received (TypeScript: `msg => messages.push(msg)`).
+// The messages a progress callback received.
 //
 const ProgressMessages = struct {
     // Allocates the copies of the messages.

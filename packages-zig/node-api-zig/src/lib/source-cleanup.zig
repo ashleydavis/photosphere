@@ -1,8 +1,7 @@
 //
-// Source cleanup moved into `packages/api` so the mobile frontend can reach it. See the comment in
-// `media-source.ts` beside this file for why. It deletes through the IMediaSource it is handed, so
-// nothing in it was Node-specific either.
-// (Zig: `export *` is written out one declaration at a time.)
+// Source cleanup lives in `packages/api` so the mobile frontend can reach it. It deletes through the
+// IMediaSource it is handed, so nothing in it is Node-specific.
+// Each declaration is re-exported one at a time.
 //
 
 const api = @import("api-zig");

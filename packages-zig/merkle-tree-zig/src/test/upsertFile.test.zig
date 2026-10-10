@@ -1,5 +1,5 @@
 //
-// Tests for upsertItem (port of src/test/upsertFile.test.ts).
+// Tests for upsertItem.
 //
 
 const std = @import("std");

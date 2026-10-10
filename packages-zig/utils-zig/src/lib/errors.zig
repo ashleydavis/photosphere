@@ -1,19 +1,18 @@
 const std = @import("std");
 
 //
-// Zig errors cannot carry a message, but TypeScript errors do (and the CLI prints them).
-// This file has no TypeScript counterpart: it records the message of the most recent error
-// thrown on the current thread so that code written like `throw new Error(message)` in
-// TypeScript can be written as `return errors.throwError(...)` in Zig.
+// Zig errors cannot carry a message, but the CLI prints one. This file records the message of the most recent error
+// thrown on the current thread, so that code can say `return errors.throwError(...)` and the message is
+// available to whoever handles the error.
 //
 
 //
-// The Zig error returned when a plain TypeScript `Error` is thrown.
+// The Zig error returned when a plain error is thrown.
 //
 pub const ThrownError = error{Thrown};
 
 //
-// The Zig error returned when a TypeScript `FatalError` is thrown.
+// The Zig error returned when a fatal error is thrown.
 //
 pub const FatalErrorSet = error{FatalError};
 
@@ -50,10 +49,10 @@ pub const ErrorRecord = struct {
     // Number of valid bytes in cause_buffer.
     cause_length: usize = 0,
 
-    // The TypeScript error class name ("Error", "FatalError" or "WrappedError").
+    // The error class name ("Error", "FatalError" or "WrappedError").
     name: []const u8 = "Error",
 
-    // The TypeScript error class names of the errors of the cause chain, nearest cause first (the name each one
+    // The error class names of the errors of the cause chain, nearest cause first (the name each one
     // shows in its stack).
     cause_names: [max_cause_names][]const u8 = undefined,
 
@@ -97,8 +96,7 @@ pub fn throwError(comptime format: []const u8, args: anytype) ThrownError {
 }
 
 //
-// Equivalent of throwing an Error that has no `stack`, as the error a Bun file stream emits has none, so that
-// formatErrorChain shows its message alone. (No TypeScript counterpart: the runtime creates these errors.)
+// Throws an error that has no `stack`, so that formatErrorChain shows its message alone.
 //
 pub fn throwStacklessError(comptime format: []const u8, args: anytype) ThrownError {
     recordError("", format, args);
@@ -116,7 +114,7 @@ pub fn throwFatalError(comptime format: []const u8, args: anytype) FatalErrorSet
 //
 // Equivalent of `throw new WrappedError(message, { cause: <the most recent error> })`.
 // The cause chain of the most recent error is kept behind the new cause.
-// As in TypeScript the cause's message (when not empty) is folded into the message: "<message>: <cause message>".
+// The cause's message (when not empty) is folded into the message: "<message>: <cause message>".
 //
 pub fn throwWrappedError(comptime format: []const u8, args: anytype) ThrownError {
     recordErrorWithCause("WrappedError", true, format, args);
@@ -180,7 +178,7 @@ pub fn lastErrorCauseMessage() []const u8 {
 }
 
 //
-// Gets the TypeScript error class names of the cause chain of the most recent error, nearest cause first (one per
+// Gets the error class names of the cause chain of the most recent error, nearest cause first (one per
 // message of lastErrorCauseChain).
 //
 pub fn lastErrorCauseNames() []const []const u8 {
@@ -214,15 +212,15 @@ pub fn restoreError(record: *const ErrorRecord) void {
 }
 
 //
-// Gets the TypeScript class name of the most recent error thrown on this thread.
+// Gets the class name of the most recent error thrown on this thread.
 //
 pub fn lastErrorName() []const u8 {
     return last_error.name;
 }
 
 //
-// TODO: a runtime error's message is its Zig error name, where Node gives its own message ("EACCES: permission
-// denied, open '...'", or JavaScriptCore's description of malformed JSON). Only a missing file's message is emulated.
+// TODO: a runtime error's message is its Zig error name, not a descriptive message ("EACCES: permission
+// denied, open '...'"). Only a missing file's message is emulated.
 //
 // Gets the message for an error: the recorded message for thrown errors, otherwise the Zig error name
 // (the equivalent of `error.message` for errors raised by the runtime).

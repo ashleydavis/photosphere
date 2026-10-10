@@ -1,4 +1,5 @@
 const std = @import("std");
+const android_libc = @import("../../android-libc.zig");
 
 //
 // Builds zlib-ng 2.3.3 from the unmodified upstream release tarball fetched as the "zlib-ng" dependency in
@@ -240,6 +241,7 @@ pub fn addZlibNg(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
         .optimize = .ReleaseFast,
     });
     translate_c.addIncludePath(context.generated.getDirectory());
+    try android_libc.addLibcIncludes(b, translate_c, target);
     module.addImport(module_name, translate_c.createModule());
     module.linkLibrary(library);
 }
@@ -476,6 +478,8 @@ fn createLibrary(context: *const Context, name: []const u8, target: std.Build.Re
             .optimize = .ReleaseFast,
             .link_libc = true,
             .strip = true,
+            // The library ends up in Android's shared library, whose code must not depend on where it is loaded.
+            .pic = if (target.result.abi.isAndroid()) true else null,
         }),
     });
     const module = library.root_module;

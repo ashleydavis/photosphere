@@ -7,7 +7,7 @@ test "IReplicateDatabaseData round-trips through task data JSON (JSON.stringify 
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // What TypeScript sends for { sourcePath, destPath, destS3Key: undefined, partial, force }.
+    // What is sent for { sourcePath, destPath, destS3Key: undefined, partial, force }.
     const json = "{\"sourcePath\":\"/src\",\"destPath\":\"s3:bucket:/dest\",\"partial\":true,\"force\":false}";
     const value = try std.json.parseFromSliceLeaky(std.json.Value, allocator, json, .{});
     const data = try std.json.parseFromValueLeaky(types.IReplicateDatabaseData, allocator, value, .{});
@@ -36,7 +36,7 @@ test "IReplicateDatabaseData reads every optional key" {
     try std.testing.expect(data.force);
 }
 
-test "IReplicateProgressMessage serializes like the TypeScript message" {
+test "IReplicateProgressMessage serializes like the message" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const message: types.IReplicateProgressMessage = .{ .type = "replicate-progress", .databasePath = "/db", .progress = "Copied 1 file" };

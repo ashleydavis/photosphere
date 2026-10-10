@@ -85,8 +85,7 @@ fn originalHashes(allocator: std.mem.Allocator, merkleTree: ?*const IMerkleTree)
 }
 
 //
-// A content hash as hex (TypeScript: `contentHash.toString("hex")`, which is lower-case).
-// (No TypeScript counterpart: the conversion is inline.)
+// A content hash as lower-case hex.
 //
 fn hexOf(allocator: std.mem.Allocator, contentHash: []const u8) ![]const u8 {
     return std.fmt.allocPrint(allocator, "{x}", .{contentHash});
@@ -277,8 +276,7 @@ pub fn consolidateDatabases(
 
 //
 // The body of consolidateDatabases' first try block, run holding the remote's write lock.
-// (No TypeScript counterpart: the try block is written inline. remoteTree and pushedCount are updated through the
-// pointers, where TypeScript reassigns the variables.)
+// (remoteTree and pushedCount are updated through the pointers.)
 //
 fn pushAbsentAssets(
     allocator: std.mem.Allocator,
@@ -356,7 +354,6 @@ fn pushAbsentAssets(
 
 //
 // The body of consolidateDatabases' second try block, run holding the local database's write lock.
-// (No TypeScript counterpart: the try block is written inline.)
 //
 fn joinAsPartialReplica(
     allocator: std.mem.Allocator,

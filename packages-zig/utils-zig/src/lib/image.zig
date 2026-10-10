@@ -23,8 +23,8 @@ pub const IImageTransformation = struct {
 };
 
 //
-// The orientation read from the EXIF: a number, or the text of a value that is not one (TypeScript: whatever
-// `exif.Orientation` or `exif.Orientation[0]` holds, compared with `===` against the numbered cases).
+// The orientation read from the EXIF: a number, or the text of a value that is not one (whatever
+// the Orientation tag, or its first element, holds, compared with `===` against the numbered cases).
 //
 const IOrientation = union(enum) {
     // A number.

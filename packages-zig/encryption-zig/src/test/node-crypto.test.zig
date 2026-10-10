@@ -100,7 +100,7 @@ fn encryptAll(allocator: std.mem.Allocator, key: []const u8, iv: []const u8, dat
     });
 }
 
-test "createPrivateKey and exportPrivateKey reproduce the TypeScript PKCS#8 PEM" {
+test "createPrivateKey and exportPrivateKey reproduce the fixture PKCS#8 PEM" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -236,7 +236,7 @@ test "generateKeyPairSync creates an RSA key with the requested modulus length a
     try std.testing.expectEqualStrings("0123456789abcdef0123456789abcdef", try crypto.privateDecrypt(allocator, privateKey, encrypted));
 }
 
-test "privateDecrypt decrypts the AES key TypeScript wrapped with publicEncrypt" {
+test "privateDecrypt decrypts the AES key of the fixture wrapped with publicEncrypt" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -478,7 +478,7 @@ test "generateKeyPairSync reports the libcrypto error for a modulus that is too 
     try std.testing.expectEqualStrings("modulusLength 2147483648 is too large", utils.errors.lastErrorMessage());
 }
 
-test "createSign supports only SHA256, like the TypeScript callers" {
+test "createSign supports only SHA256, like the callers" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     try std.testing.expectError(error.Thrown, crypto.createSign(arena.allocator(), "SHA1x"));

@@ -23,7 +23,7 @@ const InstalledLogger = struct {
     fn start(self: *InstalledLogger, app: *TestApp) !void {
         const allocator = std.testing.allocator;
         self.logs_dir = try std.fs.path.join(allocator, &.{ app.tmp_path, "logs" });
-        self.logger = try FileLogger.init(allocator, std.testing.io, self.logs_dir, "1.2.3");
+        self.logger = try FileLogger.init(allocator, std.testing.io, null, self.logs_dir, "1.2.3");
         self.previous = utils.log.log;
         utils.log.setLog(self.logger.ilog());
     }
@@ -92,8 +92,11 @@ test "renderer-log writes an exception with its stack, and a tool's output" {
 
 test "renderer-log with no file logger installed writes nothing and replies null" {
     var app: TestApp = undefined;
+    const console_log = utils.log.log;
     try app.start();
     defer app.stop();
+    // The core installs its file logger when it starts, so the console log is put back to test the app with no file logger.
+    utils.log.setLog(console_log);
     const reply = try app.requestOk("renderer-log", "{\"level\":\"info\",\"message\":\"nobody is listening\"}");
     defer std.testing.allocator.free(reply);
     try std.testing.expectEqualStrings("null", reply);
@@ -145,8 +148,11 @@ test "get-log-details replies with the path of the log file and its header" {
 
 test "get-log-details with the console log replies with a null path and the placeholder header" {
     var app: TestApp = undefined;
+    const console_log = utils.log.log;
     try app.start();
     defer app.stop();
+    // The core installs its file logger when it starts, so the console log is put back to test the app with no file logger.
+    utils.log.setLog(console_log);
     const reply = try app.requestOk("get-log-details", "null");
     defer std.testing.allocator.free(reply);
     try std.testing.expectEqualStrings("{\"logFilePath\":null,\"logHeader\":\"No log file available\"}", reply);
@@ -240,7 +246,7 @@ test "fps-measurement is an error reply that names the file when it cannot be wr
     try std.testing.expect(std.mem.indexOf(u8, reply, "photosphere-fps.csv") != null);
 }
 
-test "renderer-log treats a null toolData and a null error as absent, as the TypeScript's truthiness tests do" {
+test "renderer-log treats a null toolData and a null error as absent" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();

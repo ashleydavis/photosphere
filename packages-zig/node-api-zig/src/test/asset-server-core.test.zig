@@ -1,8 +1,7 @@
 //
-// Tests for asset-server-core.zig (port of src/test/lib/asset-server-core.test.ts).
+// Tests for asset-server-core.zig.
 //
-// The TypeScript tests mock the storage functions the core calls. These run the core against real databases in directories of their
-// own, and look at what ended up on disk.
+// These run the core against real databases in directories of their own, and look at what ended up on disk.
 //
 
 const std = @import("std");
@@ -46,6 +45,7 @@ const CoreFixture = struct {
             .uuidGenerator = fixture.database.uuidGenerator.uuidGenerator(),
             .timestampProvider = fixture.database.timestampProvider.timestampProvider(),
             .sessionId = SESSION_ID,
+            .hostRequester = null,
         });
     }
 
@@ -165,8 +165,7 @@ test "serveAsset propagates a missing-asset error" {
 }
 
 //
-// A stream of four bytes that, when it is first read, looks at who holds the write lock of the database. (TypeScript: the test reads
-// the arguments the mocked writeAssetStream was called with.)
+// A stream of four bytes that, when it is first read, looks at who holds the write lock of the database.
 //
 const LockSpyStream = struct {
     // The reader.
@@ -187,6 +186,9 @@ const LockSpyStream = struct {
     // Whether the bytes have been given.
     sent: bool,
 
+    //
+    // Looks at the write lock the first time it is read, then gives the four bytes.
+    //
     fn stream(reader: *std.Io.Reader, writer: *std.Io.Writer, limit: std.Io.Limit) std.Io.Reader.StreamError!usize {
         _ = limit;
         const self: *LockSpyStream = @fieldParentPtr("interface", reader);
@@ -202,6 +204,9 @@ const LockSpyStream = struct {
         return 4;
     }
 
+    //
+    // Makes a stream over the storage that holds the lock.
+    //
     fn init(rawStorage: IStorage, io: std.Io, allocator: std.mem.Allocator) LockSpyStream {
         return .{
             .interface = .{
@@ -254,7 +259,7 @@ test "applyDatabaseOps delegates to the apply-database-ops library with context 
 
     try fixture.core.assetServerCore().applyDatabaseOps(allocator, io, &.{op});
 
-    const reopened = try node_api.open_storage.openStorage(allocator, io, fixture.database.dir, null, null);
+    const reopened = try node_api.open_storage.openStorage(allocator, io, fixture.database.dir, null, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, reopened.storage, fixture.database.uuidGenerator.uuidGenerator(), fixture.database.timestampProvider.timestampProvider());
     const loaded = (try database.metadataCollection.getOne(io, "a1b2c3d4-e5f6-7890-abcd-ef1234567890")).?;
     try std.testing.expectEqualStrings("x.jpg", loaded.get("origFileName").?.string);

@@ -321,9 +321,9 @@ test "an S3 error response without a Code is thrown as Unknown with its Message"
 }
 
 //
-// TODO: the JavaScript SDK throws the Code and Message of the body of a 500 or 503 (InternalError, "We encountered
+// TODO: S3 answers a 500 or 503 with the Code and Message of the body (InternalError, "We encountered
 // an internal error. Please try again."), but aws-c-s3 keeps neither the status nor the body of a response it would
-// retry (see s3-client.zig, throwResultError), so the port throws the SDK's own error for them.
+// retry (see s3-client.zig, throwResultError), so the SDK's own error is thrown for them.
 //
 test "an S3 500 or 503 fails with the error aws-c-s3 gives it" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -480,7 +480,7 @@ test "an endpoint that is not a URL is a TypeError, and one the endpoint rules r
     try expectFailure(notHttp.info(allocator, io, "dir/file.txt"), "Failed to get info for dir/file.txt: Custom endpoint `ftp://127.0.0.1/` was not a valid URI: Custom endpoint `ftp://127.0.0.1/` was not a valid URI", "Error", 0);
 }
 
-test "endpointHref gives the href new URL gives: a path of / for a special scheme without one, and the endpoint otherwise" {
+test "endpointHref gives the WHATWG URL href: a path of / for a special scheme without one, and the endpoint otherwise" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -497,7 +497,7 @@ test "endpointHref gives the href new URL gives: a path of / for a special schem
     try std.testing.expectEqualStrings("\"not a url\" cannot be parsed as a URL.", errors.lastErrorMessage());
 }
 
-test "an S3 error is named by its Code even when the port does not list the Code, like the SDK" {
+test "an S3 error is named by its Code even when the client does not list the Code" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -570,7 +570,7 @@ test "a directory with only subdirectories is not empty" {
     try std.testing.expect(!try storage.isEmpty(allocator, io, "bucket/dir"));
 }
 
-test "info fails for a file whose HEAD response has no Last-Modified, like the TypeScript" {
+test "info fails for a file whose HEAD response has no Last-Modified" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

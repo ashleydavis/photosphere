@@ -279,8 +279,8 @@ test "an S3 endpoint that is absent is left out of the stored value" {
 }
 
 //
-// A sender whose stored credentials have no region sends none (TypeScript's payload has region undefined), and the
-// receiver's JSON.stringify leaves it out of what it stores.
+// A sender whose stored credentials have no region sends none, and the receiver
+// leaves it out of what it stores.
 //
 test "an S3 region that is absent is left out of the stored value" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

@@ -35,7 +35,7 @@ pub fn printNewsItem(allocator: std.mem.Allocator, item: INewsItem) !void {
 // the underlying check functions, so this call never blocks the user.
 //
 // The `psi news` command skips this hook and renders its own (always-on, full-feed)
-// listing instead (see cmd/news.ts).
+// listing instead (see cmd/news.zig).
 //
 // `quiet` is the CLI's --quiet flag. These notifications are the CLI's optional output: useful to a
 // person, noise to anything reading the output by machine, and they appear on a schedule the caller

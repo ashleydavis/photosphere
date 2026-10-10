@@ -218,6 +218,13 @@ test "switching automatic import on reports a default database that could not be
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
+    // A file where the default database's folder would go, so creating the database there cannot work.
+    const blocked_path = try std.fs.path.join(std.testing.allocator, &.{ app.tmp_path, "photosphere-default" });
+    defer std.testing.allocator.free(blocked_path);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = blocked_path,
+        .data = "this is a file, not a folder",
+    });
     try expectReply(&app, "set-config", "{\"key\":\"autoImportSources\",\"value\":[{\"type\":\"folder\",\"path\":\"/watched\",\"recurse\":true}]}", "null");
     const reply = try app.requestError("set-config", "{\"key\":\"autoImportEnabled\",\"value\":true}");
     defer std.testing.allocator.free(reply);
@@ -236,6 +243,32 @@ test "set-config of the theme with no value removes it and tells the page, with 
     try expectReply(&app, "set-config", "{\"key\":\"theme\",\"value\":\"dark\"}", "null");
     try expectReply(&app, "set-config", "{\"key\":\"theme\",\"value\":null}", "null");
     try expectReply(&app, "get-config", "\"theme\"", "null");
-    // As in Electron, where the removed theme was sent as undefined, the event carries no data.
+    // A removed theme has no value to send, so the event carries no data.
     try app.shell.expectMessageContaining("{\"channel\":\"theme-changed\"}");
+}
+
+test "a failing config or state request logs the error with the message of its handler" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const allocator = std.testing.allocator;
+    allocator.free(try app.requestError("get-config", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error getting config value") != null);
+    allocator.free(try app.requestError("set-config", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error setting config value") != null);
+    allocator.free(try app.requestError("get-state", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error getting state value") != null);
+    allocator.free(try app.requestError("set-state", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error setting state value") != null);
+}
+
+test "config and state requests that succeed log nothing to the error output" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const allocator = std.testing.allocator;
+    allocator.free(try app.requestOk("set-state", "{\"key\":\"lastFolder\",\"value\":\"/photos\"}"));
+    allocator.free(try app.requestOk("get-state", "\"lastFolder\""));
+    allocator.free(try app.requestOk("get-config", "\"theme\""));
+    try std.testing.expectEqual(@as(usize, 0), app.console_err.written().len);
 }

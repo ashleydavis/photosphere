@@ -1,13 +1,11 @@
 //
-// The logging channels: renderer-log, get-log-details and fps-measurement, from the ipcMain handlers of apps/desktop/src/main.ts of
-// the same names.
+// The logging channels: renderer-log, get-log-details and fps-measurement.
 //
 // The log they use is the one installed with utils.log.setLog, which the app makes a FileLogger (file-logger.zig) at startup.
-// renderer-log does what it does only when that log is a FileLogger, as the TypeScript does it only when it has a file logger.
+// renderer-log does what it does only when that log is a FileLogger.
 //
 // renderer-log is a channel answered on the thread that handles the page's messages, and still never waits for the disk: the
-// FileLogger queues the line in memory and a thread of its own appends it, as the TypeScript's logger queues it and awaits
-// fs.appendFile. get-log-details reads the log file, so it is a task type.
+// FileLogger queues the line in memory and a thread of its own appends it. get-log-details reads the log file, so it is a task type.
 //
 
 const std = @import("std");
@@ -20,17 +18,17 @@ const Core = ziggy.core.Core;
 const TaskContext = ziggy.task_runner.TaskContext;
 const json_util = ziggy.json_util;
 const FileLogger = file_logger.FileLogger;
+const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 //
 // renderer-log: the payload is {level, message, error?, toolData?{stdout?, stderr?}}, an IRendererLogMessage. It is written to the
 // log as the message of a worker is, with the source "Renderer". The reply is null. When the log is not a FileLogger the message is
-// dropped, as it is in the TypeScript when there is no file logger.
+// dropped.
 //
-// This differs from the TypeScript in one way: a message that is not laid out as an IRendererLogMessage (not an object, no level or
-// message, a level that is not one of the eight, a toolData that is not an object) is an error reply that says what is wrong, where
-// the TypeScript's switch would write nothing or the text "undefined". Nothing is dropped without being said, which is what the
-// repository requires, and the page's types make the TypeScript's case impossible. The check happens before the test for a file
-// logger, so a bad message is reported even when there is no file logger.
+// A message that is not laid out as an IRendererLogMessage (not an object, no level or message, a level that is not one of the
+// eight, a toolData that is not an object) is an error reply that says what is wrong. The level has to be one of the eight to be
+// read into the log's level type, and nothing is dropped without being said, which is what the repository requires. The check
+// happens before the test for a file logger, so a bad message is reported even when there is no file logger.
 //
 pub fn rendererLogHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
     _ = core;
@@ -48,7 +46,7 @@ pub fn rendererLogHandler(core: *Core, arena: std.mem.Allocator, data: std.json.
     };
     var tool_data: ?utils.log.IToolOutput = null;
     if (data.object.get("toolData")) |tool_data_value| {
-        // A null toolData is absent, as it is for the TypeScript's truthiness test.
+        // A null toolData is absent.
         if (tool_data_value != .null) {
             if (tool_data_value != .object) {
                 return utils.errors.throwError("The tool data of a log message must be an object.", .{});
@@ -75,7 +73,7 @@ pub fn rendererLogHandler(core: *Core, arena: std.mem.Allocator, data: std.json.
 // get-log-details: no payload. The reply is {logFilePath, logHeader} of the active log: the path of the log file and the header of
 // the file, read from it on demand. A log that writes no file (the console log) replies with a null path and a placeholder header.
 //
-pub fn getLogDetailsHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn getLogDetails(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
     const details = try utils.log.log.getLogDetails(context.arena, context.io());
     return try std.json.Stringify.valueAlloc(context.arena, details, .{});
@@ -83,15 +81,14 @@ pub fn getLogDetailsHandler(context: *TaskContext, data: std.json.Value) anyerro
 
 //
 // fps-measurement: the payload is the frames per second the page measured, a number. A row of the time in milliseconds since the
-// Unix epoch and the number is appended to photosphere-fps.csv, and the reply is null. Like the TypeScript's, it answers only when
+// Unix epoch and the number is appended to photosphere-fps.csv, and the reply is null. It answers only when
 // the environment variable FPS_LOGGING is 1, and it is an error otherwise.
 //
-// This differs from the TypeScript in four ways. The file is in the app's data directory, where the TypeScript's is a fixed path
-// under /tmp, which nothing new may claim. The column header row is written when the file is empty or not there, where the
-// TypeScript writes it each time the app starts, because there is no moment of registration here to write it at. The environment
-// variable is read for each message, where the TypeScript reads it once at startup to decide whether to register the channel at all,
-// and a message with it off is an error reply where the TypeScript has no handler and so ignores it. A value that is not a number
-// is an error reply where the TypeScript would write it into the file whatever it was, because all failures here are noisy.
+// The file is in the app's data directory, because a fixed path under /tmp does not exist on Windows
+// and nothing may claim a fixed machine-wide path. The column header row is written when the file is empty or not there,
+// because the channels are a fixed list and there is no moment of registration to write it at. The
+// environment variable is read for each message, and a message with it off is an error reply. A value that is
+// not a number is an error reply, because all failures here are noisy.
 //
 pub fn fpsMeasurementHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
     const enabled = node_utils.process_env.getEnv("FPS_LOGGING") orelse "";
@@ -134,3 +131,8 @@ fn existingLength(io: std.Io, file_path: []const u8) !u64 {
     defer file.close(io);
     return try file.length(io);
 }
+
+//
+// The get-log-details channel's handler: getLogDetails, with its errors logged.
+//
+pub const getLogDetailsHandler = logExceptions(getLogDetails, "Error getting log details");

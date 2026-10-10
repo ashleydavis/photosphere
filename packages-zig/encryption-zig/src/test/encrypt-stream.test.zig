@@ -11,7 +11,7 @@ const constants = encryption.encryption_constants;
 const IPrivateKeyMap = encryption.encryption_types.IPrivateKeyMap;
 
 //
-// The key pair and key map used by the tests (the TypeScript fixture key; see encrypt-buffer.test.zig).
+// The key pair and key map used by the tests (the fixture key; see encrypt-buffer.test.zig).
 //
 const TestKeys = struct {
     // The public key.
@@ -38,7 +38,7 @@ fn loadTestKeys(allocator: std.mem.Allocator) !TestKeys {
 }
 
 //
-// Encrypts data through an encryption stream (TypeScript: Readable.from(plain).pipe(enc) then streamToBuffer).
+// Encrypts data through an encryption stream and reads all of the output.
 //
 fn encryptThroughStream(allocator: std.mem.Allocator, publicKey: *const crypto.PublicKey, plain: []const u8) ![]u8 {
     const input = try allocator.create(std.Io.Reader);
@@ -212,7 +212,7 @@ test "fails when the new-format header is there and the map holds the wrong key"
     const allocator = arena.allocator();
     const keys = try loadTestKeys(allocator);
 
-    // (Zig: the second TypeScript fixture key pair stands in for generateKeyPair.)
+    // (The second fixture key pair stands in for a generated key pair.)
     const otherPrivateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts2-private.pem"));
     const otherKeyHashHex = try fixtures.readFixture(allocator, "ts2-public-hash.hex");
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, "secret");

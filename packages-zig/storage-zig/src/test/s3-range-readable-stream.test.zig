@@ -1,5 +1,5 @@
 //
-// Tests for S3RangeReadableStream (port of src/tests/s3-range-readable-stream.test.ts).
+// Tests for S3RangeReadableStream.
 //
 
 const test_files = @import("test-files.zig");
@@ -33,7 +33,7 @@ const IRange = struct {
 };
 
 //
-// Reads the first and last byte out of a Range header (TypeScript: `rangeHeader.match(/bytes=(\d+)-(\d+)/)`).
+// Reads the first and last byte out of a Range header ("bytes=first-last").
 //
 fn parseRange(rangeHeader: []const u8) !IRange {
     const prefix = "bytes=";
@@ -48,13 +48,13 @@ fn parseRange(rangeHeader: []const u8) !IRange {
 }
 
 //
-// Answers a GetObjectCommand for a test (the TypeScript tests' mockImplementation).
+// Answers a GetObjectCommand for a test.
 //
 const Answer = *const fn (mock: *MockS3, range: IRange) anyerror!S3CommandOutput;
 
 //
 // An S3 client whose send() answers each GetObjectCommand from a function, recording the Range of every
-// request (TypeScript: `{ send: jest.fn()... } as S3Client`).
+// request.
 //
 const MockS3 = struct {
     // Allocates the recorded ranges and the answers.
@@ -66,7 +66,7 @@ const MockS3 = struct {
     // Answers each command.
     answer: Answer,
 
-    // The Range of every request sent, in order (TypeScript: `mockSend.mock.calls[n][0].input.Range`).
+    // The Range of every request sent, in order.
     ranges: std.ArrayList([]const u8),
 
     // The Io the stream runs on.
@@ -108,7 +108,7 @@ const MockS3 = struct {
     }
 
     //
-    // How many requests were sent (TypeScript: `mockSend` toHaveBeenCalledTimes).
+    // How many requests were sent.
     //
     fn callCount(mock: *const MockS3) usize {
         return mock.ranges.items.len;
@@ -134,7 +134,7 @@ fn makeRangeResponse(allocator: std.mem.Allocator, slice: []u8, totalSize: u64, 
 }
 
 //
-// Answers with the slice of the data the Range asks for (TypeScript: makeMockS3).
+// Answers with the slice of the data the Range asks for.
 //
 fn sliceAnswer(mock: *MockS3, range: IRange) anyerror!S3CommandOutput {
     if (range.start >= mock.data.len) {
@@ -145,7 +145,7 @@ fn sliceAnswer(mock: *MockS3, range: IRange) anyerror!S3CommandOutput {
 }
 
 //
-// Collects a stream into a single buffer (TypeScript: streamToBuffer).
+// Collects a stream into a single buffer.
 //
 fn streamToBuffer(allocator: std.mem.Allocator, rangeStream: *S3RangeReadableStream) ![]u8 {
     return test_files.readAll(allocator, rangeStream.reader());
@@ -160,8 +160,6 @@ fn captureStderr(allocator: std.mem.Allocator) *std.Io.Writer.Allocating {
     utils.console.setCapture(null, &captured.writer);
     return captured;
 }
-
-// describe("S3RangeReadableStream")
 
 test "reads a small file in a single chunk" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

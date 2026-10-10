@@ -37,8 +37,8 @@ pub const ICheckDatabaseExistsResult = struct {
 //
 // Handler for the check-database-exists task. Returns whether an accessible database lives at the
 // given path, reusing checkDatabaseExists so "exists" means the same thing on desktop and mobile.
-// (Zig: the task data and output are JSON values holding ICheckDatabaseExistsData and ICheckDatabaseExistsResult.
-// The context is ignored, as in TypeScript.)
+// (The task data and output are JSON values holding ICheckDatabaseExistsData and ICheckDatabaseExistsResult.
+// The context is ignored.)
 //
 pub fn checkDatabaseExistsHandler(
     allocator: std.mem.Allocator,
@@ -46,9 +46,8 @@ pub fn checkDatabaseExistsHandler(
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
-    _ = context;
-    // (Zig: reading the task data into the typed struct fails when databasePath is not a string, where TypeScript would
-    // pass the wrong value on to checkDatabaseExists. The failure is reported as a sentence, not a bare parser error name.)
+    // (Reading the task data into the typed struct fails when databasePath is not a string. The failure is reported
+    // as a sentence, not a bare parser error name.)
     const data = std.json.parseFromValueLeaky(ICheckDatabaseExistsData, allocator, taskData, .{
         .ignore_unknown_fields = true,
     }) catch {
@@ -58,7 +57,7 @@ pub fn checkDatabaseExistsHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const exists = try checkDatabaseExists(allocator, io, data.databasePath);
+    const exists = try checkDatabaseExists(allocator, io, data.databasePath, context.hostRequester);
     const result: ICheckDatabaseExistsResult = .{
         .exists = exists,
     };

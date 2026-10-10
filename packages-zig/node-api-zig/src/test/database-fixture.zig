@@ -1,7 +1,5 @@
 //
-// A new, empty media file database in a directory of its own, with the generators the tests give to the code under test.
-// (No TypeScript counterpart: the TypeScript tests make the same database inline, with fs.mkdtempSync and createDatabase.)
-//
+// A new, empty media file database in a directory of its own, with the generators the tests give to the code under test.//
 
 const std = @import("std");
 const utils = @import("utils-zig");
@@ -39,7 +37,7 @@ pub const DatabaseFixture = struct {
         fixture.uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
         fixture.timestampProvider = .{};
         fixture.dir = try temp_dirs.makeTempDir(allocator, io, name);
-        const created = try node_api.open_storage.openStorage(allocator, io, fixture.dir, null, null);
+        const created = try node_api.open_storage.openStorage(allocator, io, fixture.dir, null, null, null);
         fixture.rawStorage = created.rawStorage;
         fixture.database = try media_file_database.createMediaFileDatabase(allocator, created.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
         try media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, fixture.uuidGenerator.uuidGenerator(), fixture.database.metadataCollection, null);

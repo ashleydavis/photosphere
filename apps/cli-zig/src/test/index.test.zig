@@ -272,7 +272,7 @@ test "the preAction hook asks for the notifications with the program's quiet fla
     try std.testing.expectEqual(@as(?bool, null), (try parse(allocator, &.{ "ver", "--help" })).state.notificationsQuiet);
 }
 
-test "the command definitions match index.ts" {
+test "the command definitions match the expected definitions" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -319,7 +319,7 @@ test "add command lines parse like commander" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // The files are the variadic [files...] argument; --dry-run, --watch and --cleanup default to false (index.ts).
+    // The files are the variadic [files...] argument; --dry-run, --watch and --cleanup default to false.
     const plain = try parse(allocator, &.{ "add", "--db", "a", "x.jpg", "dir", "--yes" });
     try std.testing.expect(plain.outcome == .add);
     try std.testing.expectEqual(@as(usize, 2), plain.outcome.add.paths.len);
@@ -800,7 +800,7 @@ test "check command lines parse like commander" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // The files are the required variadic <files...> argument (index.ts).
+    // The files are the required variadic <files...> argument.
     const plain = try parse(allocator, &.{ "check", "--db", "a", "x.jpg", "dir", "--yes" });
     try std.testing.expect(plain.outcome == .check);
     try std.testing.expectEqual(@as(usize, 2), plain.outcome.check.paths.len);
@@ -1097,7 +1097,7 @@ test "hash-cache command lines parse like commander" {
 }
 
 //
-// The help commander prints for the hash-cache command group (apps/cli/index.ts).
+// The help commander prints for the hash-cache command group.
 //
 const hash_cache_help =
     \\Usage: psi hash-cache [options] [command]

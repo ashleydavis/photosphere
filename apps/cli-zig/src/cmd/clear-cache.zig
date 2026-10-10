@@ -13,7 +13,7 @@ const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
 const ICommandContext = init_cmd.ICommandContext;
 
 //
-// Options of the hash-cache clear command (TypeScript: IClearCacheCommandOptions extends IBaseCommandOptions).
+// Options of the hash-cache clear command.
 // The base options are in `base`.
 //
 pub const IClearCacheCommandOptions = struct {
@@ -36,7 +36,6 @@ pub fn clearCacheCommand(allocator: std.mem.Allocator, io: std.Io, context: ICom
     const localHashCachePath = try getHashCacheDir(allocator, databaseDir);
 
     if (pathExists(io, localHashCachePath)) {
-        // (TypeScript: `fs.rmSync(localHashCachePath, { recursive: true, force: true })`.)
         try std.Io.Dir.cwd().deleteTree(io, localHashCachePath);
         log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "\u{2713} Cleared hash cache at: {s}", .{localHashCachePath})));
     }

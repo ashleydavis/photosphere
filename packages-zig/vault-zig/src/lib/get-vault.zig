@@ -8,12 +8,13 @@ const DEFAULT_VAULT_DIR = @import("plaintext-vault.zig").DEFAULT_VAULT_DIR;
 const MacOSKeychainVault = @import("macos-keychain-vault.zig").MacOSKeychainVault;
 const LinuxKeychainVault = @import("linux-keychain-vault.zig").LinuxKeychainVault;
 const WindowsKeychainVault = @import("windows-keychain-vault.zig").WindowsKeychainVault;
+const PhoneVault = @import("phone-vault.zig").PhoneVault;
+const IHostRequester = utils.host_requester.IHostRequester;
 const errors = utils.errors;
 const process_env = node_utils.process_env;
 
 //
-// Allocator for the cached vault instances, which live for the rest of the process (like the
-// TypeScript module-level Map). It is thread-safe because worker threads call getVault too.
+// Allocator for the cached vault instances, which live for the rest of the process. It is thread-safe because worker threads call getVault too.
 //
 const instance_allocator = std.heap.smp_allocator;
 
@@ -24,20 +25,37 @@ const instance_allocator = std.heap.smp_allocator;
 var vaultInstances: std.StringHashMapUnmanaged(IVault) = .empty;
 
 //
-// Guards vaultInstances (TypeScript runs on one thread; Zig worker threads share the cache).
+// Guards vaultInstances (worker threads share the cache).
 //
 var vaultInstancesMutex: std.Io.Mutex = .init;
 
 //
 // Returns the default vault type from the PHOTOSPHERE_VAULT_TYPE environment
-// variable, falling back to "keychain" when the variable is not set.
+// variable, falling back to "phone" on Android, where the keychain is the phone's, and to "keychain" elsewhere.
 //
 pub fn getDefaultVaultType() []const u8 {
-    return process_env.getEnv("PHOTOSPHERE_VAULT_TYPE") orelse "keychain";
+    return process_env.getEnv("PHOTOSPHERE_VAULT_TYPE") orelse if (builtin.abi.isAndroid()) "phone" else "keychain";
 }
 
 //
-// Locks vaultInstancesMutex without an Io (getVault has no Io parameter, like the TypeScript function).
+// Returns the vault for the given type like getVault, and for the type "phone" a vault that keeps its secrets in the phone's keychain
+// by asking the host through the given requester. The phone vault is made with the allocator for the caller to use, because the
+// requester belongs to the caller (the task running), and it is not cached. A phone vault with no requester is an error.
+//
+pub fn getVaultWithHost(allocator: std.mem.Allocator, @"type": []const u8, host: ?IHostRequester) !IVault {
+    if (!std.mem.eql(u8, @"type", "phone")) {
+        return getVault(@"type");
+    }
+    const requester = host orelse {
+        return errors.throwError("The phone vault needs the phone's shell to keep the secrets, and this program has none.", .{});
+    };
+    const instance = try allocator.create(PhoneVault);
+    instance.* = PhoneVault.init(requester);
+    return instance.vault();
+}
+
+//
+// Locks vaultInstancesMutex without an Io (getVault has no Io parameter).
 //
 fn lockVaultInstances() void {
     while (!vaultInstancesMutex.tryLock()) {
@@ -59,6 +77,7 @@ fn unlockVaultInstances() void {
 // Supported types:
 //   "keychain"  - stores secrets in the OS keychain (macOS, Linux, Windows)
 //   "plaintext" - stores secrets as plain-text JSON files under ~/.config/vault
+//   "phone"     - stores secrets in the phone's keychain (getVaultWithHost only)
 //
 // Throws if the type is not recognised.
 //
@@ -76,7 +95,7 @@ pub fn getVault(@"type": []const u8) !IVault {
 }
 
 //
-// The name Node gives the current platform (`process.platform`).
+// The name of the current platform as the keychain error message words it ("darwin", "win32", "linux").
 //
 fn processPlatform() []const u8 {
     return switch (builtin.os.tag) {

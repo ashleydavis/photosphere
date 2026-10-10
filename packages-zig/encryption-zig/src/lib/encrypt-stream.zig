@@ -8,8 +8,7 @@ const utils = @import("utils-zig");
 
 //
 // Streams.
-// TypeScript returns Node Transform streams that are piped from an input stream. In Zig each stream wraps an input
-// `*std.Io.Reader` and is itself read through its `interface: std.Io.Reader` field (pull based), which is what
+// Each stream wraps an input `*std.Io.Reader` and is itself read through its `interface: std.Io.Reader` field (pull based), which is what
 // storage-zig's EncryptedStorage needs:
 //   readStream:  const decryption = try createDecryptionStream(allocator, keyMap, try storage.readStream(path));
 //                return &decryption.interface;
@@ -21,7 +20,7 @@ const utils = @import("utils-zig");
 //
 
 //
-// Names used from other files (the equivalent of the TypeScript imports).
+// Names used from other files.
 //
 const IPrivateKeyMap = encryption_types.IPrivateKeyMap;
 const hashPublicKey = key_utils.hashPublicKey;
@@ -48,9 +47,9 @@ const chunk_length = 64 * 1024;
 const reader_buffer_length = 64 * 1024;
 
 //
-// A pull-based equivalent of a Node Transform stream: reads chunks from an input reader, passes them to a transform
+// A pull-based transform stream: reads chunks from an input reader, passes them to a transform
 // function that pushes output, calls a flush function at the end of the input and serves the pushed output through
-// a std.Io.Reader. (No TypeScript counterpart: this is the machinery behind `new Transform({ transform, flush })`.)
+// a std.Io.Reader.
 //
 pub const TransformStream = struct {
     // The reader interface that consumers read the transformed data from.
@@ -331,7 +330,7 @@ pub const DecryptionStream = struct {
             if (self.headerBytesReceived < LEGACY_HEADER_LENGTH) {
                 return;
             }
-            // (Zig: the TypeScript try block; a failing step breaks out with false, which runs the catch block.)
+            // (A failing step breaks out with false, which runs the catch block.)
             const succeeded = legacy: {
                 const encryptedKey = self.headerBuffer[0..512];
                 const iv = self.headerBuffer[512 .. 512 + 16];
@@ -399,8 +398,8 @@ pub const DecryptionStream = struct {
 
     //
     // Flush: pushes buffered bytes of data that never started decryption, or the final decrypted block.
-    // (TypeScript first pushes the header bytes of data it passed through; that cannot happen, because passing
-    // data through always empties the header buffer, so the Zig leaves it out.)
+    // (Header bytes of data that was passed through are never pushed here, because passing data through always
+    // empties the header buffer.)
     //
     fn flush(stream: *TransformStream) anyerror!void {
         const self: *DecryptionStream = @alignCast(@fieldParentPtr("transform", stream));

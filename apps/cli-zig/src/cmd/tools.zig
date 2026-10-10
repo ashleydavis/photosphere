@@ -1,5 +1,5 @@
 //
-// Port of apps/cli/src/cmd/tools.ts: the command that checks for the required media processing tools.
+// The command that checks for the required media processing tools.
 //
 
 const std = @import("std");
@@ -19,7 +19,7 @@ const isCancel = prompts.isCancel;
 const showInstallationInstructions = installation_instructions.showInstallationInstructions;
 
 //
-// Options of the tools command (TypeScript: IToolsCommandOptions).
+// Options of the tools command.
 //
 pub const IToolsCommandOptions = struct {
     // Non-interactive mode - use defaults and command line arguments.
@@ -27,7 +27,7 @@ pub const IToolsCommandOptions = struct {
 };
 
 //
-// A tool the command reports on (TypeScript: the elements of the `tools` array in listTools).
+// A tool the command reports on.
 //
 const IToolEntry = struct {
     // The name the report shows for the tool.
@@ -44,7 +44,7 @@ const IToolEntry = struct {
 };
 
 //
-// Formats a message into the allocator (TypeScript: a template literal).
+// Formats a message into the allocator.
 //
 fn text(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) ![]const u8 {
     return std.fmt.allocPrint(allocator, fmt, args);
@@ -65,7 +65,7 @@ fn listTools(allocator: std.mem.Allocator, io: std.Io, options: *const IToolsCom
     log.info("");
     log.info(try pc.bold(allocator, "📦 Media Processing Tools Status\n"));
 
-    const toolsStatus = try verifyTools(allocator, io);
+    const toolsStatus = try verifyTools(allocator, io, null);
 
     // Get ImageMagick type to display the correct command name
     const imageMagickType = Image.getImageMagickType();

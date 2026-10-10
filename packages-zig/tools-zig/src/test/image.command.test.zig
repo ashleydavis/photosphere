@@ -59,7 +59,7 @@ const FakeImageMagickDirectory = struct {
             else {
                 const scriptPath = try std.fs.path.join(allocator, &.{ self.path, name });
                 try cwd.writeFile(io, .{ .sub_path = scriptPath, .data = try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s\\n' \"$*\" > '{s}'\n", .{argumentsPath}) });
-                _ = try node_utils.exec.exec(allocator, io, try std.fmt.allocPrint(allocator, "chmod +x {s}", .{scriptPath}));
+                _ = try node_utils.exec.exec(allocator, io, null, try std.fmt.allocPrint(allocator, "chmod +x {s}", .{scriptPath}));
             }
         }
         self.environMap = std.process.Environ.Map.init(allocator);
@@ -138,7 +138,7 @@ const FakeOutputTools = struct {
                 else
                     try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s\\n' '{s}'\n", .{output});
                 try cwd.writeFile(io, .{ .sub_path = subPath, .data = script });
-                _ = try node_utils.exec.exec(allocator, io, try std.fmt.allocPrint(allocator, "chmod +x {s}", .{subPath}));
+                _ = try node_utils.exec.exec(allocator, io, null, try std.fmt.allocPrint(allocator, "chmod +x {s}", .{subPath}));
             }
         }
         self.environMap = std.process.Environ.Map.init(allocator);
@@ -168,7 +168,7 @@ const modern_command_names = [_][]const u8{ "magick" };
 const legacy_command_names = [_][]const u8{ "convert", "identify" };
 
 //
-// Expects getDominantColor to refuse what the fake commands print, as the TypeScript does with a value that is not
+// Expects getDominantColor to refuse what the fake commands print when it is not
 // three numbers between 0 and 255.
 //
 fn expectDominantColorRefusal(allocator: std.mem.Allocator, io: std.Io, fakeOutput: []const u8) !void {
@@ -176,7 +176,7 @@ fn expectDominantColorRefusal(allocator: std.mem.Allocator, io: std.Io, fakeOutp
     try directory.create(allocator, io, &modern_command_names, fakeOutput, false);
     defer directory.destroy(io);
     var image = Image.init("../test/test.png");
-    try std.testing.expectError(error.Thrown, image.getDominantColor(allocator, io));
+    try std.testing.expectError(error.Thrown, image.getDominantColor(allocator, io, null));
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Failed to extract dominant color: Error: Invalid RGB values: {s}", .{fakeOutput}), utils.errors.lastErrorMessage());
 }
 
@@ -191,7 +191,7 @@ test "getInfo reads a width and a height of NaN from output ImageMagick did not 
     try directory.create(allocator, io, &modern_command_names, "100", false);
     defer directory.destroy(io);
     var image = Image.init("../test/test.png");
-    const info = try image.getInfo(allocator, io);
+    const info = try image.getInfo(allocator, io, null);
     try std.testing.expectEqual(tools.image.ImageMagickType.modern, tools.Image.getImageMagickType());
     try std.testing.expectEqual(@as(f64, 100), info.dimensions.width);
     try std.testing.expect(std.math.isNan(info.dimensions.height));
@@ -200,7 +200,7 @@ test "getInfo reads a width and a height of NaN from output ImageMagick did not 
     directory.destroy(io);
     try directory.create(allocator, io, &modern_command_names, "", false);
     var blank = Image.init("../test/test.png");
-    const blankInfo = try blank.getInfo(allocator, io);
+    const blankInfo = try blank.getInfo(allocator, io, null);
     try std.testing.expect(std.math.isNan(blankInfo.dimensions.width));
     try std.testing.expect(std.math.isNan(blankInfo.dimensions.height));
     try std.testing.expect(blankInfo.createdAt == null);
@@ -234,7 +234,7 @@ test "verifyImageMagick reports the magick command failing after the installatio
     try directory.create(allocator, io, &modern_command_names, "Version: ImageMagick 7.1.1-29", true);
     defer directory.destroy(io);
 
-    const status = try tools.Image.verifyImageMagick(allocator, io);
+    const status = try tools.Image.verifyImageMagick(allocator, io, null);
 
     try std.testing.expect(!status.available);
     try std.testing.expectEqualStrings("Modern ImageMagick 'magick' command failed: Error: Command failed: magick -version\n", status.@"error".?);
@@ -257,7 +257,7 @@ test "verifyImageMagick reports the convert command failing after the installati
     try directory.create(allocator, io, &legacy_command_names, "Version: ImageMagick 6.9.11-60", true);
     defer directory.destroy(io);
 
-    const status = try tools.Image.verifyImageMagick(allocator, io);
+    const status = try tools.Image.verifyImageMagick(allocator, io, null);
 
     try std.testing.expect(!status.available);
     try std.testing.expectEqualStrings("Legacy ImageMagick 'convert' command failed: Error: Command failed: convert -version\n", status.@"error".?);
@@ -281,12 +281,12 @@ test "resize and transform write their numbers as a template string writes a num
     var uuids: FixedUuidGenerator = .{};
     var image = Image.init("../test/test.png");
 
-    // The command quotes both paths, as the TypeScript does (`magick "<file>" -resize <geometry> -strip "<output>"`),
-    // and the output path is joined with node-utils' path.join, the port of Node's path.join, which normalizes
+    // The command quotes both paths (`magick "<file>" -resize <geometry> -strip "<output>"`),
+    // and the output path is joined with node-utils' path.join, which normalizes
     // every `/` to a `\` on Windows. /bin/sh takes the quotes apart before the fake command sees the arguments, and
     // cmd.exe hands the command line to the fake .cmd exactly as it is, so on Windows the quotes and every space the
-    // template string leaves are recorded too. transform adds one of those spaces: the TypeScript's transformCommand
-    // starts with a space (` -rotate 1e+21`) and the template puts another one in front of it, which /bin/sh eats as
+    // command text leaves are recorded too. transform adds one of those spaces: its command text
+    // starts with a space (` -rotate 1e+21`) and the command puts another one in front of it, which /bin/sh eats as
     // an argument separator and cmd.exe does not.
     const resizeArguments = if (builtin.os.tag == .windows)
         "\"../test/test.png\" -resize 1e+21x -strip -quality 1e-7 \"out\\temp_resize_fixed.jpg\""
@@ -297,9 +297,9 @@ test "resize and transform write their numbers as a template string writes a num
     else
         "../test/test.png -rotate 1e+21 out/temp_transform_output_fixed.jpg";
 
-    try std.testing.expectError(error.Thrown, image.resize(allocator, io, .{ .width = 1e21, .height = 0, .quality = 1e-7, .format = null, .ext = "jpg" }, "out", uuids.uuidGenerator()));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, io, null, .{ .width = 1e21, .height = 0, .quality = 1e-7, .format = null, .ext = "jpg" }, "out", uuids.uuidGenerator()));
     try std.testing.expectEqualStrings(resizeArguments, try directory.arguments(allocator, io));
 
-    try std.testing.expectError(error.Thrown, image.transform(allocator, io, .{ .rotate = 1e21 }, "out", uuids.uuidGenerator()));
+    try std.testing.expectError(error.Thrown, image.transform(allocator, io, null, .{ .rotate = 1e21 }, "out", uuids.uuidGenerator()));
     try std.testing.expectEqualStrings(transformArguments, try directory.arguments(allocator, io));
 }

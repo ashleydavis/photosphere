@@ -9,8 +9,8 @@ const BsonDocument = bson.BsonDocument;
 // Recursively updates fields by merging updates into existing fields.
 // Treats input data as immutable and returns a new object with updated fields.
 // Handles nested objects recursively, and deletions (undefined values).
-// (Zig: the fields and the updates are JavaScript values, so that null, undefined and the non-plain objects a
-// record holds behave as they do in TypeScript, where a date updated with another date keeps the old one.)
+// (The fields and the updates are JavaScript values, so that null, undefined and the non-plain objects a record
+// holds behave as such values do: a date updated with another date keeps the old one.)
 //
 pub fn updateFields(allocator: std.mem.Allocator, oldFields: BsonValue, updates: BsonValue) !BsonValue {
     var currentFields = oldFields;

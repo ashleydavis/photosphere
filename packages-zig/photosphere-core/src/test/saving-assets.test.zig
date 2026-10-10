@@ -158,3 +158,65 @@ test "open-path without a path is an error reply" {
     defer std.testing.allocator.free(reply);
     try std.testing.expectEqualStrings("The folder to open needs a path.", reply);
 }
+
+test "a failing save request logs the error with the message of its handler" {
+    var app: TestApp = undefined;
+    try app.startWithTasks(&saving_tasks);
+    defer app.stop();
+    const allocator = std.testing.allocator;
+    allocator.free(try app.requestError("save-asset", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error saving asset") != null);
+    allocator.free(try app.requestError("save-assets", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error saving assets") != null);
+    allocator.free(try app.requestError("open-path", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error opening path") != null);
+}
+
+test "save-asset with a destination does not need a file name" {
+    var app: TestApp = undefined;
+    try app.startWithTasks(&saving_tasks);
+    defer app.stop();
+    try expectReply(&app, "save-asset", "{\"assetId\":\"a1\",\"assetType\":\"asset\",\"databasePath\":\"/db\",\"destPath\":\"/chosen/by/the/model.jpg\"}", "null");
+    try app.shell.expectMessageContaining("\"destPath\":\"/chosen/by/the/model.jpg\"");
+}
+
+test "save-asset without a destination or a file name is an error reply" {
+    var app: TestApp = undefined;
+    try app.startWithTasks(&saving_tasks);
+    defer app.stop();
+    const reply = try app.requestError("save-asset", "{\"assetId\":\"a1\",\"assetType\":\"asset\",\"databasePath\":\"/db\"}");
+    defer std.testing.allocator.free(reply);
+    try std.testing.expectEqualStrings("The asset to save needs a file name to suggest in the save dialog.", reply);
+}
+
+test "save-asset ignores the test mode answer for the save dialog" {
+    var app: TestApp = undefined;
+    try app.startWithTasks(&saving_tasks);
+    defer app.stop();
+    try app.environ_map.put("PHOTOSPHERE_TEST_MODE", "1");
+    try app.environ_map.put("PHOTOSPHERE_TEST_PICK_FILE_PATH", "/from/the/environment.jpg");
+    app.pick_answer = "[\"/downloads/chosen.jpg\"]";
+    try expectReply(&app, "save-asset", "{\"assetId\":\"a1\",\"assetType\":\"asset\",\"filename\":\"photo.jpg\",\"databasePath\":\"/db\"}", "null");
+    try std.testing.expectEqual(@as(i32, 1), app.last_pick_kind);
+    try app.shell.expectMessageContaining("\"destPath\":\"/downloads/chosen.jpg\"");
+}
+
+test "save-assets with one asset takes its path from PHOTOSPHERE_TEST_PICK_FILE_PATH in test mode" {
+    var app: TestApp = undefined;
+    try app.startWithTasks(&saving_tasks);
+    defer app.stop();
+    try app.environ_map.put("PHOTOSPHERE_TEST_MODE", "1");
+    try app.environ_map.put("PHOTOSPHERE_TEST_PICK_FILE_PATH", "/from/the/environment.jpg");
+    try expectReply(&app, "save-assets", "{\"items\":[{\"assetId\":\"a1\",\"assetType\":\"asset\",\"filename\":\"photo.jpg\"}],\"databasePath\":\"/db\"}", "{\"outcome\":\"saved\",\"savedCount\":1,\"failedCount\":0,\"savedFolder\":\"/from/the\"}");
+    try std.testing.expectEqual(@as(i32, -1), app.last_pick_kind);
+}
+
+test "save-assets with several assets takes its folder from PHOTOSPHERE_TEST_DOWNLOAD_FOLDER in test mode" {
+    var app: TestApp = undefined;
+    try app.startWithTasks(&saving_tasks);
+    defer app.stop();
+    try app.environ_map.put("PHOTOSPHERE_TEST_MODE", "1");
+    try app.environ_map.put("PHOTOSPHERE_TEST_DOWNLOAD_FOLDER", "/from/the/download-folder");
+    try expectReply(&app, "save-assets", "{\"items\":[{\"assetId\":\"a1\",\"assetType\":\"asset\",\"filename\":\"a.jpg\"},{\"assetId\":\"a2\",\"assetType\":\"asset\",\"filename\":\"b.jpg\"}],\"databasePath\":\"/db\"}", "{\"outcome\":\"saved\",\"savedCount\":2,\"failedCount\":1,\"savedFolder\":\"/from/the/download-folder\"}");
+    try std.testing.expectEqual(@as(i32, -1), app.last_pick_kind);
+}

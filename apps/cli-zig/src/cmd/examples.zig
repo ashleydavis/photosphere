@@ -1,5 +1,5 @@
 //
-// Port of apps/cli/src/cmd/examples.ts: the `psi examples` command.
+// The `psi examples` command.
 //
 
 const std = @import("std");
@@ -11,7 +11,7 @@ const COMMAND_EXAMPLES = examples.COMMAND_EXAMPLES;
 const formatExamplesForHelp = examples.formatExamplesForHelp;
 
 //
-// A category of commands in the examples listing (an entry of `categories` in examples.ts).
+// A category of commands in the examples listing.
 //
 const IExampleCategory = struct {
     // The name of the category.

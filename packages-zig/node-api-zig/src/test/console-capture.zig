@@ -2,7 +2,7 @@ const std = @import("std");
 const utils = @import("utils-zig");
 
 //
-// Redirects the console of the code under test (the Zig stand-in for jest.spyOn(console, ...) in the TypeScript tests).
+// Redirects the console of the code under test.
 //
 
 //

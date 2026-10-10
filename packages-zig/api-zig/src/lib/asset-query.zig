@@ -61,7 +61,7 @@ pub fn listAssetPage(io: std.Io, bsonDatabase: *IBsonDatabase, limit: usize, pag
 // Searches assets in the metadata collection using an in-memory filter.
 // Matches case-insensitive substring on origFileName and location, prefix on contentType,
 // and a date range on photoDate.
-// (Zig: the strings are lowercased with ASCII rules, where JavaScript's toLowerCase also lowercases other letters.)
+// The strings are lowercased with ASCII rules, so other letters are not lowercased.
 //
 pub fn searchAssets(
     allocator: std.mem.Allocator,
@@ -75,8 +75,7 @@ pub fn searchAssets(
 ) ![]const IAsset {
     const metadataCollection = try bsonDatabase.collection("metadata");
 
-    // TODO: lowercases ASCII letters only, where toLowerCase lowercases every letter with a lowercase form, so
-    // names that differ in the case of a non-ASCII letter match in TypeScript and not here.
+    // TODO: lowercases ASCII letters only, so names that differ in the case of a non-ASCII letter do not match.
     const queryLower = try std.ascii.allocLowerString(allocator, query);
     const contentTypePrefix: ?[]const u8 = if (isTruthy(contentType)) try std.ascii.allocLowerString(allocator, contentType.?) else null;
     const dateFromMs: ?f64 = if (isTruthy(dateFrom)) parseDate(dateFrom.?) else null;
@@ -106,19 +105,16 @@ pub fn searchAssets(
 }
 
 //
-// True when an optional string is truthy in JavaScript (set and not empty). (No TypeScript counterpart: the
-// truthiness tests are inline.)
+// True when an optional string is set and not empty.
 //
 fn isTruthy(value: ?[]const u8) bool {
     return value != null and value.?.len > 0;
 }
 
 //
-// The value of a string field of an asset, or "" when it is missing or not a string
-// (TypeScript: `asset.field || ""`).
+// The value of a string field of an asset, or "" when it is missing or not a string.
 //
-// TODO: a field that is there but is not text reads as "" here, where `asset.field || ""` carries the value through and
-// `.toLowerCase()` of a number throws in TypeScript. The fields this filters on are text, so nothing produces one.
+// TODO: a field that is there but is not text reads as "". The fields this filters on are text, so nothing produces one.
 //
 fn stringField(asset: IAsset, name: []const u8) []const u8 {
     const value = asset.get(name) orelse {
@@ -131,9 +127,8 @@ fn stringField(asset: IAsset, name: []const u8) []const u8 {
 }
 
 //
-// The milliseconds since the epoch of an asset's photoDate (TypeScript: `Date.parse(asset.photoDate)`), or null
-// when the asset has no photoDate (TypeScript: `!asset.photoDate`). NaN when the date does not parse.
-// A photoDate stored as a date is converted to a string first by Date.parse, which drops its milliseconds.
+// The milliseconds since the epoch of an asset's photoDate, or null when the asset has no photoDate. NaN when the
+// date does not parse. A photoDate stored as a date is converted to a string first, which drops its milliseconds.
 //
 fn photoDateMs(asset: IAsset) ?f64 {
     const value = asset.get("photoDate") orelse {
@@ -219,9 +214,8 @@ pub fn streamAssetToFile(
     const storageKey = try mapAssetTypeToStorageKey(allocator, @"type", assetId);
     try std.Io.Dir.cwd().createDirPath(io, node_path.dirname(outputPath));
 
-    // (Zig: the output file is created before the read stream is opened. A TypeScript file storage opens its stream
-    // lazily, after `createWriteStream(outputPath)` has created the output file, so a missing asset fails with the
-    // output file already made; the Zig storages open the file up front.)
+    // The output file is created before the read stream is opened, so a missing asset fails with the output file
+    // already made.
     const outputFile = try std.Io.Dir.cwd().createFile(io, outputPath, .{});
     defer outputFile.close(io);
 

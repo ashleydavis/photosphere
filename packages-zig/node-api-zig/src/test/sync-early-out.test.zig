@@ -1,5 +1,5 @@
 //
-// Tests for the early-out of syncDatabases (port of src/test/lib/sync-early-out.test.ts).
+// Tests for the early-out of syncDatabases.
 //
 
 const std = @import("std");
@@ -65,7 +65,7 @@ test "proceeds past the early-out when content hashes differ" {
     const targetBson = try sync_helpers.makeBsonDatabase(allocator, targetBsonStorage.storage());
 
     // The first thing syncDatabases does after the early-out is flush the source bson database.
-    // (Zig: a database with uncommitted changes refuses to flush, which stands in for the TypeScript's sentinel.)
+    // (A database with uncommitted changes refuses to flush, so the sync fails there if it gets that far.)
     sourceBson.dirty = true;
 
     try std.testing.expectError(error.Thrown, syncDatabases(

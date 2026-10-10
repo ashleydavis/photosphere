@@ -1,7 +1,6 @@
 //
-// The example's file and folder pickers. They answer the same request channels, with the same data and replies, as the
-// Electron app's pick-folder, pick-files and pick-file: a cancelled dialog is a reply of null, which Electron gives as
-// undefined. Each runs as a task, because a dialog waits for the user and must not hold up the thread that handles page
+// The example's file and folder pickers. They answer the pick-folder, pick-files and pick-file request channels: a
+// cancelled dialog is a reply of null. Each runs as a task, because a dialog waits for the user and must not hold up the thread that handles page
 // messages.
 //
 
@@ -24,7 +23,7 @@ fn firstPath(context: *TaskContext, kind: ziggy.types.PickKind, title: ?[]const 
 }
 
 //
-// pick-folder: data is an options object that may name a "title" (Electron's IPickFolderOptions), or null. The reply is the
+// pick-folder: data is an options object that may name a "title", or null. The reply is the
 // folder's path, or null.
 //
 pub fn pickFolderHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
@@ -46,7 +45,7 @@ pub fn pickFilesHandler(context: *TaskContext, data: std.json.Value) anyerror!?[
 }
 
 //
-// pick-file: a save dialog, as in Electron, where data is the suggested file name, a string. The reply is the path chosen to
+// pick-file: a save dialog, where data is the suggested file name, a string. The reply is the path chosen to
 // save to, or null.
 //
 pub fn pickFileHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {

@@ -11,7 +11,7 @@ const ICommandContext = init_cmd.ICommandContext;
 const loadMerkleTree = node_api.tree.loadMerkleTree;
 
 //
-// Options of the database-id command (TypeScript: IDatabaseIdCommandOptions extends IBaseCommandOptions).
+// Options of the database-id command.
 // The base options are in `base`.
 //
 pub const IDatabaseIdCommandOptions = struct {

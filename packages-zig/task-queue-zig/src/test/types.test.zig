@@ -2,7 +2,7 @@ const std = @import("std");
 const task_queue_zig = @import("task-queue-zig");
 const types = task_queue_zig.types;
 
-test "TaskStatus.toString returns the TypeScript enum values" {
+test "TaskStatus.toString returns the enum values" {
     try std.testing.expectEqualStrings("pending", types.TaskStatus.Pending.toString());
     try std.testing.expectEqualStrings("running", types.TaskStatus.Running.toString());
     try std.testing.expectEqualStrings("succeeded", types.TaskStatus.Succeeded.toString());

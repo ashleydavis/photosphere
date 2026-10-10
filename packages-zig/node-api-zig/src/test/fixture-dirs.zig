@@ -13,6 +13,6 @@ pub const FIXTURES_DIR = "node-api-zig/src/test/fixtures";
 pub const TEST_DBS_DIR = "../test/dbs";
 
 //
-// The directory holding the TypeScript generated encryption keys of encryption-zig.
+// The directory holding the pre-generated encryption keys of encryption-zig.
 //
 pub const KEYS_DIR = "encryption-zig/src/test/fixtures";

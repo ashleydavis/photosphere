@@ -19,7 +19,7 @@ const repair = node_api.repair.repair;
 const IRepairResult = node_api.repair.IRepairResult;
 
 //
-// Options of the repair command (TypeScript: IRepairCommandOptions extends IBaseCommandOptions).
+// Options of the repair command.
 // The base options are in `base`.
 //
 pub const IRepairCommandOptions = struct {
@@ -43,7 +43,7 @@ pub const IRepairCommandOptions = struct {
 };
 
 //
-// Writes each repair progress message (TypeScript: `(progress) => { writeProgress(`🔧 ${progress}`); }`).
+// Writes each repair progress message.
 //
 fn onProgress(context: ?*anyopaque, progress: ?[]const u8) void {
     _ = context;
@@ -70,7 +70,7 @@ fn configOrigin(config: ?std.json.Value) ?[]const u8 {
 }
 
 //
-// Formats a count in a colour (TypeScript: `pc.<colour>(count.toString())`).
+// Formats a count in a colour.
 //
 fn count(allocator: std.mem.Allocator, value: usize, comptime colour: fn (std.mem.Allocator, []const u8) std.mem.Allocator.Error![]const u8) ![]const u8 {
     return colour(allocator, try std.fmt.allocPrint(allocator, "{d}", .{value}));
@@ -124,8 +124,7 @@ pub fn repairCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
             exit(io, 1);
         }
     }
-    // TODO: this mirrors a bug in the TypeScript (repair.ts repairCommand) until both are fixed: the source database is
-    // loaded from options.source, not sourcePath, so when the source is the origin from the config, the database in
+    // The source database is loaded from options.source, not sourcePath, so when the source is the origin from the config, the database in
     // the current directory (or the one picked from the prompt) is loaded as the source instead.
     var sourceOptions: IBaseCommandOptions = .{
         .db = options.source,

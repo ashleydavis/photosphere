@@ -35,7 +35,7 @@ pub const IMediaItem = struct {
     size: u64,
 
     // When the item was created, as far as the source can tell (milliseconds since the epoch, like
-    // the time of a JavaScript Date).
+    // the time of a Date in JavaScript).
     createdAt: i64,
 };
 
@@ -125,9 +125,8 @@ threadlocal var lastDeleteErrorSourceIds: std.ArrayList([]const u8) = .empty;
 //
 // Thrown when a source is asked to delete items it cannot delete. It names them, so the caller can
 // report which source files are still on the device rather than assuming they are gone.
-// (Zig: `throw new MediaSourceDeleteError(message, sourceIds)` is written
-// `return MediaSourceDeleteError.throw(sourceIds, format, args)`, and the ids are read back with
-// `MediaSourceDeleteError.sourceIds()` where TypeScript reads `error.sourceIds`.)
+// It is thrown with `return MediaSourceDeleteError.throw(sourceIds, format, args)`, and the ids are read back with
+// `MediaSourceDeleteError.sourceIds()`.
 //
 pub const MediaSourceDeleteError = struct {
     //
@@ -153,7 +152,7 @@ pub const MediaSourceDeleteError = struct {
     }
 
     //
-    // The source ids that could not be deleted (TypeScript: `error.sourceIds`), valid until the next
+    // The source ids that could not be deleted, valid until the next
     // MediaSourceDeleteError is thrown on this thread.
     //
     pub fn sourceIds() []const []const u8 {

@@ -10,7 +10,7 @@ pub const diffLines = string.diffLines;
 pub const isActionKey = settings.isActionKey;
 
 //
-// The result of a prompt: the value, or cancel (TypeScript: the value or the `clack:cancel` symbol).
+// The result of a prompt: the value, or cancel.
 //
 pub fn PromptResult(comptime T: type) type {
     return union(enum) {
@@ -75,8 +75,7 @@ pub const IBlock = struct {
     stopped: std.atomic.Value(bool),
 
     //
-    // Ends the block: stops swallowing keys, shows the cursor again and restores the terminal (the function block
-    // returns in TypeScript).
+    // Ends the block: stops swallowing keys, shows the cursor again and restores the terminal.
     //
     pub fn unblock(self: *IBlock) !void {
         self.stopped.store(true, .release);
@@ -135,7 +134,7 @@ pub const IBlock = struct {
 
 //
 // Swallows the keys typed while something (a spinner) is drawn: switches the input to raw mode, hides the cursor
-// and erases the echo of each key, until unblock is called. Ctrl+C ends the process, as in TypeScript.
+// and erases the echo of each key, until unblock is called. Ctrl+C ends the process.
 //
 pub fn block(io: std.Io, options: BlockOptions) !*IBlock {
     const input = options.input orelse common.resolveInput(io, .{});

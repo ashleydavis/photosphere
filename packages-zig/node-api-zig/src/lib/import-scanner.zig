@@ -12,7 +12,7 @@ const ScanProgressCallback = file_scanner.ScanProgressCallback;
 // It is a scanned file plus, for a photo library item, what that file really is. The file itself is
 // a temporary copy with a path and a modified time that were both minted by the copy, so it is the
 // identity rather than the path that the hash is filed under. See IFileCacheIdentity.
-// (Zig: the fields of FileScannedResult are written out, as Zig has no interface inheritance.)
+// The fields of FileScannedResult are written out, as Zig has no interface inheritance.
 //
 pub const IScannedImportFile = struct {
     // Actual file path (temporary file path if extracted from zip, otherwise the original file path)
@@ -35,8 +35,7 @@ pub const IScannedImportFile = struct {
     cacheIdentity: ?IFileCacheIdentity,
 
     //
-    // `{ ...result, cacheIdentity }`: a scanned file with the identity it is filed under.
-    // (No TypeScript counterpart: TypeScript spreads the object.)
+    // A scanned file with the identity it is filed under.
     //
     pub fn fromScanned(result: FileScannedResult, cacheIdentity: ?IFileCacheIdentity) IScannedImportFile {
         return .{
@@ -51,8 +50,8 @@ pub const IScannedImportFile = struct {
 };
 
 //
-// The per-file callback a scanner pushes files at (TypeScript: `(result: IScannedImportFile) => Promise<void>`).
-// (Zig: a closure; `function` is called with `context`. The file is only valid during the call.)
+// The per-file callback a scanner pushes files at.
+// A closure: `function` is called with `context`. The file is only valid during the call.
 //
 pub const VisitImportFile = struct {
     // The state of the callback, passed to function.

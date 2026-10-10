@@ -7,7 +7,7 @@ const sizes = [_][]const u8{ "B", "KB", "MB", "GB", "TB" };
 
 //
 // Formats file size in bytes to human readable string.
-// (Zig: the number is printed with `{d}`, the shortest round trip decimal, like JavaScript's number to string
+// (The number is printed with `{d}`, the shortest round trip decimal, like JavaScript's number to string
 // conversion for these values.)
 //
 pub fn formatFileSize(allocator: std.mem.Allocator, bytes: u64) ![]const u8 {
@@ -19,8 +19,7 @@ pub fn formatFileSize(allocator: std.mem.Allocator, bytes: u64) ![]const u8 {
     const unitIndex: usize = @intFromFloat(@floor(@log(bytesFloat) / @log(k)));
     const value = bytesFloat / std.math.pow(f64, k, @floatFromInt(unitIndex));
     const rounded = @floor(value * 100 + 0.5) / 100;
-    // TODO: a size of a petabyte or more reads past the end of the list, where the TypeScript does the same and writes
-    // "undefined" for the unit.
+    // TODO: a size of a petabyte or more has no unit in the list, so the unit is written as "undefined".
     const unit = if (unitIndex < sizes.len) sizes[unitIndex] else "undefined";
     return std.fmt.allocPrint(allocator, "{d} {s}", .{ rounded, unit });
 }
@@ -54,8 +53,7 @@ pub fn toFixed2(allocator: std.mem.Allocator, value: f64) ![]const u8 {
 }
 
 //
-// A number as decimal text, allocated with the allocator. This file has no TypeScript counterpart: the TypeScript
-// calls `String(value)`.
+// A number as decimal text, allocated with the allocator.
 //
 pub fn numberToString(allocator: std.mem.Allocator, value: anytype) ![]u8 {
     var buffer: [64]u8 = undefined;
@@ -63,8 +61,7 @@ pub fn numberToString(allocator: std.mem.Allocator, value: anytype) ![]u8 {
 }
 
 //
-// A number as decimal text, padded on the left with zeros to at least the width, allocated with the allocator. This
-// file has no TypeScript counterpart: the TypeScript calls `String(value).padStart(width, "0")`.
+// A number as decimal text, padded on the left with zeros to at least the width, allocated with the allocator.
 //
 pub fn paddedNumberToString(allocator: std.mem.Allocator, value: anytype, width: usize) ![]u8 {
     var buffer: [64]u8 = undefined;

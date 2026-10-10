@@ -2,8 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 //
-// This file has no TypeScript counterpart: it stands in for the streams behind `process.stdin`,
-// `process.stdout` and `process.stderr`.
+// The process's standard input, output and error streams.
 //
 // On Windows, std.Io.File.stdin(), stdout() and stderr() always describe the handle as opened for
 // synchronous I/O. A handle inherited from the parent can be asynchronous (overlapped) instead: the pipes

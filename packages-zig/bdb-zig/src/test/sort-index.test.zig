@@ -23,7 +23,7 @@ const errors = utils.errors;
 const io = std.testing.io;
 
 //
-// The state shared by one test (TypeScript: the describe block variables set in beforeEach).
+// The state shared by one test.
 //
 const Fixture = struct {
     // Allocates everything the test creates.
@@ -47,7 +47,7 @@ const Fixture = struct {
     }
 
     //
-    // Creates a collection holding the given records (TypeScript: `new MockCollection(records)`).
+    // Creates a collection holding the given records.
     //
     fn collection(self: *Fixture, name: []const u8, records: []const IInternalRecord) !*BsonCollection {
         const newCollection = try self.allocator.create(BsonCollection);
@@ -59,7 +59,7 @@ const Fixture = struct {
     }
 
     //
-    // Creates a sort index (TypeScript: `new SortIndex(storage, 'db', collectionName, fieldName, direction, ...)`).
+    // Creates a sort index.
     //
     fn sortIndex(self: *Fixture, collectionName: []const u8, fieldName: []const u8, direction: SortDirection, sortDataType: ?SortDataType, onDirty: ?DirtyCallback) !*SortIndex {
         const index = try self.allocator.create(SortIndex);
@@ -69,7 +69,7 @@ const Fixture = struct {
 };
 
 //
-// An onDirty callback that does nothing (TypeScript: `() => {}`).
+// An onDirty callback that does nothing.
 //
 fn ignoreDirty(context: *anyopaque) void {
     _ = context;
@@ -81,7 +81,7 @@ fn ignoreDirty(context: *anyopaque) void {
 var dirty_count: u32 = 0;
 
 //
-// An onDirty callback that counts notifications (TypeScript: `() => { callCount++; }`).
+// An onDirty callback that counts notifications.
 //
 fn countDirty(context: *anyopaque) void {
     _ = context;
@@ -89,8 +89,7 @@ fn countDirty(context: *anyopaque) void {
 }
 
 //
-// A storage that records the path of every file written to it (the TypeScript test replaces `storage.write` with a
-// function that records the path and then calls the original). The files are kept in a MemoryStorage.
+// A storage that records the path of every file written to it. The files are kept in a MemoryStorage.
 //
 const WriteRecordingStorage = struct {
     // Where the files are kept.
@@ -138,14 +137,14 @@ const WriteRecordingStorage = struct {
 };
 
 //
-// The number of shards the test record ids are spread over. The collection stands in for the TypeScript
-// MockCollection, which holds its records in memory, so every record must stay in the collection's shard cache:
+// The number of shards the test record ids are spread over. The collection stands in for a mock
+// collection that holds its records in memory, so every record must stay in the collection's shard cache:
 // it keeps at most 8 shards and drops a newly created shard straight away when the other 8 are dirty.
 //
 const RECORD_SHARD_COUNT = 8;
 
 //
-// The candidate id with a number (valid 16 byte ids, like the TypeScript tests' ids).
+// The candidate id with a number (valid 16 byte ids).
 //
 fn candidateRecordId(allocator: std.mem.Allocator, candidate: u32) ![]const u8 {
     return std.fmt.allocPrint(allocator, "123e4567-e89b-12d3-a456-4266141{d:0>5}", .{candidate});
@@ -214,7 +213,7 @@ fn makeValueRecord(allocator: std.mem.Allocator, number: u32, key: []const u8, v
 }
 
 //
-// The records of the TypeScript sort-index tests.
+// The records of the sort-index tests.
 //
 fn testRecords(allocator: std.mem.Allocator) ![5]IInternalRecord {
     return .{
@@ -240,8 +239,7 @@ fn scores(allocator: std.mem.Allocator, index: *SortIndex, fieldName: []const u8
 }
 
 //
-// Returns every record of a sort index by following the page chain from the first page (TypeScript: getAllRecords
-// in batch-sort-index.test.ts, and the same loop written out in the other sort index tests).
+// Returns every record of a sort index by following the page chain from the first page.
 //
 fn getAllRecords(allocator: std.mem.Allocator, index: *SortIndex) ![]ISortIndexRecord {
     var allRecords: std.ArrayList(ISortIndexRecord) = .empty;
@@ -255,7 +253,7 @@ fn getAllRecords(allocator: std.mem.Allocator, index: *SortIndex) ![]ISortIndexR
 }
 
 //
-// Returns the index of the record with an id, or null when there is none (TypeScript: `findIndex(r => r._id === id)`).
+// Returns the index of the record with an id, or null when there is none.
 //
 fn findRecordIndexById(records: []const ISortIndexRecord, id: []const u8) ?usize {
     for (records, 0..) |record, recordIndex| {
@@ -1296,12 +1294,12 @@ test "flush() throws when deletedLeaves is not empty" {
 }
 
 //
-// The fixed time the date tests count back from (TypeScript: `const now = new Date()`): 2024-06-15T12:00:00.000Z.
+// The fixed time the date tests count back from: 2024-06-15T12:00:00.000Z.
 //
 const DATE_TEST_NOW: i64 = 1718452800000;
 
 //
-// The length of a day in milliseconds (TypeScript: `24 * 60 * 60 * 1000`).
+// The length of a day in milliseconds (`24 * 60 * 60 * 1000`).
 //
 const DAY_MILLISECONDS: i64 = 24 * 60 * 60 * 1000;
 
@@ -1339,7 +1337,7 @@ fn makeDateRecord(allocator: std.mem.Allocator, number: u32, name: []const u8, c
 }
 
 //
-// The records of the TypeScript sort-index-date tests.
+// The records of the sort-index-date tests.
 //
 fn dateTestRecords(allocator: std.mem.Allocator) ![5]IInternalRecord {
     return .{
@@ -1555,7 +1553,7 @@ fn makeProductRecord(allocator: std.mem.Allocator, number: u32, name: []const u8
 }
 
 //
-// The records of the TypeScript sort-index-number tests.
+// The records of the sort-index-number tests.
 //
 fn numberTestRecords(allocator: std.mem.Allocator) ![6]IInternalRecord {
     return .{
@@ -1831,7 +1829,7 @@ fn makeStringRecord(allocator: std.mem.Allocator, number: u32, name: []const u8,
 }
 
 //
-// The records of the TypeScript sort-index-string tests.
+// The records of the sort-index-string tests.
 //
 fn stringTestRecords(allocator: std.mem.Allocator) ![7]IInternalRecord {
     return .{
@@ -2065,7 +2063,7 @@ test "should add a new record with a string value to the index" {
 }
 
 //
-// The records of the TypeScript sort-index-page-split tests (sequential scores to easily verify sort order).
+// The records of the sort-index-page-split tests (sequential scores to easily verify sort order).
 //
 fn pageSplitTestRecords(allocator: std.mem.Allocator) ![5]IInternalRecord {
     return .{
@@ -2078,7 +2076,7 @@ fn pageSplitTestRecords(allocator: std.mem.Allocator) ![5]IInternalRecord {
 }
 
 //
-// Returns the scores of records sorted in ascending order (TypeScript: `records.map(r => r.score).sort((a, b) => a - b)`).
+// Returns the scores of records sorted in ascending order.
 //
 fn sortScores(allocator: std.mem.Allocator, records: []const ISortIndexRecord) ![]f64 {
     const result = try allocator.alloc(f64, records.len);
@@ -2210,7 +2208,7 @@ test "should maintain correct page ordering when multiple pages are split" {
 }
 
 //
-// The counts are JavaScript numbers in TypeScript, so a count that goes below zero (an index file whose count is
+// The counts are JavaScript numbers, so a count that goes below zero (an index file whose count is
 // short) stays negative until commit, where `writeUInt32` refuses it with the runtime's RangeError.
 //
 test "a count that goes below zero is refused at commit like writeUInt32 refuses it" {
@@ -2311,7 +2309,7 @@ test "deleteRecord removes a page whose records are all deleted, from either end
     try std.testing.expect(firstPage.nextPageId == null);
     try std.testing.expectEqual(pages.first.len, (try getAllRecords(allocator, index)).len);
 
-    // The first page, of a second index over the same records. (Known issue, in the TypeScript too: the removed
+    // The first page, of a second index over the same records. (Known issue: the removed
     // leaf stays a child of its parent, so the listing from the first page, which starts at that child, comes back
     // empty. The page counts and the second page itself are right.)
     var secondFixture = try Fixture.init(allocator);
@@ -2515,7 +2513,7 @@ test "build starts afresh from a checkpoint that cannot be read" {
     try index.build(io, collection);
     try fixture.storage.putFile("db/indexes/test_collection/score_asc/build.checkpoint", "not json");
 
-    // The checkpoint is ignored, so every shard is added to the loaded tree again (as the TypeScript does).
+    // The checkpoint is ignored, so every shard is added to the loaded tree again.
     const resumed = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     try resumed.build(io, collection);
     try std.testing.expectEqual(@as(i64, 10), resumed.totalEntries);
@@ -2686,7 +2684,7 @@ test "updateRecord and deleteRecord of a record the index does not hold look thr
     try index.deleteRecord(io, stranger._id, stranger);
     try std.testing.expectEqual(@as(i64, THREE_PAGE_RECORD_COUNT), index.totalEntries);
 
-    // The update adds the record at its new value, as the TypeScript does when the old one is not found.
+    // The update adds the record at its new value when the old one is not found.
     try index.updateRecord(io, try makeTestRecord(allocator, THREE_PAGE_RECORD_COUNT + 1, "Record", 6, "A"), stranger);
     try std.testing.expectEqual(@as(i64, THREE_PAGE_RECORD_COUNT + 1), index.totalEntries);
 }

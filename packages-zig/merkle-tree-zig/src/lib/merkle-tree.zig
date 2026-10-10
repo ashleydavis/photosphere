@@ -122,9 +122,9 @@ pub const HashedItem = struct {
 
 //
 // Represents the merkle tree itself.
-// (Zig: the TypeScript `DatabaseMetadata` type parameter is represented by a BSON document, because the metadata is
-// stored as BSON in the tree file. Callers that need typed metadata (node-api's IDatabaseMetadata) read the fields
-// from the document. A loaded tree always has a document (TypeScript loads `{}` for trees saved without metadata).)
+// (The database metadata is represented by a BSON document, because the metadata is stored as BSON in the tree
+// file. Callers that need typed metadata (node-api's IDatabaseMetadata) read the fields from the document. A loaded
+// tree always has a document, an empty one for trees saved without metadata.)
 //
 pub const IMerkleTree = struct {
     //
@@ -186,7 +186,7 @@ pub fn findItemInTree(node: ?*SortNode, targetName: []const u8) ?*SortNode {
 // Generic function to find and update a node in the binary tree.
 // The updater function should return true if the node was updated, false otherwise.
 // If a node is updated, parent nodes will have their properties recalculated.
-// (Zig: the updater receives a caller supplied `context` in place of the variables a TypeScript closure captures.)
+// (The updater receives a caller supplied `context`.)
 //
 pub fn updateNodeInTree(
     comptime T: type,
@@ -212,7 +212,7 @@ pub fn updateNodeInTree(
     }
 
     // Check right subtree (only if not found in left)
-    // (Zig: TypeScript's `!result` also skips a falsy result; the only updater, in updateItem, always returns true.)
+    // (The only updater, in updateItem, always returns true.)
     if (result == null) {
         if (node.right) |right| {
             result = updateNodeInTree(T, right, targetName, context, updater);
@@ -243,12 +243,12 @@ pub fn combineHashes(leftHash: []const u8, rightHash: []const u8) [Sha256.digest
 // Compare two names for sorting in the merkle tree.
 // Returns negative if a < b, zero if equal, positive if a > b.
 // Uses natural/numeric-aware sorting for intuitive ordering.
-// (Zig: TypeScript calls `a.localeCompare(b, undefined, { numeric: true })`, which is ICU root collation with numeric
-// ordering. Zig has no ICU, so this emulates it for the names the trees hold: every ASCII character has its ICU
+// (The order is ICU root collation with numeric ordering. Zig has no ICU, so this emulates it for the names the trees
+// hold: every ASCII character has its ICU
 // primary weight (control characters are ignorable, punctuation sorts before digits, letters compare case-insensitively
 // first and then lowercase before uppercase), and each run of digits compares by numeric value. Non-ASCII characters
 // sort after all ASCII characters by code point, which differs from ICU (for example ICU sorts "é" next to "e").
-// Golden tests compare this with localeCompare on generated names.)
+// Golden tests compare this with the ICU ordering of generated names.)
 //
 pub fn compareNames(a: []const u8, b: []const u8) i32 {
     // Primary level: compare the weights of the characters, numbers by value.
@@ -293,18 +293,18 @@ pub fn compareNames(a: []const u8, b: []const u8) i32 {
 }
 
 //
-// ICU root collation order of the ASCII characters that are not ignorable (the order `localeCompare` sorts them in).
-// A lowercase letter and its uppercase letter have the same primary weight. (No TypeScript counterpart.)
+// ICU root collation order of the ASCII characters that are not ignorable (the order ICU sorts them in).
+// A lowercase letter and its uppercase letter have the same primary weight.
 //
 const ascii_collation_order = "\t\n\x0b\x0c\r _-,;:!?.'\"()[]{}@*/\\&#%`^+<=>|~$0123456789aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRsStTuUvVwWxXyYzZ";
 
 //
-// The primary weight of an ignorable character (control characters). (No TypeScript counterpart.)
+// The primary weight of an ignorable character (control characters).
 //
 const IGNORABLE_WEIGHT: u32 = 0;
 
 //
-// The primary weight of every non-ignorable ASCII character, indexed by the character. (No TypeScript counterpart.)
+// The primary weight of every non-ignorable ASCII character, indexed by the character.
 //
 const ascii_primary_weights: [128]u32 = weights: {
     var weights = [_]u32{IGNORABLE_WEIGHT} ** 128;
@@ -322,17 +322,17 @@ const ascii_primary_weights: [128]u32 = weights: {
 };
 
 //
-// The primary weight of a run of digits (compared by numeric value among themselves). (No TypeScript counterpart.)
+// The primary weight of a run of digits (compared by numeric value among themselves).
 //
 const NUMBER_WEIGHT: u32 = ascii_primary_weights['0'];
 
 //
-// The primary weight added to the code point of a non-ASCII character. (No TypeScript counterpart.)
+// The primary weight added to the code point of a non-ASCII character.
 //
 const NON_ASCII_WEIGHT_BASE: u32 = 0x10000;
 
 //
-// One collation element of a name: a character, or a whole run of digits. (No TypeScript counterpart.)
+// One collation element of a name: a character, or a whole run of digits.
 //
 const CollationElement = struct {
     // The primary weight.
@@ -346,7 +346,7 @@ const CollationElement = struct {
 };
 
 //
-// Yields the collation elements of a name, skipping ignorable characters. (No TypeScript counterpart.)
+// Yields the collation elements of a name, skipping ignorable characters.
 //
 const CollationIterator = struct {
     // The UTF-8 name.
@@ -390,7 +390,6 @@ const CollationIterator = struct {
 
 //
 // Decodes the UTF-8 code point at index (advancing it); invalid bytes decode as U+FFFD one byte at a time.
-// (No TypeScript counterpart.)
 //
 fn decodeCodePoint(text: []const u8, index: *usize) u21 {
     const sequenceLength = std.unicode.utf8ByteSequenceLength(text[index.*]) catch {
@@ -410,7 +409,7 @@ fn decodeCodePoint(text: []const u8, index: *usize) u21 {
 }
 
 //
-// Compares the primary weights of two collation elements (numbers by value). (No TypeScript counterpart.)
+// Compares the primary weights of two collation elements (numbers by value).
 //
 fn comparePrimaryWeights(left: CollationElement, right: CollationElement) i32 {
     if (left.primary != right.primary) {
@@ -436,7 +435,7 @@ fn comparePrimaryWeights(left: CollationElement, right: CollationElement) i32 {
 }
 
 //
-// Yields the UTF-16 code units of a UTF-8 string. (No TypeScript counterpart: JavaScript strings are UTF-16.)
+// Yields the UTF-16 code units of a UTF-8 string.
 //
 const Utf16Iterator = struct {
     // The UTF-8 string.
@@ -470,8 +469,7 @@ const Utf16Iterator = struct {
 };
 
 //
-// The ordering of JavaScript's default `Array.prototype.sort()` for strings (UTF-16 code unit order).
-// (No TypeScript counterpart.)
+// The ordering of strings by UTF-16 code unit.
 //
 pub fn lessThanUtf16(context: void, left: []const u8, right: []const u8) bool {
     _ = context;
@@ -543,7 +541,7 @@ pub fn binaryTreeToArray(allocator: std.mem.Allocator, root: ?*SortNode) ![]Flat
         // The flat nodes collected so far.
         flatNodes: *std.ArrayList(FlatSortNode),
 
-        // Appends a node to the result (TypeScript: the traverseTreeSync callback).
+        // Appends a node to the result.
         fn visit(self: *const @This(), node: *SortNode) anyerror!bool {
             const flatNode: FlatSortNode = .{
                 .contentHash = node.contentHash,
@@ -568,7 +566,7 @@ pub fn binaryTreeToArray(allocator: std.mem.Allocator, root: ?*SortNode) ![]Flat
 }
 
 //
-// A sort node as stored in the flat node arrays of version 2 and 3 files (TypeScript: `Omit<SortNode, 'minName'>`).
+// A sort node as stored in the flat node arrays of version 2 and 3 files (a sort node without its minName).
 //
 pub const FlatSortNode = struct {
     // The hash of the content, for leaf nodes only.
@@ -591,9 +589,8 @@ pub const FlatSortNode = struct {
 };
 
 //
-// A child that an internal node must have, throwing like JavaScript's `node.left!.leafCount` does when it is missing
-// (a flat array or file that ends early, or holds an empty subtree under an internal node). (No TypeScript
-// counterpart: TypeScript reads the property of undefined.)
+// A child that an internal node must have, throwing when it is missing (a flat array or file that ends early, or
+// holds an empty subtree under an internal node).
 //
 fn requireChild(child: ?*SortNode) !*SortNode {
     return child orelse {
@@ -614,7 +611,7 @@ pub fn arrayToBinaryTree(allocator: std.mem.Allocator, nodes: []const FlatSortNo
     var index: usize = 0;
 
     const Builder = struct {
-        // Builds the node at nextIndex and its children (TypeScript: the nested buildNode function).
+        // Builds the node at nextIndex and its children.
         fn buildNode(builderAllocator: std.mem.Allocator, flatNodes: []const FlatSortNode, nextIndex: *usize) !?*SortNode {
             if (nextIndex.* >= flatNodes.len) {
                 return null;
@@ -919,8 +916,8 @@ pub fn addItem(
 }
 
 //
-// Iterator returned by iterateNodes and iterateLeaves (the Zig form of the TypeScript generators).
-// Visits nodes (or only leaves) in pre-order (node, left subtree, right subtree) and is lazy like a generator.
+// Iterator returned by iterateNodes and iterateLeaves.
+// Visits nodes (or only leaves) in pre-order (node, left subtree, right subtree) and is lazy.
 //
 pub fn NodeIterator(comptime NodeT: type) type {
     return struct {
@@ -1117,7 +1114,7 @@ pub fn updateItem(
     const tree = merkleTree.?;
 
     const Updater = struct {
-        // Updates the leaf node in place (TypeScript: the updater arrow function).
+        // Updates the leaf node in place.
         fn update(updatedItem: *const HashedItem, node: *SortNode, targetName: []const u8) bool {
             _ = targetName;
             // Update the leaf node in place
@@ -1164,7 +1161,7 @@ pub fn getItemInfo(merkleTree: *const IMerkleTree, name: []const u8) !?IHashedDa
 }
 
 //
-// A 64-bit number split into 32-bit parts (TypeScript: `{ high: number, low: number }`).
+// A 64-bit number split into 32-bit parts.
 //
 const SplitNumber = struct {
     // The high 32 bits.
@@ -1201,8 +1198,8 @@ fn serializeMerkleNodeV5(node: *const MerkleNode, serializer: ISerializer, strin
     // Write nodeCount
     try serializer.writeUInt32(node.nodeCount);
 
-    // Write the hash index (instead of the hash bytes). (TypeScript first checks the hash is 32 bytes, which it always
-    // is here: collectHashes put it through a BufferSet, which refuses any other length.)
+    // Write the hash index (instead of the hash bytes). (The hash is always 32 bytes here:
+    // collectHashes put it through a BufferSet, which refuses any other length.)
     const hashIndex = (try hashTable.get(node.hash)) orelse {
         return errors.throwError("Hash not found in hash table. This could be a bug.", .{});
     };
@@ -1314,7 +1311,7 @@ fn serializeSortNodeV5(node: *const SortNode, serializer: ISerializer, stringTab
 
 //
 // Collects all unique strings from the tree for the string table.
-// (Zig: returns the strings in insertion order, like a JavaScript Set.)
+// (Returns the strings in insertion order.)
 //
 fn collectStrings(allocator: std.mem.Allocator, tree: *const IMerkleTree) ![]const []const u8 {
     var strings: std.StringArrayHashMapUnmanaged(void) = .empty;
@@ -1493,8 +1490,8 @@ fn serializeMerkleTree(allocator: std.mem.Allocator, tree: *const IMerkleTree, s
 
     // Write hash table (uncompressed)
     try serializer.writeUInt32(@intCast(uniqueHashes.len));
-    // (collectHashes put every hash through a BufferSet, which refuses a hash that is not 32 bytes, so TypeScript's
-    // length check here cannot fail and is left out.)
+    // (collectHashes put every hash through a BufferSet, which refuses a hash that is not 32 bytes, so no length
+    // check is needed here.)
     for (uniqueHashes) |hash| {
         try serializer.writeBytes(hash);
     }
@@ -1531,10 +1528,10 @@ pub fn rebuildTree(
         // Items whose names start with any of these paths are left out of the new tree.
         collectorPathsToRemove: []const []const u8,
 
-        // Collects the item of a leaf node (TypeScript: the traverseTreeSync callback).
+        // Collects the item of a leaf node.
         fn visit(self: *const @This(), node: *SortNode) anyerror!bool {
             if (node.nodeCount == 1) {
-                // (Zig: TypeScript's `!node.name` is also true for an empty name.)
+                // (An empty name counts as a missing name.)
                 if (node.name == null or node.name.?.len == 0) {
                     return errors.throwError("Leaf node has no name. This could be a bug.", .{});
                 }
@@ -1543,7 +1540,7 @@ pub fn rebuildTree(
                     return errors.throwError("Leaf node has no content hash. This could be a bug.", .{});
                 }
 
-                // (Zig: TypeScript's `!node.lastModified` is also true for the date 0.)
+                // (The date 0 counts as a missing date.)
                 if (node.lastModified == null or node.lastModified.? == 0) {
                     return errors.throwError("Leaf node has no last modified date. This could be a bug.", .{});
                 }
@@ -1565,7 +1562,7 @@ pub fn rebuildTree(
             return true;
         }
 
-        // Orders items by name (TypeScript: the items.sort comparator).
+        // Orders items by name.
         fn lessThan(context: void, left: HashedItem, right: HashedItem) bool {
             _ = context;
             return compareNames(left.name, right.name) < 0;
@@ -1793,8 +1790,8 @@ fn deserializeSortNodeV5(allocator: std.mem.Allocator, deserializer: IDeserializ
         const lastModifiedHigh = try deserializer.readUInt32();
         const lastModifiedTimestamp = combineBigNum(.{ .low = lastModifiedLow, .high = lastModifiedHigh });
 
-        // TODO: a time past what a Date holds is kept as a number (2 ** 63 or more reads as negative), where the
-        // TypeScript gives an Invalid Date.
+        // TODO: a time past what a Date holds is kept as a number (2 ** 63 or more reads as negative), where it
+        // should be an Invalid Date.
         const lastModified: ?i64 = if (lastModifiedTimestamp > 0) @bitCast(lastModifiedTimestamp) else null;
 
         // For leaf nodes, minName equals name
@@ -2179,7 +2176,7 @@ fn deserializeMerkleTreeV2(allocator: std.mem.Allocator, context: void, deserial
 
 //
 // Saves a merkle tree to storage (v6 layout with type code and checksum).
-// (Zig: the TypeScript default typeCode is 'FTRE'; callers pass it explicitly.)
+// (Callers pass the type code explicitly, normally 'FTRE'.)
 //
 pub fn saveTree(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, tree: *const IMerkleTree, storage: IStorage, typeCode: []const u8) !void {
 
@@ -2209,7 +2206,7 @@ pub fn loadTreeVersion(allocator: std.mem.Allocator, io: std.Io, filePath: []con
 }
 
 //
-// The deserializers for every supported version of the tree file (TypeScript: the `deserializers` object in loadTree).
+// The deserializers for every supported version of the tree file.
 //
 const tree_deserializers = [_]serialization.DeserializerEntry(IMerkleTree, void){
     .{ .version = 6, .deserializer = deserializeMerkleTreeV6 },
@@ -2221,7 +2218,7 @@ const tree_deserializers = [_]serialization.DeserializerEntry(IMerkleTree, void)
 
 //
 // Loads a merkle tree from storage (null when the file does not exist).
-// (Zig: the TypeScript default typeCode is 'FTRE'; callers pass it explicitly.)
+// (Callers pass the type code explicitly, normally 'FTRE'.)
 //
 pub fn loadTree(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, storage: IStorage, typeCode: []const u8) !?IMerkleTree {
     return serialization.load(
@@ -2432,8 +2429,8 @@ pub fn pruneTree(
 }
 
 //
-// Checks a UUID string like the `uuid` package's `validate` (the regex in uuid/dist/cjs/regex.js).
-// (No TypeScript counterpart in this package: the TypeScript code calls the third-party `uuid` package.)
+// Checks a UUID string: the nil or max UUID, or 36 characters in the 8-4-4-4-12 hex form with a version from 1 to 8
+// and an RFC 4122 variant.
 //
 fn validateUuid(text: []const u8) bool {
     if (std.ascii.eqlIgnoreCase(text, "00000000-0000-0000-0000-000000000000")) {
@@ -2463,8 +2460,7 @@ fn validateUuid(text: []const u8) bool {
 }
 
 //
-// Converts a UUID string to its 16 bytes (the `uuid` package's `parse`, which throws 'Invalid UUID').
-// (No TypeScript counterpart in this package.)
+// Converts a UUID string to its 16 bytes. Throws 'Invalid UUID' for a string that is not a UUID.
 //
 pub fn parseUuid(text: []const u8) errors.ThrownError![16]u8 {
     if (!validateUuid(text)) {
@@ -2486,8 +2482,8 @@ pub fn parseUuid(text: []const u8) errors.ThrownError![16]u8 {
 }
 
 //
-// Converts 16 UUID bytes to the lowercase UUID string (the `uuid` package's `stringify`, which throws
-// 'Stringified UUID is invalid'). (No TypeScript counterpart in this package.)
+// Converts 16 UUID bytes to the lowercase UUID string. Throws 'Stringified UUID is invalid' when the bytes do not
+// make a UUID.
 //
 pub fn stringifyUuid(allocator: std.mem.Allocator, bytes: []const u8) ![]const u8 {
     const hex = std.fmt.bytesToHex(bytes[0..16].*, .lower);

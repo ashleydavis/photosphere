@@ -16,7 +16,7 @@ const VisitImportFile = import_scanner.VisitImportFile;
 //
 // This is exactly what `import-assets` did inline before there was a scanner at all, moved behind
 // the interface and nothing else. It has to stay that way: manual import is the most used path in
-// the application, and the CLI and Electron import smoke tests are what prove it did not change.
+// the application, and the CLI and desktop import smoke tests are what prove it did not change.
 //
 pub const ManualImportScanner = struct {
     //
@@ -86,8 +86,7 @@ pub const ManualImportScanner = struct {
     }
 
     //
-    // Hands each scanned file on without a cache identity (TypeScript: the
-    // `result => visitFile({ ...result, cacheIdentity: undefined })` arrow function).
+    // Hands each scanned file on without a cache identity.
     //
     fn visitScannedFile(context: ?*anyopaque, result: FileScannedResult) anyerror!void {
         const visitFile: *const VisitImportFile = @ptrCast(@alignCast(context.?));

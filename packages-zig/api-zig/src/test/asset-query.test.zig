@@ -41,7 +41,7 @@ var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
 var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
 
 //
-// A field of a test asset that overrides the default (TypeScript: an entry of `Partial<IAsset>`).
+// A field of a test asset that overrides the default.
 //
 const IAssetOverride = struct {
     // The name of the field.
@@ -107,7 +107,7 @@ fn assetIds(allocator: std.mem.Allocator, assets: []const IAsset) ![]const []con
 }
 
 //
-// The IDs of assets, sorted (TypeScript: `.map(asset => asset._id).sort()`).
+// The IDs of assets, sorted.
 //
 fn sortedAssetIds(allocator: std.mem.Allocator, assets: []const IAsset) ![]const []const u8 {
     const ids = try allocator.dupe([]const u8, try assetIds(allocator, assets));
@@ -116,7 +116,7 @@ fn sortedAssetIds(allocator: std.mem.Allocator, assets: []const IAsset) ![]const
 }
 
 //
-// Orders strings like JavaScript's default sort (by UTF-16 code units, the same as bytes for these ASCII IDs).
+// Orders strings by their bytes, which is the order of UTF-16 code units for these ASCII IDs.
 //
 fn lessThanString(context: void, left: []const u8, right: []const u8) bool {
     _ = context;
@@ -318,10 +318,10 @@ test "streamAssetToFile maps 'original' and an unrecognised type to the asset/ s
 }
 
 //
-// In TypeScript a file storage's read stream opens its file lazily, after `createWriteStream(outputPath)` has
-// created the output file, so exporting an asset that is not there fails and leaves an empty output file behind.
+// The output file is created before the read stream is opened, so exporting an asset that is not there fails and
+// leaves an empty output file behind.
 //
-test "streamAssetToFile fails for a missing asset after creating the output file, like TypeScript" {
+test "streamAssetToFile fails for a missing asset after creating the output file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

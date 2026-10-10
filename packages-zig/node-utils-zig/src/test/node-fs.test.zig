@@ -72,3 +72,49 @@ test "writeFile writes a file, and throws the messages Node's writeFile throws" 
     try expectThrown(try std.fmt.allocPrint(allocator, "ENOENT: no such file or directory, open '{s}'", .{underMissing}), node_fs.writeFile(io, underMissing, "a"));
     try expectThrown(try std.fmt.allocPrint(allocator, "EISDIR: illegal operation on a directory, open '{s}'", .{root}), node_fs.writeFile(io, root, "a"));
 }
+
+test "readdir lists the names of a directory's entries, and throws the messages Node's readdir throws" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const root = try makeTempDir(allocator, io);
+    defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
+
+    try std.testing.expectEqual(@as(usize, 0), (try node_fs.readdir(allocator, io, root)).len);
+
+    try node_fs.writeFile(io, try std.fs.path.join(allocator, &.{ root, "file.json" }), "{}");
+    try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(allocator, &.{ root, "sub", "nested" }));
+    const entryNames = try node_fs.readdir(allocator, io, root);
+    try std.testing.expectEqual(@as(usize, 2), entryNames.len);
+    var sawFile = false;
+    var sawDirectory = false;
+    for (entryNames) |entryName| {
+        if (std.mem.eql(u8, entryName, "file.json")) {
+            sawFile = true;
+        }
+        if (std.mem.eql(u8, entryName, "sub")) {
+            sawDirectory = true;
+        }
+    }
+    try std.testing.expect(sawFile);
+    try std.testing.expect(sawDirectory);
+
+    const missing = try std.fs.path.join(allocator, &.{ root, "missing" });
+    try expectThrown(try std.fmt.allocPrint(allocator, "ENOENT: no such file or directory, scandir '{s}'", .{missing}), node_fs.readdir(allocator, io, missing));
+}
+
+test "statfsPath reports the free space of the filesystem holding a path, and a missing path is error.FileNotFound" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const root = try makeTempDir(allocator, io);
+    defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
+
+    const stats = try node_fs.statfsPath(allocator, root);
+
+    try std.testing.expect(stats.bsize > 0);
+    try std.testing.expect(stats.bavail > 0);
+    try std.testing.expectError(error.FileNotFound, node_fs.statfsPath(allocator, try std.fs.path.join(allocator, &.{ root, "missing" })));
+}

@@ -1,9 +1,8 @@
 //
-// Port of `path.join` from Node's `path` module (lib/path.js), which the TypeScript code calls as `join` from
-// "path". Node joins the segments and then normalizes the result: it resolves `.` and `..` segments, collapses
-// repeated separators and, on Windows, turns every `/` into `\`. `std.fs.path.join` does none of that, so the
-// TypeScript output cannot be matched with it. Only join and the normalize it calls, dirname, basename (without a
-// suffix), extname and isAbsolute.
+// Joins path segments the way Node's `path.join` does: it joins the segments and then normalizes the result,
+// resolving `.` and `..` segments, collapsing repeated separators and, on Windows, turning every `/` into `\`.
+// `std.fs.path.join` does none of that, so it gives a different result. This file holds join and the normalize it
+// calls, dirname, basename (without a suffix), extname and isAbsolute.
 //
 
 const std = @import("std");
@@ -153,7 +152,7 @@ pub const posix = struct {
             }
         }
         if (joined) |text| {
-            return normalize(allocator, text.items);
+            return posix.normalize(allocator, text.items);
         }
         return ".";
     }
@@ -392,7 +391,7 @@ pub const win32 = struct {
             }
         }
 
-        return normalize(allocator, text);
+        return win32.normalize(allocator, text);
     }
 
     //
@@ -571,7 +570,6 @@ pub fn join(allocator: std.mem.Allocator, paths: []const []const u8) ![]const u8
 
 //
 // The body of extname, which is the same for both platforms once the start of the path is known.
-// (No Node counterpart: the loop is written out in each of Node's extname functions.)
 //
 fn extnameFrom(path: []const u8, start: usize, isSeparator: *const fn (u8) bool) []const u8 {
     var startDot: ?usize = null;
@@ -671,4 +669,29 @@ pub fn isAbsolute(path: []const u8) bool {
         return win32.isAbsolute(path);
     }
     return posix.isAbsolute(path);
+}
+
+//
+// Normalizes a path, with the rules of the platform the program runs on (`path.normalize`).
+//
+pub fn normalize(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
+    if (builtin.os.tag == .windows) {
+        return win32.normalize(allocator, path);
+    }
+    return posix.normalize(allocator, path);
+}
+
+//
+// Resolves a path to an absolute one, relative to the current directory when it is not absolute, with the rules of the platform
+// the program runs on, and without a trailing separator unless it is the root.
+// It takes one path, and the io the current directory is read with.
+//
+pub fn resolve(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]const u8 {
+    const absolute = if (isAbsolute(path)) path else try join(allocator, &.{ try std.process.currentPathAlloc(io, allocator), path });
+    const normalized = try normalize(allocator, absolute);
+    var end = normalized.len;
+    while (end > 1 and (normalized[end - 1] == '/' or (builtin.os.tag == .windows and normalized[end - 1] == '\\')) and !(builtin.os.tag == .windows and normalized[end - 2] == ':')) {
+        end -= 1;
+    }
+    return normalized[0..end];
 }

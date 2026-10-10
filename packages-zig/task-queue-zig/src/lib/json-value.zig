@@ -1,7 +1,6 @@
 //
-// This file has no TypeScript counterpart. TypeScript copies task data, results and messages
-// implicitly (structured clone when posting to workers, garbage collection otherwise); Zig backends
-// copy std.json.Value trees explicitly with cloneJsonValue when they have to keep them.
+// Zig backends copy task data, results and messages (std.json.Value trees) explicitly with
+// cloneJsonValue when they have to keep them.
 //
 
 const std = @import("std");

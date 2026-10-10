@@ -1,13 +1,13 @@
 //
 // The database list channels: get-databases, find-database, add-database, update-database, remove-database-entry,
-// set-database-origin and list-s3-dirs, from the ipcMain handlers of apps/desktop/src/main.ts of the same names. They read and write
+// set-database-origin and list-s3-dirs. They read and write
 // databases.toml, and (for the last two) a database's .db/config.json and an S3 bucket.
 //
 // Each is a task type, because they read and write files and talk to S3, and the thread that handles the page's messages must not
 // wait for that.
 //
-// What the page sees is what Electron sends back, in JSON: where Electron replies undefined (update-database, remove-database-entry,
-// set-database-origin) the reply is null, find-database replies null for a name that is not there, and an entry's optional fields
+// What the page sees is JSON: update-database, remove-database-entry and set-database-origin reply null,
+// find-database replies null for a name that is not there, and an entry's optional fields
 // that are not set are left out.
 //
 
@@ -27,13 +27,13 @@ const IDatabaseEntry = databases_config.IDatabaseEntry;
 const IS3Credentials = storage_zig.cloud_storage.IS3Credentials;
 const CloudStorage = storage_zig.cloud_storage.CloudStorage;
 const log = &utils.log.log;
+const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 //
 // Reads a database entry from the JSON the page sends: name, description and path are required, the rest are left out when the
 // page leaves them out.
 //
-// (Zig: a missing name, description or path is an error here, where TypeScript passes the object on and fails later, or not at all,
-// because IDatabaseEntry cannot hold an absent required field.)
+// A missing name, description or path is an error, because IDatabaseEntry cannot hold an absent required field.
 //
 fn entryFromJson(data: std.json.Value) !IDatabaseEntry {
     const name = json_util.getString(data, "name") orelse {
@@ -80,12 +80,11 @@ fn jsonString(object: std.json.ObjectMap, key: []const u8) ?[]const u8 {
 }
 
 //
-// Reads S3 credentials from the value of a vault secret, which holds them as JSON (the JSON.parse of main.ts). A key the secret does
+// Reads S3 credentials from the value of a vault secret, which holds them as JSON. A key the secret does
 // not hold reads as "" for the two that are required, as in resolveStorageCredentials, because IS3Credentials cannot carry an absent one.
 //
-// (Zig: the message of a value that is not JSON is this sentence plus the parser's error name, where JSON.parse's SyntaxError carries
-// V8's own wording, which the Zig parser does not produce. A secret that is JSON null is an error, as `parsed.region` is a TypeError
-// in TypeScript; any other JSON value that is not an object reads every key as absent, as it does there.)
+// The message of a value that is not JSON is a sentence plus the parser's error name. A secret that is JSON null is an error;
+// any other JSON value that is not an object reads every key as absent.
 //
 fn s3CredentialsFromSecret(allocator: std.mem.Allocator, secretValue: []const u8) !IS3Credentials {
     const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, secretValue, .{
@@ -120,10 +119,10 @@ pub const IOpenedDatabaseStorage = struct {
 
 //
 // Opens the raw storage of the database at a path, using the S3 credentials in the vault secret the database's entry names when it
-// has one. set-database-origin and notify-database-opened in main.ts each repeat this block.
+// has one. set-database-origin and notify-database-opened each need this block.
 //
-pub fn openDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databases: []const IDatabaseEntry, database_path: []const u8) !IOpenedDatabaseStorage {
-    const vault = try vault_zig.get_vault.getVault(vault_zig.get_vault.getDefaultVaultType());
+pub fn openDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databases: []const IDatabaseEntry, database_path: []const u8, host: ?utils.host_requester.IHostRequester) !IOpenedDatabaseStorage {
+    const vault = try vault_zig.get_vault.getVaultWithHost(allocator, vault_zig.get_vault.getDefaultVaultType(), host);
     var database_entry: ?IDatabaseEntry = null;
     for (databases) |existing_entry| {
         if (std.mem.eql(u8, existing_entry.path, database_path)) {
@@ -153,7 +152,7 @@ pub fn openDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databases: 
 // remove-database-entry: the payload is a database name. Removes the entry and the name from the recents. The secrets are
 // independent and are managed on the secrets page.
 //
-pub fn removeDatabaseEntryHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn removeDatabaseEntry(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const name = try databaseName(data);
     try databases_config.removeDatabaseEntry(context.arena, context.io(), name);
     return try context.arena.dupe(u8, "null");
@@ -162,7 +161,7 @@ pub fn removeDatabaseEntryHandler(context: *TaskContext, data: std.json.Value) a
 //
 // find-database: the payload is a database name. The reply is the entry (matched case-insensitively), or null when there is none.
 //
-pub fn findDatabaseHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn findDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const name = try databaseName(data);
     const found = try databases_config.findDatabase(context.arena, context.io(), name);
     return try json_util.stringify(context.arena, found);
@@ -171,7 +170,7 @@ pub fn findDatabaseHandler(context: *TaskContext, data: std.json.Value) anyerror
 //
 // get-databases: no payload. The reply is every configured database entry, as an array.
 //
-pub fn getDatabasesHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn getDatabases(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
     const databases = try databases_config.getDatabases(context.arena, context.io());
     return try json_util.stringify(context.arena, databases);
@@ -180,10 +179,10 @@ pub fn getDatabasesHandler(context: *TaskContext, data: std.json.Value) anyerror
 //
 // add-database: the payload is a database entry. Adds it, and replies with the entry.
 //
-// (Zig: the reply is the entry as read into IDatabaseEntry, so a key of the page's object that is not a field of the entry is not
-// echoed back, where TypeScript returns the object it was given untouched. The entry type has no other keys.)
+// The reply is the entry as read into IDatabaseEntry, so a key of the page's object that is not a field of the entry is not
+// echoed back. The entry type has no other keys.
 //
-pub fn addDatabaseHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn addDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const entry = try entryFromJson(data);
     try databases_config.addDatabaseEntry(context.arena, context.io(), entry);
     log.event("Database entry added");
@@ -194,7 +193,7 @@ pub fn addDatabaseHandler(context: *TaskContext, data: std.json.Value) anyerror!
 // update-database: the payload is {originalName, entry}. Updates the entry that originalName names, renaming it if the entry's name
 // differs.
 //
-pub fn updateDatabaseHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn updateDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const original_name = json_util.getString(data, "originalName") orelse {
         return utils.errors.throwError("The database needs a name.", .{});
     };
@@ -211,8 +210,8 @@ pub fn updateDatabaseHandler(context: *TaskContext, data: std.json.Value) anyerr
 
 //
 // Writes the origin into a database's .db/config.json, or removes it when origin is null. updateDatabaseConfig in api-zig can only
-// set a key (an origin of null leaves the existing one alone), where `{ ...existing, origin: undefined }` in TypeScript clears it
-// when the file is written, so a null origin is cleared here by loading the config, taking the key out and saving it.
+// set a key (an origin of null leaves the existing one alone), so a null origin is cleared here by loading the config, taking
+// the key out and saving it.
 //
 fn writeDatabaseOrigin(context: *TaskContext, rawStorage: storage_zig.storage.IStorage, origin: ?[]const u8) !void {
     if (origin != null) {
@@ -242,13 +241,14 @@ fn writeDatabaseOrigin(context: *TaskContext, rawStorage: storage_zig.storage.IS
 // set-database-origin: the payload is {databasePath, origin}, where a missing origin clears it. Writes the origin to the database's
 // .db/config.json, and to the database's entry when it has one with a different origin.
 //
-pub fn setDatabaseOriginHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn setDatabaseOrigin(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const database_path = json_util.getString(data, "databasePath") orelse {
         return utils.errors.throwError("The database needs a path.", .{});
     };
     const origin = json_util.getString(data, "origin");
     const databases = try databases_config.getDatabases(context.arena, context.io());
-    const opened = try openDatabaseStorage(context.arena, context.io(), databases, database_path);
+    var requester_storage: ziggy.task_runner.TaskHostRequester = undefined;
+    const opened = try openDatabaseStorage(context.arena, context.io(), databases, database_path, context.hostRequester(&requester_storage));
     try writeDatabaseOrigin(context, opened.rawStorage, origin);
     if (opened.entry) |found_entry| {
         if (!optionalStringsEqual(found_entry.origin, origin)) {
@@ -275,7 +275,7 @@ fn optionalStringsEqual(left: ?[]const u8, right: ?[]const u8) bool {
 // list-s3-dirs: the payload is {s3Key, bucket, prefix}. The reply is the names of the directories under the prefix in the bucket
 // (at most one page of them), or an empty array when the vault holds no secret of that name.
 //
-pub fn listS3DirsHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn listS3Dirs(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const s3_key = json_util.getString(data, "s3Key") orelse {
         return utils.errors.throwError("The request needs the name of the secret that holds the S3 credentials.", .{});
     };
@@ -285,7 +285,8 @@ pub fn listS3DirsHandler(context: *TaskContext, data: std.json.Value) anyerror!?
     const prefix = json_util.getString(data, "prefix") orelse {
         return utils.errors.throwError("The request needs the folder to list in the S3 bucket.", .{});
     };
-    const vault = try vault_zig.get_vault.getVault(vault_zig.get_vault.getDefaultVaultType());
+    var requester_storage: ziggy.task_runner.TaskHostRequester = undefined;
+    const vault = try vault_zig.get_vault.getVaultWithHost(context.arena, vault_zig.get_vault.getDefaultVaultType(), context.hostRequester(&requester_storage));
     const secret = try vault.get(context.arena, context.io(), s3_key);
     const found_secret = secret orelse {
         return try context.arena.dupe(u8, "[]");
@@ -296,3 +297,38 @@ pub fn listS3DirsHandler(context: *TaskContext, data: std.json.Value) anyerror!?
     const result = try storage.listDirs(context.arena, context.io(), path, 100, null);
     return try json_util.stringify(context.arena, result.names);
 }
+
+//
+// The remove-database-entry channel's handler: removeDatabaseEntry, with its errors logged.
+//
+pub const removeDatabaseEntryHandler = logExceptions(removeDatabaseEntry, "Error removing database entry");
+
+//
+// The find-database channel's handler: findDatabase, with its errors logged.
+//
+pub const findDatabaseHandler = logExceptions(findDatabase, "Error finding database");
+
+//
+// The get-databases channel's handler: getDatabases, with its errors logged.
+//
+pub const getDatabasesHandler = logExceptions(getDatabases, "Error getting databases");
+
+//
+// The add-database channel's handler: addDatabase, with its errors logged.
+//
+pub const addDatabaseHandler = logExceptions(addDatabase, "Error adding database");
+
+//
+// The update-database channel's handler: updateDatabase, with its errors logged.
+//
+pub const updateDatabaseHandler = logExceptions(updateDatabase, "Error updating database");
+
+//
+// The set-database-origin channel's handler: setDatabaseOrigin, with its errors logged.
+//
+pub const setDatabaseOriginHandler = logExceptions(setDatabaseOrigin, "Error setting database origin");
+
+//
+// The list-s3-dirs channel's handler: listS3Dirs, with its errors logged.
+//
+pub const listS3DirsHandler = logExceptions(listS3Dirs, "Error listing S3 directories");

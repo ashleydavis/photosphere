@@ -82,7 +82,7 @@ pub fn processCwd(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 }
 
 //
-// Equivalent of JavaScript `value.toFixed(2)` (the implementation lives in utils-zig).
+// Formats a number with two decimal places (the implementation lives in utils-zig).
 //
 pub fn toFixed2(allocator: std.mem.Allocator, value: f64) ![]const u8 {
     const sign: []const u8 = if (value < 0) "-" else "";
@@ -146,7 +146,7 @@ pub const FileLogger = struct {
     mutex: std.Io.Mutex,
 
     //
-    // Creates the logger (TypeScript: the private constructor) and registers its termination callback.
+    // Creates the logger and registers its termination callback.
     //
     fn init(self: *FileLogger, allocator: std.mem.Allocator, io: std.Io, consoleLogger: ILog, command: []const u8, logFile: []const u8, errorLogFile: []const u8, startTime: Date) !void {
         self.* = .{
@@ -282,7 +282,7 @@ pub const FileLogger = struct {
     // Gets the ImageMagick line of the header.
     //
     fn getImageMagickVersion(self: *FileLogger) ![]const u8 {
-        const result = Image.verifyImageMagick(self.allocator, self.io) catch {
+        const result = Image.verifyImageMagick(self.allocator, self.io, null) catch {
             return "ImageMagick: error checking version";
         };
         if (result.available) {
@@ -298,7 +298,7 @@ pub const FileLogger = struct {
     // Gets the FFmpeg line of the header.
     //
     fn getFFmpegVersion(self: *FileLogger) ![]const u8 {
-        const result = Video.verifyFfmpeg(self.allocator, self.io);
+        const result = Video.verifyFfmpeg(self.allocator, self.io, null);
         if (result.available) {
             return std.fmt.allocPrint(self.allocator, "FFmpeg: {s}", .{result.version orelse "undefined"});
         }
@@ -311,7 +311,7 @@ pub const FileLogger = struct {
     // Gets the FFprobe line of the header.
     //
     fn getFFprobeVersion(self: *FileLogger) ![]const u8 {
-        const result = Video.verifyFfprobe(self.allocator, self.io);
+        const result = Video.verifyFfprobe(self.allocator, self.io, null);
         if (result.available) {
             return std.fmt.allocPrint(self.allocator, "FFprobe: {s}", .{result.version orelse "undefined"});
         }
@@ -332,7 +332,7 @@ pub const FileLogger = struct {
 
     //
     // Appends a message to the log file. Write errors are ignored: logging must not break the app.
-    // (TypeScript queues the entries and appends them asynchronously; Zig appends them directly.)
+    // (The entries are appended directly, not queued.)
     //
     fn writeToFile(self: *FileLogger, level: []const u8, message: []const u8) void {
         self.mutex.lockUncancelable(self.io);

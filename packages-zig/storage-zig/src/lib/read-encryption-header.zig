@@ -36,7 +36,7 @@ pub fn readFirstBytes(allocator: std.mem.Allocator, io: std.Io, storage: IStorag
 }
 
 //
-// The retried read of readEncryptionHeader (TypeScript: the arrow function passed to retry).
+// The retried read of readEncryptionHeader.
 //
 const ReadFirstBytesOperation = struct {
     // Allocates the bytes read.
@@ -48,7 +48,7 @@ const ReadFirstBytesOperation = struct {
     // The path of the file to read.
     filePath: []const u8,
 
-    // The Bun toString() of the TypeScript arrow function (used in the retry timeout message).
+    // The text that names this operation in the retry timeout message.
     pub const source = "() => readFirstBytes(rawStorage, filePath, NEW_FORMAT_HEADER_LENGTH)";
 
     //

@@ -1,7 +1,7 @@
 const std = @import("std");
 
 //
-// No TypeScript counterpart: stands in for the whitespace handling of JavaScript's String.prototype.trim,
+// The whitespace handling of JavaScript's String.prototype.trim,
 // trimStart and trimEnd on UTF-8 text. They remove the characters of the WhiteSpace and LineTerminator
 // productions of the ECMAScript specification: tab, line feed, vertical tab, form feed, carriage return, space,
 // no-break space, the byte order mark, every other space separator (U+1680, U+2000 to U+200A, U+202F, U+205F and

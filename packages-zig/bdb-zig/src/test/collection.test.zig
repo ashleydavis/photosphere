@@ -16,7 +16,7 @@ const errors = utils.errors;
 const io = std.testing.io;
 
 //
-// Counts onDirty notifications (TypeScript tests pass `() => {}`).
+// Counts onDirty notifications.
 //
 var dirty_notifications: u32 = 0;
 
@@ -34,7 +34,7 @@ fn onDirty(context: *anyopaque) void {
 var test_uuid_generator: utils.test_uuid_generator.TestUuidGenerator = .{};
 
 //
-// Creates the collection under test (TypeScript: the beforeEach block).
+// Creates the collection under test.
 //
 fn newCollection(allocator: std.mem.Allocator, storage: *MemoryStorage) !*BsonCollection {
     const collection = try allocator.create(BsonCollection);
@@ -301,8 +301,7 @@ test "setInternalRecord should upsert (update existing record)" {
 }
 
 //
-// Returns true when the directory of a sort index exists (TypeScript: `sortIndex.exists()`, which is
-// `storage.dirExists(indexDirectory)`).
+// Returns true when the directory of a sort index exists.
 //
 fn sortIndexExists(allocator: std.mem.Allocator, storage: *MemoryStorage, collection: *BsonCollection, fieldName: []const u8, direction: bdb.sort_index.SortDirection) !bool {
     return storage.dirExists(allocator, io, (try collection.sortIndex(fieldName, direction)).indexDirectory);
@@ -624,7 +623,7 @@ test "iterateShards reads the shards a listing finds as well as the ones held in
 }
 
 //
-// Builds a TestUser record in external form (TypeScript: the TestUser object literal).
+// Builds a TestUser record in external form.
 //
 fn makeExternalUser(allocator: std.mem.Allocator, id: []const u8, name: []const u8, age: f64, role: []const u8) !BsonDocument {
     return BsonDocument.fromFields(allocator, &.{
@@ -820,7 +819,7 @@ test "should paginate through records" {
 }
 
 //
-// The users of the TypeScript sort index tests.
+// The users of the sort index tests.
 //
 fn sortIndexTestUsers(allocator: std.mem.Allocator) ![3]BsonDocument {
     return .{
@@ -996,7 +995,7 @@ test "flush should throw when collection is dirty" {
 
 //
 // insertOne stores the record's fields apart from its id and stamps the time it was written, as
-// toInternal does. (No TypeScript counterpart: TypeScript tests read the record back through getOne.)
+// toInternal does.
 //
 test "insertOne stores the fields apart from the id and stamps the write time" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

@@ -1,6 +1,5 @@
 //
-// Tests for isDatabasePartial and createLazyDatabaseStorage of media-file-database.zig. TypeScript has no test of either of its own: the
-// asset server core test mocks createLazyDatabaseStorage. These run them on real databases in directories of their own.
+// Tests for isDatabasePartial and createLazyDatabaseStorage of media-file-database.zig. These run them on real databases in directories of their own.
 //
 
 const std = @import("std");
@@ -89,7 +88,7 @@ test "createLazyDatabaseStorage returns the plain storage of a database with no 
     defer fixture.deinit(io);
     try makePartialCopy(allocator, io, &fixture, null);
 
-    const lazy = try media_file_database.createLazyDatabaseStorage(allocator, io, fixture.dir, null, null);
+    const lazy = try media_file_database.createLazyDatabaseStorage(allocator, io, fixture.dir, null, null, null);
 
     // It reads the database, and a file that is not there is not there.
     try std.testing.expect((try node_api.tree.loadMerkleTree(allocator, io, lazy)) != null);
@@ -115,7 +114,7 @@ test "createLazyDatabaseStorage returns the plain storage of a full database tha
         .origin = origin.dir,
     });
 
-    const lazy = try media_file_database.createLazyDatabaseStorage(allocator, io, fixture.dir, null, null);
+    const lazy = try media_file_database.createLazyDatabaseStorage(allocator, io, fixture.dir, null, null, null);
 
     try std.testing.expect(try lazy.read(allocator, io, "thumb/only-at-origin") == null);
 }
@@ -137,7 +136,7 @@ test "createLazyDatabaseStorage fetches a file a partial copy does not hold from
     defer fixture.deinit(io);
     try makePartialCopy(allocator, io, &fixture, origin.dir);
 
-    const lazy = try media_file_database.createLazyDatabaseStorage(allocator, io, fixture.dir, null, null);
+    const lazy = try media_file_database.createLazyDatabaseStorage(allocator, io, fixture.dir, null, null, null);
 
     const fetched = (try lazy.read(allocator, io, "thumb/only-at-origin")).?;
     try std.testing.expectEqualStrings("from the origin", fetched);

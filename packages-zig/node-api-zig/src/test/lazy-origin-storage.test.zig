@@ -15,7 +15,7 @@ const IWriteLockInfo = storage_module.IWriteLockInfo;
 const io = std.testing.io;
 
 //
-// A readable stream over bytes held in memory (TypeScript: `Readable.from(data)`).
+// A readable stream over bytes held in memory.
 //
 const MemoryReadStream = struct {
     // The reader over the bytes.
@@ -45,7 +45,7 @@ const MemoryReadStream = struct {
 };
 
 //
-// A readable stream whose every read fails (TypeScript: a Readable that emits an error).
+// A readable stream whose every read fails.
 //
 const FailingReadStream = struct {
     // The reader, which fails when it is read.
@@ -90,7 +90,7 @@ const FailingReadStream = struct {
 };
 
 //
-// A minimal mock IStorage (TypeScript: makeMockStorage). Only the methods used by LazyOriginStorage tests have
+// A minimal mock IStorage. Only the methods used by LazyOriginStorage tests have
 // real implementations; the rest throw so accidental calls are obvious. Its files are shared with the concurrent
 // cache write, so they are guarded and allocated with a thread safe allocator.
 //
@@ -101,7 +101,7 @@ const MockStorage = struct {
     // Guards files.
     mutex: std.Io.Mutex = .init,
 
-    // Set when read is called (TypeScript: the test's wrapper around origin.read).
+    // Set when read is called.
     readCalled: bool = false,
 
     // Set when readStream is called.
@@ -113,10 +113,10 @@ const MockStorage = struct {
     // Set when writeStream is called.
     writeStreamCalled: bool = false,
 
-    // Makes writeStream fail (TypeScript: `local.writeStream = async () => { throw new Error("disk full"); }`).
+    // Makes writeStream fail.
     writeStreamFails: bool = false,
 
-    // Makes readStream fail (TypeScript: an origin.readStream that throws "should not be called").
+    // Makes readStream fail.
     readStreamFails: bool = false,
 
     // Makes the stream readStream returns fail when it is read (TypeScript: a Readable that emits an error).
@@ -406,7 +406,7 @@ test "readStream() streams data correctly even if local cache write fails" {
     try std.testing.expectEqualStrings("pdfdata", data);
 }
 
-test "readStream() tees a file larger than the cache queue" {
+test "readStream() tees a file larger than the stream buffers" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -427,10 +427,8 @@ test "readStream() tees a file larger than the cache queue" {
     try std.testing.expectEqualSlices(u8, big, local.get("big.bin").?);
 }
 
-test "readStream() streams a file larger than the cache queue in full when the local cache write fails" {
-    // A divergence kept on purpose: the TypeScript stops after its
-    // PassThrough buffers fill, because nothing drains the cache stream once the cache write has failed, and the
-    // caller waits for ever. The Zig stops feeding the cache and hands the caller the whole file.
+// Nothing may be left stalled waiting for the cache stream to drain after the cache write fails.
+test "readStream() streams a file larger than the stream buffers in full when the local cache write fails" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

@@ -142,7 +142,7 @@ test "open-database sends no event when the user cancelled" {
     try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("database-opened"));
 }
 
-test "pick-folder treats an empty title and an empty key as none, as the TypeScript's || does" {
+test "pick-folder treats an empty title and an empty key as none" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -150,4 +150,74 @@ test "pick-folder treats an empty title and an empty key as none, as the TypeScr
     std.testing.allocator.free(try app.requestOk("pick-folder", "{\"title\":\"\",\"folderKey\":\"\"}"));
     try std.testing.expectEqualStrings("Select Folder", app.last_pick_title.?);
     try expectState(&app, "lastFolder", "\"/chosen/dir\"");
+}
+
+test "a failing dialog request logs the error with the message of its handler" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const allocator = std.testing.allocator;
+    allocator.free(try app.requestError("pick-file", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error picking save location") != null);
+    allocator.free(try app.requestError("pick-files", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error picking files") != null);
+    allocator.free(try app.requestError("pick-folder", "{\"folderKey\":\"gallerySort\"}"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error picking folder") != null);
+}
+
+test "pick-file takes its answer from PHOTOSPHERE_TEST_PICK_FILE_PATH in test mode, with no dialog and nothing remembered" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    try app.environ_map.put("PHOTOSPHERE_TEST_MODE", "1");
+    try app.environ_map.put("PHOTOSPHERE_TEST_PICK_FILE_PATH", "/from/the/environment.jpg");
+    const reply = try app.requestOk("pick-file", "\"photo.jpg\"");
+    defer std.testing.allocator.free(reply);
+    try std.testing.expectEqualStrings("\"/from/the/environment.jpg\"", reply);
+    try std.testing.expectEqual(@as(i32, -1), app.last_pick_kind);
+    try expectState(&app, "lastDownloadFolder", "null");
+}
+
+test "pick-file ignores PHOTOSPHERE_TEST_PICK_FILE_PATH outside test mode" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    try app.environ_map.put("PHOTOSPHERE_TEST_PICK_FILE_PATH", "/from/the/environment.jpg");
+    app.pick_answer = "[\"/downloads/photo.jpg\"]";
+    const reply = try app.requestOk("pick-file", "\"photo.jpg\"");
+    defer std.testing.allocator.free(reply);
+    try std.testing.expectEqualStrings("\"/downloads/photo.jpg\"", reply);
+    try std.testing.expectEqual(@as(i32, 1), app.last_pick_kind);
+}
+
+test "pick-folder for the download folder takes its answer from PHOTOSPHERE_TEST_DOWNLOAD_FOLDER in test mode, with no dialog and nothing remembered" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    try app.environ_map.put("PHOTOSPHERE_TEST_MODE", "1");
+    try app.environ_map.put("PHOTOSPHERE_TEST_DOWNLOAD_FOLDER", "/from/the/download-folder");
+    const reply = try app.requestOk("pick-folder", "{\"folderKey\":\"lastDownloadFolder\"}");
+    defer std.testing.allocator.free(reply);
+    try std.testing.expectEqualStrings("\"/from/the/download-folder\"", reply);
+    try std.testing.expectEqual(@as(i32, -1), app.last_pick_kind);
+    try expectState(&app, "lastDownloadFolder", "null");
+}
+
+test "pick-folder for any other folder ignores PHOTOSPHERE_TEST_DOWNLOAD_FOLDER, and so does a run outside test mode" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const allocator = std.testing.allocator;
+    try app.environ_map.put("PHOTOSPHERE_TEST_MODE", "1");
+    try app.environ_map.put("PHOTOSPHERE_TEST_DOWNLOAD_FOLDER", "/from/the/download-folder");
+    app.pick_answer = "[\"/chosen/dir\"]";
+    const other = try app.requestOk("pick-folder", "null");
+    defer allocator.free(other);
+    try std.testing.expectEqualStrings("\"/chosen/dir\"", other);
+    try std.testing.expectEqual(@as(i32, 2), app.last_pick_kind);
+    try app.environ_map.put("PHOTOSPHERE_TEST_MODE", "0");
+    app.pick_answer = "[\"/chosen/downloads\"]";
+    const download = try app.requestOk("pick-folder", "{\"folderKey\":\"lastDownloadFolder\"}");
+    defer allocator.free(download);
+    try std.testing.expectEqualStrings("\"/chosen/downloads\"", download);
 }

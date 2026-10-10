@@ -37,7 +37,7 @@ const resolveSyncPauseMs = api.sync_settings.resolveSyncPauseMs;
 // (Zig: the YAML documents (IYamlConfigFile, IYamlAutoImportSection, IYamlAutoImportSource and IYamlSyncSection) are
 // std.json.Value objects, which is what node-utils-zig's YAML reader and writer work in, so they have no separate struct
 // types. A number the file holds (the pacing) is a std.json.Value that is a number, so an integer stays an integer when
-// it is written back, the way a JavaScript number does.)
+// it is written back.)
 //
 
 //
@@ -108,8 +108,7 @@ pub const IConfigFile = struct {
 pub const ALLOWED_THEMES = [_]IConfigTheme{ .light, .dark, .system };
 
 //
-// Gets the object of a value that is one, or null (the optional chaining `value?.key` the TypeScript reads keys with).
-// (No TypeScript counterpart.)
+// Gets the object of a value that is one, or null.
 //
 fn objectOf(value: ?std.json.Value) ?std.json.ObjectMap {
     const present = value orelse {
@@ -119,8 +118,7 @@ fn objectOf(value: ?std.json.Value) ?std.json.ObjectMap {
 }
 
 //
-// Copies a field of one object into another when the first has it, so a field that is absent stays absent as an
-// `undefined` property does in TypeScript. (No TypeScript counterpart.)
+// Copies a field of one object into another when the first has it, so a field that is absent stays absent.
 //
 fn copyField(allocator: std.mem.Allocator, target: *std.json.ObjectMap, source: std.json.ObjectMap, sourceKey: []const u8, targetKey: []const u8) !void {
     if (source.get(sourceKey)) |value| {
@@ -135,8 +133,8 @@ fn copyField(allocator: std.mem.Allocator, target: *std.json.ObjectMap, source: 
 // file may hold anything at all, and normaliseAutoImportSettings is the only supported way to turn
 // that into settings.
 //
-// (Zig: a source that is null is the TypeError JavaScript throws reading `type` off it, so it throws here with that
-// message instead of being dropped; any other value that is not an object has no fields, as in JavaScript.)
+// (Zig: a source that is null throws here with a TypeError message
+// instead of being dropped; any other value that is not an object has no fields.)
 //
 fn yamlSourceToRawSource(allocator: std.mem.Allocator, yamlSource: std.json.Value) !IRawAutoImportSource {
     if (yamlSource == .null) {
@@ -198,8 +196,7 @@ fn isSection(value: ?std.json.Value) bool {
 }
 
 //
-// Gets a non-empty string field of a section (`typeof section.key === "string" && section.key.length > 0`).
-// (No TypeScript counterpart.)
+// Gets a non-empty string field of a section.
 //
 fn nonEmptyStringField(section: std.json.ObjectMap, key: []const u8) ?[]const u8 {
     const value = section.get(key) orelse {

@@ -13,7 +13,7 @@ test "note writes the message in a box of bars under its title" {
 
     try prompts.note(allocator, std.testing.io, "Both devices must be on the same local network (wired or Wi-Fi).\nThis does not work over the internet.", "\u{2139} Network Requirement", .{ .common = .{ .output = &output.writer } });
 
-    // What the TypeScript note writes (psi secrets send), the lines padded to the longest plus 2.
+    // What the note writes (psi secrets send), the lines padded to the longest plus 2.
     const expected =
         "   \u{2139} Network Requirement\n" ++
         (" " ** 70) ++ "\n" ++

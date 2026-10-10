@@ -1,5 +1,5 @@
 //
-// Tests for the write locks of FileStorage (port of src/tests/file-storage-locks.test.ts).
+// Tests for the write locks of FileStorage.
 //
 
 const test_files = @import("test-files.zig");
@@ -52,7 +52,7 @@ const Fixture = struct {
     }
 
     //
-    // Reads and parses a lock file the way the TypeScript tests do with JSON.parse.
+    // Reads and parses a lock file.
     //
     fn readLockFile(fixture: *Fixture, lockFilePath: []const u8) !LockFileContent {
         const allocator = fixture.arena.allocator();
@@ -60,8 +60,6 @@ const Fixture = struct {
         return std.json.parseFromSliceLeaky(LockFileContent, allocator, lockContent, .{ .allocate = .alloc_always });
     }
 };
-
-// describe('checkWriteLock')
 
 test "should return undefined for non-existent lock" {
     var fixture: Fixture = undefined;
@@ -110,8 +108,6 @@ test "should handle missing lock files gracefully" {
     const lockInfo = try fixture.storage.checkWriteLock(fixture.arena.allocator(), std.testing.io, filePath);
     try std.testing.expect(lockInfo == null);
 }
-
-// describe('acquireWriteLock')
 
 test "should successfully acquire a lock for new file" {
     var fixture: Fixture = undefined;
@@ -163,7 +159,7 @@ test "should create lock file in nested directories" {
 // One attempt of a race: acquires the lock with its own storage instance and records whether it won.
 //
 const LockAttempt = struct {
-    // The storage instance of this attempt (a different process in TypeScript).
+    // The storage instance of this attempt.
     storage: FileStorage,
 
     // The lock owner of this attempt.
@@ -385,8 +381,6 @@ test "should store timestamp accurately" {
     try std.testing.expect(lockInfo.?.acquiredAt.epochMilliseconds <= afterTime);
 }
 
-// describe('releaseWriteLock')
-
 test "should successfully release an existing lock" {
     var fixture: Fixture = undefined;
     try fixture.init();
@@ -432,8 +426,6 @@ test "should allow reacquisition after release" {
     try std.testing.expectEqualStrings("user2", lockInfo.?.owner);
 }
 
-// describe('lock file format')
-
 test "should create valid JSON lock files" {
     var fixture: Fixture = undefined;
     try fixture.init();
@@ -475,8 +467,6 @@ test "should handle special characters in owner names" {
     const lockInfo = try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath);
     try std.testing.expectEqualStrings(specialOwner, lockInfo.?.owner);
 }
-
-// describe('integration scenarios')
 
 test "should handle full lock lifecycle" {
     var fixture: Fixture = undefined;
@@ -616,7 +606,7 @@ test "parseISOString reads what toISOString writes and rejects anything else" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // Values from `new Date(text).getTime()` in JavaScript.
+    // The milliseconds since the epoch that each text stands for.
     try std.testing.expectEqual(@as(i64, 0), parseISOString("1970-01-01T00:00:00.000Z").?.epochMilliseconds);
     try std.testing.expectEqual(@as(i64, 1709251199999), parseISOString("2024-02-29T23:59:59.999Z").?.epochMilliseconds);
     try std.testing.expectEqual(@as(i64, 1000000000123), parseISOString("2001-09-09T01:46:40.123Z").?.epochMilliseconds);
@@ -628,7 +618,7 @@ test "parseISOString reads what toISOString writes and rejects anything else" {
 }
 
 //
-// TypeScript reads the lock with `JSON.parse(lockContent.trim())`, and JavaScript's trim removes a byte order mark
+// The lock is read with its content trimmed, and the trim removes a byte order mark
 // and the Unicode spaces as well as ASCII whitespace, so such a lock is read and held rather than broken as corrupt.
 //
 test "a lock file surrounded by Unicode whitespace is read and held, not broken" {
@@ -805,9 +795,8 @@ test "a refused lock is logged with the age and the owner of the lock in the way
 }
 
 //
-// A lock file that is valid JSON but whose acquiredAt is not a date `new Date` can read. TypeScript carries
-// the Invalid Date forward and answers with a lock whose acquiredAt is Invalid Date; the Zig refuses to read it
-// (see the TODO on parseLockContent), so the file reads as corrupt and the lock is broken.
+// A lock file that is valid JSON but whose acquiredAt is not a date. parseLockContent refuses to read it,
+// so the file reads as corrupt and the lock is broken.
 //
 test "a lock whose acquiredAt is not a date reads as corrupt and the lock is taken" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -829,8 +818,6 @@ test "a lock whose acquiredAt is not a date reads as corrupt and the lock is tak
     const lockInfo = (try storage.checkWriteLock(allocator, io, lockFilePath)).?;
     try std.testing.expectEqualStrings("new-owner", lockInfo.owner);
 }
-
-// describe('refreshWriteLock')
 
 test "refreshWriteLock updates the timestamp of a lock the owner holds and keeps the owner" {
     var fixture: Fixture = undefined;

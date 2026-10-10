@@ -219,7 +219,7 @@ fn positionFromName(name: []const u8) commander.HelpTextPosition {
 }
 
 //
-// Builds a command from its fixture definition, like buildCommand in generate.ts.
+// Builds a command from its fixture definition.
 //
 fn buildCommand(allocator: std.mem.Allocator, command: *Command, definition: std.json.ObjectMap, recorder: *IRecorder) !void {
     if (definition.get("description")) |description| {
@@ -510,7 +510,7 @@ test "suggestSimilar suggests the closest candidates" {
     try std.testing.expectEqualStrings("", try commander.suggestSimilar(allocator, "--a", &.{ "--b", "-c" }));
 }
 
-test "displayWidth, jsLength and stripColor measure like JavaScript" {
+test "displayWidth, jsLength and stripColor measure in UTF-16 code units" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -526,7 +526,7 @@ test "displayWidth, jsLength and stripColor measure like JavaScript" {
     try std.testing.expectEqualStrings("\x1b[x", try commander.stripColor(allocator, "\x1b[x"));
 }
 
-test "isJsWhitespace matches JavaScript's \\s" {
+test "isJsWhitespace matches the regular expression class \\s" {
     try std.testing.expect(commander.isJsWhitespace(' '));
     try std.testing.expect(commander.isJsWhitespace('\t'));
     try std.testing.expect(commander.isJsWhitespace(0xA0));

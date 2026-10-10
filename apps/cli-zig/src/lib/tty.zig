@@ -1,8 +1,8 @@
 //
-// Stand-in for the parts of `node:tty` used by the CLI (this file has no TypeScript counterpart):
+// The terminal functions used by the CLI:
 // `isTTY`, `columns`, `rows`, `setRawMode` and `hasColors`.
-// On Windows it uses the console API like libuv does, and `initConsole` stands in for the console setup the
-// Bun runtime does at startup (UTF-8 code pages and virtual terminal processing of the output).
+// On Windows it uses the console API, and `initConsole` does the console setup at startup (UTF-8 code pages and
+// virtual terminal processing of the output).
 //
 
 const std = @import("std");

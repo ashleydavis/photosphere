@@ -1,11 +1,11 @@
 //
-// The events Photosphere's core sends to the page, from the `webContents.send` calls of apps/desktop/src/main.ts (and of the
+// The events Photosphere's core sends to the page (including those of the
 // worker pool it forwards from): database-opened, database-closed, databases-changed, sync-started, sync-completed,
 // theme-changed, navigate, show-notification, update-available and platform-event. The page's side of each is in
-// apps/desktop-frontend/src/lib/platform-provider-electron.tsx. task-message and task-completed are Ziggy's own events.
+// the platform provider of the page. task-message and task-completed are Ziggy's own events.
 //
 // Each function sends one event, on the channel of that name with the payload the page's handler takes, the payload being null
-// where Electron sent none. An event is a JSON message {"channel", "data"}.
+// where there is none. An event is a JSON message {"channel", "data"}.
 //
 
 const std = @import("std");
@@ -33,7 +33,7 @@ pub const IShowNotification = struct {
     // The color variant: "primary", "success", "warning", "danger" or "neutral".
     color: []const u8,
     // The milliseconds before it is dismissed, where 0 means it is not. Left out when the sender has none.
-    duration: ?i64 = null,
+    duration: ?f64 = null,
     // A folder to offer to open. Left out when there is none.
     folderPath: ?[]const u8 = null,
     // An inline link in the body of the toast. Left out when there is none.
@@ -91,9 +91,9 @@ pub fn sendSyncCompleted(core: *Core, arena: std.mem.Allocator) !void {
 }
 
 //
-// Tells the page the theme changed: "light", "dark" or "system", or null when the setting was removed, which leaves the event without data as an undefined theme did (`theme-changed`).
+// Tells the page the theme changed: the value written to the theme setting ("light", "dark" or "system"), or null when the setting was removed, which leaves the event without data as an undefined theme did (`theme-changed`).
 //
-pub fn sendThemeChanged(core: *Core, arena: std.mem.Allocator, theme: ?[]const u8) !void {
+pub fn sendThemeChanged(core: *Core, arena: std.mem.Allocator, theme: ?std.json.Value) !void {
     try sendEvent(core, arena, "theme-changed", theme);
 }
 

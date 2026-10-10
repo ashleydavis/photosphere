@@ -1,5 +1,6 @@
 const std = @import("std");
 const storage_zig = @import("storage-zig");
+const utils = @import("utils-zig");
 const storage = storage_zig.storage;
 const IStorage = storage.IStorage;
 const IReadStream = storage.IReadStream;
@@ -8,9 +9,8 @@ const IListResult = storage.IListResult;
 const IWriteLockInfo = storage.IWriteLockInfo;
 
 //
-// In-memory IStorage for tests: a port of the TypeScript MockStorage (storage/src/tests/mock-storage.ts), which the
-// bdb TypeScript tests and the fixture generator use. Directories are remembered when a file is written below them and
-// stay until deleteDir, exactly like MockStorage, so dirExists and listDirs behave the same in both languages.
+// In-memory IStorage for tests. Directories are remembered when a file is written below them and
+// stay until deleteDir, so dirExists and listDirs behave the way they do on a real file system.
 //
 pub const MemoryStorage = struct {
     // Allocates stored file contents, paths and streams.
@@ -94,7 +94,7 @@ pub const MemoryStorage = struct {
         }
     }
 
-    // Sort predicate for paths (JavaScript's default sort order; the paths are ASCII).
+    // Sort predicate for paths (byte order; the paths are ASCII).
     //
     fn pathLessThan(context: void, left: []const u8, right: []const u8) bool {
         _ = context;
@@ -379,10 +379,10 @@ pub const MemoryStorage = struct {
     pub fn refreshWriteLock(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
         _ = allocator;
         const existingLock = self.locks.get(filePath) orelse {
-            return error.LockDoesNotExist;
+            return utils.errors.throwError("Cannot refresh write lock: lock does not exist for {s}", .{filePath});
         };
         if (!std.mem.eql(u8, existingLock.owner, owner)) {
-            return error.LockOwnedByAnotherOwner;
+            return utils.errors.throwError("Cannot refresh write lock: lock is owned by {s}, not {s} for {s}", .{ existingLock.owner, owner, filePath });
         }
         const timestamp = std.Io.Clock.real.now(io).toMilliseconds();
         self.locks.getPtr(filePath).?.* = .{

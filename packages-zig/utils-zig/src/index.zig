@@ -1,3 +1,4 @@
+pub const host_requester = @import("lib/host-requester.zig");
 pub const sleep = @import("lib/sleep.zig");
 pub const retry = @import("lib/retry.zig");
 pub const uuid_generator = @import("lib/uuid-generator.zig");
@@ -14,6 +15,7 @@ pub const image = @import("lib/image.zig");
 pub const reverse_geocode = @import("lib/reverse-geocode.zig");
 pub const swallow_error = @import("lib/swallow-error.zig");
 pub const retry_or_log = @import("lib/retry-or-log.zig");
+pub const try_or_log = @import("lib/try-or-log.zig");
 pub const batch_generator = @import("lib/batch-generator.zig");
 pub const standard_streams = @import("lib/standard-streams.zig");
 pub const js_string = @import("lib/js-string.zig");

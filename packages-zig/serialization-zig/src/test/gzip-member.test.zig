@@ -1,5 +1,5 @@
 //
-// Tests for the field by field comparison of gzip members with golden fixtures (no TypeScript counterpart).
+// Tests for the field by field comparison of gzip members with golden fixtures.
 //
 
 const std = @import("std");

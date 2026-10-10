@@ -37,32 +37,99 @@ pub fn findFile(files: []const UiFile, request_path: []const u8) ?*const UiFile 
 }
 
 //
+// The content type sent for the files with an extension.
+//
+const IContentTypeEntry = struct {
+    // The extension, with its dot.
+    extension: []const u8,
+
+    // The content type sent for it.
+    content_type: [:0]const u8,
+};
+
+//
 // The content type to send for a file, by its extension. A file with an extension that is not known is sent as plain
 // bytes, which a web view will not run or show.
 //
 pub fn contentType(path: []const u8) [:0]const u8 {
     const extension = std.fs.path.extension(path);
-    const known = [_]struct {
-        extension: []const u8,
-        content_type: [:0]const u8,
-    }{
-        .{ .extension = ".html", .content_type = "text/html; charset=utf-8" },
-        .{ .extension = ".js", .content_type = "text/javascript; charset=utf-8" },
-        .{ .extension = ".mjs", .content_type = "text/javascript; charset=utf-8" },
-        .{ .extension = ".css", .content_type = "text/css; charset=utf-8" },
-        .{ .extension = ".json", .content_type = "application/json" },
-        .{ .extension = ".map", .content_type = "application/json" },
-        .{ .extension = ".txt", .content_type = "text/plain; charset=utf-8" },
-        .{ .extension = ".svg", .content_type = "image/svg+xml" },
-        .{ .extension = ".png", .content_type = "image/png" },
-        .{ .extension = ".jpg", .content_type = "image/jpeg" },
-        .{ .extension = ".jpeg", .content_type = "image/jpeg" },
-        .{ .extension = ".gif", .content_type = "image/gif" },
-        .{ .extension = ".webp", .content_type = "image/webp" },
-        .{ .extension = ".ico", .content_type = "image/x-icon" },
-        .{ .extension = ".woff", .content_type = "font/woff" },
-        .{ .extension = ".woff2", .content_type = "font/woff2" },
-        .{ .extension = ".wasm", .content_type = "application/wasm" },
+    const known = [_]IContentTypeEntry{
+        .{
+            .extension = ".html",
+            .content_type = "text/html; charset=utf-8",
+        },
+        .{
+            .extension = ".js",
+            .content_type = "text/javascript; charset=utf-8",
+        },
+        .{
+            .extension = ".mjs",
+            .content_type = "text/javascript; charset=utf-8",
+        },
+        .{
+            .extension = ".css",
+            .content_type = "text/css; charset=utf-8",
+        },
+        .{
+            .extension = ".json",
+            .content_type = "application/json",
+        },
+        .{
+            .extension = ".map",
+            .content_type = "application/json",
+        },
+        .{
+            .extension = ".txt",
+            .content_type = "text/plain; charset=utf-8",
+        },
+        .{
+            .extension = ".svg",
+            .content_type = "image/svg+xml",
+        },
+        .{
+            .extension = ".png",
+            .content_type = "image/png",
+        },
+        .{
+            .extension = ".jpg",
+            .content_type = "image/jpeg",
+        },
+        .{
+            .extension = ".jpeg",
+            .content_type = "image/jpeg",
+        },
+        .{
+            .extension = ".gif",
+            .content_type = "image/gif",
+        },
+        .{
+            .extension = ".webp",
+            .content_type = "image/webp",
+        },
+        .{
+            .extension = ".ico",
+            .content_type = "image/x-icon",
+        },
+        .{
+            .extension = ".woff",
+            .content_type = "font/woff",
+        },
+        .{
+            .extension = ".woff2",
+            .content_type = "font/woff2",
+        },
+        .{
+            .extension = ".ttf",
+            .content_type = "font/ttf",
+        },
+        .{
+            .extension = ".otf",
+            .content_type = "font/otf",
+        },
+        .{
+            .extension = ".wasm",
+            .content_type = "application/wasm",
+        },
     };
     for (known) |entry| {
         if (std.ascii.eqlIgnoreCase(extension, entry.extension)) {

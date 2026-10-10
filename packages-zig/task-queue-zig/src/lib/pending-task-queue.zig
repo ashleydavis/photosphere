@@ -1,8 +1,8 @@
 //
 // The ordering rules every queue backend applies to its pending tasks.
 //
-// They live here, apart from the pools that use them, because all three desktop pools (Bun,
-// Electron main and the dev-server's inline pool) have to agree on them, and because ordering is
+// They live here, apart from the pools that use them, because every desktop pool
+// has to agree on them, and because ordering is
 // exactly the kind of thing that is easy to get subtly wrong and easy to test in isolation. The
 // native Android and iOS pools apply the same two rules in their own languages.
 //
@@ -37,8 +37,7 @@ pub fn resolveTaskPriority(requested: ?TaskPriority, parentPriority: ?TaskPriori
 
 //
 // Gets the priority of a pending task: an ITask, a pointer to one, or a pointer to a pool's own
-// record of a task that holds the ITask in a `task` field. (No TypeScript counterpart: TypeScript
-// pools keep ITask objects in their pending queue, Zig pools keep their own records.)
+// record of a task that holds the ITask in a `task` field.
 //
 fn priorityOf(task: anytype) TaskPriority {
     const TaskT = @TypeOf(task);

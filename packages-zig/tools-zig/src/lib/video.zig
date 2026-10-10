@@ -2,6 +2,7 @@ const std = @import("std");
 const node_utils = @import("node-utils-zig");
 const version_match = @import("version-match.zig");
 const exec = node_utils.exec.exec;
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
 const BsonValue = serialization_zig.bson.BsonValue;
@@ -18,8 +19,7 @@ const AssetInfo = types.AssetInfo;
 const Dimensions = types.Dimensions;
 
 //
-// The result of Video.verifyFfprobe and Video.verifyFfmpeg
-// (TypeScript: `{ available: boolean; version?: string; error?: string }`).
+// The result of Video.verifyFfprobe and Video.verifyFfmpeg.
 //
 pub const VideoToolStatus = struct {
     // True when the tool can be run.
@@ -52,27 +52,27 @@ pub const Video = struct {
     var isInitialized: bool = false;
 
     //
-    // Creates a video for a file (TypeScript: `new Video(filePath)`).
+    // Creates a video for a file.
     //
-    pub fn init(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) Video {
+    pub fn init(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner, filePath: []const u8) Video {
         // Initialize ffmpeg/ffprobe commands on first use
         if (!isInitialized) {
-            initializeCommands(allocator, io);
+            initializeCommands(allocator, io, tools);
         }
         return .{ .filePath = filePath };
     }
 
     //
-    // Initialize ffmpeg/ffprobe commands by checking system PATH (TypeScript does not wait for it; it only logs,
+    // Initialize ffmpeg/ffprobe commands by checking system PATH (nothing waits for it; it only logs,
     // because the commands it sets are the defaults they already have).
     //
-    fn initializeCommands(allocator: std.mem.Allocator, io: std.Io) void {
+    fn initializeCommands(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) void {
         if (isInitialized) {
             return;
         }
 
         // Test if ffprobe command is available in system PATH
-        const result = exec(allocator, io, "ffprobe -version") catch {
+        const result = exec(allocator, io, tools, "ffprobe -version") catch {
             // ffprobe not found in PATH
             isInitialized = true;
             return;
@@ -94,8 +94,8 @@ pub const Video = struct {
     //
     // Verify that ffprobe is available
     //
-    pub fn verifyFfprobe(allocator: std.mem.Allocator, io: std.Io) VideoToolStatus {
-        const result = exec(allocator, io, "ffprobe -version") catch {
+    pub fn verifyFfprobe(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) VideoToolStatus {
+        const result = exec(allocator, io, tools, "ffprobe -version") catch {
             return .{
                 .available = false,
                 .@"error" = "ffprobe not found. Make sure ffmpeg is installed.",
@@ -112,8 +112,8 @@ pub const Video = struct {
     //
     // Verify that ffmpeg is available
     //
-    pub fn verifyFfmpeg(allocator: std.mem.Allocator, io: std.Io) VideoToolStatus {
-        const result = exec(allocator, io, "ffmpeg -version") catch {
+    pub fn verifyFfmpeg(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) VideoToolStatus {
+        const result = exec(allocator, io, tools, "ffmpeg -version") catch {
             return .{
                 .available = false,
                 .@"error" = "ffmpeg not found. Make sure ffmpeg is installed.",
@@ -130,7 +130,7 @@ pub const Video = struct {
     //
     // Reads the information about the video with ffprobe.
     //
-    fn getVideoInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io) !AssetInfo {
+    fn getVideoInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !AssetInfo {
         if (self._info) |info| {
             return info;
         }
@@ -139,7 +139,7 @@ pub const Video = struct {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
 
-        self._info = self.getVideoInfoInner(allocator, io) catch |err| {
+        self._info = self.getVideoInfoInner(allocator, io, tools) catch |err| {
             return errors.throwError("Failed to get video info: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
         return self._info.?;
@@ -148,11 +148,11 @@ pub const Video = struct {
     //
     // The body of the try block of getVideoInfo.
     //
-    fn getVideoInfoInner(self: *Video, allocator: std.mem.Allocator, io: std.Io) !AssetInfo {
+    fn getVideoInfoInner(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !AssetInfo {
 
         // Run ffprobe to get video information in JSON format
         const command = try std.fmt.allocPrint(allocator, "{s} -v quiet -print_format json -show_format -show_streams \"{s}\"", .{ ffprobeCommand, self.filePath });
-        const result = try exec(allocator, io, command);
+        const result = try exec(allocator, io, tools, command);
 
         const probeData = switch (try jsonParse(allocator, result.stdout)) {
             .document => |document| document,
@@ -227,15 +227,15 @@ pub const Video = struct {
     //
     // Gets the information about the video.
     //
-    pub fn getInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io) !AssetInfo {
-        return self.getVideoInfo(allocator, io);
+    pub fn getInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !AssetInfo {
+        return self.getVideoInfo(allocator, io, tools);
     }
 
     //
     // Gets the width and height of the video.
     //
-    pub fn getDimensions(self: *Video, allocator: std.mem.Allocator, io: std.Io) !Dimensions {
-        const info = try self.getVideoInfo(allocator, io);
+    pub fn getDimensions(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !Dimensions {
+        const info = try self.getVideoInfo(allocator, io, tools);
         return info.dimensions;
     }
 
@@ -243,7 +243,7 @@ pub const Video = struct {
     // Extract a screenshot/thumbnail from the video at a specific time. Only the default options are used (no
     // scaling, quality 85), which is how getVideoDetails calls it.
     //
-    pub fn extractScreenshot(self: *Video, allocator: std.mem.Allocator, io: std.Io, outputPath: []const u8, timeInSeconds: f64) ![]const u8 {
+    pub fn extractScreenshot(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner, outputPath: []const u8, timeInSeconds: f64) ![]const u8 {
         if (!pathExists(io, self.filePath)) {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
@@ -262,7 +262,7 @@ pub const Video = struct {
         // Force overwrite and specify output
         try command.writer.print(" -y \"{s}\"", .{outputPath});
 
-        _ = exec(allocator, io, command.written()) catch |err| {
+        _ = exec(allocator, io, tools, command.written()) catch |err| {
             return errors.throwError("Failed to extract screenshot: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
         return outputPath;
@@ -270,8 +270,7 @@ pub const Video = struct {
 };
 
 //
-// The first stream of the given codec type (TypeScript: `probeData.streams.find(s => s.codec_type === type)`), which
-// throws Bun's TypeError at a null stream it reaches.
+// The first stream of the given codec type, which throws a TypeError at a null stream it reaches.
 //
 fn findStream(streams: []const BsonValue, codecType: []const u8) !?BsonDocument {
     for (streams) |stream| {
@@ -300,7 +299,7 @@ fn property(value: BsonValue, name: []const u8) BsonValue {
 }
 
 //
-// A number property of a stream (TypeScript assigns it as is), NaN when it is not a number.
+// A number property of a stream, taken as it is, NaN when it is not a number.
 //
 fn numberProperty(document: BsonDocument, name: []const u8) f64 {
     return switch (document.get(name) orelse BsonValue.undefined) {
@@ -311,7 +310,7 @@ fn numberProperty(document: BsonDocument, name: []const u8) f64 {
 }
 
 //
-// `String(value)` for a value JSON.parse gives, the text `parseFloat` and `parseInt` read: an array is its elements
+// `String(value)` for a parsed JSON value, the text `parseFloat` and `parseInt` read: an array is its elements
 // joined with commas (null elements as nothing), and an object is "[object Object]".
 //
 fn jsString(allocator: std.mem.Allocator, value: BsonValue) ![]const u8 {
@@ -321,7 +320,7 @@ fn jsString(allocator: std.mem.Allocator, value: BsonValue) ![]const u8 {
 }
 
 //
-// Writes `String(value)` for a value JSON.parse gives.
+// Writes `String(value)` for a parsed JSON value.
 //
 fn writeJsString(writer: *std.Io.Writer, value: BsonValue) std.Io.Writer.Error!void {
     switch (value) {
@@ -346,7 +345,7 @@ fn writeJsString(writer: *std.Io.Writer, value: BsonValue) std.Io.Writer.Error!v
 }
 
 //
-// The time value of `new Date(value)` for a value JSON.parse gives: a string is parsed, a number or boolean is the
+// The time value of `new Date(value)` for a parsed JSON value: a string is parsed, a number or boolean is the
 // time itself (TimeClip: NaN beyond 8.64e15, fractions dropped), and an array or object is parsed from its String().
 //
 fn newDate(allocator: std.mem.Allocator, value: BsonValue) !f64 {
@@ -365,7 +364,7 @@ fn newDate(allocator: std.mem.Allocator, value: BsonValue) !f64 {
 }
 
 //
-// Copies the own enumerable properties of a value JSON.parse gives into the document, as `{ ...value }` does: the
+// Copies the own enumerable properties of a parsed JSON value into the document, as `{ ...value }` does: the
 // fields of an object, the characters of a string and the elements of an array, under their index. Other values have
 // none.
 //
@@ -420,7 +419,7 @@ fn isTruthy(value: BsonValue) bool {
 }
 
 //
-// Throws the TypeError Bun throws with the message.
+// Throws a TypeError with the message.
 //
 fn typeError(message: []const u8) errors.ThrownError {
     errors.recordError("TypeError", "{s}", .{message});

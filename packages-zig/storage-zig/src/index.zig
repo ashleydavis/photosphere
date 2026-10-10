@@ -8,10 +8,10 @@ pub const storage_prefix_wrapper = @import("lib/storage-prefix-wrapper.zig");
 pub const storage_factory = @import("lib/storage-factory.zig");
 pub const read_encryption_header = @import("lib/read-encryption-header.zig");
 pub const walk_directory = @import("lib/walk-directory.zig");
-// Not re-exported: `export * from "encryption"` (import encryption-zig directly).
+// The encryption package is not re-exported here (import encryption-zig directly).
 
 //
-// Files with no TypeScript counterpart (the binding to the AWS SDK for C, and the ICU replacement).
+// The binding to the AWS SDK for C, and the ICU replacement.
 //
 pub const s3_client = @import("lib/s3-client.zig");
 pub const locale_compare = @import("lib/locale-compare.zig");

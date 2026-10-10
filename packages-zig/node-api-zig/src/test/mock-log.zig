@@ -2,7 +2,7 @@ const std = @import("std");
 const utils = @import("utils-zig");
 
 //
-// A log that swallows every message (the jest.mock of `log` in the TypeScript tests, whose methods are jest.fn()s).
+// A log that swallows every message.
 // For a test whose code under test logs to stderr: a passing test program must write nothing to stderr, because
 // Zig 0.16.0 prints a misleading "failed command" line after any (https://codeberg.org/ziglang/zig/issues/35202).
 //

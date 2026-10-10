@@ -9,7 +9,7 @@ const yamlToConfigFile = config_format.yamlToConfigFile;
 //
 // Reading and writing config.yaml where there is a filesystem: the CLI and the desktop app.
 //
-// The mobile apps read and write the same document through worker tasks instead (config.worker.ts),
+// The mobile apps read and write the same document through worker tasks instead (config.worker.zig),
 // because a phone's WebView has no filesystem of its own. Both go through config-format.zig, so the
 // file means the same thing whichever wrote it. The wiki page "Configuration-File" documents it for
 // users.
@@ -32,7 +32,18 @@ pub fn loadConfigFile(allocator: std.mem.Allocator, io: std.Io) !IConfigFile {
 }
 
 //
-// The mutator updateConfigFile hands to updateYaml (the arrow function in TypeScript): it turns the document into the
+// Writes the whole configuration to disk, replacing whatever was there.
+//
+// Only for a caller that has the complete configuration in hand, which in practice means a test or a
+// first write. Everything the app does goes through updateConfigFile instead, for the reason recorded
+// there.
+//
+pub fn saveConfigFile(allocator: std.mem.Allocator, io: std.Io, config: IConfigFile) !void {
+    try fs.writeYaml(allocator, io, try getConfigPath(allocator), try configFileToYaml(allocator, config, null));
+}
+
+//
+// The mutator updateConfigFile hands to updateYaml: it turns the document into the
 // configuration, lets the caller change it and turns it back into a document.
 //
 fn ConfigMutator(comptime MutatorT: type) type {

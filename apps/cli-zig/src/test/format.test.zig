@@ -128,7 +128,7 @@ test "should respect custom decimal places for small values" {
     try std.testing.expectEqualStrings("2.2 MiB", try formatBytes(allocator, 2306867, .{ .binary = true, .decimals = 3 }));
 }
 
-test "formatBytes matches the TypeScript output for every fixture value" {
+test "formatBytes matches the fixture output for every fixture value" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -159,7 +159,7 @@ test "toLocaleString rounds half away from zero and groups thousands" {
     try std.testing.expectEqualStrings("0", try cli.format.toLocaleString(allocator, 0, 2));
 }
 
-test "formatBytes of a size that is negative, NaN, infinite or under a byte gives what the TypeScript gives" {
+test "formatBytes of a size that is negative, NaN, infinite or under a byte gives the expected text" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

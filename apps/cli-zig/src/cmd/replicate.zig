@@ -41,7 +41,7 @@ const select = prompts.select;
 const isCancel = prompts.isCancel;
 
 //
-// Options of the replicate command (TypeScript: IReplicateCommandOptions extends IBaseCommandOptions).
+// Options of the replicate command.
 // The base options are in `base`.
 //
 pub const IReplicateCommandOptions = struct {
@@ -85,15 +85,14 @@ pub const IReplicateCommandOptions = struct {
 };
 
 //
-// JavaScript truthiness of an optional string.
+// Whether an optional string is present and not empty.
 //
 fn isSet(value: ?[]const u8) bool {
     return value != null and value.?.len > 0;
 }
 
 //
-// Formats the "Did you mean" list of similar key names
-// (TypeScript: `similarKeyNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')`).
+// Formats the "Did you mean" list of similar key names, one bulleted cyan name per line.
 //
 fn similarNamesList(allocator: std.mem.Allocator, similarKeyNames: []const []const u8) ![]const u8 {
     var lines: std.ArrayList([]const u8) = .empty;
@@ -104,7 +103,7 @@ fn similarNamesList(allocator: std.mem.Allocator, similarKeyNames: []const []con
 }
 
 //
-// Writes each replication progress message (TypeScript: `progress => { writeProgress(`🔄 ${progress}`); }`).
+// Writes each replication progress message.
 //
 fn onProgress(context: ?*anyopaque, progress: []const u8) void {
     _ = context;

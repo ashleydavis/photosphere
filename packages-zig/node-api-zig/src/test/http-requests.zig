@@ -1,7 +1,6 @@
 //
 // Sends requests to a server on the loopback interface and reads the answers, for the tests of the asset server. It uses the HTTP client
-// of the standard library, so a test sees the server as a browser's fetch does. (No TypeScript counterpart: the TypeScript tests call
-// `fetch`.)
+// of the standard library, so a test sees the server as a browser's fetch does.
 //
 
 const std = @import("std");
@@ -24,6 +23,15 @@ pub const Reply = struct {
 
     // The Access-Control-Allow-Headers header, or null.
     allowHeaders: ?[]const u8,
+
+    // The Allow header, or null.
+    allow: ?[]const u8,
+
+    // The Content-Security-Policy header, or null.
+    contentSecurityPolicy: ?[]const u8,
+
+    // The X-Content-Type-Options header, or null.
+    contentTypeOptions: ?[]const u8,
 
     // The Content-Length header, or null.
     contentLength: ?u64,
@@ -79,6 +87,9 @@ pub fn send(allocator: std.mem.Allocator, io: std.Io, method: std.http.Method, p
         .allowOrigin = null,
         .allowMethods = null,
         .allowHeaders = null,
+        .allow = null,
+        .contentSecurityPolicy = null,
+        .contentTypeOptions = null,
         .contentLength = response.head.content_length,
         .body = &.{},
     };
@@ -92,6 +103,15 @@ pub fn send(allocator: std.mem.Allocator, io: std.Io, method: std.http.Method, p
         }
         else if (std.ascii.eqlIgnoreCase(header.name, "access-control-allow-headers")) {
             reply.allowHeaders = try allocator.dupe(u8, header.value);
+        }
+        else if (std.ascii.eqlIgnoreCase(header.name, "allow")) {
+            reply.allow = try allocator.dupe(u8, header.value);
+        }
+        else if (std.ascii.eqlIgnoreCase(header.name, "content-security-policy")) {
+            reply.contentSecurityPolicy = try allocator.dupe(u8, header.value);
+        }
+        else if (std.ascii.eqlIgnoreCase(header.name, "x-content-type-options")) {
+            reply.contentTypeOptions = try allocator.dupe(u8, header.value);
         }
     }
     var transfer_buffer: [4096]u8 = undefined;

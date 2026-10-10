@@ -1,3 +1,7 @@
 # open-android.sh
 
-Runs `sync-android.sh`, then opens the Android project in Android Studio. Invoked as `bun run --filter=ziggy open:android`. Takes no arguments. Runs on Linux and MacOS.
+Syncs, then opens the Android project (`shells/android`) in Android Studio.
+
+Invoke: `bun run --filter=ziggy open:android`. No arguments.
+
+Android Studio is found as `android-studio`, `studio` or `studio.sh` on the PATH. Set `PHOTOSPHERE_ANDROID_STUDIO` to its launcher when it is somewhere else.

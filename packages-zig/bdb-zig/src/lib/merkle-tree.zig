@@ -125,7 +125,7 @@ pub fn listShards(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, b
 
 //
 // The onDirty callback given to the collection that buildCollectionMerkleTree reads shards through
-// (TypeScript: `() => {}`). The collection is never written to, so there is nothing to propagate.
+// (a no-op). The collection is never written to, so there is nothing to propagate.
 //
 fn ignoreDirty(context: *anyopaque) void {
     _ = context;

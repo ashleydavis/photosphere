@@ -3,14 +3,12 @@ const utils = @import("utils-zig");
 const c = @import("openssl");
 
 //
-// The subset of node:crypto that the encryption package uses, so that the ported files read like the TypeScript.
-// This file has no TypeScript counterpart (node:crypto is part of Node, over OpenSSL): it calls aws-lc's libcrypto,
-// built from the upstream release by aws/aws-lc.zig. Error messages match the OpenSSL 3 messages that Node reports
-// for the same failures.
+// The subset of the crypto API that the encryption package uses. It calls aws-lc's libcrypto, built from the
+// upstream release by aws/aws-lc.zig. Error messages match the OpenSSL 3 messages for the same failures.
 //
 
 //
-// Names used from other files (the equivalent of the TypeScript imports).
+// Names used from other files.
 //
 const errors = utils.errors;
 

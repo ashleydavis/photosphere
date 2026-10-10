@@ -11,8 +11,7 @@ const MerkleNode = merkle_tree.MerkleNode;
 const iterateLeaves = merkle_tree.iterateLeaves;
 
 //
-// Writes the short form of a hash: the first and last byte in hex
-// (TypeScript: `hashHex.substring(0,2) + hashHex.substring(hashHex.length - 2)`).
+// Writes the short form of a hash: the first and last byte in hex.
 //
 fn writeShortHash(writer: *std.Io.Writer, hash: []const u8) !void {
     if (hash.len == 0) {
@@ -132,7 +131,7 @@ fn writeMetadataValue(writer: *std.Io.Writer, value: bson.BsonValue) !void {
 }
 
 //
-// Writes a line of 50 equals signs and a newline (TypeScript: `"=".repeat(50) + "\n"`).
+// Writes a line of 50 equals signs and a newline.
 //
 fn writeRule(writer: *std.Io.Writer) !void {
     try writer.splatByteAll('=', 50);

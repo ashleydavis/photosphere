@@ -1,5 +1,5 @@
 //
-// Tests for pruneTree (port of src/test/prune-tree.test.ts).
+// Tests for pruneTree.
 //
 
 const std = @import("std");

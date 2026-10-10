@@ -8,9 +8,8 @@ const IListResult = storage.IListResult;
 const IWriteLockInfo = storage.IWriteLockInfo;
 
 //
-// In-memory IStorage for tests: a port of the TypeScript MockStorage (storage/src/tests/mock-storage.ts), which the
-// bdb TypeScript tests and the fixture generator use. Directories are remembered when a file is written below them and
-// stay until deleteDir, exactly like MockStorage, so dirExists and listDirs behave the same in both languages.
+// In-memory IStorage for tests. Directories are remembered when a file is written below them and
+// stay until deleteDir, so dirExists and listDirs answer for them.
 //
 pub const MemoryStorage = struct {
     // Allocates stored file contents, paths and streams.
@@ -29,8 +28,7 @@ pub const MemoryStorage = struct {
     // own (a filesystem) answers undefined, which is what an empty map does.
     storedHashes: std.StringArrayHashMapUnmanaged([]const u8) = .empty,
 
-    // Held while the maps are read or changed, because the files of a batch can be stored on separate threads
-    // (where TypeScript interleaves them on one).
+    // Held while the maps are read or changed, because the files of a batch can be stored on separate threads.
     mutex: std.Io.Mutex = .init,
 
     //
@@ -99,7 +97,7 @@ pub const MemoryStorage = struct {
     }
 
     //
-    // Writes every stored file to a directory on disk (so the TypeScript CLI code can read what Zig wrote).
+    // Writes every stored file to a directory on disk.
     //
     pub fn writeToDirectory(self: *MemoryStorage, io: std.Io, directoryPath: []const u8) !void {
         const cwd = std.Io.Dir.cwd();
@@ -113,7 +111,7 @@ pub const MemoryStorage = struct {
     }
 
     //
-    // Sort predicate for paths (JavaScript's default sort order; the paths are ASCII).
+    // Sort predicate for paths (byte order; the paths are ASCII).
     //
     fn pathLessThan(context: void, left: []const u8, right: []const u8) bool {
         _ = context;

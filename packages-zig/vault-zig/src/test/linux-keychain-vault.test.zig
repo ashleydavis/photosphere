@@ -17,7 +17,7 @@ fn secretNameLessThan(context: void, left: ISecret, right: ISecret) bool {
 }
 
 //
-// Asserts that two secrets are equal (the toEqual of the TypeScript tests).
+// Asserts that two secrets are equal.
 //
 fn expectSecretEqual(expected: ISecret, actual: ?ISecret) !void {
     try std.testing.expect(actual != null);
@@ -26,7 +26,7 @@ fn expectSecretEqual(expected: ISecret, actual: ?ISecret) !void {
     try std.testing.expectEqualStrings(expected.value, actual.?.value);
 }
 
-test "get: returns undefined for a missing secret" {
+test "returns undefined for a missing secret" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
@@ -37,7 +37,7 @@ test "get: returns undefined for a missing secret" {
     try std.testing.expect(result == null);
 }
 
-test "get: returns the secret after set" {
+test "returns the secret after set" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -51,7 +51,7 @@ test "get: returns the secret after set" {
     try expectSecretEqual(secret, try vault.get(allocator, io, "my-key"));
 }
 
-test "set: stores name, type, and value correctly" {
+test "stores name, type, and value correctly" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -67,7 +67,7 @@ test "set: stores name, type, and value correctly" {
     try std.testing.expectEqualStrings("creds", result.value);
 }
 
-test "set: stores multiline values without truncation" {
+test "stores multiline values without truncation" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -82,7 +82,7 @@ test "set: stores multiline values without truncation" {
     try std.testing.expectEqualStrings(multilineValue, result.value);
 }
 
-test "list: returns empty array when no secrets exist" {
+test "returns empty array when no secrets exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
@@ -93,7 +93,7 @@ test "list: returns empty array when no secrets exist" {
     try std.testing.expectEqual(@as(usize, 0), result.len);
 }
 
-test "list: returns all stored secrets" {
+test "returns all stored secrets" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -111,7 +111,7 @@ test "list: returns all stored secrets" {
     try std.testing.expectEqualStrings("b", result[1].name);
 }
 
-test "list: returns correct types for each secret" {
+test "returns correct types for each secret" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -128,7 +128,7 @@ test "list: returns correct types for each secret" {
     try std.testing.expectEqualStrings("encryption-key", result[1].type);
 }
 
-test "delete: removes the secret (subsequent get returns undefined)" {
+test "removes the secret (subsequent get returns undefined)" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -143,7 +143,7 @@ test "delete: removes the secret (subsequent get returns undefined)" {
     try std.testing.expect(result == null);
 }
 
-test "delete: does nothing when the secret does not exist" {
+test "does nothing when the secret does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
@@ -153,7 +153,7 @@ test "delete: does nothing when the secret does not exist" {
     try vault.delete(arena.allocator(), std.testing.io, "nonexistent");
 }
 
-test "psi- prefix: adds psi- prefix on write and strips it on read" {
+test "adds psi- prefix on write and strips it on read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -168,7 +168,7 @@ test "psi- prefix: adds psi- prefix on write and strips it on read" {
     try std.testing.expectEqualStrings("mykey", result.name);
 }
 
-test "special characters: handles names with colons" {
+test "handles names with colons" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -206,7 +206,7 @@ test "parseSearchOutput keeps only psi- entries and defaults the type to plain" 
     try std.testing.expectEqualStrings("plain", entries[1].secretType);
 }
 
-test "set passes the same secret-tool arguments as TypeScript" {
+test "set passes the secret-tool arguments" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
@@ -273,7 +273,7 @@ test "get throws when secret-tool search fails, with its exit code" {
     }
 }
 
-test "list: returns nothing when secret-tool search fails" {
+test "returns nothing when secret-tool search fails" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -359,7 +359,7 @@ test "parseSearchOutput of empty output is no entries" {
 // get reports the type the keychain holds rather than the one the caller wrote, which is what the search
 // entry carries.
 //
-test "get: reads back the type stored as the secrettype attribute" {
+test "reads back the type stored as the secrettype attribute" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -375,7 +375,7 @@ test "get: reads back the type stored as the secrettype attribute" {
 //
 // The stored stdin is the secret value the vault passed, and nothing else: the type travels as an argument.
 //
-test "set: pipes the value to secret-tool on stdin and passes the type as an argument" {
+test "pipes the value to secret-tool on stdin and passes the type as an argument" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -402,7 +402,7 @@ test "set: pipes the value to secret-tool on stdin and passes the type as an arg
 //
 // list is empty for a keychain with nothing in it, and says so rather than failing.
 //
-test "list: is empty when the search finds no entry" {
+test "is empty when the search finds no entry" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
@@ -431,7 +431,7 @@ test "checkPrereqs is true when secret-tool is on PATH" {
 //
 // delete says nothing when there is no such secret, because a secret that is not there is what delete wanted.
 //
-test "delete: says nothing when the secret is not there" {
+test "says nothing when the secret is not there" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
@@ -443,7 +443,7 @@ test "delete: says nothing when the secret is not there" {
 
 //
 // A `secret-tool search` that exits 1 has found nothing, which is not a failure, so list is empty and get still
-// reads the value it looked up. TypeScript accepts exit codes 0 and 1 here for the same reason.
+// reads the value it looked up. Exit codes 0 and 1 are both accepted here for that reason.
 //
 test "a search that exits 1 has found nothing, which is not a failure" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

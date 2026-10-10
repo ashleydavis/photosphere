@@ -31,7 +31,7 @@ const parseWatchInterval = sync_watch.parseWatchInterval;
 const runSyncWatch = sync_watch.runSyncWatch;
 
 //
-// Options for the sync command (TypeScript: ISyncCommandOptions extends IBaseCommandOptions).
+// Options for the sync command.
 // The base options are in `base`.
 //
 pub const ISyncCommandOptions = struct {
@@ -60,7 +60,7 @@ pub const ISyncCommandOptions = struct {
 };
 
 //
-// JavaScript truthiness of an optional string.
+// Whether an optional string is present and not empty.
 //
 fn isSet(value: ?[]const u8) bool {
     return value != null and value.?.len > 0;
@@ -83,8 +83,7 @@ pub fn configOrigin(config: ?std.json.Value) ?[]const u8 {
 }
 
 //
-// Formats the "Did you mean" list of similar key names
-// (TypeScript: `similarKeyNames.map(similarName => `  • ${pc.cyan(similarName)}`).join('\n')`).
+// Formats the "Did you mean" list of similar key names, one bulleted cyan name per line.
 //
 fn similarNamesList(allocator: std.mem.Allocator, similarKeyNames: []const []const u8) ![]const u8 {
     var lines: std.ArrayList([]const u8) = .empty;
@@ -95,7 +94,7 @@ fn similarNamesList(allocator: std.mem.Allocator, similarKeyNames: []const []con
 }
 
 //
-// What a sync watch runs (TypeScript: the variables the syncOnce, isStopped and termination arrow functions capture).
+// What a sync watch runs.
 //
 const ISyncWatchState = struct {
     // Allocates what each sync keeps.
@@ -114,7 +113,7 @@ const ISyncWatchState = struct {
     stopped: std.atomic.Value(bool) = .init(false),
 
     //
-    // Runs one sync (TypeScript: `() => syncDatabases(...)`).
+    // Runs one sync.
     //
     fn syncOnce(context: ?*anyopaque, io: std.Io) anyerror!bool {
         const self: *ISyncWatchState = @ptrCast(@alignCast(context.?));
@@ -123,7 +122,7 @@ const ISyncWatchState = struct {
     }
 
     //
-    // True once the watch should stop (TypeScript: `() => stopped`).
+    // True once the watch should stop.
     //
     fn isStopped(context: ?*anyopaque) bool {
         const self: *ISyncWatchState = @ptrCast(@alignCast(context.?));
@@ -131,7 +130,7 @@ const ISyncWatchState = struct {
     }
 
     //
-    // Stops the watch when the process is told to terminate (TypeScript: `async () => { stopped = true; }`).
+    // Stops the watch when the process is told to terminate.
     //
     fn stop(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void {
         _ = io;

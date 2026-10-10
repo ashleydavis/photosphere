@@ -3,11 +3,9 @@ const utils = @import("utils-zig");
 const errors = utils.errors;
 
 //
-// This file has no TypeScript counterpart: TypeScript uses the third-party `smol-toml` library.
-// `parse` reads a TOML 1.0 document into a dynamic value and `stringify` is a port of smol-toml's
-// `stringify`, so files written by Zig are byte-identical to files written by TypeScript.
+// `parse` reads a TOML 1.0 document into a dynamic value and `stringify` writes one back out.
 //
-// Values are represented as `std.json.Value` (like the plain JavaScript objects smol-toml returns):
+// Values are represented as `std.json.Value`:
 // tables are `.object` (keys keep document order), arrays are `.array`, strings are `.string`,
 // integers are `.integer`, floats are `.float` and booleans are `.bool`. Offset date-times, local
 // date-times, local dates and local times are returned as `.string` holding the text from the document.
@@ -19,7 +17,7 @@ const errors = utils.errors;
 pub const TomlValue = std.json.Value;
 
 //
-// The maximum nesting depth accepted by stringify (smol-toml's default `maxDepth`).
+// The maximum nesting depth accepted by stringify.
 //
 const default_max_depth: u32 = 1000;
 
@@ -676,7 +674,7 @@ const Parser = struct {
     }
 
     //
-    // Rejects integers that a JavaScript number cannot hold exactly (like smol-toml does).
+    // Rejects integers that a double cannot hold exactly.
     //
     fn safeInteger(self: *Parser, integer: i64) !TomlValue {
         const max_safe_integer: i64 = 9007199254740991;
@@ -688,7 +686,7 @@ const Parser = struct {
 };
 
 //
-// Returns true when `key` matches smol-toml's BARE_KEY (/^[a-z0-9-_]+$/i).
+// Returns true when `key` is a bare TOML key (/^[a-z0-9-_]+$/i).
 //
 fn isBareKey(key: []const u8) bool {
     if (key.len == 0) {
@@ -703,7 +701,7 @@ fn isBareKey(key: []const u8) bool {
 }
 
 //
-// Writes a string the way smol-toml's formatString does: `JSON.stringify(s)` with DEL escaped as \u007f.
+// Writes a string as a JSON string with DEL escaped as \u007f.
 //
 fn formatString(writer: *std.Io.Writer, text: []const u8) !void {
     try writer.writeByte('"');
@@ -752,7 +750,7 @@ fn formatKeyAlloc(allocator: std.mem.Allocator, key: []const u8) ![]const u8 {
 }
 
 //
-// Writes a float the way JavaScript's `Number.prototype.toString` does.
+// Writes a float in its shortest decimal form.
 //
 fn formatFloat(writer: *std.Io.Writer, value: f64) !void {
     if (std.math.isNan(value)) {
@@ -767,7 +765,7 @@ fn formatFloat(writer: *std.Io.Writer, value: f64) !void {
 }
 
 //
-// Returns true when `value` should be written as an array of tables (smol-toml's isArrayOfTables).
+// Returns true when `value` should be written as an array of tables.
 //
 fn isArrayOfTables(value: TomlValue) bool {
     if (value != .array) {
@@ -783,21 +781,21 @@ fn isArrayOfTables(value: TomlValue) bool {
 }
 
 //
-// Throws smol-toml's error for exceeding the maximum depth.
+// Throws the error for exceeding the maximum depth.
 //
 fn failMaximumDepth() errors.ThrownError {
     return errors.throwError("Could not stringify the object: maximum object depth exceeded", .{});
 }
 
 //
-// Throws the TypeError JavaScript throws for `Object.keys(null)`, which smol-toml calls on a null it takes for a table.
+// Throws the error for taking the keys of a null that was taken for a table.
 //
 fn failObjectKeysOfNull() errors.ThrownError {
     return errors.throwError("Cannot convert undefined or null to object", .{});
 }
 
 //
-// Writes a value (smol-toml's stringifyValue).
+// Writes a value.
 //
 fn stringifyValue(writer: *std.Io.Writer, value: TomlValue, depth: u32) anyerror!void {
     if (depth == 0) {
@@ -817,7 +815,7 @@ fn stringifyValue(writer: *std.Io.Writer, value: TomlValue, depth: u32) anyerror
 }
 
 //
-// Writes an inline table (smol-toml's stringifyInlineTable).
+// Writes an inline table.
 //
 fn stringifyInlineTable(writer: *std.Io.Writer, object: std.json.ObjectMap, depth: u32) anyerror!void {
     if (object.count() == 0) {
@@ -837,7 +835,7 @@ fn stringifyInlineTable(writer: *std.Io.Writer, object: std.json.ObjectMap, dept
 }
 
 //
-// Writes an inline array (smol-toml's stringifyArray).
+// Writes an inline array.
 //
 fn stringifyArray(writer: *std.Io.Writer, array: std.json.Array, depth: u32) anyerror!void {
     if (array.items.len == 0) {
@@ -858,7 +856,7 @@ fn stringifyArray(writer: *std.Io.Writer, array: std.json.Array, depth: u32) any
 }
 
 //
-// Formats an array of tables (smol-toml's stringifyArrayTable).
+// Formats an array of tables.
 //
 fn stringifyArrayTable(allocator: std.mem.Allocator, array: std.json.Array, key: []const u8, depth: u32) anyerror![]const u8 {
     if (depth == 0) {
@@ -880,7 +878,7 @@ fn stringifyArrayTable(allocator: std.mem.Allocator, array: std.json.Array, key:
 }
 
 //
-// Formats a table (smol-toml's stringifyTable). `tableKey` is null for the root table.
+// Formats a table. `tableKey` is null for the root table.
 //
 fn stringifyTable(allocator: std.mem.Allocator, tableKey: ?[]const u8, object: std.json.ObjectMap, prefix: []const u8, depth: u32) anyerror![]const u8 {
     if (depth == 0) {
@@ -938,7 +936,7 @@ fn stringifyTable(allocator: std.mem.Allocator, tableKey: ?[]const u8, object: s
 }
 
 //
-// Converts a table to TOML text exactly like smol-toml's `stringify`.
+// Converts a table to TOML text.
 //
 pub fn stringify(allocator: std.mem.Allocator, value: TomlValue) ![]const u8 {
     if (value != .object) {

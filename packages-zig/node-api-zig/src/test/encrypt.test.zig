@@ -1,5 +1,5 @@
 //
-// Tests for encryptableFiles and encrypt (port of src/test/lib/encrypt.test.ts).
+// Tests for encryptableFiles and encrypt.
 //
 
 const std = @import("std");
@@ -36,7 +36,7 @@ const FILES_TREE_PATH = ".db/files.dat";
 const VALID_UUID = "12345678-1234-5678-9abc-123456789abc";
 
 //
-// Gets the key pair all the encrypt tests use, loaded from the fixture keys (TypeScript: generated when the file loads).
+// Gets the key pair all the encrypt tests use, loaded from the fixture keys.
 //
 fn getEncryptKeyPair(allocator: std.mem.Allocator) !IKeyPair {
     return fixture_keys.loadFixtureKeyPair(allocator, std.testing.io);
@@ -94,7 +94,7 @@ fn contains(names: []const []const u8, name: []const u8) bool {
 }
 
 //
-// A progress callback that ignores the messages (TypeScript: `() => {}`).
+// A progress callback that ignores the messages.
 //
 fn ignoreProgress(context: ?*anyopaque, message: []const u8) void {
     _ = context;
@@ -110,7 +110,7 @@ const noProgress: IEncryptProgress = .{
 };
 
 //
-// The messages a progress callback received (TypeScript: `msg => messages.push(msg)`).
+// The messages a progress callback received.
 //
 const ProgressMessages = struct {
     // Allocates the copies of the messages.

@@ -7,7 +7,7 @@ const IFileInfo = storage.IFileInfo;
 const IListResult = storage.IListResult;
 
 //
-// In-memory IStorage for tests (the TypeScript tests use FileStorage on a temporary file instead).
+// In-memory IStorage for tests.
 // Only the methods the merkle tree functions use do real work; the others fail with error.NotImplemented.
 //
 pub const MemoryStorage = struct {

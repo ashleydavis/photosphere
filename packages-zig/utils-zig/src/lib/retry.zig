@@ -6,7 +6,7 @@ const sleep_module = @import("sleep.zig");
 const wrapped_error = @import("wrapped-error.zig");
 
 //
-// In Zig an operation (TypeScript: `() => Promise<ReturnT>`) is a value (usually a pointer to a struct)
+// An operation is a value (usually a pointer to a struct)
 // with a method `run(self, io: std.Io) !ReturnT`. This gets ReturnT for an operation type.
 //
 pub fn OperationResult(comptime OperationT: type) type {
@@ -19,9 +19,10 @@ pub fn OperationResult(comptime OperationT: type) type {
 }
 
 //
-// Gets `operation.toString().replace(/\s+/g, " ").slice(0, 200)` for an operation type.
-// A Zig operation has no source text of its own, so its type declares `pub const source` holding the
-// text Bun gives for the TypeScript arrow function it stands in for (`operation.toString()`).
+// Gets the text that names an operation type in the timeout message: its source with runs of whitespace
+// collapsed to one space, cut to 200 characters.
+// An operation has no source text of its own, so its type declares `pub const source` holding
+// the text that names the call it makes.
 //
 fn operationSourceOf(comptime OperationT: type) []const u8 {
     const ContextT = switch (@typeInfo(OperationT)) {
@@ -29,7 +30,7 @@ fn operationSourceOf(comptime OperationT: type) []const u8 {
         else => OperationT,
     };
     if (!@hasDecl(ContextT, "source")) {
-        @compileError("retry operation " ++ @typeName(ContextT) ++ " must declare `pub const source` (the Bun toString() of the TypeScript arrow function)");
+        @compileError("retry operation " ++ @typeName(ContextT) ++ " must declare `pub const source` (the text that names the operation in the timeout message)");
     }
     comptime {
         const raw: []const u8 = ContextT.source;
@@ -73,27 +74,30 @@ fn OperationTask(comptime OperationT: type) type {
 }
 
 //
-// Waits for the timeout of retryOnce (the `setTimeout` in TypeScript).
+// Waits for the timeout of retryOnce.
 //
 fn waitForTimeout(io: std.Io, timeoutMS: u64) std.Io.Cancelable!void {
     try io.sleep(.fromMilliseconds(@intCast(timeoutMS)), .awake);
 }
 
 //
-// TODO: a timed out operation is canceled, where the TypeScript leaves it running in the background.
+// Waits the given number of milliseconds, then fails with a timeout error.
+//
+pub fn rejectAfter(comptime ReturnT: type, io: std.Io, ms: u64) anyerror!ReturnT {
+    try sleep_module.sleep(io, ms);
+    return errors.throwError("Operation timed out after {d}ms", .{ms});
+}
+
 //
 // Attempts an operation once, rejecting if it doesn't complete within timeoutMS.
-// The operation runs concurrently with a timer (the `setTimeout` in TypeScript).
-// When the timer wins, TypeScript leaves the operation running in the background, kept alive by the
-// garbage collector. Zig cannot do that: the operation borrows memory owned by the caller (the operation
-// value, the caller's allocator and buffers) that is gone once retry returns, and a concurrent task
-// must be awaited or canceled before its storage is released. So the operation is canceled instead:
-// it stops at its next cancelation point and the timeout error is then returned.
-// In TypeScript the timer can only fire while the operation is awaiting: work the operation does without
-// awaiting always runs to the end first, so an operation that settles without awaiting again beats the timer.
-// The Zig counterpart: an operation that still succeeds after the cancelation (it reached no cancelation
+// The operation runs concurrently with a timer.
+// When the timer wins, the operation cannot be left running in the background: it borrows memory owned by the
+// caller (the operation value, the caller's allocator and buffers) that is gone once retry returns, and a
+// concurrent task must be awaited or canceled before its storage is released. So the operation is canceled
+// instead: it stops at its next cancelation point and the timeout error is then returned.
+// An operation that still succeeds after the cancelation (it reached no cancelation
 // point, e.g. its thread had not even been scheduled yet when the timer fired) wins over the timer.
-// The operation and the timer must both run concurrently (as they do in TypeScript): when the Io
+// The operation and the timer must both run concurrently: when the Io
 // implementation cannot run either of them concurrently, error.ConcurrencyUnavailable is returned.
 //
 pub fn retryOnce(io: std.Io, operation: anytype, timeoutMS: u64) anyerror!OperationResult(@TypeOf(operation)) {
@@ -106,9 +110,8 @@ pub fn retryOnce(io: std.Io, operation: anytype, timeoutMS: u64) anyerror!Operat
     // timer's stack and says nothing about what was being waited for. "Operation timed out after
     // 30000ms" was the whole of what a failing background sync reported on a phone, pass after pass,
     // and there are dozens of retries it could have come from. A stack does not help either: the
-    // callers are async, and the embedded engine shows only the two synchronous frames inside this
-    // file. The operation's own text does, because these are all one-line arrow functions naming the
-    // call they make.
+    // callers are async, so it shows only the frames inside this file. The operation's own text does,
+    // because it names the call the operation makes.
     const operationSource = comptime operationSourceOf(OperationT);
 
     //
@@ -163,8 +166,7 @@ pub fn retryOnce(io: std.Io, operation: anytype, timeoutMS: u64) anyerror!Operat
 }
 
 //
-// Logs the error of a failed attempt the way `JSON.stringify(serializeError(error), null, 2)` does
-// (Zig errors have no stack, so only the name and message are included).
+// Logs the error of a failed attempt as an indented JSON object holding its name and message (a Zig error has no stack to include).
 //
 fn logVerboseError(err: anyerror) void {
     var buffer: [16 * 1024]u8 = undefined;
@@ -174,7 +176,7 @@ fn logVerboseError(err: anyerror) void {
 }
 
 //
-// Logs `${errorContext ?? "An operation failed"}. Retrying after: ${error?.message ?? String(error)}`
+// Logs the context of the operation (or "An operation failed" when it has none), then ". Retrying after: " and the message of the error,
 // as a warning.
 //
 fn logRetryWarning(errorContext: ?[]const u8, err: anyerror) void {

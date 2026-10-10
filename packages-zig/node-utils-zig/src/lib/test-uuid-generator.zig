@@ -57,7 +57,7 @@ pub const TestUuidGenerator = struct {
         defer self.releaseLock(io);
 
         const cwd = std.Io.Dir.cwd();
-        // A JavaScript number, so a counter past the integers a double holds exactly counts on as TypeScript's does.
+        // A double, so a counter past the integers a double holds exactly keeps counting on.
         var counter: f64 = 0;
         if (cwd.readFileAlloc(io, self.counterFilePath, allocator, .unlimited)) |data| {
             counter = utils.js_number.parseInt(utils.js_string.trim(data), 10);
@@ -126,7 +126,7 @@ pub const TestUuidGenerator = struct {
 
     //
     // Generates the UUID for a counter value. Same algorithm as the in-memory TestUuidGenerator in utils,
-    // so it is shared with utils-zig (which reproduces the JavaScript number semantics exactly).
+    // so it is shared with utils-zig.
     //
     fn generateDeterministicUuid(allocator: std.mem.Allocator, counter: f64) ![]const u8 {
         return utils.test_uuid_generator.TestUuidGenerator.generateDeterministicUuid(allocator, counter);

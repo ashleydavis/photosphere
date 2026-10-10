@@ -1,5 +1,5 @@
 //
-// Port of the local copy of @clack/core (src/lib/clack/core/index.ts): the prompt state machines.
+// The prompt state machines.
 //
 pub const types = @import("types.zig");
 pub const State = types.ClackState;

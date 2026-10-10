@@ -54,10 +54,12 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
     - packages-zig/ - The Zig packages, built and tested by the `build.zig` at the root of the repository
         - api-zig - Zig port of api
         - bdb-zig - Zig port of bdb
+        - config-zig - Zig port of config (the version and build metadata)
         - encryption-zig - Zig port of encryption
         - fuzzy-match-zig - Zig port of fuzzy-match
         - lan-share-core-zig - Zig port of the core of lan-share
         - lan-share-network-zig - Zig port of the network side of lan-share
+        - mobile-worker-zig - Zig port of mobile-worker (the planning task handlers the phone runs)
         - merkle-tree-zig - Zig port of merkle-tree
         - node-api-zig - Zig port of node-api
         - node-utils-zig - Zig port of node-utils (also the HTTP server glue the asset server runs on)

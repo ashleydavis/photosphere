@@ -33,8 +33,8 @@ const QueueEventKind = enum {
 
 //
 // An event delivered by the backend (on any thread) and waiting to be dispatched to the queue's
-// callbacks by a thread blocked in awaitAllTasks or awaitTask. This stands in for the JavaScript event
-// loop: like in TypeScript, callbacks run one at a time while the owner of the queue awaits.
+// callbacks by a thread blocked in awaitAllTasks or awaitTask. Callbacks run one at a time
+// while the owner of the queue awaits.
 //
 const IQueueEvent = struct {
     // Whether the event is a completion or a message.
@@ -46,7 +46,7 @@ const IQueueEvent = struct {
 };
 
 //
-// A caller blocked in awaitAllTasks (TypeScript: the resolve function of the returned promise).
+// A caller blocked in awaitAllTasks.
 //
 const IAwaitAllResolver = struct {
     // Set when the caller can return.
@@ -54,7 +54,7 @@ const IAwaitAllResolver = struct {
 };
 
 //
-// A caller blocked in awaitTask (TypeScript: the resolve function of the returned promise).
+// A caller blocked in awaitTask.
 //
 const IAwaitTaskResolver = struct {
     // The task the caller waits for.
@@ -111,7 +111,7 @@ const IAnyMessageCallbackRegistration = struct {
 //
 // Zig threading model: the backend reports completions and messages from any thread. They are queued
 // and the registered callbacks run on the thread that is blocked in awaitAllTasks or awaitTask (one
-// callback at a time), like the JavaScript event loop running callbacks while the caller awaits.
+// callback at a time).
 // Values passed to callbacks are only valid during the call.
 //
 pub const TaskQueue = struct {
@@ -175,7 +175,7 @@ pub const TaskQueue = struct {
     //
     // Callers blocked in awaitTask(taskId). A resolver receives the task's ITaskResult on normal
     // completion, or null when the queue is shut down before the task completes.
-    // (TypeScript keys them by task ID in a Map; the list is searched by task ID.)
+    // (The list is searched by task ID.)
     //
     awaitTaskResolvers: std.ArrayList(*IAwaitTaskResolver),
 
@@ -217,13 +217,12 @@ pub const TaskQueue = struct {
 
     //
     // Whether shutdown has run, so that deinit does not cancel the tasks of the source a second time.
-    // (No TypeScript counterpart: deinit has none.)
     //
     isShutDown: bool,
 
     //
     // Creates a queue for the tasks of `source` on the backend registered with setQueueBackend
-    // (TypeScript: constructor(uuidGenerator, source)). Free it with deinit.
+    // Free it with deinit.
     //
     pub fn init(allocator: std.mem.Allocator, io: std.Io, uuidGenerator: IUuidGenerator, source: []const u8) !*TaskQueue {
         const backend = try getQueueBackend();
@@ -271,8 +270,7 @@ pub const TaskQueue = struct {
     }
 
     //
-    // Shuts the queue down (if it is not already) and frees it. This has no TypeScript counterpart
-    // (garbage collection frees the TypeScript object).
+    // Shuts the queue down (if it is not already) and frees it.
     //
     pub fn deinit(self: *TaskQueue) void {
         if (!self.isShutDown) {
@@ -305,7 +303,7 @@ pub const TaskQueue = struct {
     }
 
     //
-    // Backend callback: a task with this queue's source was added (TypeScript: the onTaskAdded arrow function).
+    // Backend callback: a task with this queue's source was added.
     //
     fn onBackendTaskAdded(context: ?*anyopaque, taskId: []const u8) void {
         const self: *TaskQueue = @ptrCast(@alignCast(context.?));
@@ -326,7 +324,7 @@ pub const TaskQueue = struct {
     }
 
     //
-    // Backend callback: a task completed (TypeScript: the onTaskComplete arrow function).
+    // Backend callback: a task completed.
     // Results of tracked tasks are queued for dispatch.
     //
     fn onBackendTaskComplete(context: ?*anyopaque, result: ITaskResult) anyerror!void {
@@ -340,7 +338,7 @@ pub const TaskQueue = struct {
     }
 
     //
-    // Backend callback: a task sent a message (TypeScript: the onAnyTaskMessage arrow function).
+    // Backend callback: a task sent a message.
     // Messages of tracked tasks are queued for dispatch.
     //
     fn onBackendAnyTaskMessage(context: ?*anyopaque, message: ITaskMessageData) anyerror!void {
@@ -354,7 +352,7 @@ pub const TaskQueue = struct {
     }
 
     //
-    // Backend callback: the tasks of this queue's source were cancelled (TypeScript: the onTasksCancelled arrow function).
+    // Backend callback: the tasks of this queue's source were cancelled.
     //
     fn onBackendTasksCancelled(context: ?*anyopaque) void {
         const self: *TaskQueue = @ptrCast(@alignCast(context.?));
@@ -708,7 +706,7 @@ pub const TaskQueue = struct {
     //
     // Cancels all in-flight tasks belonging to this queue and cleans up subscriptions.
     // Any callers blocked in awaitAllTasks() or awaitTask() are resolved immediately.
-    // (Zig also drops the events that were delivered but not dispatched yet.)
+    // (The events that were delivered but not dispatched yet are dropped too.)
     //
     pub fn shutdown(self: *TaskQueue) void {
         self.isShutDown = true;

@@ -1,6 +1,5 @@
 //
-// Unit tests for the merkle-tree.zig functions that the TypeScript test files do not test directly
-// (no TypeScript counterpart file).
+// Unit tests for the merkle-tree.zig functions that the other test files do not test directly.
 //
 
 const std = @import("std");

@@ -12,7 +12,7 @@ const getAllNews = check_for_news.getAllNews;
 const markNewsAsShown = check_for_news.markNewsAsShown;
 
 //
-// Formats a message into the allocator (TypeScript: a template literal).
+// Formats a message into the allocator.
 //
 fn text(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) ![]const u8 {
     return std.fmt.allocPrint(allocator, fmt, args);

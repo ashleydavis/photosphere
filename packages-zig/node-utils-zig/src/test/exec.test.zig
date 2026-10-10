@@ -10,12 +10,12 @@ test "exec runs the command in the shell and returns its output" {
 
     // The command runs in cmd.exe on Windows, which has its own syntax and ends lines with CRLF.
     if (builtin.os.tag == .windows) {
-        const result = try exec(arena.allocator(), std.testing.io, "echo hello&& echo oops>&2");
+        const result = try exec(arena.allocator(), std.testing.io, null, "echo hello&& echo oops>&2");
         try std.testing.expectEqualStrings("hello\r\n", result.stdout);
         try std.testing.expectEqualStrings("oops\r\n", result.stderr);
     }
     else {
-        const result = try exec(arena.allocator(), std.testing.io, "echo hello && echo oops 1>&2");
+        const result = try exec(arena.allocator(), std.testing.io, null, "echo hello && echo oops 1>&2");
         try std.testing.expectEqualStrings("hello\n", result.stdout);
         try std.testing.expectEqualStrings("oops\n", result.stderr);
     }
@@ -27,11 +27,11 @@ test "exec fails with Node's message when the command exits with a non-zero code
 
     // The command runs in cmd.exe on Windows, which has its own syntax and ends lines with CRLF.
     if (builtin.os.tag == .windows) {
-        try std.testing.expectError(error.Thrown, exec(arena.allocator(), std.testing.io, "echo broken>&2& exit 3"));
+        try std.testing.expectError(error.Thrown, exec(arena.allocator(), std.testing.io, null, "echo broken>&2& exit 3"));
         try std.testing.expectEqualStrings("Command failed: echo broken>&2& exit 3\nbroken\r\n", utils.errors.lastErrorMessage());
     }
     else {
-        try std.testing.expectError(error.Thrown, exec(arena.allocator(), std.testing.io, "echo broken 1>&2; exit 3"));
+        try std.testing.expectError(error.Thrown, exec(arena.allocator(), std.testing.io, null, "echo broken 1>&2; exit 3"));
         try std.testing.expectEqualStrings("Command failed: echo broken 1>&2; exit 3\nbroken\n", utils.errors.lastErrorMessage());
     }
 }
@@ -46,11 +46,11 @@ test "exec passes process.env to the command" {
 
     // cmd.exe on Windows expands %NAME% and ends lines with CRLF.
     if (builtin.os.tag == .windows) {
-        const result = try exec(arena.allocator(), std.testing.io, "echo %PHOTOSPHERE_EXEC_TEST%");
+        const result = try exec(arena.allocator(), std.testing.io, null, "echo %PHOTOSPHERE_EXEC_TEST%");
         try std.testing.expectEqualStrings("from-env\r\n", result.stdout);
     }
     else {
-        const result = try exec(arena.allocator(), std.testing.io, "echo $PHOTOSPHERE_EXEC_TEST");
+        const result = try exec(arena.allocator(), std.testing.io, null, "echo $PHOTOSPHERE_EXEC_TEST");
         try std.testing.expectEqualStrings("from-env\n", result.stdout);
     }
 }
@@ -58,7 +58,7 @@ test "exec passes process.env to the command" {
 test "execLogged returns the output of the command" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const result = try node_utils.exec.execLogged(arena.allocator(), std.testing.io, "echo", "echo hello", null);
+    const result = try node_utils.exec.execLogged(arena.allocator(), std.testing.io, null, "echo", "echo hello", null);
     const expected = if (builtin.os.tag == .windows) "hello\r\n" else "hello\n";
     try std.testing.expectEqualStrings(expected, result.stdout);
 }
@@ -70,7 +70,7 @@ test "execLogged reports a command that fails as a failure to execute it" {
     var output = std.Io.Writer.Allocating.init(arena.allocator());
     utils.console.setCapture(&output.writer, &output.writer);
     defer utils.console.setCapture(null, null);
-    try std.testing.expectError(error.Thrown, node_utils.exec.execLogged(arena.allocator(), std.testing.io, "sh", "exit 3", null));
+    try std.testing.expectError(error.Thrown, node_utils.exec.execLogged(arena.allocator(), std.testing.io, null, "sh", "exit 3", null));
     try std.testing.expectEqualStrings("Failed to execute command: exit 3", utils.errors.lastErrorMessage());
 }
 
@@ -92,7 +92,7 @@ test "execLogged reports a failed validation as a failure to execute the command
     utils.console.setCapture(&output.writer, &output.writer);
     defer utils.console.setCapture(null, null);
     var unused: u8 = 0;
-    try std.testing.expectError(error.Thrown, node_utils.exec.execLogged(arena.allocator(), std.testing.io, "echo", "echo hello", .{ .context = &unused, .function = failValidation }));
+    try std.testing.expectError(error.Thrown, node_utils.exec.execLogged(arena.allocator(), std.testing.io, null, "echo", "echo hello", .{ .context = &unused, .function = failValidation }));
     try std.testing.expectEqualStrings("Failed to execute command: echo hello", utils.errors.lastErrorMessage());
 }
 
@@ -103,11 +103,11 @@ test "exec hands the quotes in the command to the shell untouched" {
     // Quoted arguments holding spaces and %, like `magick identify -format "%w %h" "<file>"`. cmd.exe on
     // Windows echoes the arguments as they reach it, quotes included, and ends lines with CRLF.
     if (builtin.os.tag == .windows) {
-        const result = try exec(arena.allocator(), std.testing.io, "echo \"%w %h\" \"file name.jpg\"");
+        const result = try exec(arena.allocator(), std.testing.io, null, "echo \"%w %h\" \"file name.jpg\"");
         try std.testing.expectEqualStrings("\"%w %h\" \"file name.jpg\"\r\n", result.stdout);
     }
     else {
-        const result = try exec(arena.allocator(), std.testing.io, "echo \"%w %h\" \"file name.jpg\"");
+        const result = try exec(arena.allocator(), std.testing.io, null, "echo \"%w %h\" \"file name.jpg\"");
         try std.testing.expectEqualStrings("%w %h file name.jpg\n", result.stdout);
     }
 }
@@ -118,12 +118,12 @@ test "exec reads stdout and stderr together so a command filling stderr does not
 
     // More than a pipe buffer holds goes to stderr before anything goes to stdout.
     if (builtin.os.tag == .windows) {
-        const result = try exec(arena.allocator(), std.testing.io, "(for /L %i in (1,1,10000) do @echo stderr line %i>&2)& echo done");
+        const result = try exec(arena.allocator(), std.testing.io, null, "(for /L %i in (1,1,10000) do @echo stderr line %i>&2)& echo done");
         try std.testing.expectEqualStrings("done\r\n", result.stdout);
         try std.testing.expect(result.stderr.len > 128 * 1024);
     }
     else {
-        const result = try exec(arena.allocator(), std.testing.io, "i=0; while [ $i -lt 10000 ]; do echo stderr line $i 1>&2; i=$((i+1)); done; echo done");
+        const result = try exec(arena.allocator(), std.testing.io, null, "i=0; while [ $i -lt 10000 ]; do echo stderr line $i 1>&2; i=$((i+1)); done; echo done");
         try std.testing.expectEqualStrings("done\n", result.stdout);
         try std.testing.expect(result.stderr.len > 128 * 1024);
     }
@@ -160,9 +160,9 @@ test "exec takes up to maxBuffer (1 MiB) of output, as Bun's exec does" {
     const filePath = try writeFileOfSize(allocator, io, 1024 * 1024);
     defer std.Io.Dir.cwd().deleteFile(io, filePath) catch {};
 
-    const toStdout = try exec(allocator, io, try printFileCommand(allocator, filePath, false));
+    const toStdout = try exec(allocator, io, null, try printFileCommand(allocator, filePath, false));
     try std.testing.expectEqual(@as(usize, 1024 * 1024), toStdout.stdout.len);
-    const toStderr = try exec(allocator, io, try printFileCommand(allocator, filePath, true));
+    const toStderr = try exec(allocator, io, null, try printFileCommand(allocator, filePath, true));
     try std.testing.expectEqual(@as(usize, 1024 * 1024), toStderr.stderr.len);
 }
 
@@ -174,11 +174,11 @@ test "exec fails with Bun's RangeError when the command writes more than maxBuff
     const filePath = try writeFileOfSize(allocator, io, 1024 * 1024 + 1);
     defer std.Io.Dir.cwd().deleteFile(io, filePath) catch {};
 
-    try std.testing.expectError(error.Thrown, exec(allocator, io, try printFileCommand(allocator, filePath, false)));
+    try std.testing.expectError(error.Thrown, exec(allocator, io, null, try printFileCommand(allocator, filePath, false)));
     try std.testing.expectEqualStrings("RangeError", utils.errors.lastErrorName());
     try std.testing.expectEqualStrings("stdout maxBuffer length exceeded", utils.errors.lastErrorMessage());
 
-    try std.testing.expectError(error.Thrown, exec(allocator, io, try printFileCommand(allocator, filePath, true)));
+    try std.testing.expectError(error.Thrown, exec(allocator, io, null, try printFileCommand(allocator, filePath, true)));
     try std.testing.expectEqualStrings("RangeError", utils.errors.lastErrorName());
     try std.testing.expectEqualStrings("stderr maxBuffer length exceeded", utils.errors.lastErrorMessage());
 }

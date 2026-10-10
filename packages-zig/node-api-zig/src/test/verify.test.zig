@@ -29,7 +29,7 @@ fn runVerify(allocator: std.mem.Allocator, io: std.Io, databaseDir: []const u8, 
     try node_api.task_handlers.initTaskHandlers();
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
-    const opened = try node_api.open_storage.openStorage(allocator, io, databaseDir, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, databaseDir, null, null, null);
     const database = try node_api.media_file_database.createMediaFileDatabase(allocator, opened.storage, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider());
     const progressCallback: ?node_api.media_file_database.ProgressCallback = if (recorder) |progressRecorder| .{ .context = progressRecorder, .function = recordProgress } else null;
     return verify_module.verify(allocator, io, .{ .databasePath = databaseDir }, opened.storage, uuidGenerator.uuidGenerator(), database.metadataCollection, options, progressCallback);
@@ -237,7 +237,7 @@ test "verify reports a database record whose hash is wrong as a record mismatch"
     _ = try test_environment.setupEnvironment(io);
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
-    const opened = try node_api.open_storage.openStorage(allocator, io, databaseDir, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, databaseDir, null, null, null);
     const database = try node_api.media_file_database.createMediaFileDatabase(allocator, opened.storage, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider());
     var updates: @import("serialization-zig").bson.BsonDocument = .empty;
     try updates.put(allocator, "hash", .{ .string = "0000" });

@@ -1,7 +1,7 @@
 //
-// Tests for writeAssetStreamVerified of media-file-database.zig (port of src/test/lib/write-asset-stream-verified.test.ts).
+// Tests for writeAssetStreamVerified of media-file-database.zig.
 //
-// The TypeScript tests mock the storages and the hash. These write to a new database in a directory of its own, read the source
+// These write to a new database in a directory of its own, read the source
 // from another, and compare the real hashes of the two.
 //
 
@@ -50,7 +50,7 @@ fn startIo(virtual_time: *virtual_time_io.VirtualTimeIo) void {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
 }
 
-test "writeAssetStreamVerified writes the stream to the destination under the destination id" {
+test "writeAssetStreamVerified calls writeAssetStream with dest storage and correct arguments" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -61,9 +61,18 @@ test "writeAssetStreamVerified writes the stream to the destination under the de
     var fixtures: Fixtures = undefined;
     try fixtures.init(allocator, io, "verified-writes");
     defer fixtures.deinit(io);
+    var spy: sync_test_helpers.SpyStorage = .{
+        .allocator = allocator,
+        .inner = fixtures.dest.database.assetStorage,
+    };
     var stream = std.Io.Reader.fixed("abcd");
 
-    try media_file_database.writeAssetStreamVerified(allocator, io, fixtures.source.database.assetStorage, fixtures.dest.database.assetStorage, fixtures.dest.rawStorage, "session-1", "src-id", "dst-id", "thumb", "image/jpeg", &stream, 4);
+    try media_file_database.writeAssetStreamVerified(allocator, io, fixtures.source.database.assetStorage, spy.storage(), fixtures.dest.rawStorage, "session-1", "src-id", "dst-id", "thumb", "image/jpeg", &stream, 4);
+
+    try std.testing.expectEqual(@as(usize, 1), spy.writeStreamCalls.items.len);
+    try std.testing.expectEqualStrings("thumb/dst-id", spy.writeStreamCalls.items[0].filePath);
+    try std.testing.expectEqualStrings("image/jpeg", spy.writeStreamCalls.items[0].contentType.?);
+    try std.testing.expectEqual(@as(?u64, 4), spy.writeStreamCalls.items[0].contentLength);
 
     const written = try test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ fixtures.dest.dir, "thumb", "dst-id" }));
     try std.testing.expectEqualStrings("abcd", written);

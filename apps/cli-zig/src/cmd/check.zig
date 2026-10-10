@@ -21,7 +21,7 @@ const CheckPathsProgressCallback = node_api.check.CheckPathsProgressCallback;
 const IAddSummary = node_api.media_file_database.IAddSummary;
 
 //
-// Options of the check command (TypeScript: ICheckCommandOptions extends IBaseCommandOptions).
+// Options of the check command.
 // The base options are in `base`.
 //
 pub const ICheckCommandOptions = struct {
@@ -30,7 +30,7 @@ pub const ICheckCommandOptions = struct {
 };
 
 //
-// Writes the progress line (TypeScript: the `(currentlyScanning, summary) => { ... }` arrow function).
+// Writes the progress line.
 //
 fn onProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, summary: *const IAddSummary) void {
     _ = context;
@@ -44,7 +44,7 @@ fn onProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, summary: *co
 }
 
 //
-// Builds the progress line. (No TypeScript counterpart: the body of the arrow function.)
+// Builds the progress line.
 //
 pub fn buildProgressMessage(allocator: std.mem.Allocator, currentlyScanning: ?[]const u8, summary: *const IAddSummary) ![]const u8 {
     var progressMessage: std.ArrayList(u8) = .empty;

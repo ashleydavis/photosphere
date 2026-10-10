@@ -1,5 +1,5 @@
 //
-// Tests for how often a push says where its time went (port of src/test/lib/sync-timings-log.test.ts).
+// Tests for how often a push says where its time went.
 //
 // It is meant to be every twenty files, and zero divides by twenty exactly, so a pass that copied
 // nothing said it on every leaf it walked instead. On a Pixel 6 pushing to an origin holding 8,481
@@ -25,8 +25,7 @@ const throughTheDatabases = node_api.sync.throughTheDatabases;
 const dbId = "5b2c3d4e-6f7a-4b8c-9d0e-1f2a3b4c5d6e";
 
 //
-// Names count files from a pattern: `<prefix><index><suffix>`, the index padded to three digits when asked
-// (TypeScript: `Array.from({ length }, (_, index) => ...)`).
+// Names count files from a pattern: `<prefix><index><suffix>`, the index padded to three digits when asked.
 //
 fn namesFrom(allocator: std.mem.Allocator, count: usize, prefix: []const u8, suffix: []const u8, padded: bool) ![]const []const u8 {
     const names = try allocator.alloc([]const u8, count);
@@ -41,8 +40,7 @@ fn namesFrom(allocator: std.mem.Allocator, count: usize, prefix: []const u8, suf
 
 //
 // Deleted asset ids, sorted after the files to copy.
-// (Zig: the TypeScript test's ids are `z-000.jpg` and so on, which its stand-in bson database accepts; a real
-// BsonDatabase only takes ids that are hex, so these are hex ids that sort after `a-`.)
+// A real BsonDatabase only takes ids that are hex, so these are hex ids that sort after `a-`.
 //
 fn deletedAssetIds(allocator: std.mem.Allocator, count: usize) ![]const []const u8 {
     return namesFrom(allocator, count, "fe000000-0000-0000-0000-000000000", "", true);
@@ -60,7 +58,7 @@ fn assetPaths(allocator: std.mem.Allocator, assetIds: []const []const u8) ![]con
 }
 
 //
-// Joins two lists of names (TypeScript: `concat`).
+// Joins two lists of names.
 //
 fn concat(allocator: std.mem.Allocator, first: []const []const u8, second: []const []const u8) ![]const []const u8 {
     return std.mem.concat(allocator, []const u8, &.{ first, second });

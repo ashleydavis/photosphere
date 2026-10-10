@@ -13,8 +13,8 @@ const jsonParse = serialization_zig.json_parse.jsonParse;
 const io = std.testing.io;
 
 //
-// The expected responses of these tests are the ones the MCP TypeScript SDK (version 1.29, as `psi mcp` of
-// apps/cli uses it) gives to the same requests, recorded from `bun run start -- mcp`.
+// The expected responses of these tests are the ones the MCP SDK (version 1.29) gives to the same requests, recorded
+// from a session of `psi mcp`.
 //
 
 //
@@ -78,7 +78,7 @@ fn echo(context: ?*anyopaque, allocator: std.mem.Allocator, toolIo: std.Io, argu
 }
 
 //
-// The handler of the failing tool: fails the way a TypeScript handler throws.
+// The handler of the failing tool: fails by returning an error.
 //
 fn fail(context: ?*anyopaque, allocator: std.mem.Allocator, toolIo: std.Io, arguments: BsonDocument) !ICallToolResult {
     _ = context;
@@ -208,7 +208,7 @@ test "the tools of psi mcp are listed with the input schemas the SDK reports for
     };
     const server = try cli.mcp.createMcpServer(allocator, &toolContext);
 
-    // The second line of mcp-session-expected.jsonl is the TypeScript CLI's answer to tools/list (id 2).
+    // The second line of mcp-session-expected.jsonl is the recorded answer to tools/list (id 2).
     const expected = try std.Io.Dir.cwd().readFileAlloc(io, "src/test/fixtures/mcp-session-expected.jsonl", allocator, .unlimited);
     var lines = std.mem.splitScalar(u8, expected, '\n');
     _ = lines.next();

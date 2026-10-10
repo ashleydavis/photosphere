@@ -5,6 +5,7 @@ const task_queue_zig = @import("task-queue-zig");
 const hash_cache = @import("hash-cache.zig");
 const hash_module = @import("hash.zig");
 const file_scanner = @import("file-scanner.zig");
+const node_utils = @import("node-utils-zig");
 const errors = utils.errors;
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
@@ -63,7 +64,7 @@ pub const IHashFileData = struct {
 //
 pub const IHashFileResult = struct {
     // SHA-256 hash bytes of the file content.
-    // (Zig: hex encoded, because task outputs are JSON; TypeScript posts a Uint8Array.)
+    // Hex encoded, because task outputs are JSON.
     hash: []const u8,
 
     // True if the hash was retrieved from the local cache (not freshly computed).
@@ -91,7 +92,7 @@ pub const IHashFileResult = struct {
 };
 
 //
-// `Date.now()`. (No TypeScript counterpart.)
+// The current time in milliseconds.
 //
 fn dateNow(io: std.Io) i64 {
     return std.Io.Clock.real.now(io).toMilliseconds();
@@ -101,10 +102,12 @@ fn dateNow(io: std.Io) i64 {
 // Handler for the hash-file task. Computes the SHA-256 hash of a file, or takes it from the local
 // hash cache. Says nothing about the database and queues nothing; the orchestrator (import-assets)
 // does both.
-// (Zig: the task data and output are JSON values holding IHashFileData and IHashFileResult.)
+// The task data and output are JSON values holding IHashFileData and IHashFileResult.
 //
 pub fn hashFileHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
-    _ = context;
+    // On a phone the shell runs ImageMagick and ffmpeg, and the task asks it through its host requester.
+    var toolRunnerStorage: node_utils.host_tools.HostToolRunner = undefined;
+    const toolRunner = try node_utils.host_tools.toolRunnerFor(context.hostRequester, &toolRunnerStorage);
     const data = try std.json.parseFromValueLeaky(IHashFileData, allocator, taskData, .{ .ignore_unknown_fields = true });
     const filePath = data.filePath;
     const fileStat = data.fileStat;
@@ -142,7 +145,7 @@ pub fn hashFileHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.j
     }
     else {
         const hashStartedAt = dateNow(io);
-        const hashedFile = try validateAndHash(allocator, io, filePath, fileStat, contentType, logicalPath);
+        const hashedFile = try validateAndHash(allocator, io, toolRunner, filePath, fileStat, contentType, logicalPath);
         hashMs = dateNow(io) - hashStartedAt;
         const validHash = hashedFile orelse {
             return errors.throwError("Failed to validate and hash file \"{s}\"", .{logicalPath});

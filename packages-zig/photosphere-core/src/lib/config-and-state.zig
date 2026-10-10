@@ -1,12 +1,12 @@
 //
 // The channels the page reads and writes its settings and its remembered state through: get-config and set-config (config.yaml, what the
 // user chose), and get-state and set-state (state.yaml, what the
-// app remembered), from the ipcMain handlers of the same names in apps/desktop/src/main.ts.
+// app remembered).
 //
 // Each is a task type, because it reads or writes a file.
 //
-// The page sends a value as JSON, where Electron's structured clone carried it as it was: setting a key to null (or leaving the value
-// out) removes it, which is what `undefined` did.
+// The page sends a value as JSON: setting a key to null (or leaving the value
+// out) removes it.
 //
 
 const std = @import("std");
@@ -22,11 +22,12 @@ const auto_import_settings = @import("api-zig").auto_import_settings;
 const events = @import("events.zig");
 const main_state = @import("main-state.zig");
 const main_process = @import("main-process.zig");
+const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 //
 // get-state: the payload is a state key. The reply is the value remembered under it, or null when there is none.
 //
-pub fn getStateHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn getState(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     if (data != .string) {
         return utils.errors.throwError("The state request needs the name of a key.", .{});
     }
@@ -57,7 +58,7 @@ const SetStateMutator = struct {
 // left out. Nothing here reacts to a particular key the way set-config does: the theme and the automatic import settings are the
 // user's, and this file holds nothing anything else has to be told about. The reply is null.
 //
-pub fn setStateHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn setState(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const key = json_util.getString(data, "key") orelse {
         return utils.errors.throwError("The state request needs the name of a key.", .{});
     };
@@ -71,7 +72,7 @@ pub fn setStateHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]
 }
 
 //
-// The config keys that change what automatic import should be doing, so writing one restarts it (AUTO_IMPORT_CONFIG_KEYS of main.ts).
+// The config keys that change what automatic import should be doing, so writing one restarts it.
 //
 const AUTO_IMPORT_CONFIG_KEYS = [_][]const u8{
     "autoImportEnabled",
@@ -81,8 +82,7 @@ const AUTO_IMPORT_CONFIG_KEYS = [_][]const u8{
 };
 
 //
-// Turns a value from the page into the value a config key holds. (No TypeScript counterpart: Electron carried the JavaScript value
-// as it was.) A number, which no config key holds at present, is kept as the JSON number it is.
+// Turns a value from the page into the value a config key holds. A number, which no config key holds at present, is kept as the JSON number it is.
 //
 fn configValueFromJson(arena: std.mem.Allocator, key: []const u8, value: std.json.Value) !app_config.IAppConfigValue {
     switch (value) {
@@ -114,7 +114,7 @@ fn configValueFromJson(arena: std.mem.Allocator, key: []const u8, value: std.jso
 }
 
 //
-// Turns the value of a config key into the JSON the page is sent. (No TypeScript counterpart.)
+// Turns the value of a config key into the JSON the page is sent.
 //
 fn configValueToJson(arena: std.mem.Allocator, value: ?app_config.IAppConfigValue) ![]const u8 {
     const present = value orelse {
@@ -133,7 +133,7 @@ fn configValueToJson(arena: std.mem.Allocator, value: ?app_config.IAppConfigValu
 // get-config: the payload is a config key. The reply is the setting the user chose under it, from config.yaml, or null when there is
 // none.
 //
-pub fn getConfigHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn getConfig(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     if (data != .string) {
         return utils.errors.throwError("The config request needs the name of a key.", .{});
     }
@@ -164,7 +164,7 @@ const SetConfigMutator = struct {
 // of theme is announced to the page (the `theme-changed` event), so the menu bar can follow, and a change to a setting that decides what
 // automatic import does takes effect now rather than at the next start. The reply is null.
 //
-pub fn setConfigHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn setConfig(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const arena = context.arena;
     const key = json_util.getString(data, "key") orelse {
         return utils.errors.throwError("The config request needs the name of a key.", .{});
@@ -178,7 +178,7 @@ pub fn setConfigHandler(context: *TaskContext, data: std.json.Value) anyerror!?[
     try app_config.updateAppConfig(arena, context.io(), &mutator);
     // Keep the theme-changed event so the menu bar can react to theme changes.
     if (std.mem.eql(u8, key, "theme")) {
-        try events.sendThemeChanged(main_state.fromContext(context).core, arena, if (value) |present| present.string else null);
+        try events.sendThemeChanged(main_state.fromContext(context).core, arena, json_value);
     }
     // Switching automatic import on or off, or changing what it watches, takes effect now rather than at the next restart. The main
     // process reads the same config the page just wrote, so this needs no channel of its own.
@@ -190,3 +190,23 @@ pub fn setConfigHandler(context: *TaskContext, data: std.json.Value) anyerror!?[
     }
     return try arena.dupe(u8, "null");
 }
+
+//
+// The get-state channel's handler: getState, with its errors logged.
+//
+pub const getStateHandler = logExceptions(getState, "Error getting state value");
+
+//
+// The set-state channel's handler: setState, with its errors logged.
+//
+pub const setStateHandler = logExceptions(setState, "Error setting state value");
+
+//
+// The get-config channel's handler: getConfig, with its errors logged.
+//
+pub const getConfigHandler = logExceptions(getConfig, "Error getting config value");
+
+//
+// The set-config channel's handler: setConfig, with its errors logged.
+//
+pub const setConfigHandler = logExceptions(setConfig, "Error setting config value");

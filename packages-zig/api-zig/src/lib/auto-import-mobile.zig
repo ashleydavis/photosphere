@@ -1,12 +1,24 @@
 const std = @import("std");
 const auto_import_settings = @import("auto-import-settings.zig");
 const IAutoImportSettings = auto_import_settings.IAutoImportSettings;
+pub const IAutoImportSource = auto_import_settings.IAutoImportSource;
+const IRawAutoImportSettings = auto_import_settings.IRawAutoImportSettings;
+const normaliseAutoImportSettings = auto_import_settings.normaliseAutoImportSettings;
 
 //
 // What the mobile app should do about automatic import, worked out from its settings alone.
 //
+// This mirrors the desktop planner: the decisions
+// live here as plain functions so they can be unit tested, and the caller is left with the parts
+// that need the app (creating the database, starting the task, asking for the permission).
+//
+// It lives in this package rather than in the mobile frontend because the native background import
+// asks for the same plan, through a worker task, and the worker cannot reach the frontend's React
+// code. One planner answers both, so a phone driving the import from its own service and a phone
+// driving it from the WebView cannot decide different things.
+//
 // (Zig: a number the file holds (the pacing) is a std.json.Value that is a number, so an integer stays an integer when
-// it is written back, the way a JavaScript number does.)
+// it is written back.)
 //
 
 //
@@ -40,8 +52,7 @@ pub const IAutoImportFile = struct {
 pub const DEFAULT_AUTO_IMPORT_PAUSE_MS = 30000;
 
 //
-// The value of a number as a float, or null when it is not a number (`typeof value === "number"`).
-// (No TypeScript counterpart.)
+// The value of a number as a float, or null when it is not a number.
 //
 fn numberAsFloat(value: std.json.Value) ?f64 {
     return switch (value) {
@@ -76,4 +87,82 @@ pub fn resolveAutoImportPauseMs(pauseMs: ?std.json.Value) std.json.Value {
         };
     }
     return value;
+}
+
+//
+// The folder the default private database is created in, inside the app sandbox.
+//
+// The same fixed name the desktop app uses, so a user with both sees the same database name and a
+// support answer about one applies to the other.
+//
+pub const DEFAULT_DATABASE_FOLDER_NAME = "photosphere-default";
+
+//
+// The name the default private database is listed under.
+//
+pub const DEFAULT_DATABASE_DISPLAY_NAME = "My Photos";
+
+//
+// The source tag every automatic import task is queued under, so it can be cancelled as a group when
+// the setting is switched off.
+//
+pub const AUTO_IMPORT_TASK_SOURCE = "auto-import";
+
+//
+// The whole device photo library, which is what is watched before the user chooses albums.
+//
+pub const WHOLE_LIBRARY_SOURCES = [_]IAutoImportSource{
+    .{
+        .@"device-album" = .{
+            .albumId = auto_import_settings.ALL_DEVICE_MEDIA_ALBUM_ID,
+        },
+    },
+};
+
+//
+// What the app should do about automatic import right now.
+//
+pub const IMobileAutoImportPlan = struct {
+    // Whether the automatic import task should be running at all.
+    shouldRun: bool,
+
+    // The sandbox-relative path of the database automatic import writes to.
+    databasePath: []const u8,
+
+    // True when no default database has been chosen yet, so the path above is where a new one goes.
+    isNewDefault: bool,
+
+    // The settings the task should run with.
+    settings: IAutoImportSettings,
+};
+
+//
+// Decides what the app should do about automatic import.
+//
+// When the user has switched automatic import on but named no albums, the whole photo library is
+// watched. Running with no sources at all would import nothing while looking like it was working,
+// which is the worst of both.
+//
+// (Zig has no untyped object, so the stored settings are the std.json.Value they were read as. A malformed source in them
+// is dropped by normaliseAutoImportSettings, and normalising allocates.)
+//
+pub fn planMobileAutoImport(
+    allocator: std.mem.Allocator,
+    storedSettings: ?IRawAutoImportSettings,
+    defaultDatabasePath: ?[]const u8,
+) !IMobileAutoImportPlan {
+    var settings = try normaliseAutoImportSettings(allocator, storedSettings);
+
+    if (settings.sources.len == 0) {
+        settings.sources = &WHOLE_LIBRARY_SOURCES;
+    }
+
+    const isNewDefault = defaultDatabasePath == null or defaultDatabasePath.?.len == 0;
+
+    return .{
+        .shouldRun = settings.enabled,
+        .databasePath = if (isNewDefault) DEFAULT_DATABASE_FOLDER_NAME else defaultDatabasePath.?,
+        .isNewDefault = isNewDefault,
+        .settings = settings,
+    };
 }

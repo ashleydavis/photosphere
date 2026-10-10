@@ -13,7 +13,7 @@ const ICommandContext = init_cmd.ICommandContext;
 const getDatabaseSummary = node_api.media_file_database.getDatabaseSummary;
 
 //
-// Options of the summary command (TypeScript: ISummaryCommandOptions extends IBaseCommandOptions).
+// Options of the summary command.
 // The base options are in `base`.
 //
 pub const ISummaryCommandOptions = struct {

@@ -1,7 +1,7 @@
 //
-// Tests for writeAssetStream, writeAsset and streamAsset of media-file-database.zig (port of src/test/lib/write-asset-stream.test.ts).
+// Tests for writeAssetStream, writeAsset and streamAsset of media-file-database.zig.
 //
-// The TypeScript tests mock the write lock, the merkle tree functions and the hash. These run the real ones against a new database in
+// These run the real write lock, merkle tree functions and hash against a new database in
 // a directory of its own, and look at the database afterwards.
 //
 
@@ -11,6 +11,7 @@ const merkle_tree_zig = @import("merkle-tree-zig");
 const node_api = @import("node-api-zig");
 const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 const test_files = @import("test-files.zig");
+const sync_test_helpers = @import("sync-test-helpers.zig");
 const DatabaseFixture = @import("database-fixture.zig").DatabaseFixture;
 const media_file_database = node_api.media_file_database;
 
@@ -57,7 +58,17 @@ test "writeAssetStream writes the stream to the correct asset path" {
     try fixture.init(allocator, io, "write-asset-stream-path");
     defer fixture.deinit(io);
 
-    try writeFourBytes(allocator, io, &fixture, "t1", "thumb");
+    var spy: sync_test_helpers.SpyStorage = .{
+        .allocator = allocator,
+        .inner = fixture.database.assetStorage,
+    };
+    var stream = std.Io.Reader.fixed("abcd");
+    try media_file_database.writeAssetStream(allocator, io, spy.storage(), fixture.rawStorage, "session-1", "t1", "thumb", "image/jpeg", &stream, 4);
+
+    try std.testing.expectEqual(@as(usize, 1), spy.writeStreamCalls.items.len);
+    try std.testing.expectEqualStrings("thumb/t1", spy.writeStreamCalls.items[0].filePath);
+    try std.testing.expectEqualStrings("image/jpeg", spy.writeStreamCalls.items[0].contentType.?);
+    try std.testing.expectEqual(@as(?u64, 4), spy.writeStreamCalls.items[0].contentLength);
 
     const written = try test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ fixture.dir, "thumb", "t1" }));
     try std.testing.expectEqualStrings("abcd", written);
@@ -290,7 +301,7 @@ test "writeAssetStream rejects when written file has zero length and no length w
     try std.testing.expectEqualStrings("Asset data is empty", utils.errors.errorMessage(error.Thrown));
 }
 
-// The functions below have no TypeScript test of their own.
+// The tests below cover writeAsset and streamAsset.
 
 test "writeAsset writes the buffer, adds it to the merkle tree and counts an asset as imported" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

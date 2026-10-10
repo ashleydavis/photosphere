@@ -76,8 +76,7 @@ pub fn runSourceCleanup(allocator: std.mem.Allocator, io: std.Io, source: IMedia
 }
 
 //
-// True when the list holds the string (TypeScript: `new Set(error.sourceIds).has(sourceId)`).
-// (No TypeScript counterpart.)
+// True when the list holds the string.
 //
 fn containsString(list: []const []const u8, value: []const u8) bool {
     for (list) |item| {

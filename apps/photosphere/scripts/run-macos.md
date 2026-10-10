@@ -1,3 +1,9 @@
-# run-macos.sh
+# run-macos
 
-Builds the MacOS app (`build-macos.sh`) and launches it. Invoked as `bun run --filter=ziggy run:macos`. Takes no arguments. Runs on MacOS only. The launched process is recorded when it is started and stopped through `kill_process_tree` from `scripts/lib/process-control.sh`.
+Builds the MacOS app in Debug for this Mac's architecture with `build-macos.sh`, then runs its executable directly, so its output appears in the terminal.
+
+Run it on a Mac in a graphical session: `bun run --filter=ziggy run:macos -- [app arguments]`.
+
+## Arguments
+
+Every argument goes to the app. `-geometry=WxH` sets the window size.

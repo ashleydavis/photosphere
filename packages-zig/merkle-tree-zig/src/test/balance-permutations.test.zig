@@ -1,7 +1,6 @@
 //
-// Balance verification for every insertion order (port of src/test/balance-permutations.test.ts).
-// (Zig: TypeScript generates one test per permutation; Zig test names are fixed, so each group is one test that
-// checks every permutation and reports the failing one.)
+// Balance verification for every insertion order.
+// (Zig test names are fixed, so each group is one test that checks every permutation and reports the failing one.)
 //
 
 const std = @import("std");

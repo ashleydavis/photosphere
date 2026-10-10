@@ -1,5 +1,5 @@
 //
-// Small helpers for building JSON text. This file has no TypeScript counterpart: the TypeScript calls JSON.stringify.
+// Small helpers for building JSON text.
 //
 
 const std = @import("std");

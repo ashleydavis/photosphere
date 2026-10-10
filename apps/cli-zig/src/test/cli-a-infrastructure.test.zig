@@ -197,7 +197,7 @@ test "the worker log writes no tool output when tool logging is off or the outpu
     var quiet = worker_log_bun.WorkerLogBun.init(1, false, false);
     quiet.tool("ffprobe", .{ .stdout = "out", .stderr = "err" });
 
-    // An empty output is not written, as an empty string is not truthy in TypeScript.
+    // An empty output is not written.
     var loud = worker_log_bun.WorkerLogBun.init(1, false, true);
     loud.tool("ffprobe", .{ .stdout = "", .stderr = null });
     loud.tool("ffprobe", .{ .stdout = null, .stderr = "" });
@@ -698,7 +698,7 @@ test "a pool that can never create a worker leaves the task pending" {
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
 
-    // As in TypeScript, a maxWorkers that compares false against the number of workers (NaN) never allows
+    // A maxWorkers that compares false against the number of workers (NaN) never allows
     // one, so the task waits for a worker that never comes.
     const pool = try WorkerPoolBun.init(std.testing.io, std.math.nan(f64), 10000, .{});
     defer pool.deinit();
@@ -823,7 +823,7 @@ test "boxWrap splits CRLF lines and keeps a blank line for a line of only whites
     const allocator = arena.allocator();
     var helper = commander.Help{};
 
-    // The \r of a CRLF line ending is not part of the line, as the split of the JavaScript is not.
+    // The \r of a CRLF line ending is not part of the line.
     try std.testing.expectEqualStrings("aaa bbb\nccc", try helper.boxWrap(allocator, "aaa bbb\r\nccc", 80));
 
     // A line of only whitespace has no chunks at all, which is one empty line.

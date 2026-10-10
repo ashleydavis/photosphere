@@ -9,6 +9,7 @@
 const std = @import("std");
 const types = @import("types.zig");
 const json_util = @import("json-util.zig");
+const utils = @import("utils-zig");
 
 const Completion = types.Completion;
 const TaskStatus = types.TaskStatus;
@@ -129,14 +130,20 @@ const WaitKind = enum {
     slot,
 };
 
+//
+// Where a task is in its life.
+//
 const TaskState = enum {
+    // Waiting in the queue for a worker.
     queued,
+    // Being run by a thread.
     running,
+    // Ended.
     done,
 };
 
 //
-// The error of a failed task in a task-completed event, laid out like the fields of a JavaScript Error that survive JSON.
+// The error of a failed task in a task-completed event, laid out like the error objects the page reads, with the fields that survive JSON.
 //
 const ErrorObject = struct {
     // The text of the error.
@@ -296,6 +303,19 @@ pub const TaskContext = struct {
     }
 
     //
+    // Runs one child task to its end and returns how it ended, with everything the runner and this call held for it released. Unlike
+    // queueChild and awaitTask it keeps nothing of the child until this task ends: the data is written with the allocator, the
+    // completion is copied with it, and the child is freed before this returns. It is for a task that runs children one after another
+    // for as long as it lives. Returns error.Cancelled when this task has been cancelled.
+    //
+    pub fn runChild(self: *TaskContext, allocator: std.mem.Allocator, task_type: []const u8, data: anytype, priority: ?TaskPriority) !Completion {
+        const data_json = try json_util.stringify(allocator, data);
+        const child_id = try self.runner.queueChild(self.task, task_type, data_json, priority);
+        defer self.runner.releaseChild(self.task, child_id);
+        return try self.runner.awaitTask(self.task, child_id, allocator);
+    }
+
+    //
     // Waits for every child to finish, running queued children of this task while it waits.
     //
     pub fn awaitAllTasks(self: *TaskContext) void {
@@ -329,6 +349,24 @@ pub const TaskContext = struct {
     }
 
     //
+    // The requester that hands the host requests of this task to code that does not know about tasks, or null when the shell gave the
+    // core no host request callback (every desktop). The storage is the caller's, and the requester is valid as long as it and this
+    // task are.
+    //
+    pub fn hostRequester(self: *TaskContext, storage: *TaskHostRequester) ?utils.host_requester.IHostRequester {
+        if (self.runner.config.host_request == null) {
+            return null;
+        }
+        storage.* = .{
+            .context = self,
+        };
+        return .{
+            .ptr = storage,
+            .request = TaskHostRequester.request,
+        };
+    }
+
+    //
     // Shows a native file or folder dialog through the shell's native host callback, and returns what the user chose as the
     // JSON text of an array of path strings, empty when they cancelled. The dialog is shown on the shell's UI thread while this
     // waits, so it must be called from a task. A test hooks build lets a test answer instead, and no dialog is shown.
@@ -352,6 +390,43 @@ pub const TaskContext = struct {
         return buffer[0..@intCast(length)];
     }
 };
+
+//
+// What a task's host requester asks through: the shell's host request callback. An answer that did not succeed is an error with the shell's
+// reason in it.
+//
+pub const TaskHostRequester = struct {
+    // The task whose host requests are made.
+    context: *TaskContext,
+
+    //
+    // Asks the shell and returns its answer, allocated with the allocator. Everything it allocates is the caller's, so it may be
+    // called from any thread of the task, which is why it does not use the task's arena.
+    //
+    fn request(ptr: *anyopaque, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) anyerror![]const u8 {
+        const self: *TaskHostRequester = @ptrCast(@alignCast(ptr));
+        return askShell(self.context.config(), allocator, method, request_json);
+    }
+};
+
+//
+// Asks the shell, through the host request callback of the configuration, to do one thing only the platform can do, and returns its
+// answer allocated with the allocator. Fails with the shell's reason when it could not do it, and when the configuration has no
+// callback. It is for code that has the configuration but no task, such as the startup of the core.
+//
+pub fn askShell(config: *const ZiggyConfig, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) anyerror![]const u8 {
+    const host_request = config.host_request orelse {
+        return utils.errors.throwError("{s} needs the phone's shell, and this program has none.", .{method});
+    };
+    const method_text = try allocator.dupeZ(u8, method);
+    const request_text = try allocator.dupeZ(u8, request_json);
+    const buffer = try allocator.alloc(u8, 256 * 1024);
+    const length = host_request(config.user_data, method_text.ptr, request_text.ptr, buffer.ptr, buffer.len);
+    if (length < 0) {
+        return utils.errors.throwError("{s} failed: {s}", .{ method, buffer[0..@intCast(-length)] });
+    }
+    return buffer[0..@intCast(length)];
+}
 
 //
 // The pool of threads and the queue of tasks.
@@ -544,8 +619,7 @@ pub const TaskRunner = struct {
 
     //
     // The priority of the task running on the calling thread, or null when no task of this runner is. An app that lets a handler queue
-    // a task through some other route than the task context uses it to give that task its parent's priority, as the Electron pool does
-    // with priorityOfRunningTask.
+    // a task through some other route than the task context uses it to give that task its parent's priority.
     //
     pub fn priorityOfRunningTask(self: *TaskRunner) ?TaskPriority {
         const thread_id = std.Thread.getCurrentId();
@@ -562,10 +636,16 @@ pub const TaskRunner = struct {
         return null;
     }
 
+    //
+    // Takes the lock that guards the queue and the tasks.
+    //
     fn lock(self: *TaskRunner) void {
         self.mutex.lockUncancelable(self.io);
     }
 
+    //
+    // Releases the lock that guards the queue and the tasks.
+    //
     fn unlock(self: *TaskRunner) void {
         self.mutex.unlock(self.io);
     }
@@ -580,6 +660,9 @@ pub const TaskRunner = struct {
         }
     }
 
+    //
+    // Makes a task in the queued state. A top level task has no parent, and a child is made by queueChild.
+    //
     fn createTask(self: *TaskRunner, task_id: []const u8, task_type: []const u8, source: []const u8, data_json: []const u8, priority: TaskPriority, parent: ?*Task) !*Task {
         const task = try self.allocator.create(Task);
         errdefer self.allocator.destroy(task);
@@ -638,8 +721,8 @@ pub const TaskRunner = struct {
     }
 
     //
-    // Puts a task into the one queue: an interactive task at the head and a background task at the end, as the pools of the
-    // Electron and Bun apps do (insertTaskByPriority). A second interactive task therefore goes in front of the first one still
+    // Puts a task into the one queue: an interactive task at the head and a background task at the end.
+    // A second interactive task therefore goes in front of the first one still
     // waiting, and background tasks keep their arrival order. The caller holds the lock.
     //
     fn enqueue(self: *TaskRunner, task: *Task) !void {
@@ -672,6 +755,9 @@ pub const TaskRunner = struct {
         return task;
     }
 
+    //
+    // The loop of a worker thread: takes the next queued task and runs it, until the runner shuts down.
+    //
     fn workerMain(self: *TaskRunner) void {
         while (true) {
             self.lock();
@@ -726,6 +812,9 @@ pub const TaskRunner = struct {
         self.finish(task, completion);
     }
 
+    //
+    // Finds the handler for the task's type and runs it, giving the task's completion. An unknown type or data that is not JSON fails the task.
+    //
     fn callHandler(self: *TaskRunner, context: *TaskContext, arena: std.mem.Allocator) Completion {
         const task = context.task;
         var handler: ?TaskHandler = null;
@@ -850,6 +939,9 @@ pub const TaskRunner = struct {
         }
     }
 
+    //
+    // Queues a child of the parent task, waiting (and running other children meanwhile) while the parent is at its child task limit. Returns the child's id.
+    //
     fn queueChild(self: *TaskRunner, parent: *Task, task_type: []const u8, data_json: []const u8, priority: ?TaskPriority) ![]const u8 {
         self.lock();
         defer self.unlock();
@@ -873,6 +965,9 @@ pub const TaskRunner = struct {
         return child.id;
     }
 
+    //
+    // Waits for a child of the parent to end, running queued children on this thread while it waits, and returns its completion.
+    //
     fn awaitTask(self: *TaskRunner, parent: *Task, child_id: []const u8, arena: std.mem.Allocator) !Completion {
         self.lock();
         defer self.unlock();
@@ -895,6 +990,27 @@ pub const TaskRunner = struct {
         };
     }
 
+    //
+    // Forgets a finished child of the parent and frees it with all its own children and its result. The child's id is not valid
+    // afterwards. A task that goes on for a long time and queues many children calls this for each, so they do not pile up until it ends.
+    //
+    fn releaseChild(self: *TaskRunner, parent: *Task, child_id: []const u8) void {
+        self.lock();
+        defer self.unlock();
+        for (parent.children.items, 0..) |child, index| {
+            if (std.mem.eql(u8, child.id, child_id)) {
+                std.debug.assert(child.state == .done);
+                _ = parent.children.orderedRemove(index);
+                self.destroyTask(child);
+                return;
+            }
+        }
+        std.debug.panic("releaseChild: {s} is not a child of {s}", .{ child_id, parent.id });
+    }
+
+    //
+    // Waits for every child of the parent to end, running queued children on this thread while it waits.
+    //
     fn awaitAllTasks(self: *TaskRunner, parent: *Task) void {
         self.lock();
         defer self.unlock();
@@ -917,6 +1033,9 @@ pub const TaskRunner = struct {
         }
     }
 
+    //
+    // Whether the condition a wait is for holds: a task is done, every child is done or a place is free under the child task limit.
+    //
     fn conditionMet(self: *TaskRunner, parent: *Task, kind: WaitKind, target: ?*Task) bool {
         return switch (kind) {
             .task => target.?.state == .done,
@@ -925,6 +1044,9 @@ pub const TaskRunner = struct {
         };
     }
 
+    //
+    // Tells the page a task sent a message, then the observer.
+    //
     fn emitTaskMessage(self: *TaskRunner, task: *Task, message_json: []const u8) !void {
         if (self.silent.load(.acquire)) {
             return;
@@ -934,7 +1056,9 @@ pub const TaskRunner = struct {
             .data = .{
                 .taskId = task.id,
                 .source = task.source,
-                .message = json_util.Raw{ .text = message_json },
+                .message = json_util.Raw{
+                    .text = message_json,
+                },
             },
         });
         defer self.allocator.free(event);
@@ -948,6 +1072,7 @@ pub const TaskRunner = struct {
             });
         }
     }
+
     //
     // Sends the reply to the page request a task was answering: the task's result on success, or an error reply saying why not.
     //
@@ -956,9 +1081,13 @@ pub const TaskRunner = struct {
             return;
         }
         const event = json_util.stringify(self.allocator, .{
-            .id = json_util.Raw{ .text = reply_id_json },
+            .id = json_util.Raw{
+                .text = reply_id_json,
+            },
             .ok = completion.status == .succeeded,
-            .data = if (completion.status == .succeeded) json_util.Raw{ .text = completion.result_json orelse "null" } else null,
+            .data = if (completion.status == .succeeded) json_util.Raw{
+                .text = completion.result_json orelse "null",
+            } else null,
             .@"error" = switch (completion.status) {
                 .succeeded => null,
                 .cancelled => "Cancelled",
@@ -969,9 +1098,8 @@ pub const TaskRunner = struct {
         self.sink.emit(self.sink.user_data, event);
     }
 
-
     //
-    // Tells the page a task has ended, with the payload the Electron main process sends: `{taskId, result}`, where result is the
+    // Tells the page a task has ended, with the payload `{taskId, result}`, where result is the
     // full ITaskResult (taskId, status, errorMessage, outputs, type, inputs). TaskStatus has no cancelled, so a cancelled task is
     // reported as failed with the error message "Cancelled". The runner knows the task's type and input, so they come from it.
     //
@@ -991,11 +1119,17 @@ pub const TaskRunner = struct {
                 .result = .{
                     .taskId = task.id,
                     .status = if (completion.status == .succeeded) "succeeded" else "failed",
-                    .@"error" = if (error_message) |text| ErrorObject{ .message = text } else null,
+                    .@"error" = if (error_message) |text| ErrorObject{
+                        .message = text,
+                    } else null,
                     .errorMessage = error_message,
-                    .outputs = if (completion.result_json) |text| json_util.Raw{ .text = text } else null,
+                    .outputs = if (completion.result_json) |text| json_util.Raw{
+                        .text = text,
+                    } else null,
                     .type = task.task_type,
-                    .inputs = json_util.Raw{ .text = task.data_json },
+                    .inputs = json_util.Raw{
+                        .text = task.data_json,
+                    },
                 },
             },
         }) catch @panic("out of memory building a task event");

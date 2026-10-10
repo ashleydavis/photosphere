@@ -21,4 +21,9 @@ public interface ZiggyHost {
     // folder. Returns the answer as UTF-8 JSON, an array of path strings that is [] when the user cancelled, or null when
     // the picker could not be shown (the reason has been logged).
     byte[] pickPathsJson(int kind, String title, String initialName);
+
+    // Does one thing only the app's own code can do, named by method, for the core's host request callback. Both arguments are UTF-8
+    // text as bytes (the method name and the JSON text of its argument). Called from a worker thread of the core, which waits for the
+    // answer, so it may block. Returns a HostRequestAnswer: a status byte followed by the JSON text of the answer or the reason it failed.
+    byte[] hostRequest(byte[] method, byte[] requestJson);
 }

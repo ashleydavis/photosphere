@@ -128,7 +128,7 @@ fn runCase(allocator: std.mem.Allocator, promptCase: std.json.Value, input: *Pro
     unreachable;
 }
 
-test "prompts render and answer exactly like the TypeScript prompts" {
+test "prompts render and answer exactly like the recorded prompts" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -153,7 +153,7 @@ test "prompts render and answer exactly like the TypeScript prompts" {
         errdefer std.debug.print("case {d}: {s} keys={f}\n", .{ caseIndex, helpers.stringField(promptCase, "prompt"), std.json.fmt(keys, .{}) });
 
         if (pending) {
-            // TypeScript keeps waiting for more input; the test input ends instead.
+            // The prompt keeps waiting for more input; the test input ends instead.
             try std.testing.expectError(error.EndOfStream, runCase(allocator, promptCase, input, &output.writer));
             try std.testing.expectEqualStrings(helpers.stringField(promptCase, "output"), output.written());
             continue;
@@ -215,10 +215,9 @@ test "a text prompt ends its input on ctrl-d with an empty line" {
 }
 
 //
-// What the TypeScript prompts write for a text prompt whose placeholder is empty, starts with a character of two
+// What the prompts write for a text prompt whose placeholder is empty, starts with a character of two
 // UTF-8 bytes, or starts with a character outside the Basic Multilingual Plane (split into two surrogates, which
-// are written as U+FFFD each), and for a select prompt whose hints are empty. Captured from the TypeScript prompts
-// the way fixtures/generate.ts captures prompts.json.
+// are written as U+FFFD each), and for a select prompt whose hints are empty. Recorded the way prompts.json is.
 //
 const empty_and_non_ascii_cases =
     "[{\"prompt\":\"text\",\"options\":{\"message\":\"Name:\",\"placeholder\":\"\"},\"keys\":[\"a\",\"\\u" ++
@@ -278,9 +277,9 @@ test "an empty placeholder or hint is left out, and a placeholder's first charac
 }
 
 //
-// What the TypeScript password prompt writes when a character outside the Basic Multilingual Plane is typed: it is
-// two UTF-16 code units, so `userInput.replaceAll(/./g, mask)` masks it twice, and the cursor counts code units.
-// Captured from the TypeScript prompt the way fixtures/generate.ts captures prompts.json.
+// What the password prompt writes when a character outside the Basic Multilingual Plane is typed: it is
+// two UTF-16 code units, so the mask is written twice, and the cursor counts code units.
+// Recorded the way prompts.json is.
 //
 const astral_password_cases =
     "[{\"prompt\":\"password\",\"options\":{\"message\":\"Secret:\"},\"keys\":[\"\\ud83d\\ude00\",\"a\"," ++

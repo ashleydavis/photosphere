@@ -38,8 +38,8 @@ pub const Creator = *const fn (context: *anyopaque, allocator: std.mem.Allocator
 // The caller supplies load/save/delete callbacks appropriate for the level
 // (shard, collection, or database). An optional creator callback is needed
 // when upsert() may be called on a level whose tree starts empty (e.g. database).
-// (Zig: the TypeScript arrow functions become function pointers that receive `context`, the object that owns the
-// ref. The ref keeps the allocator it was created with; tree nodes are allocated with it.)
+// (The callbacks are function pointers that receive `context`, the object that owns the ref. The ref keeps the
+// allocator it was created with; tree nodes are allocated with it.)
 //
 pub const MerkleRef = struct {
     //
@@ -89,7 +89,7 @@ pub const MerkleRef = struct {
     creator: Creator,
 
     //
-    // Creates a ref (TypeScript: the constructor).
+    // Creates a ref.
     //
     pub fn init(allocator: std.mem.Allocator, context: *anyopaque, loader: Loader, saver: Saver, deleter: Deleter, creator: Creator) MerkleRef {
         return .{
@@ -179,7 +179,7 @@ pub const MerkleRef = struct {
 
     //
     // Drops the cached tree. Throws if dirty, call commit() first.
-    // (Zig: the message's dash is written as an escape so the source holds no em dash; the text matches TypeScript.)
+    // (The message's dash is written as an escape so the source holds no em dash.)
     //
     pub fn flush(self: *MerkleRef) !void {
         if (self._dirty) {

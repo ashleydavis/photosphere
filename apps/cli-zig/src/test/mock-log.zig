@@ -43,8 +43,7 @@ pub const IMockLogCall = struct {
 };
 
 //
-// A log that records every call made to it (the mocked `log` of `utils` in the TypeScript tests, whose
-// methods are jest.fn()s). Nothing is written anywhere.
+// A log that records every call made to it. Nothing is written anywhere.
 //
 pub const MockLog = struct {
     // Allocator the recorded calls are copied with.
@@ -76,7 +75,7 @@ pub const MockLog = struct {
     }
 
     //
-    // Makes this the global log (TypeScript: the mocked `utils` module).
+    // Makes this the global log.
     //
     pub fn install(self: *MockLog) void {
         self.previousLog = log_module.log;
@@ -103,7 +102,7 @@ pub const MockLog = struct {
     }
 
     //
-    // The number of calls to a method (TypeScript: log.info.mock.calls.length).
+    // The number of calls to a method.
     //
     pub fn callCount(self: *const MockLog, method: LogMethod) usize {
         var count: usize = 0;
@@ -116,7 +115,7 @@ pub const MockLog = struct {
     }
 
     //
-    // True when a method was called with exactly this message (TypeScript: toHaveBeenCalledWith(message)).
+    // True when a method was called with exactly this message.
     //
     pub fn wasCalledWith(self: *const MockLog, method: LogMethod, message: []const u8) bool {
         for (self.calls.items) |call| {
@@ -128,7 +127,7 @@ pub const MockLog = struct {
     }
 
     //
-    // True when a method was called with a message containing the text (TypeScript: toHaveBeenCalledWith(expect.stringContaining(text))).
+    // True when a method was called with a message containing the text.
     //
     pub fn wasCalledContaining(self: *const MockLog, method: LogMethod, text: []const u8) bool {
         for (self.calls.items) |call| {
@@ -226,7 +225,7 @@ pub const MockLog = struct {
     }
 
     //
-    // Verbose logging is off (TypeScript: verboseEnabled: false).
+    // Verbose logging is off.
     //
     fn verboseEnabled(ptr: *anyopaque) bool {
         _ = ptr;

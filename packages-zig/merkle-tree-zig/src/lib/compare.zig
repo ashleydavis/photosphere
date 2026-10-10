@@ -19,8 +19,7 @@ pub const ICompareResult = struct {
 };
 
 //
-// The optional progress callback of compareTrees (TypeScript: `(progress: string) => void`).
-// (Zig: a closure; `function` is called with `context`.)
+// The optional progress callback of compareTrees (a closure; `function` is called with `context`).
 //
 pub const CompareProgressCallback = struct {
     // The state of the callback, passed to function.
@@ -61,7 +60,7 @@ pub fn compareTrees(allocator: std.mem.Allocator, treeA: *const IMerkleTree, tre
     var onlyInB: std.ArrayList([]const u8) = .empty;
     var modified: std.ArrayList([]const u8) = .empty;
 
-    // TODO: fix together with the TypeScript. Equal roots are treated as identical trees even when the leaf names differ, because a leaf hash does not cover its name. Mirrors compare.ts on purpose.
+    // TODO: equal roots are treated as identical trees even when the leaf names differ, because a leaf hash does not cover its name.
     if (treeA.merkle != null and treeB.merkle != null and std.mem.eql(u8, treeA.merkle.?.hash, treeB.merkle.?.hash)) {
         return .{
             .onlyInA = onlyInA.items,
@@ -70,7 +69,7 @@ pub fn compareTrees(allocator: std.mem.Allocator, treeA: *const IMerkleTree, tre
         };
     }
 
-    // (Zig: an array hash map keeps insertion order, like a JavaScript Map.)
+    // (An array hash map keeps insertion order.)
     var hashesInB: std.StringArrayHashMapUnmanaged([]const u8) = .empty;
     var leavesOfB = iterateLeaves(SortNode, allocator, treeB.sort);
     while (try leavesOfB.next()) |leaf| {

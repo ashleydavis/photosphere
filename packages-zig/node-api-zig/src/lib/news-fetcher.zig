@@ -109,6 +109,7 @@ fn isTruthy(value: ?std.json.Value) bool {
 
 //
 // Converts a link of a news item (kept only when truthy, as `if (item.link)` tests it).
+// (Zig: a news item has typed fields.)
 //
 fn toLink(allocator: std.mem.Allocator, value: ?std.json.Value) !?INewsLink {
     if (!isTruthy(value)) {
@@ -116,7 +117,10 @@ fn toLink(allocator: std.mem.Allocator, value: ?std.json.Value) !?INewsLink {
     }
     const object = switch (value.?) {
         .object => |object| object,
-        else => return INewsLink{ .label = "undefined", .url = "undefined" },
+        else => return INewsLink{
+            .label = "undefined",
+            .url = "undefined",
+        },
     };
     return INewsLink{
         .label = try templateText(allocator, object.get("label")),
@@ -126,6 +130,7 @@ fn toLink(allocator: std.mem.Allocator, value: ?std.json.Value) !?INewsLink {
 
 //
 // Whether a path segment is a single dot of a URL path, written plainly or percent-encoded.
+// (This and the helpers below it turn a file URL into a path.)
 //
 fn isSingleDotSegment(segment: []const u8) bool {
     return std.mem.eql(u8, segment, ".") or std.ascii.eqlIgnoreCase(segment, "%2e");
@@ -198,7 +203,7 @@ fn percentDecode(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
 }
 
 //
-// Node's `fileURLToPath` for a URL starting "file://", as Bun runs it. The URL is parsed first: tabs and
+// Converts a URL starting "file://" to a file path. The URL is parsed first: tabs and
 // newlines are dropped, backslashes are slashes, the query and fragment are cut off, "localhost" is no host at
 // all, and `.` and `..` segments are resolved. Then the path is checked and percent-decoded. On Windows the path
 // uses backslashes and loses the slash before the drive letter ("C:\dir\file"), and a host makes it a UNC path

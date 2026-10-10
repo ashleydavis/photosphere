@@ -2,8 +2,7 @@ const std = @import("std");
 const utils = @import("utils-zig");
 
 //
-// A log that counts the calls to verbose and exception and prints nothing (the jest.mock of the utils log in the
-// TypeScript tests, whose `verbose` and `exception` are jest.fn()s). Every other method does nothing.
+// A log that counts the calls to verbose and exception and prints nothing. Every other method does nothing.
 //
 pub const MockLog = struct {
     // How many times verbose has been called.

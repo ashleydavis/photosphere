@@ -61,7 +61,7 @@ test "pick-file is a save dialog with the suggested name and replies with one pa
     try shell.expectMessageContaining("{\"id\":3,\"ok\":true,\"data\":\"kind1\"}");
 }
 
-test "a cancelled dialog is a reply of null, as Electron's undefined" {
+test "a cancelled dialog is a reply of null" {
     var shell: FakeShell = undefined;
     shell.init(std.testing.allocator);
     defer shell.deinit();

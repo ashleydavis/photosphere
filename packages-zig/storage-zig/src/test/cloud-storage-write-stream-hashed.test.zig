@@ -1,6 +1,5 @@
 //
-// Tests for CloudStorage.writeStreamHashed (port of src/tests/cloud-storage-write-stream-hashed.test.ts), and for
-// CloudStorage.storedHash, which has no test of its own in TypeScript.
+// Tests for CloudStorage.writeStreamHashed, and for CloudStorage.storedHash.
 //
 
 const std = @import("std");
@@ -13,7 +12,7 @@ const S3Command = s3_client.S3Command;
 const S3CommandOutput = s3_client.S3CommandOutput;
 
 //
-// Answers a command for a test (the TypeScript test's handler).
+// Answers a command for a test.
 //
 const Handler = *const fn (commandName: []const u8) anyerror!S3CommandOutput;
 
@@ -47,7 +46,7 @@ const FakeClient = struct {
 };
 
 //
-// Creates a CloudStorage whose S3 client answers from the handler (the TypeScript's createStorage).
+// Creates a CloudStorage whose S3 client answers from the handler.
 //
 fn createStorage(allocator: std.mem.Allocator, client: *FakeClient, handler: Handler) CloudStorage {
     client.* = .{
@@ -90,7 +89,7 @@ fn aBody() std.Io.Reader {
 const hash = [_]u8{7} ** 32;
 
 //
-// The base64 of the hash (TypeScript: `hash.toString('base64')`).
+// The base64 of the hash.
 //
 fn hashBase64(allocator: std.mem.Allocator) ![]const u8 {
     const encoded = try allocator.alloc(u8, std.base64.standard.Encoder.calcSize(hash.len));
@@ -240,7 +239,7 @@ fn notFound(commandName: []const u8) anyerror!S3CommandOutput {
 }
 
 //
-// storedHash has no test of its own in TypeScript; what it answers for an S3 object is pinned here.
+// What storedHash answers for an S3 object is pinned here.
 //
 test "storedHash asks for the checksum and decodes the one S3 kept" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -292,10 +291,9 @@ fn headWithUntidyChecksum(commandName: []const u8) anyerror!S3CommandOutput {
 }
 
 //
-// TypeScript decodes the checksum with `Buffer.from(checksum, "base64")`, which skips what is not base64 rather than
-// failing.
+// The checksum is decoded leniently: what is not base64 is skipped rather than failing.
 //
-test "storedHash decodes a checksum the way Buffer.from does, skipping characters that are not base64" {
+test "storedHash decodes a checksum, skipping characters that are not base64" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

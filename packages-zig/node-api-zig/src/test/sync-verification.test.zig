@@ -1,6 +1,5 @@
 //
-// Tests for how a sync checks its copies against the target's own hash (port of
-// src/test/lib/sync-verification.test.ts).
+// Tests for how a sync checks its copies against the target's own hash.
 //
 
 const std = @import("std");
@@ -185,7 +184,7 @@ test "a target that knows its own hash is not read back" {
     defer temp_dirs.removeTempDir(io, workingDir);
 
     // Reading every copied file back is what made syncing a phone's library unusable: the file
-    // crosses the network twice and is hashed by the embedded engine's pure JavaScript SHA-256.
+    // crosses the network twice and is hashed in software.
     var hashes: std.StringHashMapUnmanaged([]const u8) = .empty;
     try hashes.put(allocator, try assetPathOf(allocator, assetId), try sync_helpers.hashOf(allocator, assetBytes));
 
@@ -235,10 +234,9 @@ test "the hash the sync already has goes up with the file" {
     const workingDir = try temp_dirs.makeTempDir(allocator, io, "psphere-sync-verify");
     defer temp_dirs.removeTempDir(io, workingDir);
 
-    // Nothing should have to compute it. The AWS SDK asked to checksum a body hashes it in the
-    // embedded engine's pure JavaScript SHA-256 at well under a megabyte a second, and on a
-    // Pixel 6 one 100MB video held the upload for over a quarter of an hour with no byte
-    // reaching the server. The merkle tree is made of these hashes, so the sync already has it.
+    // Nothing should have to compute it. The AWS SDK asked to checksum a body hashes it in
+    // software, which is slow enough on a phone that one large video held the upload for a
+    // very long time with no byte reaching the server. The merkle tree is made of these hashes, so the sync already has it.
     const hashes: std.StringHashMapUnmanaged([]const u8) = .empty;
     const target = try syncOneAsset(allocator, io, workingDir, &hashes, null);
 
@@ -260,8 +258,7 @@ test "a target that does not know its own hash is checked by length, not read ba
     defer temp_dirs.removeTempDir(io, workingDir);
 
     // Reading a file back to hash it is what made syncing a phone's library impossible: each file
-    // crossed the network twice and was hashed by the embedded engine's pure JavaScript SHA-256
-    // at well under a megabyte a second. `psi verify` is the deep check.
+    // crossed the network twice and was hashed in software, which is slow. `psi verify` is the deep check.
     const hashes: std.StringHashMapUnmanaged([]const u8) = .empty;
     const target = try syncOneAsset(allocator, io, workingDir, &hashes, null);
 

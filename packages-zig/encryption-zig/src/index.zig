@@ -5,6 +5,6 @@ pub const encrypt_stream = @import("lib/encrypt-stream.zig");
 pub const key_utils = @import("lib/key-utils.zig");
 
 //
-// The file with no TypeScript counterpart (the node:crypto functions, over aws-lc's libcrypto).
+// The crypto functions the encryption package uses, over aws-lc's libcrypto.
 //
 pub const node_crypto = @import("lib/node-crypto.zig");

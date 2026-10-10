@@ -23,7 +23,7 @@ pub const EncryptedStorage = struct {
     // Gets the location of the storage.
     location: []const u8,
 
-    // The wrapped storage (TypeScript: the private `storage` field; renamed because `storage()` returns the interface).
+    // The wrapped storage (not called `storage` because `storage()` returns the interface).
     wrappedStorage: IStorage,
 
     // The private keys used to decrypt files, by key hash and "default".
@@ -33,7 +33,7 @@ pub const EncryptedStorage = struct {
     encryptionPublicKey: *const PublicKey,
 
     //
-    // Creates the encrypted storage (TypeScript: `new EncryptedStorage(location, storage, decryptionKeyMap, encryptionPublicKey)`).
+    // Creates the encrypted storage.
     //
     pub fn init(location: []const u8, wrappedStorage: IStorage, decryptionKeyMap: IPrivateKeyMap, encryptionPublicKey: *const PublicKey) EncryptedStorage {
         return .{
@@ -45,7 +45,7 @@ pub const EncryptedStorage = struct {
     }
 
     //
-    // Gets the IStorage interface of this storage (TypeScript: the class implements IStorage).
+    // Gets the IStorage interface of this storage.
     //
     pub fn storage(self: *EncryptedStorage) IStorage {
         return .{ .ptr = self, .vtable = storage_module.implement(EncryptedStorage), .location = self.location };
@@ -234,8 +234,7 @@ pub const EncryptedStorage = struct {
 };
 
 //
-// The stream returned by EncryptedStorage.readStream: the decryption stream piped from the wrapped storage's stream
-// (TypeScript: `pipe(readStream, decryptionStream)`).
+// The stream returned by EncryptedStorage.readStream: the decryption stream piped from the wrapped storage's stream.
 //
 const DecryptedReadStream = struct {
     // The stream that decrypts the source.

@@ -3,8 +3,7 @@ const utils = @import("utils-zig");
 const log_module = utils.log;
 
 //
-// A log that counts and records the calls to exception (the jest.mock of `log` in the TypeScript
-// tests, whose `exception` is a jest.fn()). Every other method does nothing.
+// A log that counts and records the calls to exception. Every other method does nothing.
 //
 pub const ExceptionLog = struct {
     // How many times exception has been called.
@@ -20,7 +19,7 @@ pub const ExceptionLog = struct {
     previousLog: ?log_module.ILog = null,
 
     //
-    // Makes this the global log (TypeScript: jest.mock("../../lib/log")).
+    // Makes this the global log.
     //
     pub fn install(self: *ExceptionLog) void {
         self.previousLog = log_module.log;

@@ -1,10 +1,8 @@
 //
-// This file has no TypeScript counterpart. TypeScript passes inline arrow functions to retry, such as
-// `retry(() => storage.info(fileName))`. utils-zig's retry takes an operation value with a
-// `run(self, io)` method instead, so the arrow functions that several files share are defined here.
-// Each is a function of the TypeScript arrow function's source text (the Bun toString() that retryOnce puts
-// in its timeout message), because the same operation is written with different variable names in
-// different places.
+// The operations that several files pass to retry. utils-zig's retry takes an operation value with a
+// `run(self, io)` method, so each operation is defined here.
+// Each is a function of the operation's source text (which retryOnce puts in its timeout message), because
+// the same operation is written with different variable names in different places.
 //
 
 const std = @import("std");
@@ -18,11 +16,11 @@ const IMerkleTree = merkle_tree_zig.merkle_tree.IMerkleTree;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 //
-// `() => storage.info(fileName)`.
+// Gets the info of a file in a storage.
 //
 pub fn InfoOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the result.
@@ -44,11 +42,11 @@ pub fn InfoOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `() => storage.read(fileName)`.
+// Reads a file from a storage.
 //
 pub fn ReadOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the result.
@@ -70,11 +68,11 @@ pub fn ReadOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `() => storage.write(fileName, contentType, data)`.
+// Writes a file to a storage.
 //
 pub fn WriteOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the storage implementation's temporary data.
@@ -102,11 +100,11 @@ pub fn WriteOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `async () => computeHash(await storage.readStream(fileName))`.
+// Hashes a file by streaming it from a storage.
 //
 pub fn ComputeStorageHashOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the storage implementation's temporary data.
@@ -130,12 +128,11 @@ pub fn ComputeStorageHashOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `async () => { const readStream = await sourceStorage.readStream(fileName);
-//                 await destStorage.writeStream(fileName, contentType, readStream); }`.
+// Copies a file from one storage to another by streaming it.
 //
 pub fn CopyStreamOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the storage implementations' temporary data.
@@ -165,12 +162,11 @@ pub fn CopyStreamOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `async () => { const stream = await sourceStorage.readStream(fileName);
-//                 await destStorage.writeStream(fileName, contentType, stream, contentLength); }`.
+// Copies a file from one storage to another by streaming it, giving the destination the content length.
 //
 pub fn CopyStreamWithLengthOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the storage implementations' temporary data.
@@ -203,11 +199,11 @@ pub fn CopyStreamWithLengthOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `() => merkleTreeExists(storage)`.
+// Checks whether a storage holds a merkle tree.
 //
 pub fn MerkleTreeExistsOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the storage implementation's temporary data.
@@ -226,11 +222,11 @@ pub fn MerkleTreeExistsOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `() => loadMerkleTree(storage)`.
+// Loads the merkle tree from a storage.
 //
 pub fn LoadMerkleTreeOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the loaded tree.
@@ -249,11 +245,11 @@ pub fn LoadMerkleTreeOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `() => saveMerkleTree(merkleTree, storage)`.
+// Saves a merkle tree to a storage.
 //
 pub fn SaveMerkleTreeOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the rebuilt merkle nodes and the serialized data.
@@ -275,11 +271,11 @@ pub fn SaveMerkleTreeOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `() => storage.deleteFile(filePath)`.
+// Deletes a file from a storage.
 //
 pub fn DeleteFileOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the storage implementation's temporary data.
@@ -301,11 +297,11 @@ pub fn DeleteFileOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `() => storage.writeStream(fileName, contentType, inputStream, contentLength)`.
+// Writes a file to a storage from a stream.
 //
 pub fn WriteStreamOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the storage implementation's temporary data.
@@ -336,11 +332,11 @@ pub fn WriteStreamOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `async () => computeAssetHash(await storage.readStream(fileName), fileInfo)`.
+// Computes the hash of an asset by streaming it from a storage.
 //
 pub fn ComputeAssetHashOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the hash and the storage implementation's temporary data.

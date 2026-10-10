@@ -4,9 +4,9 @@ const encryption = @import("encryption-zig");
 const fixtures = @import("fixtures.zig");
 
 //
-// Golden interop tests between the TypeScript encryption package and this port, in both directions.
-// The TypeScript side of the fixtures is written by fixtures/generate.ts; the Zig output is checked against the
-// header, lengths and PEM layout of those committed fixtures and decrypted back with the fixture keys.
+// Golden interop tests against the committed fixtures, in both directions.
+// The Zig output is checked against the header, lengths and PEM layout of those fixtures and decrypted back with the
+// fixture keys.
 //
 
 const crypto = encryption.node_crypto;
@@ -57,7 +57,7 @@ fn encryptThroughStream(allocator: std.mem.Allocator, publicKey: *const crypto.P
     return fixtures.readAll(allocator, encryptionStream.reader());
 }
 
-test "Zig decrypts every TypeScript fixture (new format, legacy format and stream output)" {
+test "Zig decrypts every fixture (new format, legacy format and stream output)" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -112,7 +112,7 @@ test "Zig encrypts and decrypts its own output for every size" {
 }
 
 //
-// The 44-byte new-format header TypeScript wrote at the start of every new-<size>.bin and stream-<size>.bin fixture
+// The 44-byte new-format header at the start of every new-<size>.bin and stream-<size>.bin fixture
 // encrypted with ts-public.pem: "PSEN", version 1 (little endian), "A2CB" and the SHA-256 hash of the public key
 // (ts-public-hash.hex).
 //
@@ -121,12 +121,12 @@ const ts_key_header = "PSEN" ++ "\x01\x00\x00\x00" ++ "A2CB" ++
     "\x57\x39\x8d\x71\x17\x8a\x1f\x70\x96\x3e\x22\xd6\x96\x64\xbe\x2c";
 
 //
-// The length of the TypeScript fixture new-<size>.bin for each entry of `sizes` (the stream fixtures have the same
+// The length of the fixture new-<size>.bin for each entry of `sizes` (the stream fixtures have the same
 // lengths): the 44-byte header, the 512-byte wrapped key, the 16-byte IV and the PKCS#7 padded ciphertext.
 //
 const ts_encrypted_lengths = [_]usize{ 588, 588, 588, 604, 604, 1049164 };
 
-test "Zig output with the TypeScript key has the header and length of the TypeScript fixtures" {
+test "Zig output with the fixture key has the header and length of the fixtures" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -134,7 +134,7 @@ test "Zig output with the TypeScript key has the header and length of the TypeSc
     const privateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts-private.pem"));
     const tsPublicKey = try crypto.createPublicKey(allocator, try fixtures.readFixture(allocator, "ts-public.pem"));
 
-    // TypeScript decrypts with a key map that holds only the key hash, so Zig output must carry that hash.
+    // The fixtures are decrypted with a key map that holds only the key hash, so Zig output must carry that hash.
     var hashOnlyMap = try buildKeyMap(allocator, privateKey);
     _ = hashOnlyMap.swapRemove("default");
 
@@ -162,7 +162,7 @@ test "Zig output with the TypeScript key has the header and length of the TypeSc
     }
 }
 
-test "Zig-generated keys export as PEM with the layout of the TypeScript PEM files" {
+test "Zig-generated keys export as PEM with the layout of the fixture PEM files" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

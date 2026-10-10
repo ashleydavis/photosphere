@@ -17,7 +17,7 @@ const io = std.testing.io;
 //
 var test_uuid_generator: utils.test_uuid_generator.TestUuidGenerator = .{};
 
-test "hashRecord matches TypeScript for the synthetic records" {
+test "hashRecord matches the golden hashes for the synthetic records" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -39,7 +39,7 @@ test "hashRecord matches TypeScript for the synthetic records" {
     }
 }
 
-test "hashRecord matches the hashes TypeScript stored for every test database record" {
+test "hashRecord matches the hashes stored for every test database record" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -116,7 +116,7 @@ test "shard, collection and database merkle trees save, load and delete at the v
     try std.testing.expect((try merkle_tree.loadDatabaseMerkleTree(allocator, io, storage.asStorage(), ".db/bson")) == null);
 }
 
-test "loadDatabaseMerkleTree loads the tree TypeScript wrote for the v6 test database" {
+test "loadDatabaseMerkleTree loads the tree stored for the v6 test database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -144,8 +144,7 @@ test "getDatabaseRootHash returns the root hash of the database merkle tree, or 
 }
 
 //
-// The state of a merkle tree update test (TypeScript: the describe block variables set in beforeEach of
-// merkle-tree-update.test.ts).
+// The state of a merkle tree update test.
 //
 const UpdateFixture = struct {
     // The storage the database writes to.
@@ -159,7 +158,7 @@ const UpdateFixture = struct {
 };
 
 //
-// Creates the database and collection of a merkle tree update test (TypeScript: the beforeEach block).
+// Creates the database and collection of a merkle tree update test.
 //
 fn newUpdateFixture(allocator: std.mem.Allocator) !UpdateFixture {
     const storage = try allocator.create(MemoryStorage);
@@ -353,7 +352,7 @@ test "listShards lists the shards of a collection in name order, skipping the me
     try std.testing.expectEqual(@as(usize, 0), (try merkle_tree.listShards(allocator, io, storage.asStorage(), ".db/bson", "nonexistent")).len);
 }
 
-test "buildDatabaseMerkleTree with rebuild reproduces the merkle trees TypeScript wrote" {
+test "buildDatabaseMerkleTree with rebuild reproduces the stored merkle trees" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

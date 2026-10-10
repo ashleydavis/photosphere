@@ -1,7 +1,7 @@
 const std = @import("std");
 
 //
-// No TypeScript counterpart: the JavaScript Date semantics the TypeScript code relies on (`new Date(string)`,
+// The JavaScript Date semantics that the stored data depends on (`new Date(string)`,
 // `Date.prototype.toISOString`, `Date.prototype.toString`), as time values in milliseconds since the epoch.
 // Moved here from bdb-zig's js-value.zig so the packages below bdb (tools-zig) can use them; js-value.zig
 // re-exports them.
@@ -191,9 +191,8 @@ fn consume(text: []const u8, index: *usize, expected: u8) bool {
 // THH:mm, THH:mm:ss or THH:mm:ss.sss (any number of fraction digits) and Z or +HH:mm / -HH:mm, with the expanded
 // +YYYYYY / -YYYYYY year. A date-only form is UTC; a date-time without an offset is local time, assumed to be UTC.
 // The separator may be a single space as well as `T` or `t`: Node and Bun read a date-time that ISO 8601 writes
-// with a space as a date (and the TypeScript packages/tools/src/lib/image.ts depends on it, handing
-// `new Date("2025-05-27 09:54:16")`, an EXIF DateTimeOriginal with its date colons rewritten as dashes, to
-// `new Date`), so refusing it gave NaN and silently lost the date.
+// with a space as a date (image metadata depends on it: an EXIF DateTimeOriginal with its date colons rewritten as
+// dashes, "2025-05-27 09:54:16", is parsed this way), so refusing it gave NaN and silently lost the date.
 //
 pub fn parseDate(text: []const u8) f64 {
     var index: usize = 0;

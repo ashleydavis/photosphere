@@ -24,7 +24,7 @@ const loadMerkleTree = node_api.tree.loadMerkleTree;
 const js_value = bdb.js_value;
 
 //
-// Options of the compare command (TypeScript: ICompareCommandOptions extends IBaseCommandOptions).
+// Options of the compare command.
 // The base options (which hold the source database directory, db) are in `base`.
 //
 pub const ICompareCommandOptions = struct {
@@ -48,13 +48,13 @@ pub const ICompareCommandOptions = struct {
 
     //
     // Maximum number of items to show in each category.
-    // (Zig: the text of the option, which commander passes through without parsing it.)
+    // The text of the option, which the command line parser passes through without parsing it.
     //
     max: ?[]const u8 = null,
 };
 
 //
-// Writes each comparison progress message (TypeScript: `(progress) => { writeProgress(`🔍 Comparing | ${progress}`); }`).
+// Writes each comparison progress message, prefixed with "Comparing |".
 //
 fn onProgress(context: ?*anyopaque, progress: []const u8) void {
     _ = context;
@@ -81,7 +81,7 @@ fn configOrigin(config: ?std.json.Value) ?[]const u8 {
 }
 
 //
-// The end index of `files.slice(0, maxItems)` for a JavaScript number: NaN is 0, a negative end counts back from
+// The end index of the files to show for a floating point maximum: NaN is 0, a negative end counts back from
 // the length, and the end is clamped to the length.
 //
 fn sliceEnd(length: usize, maxItems: f64) usize {

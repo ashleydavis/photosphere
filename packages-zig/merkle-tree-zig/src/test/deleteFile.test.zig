@@ -1,5 +1,5 @@
 //
-// Tests for deleteItem and deleteItems (port of src/test/deleteFile.test.ts).
+// Tests for deleteItem and deleteItems.
 //
 
 const std = @import("std");
@@ -25,7 +25,7 @@ fn buildTestTree(allocator: std.mem.Allocator) !IMerkleTree {
 }
 
 //
-// The leaf count of a tree (0 when empty; TypeScript: `tree.sort?.leafCount || 0`).
+// The leaf count of a tree (0 when empty).
 //
 fn leafCount(tree: *const IMerkleTree) u32 {
     return if (tree.sort) |sort| sort.leafCount else 0;
@@ -189,14 +189,14 @@ test "should handle deleting from empty tree" {
 }
 
 //
-// Returns true when the tree has an item with the name (TypeScript: `findItemNode(tree, name)` is defined).
+// Returns true when the tree has an item with the name.
 //
 fn hasItem(tree: *const IMerkleTree, name: []const u8) bool {
     return merkle_tree.findItemInTree(tree.sort, name) != null;
 }
 
 //
-// The size of a tree (0 when empty; TypeScript: `tree.sort?.size || 0`).
+// The size of a tree (0 when empty).
 //
 fn treeSize(tree: *const IMerkleTree) u64 {
     return if (tree.sort) |sort| sort.size else 0;
@@ -210,7 +210,7 @@ fn expectThrown(expectedMessage: []const u8, result: anytype) !void {
     try std.testing.expectEqualStrings(expectedMessage, errors.lastErrorMessage());
 }
 
-test "Hard File Deletion (deleteItems): should completely remove a file from the tree" {
+test "deleteItems should completely remove a file from the tree" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -242,7 +242,7 @@ test "Hard File Deletion (deleteItems): should completely remove a file from the
     }
 }
 
-test "Hard File Deletion (deleteItems): should throw when trying to delete a non-existent file" {
+test "deleteItems should throw when trying to delete a non-existent file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -255,7 +255,7 @@ test "Hard File Deletion (deleteItems): should throw when trying to delete a non
     );
 }
 
-test "Hard File Deletion (deleteItems): should handle deleting the only file in a tree" {
+test "deleteItems should handle deleting the only file in a tree" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -275,7 +275,7 @@ test "Hard File Deletion (deleteItems): should handle deleting the only file in 
     try std.testing.expectEqual(@as(u32, 0), nodeCount(&tree));
 }
 
-test "Hard File Deletion (deleteItems): should persist hard deletion when saving and loading the tree" {
+test "deleteItems should persist hard deletion when saving and loading the tree" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -299,7 +299,7 @@ test "Hard File Deletion (deleteItems): should persist hard deletion when saving
     try std.testing.expect(!hasItem(&loadedTree, fileToDelete));
 }
 
-test "Hard File Deletion (deleteItems): should allow multiple files to be deleted completely" {
+test "deleteItems should allow multiple files to be deleted completely" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -322,7 +322,7 @@ test "Hard File Deletion (deleteItems): should allow multiple files to be delete
     try std.testing.expectEqual(initialFiles - 3, leafCount(&tree));
 }
 
-test "Hard File Deletion (deleteItems): should update Merkle tree hashes when a file is deleted" {
+test "deleteItems should update Merkle tree hashes when a file is deleted" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -341,7 +341,7 @@ test "Hard File Deletion (deleteItems): should update Merkle tree hashes when a 
     try std.testing.expect(!std.mem.eql(u8, originalRootHash, tree.merkle.?.hash));
 }
 
-test "Hard File Deletion (deleteItems): should handle deleting all files from a tree" {
+test "deleteItems should handle deleting all files from a tree" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -358,7 +358,7 @@ test "Hard File Deletion (deleteItems): should handle deleting all files from a 
     try std.testing.expectEqual(@as(u32, 0), nodeCount(&tree));
 }
 
-test "Hard File Deletion (deleteItems): should preserve metadata id and update counts correctly" {
+test "deleteItems should preserve metadata id and update counts correctly" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -379,7 +379,7 @@ test "Hard File Deletion (deleteItems): should preserve metadata id and update c
     try std.testing.expect(treeSize(&tree) < originalSize);
 }
 
-test "Hard File Deletion (deleteItems): should throw when trying to delete from empty tree" {
+test "deleteItems should throw when trying to delete from empty tree" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -392,7 +392,7 @@ test "Hard File Deletion (deleteItems): should throw when trying to delete from 
     );
 }
 
-test "Hard File Deletion (deleteItems): should throw when trying to delete 0 files (empty array)" {
+test "deleteItems should throw when trying to delete 0 files (empty array)" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -405,7 +405,7 @@ test "Hard File Deletion (deleteItems): should throw when trying to delete 0 fil
     );
 }
 
-test "Hard File Deletion (deleteItems): should handle deleting 1 file" {
+test "deleteItems should handle deleting 1 file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -423,7 +423,7 @@ test "Hard File Deletion (deleteItems): should handle deleting 1 file" {
     try std.testing.expect(hasItem(&tree, "file3.txt"));
 }
 
-test "Hard File Deletion (deleteItems): should handle deleting 2 files" {
+test "deleteItems should handle deleting 2 files" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -443,7 +443,7 @@ test "Hard File Deletion (deleteItems): should handle deleting 2 files" {
     try std.testing.expect(hasItem(&tree, "file5.txt"));
 }
 
-test "Hard File Deletion (deleteItems): should handle deleting 3 files" {
+test "deleteItems should handle deleting 3 files" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -463,7 +463,7 @@ test "Hard File Deletion (deleteItems): should handle deleting 3 files" {
     try std.testing.expect(hasItem(&tree, "file4.txt"));
 }
 
-test "Hard File Deletion (deleteItems): should throw when trying to delete mix of existing and non-existing files" {
+test "deleteItems should throw when trying to delete mix of existing and non-existing files" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

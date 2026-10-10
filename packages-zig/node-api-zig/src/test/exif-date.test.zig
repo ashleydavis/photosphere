@@ -7,7 +7,7 @@ const parseExifDate = node_api.image.parseExifDate;
 const pickExifDate = node_api.image.pickExifDate;
 
 //
-// Which EXIF date a photo is given, and when it is given none (port of exif-date.test.ts).
+// Which EXIF date a photo is given, and when it is given none.
 //
 
 //

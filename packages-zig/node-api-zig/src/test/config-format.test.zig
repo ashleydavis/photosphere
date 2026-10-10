@@ -11,21 +11,21 @@ const DEFAULT_AUTO_IMPORT_PAUSE_MS = api.auto_import_mobile.DEFAULT_AUTO_IMPORT_
 const DEFAULT_SYNC_PAUSE_MS = api.sync_settings.DEFAULT_SYNC_PAUSE_MS;
 
 //
-// Parses a JSON literal (TypeScript: the object literal the test passes).
+// Parses a JSON literal.
 //
 fn parseJson(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
 }
 
 //
-// Turns a value into JSON text, for comparing documents (TypeScript: `toEqual`; here the order of the keys counts too).
+// Turns a value into JSON text, for comparing documents (the order of the keys counts too).
 //
 fn toJson(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
     return std.json.Stringify.valueAlloc(allocator, value, .{});
 }
 
 //
-// Asserts that two lists of sources are equal (TypeScript: `toEqual`).
+// Asserts that two lists of sources are equal.
 //
 fn expectSources(expected: []const IAutoImportSource, actual: []const IAutoImportSource) !void {
     try std.testing.expectEqual(expected.len, actual.len);
@@ -55,7 +55,7 @@ fn expectOptionalString(expected: ?[]const u8, actual: ?[]const u8) !void {
 }
 
 //
-// Asserts that two configurations are equal (TypeScript: `toEqual`).
+// Asserts that two configurations are equal.
 //
 fn expectConfigEqual(expected: IConfigFile, actual: IConfigFile) !void {
     try std.testing.expectEqual(expected.theme, actual.theme);
@@ -276,9 +276,9 @@ test "yamlToConfigFile: a malformed source is dropped and the rest are kept" {
     }, config.autoImport.settings.sources);
 }
 
-// JavaScript throws reading `type` off a null source, so a file with an empty list entry stops here with that message
+// Reading `type` off a null source throws, so a file with an empty list entry stops here with that message
 // instead of that entry being dropped.
-test "yamlToConfigFile: a null source throws the error JavaScript throws reading it" {
+test "yamlToConfigFile: a null source throws the error reading it throws" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -659,7 +659,7 @@ test "parseConfigYamlChecked: an empty file and a file that is not a mapping hav
 //
 // An allocator whose first allocation fails and which then works as normal, so a test can tell code that returns an
 // out of memory error from code that swallows it and carries on (std.testing.FailingAllocator keeps failing once it
-// has failed, which cannot tell the two apart). (No TypeScript counterpart.)
+// has failed, which cannot tell the two apart).
 //
 const FailsOnceAllocator = struct {
     // The allocator that does the work.

@@ -9,6 +9,7 @@ const aws_c_sdkutils = @import("aws-c-sdkutils.zig");
 const aws_c_auth = @import("aws-c-auth.zig");
 const aws_c_s3 = @import("aws-c-s3.zig");
 const s2n_tls = @import("s2n-tls.zig");
+const android_libc = @import("../../android-libc.zig");
 
 //
 // Builds the AWS SDK for C (aws-c-s3 and the libraries under it) from the unmodified upstream sources fetched as the
@@ -53,6 +54,10 @@ pub const Context = struct {
     // glibc and for the other operating systems. Some probes of the CMake files find different things in the two.
     isMusl: bool,
 
+    // True for Android (CMake: `ANDROID`). Zig targets it as Linux with the android ABI, so isLinux is true as well. Its C library,
+    // bionic, holds the pthread, dl, rt and m functions, and is neither glibc nor musl.
+    isAndroid: bool,
+
     //
     // Creates a static library module for the target that links libc (every SDK library is C).
     //
@@ -70,6 +75,8 @@ pub const Context = struct {
             .optimize = self.optimize,
             .link_libc = true,
             .strip = true,
+            // The libraries end up in Android's shared library, whose code must not depend on where it is loaded.
+            .pic = if (target.result.abi.isAndroid()) true else null,
         });
         return self.b.addLibrary(.{
             .name = name,
@@ -227,7 +234,7 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
         .isAarch64 = arch == .aarch64,
         .isCrossCompiling = host.os.tag != os or host.cpu.arch != arch or host.abi != target.result.abi,
         .isMusl = target.result.abi.isMusl(),
-    };
+        .isAndroid = target.result.abi.isAndroid(),    };
 
     const common = try aws_c_common.build(&context, b.dependency("aws-c-common", .{}));
     const checksums = try aws_checksums.build(&context, b.dependency("aws-checksums", .{}), common);
@@ -268,6 +275,7 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
     for (aws_c_io.publicDefines(&context)) |define| {
         preprocess.addArg(b.fmt("-D{s}", .{define}));
     }
+    try android_libc.addLibcIncludesToCommand(b, preprocess, target);
     preprocess.addFileArg(header_files.add("aws-c.h", aws_c_header));
     preprocess.addArg("-o");
     const preprocessed_header = preprocess.addOutputFileArg("aws-c-preprocessed.h");
@@ -278,6 +286,7 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
         .target = target,
         .optimize = .Debug,
     });
+    try android_libc.addLibcIncludes(b, translate_c, target);
     module.addImport(aws_c_module_name, translate_c.createModule());
 
     for ([_]*std.Build.Step.Compile{ s3, auth, sdkutils, http, compression, io, cal, checksums, common }) |library| {

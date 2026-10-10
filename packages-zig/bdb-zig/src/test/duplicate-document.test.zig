@@ -17,8 +17,7 @@ const io = std.testing.io;
 var random_uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
 
 //
-// Creates the collection under test (TypeScript: the beforeEach block; the temporary directory it makes is
-// never used).
+// Creates the collection under test.
 //
 fn newCollection(allocator: std.mem.Allocator, storage: *MemoryStorage) !*IBsonCollection {
     const db = try BsonDatabase.init(allocator, storage.asStorage(), "", random_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
@@ -26,7 +25,7 @@ fn newCollection(allocator: std.mem.Allocator, storage: *MemoryStorage) !*IBsonC
 }
 
 //
-// Builds a test document (TypeScript: the object literal).
+// Builds a test document.
 //
 fn makeDocument(allocator: std.mem.Allocator, id: ?[]const u8, name: []const u8, value: f64) !BsonDocument {
     var document: BsonDocument = .empty;

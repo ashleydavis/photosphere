@@ -6,7 +6,7 @@ const TaskContext = task_queue_zig.task_context.TaskContext;
 const SendMessageFn = task_queue_zig.task_context.SendMessageFn;
 
 //
-// Records the messages passed to the send-message function (the jest.fn() of the TypeScript tests).
+// Records the messages passed to the send-message function.
 //
 const MessageRecorder = struct {
     // Number of calls.
@@ -36,7 +36,7 @@ const MessageRecorder = struct {
     }
 };
 
-test "TaskContext: isCancelled returns false initially" {
+test "isCancelled returns false initially" {
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
     var timestamp_provider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
     var recorder: MessageRecorder = .{ .calls = 0, .lastType = "", .lastValue = 0 };
@@ -45,7 +45,7 @@ test "TaskContext: isCancelled returns false initially" {
     try std.testing.expect(!context.isCancelled());
 }
 
-test "TaskContext: cancel causes isCancelled to return true" {
+test "cancel causes isCancelled to return true" {
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
     var timestamp_provider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
     var recorder: MessageRecorder = .{ .calls = 0, .lastType = "", .lastValue = 0 };
@@ -57,7 +57,7 @@ test "TaskContext: cancel causes isCancelled to return true" {
     try std.testing.expect(context.taskContext().isCancelled());
 }
 
-test "TaskContext: sendMessage invokes the injected sendMessageFn with the correct argument" {
+test "sendMessage invokes the injected sendMessageFn with the correct argument" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
@@ -77,7 +77,7 @@ test "TaskContext: sendMessage invokes the injected sendMessageFn with the corre
     try std.testing.expectEqual(@as(usize, 2), recorder.calls);
 }
 
-test "TaskContext: everything the task needs is exposed as provided" {
+test "everything the task needs is exposed as provided" {
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
     var timestamp_provider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
     var recorder: MessageRecorder = .{ .calls = 0, .lastType = "", .lastValue = 0 };

@@ -38,7 +38,7 @@ pub const IVault = struct {
     vtable: *const VTable,
 
     //
-    // The functions an implementation of IVault provides (same names as the TypeScript interface).
+    // The functions an implementation of IVault provides.
     //
     pub const VTable = struct {
         // Retrieves a secret by name. Returns null if the secret does not exist.

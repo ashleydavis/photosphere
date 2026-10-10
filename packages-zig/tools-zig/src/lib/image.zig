@@ -3,6 +3,7 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const version_match = @import("version-match.zig");
 const exec = node_utils.exec.exec;
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const execLogged = node_utils.exec.execLogged;
 const pathExists = node_utils.fs.pathExists;
 const join = node_utils.path.join;
@@ -17,7 +18,7 @@ const Dimensions = types.Dimensions;
 const ResizeOptions = types.ResizeOptions;
 
 //
-// The kind of ImageMagick installation found (TypeScript: 'modern' | 'legacy' | 'none').
+// The kind of ImageMagick installation found.
 //
 pub const ImageMagickType = enum {
     // ImageMagick 7: the `magick` command.
@@ -31,8 +32,7 @@ pub const ImageMagickType = enum {
 };
 
 //
-// The result of Image.verifyImageMagick
-// (TypeScript: `{ available: boolean; version?: string; error?: string; type?: 'modern' | 'legacy' }`).
+// The result of Image.verifyImageMagick.
 //
 pub const ImageMagickStatus = struct {
     // True when ImageMagick can be run.
@@ -79,7 +79,7 @@ pub const Image = struct {
     _info: ?AssetInfo = null,
 
     //
-    // Creates an image for a file (TypeScript: `new Image(filePath)`).
+    // Creates an image for a file.
     //
     pub fn init(filePath: []const u8) Image {
         return .{ .filePath = filePath };
@@ -88,13 +88,13 @@ pub const Image = struct {
     //
     // Initialize ImageMagick commands by checking system PATH
     //
-    fn initializeCommands(allocator: std.mem.Allocator, io: std.Io) !void {
+    fn initializeCommands(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !void {
         if (isInitialized) {
             return;
         }
 
         // First try modern ImageMagick (magick command)
-        if (exec(allocator, io, "magick -version")) |result| {
+        if (exec(allocator, io, tools, "magick -version")) |result| {
             // If we get here, modern magick command works
             convertCommand = "magick";
             identifyCommand = "magick identify";
@@ -111,13 +111,13 @@ pub const Image = struct {
         else |_| {}
 
         // Try legacy ImageMagick (convert/identify commands)
-        const convertResult = exec(allocator, io, "convert -version") catch {
+        const convertResult = exec(allocator, io, tools, "convert -version") catch {
             // Neither modern nor legacy ImageMagick found
             imageMagickType = .none;
             isInitialized = true;
             return;
         };
-        _ = exec(allocator, io, "identify -version") catch {
+        _ = exec(allocator, io, tools, "identify -version") catch {
             // Neither modern nor legacy ImageMagick found
             imageMagickType = .none;
             isInitialized = true;
@@ -140,12 +140,12 @@ pub const Image = struct {
     //
     // Verify that ImageMagick is available
     //
-    pub fn verifyImageMagick(allocator: std.mem.Allocator, io: std.Io) !ImageMagickStatus {
+    pub fn verifyImageMagick(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !ImageMagickStatus {
         // Initialize commands if not already done
-        try initializeCommands(allocator, io);
+        try initializeCommands(allocator, io, tools);
 
         if (imageMagickType == .modern) {
-            const result = exec(allocator, io, "magick -version") catch |err| {
+            const result = exec(allocator, io, tools, "magick -version") catch |err| {
                 return .{
                     .available = false,
                     .@"error" = try std.fmt.allocPrint(allocator, "Modern ImageMagick 'magick' command failed: {s}", .{try utils.errors.errorToString(allocator, err)}),
@@ -158,7 +158,7 @@ pub const Image = struct {
             };
         }
         else if (imageMagickType == .legacy) {
-            const result = exec(allocator, io, "convert -version") catch |err| {
+            const result = exec(allocator, io, tools, "convert -version") catch |err| {
                 return .{
                     .available = false,
                     .@"error" = try std.fmt.allocPrint(allocator, "Legacy ImageMagick 'convert' command failed: {s}", .{try utils.errors.errorToString(allocator, err)}),
@@ -188,7 +188,7 @@ pub const Image = struct {
     //
     // Reads the dimensions of the image, and its date from the EXIF when it has one.
     //
-    fn getImageInfo(self: *Image, allocator: std.mem.Allocator, io: std.Io) !AssetInfo {
+    fn getImageInfo(self: *Image, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !AssetInfo {
         if (self._info) |info| {
             return info;
         }
@@ -198,11 +198,11 @@ pub const Image = struct {
         }
 
         // Ensure ImageMagick commands are initialized before using them
-        try initializeCommands(allocator, io);
+        try initializeCommands(allocator, io, tools);
 
         // Get format, dimensions
         const command = try std.fmt.allocPrint(allocator, "{s} -format \"%w %h\" \"{s}\"", .{ identifyCommand, self.filePath });
-        const result = try execLogged(allocator, io, "magick", command, null);
+        const result = try execLogged(allocator, io, tools, "magick", command, null);
 
         var parts = std.mem.splitScalar(u8, utils.js_string.trim(result.stdout), ' ');
         const width = parseInt(parts.next() orelse "undefined", null);
@@ -210,13 +210,11 @@ pub const Image = struct {
 
         // Get EXIF data for created date
         //
-        // TODO: createdAt is NaN for every image that has an EXIF DateTimeOriginal, where TypeScript reads a real
-        // date. An EXIF date and time is "2023:12:25 14:30:00", which becomes "2023-12-25 14:30:00", and
-        // TypeScript's `new Date` reads the space where the ISO 8601 form has a "T" (the Date Time String Format of
-        // ECMA-262 allows both) as local time. js_date.parseDate in serialization-zig reads only the "T" form, so it
-        // returns NaN, an Invalid Date. The fix belongs to serialization-zig.
+        // An EXIF date and time is "2023:12:25 14:30:00", which becomes "2023-12-25 14:30:00". js_date.parseDate reads
+        // the space where the ISO 8601 form has a "T" (the Date Time String Format of ECMA-262 allows both) as local
+        // time.
         var createdAt: ?f64 = null;
-        if (self.getExifData(allocator, io)) |exifData| {
+        if (self.getExifData(allocator, io, tools)) |exifData| {
             if (exifData.get("DateTimeOriginal")) |dateTimeOriginal| {
                 if (dateTimeOriginal.len > 0) {
                     // Parse EXIF date format: "2023:12:25 14:30:00"
@@ -248,31 +246,31 @@ pub const Image = struct {
     //
     // Gets the width and height of the image.
     //
-    pub fn getDimensions(self: *Image, allocator: std.mem.Allocator, io: std.Io) !Dimensions {
-        const info = try self.getImageInfo(allocator, io);
+    pub fn getDimensions(self: *Image, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !Dimensions {
+        const info = try self.getImageInfo(allocator, io, tools);
         return info.dimensions;
     }
 
     //
     // Gets the information about the image.
     //
-    pub fn getInfo(self: *Image, allocator: std.mem.Allocator, io: std.Io) !AssetInfo {
-        return self.getImageInfo(allocator, io);
+    pub fn getInfo(self: *Image, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !AssetInfo {
+        return self.getImageInfo(allocator, io, tools);
     }
 
     //
     // Get EXIF data from the image
     //
-    pub fn getExifData(self: *Image, allocator: std.mem.Allocator, io: std.Io) !std.StringArrayHashMapUnmanaged([]const u8) {
+    pub fn getExifData(self: *Image, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !std.StringArrayHashMapUnmanaged([]const u8) {
         if (!pathExists(io, self.filePath)) {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
 
         // Ensure ImageMagick commands are initialized before using them
-        try initializeCommands(allocator, io);
+        try initializeCommands(allocator, io, tools);
 
         const command = try std.fmt.allocPrint(allocator, "{s} -format \"%[EXIF:*]\" \"{s}\"", .{ identifyCommand, self.filePath });
-        const result = execLogged(allocator, io, "magick", command, null) catch |err| {
+        const result = execLogged(allocator, io, tools, "magick", command, null) catch |err| {
             return errors.throwError("Failed to get EXIF data: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
 
@@ -287,7 +285,7 @@ pub const Image = struct {
         var lines = std.mem.splitScalar(u8, utils.js_string.trim(stdout), '\n');
 
         while (lines.next()) |line| {
-            // TypeScript: `line.match(/exif:([^=]+)=(.*)/)`. The first "exif:" followed by at least one character that
+            // The pattern is `exif:([^=]+)=(.*)`. The first "exif:" followed by at least one character that
             // is not "=" and then "=" matches, and the value runs to the first line terminator, which `.` does not match.
             var searchStart: usize = 0;
             while (std.mem.indexOfPos(u8, line, searchStart, "exif:")) |start| {
@@ -314,7 +312,7 @@ pub const Image = struct {
     }
 
     //
-    // The state the resize validation reads (TypeScript: the closure over actualOutputPath).
+    // The state the resize validation reads.
     //
     const IResizeValidation = struct {
         // The first output path ImageMagick may write.
@@ -344,7 +342,7 @@ pub const Image = struct {
     //
     // Resizes the image into a new file in tempDir and returns its path.
     //
-    pub fn resize(self: *Image, allocator: std.mem.Allocator, io: std.Io, options: ResizeOptions, tempDir: []const u8, uuidGenerator: IUuidGenerator) ![]const u8 {
+    pub fn resize(self: *Image, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner, options: ResizeOptions, tempDir: []const u8, uuidGenerator: IUuidGenerator) ![]const u8 {
         if (!pathExists(io, self.filePath)) {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
@@ -365,7 +363,7 @@ pub const Image = struct {
         }
 
         // Ensure ImageMagick commands are initialized before using them
-        try initializeCommands(allocator, io);
+        try initializeCommands(allocator, io, tools);
 
         // Build the resize geometry string
         var geometry: []const u8 = "";
@@ -419,7 +417,7 @@ pub const Image = struct {
             .actualOutputPath = outputPath1,
         };
 
-        _ = try execLogged(allocator, io, "magick", command.items, .{ .context = &validation, .function = IResizeValidation.validate });
+        _ = try execLogged(allocator, io, tools, "magick", command.items, .{ .context = &validation, .function = IResizeValidation.validate });
 
         return validation.actualOutputPath;
     }
@@ -428,15 +426,15 @@ pub const Image = struct {
     // Extract the dominant color from the image using ImageMagick
     // Returns RGB values as [r, g, b] array
     //
-    pub fn getDominantColor(self: *Image, allocator: std.mem.Allocator, io: std.Io) ![3]f64 {
+    pub fn getDominantColor(self: *Image, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) ![3]f64 {
         if (!pathExists(io, self.filePath)) {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
 
         // Ensure ImageMagick commands are initialized before using them
-        try initializeCommands(allocator, io);
+        try initializeCommands(allocator, io, tools);
 
-        return self.getDominantColorInner(allocator, io) catch |err| {
+        return self.getDominantColorInner(allocator, io, tools) catch |err| {
             return errors.throwError("Failed to extract dominant color: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
     }
@@ -444,10 +442,10 @@ pub const Image = struct {
     //
     // The body of the try block of getDominantColor.
     //
-    fn getDominantColorInner(self: *Image, allocator: std.mem.Allocator, io: std.Io) ![3]f64 {
+    fn getDominantColorInner(self: *Image, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) ![3]f64 {
         // Method 1: Simple resize to 1x1 pixel (fastest, good for average color)
         const command = try std.fmt.allocPrint(allocator, "{s} \"{s}\" -resize 1x1! -format \"%[fx:int(mean.r*255)],%[fx:int(mean.g*255)],%[fx:int(mean.b*255)]\" info:", .{ convertCommand, self.filePath });
-        const result = try execLogged(allocator, io, "magick", command, null);
+        const result = try execLogged(allocator, io, tools, "magick", command, null);
 
         const rgbString = utils.js_string.trim(result.stdout);
         var rgbValues: std.ArrayList(f64) = .empty;
@@ -471,13 +469,13 @@ pub const Image = struct {
     //
     // Transform an image with rotation and flip operations
     //
-    pub fn transform(self: *Image, allocator: std.mem.Allocator, io: std.Io, options: IImageTransformation, tempDir: []const u8, uuidGenerator: IUuidGenerator) ![]const u8 {
+    pub fn transform(self: *Image, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner, options: IImageTransformation, tempDir: []const u8, uuidGenerator: IUuidGenerator) ![]const u8 {
         if (!pathExists(io, self.filePath)) {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
 
         // Ensure ImageMagick commands are initialized before using them
-        try initializeCommands(allocator, io);
+        try initializeCommands(allocator, io, tools);
 
         var transformCommand: std.ArrayList(u8) = .empty;
 
@@ -495,7 +493,7 @@ pub const Image = struct {
             // Transform to a temporary file and return the path.
             const outputPath = try join(allocator, &.{ tempDir, try std.fmt.allocPrint(allocator, "temp_transform_output_{s}.jpg", .{try uuidGenerator.generate(allocator, io)}) });
             const command = try std.fmt.allocPrint(allocator, "{s} \"{s}\" {s} \"{s}\"", .{ convertCommand, self.filePath, transformCommand.items, outputPath });
-            _ = try execLogged(allocator, io, "magick", command, null);
+            _ = try execLogged(allocator, io, tools, "magick", command, null);
 
             // Check if the output file was created successfully.
             if (!pathExists(io, outputPath)) {
@@ -511,7 +509,7 @@ pub const Image = struct {
 
     //
     // Forgets the detected installation so the next verifyImageMagick detects it again
-    // (no TypeScript counterpart: used by tests, which cannot reload the module).
+    // (used by tests, which cannot reload the module).
     //
     pub fn resetInitialization() void {
         convertCommand = "magick";
@@ -529,8 +527,7 @@ fn isTruthy(value: f64) bool {
 }
 
 //
-// Turns the date of an EXIF date and time into dashes (TypeScript:
-// `.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3')`).
+// Turns the date of an EXIF date and time into dashes ("2023:12:25 14:30:00" becomes "2023-12-25 14:30:00").
 //
 pub fn exifDateToDashes(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
     if (text.len >= 10 and std.ascii.isDigit(text[0]) and std.ascii.isDigit(text[1]) and std.ascii.isDigit(text[2]) and std.ascii.isDigit(text[3]) and text[4] == ':' and std.ascii.isDigit(text[5]) and std.ascii.isDigit(text[6]) and text[7] == ':' and std.ascii.isDigit(text[8]) and std.ascii.isDigit(text[9])) {
@@ -543,7 +540,7 @@ pub fn exifDateToDashes(allocator: std.mem.Allocator, text: []const u8) ![]const
 }
 
 //
-// `${number}` in a template string: the number as JavaScript writes it.
+// The text of a number as it goes into a command: the number as JavaScript writes it.
 //
 fn numberText(allocator: std.mem.Allocator, number: f64) ![]const u8 {
     var output: std.Io.Writer.Allocating = .init(allocator);

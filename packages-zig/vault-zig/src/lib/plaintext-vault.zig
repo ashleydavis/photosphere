@@ -11,7 +11,7 @@ const updateFileOptimistic = node_utils.fs.updateFileOptimistic;
 
 //
 // Default directory under which the plain-text vault stores its vault file.
-// TypeScript computes this constant when the module loads (path.join(os.homedir(), ".config", "photosphere", "vault")).
+// It is the "vault" directory under ".config/photosphere" in the home directory.
 // Zig has no process-wide environment until `main` sets it (see node-utils process-env.zig), so it is computed on demand.
 //
 pub fn DEFAULT_VAULT_DIR(allocator: std.mem.Allocator) ![]const u8 {
@@ -63,7 +63,7 @@ pub fn ensureDir(io: std.Io, dirPath: []const u8) !void {
     // Apply the mode explicitly because the recursive flag may create
     // intermediate directories with the process umask rather than DIR_MODE.
     // chmod is not supported on all platforms (e.g. Windows); ignore errors.
-    // (Zig: on Windows Node's chmod only toggles the read-only attribute, which an owner-writable mode
+    // (On Windows chmod only toggles the read-only attribute, which an owner-writable mode
     // leaves off, and Zig's setFilePermissions panics there, so it is skipped.)
     if (builtin.os.tag != .windows) {
         cwd.setFilePermissions(io, dirPath, modeToPermissions(DIR_MODE), .{}) catch {};
@@ -82,7 +82,7 @@ pub fn getVaultFilePath(allocator: std.mem.Allocator, vaultDir: []const u8) ![]c
 //
 pub fn applyFileMode(io: std.Io, filePath: []const u8) void {
     // chmod is not supported on all platforms (e.g. Windows); ignore errors.
-    // (Zig: skipped on Windows, see ensureDir.)
+    // (Skipped on Windows, see ensureDir.)
     if (builtin.os.tag != .windows) {
         std.Io.Dir.cwd().setFilePermissions(io, filePath, modeToPermissions(FILE_MODE), .{}) catch {};
     }
@@ -93,7 +93,7 @@ pub fn applyFileMode(io: std.Io, filePath: []const u8) void {
 // names and whose values are the secrets stored under those names.  A secret
 // name lives in a JSON key, so a colon, slash or unicode character in a name
 // needs no encoding of any kind.
-// (Zig: the parsed JSON object, keys in the order a JavaScript object keeps them; see orderLikeJavaScript.)
+// (The parsed JSON object, keys in the order a JavaScript object keeps them; see orderLikeJavaScript.)
 //
 pub const IVaultFile = std.json.ObjectMap;
 
@@ -122,7 +122,7 @@ fn isArrayIndex(name: []const u8) bool {
 //
 // Orders the keys of an object the way a JavaScript object does (and therefore the way JSON.stringify
 // and Object.values visit them): array index names first in ascending numeric order, then every other
-// name in insertion order. (No TypeScript counterpart: this is JavaScript object semantics.)
+// name in insertion order.
 //
 fn orderLikeJavaScript(contents: *IVaultFile) void {
     //
@@ -150,15 +150,14 @@ fn orderLikeJavaScript(contents: *IVaultFile) void {
 }
 
 //
-// Equivalent of `JSON.parse(raw) as IVaultFile` for the vault file.
+// Parses the text of the vault file.
 //
 fn parseVaultFile(allocator: std.mem.Allocator, raw: []const u8) !IVaultFile {
     const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, raw, .{
         .duplicate_field_behavior = .use_last,
     });
     if (parsed != .object) {
-        // (Zig: a vault file holding JSON that is not an object cannot be represented; TypeScript would
-        // carry on with whatever value it is.)
+        // (A vault file holding JSON that is not an object cannot be represented.)
         return errors.throwError("The vault file does not hold a JSON object", .{});
     }
     var contents = parsed.object;
@@ -183,7 +182,7 @@ pub fn readVaultFile(allocator: std.mem.Allocator, io: std.Io, vaultDir: []const
 }
 
 //
-// The parse passed to updateFileOptimistic (`raw => JSON.parse(raw) as IVaultFile`).
+// The parse passed to updateFileOptimistic.
 //
 const VaultFileParse = struct {
     // Unused. Present so the parser is a value with methods.
@@ -247,7 +246,7 @@ fn VaultFileMutator(comptime MutatorT: type) type {
 // processes each adding a secret both read the same contents, and whichever wrote second dropped
 // the other's secret. Two CLI invocations storing credentials at once is enough to hit that.
 //
-// In Zig the mutator (TypeScript: `(contents: IVaultFile) => void`) is a value with a method
+// The mutator is a value with a method
 // `run(self, allocator, contents: *IVaultFile) !void`.
 //
 pub fn updateVaultFile(allocator: std.mem.Allocator, io: std.Io, vaultDir: []const u8, mutator: anytype) !void {
@@ -270,10 +269,8 @@ pub fn updateVaultFile(allocator: std.mem.Allocator, io: std.Io, vaultDir: []con
 //
 // Converts a secret held in the vault file to an ISecret.
 //
-// TODO: TypeScript does not do this: `get` returns `contents[name]` as it stands and `list` returns
-// `Object.values(contents)`, so a vault file holding something that is not a secret (a number, an object without
-// the fields) hands that value back typed as an ISecret, and the caller reads whatever fields it finds. This throws
-// instead, because Zig cannot return a JSON value as an ISecret. Fix the TypeScript to check the shape too.
+// A vault file holding something that is not a secret (a number, an object without the fields) throws, because Zig
+// cannot return a JSON value as an ISecret.
 //
 fn toSecret(allocator: std.mem.Allocator, value: std.json.Value) !ISecret {
     return std.json.parseFromValueLeaky(ISecret, allocator, value, .{
@@ -347,8 +344,7 @@ pub const PlaintextVault = struct {
     vaultDir: []const u8,
 
     //
-    // Creates the vault (TypeScript: constructor(vaultDir = DEFAULT_VAULT_DIR); callers pass
-    // DEFAULT_VAULT_DIR(allocator) for the default).
+    // Creates the vault (callers pass DEFAULT_VAULT_DIR(allocator) for the default directory).
     //
     pub fn init(vaultDir: []const u8) PlaintextVault {
         return .{ .vaultDir = vaultDir };

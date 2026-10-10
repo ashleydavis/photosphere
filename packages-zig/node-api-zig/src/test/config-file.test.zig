@@ -130,6 +130,33 @@ test "loadConfigFile throws when the config file is not YAML" {
     try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "(") != null);
 }
 
+test "saveConfigFile writes the whole configuration, replacing whatever was there" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const configDir = try freshConfigDir(allocator, io, "config-file-save");
+    defer temp_dirs.removeTempDir(io, configDir);
+    try writeConfig(allocator, io, configDir, "theme: dark\nshow_fps_indicator: true\n");
+    var config = try config_file.defaultConfigFile(allocator);
+    config.theme = .light;
+
+    try config_file.saveConfigFile(allocator, io, config);
+
+    try std.testing.expectEqualStrings(
+        \\theme: light
+        \\auto_import:
+        \\  enabled: false
+        \\  pause_between_runs_ms: 30000
+        \\  sources: []
+        \\sync:
+        \\  enabled: false
+        \\  only_on_wifi: true
+        \\  pause_between_runs_ms: 300000
+        \\
+    , try readConfig(allocator, io, configDir));
+}
+
 //
 // A mutator for the updateConfigFile tests: records what it was handed and then changes the theme and developer mode,
 // or throws when `fail` is set.

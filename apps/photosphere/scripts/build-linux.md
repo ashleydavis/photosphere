@@ -1,5 +1,3 @@
 # build-linux.sh
 
-Runs `sync-linux.sh`, then builds the Linux shell with `zig build` from the root of the repository. Invoked as `bun run --filter=ziggy build:linux`.
-
-Takes no arguments. Runs on Linux.
+Runs `sync-linux.sh`, which produces Photosphere's Linux executable, with its page embedded, in `shells/linux/zig-out/bin`. Runs on Linux. Passes its arguments on, so `--test-hooks` builds the test hooks in.

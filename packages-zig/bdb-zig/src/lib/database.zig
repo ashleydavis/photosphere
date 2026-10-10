@@ -25,8 +25,8 @@ const errors = utils.errors;
 pub const IBsonDatabase = BsonDatabase;
 
 //
-// A BSON database (TypeScript: the BsonDatabase class).
-// (Zig: create it with init, which allocates it on the heap, because its collections point back at it.)
+// A BSON database.
+// Create it with init, which allocates it on the heap, because its collections point back at it.
 //
 pub const BsonDatabase = struct {
 
@@ -71,7 +71,7 @@ pub const BsonDatabase = struct {
     timestampProvider: ITimestampProvider,
 
     //
-    // Creates a database (TypeScript: the constructor).
+    // Creates a database.
     //
     pub fn init(allocator: std.mem.Allocator, storage: IStorage, bsonDbPath: []const u8, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider) !*BsonDatabase {
         const database = try allocator.create(BsonDatabase);
@@ -93,7 +93,7 @@ pub const BsonDatabase = struct {
     }
 
     //
-    // The onDirty callback given to collections (TypeScript: `() => this.markDirty()`).
+    // The onDirty callback given to collections.
     //
     fn markDirtyCallback(context: *anyopaque) void {
         const self: *BsonDatabase = @ptrCast(@alignCast(context));
@@ -229,7 +229,7 @@ pub const BsonDatabase = struct {
     }
 
     //
-    // The merkle ref loader (TypeScript: the first arrow function in merkleTree()).
+    // The merkle ref loader.
     //
     fn merkleLoader(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!?IMerkleTree {
         const self: *BsonDatabase = @ptrCast(@alignCast(context));

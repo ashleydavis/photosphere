@@ -1,5 +1,5 @@
 //
-// Port of apps/cli/src/lib/find-orphans.ts.
+// Finds the orphaned files in a database's storage.
 //
 
 const std = @import("std");
@@ -15,7 +15,7 @@ const SortNode = merkle_tree_zig.merkle_tree.SortNode;
 const traverseTreeAsync = merkle_tree_zig.traverse.traverseTreeAsync;
 
 //
-// Removes the optional leading slash of a path (TypeScript: the `^\/?` of the ignore patterns).
+// Removes the optional leading slash of a path (the ignore patterns are matched without it).
 //
 fn withoutLeadingSlash(fullPath: []const u8) []const u8 {
     if (std.mem.startsWith(u8, fullPath, "/")) {
@@ -57,7 +57,7 @@ const IMerkleFileNames = struct {
 };
 
 //
-// Adds the name of a node to the set (TypeScript: the callback given to traverseTreeAsync).
+// Adds the name of a node to the set (the callback given to traverseTreeAsync).
 //
 fn addNodeName(merkleFileNames: *IMerkleFileNames, node: *SortNode) anyerror!bool {
     if (node.name) |name| {

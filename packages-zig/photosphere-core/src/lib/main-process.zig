@@ -1,12 +1,13 @@
 //
-// What the Electron main process of apps/desktop/src/main.ts does about databases being opened and closed, about syncing and about
+// What the main process does about databases being opened and closed, about syncing and about
 // the tasks the worker pool reports on: the `notify-database-opened`, `notify-database-closed` and `notify-database-edited` channels,
-// the `main-command` channel, and the functions `initWorkers` hands the worker pool to hear every task end and every task message.
+// the `main-command` channel, and the functions that hear every task end and every task message from the worker pool.
 //
 // The state these use is in main-state.zig.
 //
 
 const std = @import("std");
+const builtin = @import("builtin");
 const ziggy = @import("ziggy-core");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -15,6 +16,8 @@ const api_zig = @import("api-zig");
 const databases = @import("databases.zig");
 const events = @import("events.zig");
 const main_state = @import("main-state.zig");
+const background_work = @import("background-work.zig");
+const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 const Core = ziggy.core.Core;
 const TaskContext = ziggy.task_runner.TaskContext;
@@ -33,10 +36,9 @@ const AUTO_IMPORT_TASK_SOURCE = node_api.auto_import_desktop.AUTO_IMPORT_TASK_SO
 // an entry for it when it has none, and refreshing its origin when that changed), moves it to the front of the recently opened ones,
 // remembers it as the one to reopen at the next start, and tells the main process's state, which resets syncing for it.
 //
-// (Zig: main.ts rebuilds the application menu here (`updateMenu`) so that its items follow whether a database is open. Ziggy's menu is
-// written once and the page decides what each item does, so there is no menu to rebuild.)
+// Ziggy's menu is written once and the page decides what each item does, so there is no menu to rebuild when a database is opened.
 //
-pub fn notifyDatabaseOpenedHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn notifyDatabaseOpened(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const arena = context.arena;
     const io = context.io();
     if (data != .string) {
@@ -45,7 +47,8 @@ pub fn notifyDatabaseOpenedHandler(context: *TaskContext, data: std.json.Value) 
     const database_path = data.string;
     const state = main_state.fromContext(context);
     const all_databases = try databases_config.getDatabases(arena, io);
-    const opened = try databases.openDatabaseStorage(arena, io, all_databases, database_path);
+    var requester_storage: ziggy.task_runner.TaskHostRequester = undefined;
+    const opened = try databases.openDatabaseStorage(arena, io, all_databases, database_path, context.hostRequester(&requester_storage));
     const database_config = try api_zig.database_config.loadDatabaseConfig(arena, io, opened.rawStorage);
     const origin: ?[]const u8 = if (database_config) |config| json_util.getString(config, "origin") else null;
     if (opened.entry) |existing| {
@@ -86,12 +89,17 @@ pub fn notifyDatabaseOpenedHandler(context: *TaskContext, data: std.json.Value) 
 }
 
 //
+// The notify-database-opened channel's handler: notifyDatabaseOpened, with its errors logged.
+//
+pub const notifyDatabaseOpenedHandler = logExceptions(notifyDatabaseOpened, "Error notifying database opened");
+
+//
 // notify-database-closed: no payload. Forgets the database to reopen, so a database the user closed is not reopened for them at the
 // next start, and tells the main process's state that none is open.
 //
-// (Zig: there is no menu to rebuild (`updateMenu` in main.ts), see notifyDatabaseOpenedHandler.)
+// There is no menu to rebuild, see notifyDatabaseOpenedHandler.
 //
-pub fn notifyDatabaseClosedHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn notifyDatabaseClosed(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
     const state = main_state.fromContext(context);
     try databases_config.setLastDatabase(context.arena, context.io(), null);
@@ -110,6 +118,11 @@ pub fn notifyDatabaseClosedHandler(context: *TaskContext, data: std.json.Value) 
 }
 
 //
+// The notify-database-closed channel's handler: notifyDatabaseClosed, with its errors logged.
+//
+pub const notifyDatabaseClosedHandler = logExceptions(notifyDatabaseClosed, "Error notifying database closed");
+
+//
 // notify-database-edited: no payload and no reply. Schedules a debounced sync.
 //
 pub fn notifyDatabaseEditedHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
@@ -126,16 +139,13 @@ pub fn notifyDatabaseEditedHandler(core: *Core, arena: std.mem.Allocator, data: 
 //  - set-sync-allowed: records whether the page's decision permits syncing automatically (`allowed`), and schedules a sync at once
 //    when it does, to catch up one that was waiting.
 //
-// (Zig: an unknown command, or a payload with no command name, is an error reply, where TypeScript wrote the unknown command to the
-// console and replied nothing. Zig also needs the shell's help for toggle-devtools, where TypeScript called the main window's
-// `toggleDevTools()`, so it is an error when the shell offers no way to do it.)
+// toggle-devtools needs the shell's help, so it is an error when the shell offers no way to do it. A payload with no command name
+// is an unknown command called "undefined".
 //
 pub fn mainCommandHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
     const command: []const u8 = switch (data) {
         .string => |text| text,
-        else => json_util.getString(data, "command") orelse {
-            return utils.errors.throwError("The main command needs the name of a command.", .{});
-        },
+        else => json_util.getString(data, "command") orelse "undefined",
     };
     if (std.mem.eql(u8, command, "toggle-devtools")) {
         const menu_action = core.config.menu_action orelse {
@@ -151,14 +161,15 @@ pub fn mainCommandHandler(core: *Core, arena: std.mem.Allocator, data: std.json.
             defer state.unlock();
             state.sync_allowed = allowed;
         }
-        utils.log.log.info(try std.fmt.allocPrint(arena, "Sync allowed set to {s}", .{if (allowed) "true" else "false"}));
+        // The smoke tests wait for this line, so its wording must not change.
+        utils.log.log.info(try std.fmt.allocPrint(arena, "Sync gate set to {s}", .{if (allowed) "true" else "false"}));
         // Catch up a pending sync as soon as syncing is allowed.
         if (allowed) {
             state.scheduleSync();
         }
     }
     else {
-        return utils.errors.throwError("Unknown main-command: {s}", .{command});
+        utils.console.errorFormat("Unknown main-command: {s}", .{command});
     }
     return try arena.dupe(u8, "null");
 }
@@ -257,8 +268,7 @@ fn enqueueEvictOriginals(core: *Core, arena: std.mem.Allocator, database_path: [
 // makes the database, lists it, and remembers it as the default. The main process queues it rather than writing the config and the
 // database list itself, so the default database comes to exist one way rather than one way per platform.
 //
-// (Zig: the task is a child of the one running ensureAutoImport, so it takes that task's source, where main.ts queues it under the
-// database's path so that opening another database cancels it.)
+// The task is a child of the one running ensureAutoImport, so it takes that task's source.
 //
 fn createDefaultDatabase(context: *TaskContext, database_path: []const u8) !void {
     const arena = context.arena;
@@ -300,9 +310,14 @@ fn clearAutoImportState(state: *MainState) bool {
 // Starts or stops automatic import to match the current config. Called whenever one of the automatic import settings is written, so
 // switching the toggle takes effect without restarting the app.
 //
-// (Zig: it runs as part of a task, so that it can wait for the task that creates the default database.)
+// It runs as part of a task, so that it can wait for the task that creates the default database.
 //
 pub fn ensureAutoImport(context: *TaskContext) !void {
+    // A phone does not watch folders. Its automatic import is the background work the page starts and stops (startBackgroundImport and
+    // stopBackgroundImport), which reads the device photo library.
+    if (builtin.os.tag == .ios or builtin.abi.isAndroid()) {
+        return;
+    }
     const arena = context.arena;
     const io = context.io();
     const state = main_state.fromContext(context);
@@ -351,7 +366,8 @@ pub fn ensureAutoImport(context: *TaskContext) !void {
         state.core.runner.cancelSource(AUTO_IMPORT_TASK_SOURCE);
     }
 
-    if (plan.isNewDefault or !(try node_api.media_file_database.checkDatabaseExists(arena, io, plan.databasePath))) {
+    var requester_storage: ziggy.task_runner.TaskHostRequester = undefined;
+    if (plan.isNewDefault or !(try node_api.media_file_database.checkDatabaseExists(arena, io, plan.databasePath, context.hostRequester(&requester_storage)))) {
         try createDefaultDatabase(context, plan.databasePath);
     }
 
@@ -380,10 +396,9 @@ pub fn ensureAutoImport(context: *TaskContext) !void {
     });
     const task_id = try state.uuid_generator.generate(arena, io);
 
-    // (Zig: what is remembered about the task is recorded before the task is queued, where main.ts records it after. The task runs on
+    // What is remembered about the task is recorded before the task is queued. The task runs on
     // another thread and can end before this one gets to record anything, and the end is told apart from a manual import's by the
-    // remembered id, so recorded afterwards a task that ended at once would be remembered as running for good. In main.ts nothing can
-    // run between the two, so the order does not show.)
+    // remembered id, so recorded afterwards a task that ended at once would be remembered as running for good.
     {
         state.lock();
         defer state.unlock();
@@ -403,7 +418,7 @@ pub fn ensureAutoImport(context: *TaskContext) !void {
 
 //
 // ensure-auto-import: no payload. Makes automatic import match the config, as ensureAutoImport does. Queued by the timer thread of
-// main-state.zig at the start and then on every tick of the automatic import check (AUTO_IMPORT_RESTART_CHECK_MS), where main.ts calls the function itself, because the function waits for the
+// main-state.zig at the start and then on every tick of the automatic import check (AUTO_IMPORT_RESTART_CHECK_MS), as a task because the function waits for the
 // task that creates the default database and only a task can wait. A failure is logged when the task ends (see handleTaskEnd).
 //
 pub fn ensureAutoImportTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
@@ -413,7 +428,7 @@ pub fn ensureAutoImportTask(context: *TaskContext, data: std.json.Value) anyerro
 }
 
 //
-// Told when any task ends (`workerPool.onTaskComplete` of initWorkers in main.ts). Resets syncing when a sync ends, starts the
+// Told when any task ends. Resets syncing when a sync ends, starts the
 // eviction of originals after a sync that succeeded, tells the user when an import or a replication fails, registers the destination of
 // a replication that worked, and notices when automatic import stops. The page is told of every task's end by the core.
 //
@@ -439,14 +454,57 @@ fn errorMessageOrUnknown(error_message: ?[]const u8) []const u8 {
 }
 
 //
-// What the main process does when a task ends, in the order of the callback `initWorkers` gives `workerPool.onTaskComplete`.
+// What the main process does when the asset server task ends. The
+// server is meant to run for the life of the app, so its ending is either the app quitting or a failure. After a failure the server is
+// started again on the port it had, so the address the page was loaded with stays valid.
+//
+// A task ends with a status and a message, so the failure is logged with its message.
+// A server that ended before it said which port it bound is not started again: the start here is the page's query asking for the
+// port, which reports the same failure to the shell.
+//
+fn handleAssetServerEnd(state: *MainState, arena: std.mem.Allocator, end: ziggy.types.TaskEnd) !void {
+    if (end.status == .failed) {
+        utils.log.log.@"error"(try std.fmt.allocPrint(arena, "The asset server stopped: {s}", .{errorMessageOrUnknown(end.error_message)}));
+    }
+    var port: u16 = 0;
+    {
+        state.lock();
+        defer state.unlock();
+        port = state.asset_server_port;
+        if (port == 0 or state.stopping.load(.acquire)) {
+            state.asset_server_ended = true;
+            if (port == 0) {
+                try state.setOwned(&state.asset_server_error, errorMessageOrUnknown(end.error_message));
+            }
+            return;
+        }
+    }
+    utils.console.log("Restarting REST API worker...");
+    state.queueAssetServer(port) catch |err| {
+        utils.log.log.exception("Failed to restart REST API worker", err);
+    };
+}
+
+//
+// What the main process does when a task ends.
 //
 fn handleTaskEnd(core: *Core, arena: std.mem.Allocator, end: ziggy.types.TaskEnd) !void {
     const state = main_state.fromCore(core);
+    if (background_work.Loop.fromTaskType(end.task_type)) |loop| {
+        state.releaseBackgroundLoop(loop);
+        if (end.status == .failed) {
+            utils.log.log.@"error"(try std.fmt.allocPrint(arena, "The background {s} loop stopped: {s}", .{ loop.label(), errorMessageOrUnknown(end.error_message) }));
+        }
+    }
     if (std.mem.eql(u8, end.task_type, "ensure-auto-import") and end.status == .failed) {
-        // (Zig: ensureAutoImport runs as a task here, see ensureAutoImportTask. main.ts logged the error where it called the function,
-        // as 'Error starting automatic import' at startup and 'Error restarting automatic import' on the timer.)
-        utils.log.log.@"error"(try std.fmt.allocPrint(arena, "Error starting automatic import: {s}", .{errorMessageOrUnknown(end.error_message)}));
+        // ensureAutoImport runs as a task, see ensureAutoImportTask. The error is logged as 'Error starting automatic import' at
+        // startup and 'Error restarting automatic import' on the timer.
+        // A task's end carries the text of the error and not the error, so the text follows the message.
+        const what = if (std.mem.eql(u8, end.input_json, main_state.ENSURE_AUTO_IMPORT_RESTARTING_INPUT)) "restarting" else "starting";
+        utils.log.log.@"error"(try std.fmt.allocPrint(arena, "Error {s} automatic import: {s}", .{ what, errorMessageOrUnknown(end.error_message) }));
+    }
+    if (std.mem.eql(u8, end.task_type, "asset-server")) {
+        try handleAssetServerEnd(state, arena, end);
     }
     if (std.mem.eql(u8, end.task_type, "sync-database")) {
         state.syncStopped();
@@ -459,8 +517,11 @@ fn handleTaskEnd(core: *Core, arena: std.mem.Allocator, end: ziggy.types.TaskEnd
             const sync_inputs = try std.json.parseFromSliceLeaky(ISyncInputs, arena, end.input_json, .{
                 .ignore_unknown_fields = true,
             });
+            // (`syncInputs?.databasePath` is false for an empty path as well as for none.)
             if (sync_inputs.databasePath) |database_path| {
-                try enqueueEvictOriginals(core, arena, database_path);
+                if (database_path.len > 0) {
+                    try enqueueEvictOriginals(core, arena, database_path);
+                }
             }
         }
     }
@@ -484,7 +545,7 @@ fn handleTaskEnd(core: *Core, arena: std.mem.Allocator, end: ziggy.types.TaskEnd
         }
         if (is_auto_import_task) {
             if (end.status != .succeeded) {
-                utils.log.log.@"error"(try std.fmt.allocPrint(arena, "Automatic import stopped: {s}", .{end.error_message orelse ""}));
+                utils.log.log.@"error"(try std.fmt.allocPrint(arena, "Automatic import stopped: {s}", .{errorMessageOrUnknown(end.error_message)}));
             }
             return;
         }
@@ -522,7 +583,7 @@ fn handleTaskEnd(core: *Core, arena: std.mem.Allocator, end: ziggy.types.TaskEnd
 }
 
 //
-// Told when any task sends a message (`workerPool.onAnyTaskMessage` of initWorkers in main.ts). Tells the page when a sync starts and
+// Told when any task sends a message. Tells the page when a sync starts and
 // when it completes. The page is told of every task message by the core.
 //
 pub fn onTaskMessage(core: *Core, sent: ziggy.types.TaskSentMessage) void {
@@ -545,5 +606,19 @@ fn handleTaskMessage(core: *Core, arena: std.mem.Allocator, sent: ziggy.types.Ta
     else if (std.mem.eql(u8, message_type, "sync-completed")) {
         utils.log.log.event("Sync completed");
         try events.sendSyncCompleted(core, arena);
+    }
+    else if (std.mem.eql(u8, message_type, "asset-server-ready")) {
+        // The asset server says which port it bound.
+        const port = json_util.getInteger(message, "port") orelse {
+            return utils.errors.throwError("The asset server's ready message has no port.", .{});
+        };
+        if (port <= 0 or port > std.math.maxInt(u16)) {
+            return utils.errors.throwError("The asset server's ready message has a port that is not a port: {d}.", .{port});
+        }
+        const state = main_state.fromCore(core);
+        state.lock();
+        defer state.unlock();
+        state.asset_server_port = @intCast(port);
+        utils.log.log.info(try std.fmt.allocPrint(arena, "REST API initialized on port {d}", .{port}));
     }
 }

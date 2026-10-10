@@ -23,6 +23,13 @@ const getImportRecordPath = node_api.database_cache_dir.getImportRecordPath;
 const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 const loadImportRecord = node_api.import_record_storage.loadImportRecord;
 const registerFolderMediaSourceBuilder = node_api.create_auto_import_scanner.registerFolderMediaSourceBuilder;
+const buildFolderMediaSource = node_api.create_auto_import_scanner.buildFolderMediaSource;
+const registerMediaSourceBuilder = node_api.media_source_registry.registerMediaSourceBuilder;
+const IMediaSource = node_api.media_source.IMediaSource;
+const IMediaItem = node_api.media_source.IMediaItem;
+const IMediaSourceListPage = node_api.media_source.IMediaSourceListPage;
+const IMediaSourceBuildOptions = node_api.media_source_registry.IMediaSourceBuildOptions;
+const IAutoImportSource = api.auto_import_settings.IAutoImportSource;
 const TaskContext = task_queue_zig.task_context.TaskContext;
 const TaskStatus = task_queue_zig.types.TaskStatus;
 const TaskPriority = task_queue_zig.types.TaskPriority;
@@ -41,10 +48,9 @@ const path = node_utils.path;
 const errors = utils.errors;
 
 //
-// (Zig: TypeScript mocks the file scanner, storage, the database, the hash cache, the tree, the merkle tree and the
-// import record. The Zig port has no modules to mock, so these tests run the handler over real files, a real
+// These tests run the handler over real files, a real
 // database and a real hash cache in the test's own directory, and check what it did to them. The queue backend is
-// replaced by a MockBackend, as TypeScript does at the same seam.)
+// replaced by a MockBackend.
 //
 
 //
@@ -92,9 +98,9 @@ const ResultFactory = *const fn (backend: *MockBackend, allocator: std.mem.Alloc
 // Minimal mock IQueueBackend that records addTask calls, fires onTaskAdded callbacks,
 // and completes tasks via a result factory.
 //
-// (Zig: a completion fires on the backend's own thread once no task has been added for `idleMs`, which is what
-// TypeScript's completeAfterTimeout does: the import gets to queue what it wants before anything completes, so the
-// concurrency tests measure the limit rather than a backend that completes everything at once.)
+// A completion fires on the backend's own thread once no task has been added for `idleMs`:
+// the import gets to queue what it wants before anything completes, so the
+// concurrency tests measure the limit rather than a backend that completes everything at once.
 //
 const MockBackend = struct {
     // Guards the backend's state.
@@ -427,7 +433,7 @@ const DEFAULT_HASH = repeatedHash("00");
 const NEW_HASH = repeatedHash("aa");
 
 //
-// Hash-file reports the default hash (TypeScript: the beforeEach result factory).
+// Hash-file reports the default hash.
 //
 fn hashFileReportsDefault(backend: *MockBackend, allocator: std.mem.Allocator, taskType: []const u8, data: std.json.Value) anyerror!?IMockResult {
     _ = backend;
@@ -491,7 +497,7 @@ fn uploadOutputs(allocator: std.mem.Allocator, data: std.json.Value) ![]const u8
 }
 
 //
-// Hash-file reports a new file and upload-asset succeeds (TypeScript: hashFileReportsNewFile and uploadSucceeds).
+// Hash-file reports a new file and upload-asset succeeds.
 //
 fn newFileUploads(backend: *MockBackend, allocator: std.mem.Allocator, taskType: []const u8, data: std.json.Value) anyerror!?IMockResult {
     _ = backend;
@@ -533,7 +539,7 @@ fn everyFileNew(backend: *MockBackend, allocator: std.mem.Allocator, taskType: [
 }
 
 //
-// Every hash-file task reports the same new hash, and uploads fail (TypeScript: the duplicate-hash test's factories).
+// Every hash-file task reports the same new hash, and uploads fail.
 //
 fn sameNewHashUploadFails(backend: *MockBackend, allocator: std.mem.Allocator, taskType: []const u8, data: std.json.Value) anyerror!?IMockResult {
     _ = backend;
@@ -605,7 +611,7 @@ const MessageRecorder = struct {
 };
 
 //
-// The state each test starts from (TypeScript: the beforeEach of the describe block).
+// The state each test starts from.
 //
 const ImportTest = struct {
     // Holds the test's allocations.
@@ -867,6 +873,35 @@ test "a missing or nonsensical concurrency limit fails loudly rather than import
 }
 
 //
+// Adding any hash-file task fails, which stops the scan with an error.
+//
+fn addingHashFileFails(backend: *MockBackend, allocator: std.mem.Allocator, taskType: []const u8, data: std.json.Value) anyerror!?IMockResult {
+    _ = backend;
+    _ = allocator;
+    _ = data;
+    if (std.mem.eql(u8, taskType, "hash-file")) {
+        return error.ScanFailed;
+    }
+    return null;
+}
+
+test "childQueue.shutdown is called in the finally block even when scanPaths throws" {
+    var context: ImportTest = undefined;
+    try context.init(addingHashFileFails);
+    defer context.deinit();
+    _ = try context.writePhoto("img1.jpg");
+    // The failure of the scan is logged; a passing test must write nothing to stderr, so the log is muted.
+    var mutedLog: mock_log.MutedLog = .{};
+    mutedLog.install();
+    defer mutedLog.uninstall();
+
+    try std.testing.expectError(error.ScanFailed, context.run(try context.makeData(false)));
+
+    // shutdown() cancels the queue's tasks through the backend, confirming the finally block ran.
+    try std.testing.expect(context.backend.cancelCount > 0);
+}
+
+//
 // Releases the write lock another owner holds, once the import has waited for it for a second of the time of its Io. That time
 // is the one the back-off sleeps of the import move, so the import has certainly been refused the lock and is waiting by the
 // time it is released, however fast the machine is.
@@ -891,7 +926,7 @@ test "when acquireWriteLock returns false, retries until lock is acquired and sl
     defer virtual_time.deinit();
     const io = virtual_time.io();
     _ = try context.writePhoto("img1.jpg");
-    // (Zig: another owner holds the lock when the import first asks for it, and lets go of it a while later.)
+    // Another owner holds the lock when the import first asks for it, and lets go of it a while later.
     const created = try storage_zig.storage_factory.createStorage(allocator, io, context.databaseDir, null, null);
     try std.testing.expect(try created.rawStorage.acquireWriteLock(allocator, io, ".db/write.lock", "other-owner"));
     // Waiting for the lock logs each failed attempt; a passing test must write nothing to stderr, so the log is muted.
@@ -1034,8 +1069,8 @@ test "sends file-ignored messages when files are ignored" {
     try context.init(hashFileReportsDefault);
     defer context.deinit();
     const allocator = context.arena.allocator();
-    // (Zig: two files that are not media, and a photo after them, so the scan reports progress once both have
-    // been ignored.)
+    // Two files that are not media, and a photo after them, so the scan reports progress once both have
+    // been ignored.
     _ = try context.writePhoto("a.txt");
     _ = try context.writePhoto("b.txt");
     _ = try context.writePhoto("c.jpg");
@@ -1210,6 +1245,69 @@ test "records the id of an asset the database already held, so it is not looked 
     try std.testing.expectEqualStrings("d0d0d0d0-0000-4000-8000-000000000000", (try cache.getHash(allocator, filePath)).?.assetId.?);
 }
 
+//
+// What the hash-file results below read the import record for.
+//
+const IRecordSnapshot = struct {
+    // The database whose import record is read.
+    databaseDir: []const u8,
+
+    // The number of the task, counting from one, at which the record is read.
+    atTask: usize,
+
+    // How many entries the record held at that point, once it has been read.
+    entriesAtThatPoint: ?usize = null,
+};
+
+//
+// Every hash-file task reports the hash the database already holds, and the import record is read when the task numbered
+// by the snapshot is added.
+//
+fn hashFileSnapshotsImportRecord(backend: *MockBackend, allocator: std.mem.Allocator, taskType: []const u8, data: std.json.Value) anyerror!?IMockResult {
+    _ = data;
+    if (!std.mem.eql(u8, taskType, "hash-file")) {
+        return null;
+    }
+    const snapshot: *IRecordSnapshot = @ptrCast(@alignCast(backend.factoryState.?));
+    if (backend.addedTasks.items.len == snapshot.atTask) {
+        const record = try loadImportRecord(allocator, std.testing.io, snapshot.databaseDir);
+        snapshot.entriesAtThatPoint = record.entries.len;
+    }
+    return .{
+        .status = .Succeeded,
+        .outputs = try hashOutputs(allocator, DEFAULT_HASH),
+    };
+}
+
+test "writes the import record part way through a long import, not only at the end" {
+    // An import of two thousand photos that died at nineteen hundred used to write no record at
+    // all, because the record was only written in the finally at the end of the run. Automatic
+    // import made that worse: a run that goes on until the app quits never reaches the end.
+    var context: ImportTest = undefined;
+    try context.init(hashFileSnapshotsImportRecord);
+    defer context.deinit();
+    const allocator = context.arena.allocator();
+    const fileCount = import_assets_worker.IMPORT_RECORD_FLUSH_SIZE + 25;
+    var fileNumber: usize = 0;
+    while (fileNumber < fileCount) : (fileNumber += 1) {
+        _ = try context.writePhoto(try std.fmt.allocPrint(allocator, "img{d}.jpg", .{fileNumber}));
+    }
+    // At most as many tasks are in flight as the context allows, so when the task five from the last is added every outcome
+    // but a handful before it has been recorded, which is more than the flush size and fewer than twice it.
+    var snapshot: IRecordSnapshot = .{
+        .databaseDir = context.databaseDir,
+        .atTask = fileCount - 5,
+    };
+    context.backend.factoryState = &snapshot;
+
+    _ = try context.run(try context.makeData(false));
+
+    // The record held one flush's worth at that point, written at the hundred mark, and holds every file at the end.
+    try std.testing.expectEqual(@as(?usize, import_assets_worker.IMPORT_RECORD_FLUSH_SIZE), snapshot.entriesAtThatPoint);
+    const record = try loadImportRecord(allocator, std.testing.io, context.databaseDir);
+    try std.testing.expectEqual(@as(usize, fileCount), record.entries.len);
+}
+
 test "writes the import record once at the end of a short import" {
     var context: ImportTest = undefined;
     try context.init(hashFileReportsDefault);
@@ -1248,6 +1346,123 @@ test "a dry run records nothing, because it changed nothing" {
     try std.testing.expect(!test_files.fileExists(std.testing.io, try getImportRecordPath(context.arena.allocator(), context.databaseDir)));
 }
 
+//
+// A folder media source that notes each item the import releases in a file beside the session directories. The scanner builds its
+// own media source, so the releases are visible nowhere else.
+//
+const ReleaseNotingSource = struct {
+    // The folder source that does the work.
+    inner: IMediaSource,
+
+    // The file the paths of the released items are appended to, one to a line.
+    notesPath: []const u8,
+
+    //
+    // Gets the IMediaSource interface for this source (the source must not move while it is used).
+    //
+    fn mediaSource(self: *ReleaseNotingSource) IMediaSource {
+        return .{
+            .ptr = self,
+            .vtable = &vtable,
+        };
+    }
+
+    //
+    // The IMediaSource functions of this source.
+    //
+    const vtable: IMediaSource.VTable = .{
+        .listPage = listPageErased,
+        .openItem = openItemErased,
+        .closeItem = closeItemErased,
+        .deleteItems = deleteItemsErased,
+    };
+
+    //
+    // Lists a page of the folder source.
+    //
+    fn listPageErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
+        const self: *ReleaseNotingSource = @ptrCast(@alignCast(ptr));
+        return self.inner.listPage(allocator, io, cursor, pageSize);
+    }
+
+    //
+    // Opens an item of the folder source.
+    //
+    fn openItemErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, item: IMediaItem) anyerror![]const u8 {
+        const self: *ReleaseNotingSource = @ptrCast(@alignCast(ptr));
+        return self.inner.openItem(allocator, io, item);
+    }
+
+    //
+    // Closes an item of the folder source, and notes that it was released.
+    //
+    fn closeItemErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, item: IMediaItem) anyerror!void {
+        const self: *ReleaseNotingSource = @ptrCast(@alignCast(ptr));
+        try self.inner.closeItem(allocator, io, item);
+        const earlier: []const u8 = if (test_files.fileExists(io, self.notesPath)) try test_files.readFile(allocator, io, self.notesPath) else "";
+        try test_files.writeFile(io, self.notesPath, try std.fmt.allocPrint(allocator, "{s}{s}\n", .{ earlier, item.filePath }));
+    }
+
+    //
+    // Deletes items of the folder source.
+    //
+    fn deleteItemsErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, sourceIds: []const []const u8) anyerror!void {
+        const self: *ReleaseNotingSource = @ptrCast(@alignCast(ptr));
+        return self.inner.deleteItems(allocator, io, sourceIds);
+    }
+};
+
+//
+// Builds the folder media source that notes its releases.
+//
+fn buildReleaseNotingSource(allocator: std.mem.Allocator, sources: []const IAutoImportSource, options: IMediaSourceBuildOptions) anyerror!IMediaSource {
+    const noting = try allocator.create(ReleaseNotingSource);
+    noting.* = .{
+        .inner = try buildFolderMediaSource(allocator, sources, options),
+        .notesPath = try path.join(allocator, &.{ std.fs.path.dirname(options.sessionTempDir).?, "released.txt" }),
+    };
+    return noting.mediaSource();
+}
+
+//
+// Reads the paths the import released, from the notes the media source made.
+//
+fn readReleasedPaths(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
+    const notesPath = try path.join(allocator, &.{ try node_utils.fs.getProcessTmpDir(allocator, io), "photosphere", "released.txt" });
+    return try test_files.readFile(allocator, io, notesPath);
+}
+
+test "releases each file once the import has finished with it" {
+    // On a phone this is what deletes the copy that had to be made to read the photo at all.
+    // Doing it per file rather than at the end of the run is what keeps a long automatic import
+    // from filling the sandbox with copies of every photo it has ever looked at.
+    var context: ImportTest = undefined;
+    try context.init(newFileUploads);
+    defer context.deinit();
+    const allocator = context.arena.allocator();
+    try registerMediaSourceBuilder("folder", buildReleaseNotingSource);
+    const filePath = try context.writePhoto("img1.jpg");
+
+    _ = try context.run(try context.autoImportData());
+
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{s}\n", .{filePath}), try readReleasedPaths(allocator, std.testing.io));
+}
+
+test "releases a file the database already held" {
+    // The database holds this hash, which is what makes it already-imported. The import reads
+    // that from the map it builds when the run starts, not from the task result.
+    var context: ImportTest = undefined;
+    try context.init(hashFileReportsDefault);
+    defer context.deinit();
+    const allocator = context.arena.allocator();
+    try registerMediaSourceBuilder("folder", buildReleaseNotingSource);
+    const filePath = try context.writePhoto("img1.jpg");
+
+    _ = try context.run(try context.autoImportData());
+
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{s}\n", .{filePath}), try readReleasedPaths(allocator, std.testing.io));
+}
+
 test "reports what an automatic import is doing, so the panel has something to show" {
     var context: ImportTest = undefined;
     try context.init(newFileUploads);
@@ -1265,8 +1480,8 @@ test "says how much of what it skipped was recognised without opening the file" 
     defer context.deinit();
     const allocator = context.arena.allocator();
     const io = std.testing.io;
-    // (Zig: the first photo of the folder is recorded in the hash cache as already imported, so the scanner
-    // recognises it without opening it, as TypeScript's mocked scanner reports.)
+    // The first photo of the folder is recorded in the hash cache as already imported, so the scanner
+    // recognises it without opening it.
     const skippedPath = try context.writePhoto("a.jpg");
     _ = try context.writePhoto("b.jpg");
     const stat = try std.Io.Dir.cwd().statFile(io, skippedPath, .{});
@@ -1325,6 +1540,22 @@ test "names the database an automatic arrival landed in, which the gallery needs
     try std.testing.expectEqual(@as(usize, 1), arrivals.len);
     try std.testing.expectEqualStrings(context.databaseDir, arrivals[0].get("databasePath").?.string);
     try std.testing.expectEqualStrings("automatic", arrivals[0].get("source").?.string);
+}
+
+test "sends the arrival's asset as the record itself, which the gallery lays out" {
+    var context: ImportTest = undefined;
+    try context.init(newFileUploads);
+    defer context.deinit();
+    _ = try context.writePhoto("img1.jpg");
+
+    _ = try context.run(try context.makeData(false));
+
+    // The gallery sets the layout fields on the asset it is given, so a string (the encoded record the upload carries) breaks it.
+    const arrivals = try context.messages.ofType(context.arena.allocator(), "import-success");
+    try std.testing.expectEqual(@as(usize, 1), arrivals.len);
+    const asset = arrivals[0].get("asset").?;
+    try std.testing.expect(asset == .object);
+    try std.testing.expectEqualStrings(arrivals[0].get("assetId").?.string, asset.object.get("_id").?.string);
 }
 
 test "writes fewer assets than a batch holds rather than stranding them" {

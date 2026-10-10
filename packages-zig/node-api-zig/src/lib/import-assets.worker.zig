@@ -16,6 +16,7 @@ const create_auto_import_scanner = @import("create-auto-import-scanner.zig");
 const auto_import_scanner = @import("auto-import-scanner.zig");
 const hash_file_worker = @import("hash-file.worker.zig");
 const upload_asset_worker = @import("upload-asset.worker.zig");
+const bson_json = @import("bson-json.zig");
 const import_record_storage = @import("import-record-storage.zig");
 const file_scanner = @import("file-scanner.zig");
 const retry_operations = @import("retry-operations.zig");
@@ -206,51 +207,77 @@ pub const IImportOptions = struct {
     sources: []const IAutoImportSource,
 
     //
-    // Converts the options to the JSON object they are queued as (TypeScript: the object itself).
-    // (No TypeScript counterpart.)
+    // Converts the options to the JSON object they are queued as.
     //
     pub fn toJson(self: IImportOptions, allocator: std.mem.Allocator) !std.json.Value {
         var object: std.json.ObjectMap = .empty;
-        try object.put(allocator, "auto", .{ .bool = self.auto });
+        try object.put(allocator, "auto", .{
+            .bool = self.auto,
+        });
         try object.put(allocator, "sources", try api.auto_import_settings.autoImportSourcesToJson(allocator, self.sources));
-        return .{ .object = object };
+        return .{
+            .object = object,
+        };
     }
 };
 
 //
 // Converts what an import reports back to the JSON value returned as the task output.
-// (No TypeScript counterpart: TypeScript returns the object itself. Each asset record is carried as the base64
+// (Each asset record is carried as the base64
 // of its BSON serialization, as in IAssetDatabaseData.)
 //
 pub fn importAssetsResultToJson(allocator: std.mem.Allocator, result: IImportAssetsResult) !std.json.Value {
     var imported: std.json.Array = .init(allocator);
     for (result.imported) |importedAsset| {
         var object: std.json.ObjectMap = .empty;
-        try object.put(allocator, "assetId", .{ .string = importedAsset.assetId });
-        try object.put(allocator, "logicalPath", .{ .string = importedAsset.logicalPath });
-        try object.put(allocator, "asset", .{ .string = try encodeAssetRecord(allocator, importedAsset.asset) });
-        try imported.append(.{ .object = object });
+        try object.put(allocator, "assetId", .{
+            .string = importedAsset.assetId,
+        });
+        try object.put(allocator, "logicalPath", .{
+            .string = importedAsset.logicalPath,
+        });
+        try object.put(allocator, "asset", .{
+            .string = try encodeAssetRecord(allocator, importedAsset.asset),
+        });
+        try imported.append(.{
+            .object = object,
+        });
     }
     var skipped: std.json.Array = .init(allocator);
     for (result.skipped) |skippedImport| {
         var object: std.json.ObjectMap = .empty;
-        try object.put(allocator, "logicalPath", .{ .string = skippedImport.logicalPath });
-        try object.put(allocator, "contentHash", .{ .string = skippedImport.contentHash });
-        try skipped.append(.{ .object = object });
+        try object.put(allocator, "logicalPath", .{
+            .string = skippedImport.logicalPath,
+        });
+        try object.put(allocator, "contentHash", .{
+            .string = skippedImport.contentHash,
+        });
+        try skipped.append(.{
+            .object = object,
+        });
     }
     var output: std.json.ObjectMap = .empty;
-    try output.put(allocator, "imported", .{ .array = imported });
-    try output.put(allocator, "skipped", .{ .array = skipped });
-    try output.put(allocator, "failedCount", .{ .integer = @intCast(result.failedCount) });
-    return .{ .object = output };
+    try output.put(allocator, "imported", .{
+        .array = imported,
+    });
+    try output.put(allocator, "skipped", .{
+        .array = skipped,
+    });
+    try output.put(allocator, "failedCount", .{
+        .integer = @intCast(result.failedCount),
+    });
+    return .{
+        .object = output,
+    };
 }
 
 //
-// Converts a typed value to the JSON value it is queued or sent as, leaving out optional fields that are not set
-// (as JSON.stringify leaves out undefined properties). (No TypeScript counterpart.)
+// Converts a typed value to the JSON value it is queued or sent as, leaving out optional fields that are not set.
 //
 fn toJsonValue(allocator: std.mem.Allocator, value: anytype) !std.json.Value {
-    const text = try std.json.Stringify.valueAlloc(allocator, value, .{ .emit_null_optional_fields = false });
+    const text = try std.json.Stringify.valueAlloc(allocator, value, .{
+        .emit_null_optional_fields = false,
+    });
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
 }
 
@@ -276,8 +303,7 @@ const IPendingDatabaseUpdate = struct {
 };
 
 //
-// `() => flushImportRecord()` passed to swallowError.
-// (No TypeScript counterpart: the arrow function.)
+// The operation that flushes the import record, passed to swallowError.
 //
 const FlushImportRecordOperation = struct {
     // The import whose record is flushed.
@@ -293,7 +319,7 @@ const FlushImportRecordOperation = struct {
 };
 
 //
-// `() => scanner.release(filePath)` passed to swallowError. (No TypeScript counterpart: the arrow function.)
+// The operation that releases a file back to the scanner, passed to swallowError.
 //
 const ReleaseFileOperation = struct {
     // The import whose scanner releases the file.
@@ -311,7 +337,7 @@ const ReleaseFileOperation = struct {
 };
 
 //
-// `() => remove(sessionTempDir)` passed to swallowError. (No TypeScript counterpart: the arrow function.)
+// The operation that removes the session temp directory, passed to swallowError.
 //
 const RemoveSessionTempDirOperation = struct {
     // The directory to remove.
@@ -326,12 +352,12 @@ const RemoveSessionTempDirOperation = struct {
 };
 
 //
-// Everything importAssetsHandler's inner functions share (TypeScript: the variables they close over).
+// Everything importAssetsHandler's inner functions share.
 //
 // The throttled writer's timer fires on a thread of its own (see lodash/debounce.zig), and the queue runs its
-// callbacks on the thread that waits for it. `loopLock` stands in for JavaScript's one thread: whatever runs the
-// import's code holds it, and the import lets go of it only while it waits (for the queue, or in a sleep), which is
-// where TypeScript would let a timer or a callback run.
+// callbacks on the thread that waits for it. `loopLock` is held by whatever runs the
+// import's code, and the import lets go of it only while it waits (for the queue, or in a sleep), which is
+// where a timer or a callback is allowed to run.
 //
 const ImportRun = struct {
     // Allocates everything the run keeps (the task's arena; only used while holding loopLock).
@@ -346,7 +372,7 @@ const ImportRun = struct {
     // The task's context.
     context: ITaskContext,
 
-    // Stands in for JavaScript's one thread (see above).
+    // Held by whatever runs the import's code (see above).
     loopLock: std.Io.Mutex,
 
     // The same outcome the messages report, gathered so a caller that cannot see the messages
@@ -426,14 +452,14 @@ const ImportRun = struct {
     // other task on the machine would wait behind it.
     filesAwaitingHash: std.ArrayList(IHashFileData),
 
-    // The index of the first file in filesAwaitingHash that has not been handed out (TypeScript: shift()).
+    // The index of the first file in filesAwaitingHash that has not been handed out.
     filesAwaitingHashHead: usize,
 
     // Files that have been hashed and are waiting for an upload-asset task. Held here rather than
     // queued straight away for the same reason, and drained ahead of the hash queue below.
     assetsAwaitingUpload: std.ArrayList(IUploadAssetData),
 
-    // The index of the first upload in assetsAwaitingUpload that has not been handed out (TypeScript: shift()).
+    // The index of the first upload in assetsAwaitingUpload that has not been handed out.
     assetsAwaitingUploadHead: usize,
 
     // How many hash-file and upload-asset tasks this import currently has in flight. Never allowed
@@ -474,7 +500,7 @@ const ImportRun = struct {
     }
 
     //
-    // `await sleep(milliseconds)`: lets go of the loop lock while it waits, as JavaScript lets other work run.
+    // Sleeps for the given milliseconds, letting go of the loop lock while it waits so that other work can run.
     //
     fn sleepUnlocked(self: *ImportRun, milliseconds: u64) !void {
         self.unlock();
@@ -490,14 +516,18 @@ const ImportRun = struct {
     }
 
     //
-    // Sends a task message made of string fields. (No TypeScript counterpart: TypeScript sends an object literal.)
+    // Sends a task message made of string fields.
     //
     fn sendStringMessage(self: *ImportRun, fields: []const [2][]const u8) !void {
         var message: std.json.ObjectMap = .empty;
         for (fields) |field| {
-            try message.put(self.allocator, field[0], .{ .string = field[1] });
+            try message.put(self.allocator, field[0], .{
+                .string = field[1],
+            });
         }
-        self.context.sendMessage(.{ .object = message });
+        self.context.sendMessage(.{
+            .object = message,
+        });
     }
 
     //
@@ -560,14 +590,14 @@ const ImportRun = struct {
     }
 
     //
-    // `filesAwaitingHash.length`. (No TypeScript counterpart.)
+    // `filesAwaitingHash.length`.
     //
     fn filesAwaitingHashCount(self: *ImportRun) usize {
         return self.filesAwaitingHash.items.len - self.filesAwaitingHashHead;
     }
 
     //
-    // `assetsAwaitingUpload.length`. (No TypeScript counterpart.)
+    // `assetsAwaitingUpload.length`.
     //
     fn assetsAwaitingUploadCount(self: *ImportRun) usize {
         return self.assetsAwaitingUpload.items.len - self.assetsAwaitingUploadHead;
@@ -681,7 +711,7 @@ const ImportRun = struct {
 
     //
     // The body of processPendingDatabaseUpdates' try block, run holding the write lock.
-    // (No TypeScript counterpart: the try block is written inline; Zig needs it as a function to release the lock
+    // (Zig needs it as a function to release the lock
     // in the finally block whether it failed or not.)
     //
     fn writeLockedBatch(self: *ImportRun, itemsToProcess: []const IPendingDatabaseUpdate) !bool {
@@ -759,24 +789,46 @@ const ImportRun = struct {
             // necessarily the one on screen, and an arrival in another one is not that gallery's
             // to show.
             var arrival: std.json.ObjectMap = .empty;
-            try arrival.put(allocator, "type", .{ .string = "import-success" });
-            try arrival.put(allocator, "databasePath", .{ .string = self.data.storageDescriptor.databasePath });
-            try arrival.put(allocator, "assetId", .{ .string = assetData.assetId });
-            try arrival.put(allocator, "logicalPath", .{ .string = logicalPath });
-            try arrival.put(allocator, "source", .{ .string = @tagName(self.importSource) });
+            try arrival.put(allocator, "type", .{
+                .string = "import-success",
+            });
+            try arrival.put(allocator, "databasePath", .{
+                .string = self.data.storageDescriptor.databasePath,
+            });
+            try arrival.put(allocator, "assetId", .{
+                .string = assetData.assetId,
+            });
+            try arrival.put(allocator, "logicalPath", .{
+                .string = logicalPath,
+            });
+            try arrival.put(allocator, "source", .{
+                .string = @tagName(self.importSource),
+            });
             if (micro) |microText| {
-                try arrival.put(allocator, "micro", .{ .string = microText });
+                try arrival.put(allocator, "micro", .{
+                    .string = microText,
+                });
             }
-            try arrival.put(allocator, "asset", .{ .string = assetData.assetRecord });
-            self.context.sendMessage(.{ .object = arrival });
+            // (Zig: the upload carries the record encoded, so this sends the decoded record as
+            // JSON. The gallery sets its layout fields on it, so it has to be an object.)
+            try arrival.put(allocator, "asset", .{
+                .object = try bson_json.bsonDocumentToJsonObject(allocator, assetRecord),
+            });
+            self.context.sendMessage(.{
+                .object = arrival,
+            });
         }
 
         var databaseMetadata = merkleTree.databaseMetadata orelse BsonDocument.empty;
         if (merkleTree.databaseMetadata == null) {
-            try databaseMetadata.put(allocator, "filesImported", .{ .number = 0 });
+            try databaseMetadata.put(allocator, "filesImported", .{
+                .number = 0,
+            });
         }
         const filesImported = databaseMetadata.get("filesImported") orelse BsonValue.undefined;
-        try databaseMetadata.put(allocator, "filesImported", .{ .number = jsNumber(filesImported) + @as(f64, @floatFromInt(itemsToProcess.len)) });
+        try databaseMetadata.put(allocator, "filesImported", .{
+            .number = jsNumber(filesImported) + @as(f64, @floatFromInt(itemsToProcess.len)),
+        });
         merkleTree.databaseMetadata = databaseMetadata;
 
         if (!self.data.dryRun) {
@@ -796,7 +848,7 @@ const ImportRun = struct {
     }
 
     //
-    // The body of the throttled processor (TypeScript: the async arrow function passed to throttle).
+    // The body of the throttled processor.
     //
     fn processQueue(self: *ImportRun) !void {
         if (self.isProcessingQueue or self.pendingDatabaseUpdates.items.len == 0) {
@@ -837,7 +889,7 @@ const ImportRun = struct {
     }
 
     //
-    // The throttled function (TypeScript: the async arrow function passed to throttle, with its catch).
+    // The throttled function, with its catch.
     // Runs holding the loop lock: on the timer thread, or from flush.
     //
     fn processQueueThrottled(context: *anyopaque) void {
@@ -851,8 +903,7 @@ const ImportRun = struct {
     // Subscribe to task completions for hash-file and upload-asset tasks that belong
     // to this import session. The source filter prevents concurrent imports from
     // processing each other's completions.
-    // (TypeScript: the arrow function passed to queue.onTaskComplete. Runs on the thread waiting in awaitAllTasks,
-    // holding the loop lock.)
+    // Runs on the thread waiting in awaitAllTasks, holding the loop lock.
     //
     fn onTaskComplete(context: ?*anyopaque, taskResult: ITaskResult) anyerror!void {
         const self: *ImportRun = @ptrCast(@alignCast(context.?));
@@ -960,8 +1011,7 @@ const ImportRun = struct {
                 }
                 else {
                     if (try self.hashesQueuedForImport.has(hashBuffer)) {
-                        // TODO: replicates a TypeScript bug. The template string lost its `${logicalPath}`, so the name is
-                        // empty. Fix it in the TypeScript first, then here.
+                        // The file name in this log line is empty: the logical path is not included in it.
                         log.verbose("File \"\" is a duplicate in this scan, skipping.");
                         self.releaseFile(hashFileData.filePath);
                     }
@@ -1009,7 +1059,7 @@ const ImportRun = struct {
             if (taskResult.status == TaskStatus.Succeeded) {
                 const outputs = taskResult.outputs orelse .null;
                 if (outputs == .null) {
-                    return errors.throwError("undefined is not an object (evaluating 'uploadResult.assetData')", .{});
+                    return errors.throwError("The upload-asset task succeeded but returned no output", .{});
                 }
                 const uploadResult = try std.json.parseFromValueLeaky(IUploadAssetResult, allocator, outputs, .{
                     .ignore_unknown_fields = true,
@@ -1069,7 +1119,7 @@ const ImportRun = struct {
         // hashed and copied the same photos again. Being caught up is the moment that matters, and
         // the moment it costs nothing: nothing more is coming, and hours may pass before anything is.
         //
-        // It is deliberately not a timer. This task runs inside an embedded JavaScript engine on a
+        // It is deliberately not a timer. This task runs inside an embedded engine on a
         // phone, where a timer fires outside the task's own control flow, can overlap the task's own
         // writes, and outlives the task if a clear is ever missed. This runs on the scanner's own
         // loop instead. Both writes cost nothing when nothing has changed, so repeating it on every
@@ -1111,18 +1161,34 @@ const ImportRun = struct {
         const importedCount: u64 = self.imported.items.len;
         const skippedCount: u64 = self.skipped.items.len;
         var message: std.json.ObjectMap = .empty;
-        try message.put(allocator, "type", .{ .string = "import-progress" });
-        try message.put(allocator, "seen", .{ .integer = @intCast(importedCount + skippedCount + self.failedCount + self.skippedBeforeOpening) });
-        try message.put(allocator, "imported", .{ .integer = @intCast(importedCount) });
+        try message.put(allocator, "type", .{
+            .string = "import-progress",
+        });
+        try message.put(allocator, "seen", .{
+            .integer = @intCast(importedCount + skippedCount + self.failedCount + self.skippedBeforeOpening),
+        });
+        try message.put(allocator, "imported", .{
+            .integer = @intCast(importedCount),
+        });
         // What the import recognised, plus what the scanner recognised before it went to the
         // trouble of copying the photo out of the library at all.
-        try message.put(allocator, "skipped", .{ .integer = @intCast(skippedCount + self.skippedBeforeOpening) });
-        try message.put(allocator, "skippedBeforeOpening", .{ .integer = @intCast(self.skippedBeforeOpening) });
-        try message.put(allocator, "failed", .{ .integer = @intCast(self.failedCount) });
+        try message.put(allocator, "skipped", .{
+            .integer = @intCast(skippedCount + self.skippedBeforeOpening),
+        });
+        try message.put(allocator, "skippedBeforeOpening", .{
+            .integer = @intCast(self.skippedBeforeOpening),
+        });
+        try message.put(allocator, "failed", .{
+            .integer = @intCast(self.failedCount),
+        });
         if (currentItem) |item| {
-            try message.put(allocator, "currentItem", .{ .string = item });
+            try message.put(allocator, "currentItem", .{
+                .string = item,
+            });
         }
-        self.context.sendMessage(.{ .object = message });
+        self.context.sendMessage(.{
+            .object = message,
+        });
 
         // The same counters again, as the job the interface lists and can cancel. Indeterminate,
         // because the scanner streams: how many files there are to import is not known until the
@@ -1131,8 +1197,7 @@ const ImportRun = struct {
     }
 
     //
-    // Queues one file the scanner found (TypeScript: the `async (result) => { ... }` arrow function passed to
-    // scanner.scan). Runs holding the loop lock.
+    // Queues one file the scanner found. Runs holding the loop lock.
     //
     fn visitFile(context: ?*anyopaque, result: IScannedImportFile) anyerror!void {
         const self: *ImportRun = @ptrCast(@alignCast(context.?));
@@ -1171,8 +1236,7 @@ const ImportRun = struct {
     }
 
     //
-    // Reports the scan's progress (TypeScript: the `(currentlyScanning, state) => { ... }` arrow function passed
-    // to scanner.scan). Runs holding the loop lock.
+    // Reports the scan's progress. Runs holding the loop lock.
     //
     fn onScanProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, state: *const ScannerState) void {
         const self: *ImportRun = @ptrCast(@alignCast(context.?));
@@ -1182,7 +1246,7 @@ const ImportRun = struct {
     }
 
     //
-    // The body of onScanProgress. (No TypeScript counterpart.)
+    // The body of onScanProgress.
     //
     fn reportScanProgress(self: *ImportRun, currentlyScanning: ?[]const u8, state: *const ScannerState) !void {
         const allocator = self.allocator;
@@ -1190,9 +1254,15 @@ const ImportRun = struct {
         self.prevIgnoredCount = state.numFilesIgnored;
         if (newIgnored > 0) {
             var message: std.json.ObjectMap = .empty;
-            try message.put(allocator, "type", .{ .string = "file-ignored" });
-            try message.put(allocator, "count", .{ .integer = @intCast(newIgnored) });
-            self.context.sendMessage(.{ .object = message });
+            try message.put(allocator, "type", .{
+                .string = "file-ignored",
+            });
+            try message.put(allocator, "count", .{
+                .integer = @intCast(newIgnored),
+            });
+            self.context.sendMessage(.{
+                .object = message,
+            });
         }
         if (currentlyScanning) |scanning| {
             if (scanning.len > 0) {
@@ -1210,8 +1280,7 @@ const ImportRun = struct {
 };
 
 //
-// The async arrow function onScannerProgress passes to swallowError when the scanner is caught up.
-// (No TypeScript counterpart: the arrow function.)
+// The operation onScannerProgress passes to swallowError when the scanner is caught up.
 //
 const CaughtUpFlushOperation = struct {
     // The import whose hash cache and import record are written.
@@ -1236,7 +1305,7 @@ const CaughtUpFlushOperation = struct {
 };
 
 //
-// `a === b` for two optional strings (undefined equals only undefined). (No TypeScript counterpart.)
+// Whether two optional strings are equal (null equals only null).
 //
 fn optionalStringsEqual(left: ?[]const u8, right: ?[]const u8) bool {
     if (left == null or right == null) {
@@ -1246,7 +1315,7 @@ fn optionalStringsEqual(left: ?[]const u8, right: ?[]const u8) bool {
 }
 
 //
-// `Buffer.from(hex, "hex")`. (No TypeScript counterpart.)
+// Decodes hex text to the bytes it stands for.
 //
 fn hexToBuffer(allocator: std.mem.Allocator, hex: []const u8) ![]const u8 {
     const buffer = try allocator.alloc(u8, hex.len / 2);
@@ -1254,7 +1323,7 @@ fn hexToBuffer(allocator: std.mem.Allocator, hex: []const u8) ![]const u8 {
 }
 
 //
-// A JavaScript value used as a number in `+=` (undefined is NaN). (No TypeScript counterpart.)
+// A value used as a number when adding up (a missing value counts as NaN).
 //
 fn jsNumber(value: BsonValue) f64 {
     return switch (value) {
@@ -1268,7 +1337,7 @@ fn jsNumber(value: BsonValue) f64 {
 }
 
 //
-// `assetRecord.micro`, or undefined when the record has none. (No TypeScript counterpart.)
+// The `micro` field of the record, or null when the record has none.
 //
 fn recordMicro(assetRecord: BsonDocument) ?[]const u8 {
     const micro = assetRecord.get("micro") orelse {
@@ -1287,7 +1356,9 @@ fn recordMicro(assetRecord: BsonDocument) ?[]const u8 {
 // (Zig: the task data and output are JSON values holding IImportAssetsData and IImportAssetsResult.)
 //
 pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
-    const data = try std.json.parseFromValueLeaky(IImportAssetsData, allocator, taskData, .{ .ignore_unknown_fields = true });
+    const data = try std.json.parseFromValueLeaky(IImportAssetsData, allocator, taskData, .{
+        .ignore_unknown_fields = true,
+    });
     const uuidGenerator = context.uuidGenerator;
     const maxConcurrentChildTasks = context.maxConcurrentChildTasks;
 
@@ -1299,7 +1370,7 @@ pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, taskData: s
 
     const hashCacheDir = try getHashCacheDir(allocator, data.storageDescriptor.databasePath);
 
-    const credentials = try resolveStorageCredentials(allocator, io, data.storageDescriptor.databasePath, data.storageDescriptor.encryptionKey, null);
+    const credentials = try resolveStorageCredentials(allocator, io, data.storageDescriptor.databasePath, data.storageDescriptor.encryptionKey, null, context.hostRequester);
     const loadedKeys = try loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
     const created = try createStorage(allocator, io, data.storageDescriptor.databasePath, credentials.s3Config, loadedKeys.options);
 
@@ -1513,7 +1584,7 @@ pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, taskData: s
 }
 
 //
-// `data.options?.auto`, read from the raw options. (No TypeScript counterpart.)
+// Whether the raw options ask for an automatic import (`options.auto`).
 //
 fn isAutoImport(options: ?std.json.Value) bool {
     const value = options orelse {
@@ -1529,7 +1600,7 @@ fn isAutoImport(options: ?std.json.Value) bool {
 }
 
 //
-// The result object the handler returns. (No TypeScript counterpart: TypeScript fills the object as it goes.)
+// The result object the handler returns.
 //
 fn runResult(run: *ImportRun) IImportAssetsResult {
     return .{
@@ -1540,7 +1611,7 @@ fn runResult(run: *ImportRun) IImportAssetsResult {
 }
 
 //
-// Reads every record's hash into existingAssetIdsByHash (TypeScript: the inner loadExistingHashes function).
+// Reads every record's hash into existingAssetIdsByHash.
 //
 fn loadExistingHashes(run: *ImportRun) !void {
     var next: ?[]const u8 = null;

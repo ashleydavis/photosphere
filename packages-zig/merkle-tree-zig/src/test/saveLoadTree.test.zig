@@ -1,6 +1,5 @@
 //
-// Tests for saveTree, loadTree and loadTreeVersion (port of src/test/saveLoadTree.test.ts).
-// (Zig: the TypeScript tests use FileStorage on temporary files; these use the in-memory storage.)
+// Tests for saveTree, loadTree and loadTreeVersion. They use the in-memory storage.
 //
 
 const std = @import("std");

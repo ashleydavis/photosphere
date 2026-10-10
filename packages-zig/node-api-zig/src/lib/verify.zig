@@ -103,7 +103,6 @@ pub const IVerifyResult = struct {
 
 //
 // Formats a progress message and calls the progress callback with it, when there is one.
-// (No TypeScript counterpart: TypeScript uses template strings.)
 //
 fn reportProgress(allocator: std.mem.Allocator, progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) !void {
     const callback = progressCallback orelse {
@@ -114,8 +113,7 @@ fn reportProgress(allocator: std.mem.Allocator, progressCallback: ?ProgressCallb
 
 //
 // The state of a verification that the task completion callback and the tree traversal callback update.
-// (No TypeScript counterpart: TypeScript closures capture the variables of verify. The lists grow here and are
-// copied to the IVerifyResult at the end.)
+// The lists grow here and are copied to the IVerifyResult at the end.
 //
 const VerifyState = struct {
     // Allocates the lists and the file names copied from task results.
@@ -159,7 +157,7 @@ const VerifyState = struct {
 
     //
     // Registers a callback to integrate results as tasks complete.
-    // (TypeScript: the arrow function passed to queue.onTaskComplete. Runs on the thread blocked in awaitAllTasks.)
+    // Runs on the thread blocked in awaitAllTasks.
     //
     fn onTaskComplete(context: ?*anyopaque, taskResult: ITaskResult) anyerror!void {
         const self: *VerifyState = @ptrCast(@alignCast(context.?));
@@ -217,8 +215,7 @@ const VerifyState = struct {
     }
 
     //
-    // Queues the verification of a node and checks asset records (TypeScript: the arrow function passed to
-    // traverseTreeAsync).
+    // Queues the verification of a node and checks asset records.
     //
     fn visitNode(self: *VerifyState, node: *SortNode) anyerror!bool {
         const allocator = self.allocator;
@@ -271,7 +268,7 @@ const VerifyState = struct {
 // Checks for missing files, modified files, and new files.
 // If any files are corrupted, this will pick them up as modified.
 // Also checks each asset in the merkle tree has a database record with the correct id and hash.
-// (Zig: the TypeScript optional parameters are passed as null.)
+// A caller with nothing to supply for an optional parameter passes null.
 //
 pub fn verify(allocator: std.mem.Allocator, io: std.Io, storageDescriptor: IDatabaseDescriptor, databaseStorage: IStorage, uuidGenerator: IUuidGenerator, metadataCollection: *IBsonCollection, options: ?IVerifyOptions, progressCallback: ?ProgressCallback) !IVerifyResult {
 
@@ -332,7 +329,7 @@ pub fn verify(allocator: std.mem.Allocator, io: std.Io, storageDescriptor: IData
 
     //
     // Get the task queue from the provider (lazily created).
-    // Handlers are registered in the worker file (apps/cli/src/lib/worker.ts).
+    // Handlers are registered when the worker starts.
     // maxWorkers is set in the provider constructor (defaults to number of CPUs).
     //
     const queue = try TaskQueue.init(allocator, io, uuidGenerator, storageDescriptor.databasePath);
@@ -383,7 +380,7 @@ pub fn verify(allocator: std.mem.Allocator, io: std.Io, storageDescriptor: IData
 }
 
 //
-// A file that failed verification (TypeScript: the anonymous `{ file: string; error: string }` type).
+// A file that failed verification.
 //
 pub const IDatabaseFileVerifyError = struct {
     // The file that failed verification.
@@ -414,8 +411,7 @@ pub const IDatabaseFileVerifyResult = struct {
 };
 
 //
-// The state of verifyDatabaseFiles that its helper functions update. (No TypeScript counterpart: TypeScript
-// closures capture the variables of verifyDatabaseFiles.)
+// The state of verifyDatabaseFiles that its helper functions update.
 //
 const DatabaseFileVerifyState = struct {
     // Allocates the lists.
@@ -596,7 +592,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
             else {
                 // Shard data file (with checksum)
                 log.verbose(try std.fmt.allocPrint(allocator, "Verifying {s}", .{filePath}));
-                // (Zig: the TypeScript try/catch is a labeled block whose error is caught.)
+                // A labeled block whose error is caught.
                 verifyShard: {
                     const verifyResult = verifySerializedFile(allocator, io, assetStorage, filePath) catch |err| {
                         try state.addError(filePath, errors.errorMessage(err));
@@ -640,7 +636,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
 
                     // files.dat and page files (all have checksum)
                     log.verbose(try std.fmt.allocPrint(allocator, "Verifying {s}", .{filePath}));
-                    // (Zig: the TypeScript try/catch is a labeled block whose error is caught.)
+                    // A labeled block whose error is caught.
                     verifyIndexFile: {
                         const verifyResult = verifySerializedFile(allocator, io, assetStorage, filePath) catch |err| {
                             try state.addError(filePath, errors.errorMessage(err));

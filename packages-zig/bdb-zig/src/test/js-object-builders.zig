@@ -5,7 +5,7 @@ const BsonValue = bson.BsonValue;
 const BsonDocument = bson.BsonDocument;
 
 //
-// Builds one property of a JS object literal (TypeScript: `key: value`).
+// Builds one property of a JS object literal (`key: value`).
 //
 pub fn property(key: []const u8, value: BsonValue) bson.BsonField {
     return .{

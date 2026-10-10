@@ -5,14 +5,14 @@ const app_state_format = node_api.app_state_format;
 const IAppState = app_state_format.IAppState;
 
 //
-// Parses JSON text into the value a YAML document holds (what the TypeScript tests write as an object literal).
+// Parses JSON text into the value a YAML document holds.
 //
 fn parse(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
 }
 
 //
-// A value as compact JSON (what the TypeScript tests compare with toEqual).
+// A value as compact JSON.
 //
 fn toText(allocator: std.mem.Allocator, value: anytype) ![]const u8 {
     return std.json.Stringify.valueAlloc(allocator, value, .{
@@ -557,4 +557,33 @@ test "setAppStateValue refuses a ui key given a value the interface cannot hold"
     );
     try std.testing.expectError(error.Thrown, app_state_format.setAppStateValue(allocator, &state, "nothing", .null));
     try std.testing.expect(state.ui == null);
+}
+
+test "setAppStateValue writing nothing removes a declared key rather than leaving it as it was" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var state: IAppState = .{
+        .gallerySort = "name",
+    };
+
+    try app_state_format.setAppStateValue(allocator, &state, "gallerySort", null);
+
+    try std.testing.expect(state.gallerySort == null);
+    try std.testing.expect((try app_state_format.getAppStateValue(allocator, state, "gallerySort")) == null);
+}
+
+test "setAppStateValue writing nothing removes a ui key rather than leaving it as it was" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var state: IAppState = .{};
+    try app_state_format.setAppStateValue(allocator, &state, "sidebar-collapsed-databases", .{
+        .bool = true,
+    });
+
+    try app_state_format.setAppStateValue(allocator, &state, "sidebar-collapsed-databases", null);
+
+    try std.testing.expectEqual(@as(usize, 0), state.ui.?.count());
+    try std.testing.expect((try app_state_format.getAppStateValue(allocator, state, "sidebar-collapsed-databases")) == null);
 }

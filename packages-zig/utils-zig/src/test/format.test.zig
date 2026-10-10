@@ -7,7 +7,7 @@ test "formatFileSize formats zero bytes" {
     try std.testing.expectEqualStrings("0 B", try utils.format.formatFileSize(arena.allocator(), 0));
 }
 
-test "formatFileSize formats bytes, kilobytes and megabytes like TypeScript" {
+test "formatFileSize formats bytes, kilobytes and megabytes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -21,9 +21,9 @@ test "formatFileSize formats bytes, kilobytes and megabytes like TypeScript" {
 }
 
 //
-// TypeScript's sizes list stops at TB, so a petabyte or more reads `sizes[5]`, which is undefined.
+// The sizes list stops at TB, so a petabyte or more reads `sizes[5]`, which is undefined.
 //
-test "formatFileSize names the unit undefined from a petabyte up, like TypeScript" {
+test "formatFileSize names the unit undefined from a petabyte up" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

@@ -11,7 +11,7 @@ const key_utils = encryption.key_utils;
 const computeEncryptedLength = encryption.encrypt_stream.computeEncryptedLength;
 
 //
-// Loads the TypeScript fixture key of encryption-zig as storage options.
+// Loads the fixture key of encryption-zig as storage options.
 //
 fn loadFixtureOptions(allocator: std.mem.Allocator) !encryption.encryption_types.IStorageOptions {
     const cwd = std.Io.Dir.cwd();
@@ -135,12 +135,12 @@ test "the other methods forward to the wrapped storage unchanged" {
 }
 
 //
-// The directory of the encryption-zig golden fixtures that the TypeScript encryption package wrote with ts-public.pem.
+// The directory of the encryption-zig golden fixtures, written with ts-public.pem.
 //
 const encryption_fixtures_dir = "encryption-zig/src/test/fixtures";
 
 //
-// The 44-byte header TypeScript wrote at the start of every file it encrypted with ts-public.pem: "PSEN", version 1
+// The 44-byte header at the start of every fixture file encrypted with ts-public.pem: "PSEN", version 1
 // (little endian), "A2CB" and the SHA-256 hash of the public key (encryption-zig fixture ts-public-hash.hex).
 //
 const ts_key_header = "PSEN" ++ "\x01\x00\x00\x00" ++ "A2CB" ++
@@ -148,7 +148,7 @@ const ts_key_header = "PSEN" ++ "\x01\x00\x00\x00" ++ "A2CB" ++
     "\x57\x39\x8d\x71\x17\x8a\x1f\x70\x96\x3e\x22\xd6\x96\x64\xbe\x2c";
 
 //
-// A file TypeScript encrypted, and the plaintext size and encrypted length of the fixture.
+// A golden fixture file, and its plaintext size and encrypted length.
 //
 const TypeScriptEncryptedFile = struct {
     // The fixture file name in encryption-zig/src/test/fixtures.
@@ -162,7 +162,7 @@ const TypeScriptEncryptedFile = struct {
 };
 
 //
-// The files the TypeScript encryption package wrote with encryptBuffer (new-*) and createEncryptionStream (stream-*).
+// The fixture files written with encryptBuffer (new-*) and createEncryptionStream (stream-*).
 //
 const ts_encrypted_files = [_]TypeScriptEncryptedFile{
     .{ .fileName = "new-0.bin", .plainSize = 0, .encryptedLength = 588 },
@@ -174,7 +174,7 @@ const ts_encrypted_files = [_]TypeScriptEncryptedFile{
 };
 
 //
-// Creates the plaintext of the encryption-zig fixtures (makePlaintext of its generate.ts): byte i is (i * 31 + 7) mod 256.
+// Creates the plaintext of the encryption-zig fixtures: byte i is (i * 31 + 7) mod 256.
 //
 fn makeFixturePlaintext(allocator: std.mem.Allocator, size: usize) ![]u8 {
     const plain = try allocator.alloc(u8, size);
@@ -184,7 +184,7 @@ fn makeFixturePlaintext(allocator: std.mem.Allocator, size: usize) ![]u8 {
     return plain;
 }
 
-test "EncryptedStorage reads the files TypeScript encrypted" {
+test "EncryptedStorage reads the files in the golden fixtures" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -194,7 +194,7 @@ test "EncryptedStorage reads the files TypeScript encrypted" {
     const created = try createStorage(allocator, io, dbDir, null, try loadFixtureOptions(allocator));
     try std.testing.expectEqualStrings("encrypted-fs", created.@"type");
 
-    // The plaintext fixture TypeScript wrote matches the formula of its generator.
+    // The plaintext fixture matches the formula it was generated from.
     const plain17 = try std.Io.Dir.cwd().readFileAlloc(io, encryption_fixtures_dir ++ "/plain-17.bin", allocator, .unlimited);
     try std.testing.expectEqualSlices(u8, "\x07\x26\x45\x64\x83\xa2\xc1\xe0\xff\x1e\x3d\x5c\x7b\x9a\xb9\xd8\xf7", plain17);
     try std.testing.expectEqualSlices(u8, plain17, try makeFixturePlaintext(allocator, 17));
@@ -214,7 +214,7 @@ test "EncryptedStorage reads the files TypeScript encrypted" {
     }
 }
 
-test "EncryptedStorage writes files with the header and length TypeScript writes" {
+test "EncryptedStorage writes files with the header and length of the golden fixtures" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -242,7 +242,7 @@ test "EncryptedStorage writes files with the header and length TypeScript writes
 }
 
 //
-// readableLength has no test of its own in TypeScript; what it says of an encrypted store is pinned here.
+// What readableLength says of an encrypted store is pinned here.
 //
 test "readableLength is undefined, because the plaintext length cannot be worked out from the stored length" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -259,8 +259,7 @@ test "readableLength is undefined, because the plaintext length cannot be worked
 }
 
 //
-// writeStreamHashed has no test of its own in TypeScript beyond the length it declares (encrypted-storage-lengths.test.ts):
-// the hash is not handed down and the bytes still make the trip.
+// For writeStreamHashed, the hash is not handed down and the bytes still make the trip.
 //
 test "writeStreamHashed writes the stream without the hash, and the bytes make the trip" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -282,7 +281,7 @@ test "writeStreamHashed writes the stream without the hash, and the bytes make t
 }
 
 //
-// storedHash has no test of its own in TypeScript; what it says of an encrypted store is pinned here.
+// What storedHash says of an encrypted store is pinned here.
 //
 test "storedHash is undefined, because the stored bytes are ciphertext" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -299,8 +298,8 @@ test "storedHash is undefined, because the stored bytes are ciphertext" {
 
 //
 // A storage that records the length each stream write was told to expect, which is what becomes the Content-Length
-// of the request that carries it (the LengthRecordingStorage of encrypted-storage-lengths.test.ts). It stores the
-// bytes in files, like the MockStorage the TypeScript class extends keeps them in memory.
+// of the request that carries it. It stores the
+// bytes in files.
 //
 const LengthRecordingStorage = struct {
     // The storage the bytes are really written to.

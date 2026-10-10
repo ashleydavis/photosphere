@@ -17,7 +17,7 @@ const showInstallationInstructions = installation_instructions.showInstallationI
 // Shows user-friendly error and exits if tools are missing.
 //
 pub fn ensureMediaProcessingTools(allocator: std.mem.Allocator, io: std.Io, nonInteractive: bool) !void {
-    const toolsStatus = try verifyTools(allocator, io);
+    const toolsStatus = try verifyTools(allocator, io, null);
 
     if (toolsStatus.allAvailable) {
         return; // All tools are available, continue

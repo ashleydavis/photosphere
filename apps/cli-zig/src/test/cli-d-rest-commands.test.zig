@@ -1,14 +1,12 @@
 //
 // The failure paths and the edge cases of the list, compare, export, hash-cache, news, summary and root-hash
 // commands that the other test files leave out (apps/cli-zig/src/cmd/list.zig, compare.zig, hash-cache.zig,
-// summary.zig and news.zig against apps/cli/src/cmd/list.ts, compare.ts, hash-cache.ts, summary.ts and news.ts).
+// summary.zig and news.zig).
 //
-// The reports the tests expect are written out here from the TypeScript CLI: the "No files found in the database."
-// of listCommand (apps/cli/src/cmd/list.ts), the "... and N more" truncation of compareCommand
-// (apps/cli/src/cmd/compare.ts), the "No database found" of loadDatabase (apps/cli/src/lib/init-cmd.ts), the
-// "Local Hash Cache" report of hashCacheCommand (apps/cli/src/cmd/hash-cache.ts), the "No news items available."
-// of newsCommand (apps/cli/src/cmd/news.ts) and the summary report of summaryCommand
-// (apps/cli/src/cmd/summary.ts).
+// The reports the tests expect are written out here: the "No files found in the database." of listCommand,
+// the "... and N more" truncation of compareCommand, the "No database found" of loadDatabase, the
+// "Local Hash Cache" report of hashCacheCommand, the "No news items available." of newsCommand and the summary
+// report of summaryCommand.
 //
 
 const std = @import("std");
@@ -113,7 +111,7 @@ fn countLines(text: []const u8, line: []const u8) usize {
 }
 
 //
-// The report of listCommand (apps/cli/src/cmd/list.ts) for a database whose sort index holds no records: nothing
+// The report of listCommand for a database whose sort index holds no records: nothing
 // has been displayed, so it says so rather than printing the end-of-results line.
 //
 const list_empty_report =
@@ -127,7 +125,7 @@ const list_empty_report =
 ;
 
 //
-// The report of summaryCommand (apps/cli/src/cmd/summary.ts) for test/dbs/no-assets: the database holds the
+// The report of summaryCommand for test/dbs/no-assets: the database holds the
 // README.md and its tree, and no asset, so nothing has been imported. It has no database hash, because a
 // database with no asset has no asset tree hash of its own, which is the branch the report only prints the
 // files hash for.
@@ -142,7 +140,7 @@ const summary_empty_report_tail =
     \\
 ;
 
-test "list and summary report a database with no assets like the TypeScript CLI" {
+test "list and summary report a database with no assets" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -164,7 +162,7 @@ test "list and summary report a database with no assets like the TypeScript CLI"
     try std.testing.expect(std.mem.indexOf(u8, summary.stdout, "Database hash:") == null);
 }
 
-test "list counts back from the end of the page for a negative page size like TypeScript" {
+test "list counts back from the end of the page for a negative page size" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -189,7 +187,7 @@ test "list counts back from the end of the page for a negative page size like Ty
 }
 
 //
-// The report of compareCommand (apps/cli/src/cmd/compare.ts) for test/dbs/1-asset against test/dbs/1-asset-2 with
+// The report of compareCommand for test/dbs/1-asset against test/dbs/1-asset-2 with
 // --max that is not a number: `onlyInA.slice(0, NaN)` is empty and `length > NaN` is false, so the headings are
 // printed with nothing under them and the "... and N more" line is not.
 //
@@ -213,9 +211,9 @@ const compare_max_not_a_number_report =
 ;
 
 //
-// The report of compareCommand (apps/cli/src/cmd/compare.ts) for test/dbs/1-asset against test/dbs/1-asset-2 with
-// --max 0: nothing is listed, and every category says how many files it did not list, because `length > 0` and
-// `length - 0` are what the TypeScript writes.
+// The report of compareCommand for test/dbs/1-asset against test/dbs/1-asset-2 with
+// --max 0: nothing is listed, and every category says how many files it did not list, because any number of
+// files is more than 0.
 //
 const compare_max_zero_report =
     \\
@@ -251,7 +249,7 @@ fn withPlatformSeparators(allocator: std.mem.Allocator, text: []const u8) ![]con
 }
 
 //
-// The report of compareCommand (apps/cli/src/cmd/compare.ts) for test/dbs/1-asset against test/dbs/1-asset-2 with
+// The report of compareCommand for test/dbs/1-asset against test/dbs/1-asset-2 with
 // --full: every file of every category is listed and the "... and N more" line is not.
 //
 const compare_full_report_tail =
@@ -270,7 +268,7 @@ const compare_full_report_tail =
     \\
 ;
 
-test "compare lists nothing for a maximum that is not a number and everything for --full, like the TypeScript CLI" {
+test "compare lists nothing for a maximum that is not a number and everything for --full" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -292,13 +290,13 @@ test "compare lists nothing for a maximum that is not a number and everything fo
     try std.testing.expectEqual(@as(u8, 0), full.exitCode);
 
     // A maximum of 0 shows nothing, and every category says how many it did not show, because 0 is a number
-    // that any number of files is more than (TypeScript: `length > 0`, `length - 0`).
+    // that any number of files is more than.
     const zeroMax = try normalize(allocator, try runZig(allocator, environment, &.{ "compare", "--db", source, "--dest", destination, "--max", "0", "--yes" }), root, "<root>");
     try expectResult(zeroMax, try withPlatformSeparators(allocator, compare_max_zero_report), "", 0);
 }
 
 //
-// The report of loadDatabase (apps/cli/src/lib/init-cmd.ts) when the destination of compare is not a database.
+// The report of loadDatabase when the destination of compare is not a database.
 //
 const compare_missing_dest_report =
     \\
@@ -311,7 +309,7 @@ const compare_missing_dest_report =
     \\
 ;
 
-test "compare reports a destination that is not a database like the TypeScript CLI" {
+test "compare reports a destination that is not a database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -331,7 +329,7 @@ test "compare reports a destination that is not a database like the TypeScript C
 }
 
 //
-// The report of newsCommand (apps/cli/src/cmd/news.ts) when the feed holds no items.
+// The report of newsCommand when the feed holds no items.
 //
 const news_empty_report =
     \\
@@ -343,7 +341,7 @@ const news_empty_report =
     \\
 ;
 
-test "news says the feed is empty like the TypeScript CLI" {
+test "news says the feed is empty" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -361,7 +359,7 @@ test "news says the feed is empty like the TypeScript CLI" {
 //
 const test_png_hash = "3d9d6f073e60a13e6706bec322b47615f76b594b17bd64495614996b995908d9";
 
-test "hash-cache show names the asset id of an entry added by add, like the TypeScript CLI" {
+test "hash-cache show names the asset id of an entry added by add" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

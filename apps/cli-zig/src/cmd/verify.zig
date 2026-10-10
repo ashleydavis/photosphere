@@ -44,7 +44,7 @@ pub fn verifyFoundProblems(result: IVerifyResult, databaseFiles: ?IDatabaseFileV
 }
 
 //
-// Options of the verify command (TypeScript: IVerifyCommandOptions extends IBaseCommandOptions).
+// Options of the verify command.
 // The base options are in `base`.
 //
 pub const IVerifyCommandOptions = struct {
@@ -63,14 +63,14 @@ pub const IVerifyCommandOptions = struct {
 };
 
 //
-// JavaScript truthiness of an optional string.
+// Whether an optional string is present and not empty.
 //
 fn isSet(value: ?[]const u8) bool {
     return value != null and value.?.len > 0;
 }
 
 //
-// Writes each verification progress message (TypeScript: `(progress) => { writeProgress(`🔍 ${progress}`); }`).
+// Writes each verification progress message.
 //
 fn onProgress(context: ?*anyopaque, progress: ?[]const u8) void {
     _ = context;

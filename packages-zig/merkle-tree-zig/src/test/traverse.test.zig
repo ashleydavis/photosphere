@@ -1,7 +1,6 @@
 //
-// Tests for traverseTreeSync and traverseTreeAsync (port of src/test/traverse.test.ts).
-// (Zig: test names are prefixed with the describe name. The TypeScript async callbacks await timers;
-// the Zig callbacks are blocking functions.)
+// Tests for traverseTreeSync and traverseTreeAsync.
+// (The callbacks are blocking functions.)
 //
 
 const std = @import("std");
@@ -38,7 +37,7 @@ const Recorder = struct {
     // When true, returning false for every leaf.
     stopAtLeaves: bool = false,
 
-    // When set, returning false once this many nodes have been visited (TypeScript: `return count < limit`).
+    // When set, returning false once this many nodes have been visited.
     limit: ?usize = null,
 
     // When set, failing with 'Stop here' when this many nodes have been visited.
@@ -113,7 +112,7 @@ fn countInternalNodes(nodeCounts: []const u32) usize {
 }
 
 //
-// A traverseTreeSync callback that records leaves with children (TypeScript: the 'can validate tree structure' callback).
+// A traverseTreeSync callback that records leaves with children.
 //
 fn collectInvalidNodes(invalidNodes: *std.ArrayList(*SortNode), current: *SortNode) anyerror!bool {
     if (current.nodeCount == 1 and (current.left != null or current.right != null)) {
@@ -122,7 +121,7 @@ fn collectInvalidNodes(invalidNodes: *std.ArrayList(*SortNode), current: *SortNo
     return true;
 }
 
-test "traverseTreeSync: handles undefined node" {
+test "traverseTreeSync handles undefined node" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var recorder: Recorder = .{ .allocator = arena.allocator() };
@@ -130,7 +129,7 @@ test "traverseTreeSync: handles undefined node" {
     try std.testing.expectEqual(@as(usize, 0), recorder.visited.items.len);
 }
 
-test "traverseTreeSync: traverses single leaf node" {
+test "traverseTreeSync traverses single leaf node" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -139,7 +138,7 @@ test "traverseTreeSync: traverses single leaf node" {
     try expectNames(&.{"A"}, recorder.visited.items);
 }
 
-test "traverseTreeSync: traverses two leaf nodes" {
+test "traverseTreeSync traverses two leaf nodes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -148,7 +147,7 @@ test "traverseTreeSync: traverses two leaf nodes" {
     try expectNames(&.{ "A", "A", "B" }, recorder.visited.items);
 }
 
-test "traverseTreeSync: performs pre-order traversal (parent, left, right)" {
+test "traverseTreeSync performs pre-order traversal (parent, left, right)" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -158,7 +157,7 @@ test "traverseTreeSync: performs pre-order traversal (parent, left, right)" {
     try expectNames(&.{ "A", "A", "A", "B", "C" }, recorder.visited.items);
 }
 
-test "traverseTreeSync: visits all nodes in pre-order for balanced tree" {
+test "traverseTreeSync visits all nodes in pre-order for balanced tree" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -173,7 +172,7 @@ test "traverseTreeSync: visits all nodes in pre-order for balanced tree" {
     try std.testing.expect(recorder.nodeCounts.items[0] > recorder.nodeCounts.items[1]);
 }
 
-test "traverseTreeSync: stops node children when callback returns false" {
+test "traverseTreeSync stops node children when callback returns false" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -184,7 +183,7 @@ test "traverseTreeSync: stops node children when callback returns false" {
     try std.testing.expect(recorder.visited.items.len < 7); // Less than all nodes
 }
 
-test "traverseTreeSync: stops traversing children of node when it returns false" {
+test "traverseTreeSync stops traversing children of node when it returns false" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -201,7 +200,7 @@ test "traverseTreeSync: stops traversing children of node when it returns false"
     try std.testing.expect(!merkle_verify.containsName(recorder.leafNames.items, "B"));
 }
 
-test "traverseTreeSync: continues traversal when callback returns true" {
+test "traverseTreeSync continues traversal when callback returns true" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -213,7 +212,7 @@ test "traverseTreeSync: continues traversal when callback returns true" {
     try std.testing.expectEqual(@as(usize, 9), recorder.visited.items.len);
 }
 
-test "traverseTreeSync: prevents children traversal for leaf nodes when returning false" {
+test "traverseTreeSync prevents children traversal for leaf nodes when returning false" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -225,7 +224,7 @@ test "traverseTreeSync: prevents children traversal for leaf nodes when returnin
     try expectNames(&.{ "A", "B", "C", "D" }, recorder.leafNames.items);
 }
 
-test "traverseTreeSync: collects all leaf nodes" {
+test "traverseTreeSync collects all leaf nodes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -235,7 +234,7 @@ test "traverseTreeSync: collects all leaf nodes" {
     try expectNames(&.{ "A", "B", "C", "D" }, recorder.leafNames.items);
 }
 
-test "traverseTreeSync: collects all internal nodes" {
+test "traverseTreeSync collects all internal nodes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -245,7 +244,7 @@ test "traverseTreeSync: collects all internal nodes" {
     try std.testing.expectEqual(@as(usize, 3), countInternalNodes(recorder.nodeCounts.items)); // 1 root + 2 internal
 }
 
-test "traverseTreeSync: counts total nodes" {
+test "traverseTreeSync counts total nodes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -255,7 +254,7 @@ test "traverseTreeSync: counts total nodes" {
     try std.testing.expectEqual(@as(usize, 9), recorder.visited.items.len); // 5 leaves + 4 internal nodes
 }
 
-test "traverseTreeSync: verifies all nodes have required properties" {
+test "traverseTreeSync verifies all nodes have required properties" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -272,7 +271,7 @@ test "traverseTreeSync: verifies all nodes have required properties" {
     try std.testing.expect(allValid);
 }
 
-test "traverseTreeSync: can validate tree structure" {
+test "traverseTreeSync can validate tree structure" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const tree = try buildTree(arena.allocator(), &.{ "A", "B", "C", "D" });

@@ -66,16 +66,32 @@ pub const AppHandlers = struct {
     // Called when a task has sent a message, after the page has been told, from the thread that sent it, with no lock held. The values
     // are valid only during the call.
     on_task_message: ?*const fn (core: *Core, sent: types.TaskSentMessage) void = null,
+    // Gives the query text the shell appends to the address of the page, after the question mark, so the page's first render already
+    // holds what the app tells it at start-up. Null for an app whose page needs no query. See `PageQuery`.
+    page_query: ?PageQuery = null,
 };
 
 //
-// The state an app keeps in the core. The core makes it when it is created, after the task runner is running, and destroys it first
-// when it is destroyed, before the task runner stops, so what it owns (a timer thread, say) can stop while tasks can still be queued.
+// An app's function for the query of the page's address. The core calls it when the shell asks (the shell asks once the core exists,
+// before it loads the page), with whether the test mode switch is on, which the app says in the query however it likes. It returns
+// the text after the question mark, such as `restApiUrl=...&testMode=1`, or an empty string for no query, allocated with the
+// allocator given, which is an arena that is released when the call returns. Ziggy passes the text through unread, so no shell
+// composes a query and Ziggy names none of its parts.
+//
+pub const PageQuery = *const fn (core: *Core, allocator: std.mem.Allocator, test_mode: bool) anyerror![]const u8;
+
+//
+// The state an app keeps in the core. The core makes it when it is created, after the task runner is running. When the core is
+// destroyed it stops the state first, before the task runner stops, so what the state owns that runs by itself (a timer thread, say)
+// can end while tasks can still be queued, and destroys the state last, after the task runner has stopped, so nothing a running task
+// reads (the state itself, a log file) is gone while a task can still run.
 //
 pub const AppState = struct {
     // Makes the app's state. The core's `app_state` is null until this returns.
     create: *const fn (core: *Core) anyerror!*anyopaque,
-    // Destroys the state `create` made.
+    // Stops what the state owns that runs by itself. The state stays valid, because tasks that are still running read it.
+    stop: *const fn (core: *Core, state: *anyopaque) void,
+    // Releases the state `create` made, after the task runner has stopped and no task can read it.
     destroy: *const fn (core: *Core, state: *anyopaque) void,
 };
 
@@ -99,14 +115,35 @@ pub const TaskChannelEntry = struct {
 // The channels that belong to Ziggy itself.
 //
 const ziggy_channels = [_]ChannelEntry{
-    .{ .name = "get-platform", .handler = getPlatformHandler },
-    .{ .name = "add-task", .handler = addTaskHandler },
-    .{ .name = "cancel-tasks", .handler = cancelTasksHandler },
-    .{ .name = "menu-action", .handler = menuActionHandler },
-    .{ .name = "get-dropped-paths", .handler = getDroppedPathsHandler },
+    .{
+        .name = "get-platform",
+        .handler = getPlatformHandler,
+    },
+    .{
+        .name = "add-task",
+        .handler = addTaskHandler,
+    },
+    .{
+        .name = "cancel-tasks",
+        .handler = cancelTasksHandler,
+    },
+    .{
+        .name = "menu-action",
+        .handler = menuActionHandler,
+    },
+    .{
+        .name = "get-dropped-paths",
+        .handler = getDroppedPathsHandler,
+    },
 } ++ if (build_options.test_hooks) [_]ChannelEntry{
-    .{ .name = "test-result", .handler = testResultHandler },
-    .{ .name = "test-page-ready", .handler = testPageReadyHandler },
+    .{
+        .name = "test-result",
+        .handler = testResultHandler,
+    },
+    .{
+        .name = "test-page-ready",
+        .handler = testPageReadyHandler,
+    },
 } else [_]ChannelEntry{};
 
 //
@@ -139,6 +176,10 @@ pub const Core = struct {
     on_task_end: ?*const fn (core: *Core, end: types.TaskEnd) void,
     // The app's function for a message a task sent, or null.
     on_task_message: ?*const fn (core: *Core, sent: types.TaskSentMessage) void,
+    // The app's function for the query of the page's address, or null.
+    page_query: ?PageQuery,
+    // The text the last call to `pageQuery` returned, owned by the core, or null before the first call.
+    page_query_text: ?[:0]u8,
     // The shell's configuration. The strings in it are copies owned by the core.
     config: ZiggyConfig,
     // The owned copy of the app's URL prefix.
@@ -165,8 +206,8 @@ pub const Core = struct {
         errdefer allocator.destroy(core);
         core.allocator = allocator;
         core.threaded = .init_single_threaded;
-        // Code ported from TypeScript runs its operations against a timer, which needs the Io to start a task of its own (the retry
-        // of utils-zig does). Everything else still runs on the calling thread, and a cancel request still has no effect on it.
+        // The retry of utils-zig runs its operations against a timer, which needs the Io to start a task of its own. Everything else
+        // still runs on the calling thread, and a cancel request still has no effect on it.
         core.threaded.allocator = allocator;
         core.threaded.concurrent_limit = .unlimited;
         const channels = try allocator.alloc(ChannelEntry, ziggy_channels.len + app.channels.len);
@@ -184,6 +225,8 @@ pub const Core = struct {
         core.app_state = null;
         core.on_task_end = app.on_task_end;
         core.on_task_message = app.on_task_message;
+        core.page_query = app.page_query;
+        core.page_query_text = null;
         core.config = config;
         core.app_url_prefix = try allocator.dupeZ(u8, std.mem.span(config.app_url_prefix));
         errdefer allocator.free(core.app_url_prefix);
@@ -218,7 +261,10 @@ pub const Core = struct {
             core.app_state = try hooks.create(core);
             core.runner.app_state = core.app_state;
         }
-        errdefer if (core.app_state) |state| core.state_hooks.?.destroy(core, state);
+        errdefer if (core.app_state) |state| {
+            core.state_hooks.?.stop(core, state);
+            core.state_hooks.?.destroy(core, state);
+        };
         if (build_options.test_hooks) {
             if (config.test_mode) {
                 const control = try allocator.create(test_control.TestControl);
@@ -239,17 +285,23 @@ pub const Core = struct {
     //
     pub fn destroy(self: *Core) void {
         if (self.app_state) |state| {
-            self.state_hooks.?.destroy(self, state);
+            self.state_hooks.?.stop(self, state);
         }
         if (self.control) |control| {
             control.stop();
             self.allocator.destroy(control);
         }
         self.runner.stop();
+        if (self.app_state) |state| {
+            self.state_hooks.?.destroy(self, state);
+        }
         task_queue.queue_backend.setQueueBackend(null);
         self.queue_backend.destroy();
         self.threaded.deinit();
         self.dropped.deinit();
+        if (self.page_query_text) |text| {
+            self.allocator.free(text);
+        }
         self.allocator.free(self.channels);
         self.allocator.free(self.app_url_prefix);
         self.allocator.free(self.data_dir);
@@ -262,6 +314,27 @@ pub const Core = struct {
     //
     pub fn checkUrl(self: *Core, url: []const u8) types.UrlDecision {
         return origin_check.checkUrl(self.app_url_prefix, url);
+    }
+
+    //
+    // Asks the app for the query of the page's address and returns the text after the question mark, empty when the app has none. The
+    // text is owned by the core and stays valid until the next call or until the core is destroyed. The shell calls it once the core
+    // exists, before it loads the page.
+    //
+    pub fn pageQuery(self: *Core) ![:0]const u8 {
+        const page_query = self.page_query orelse {
+            return "";
+        };
+        // The app allocates from an arena that goes when the call returns, so it need not free what it uses to make the text.
+        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena_state.deinit();
+        const text = try page_query(self, arena_state.allocator(), self.config.test_mode);
+        const owned = try self.allocator.dupeZ(u8, text);
+        if (self.page_query_text) |old| {
+            self.allocator.free(old);
+        }
+        self.page_query_text = owned;
+        return owned;
     }
 
     //
@@ -363,11 +436,16 @@ pub const Core = struct {
         };
     }
 
+    //
+    // Sends the successful reply to a request.
+    //
     fn sendReply(self: *Core, arena: std.mem.Allocator, id: std.json.Value, reply_data: []const u8) !void {
         const reply = try json_util.stringify(arena, .{
             .id = id,
             .ok = true,
-            .data = json_util.Raw{ .text = reply_data },
+            .data = json_util.Raw{
+                .text = reply_data,
+            },
         });
         self.deliver(reply);
     }
@@ -399,6 +477,9 @@ pub const Core = struct {
     }
 };
 
+//
+// The runner calls this when a task has ended: tells the queue backend, then the app.
+//
 fn observeTaskEnd(user_data: ?*anyopaque, end: types.TaskEnd) void {
     const core: *Core = @ptrCast(@alignCast(user_data.?));
     core.queue_backend.taskEnded(end);
@@ -407,6 +488,9 @@ fn observeTaskEnd(user_data: ?*anyopaque, end: types.TaskEnd) void {
     }
 }
 
+//
+// The runner calls this when a task has sent a message: tells the queue backend, then the app.
+//
 fn observeTaskMessage(user_data: ?*anyopaque, sent: types.TaskSentMessage) void {
     const core: *Core = @ptrCast(@alignCast(user_data.?));
     core.queue_backend.messageSent(sent);
@@ -415,11 +499,17 @@ fn observeTaskMessage(user_data: ?*anyopaque, sent: types.TaskSentMessage) void 
     }
 }
 
+//
+// Delivers a message the runner or the test control connection produced to the shell.
+//
 fn emitFromRunner(user_data: ?*anyopaque, message: []const u8) void {
     const core: *Core = @ptrCast(@alignCast(user_data.?));
     core.deliver(message);
 }
 
+//
+// Answers get-platform: whether the platform is a desktop or a mobile one, and the operating system and architecture.
+//
 fn getPlatformHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
     _ = core;
     _ = data;
@@ -434,6 +524,9 @@ fn getPlatformHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Valu
     });
 }
 
+//
+// Answers add-task: queues the task the page asked for.
+//
 fn addTaskHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
     const task_type = json_util.getString(data, "taskType") orelse {
         return error.MissingTaskType;
@@ -458,7 +551,7 @@ fn addTaskHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) a
 
 //
 // Turns the priority of an add-task request into the runner's TaskPriority. The page sends TaskPriority, "interactive" or
-// "background", as the Electron renderer does, and leaves it out when the task has no preference, which runs as background.
+// "background", and leaves it out when the task has no preference, which runs as background.
 //
 pub fn priorityFromText(text: ?[]const u8) !task_runner.TaskPriority {
     const priority = text orelse {
@@ -474,7 +567,7 @@ pub fn priorityFromText(text: ?[]const u8) !task_runner.TaskPriority {
 }
 
 //
-// Cancels the tasks queued under a source. The page sends the source as a bare string, as the Electron renderer does.
+// Cancels the tasks queued under a source. The page sends the source as a bare string.
 //
 fn cancelTasksHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
     if (data != .string) {
@@ -485,6 +578,9 @@ fn cancelTasksHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Valu
     return try arena.dupe(u8, "{}");
 }
 
+//
+// Answers test-result: hands the result the page computed for a test control request to the connection waiting for it.
+//
 fn testResultHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
     const control = core.control orelse {
         return error.TestControlNotRunning;
@@ -498,6 +594,9 @@ fn testResultHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value
     return try arena.dupe(u8, "{}");
 }
 
+//
+// Answers test-page-ready: tells the test control connection the page has loaded.
+//
 fn testPageReadyHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
     _ = data;
     const control = core.control orelse {
@@ -524,8 +623,6 @@ fn menuActionHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value
     core.deliver(event);
     return try arena.dupe(u8, "{}");
 }
-
-//
 
 //
 // What the test control connection calls for its drop command: records the files as the shell does when the user drops them.

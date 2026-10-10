@@ -47,7 +47,7 @@ const Fixture = struct {
     // Makes a logger that logs in the directory.
     //
     fn createLogger(self: *Fixture) !*FileLogger {
-        return FileLogger.init(std.testing.allocator, std.testing.io, self.logs_dir, "9.8.7");
+        return FileLogger.init(std.testing.allocator, std.testing.io, null, self.logs_dir, "9.8.7");
     }
 };
 
@@ -146,7 +146,7 @@ test "info, verbose, debug, event and tool go to the log file only, with the lev
     try std.testing.expect(std.mem.indexOf(u8, error_text, "an event line") == null);
     try std.testing.expect(std.mem.indexOf(u8, error_text, "Error Log End") == null);
     try std.testing.expect(!logger.hasLoggedErrors());
-    // The console gets the info and the event, as the Electron log's does.
+    // The console gets the info and the event.
     try std.testing.expectEqualStrings("an info line\n[EVENT] an event line\n", fixture.console_out.writer.buffered());
 }
 
@@ -252,7 +252,7 @@ test "handleWorkerLogMessage writes each level with the source" {
     try std.testing.expect(std.mem.indexOf(u8, error_text, "] [WARN] [Worker 1] w warn\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, error_text, "w info") == null);
     try std.testing.expect(std.mem.indexOf(u8, error_text, "w verbose") == null);
-    // What the console gets, as the TypeScript prints it.
+    // What the console gets.
     try std.testing.expect(std.mem.indexOf(u8, fixture.console_out.writer.buffered(), "[Worker 1] w info\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, fixture.console_out.writer.buffered(), "[EVENT] [Worker 1] w event\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, fixture.console_out.writer.buffered(), "[Worker 1] == ffmpeg stdout ==\nout text\n") != null);
@@ -379,7 +379,7 @@ fn logManyLines(logger: *FileLogger, thread_index: usize) void {
     }
 }
 
-test "handleWorkerLogMessage treats an empty error text as no error text, as the TypeScript's truthiness test does" {
+test "handleWorkerLogMessage treats an empty error text as no error text" {
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();

@@ -10,7 +10,7 @@ const IWriteLockInfo = storage_module.IWriteLockInfo;
 
 //
 // How many bytes of a file fetched from the origin may wait for the local cache write before the reader waits for
-// it (TypeScript: the highWaterMark of the PassThrough streams, 16 KiB).
+// it (16 KiB).
 //
 const CACHE_PIPE_CAPACITY = 16 * 1024;
 
@@ -39,7 +39,7 @@ pub const LazyOriginStorage = struct {
     origin: IStorage,
 
     //
-    // Creates the wrapper (TypeScript: `new LazyOriginStorage(local, origin)`).
+    // Creates the wrapper.
     //
     pub fn init(local: IStorage, origin: IStorage) LazyOriginStorage {
         return .{
@@ -49,7 +49,7 @@ pub const LazyOriginStorage = struct {
     }
 
     //
-    // Gets the IStorage interface of this storage (TypeScript: the class implements IStorage).
+    // Gets the IStorage interface of this storage.
     // Its location is the local storage's location.
     //
     pub fn storage(self: *LazyOriginStorage) IStorage {
@@ -150,12 +150,8 @@ pub const LazyOriginStorage = struct {
     // is required for large files such as 7 GB videos.
     //
     // Cache write errors are non-fatal — the caller's stream is unaffected.
-    // (Zig: the cache write runs concurrently and destroying the returned stream waits for it to finish.)
-    //
-    // TODO: the TypeScript hangs when the cache write fails before the file is read: nothing drains cacheStream any
-    // more, so once its buffer is full the origin stays paused and the caller's stream never ends (in Bun a 192 KB
-    // file stops after 65536 bytes). The Zig stops feeding the cache and hands the caller the whole file, since
-    // matching it would make `psi export` hang. Fix the TypeScript to drain or drop the cache branch the same way.
+    // (Zig: the cache write runs concurrently and destroying the returned stream waits for it to finish. When the cache
+    // write fails, the tee stops feeding the cache and hands the caller the whole file.)
     //
     pub fn readStream(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
         if (try self.local.fileExists(allocator, io, filePath)) {
@@ -244,9 +240,8 @@ pub const LazyOriginStorage = struct {
 };
 
 //
-// Writes the cache branch of a tee to local storage (TypeScript: `this.local.writeStream(filePath, undefined,
-// cacheStream).catch(() => {})`). Runs concurrently with the caller's reads, with its own allocator because the
-// caller's is not shared between threads.
+// Writes the cache branch of a tee to local storage. A failure to write is ignored. Runs concurrently with the
+// caller's reads, with its own allocator because the caller's is not shared between threads.
 //
 fn writeCache(local: IStorage, io: std.Io, filePath: []const u8, cachePipe: *CachePipe) void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -256,7 +251,7 @@ fn writeCache(local: IStorage, io: std.Io, filePath: []const u8, cachePipe: *Cac
 }
 
 //
-// The cache branch of a tee (TypeScript: the cacheStream PassThrough): a bounded queue of bytes that the caller's
+// The cache branch of a tee: a bounded queue of bytes that the caller's
 // reads push into and the cache write reads from.
 //
 const CachePipe = struct {
@@ -275,10 +270,10 @@ const CachePipe = struct {
     // How many bytes of queue are filled.
     queued: usize = 0,
 
-    // True when the origin stream ended (TypeScript: `cacheStream.end()`).
+    // True when the origin stream ended.
     ended: bool = false,
 
-    // True when the caller's stream failed or was destroyed early (TypeScript: `cacheStream.destroy(err)`).
+    // True when the caller's stream failed or was destroyed early.
     failed: bool = false,
 
     // True when the cache write has stopped reading (it finished or failed), so pushes are dropped.
@@ -293,8 +288,7 @@ const CachePipe = struct {
     },
 
     //
-    // Adds bytes for the cache write, waiting while the queue is full (TypeScript: `cacheStream.write(chunk)` with
-    // the origin paused until it drains).
+    // Adds bytes for the cache write, waiting while the queue is full (the origin is paused until it drains).
     //
     fn push(self: *CachePipe, data: []const u8) void {
         var remaining = data;
@@ -363,7 +357,7 @@ const CachePipe = struct {
 };
 
 //
-// The caller's branch of a tee (TypeScript: the callerStream PassThrough): reads the origin stream and hands each
+// The caller's branch of a tee: reads the origin stream and hands each
 // chunk to the cache branch as well.
 //
 const TeeStream = struct {

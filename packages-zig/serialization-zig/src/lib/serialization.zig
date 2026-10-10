@@ -304,7 +304,7 @@ pub const IDeserializer = struct {
 
 //
 // Type definitions for serializer and deserializer functions
-// (Zig: the allocator is passed explicitly; `context` stands in for the variables a TypeScript closure captures, such as `this`).
+// (The allocator is passed explicitly, and `context` carries the variables the function needs, since Zig has no closures.)
 //
 pub fn SerializerFunction(comptime T: type) type {
     return *const fn (allocator: std.mem.Allocator, data: T, serializer: ISerializer) anyerror!void;
@@ -319,7 +319,7 @@ pub fn DeserializerFunction(comptime T: type, comptime ContextT: type) type {
 
 //
 // Map of version numbers to deserializer functions
-// (Zig: one entry of the map; a DeserializerMap is a slice of entries).
+// (One entry of the map; a DeserializerMap is a slice of entries).
 //
 pub fn DeserializerEntry(comptime T: type, comptime ContextT: type) type {
     return struct {
@@ -333,8 +333,8 @@ pub fn DeserializerEntry(comptime T: type, comptime ContextT: type) type {
 
 //
 // The range check `buffer.writeUInt32LE(value)` makes before BinarySerializer.writeUInt32 writes a JavaScript
-// number: a value outside 0 to 4294967295 throws the runtime's RangeError. (No TypeScript counterpart: the Zig
-// writeUInt32 takes a u32, so a caller holding a JavaScript number checks it with this first.)
+// number: a value outside 0 to 4294967295 throws the runtime's RangeError. (writeUInt32 takes a u32, so a caller
+// holding a JavaScript number checks it with this first.)
 //
 pub fn checkUInt32(value: i64) errors.ThrownError!u32 {
     if (value < 0 or value > std.math.maxInt(u32)) {
@@ -361,7 +361,7 @@ pub const BinarySerializer = struct {
     capacity: usize,
 
     //
-    // Creates a serializer with the given initial buffer capacity (TypeScript default: 1024).
+    // Creates a serializer with the given initial buffer capacity.
     //
     pub fn init(allocator: std.mem.Allocator, initialCapacity: usize) std.mem.Allocator.Error!BinarySerializer {
         const buffer = try allocator.alloc(u8, initialCapacity);
@@ -647,7 +647,7 @@ pub const CompressedBinarySerializer = struct {
     mainSerializer: ISerializer,
 
     //
-    // Creates a compressed serializer that writes to mainSerializer (TypeScript default initialCapacity: 1024).
+    // Creates a compressed serializer that writes to mainSerializer.
     //
     pub fn init(allocator: std.mem.Allocator, mainSerializer: ISerializer, initialCapacity: usize) std.mem.Allocator.Error!CompressedBinarySerializer {
         return .{
@@ -973,7 +973,7 @@ pub const CompressedBinaryDeserializer = struct {
 
 //
 // Implementation of IDeserializer for reading binary data
-// (Zig: strings, buffers and bytes are returned as slices of the input buffer; BSON documents are allocated).
+// (Strings, buffers and bytes are returned as slices of the input buffer; BSON documents are allocated).
 //
 // TODO: a readString whose bytes are not valid UTF-8 returns them as they are, where `toString("utf8")` replaces every
 // invalid byte with U+FFFD. Matching it needs an allocation to build the replacement string.
@@ -1253,11 +1253,11 @@ const compressed_binary_deserializer_vtable = deserializerVTable(CompressedBinar
 
 //
 // Error thrown when no deserializer is found for a version
-// (Zig: returned as error.Thrown with the error name "UnsupportedVersionError" recorded; check errors.lastErrorName()).
+// (Returned as error.Thrown with the error name "UnsupportedVersionError" recorded; check errors.lastErrorName()).
 //
 pub const UnsupportedVersionError = struct {
     //
-    // Records the error message and returns the error (TypeScript: `throw new UnsupportedVersionError(...)`).
+    // Records the error message and returns the error.
     //
     pub fn throw(version: u32, availableVersions: []const u32, fileName: []const u8) errors.ThrownError {
         errors.recordError("UnsupportedVersionError", "No deserializer found for version {d} from file {s}. Available versions: {f}", .{ version, fileName, VersionList{ .versions = availableVersions } });
@@ -1293,8 +1293,7 @@ const TYPE_CODE_LENGTH = 4;
 //
 // Checks that a type code is exactly 4 characters and returns its bytes
 //
-// TODO: the bytes are passed through, where `Buffer.from(typeCode, "ascii")` encodes a JavaScript string as latin1, so
-// a character above U+00FF has no single byte to become. Every type code in this repo is four ASCII letters.
+// TODO: the bytes are passed through unchanged, so a character above U+00FF has no single byte to become. Every type code in this repo is four ASCII letters.
 //
 fn typeCodeToBuffer(typeCode: []const u8) errors.ThrownError![]const u8 {
     if (typeCode.len != TYPE_CODE_LENGTH) {
@@ -1313,7 +1312,7 @@ fn sha256(data: []const u8) [Sha256.digest_length]u8 {
 }
 
 //
-// The retry operation that writes a file to storage (TypeScript: `() => storage.write(filePath, undefined, finalBuffer)`).
+// The retry operation that writes a file to storage.
 //
 fn WriteOperation(comptime StorageT: type) type {
     return struct {
@@ -1329,7 +1328,7 @@ fn WriteOperation(comptime StorageT: type) type {
         // The data to write.
         data: []const u8,
 
-        // The Bun toString() of the TypeScript arrow function (used in the retry timeout message).
+        // The text that names this operation in the retry timeout message.
         pub const source = "() => storage.write(filePath, void 0, finalBuffer)";
 
         //
@@ -1342,7 +1341,7 @@ fn WriteOperation(comptime StorageT: type) type {
 }
 
 //
-// The retry operation that reads a file from storage (TypeScript: `() => storage.read(filePath)`).
+// The retry operation that reads a file from storage.
 //
 fn ReadOperation(comptime StorageT: type) type {
     return struct {
@@ -1355,7 +1354,7 @@ fn ReadOperation(comptime StorageT: type) type {
         // The path of the file to read.
         filePath: []const u8,
 
-        // The Bun toString() of the TypeScript arrow function (used in the retry timeout message).
+        // The text that names this operation in the retry timeout message.
         pub const source = "() => storage.read(filePath)";
 
         //
@@ -1368,7 +1367,7 @@ fn ReadOperation(comptime StorageT: type) type {
 }
 
 //
-// The storage methods used by this file. `storage: anytype` must provide methods named like the TypeScript IStorage
+// The storage methods used by this file. `storage: anytype` must provide methods named like the IStorage
 // methods (storage-zig's IStorage satisfies this):
 //
 //   read(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]u8
@@ -1376,7 +1375,7 @@ fn ReadOperation(comptime StorageT: type) type {
 //   write(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, data: []const u8) !void
 //   readStream(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !Stream
 //       Where Stream (a value or pointer) has `reader() *std.Io.Reader` and `destroy(io: std.Io) void`
-//       (TypeScript: `stream.destroy()`). Errors opening or reading the stream count as a failed stream.
+//       Errors opening or reading the stream count as a failed stream.
 //
 
 //
@@ -1408,7 +1407,7 @@ pub fn save(
 }
 
 //
-// Finds the deserializer for a version (TypeScript: `deserializers[version]`).
+// Finds the deserializer for a version.
 //
 fn findDeserializer(comptime T: type, comptime ContextT: type, deserializers: []const DeserializerEntry(T, ContextT), version: u32) ?DeserializerFunction(T, ContextT) {
     for (deserializers) |entry| {
@@ -1421,7 +1420,7 @@ fn findDeserializer(comptime T: type, comptime ContextT: type, deserializers: []
 
 //
 // Loads data from storage. Prefers v6 layout [version][type][payload][checksum]; falls back to legacy [version][payload][checksum] for pre-v6 databases.
-// (Zig: `context` is passed to every deserializer.)
+// (`context` is passed to every deserializer.)
 //
 pub fn load(
     comptime T: type,
@@ -1514,8 +1513,7 @@ pub fn load(
 }
 
 //
-// Decodes bytes like `buffer.toString("ascii")`, which drops the high bit of each byte. (No TypeScript counterpart:
-// Buffer's "ascii" decoding.)
+// Decodes bytes like `buffer.toString("ascii")`, which drops the high bit of each byte.
 //
 fn asciiString(output: []u8, bytes: []const u8) []const u8 {
     for (bytes, 0..) |byte, index| {
@@ -1531,8 +1529,8 @@ fn asciiString(output: []u8, bytes: []const u8) []const u8 {
 // reading the version bytes directly.
 //
 pub fn loadVersion(allocator: std.mem.Allocator, io: std.Io, storage: anytype, filePath: []const u8) ?u32 {
-    // (Zig: FileStorage opens the file in readStream where Node opens it on the first read and reports a failure
-    // through the stream's 'error' event, so a failure of readStream resolves undefined like that event.)
+    // (FileStorage opens the file in readStream, so a failure of readStream means the file cannot be read and the
+    // version is undefined.)
     const stream = storage.readStream(allocator, io, filePath) catch {
         return null;
     };

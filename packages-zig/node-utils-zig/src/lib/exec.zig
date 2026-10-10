@@ -3,9 +3,10 @@ const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const errors = utils.errors;
 const process_env = @import("process-env.zig");
+const in_process_tools = @import("in-process-tools.zig");
 
 //
-// The output of a command run with exec (TypeScript: `{ stdout: string; stderr: string }`).
+// The output of a command run with exec.
 //
 pub const ExecResult = struct {
     // Everything the command wrote to stdout.
@@ -16,18 +17,23 @@ pub const ExecResult = struct {
 };
 
 //
-// The most bytes Bun's exec takes from each of stdout and stderr (its default `maxBuffer`). A command that writes
+// The most bytes exec takes from each of stdout and stderr (its `maxBuffer`). A command that writes
 // more is killed and fails with a RangeError.
 //
 const maxBuffer: usize = 1024 * 1024;
 
 //
 // Executes a command using the specified tool.
-// Like Node's `child_process.exec`, the command runs in the shell (/bin/sh -c, or cmd.exe on Windows)
+// The command runs in the shell (/bin/sh -c, or cmd.exe on Windows)
 // with the environment of `process.env` (see process-env.zig), and fails when the command cannot be
-// started or exits with a non-zero code. The error message is Node's: "Command failed: <command>\n<stderr>".
+// started or exits with a non-zero code. The error message is "Command failed: <command>\n<stderr>". A command that starts ImageMagick,
+// ffmpeg or ffprobe goes to the runner in tools when there is one, and null means every command is started as a program.
 //
-pub fn exec(allocator: std.mem.Allocator, io: std.Io, command: []const u8) !ExecResult {
+pub fn exec(allocator: std.mem.Allocator, io: std.Io, tools: ?in_process_tools.InProcessRunner, command: []const u8) !ExecResult {
+    // On a platform with no ImageMagick, ffmpeg or ffprobe program, the app runs them in its own process (see in-process-tools.zig).
+    if (try in_process_tools.tryRun(allocator, tools, command)) |result| {
+        return result;
+    }
     if (builtin.os.tag == .windows) {
         return execWindows(allocator, command);
     }
@@ -48,7 +54,7 @@ pub fn exec(allocator: std.mem.Allocator, io: std.Io, command: []const u8) !Exec
 }
 
 //
-// Records the RangeError Bun's exec fails with when a command writes more than maxBuffer bytes to a stream.
+// Records the RangeError exec fails with when a command writes more than maxBuffer bytes to a stream.
 //
 fn maxBufferExceeded(streamName: []const u8) errors.ThrownError {
     errors.recordError("RangeError", "{s} maxBuffer length exceeded", .{streamName});
@@ -56,11 +62,10 @@ fn maxBufferExceeded(streamName: []const u8) errors.ThrownError {
 }
 
 //
-// TODO: the command gets an empty stdin, where Node gives it an open pipe nothing writes to, so a command that
-// reads stdin ends at once here and waits for ever in TypeScript.
+// The command gets an empty stdin, so a command that reads stdin ends at once.
 //
 // Runs the command in /bin/sh with the environment of `process.env` and reads its stdout and stderr to their ends,
-// as std.process.run does, but failing as Bun's exec does when either has more than maxBuffer bytes.
+// as std.process.run does, but failing when either has more than maxBuffer bytes.
 //
 fn runShell(allocator: std.mem.Allocator, io: std.Io, command: []const u8) !std.process.RunResult {
     var child = try std.process.spawn(io, .{
@@ -100,8 +105,8 @@ fn runShell(allocator: std.mem.Allocator, io: std.Io, command: []const u8) !std.
 }
 
 //
-// The Windows version of exec. Node's exec runs `cmd.exe /d /s /c "<command>"` with that command line
-// passed verbatim (libuv's windowsVerbatimArguments), so the quotes inside the command reach cmd.exe
+// The Windows version of exec. It runs `cmd.exe /d /s /c "<command>"` with that command line
+// passed verbatim, so the quotes inside the command reach cmd.exe
 // untouched. std.process quotes each argument instead, turning those quotes into \", so the process is
 // created here with CreateProcessW.
 //
@@ -272,7 +277,7 @@ const IPipeReader = struct {
     // The error that stopped the reading, or null when the pipe was read to its end.
     failure: ?anyerror,
 
-    // The process writing to the pipe, killed when it writes more than maxBuffer bytes, as Bun kills it. That closes
+    // The process writing to the pipe, killed when it writes more than maxBuffer bytes. That closes
     // its end of the other pipe too, so the read of the other pipe ends rather than waiting for ever.
     process: std.os.windows.HANDLE,
 
@@ -366,7 +371,7 @@ fn runCmdExe(allocator: std.mem.Allocator, command: []const u8) !ICmdExeResult {
     const stdoutRead = readPipe(stdoutPipe.parentEnd, &stdoutOutput);
     const stdoutOverflowed = if (stdoutRead) |_| false else |err| err == error.MaxBufferExceeded;
 
-    // Bun kills a command that writes too much, which also closes its end of the other pipe so the other read ends.
+    // A command that writes too much is killed, which also closes its end of the other pipe so the other read ends.
     if (stdoutOverflowed) {
         _ = kernel32.TerminateProcess(processInformation.hProcess, 1);
     }
@@ -398,7 +403,7 @@ fn runCmdExe(allocator: std.mem.Allocator, command: []const u8) !ICmdExeResult {
 
 //
 // Checks the result of a command run with execLogged: returns the reason it failed, or null when it did not
-// (TypeScript: the optional `validate` callback, `() => Promise<string | undefined>`).
+// The check is optional.
 //
 pub const IValidate = struct {
     // The state the check reads.
@@ -411,10 +416,10 @@ pub const IValidate = struct {
 //
 // Runs the command and adds logging for the tool used.
 //
-pub fn execLogged(allocator: std.mem.Allocator, io: std.Io, tool: []const u8, command: []const u8, validate: ?IValidate) !ExecResult {
+pub fn execLogged(allocator: std.mem.Allocator, io: std.Io, tools: ?in_process_tools.InProcessRunner, tool: []const u8, command: []const u8, validate: ?IValidate) !ExecResult {
     const log = &utils.log.log;
     log.verbose(try std.fmt.allocPrint(allocator, "Executing {s} with command: \"{s}\"", .{ tool, command }));
-    return execLoggedInner(allocator, io, tool, command, validate) catch |err| {
+    return execLoggedInner(allocator, io, tools, tool, command, validate) catch |err| {
         const msg = try std.fmt.allocPrint(allocator, "Failed to execute command: {s}", .{command});
         log.exception(msg, err);
         return errors.throwError("{s}", .{msg});
@@ -424,9 +429,9 @@ pub fn execLogged(allocator: std.mem.Allocator, io: std.Io, tool: []const u8, co
 //
 // The body of the try block of execLogged.
 //
-fn execLoggedInner(allocator: std.mem.Allocator, io: std.Io, tool: []const u8, command: []const u8, validate: ?IValidate) !ExecResult {
+fn execLoggedInner(allocator: std.mem.Allocator, io: std.Io, tools: ?in_process_tools.InProcessRunner, tool: []const u8, command: []const u8, validate: ?IValidate) !ExecResult {
     const log = &utils.log.log;
-    const result = try exec(allocator, io, command);
+    const result = try exec(allocator, io, tools, command);
     log.tool(tool, .{ .stdout = result.stdout, .stderr = result.stderr });
     if (validate) |check| {
         const validationFailedReason = try check.function(check.context, allocator, io);

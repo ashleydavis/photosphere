@@ -125,7 +125,7 @@ fn contains(list: []const []const u8, value: []const u8) bool {
 }
 
 //
-// Asserts that two lists of ids are equal (TypeScript: `toEqual`).
+// Asserts that two lists of ids are equal.
 //
 fn expectIds(expected: []const []const u8, actual: []const []const u8) !void {
     try std.testing.expectEqual(expected.len, actual.len);

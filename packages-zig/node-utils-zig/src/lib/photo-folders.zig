@@ -53,8 +53,8 @@ pub fn parseXdgPicturesDir(allocator: std.mem.Allocator, fileContents: []const u
 }
 
 //
-// Matches a line against /^XDG_PICTURES_DIR\s*=\s*"(.*)"\s*$/ (where \s is JavaScript whitespace) and returns the
-// captured value, or null when it does not match. (No TypeScript counterpart: TypeScript runs the regular expression inline.)
+// Matches a line against /^XDG_PICTURES_DIR\s*=\s*"(.*)"\s*$/ and returns the
+// captured value, or null when it does not match.
 //
 fn matchXdgPicturesDir(line: []const u8) ?[]const u8 {
     const key = "XDG_PICTURES_DIR";
@@ -104,7 +104,7 @@ pub fn readXdgPicturesDir(allocator: std.mem.Allocator, io: std.Io, homeDir: []c
 // The photo locations an operating system is expected to have, before checking which of them are
 // actually present on this machine. Duplicates are removed, so a Linux machine whose XDG pictures
 // directory is the ordinary "Pictures" folder yields one entry rather than two.
-// (Zig: the platform is the value of Node's `process.platform`, e.g. "win32", "darwin" or "linux".)
+// The platform is "win32", "darwin" or "linux".
 //
 pub fn getPhotoFolderCandidates(allocator: std.mem.Allocator, platform: []const u8, homeDir: []const u8, xdgPicturesDir: ?[]const u8) ![]const []const u8 {
     var candidates: std.ArrayList([]const u8) = .empty;
@@ -156,8 +156,7 @@ pub fn filterExistingFolders(allocator: std.mem.Allocator, io: std.Io, candidate
 }
 
 //
-// Node's `process.platform` for the platform this program was built for.
-// (No TypeScript counterpart: TypeScript reads `process.platform`.)
+// The platform name ("win32", "darwin" or "linux") of the platform this program was built for.
 //
 pub fn processPlatform() []const u8 {
     return switch (builtin.os.tag) {

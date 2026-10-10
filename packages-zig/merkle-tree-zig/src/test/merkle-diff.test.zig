@@ -1,5 +1,5 @@
 //
-// Tests for findMerkleTreeDifferences, findDifferingNodes and processRemainingNodes (port of src/test/merkle-diff.test.ts).
+// Tests for findMerkleTreeDifferences, findDifferingNodes and processRemainingNodes.
 //
 
 const std = @import("std");

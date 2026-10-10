@@ -37,7 +37,7 @@ fn writeState(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8, t
 }
 
 //
-// The state file as the compact JSON of its document (what the TypeScript tests read from the writeYaml mock).
+// The state file as the compact JSON of its document.
 //
 fn documentText(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8) ![]const u8 {
     const document = try node_utils.fs.readYaml(allocator, io, try statePath(allocator, configDir));
@@ -709,4 +709,24 @@ test "getStatePath returns a string ending with state.yaml, beside the config fi
 
     try std.testing.expect(std.mem.endsWith(u8, result, "state.yaml"));
     try std.testing.expectEqualStrings(try statePath(allocator, configDir), result);
+}
+
+test "getFolderPath returns undefined when there is no state file at all" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const configDir = try freshConfigDir(allocator, io, "app-state-folder-no-file");
+    defer temp_dirs.removeTempDir(io, configDir);
+
+    try std.testing.expect((try app_state.getFolderPath(allocator, io, "lastFolder")) == null);
+    try std.testing.expect(!test_files.fileExists(io, try statePath(allocator, configDir)));
+}
+
+test "asFolderStateKey names the keys it does accept, so the message says how to fix it" {
+    try std.testing.expectError(error.Thrown, app_state.asFolderStateKey("nonsense"));
+
+    const message = utils.errors.lastErrorMessage();
+    try std.testing.expect(std.mem.indexOf(u8, message, "lastFolder") != null);
+    try std.testing.expect(std.mem.indexOf(u8, message, "lastDownloadFolder") != null);
 }

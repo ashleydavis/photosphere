@@ -30,7 +30,7 @@ fn writeAnEntry(cacheDir: []const u8, key: []const u8, length: u64) !void {
 }
 
 //
-// The state each test starts from (TypeScript: the beforeEach of the describe block).
+// The state each test starts from.
 //
 const SharedCacheTest = struct {
     // Holds the test's allocations.
@@ -84,7 +84,7 @@ test "a cache that has been written since is read again" {
     try writeAnEntry(context.cacheDir, "photo-2.jpg", 200);
     const second = try loadSharedHashCache(io, context.cacheDir);
 
-    // (Zig: the replaced cache is freed, and a new one can be allocated at the same address, so the cache is told
+    // (The replaced cache is freed, and a new one can be allocated at the same address, so the cache is told
     // apart by what it holds rather than by its identity.)
     try std.testing.expectEqual(@as(u32, 1), firstEntryCount);
     try std.testing.expectEqual(@as(u32, 2), second.getEntryCount());

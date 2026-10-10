@@ -9,9 +9,9 @@ const yamlToStateFile = state_format.yamlToStateFile;
 //
 // Reading and writing state.yaml where there is a filesystem: the CLI and the desktop app.
 //
-// The sibling of config-file.ts, and it works the same way. The mobile apps read and write the same
-// document through worker tasks instead (state.worker.ts), because a phone's WebView has no
-// filesystem of its own. Both go through state-format.ts, so the file means the same thing whichever
+// The sibling of config-file.zig, and it works the same way. The mobile apps read and write the same
+// document through worker tasks instead, because a phone's WebView has no
+// filesystem of its own. Both go through state-format.zig, so the file means the same thing whichever
 // wrote it.
 //
 // Unlike config.yaml this file is not documented for users. Nothing in it was chosen by anyone: it is
@@ -36,7 +36,7 @@ pub fn loadStateFile(allocator: std.mem.Allocator, io: std.Io) !IStateFile {
 }
 
 //
-// The mutator updateStateFile hands to updateYaml (the arrow function in TypeScript): it turns the
+// The mutator updateStateFile hands to updateYaml: it turns the
 // document into the state, lets the caller change it and turns it back into a document.
 //
 fn StateMutator(comptime MutatorT: type) type {
@@ -65,6 +65,10 @@ fn StateMutator(comptime MutatorT: type) type {
 // In Zig the mutator is a value with a method `run(self, allocator, state: *IStateFile) !void`.
 //
 pub fn updateStateFile(allocator: std.mem.Allocator, io: std.Io, mutator: anytype) !void {
-    const stateMutator: StateMutator(@TypeOf(mutator)) = .{ .mutator = mutator };
-    try fs.updateYaml(allocator, io, try getStatePath(allocator), .{ .object = .empty }, &stateMutator, 3);
+    const stateMutator: StateMutator(@TypeOf(mutator)) = .{
+        .mutator = mutator,
+    };
+    try fs.updateYaml(allocator, io, try getStatePath(allocator), .{
+        .object = .empty,
+    }, &stateMutator, 3);
 }

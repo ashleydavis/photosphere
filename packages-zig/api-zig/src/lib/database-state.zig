@@ -107,7 +107,7 @@ fn deserializeAnyDatabaseState(allocator: std.mem.Allocator, context: void, dese
 }
 
 //
-// The deserializers of the state file by version (TypeScript: `{ 1: deserializeAnyDatabaseState, 2: deserializeAnyDatabaseState }`).
+// The deserializers of the state file by version.
 //
 const state_deserializers = [_]serialization.DeserializerEntry(IDatabaseState, void){
     .{ .version = 1, .deserializer = deserializeAnyDatabaseState },
@@ -148,9 +148,8 @@ pub fn saveDatabaseState(allocator: std.mem.Allocator, io: std.Io, rawStorage: I
 //
 // Merges partial into the existing state (or an empty state when absent) and saves it.
 // Lock-free primitive: the caller must already hold the database write lock.
-// (Zig: a `Partial<IDatabaseState>` is the same type as an `IDatabaseState`, with every field optional, so a field
-// partial leaves null is absent from the merge. In TypeScript a key present with the value undefined overwrites the
-// existing one, clearing it, so a caller there can blank a field and a caller here cannot. No caller does.)
+// The partial is the same type as an `IDatabaseState`, with every field optional, so a field partial leaves null is
+// absent from the merge. A caller cannot blank a field with it. No caller does.
 //
 pub fn mergeDatabaseState(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, partial: IDatabaseState) !void {
     const existing = try loadDatabaseState(allocator, io, rawStorage);
@@ -173,7 +172,7 @@ pub fn updateDatabaseStateLocked(allocator: std.mem.Allocator, io: std.Io, rawSt
     if (!try acquireWriteLock(allocator, io, rawStorage, sessionId, 3)) {
         return;
     }
-    // (Zig: the `finally` block; an error from releasing replaces the error of the merge, as in JavaScript.)
+    // The lock is released whether or not the merge fails; an error from releasing replaces the error of the merge.
     mergeDatabaseState(allocator, io, rawStorage, partial) catch |err| {
         try releaseWriteLock(allocator, io, rawStorage);
         return err;

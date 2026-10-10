@@ -9,7 +9,7 @@ const getAllNews = cli.check_for_news.getAllNews;
 const markNewsAsShown = cli.check_for_news.markNewsAsShown;
 
 //
-// A feed of three items, in the order the TypeScript tests give them.
+// A feed of three items.
 //
 const three_item_feed =
     \\items:
@@ -23,8 +23,8 @@ const three_item_feed =
 ;
 
 //
-// Sets up a config dir and a news feed file in the root, and points the process environment at them (TypeScript: the
-// mocked fetchNews of node-api, which here reads a real feed file through a file URL).
+// Sets up a config dir and a news feed file in the root, and points the process environment at them (the
+// feed is read from a real feed file through a file URL).
 //
 fn setup(allocator: std.mem.Allocator, root: []const u8, feed: []const u8) !void {
     const map = try allocator.create(std.process.Environ.Map);
@@ -262,7 +262,7 @@ test "markNewsAsShown swallows persistence errors" {
     mock.install();
     defer mock.uninstall();
 
-    // A file where the config dir should be, so the state file cannot be written (TypeScript: addShownNewsIds rejects with "disk full").
+    // A file where the config dir should be, so the state file cannot be written (as when the disk is full).
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fs.path.join(allocator, &.{ root, "config" }), .data = "not a directory" });
     markNewsAsShown(allocator, std.testing.io, &.{"a"});
 

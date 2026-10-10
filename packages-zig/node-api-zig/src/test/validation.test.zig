@@ -8,7 +8,7 @@ const test_environment = @import("test-environment.zig");
 const validateFile = node_api.validation.validateFile;
 
 //
-// (Zig: there are no TypeScript tests of validation.ts; these cover what validateFile decides.)
+// These cover what validateFile decides.
 //
 
 test "a zero-byte file is not valid" {
@@ -22,7 +22,7 @@ test "a zero-byte file is not valid" {
     mutedLog.install();
     defer mutedLog.uninstall();
 
-    try std.testing.expectEqual(false, try validateFile(arena.allocator(), io, "../test/test.png", "image/png", .{
+    try std.testing.expectEqual(false, try validateFile(arena.allocator(), io, null, "../test/test.png", "image/png", .{
         .length = 0,
         .lastModified = 0,
     }));
@@ -34,7 +34,7 @@ test "an image the media tools can measure is valid" {
     const io = std.testing.io;
     _ = try test_environment.setupEnvironment(io);
 
-    try std.testing.expectEqual(true, try validateFile(arena.allocator(), io, "../test/test.png", "image/png", .{
+    try std.testing.expectEqual(true, try validateFile(arena.allocator(), io, null, "../test/test.png", "image/png", .{
         .length = 100,
         .lastModified = 0,
     }));
@@ -56,7 +56,7 @@ test "an image the media tools cannot read is not valid" {
     mutedLog.install();
     defer mutedLog.uninstall();
 
-    try std.testing.expectEqual(false, try validateFile(allocator, io, filePath, "image/png", .{
+    try std.testing.expectEqual(false, try validateFile(allocator, io, null, filePath, "image/png", .{
         .length = 9,
         .lastModified = 0,
     }));
@@ -68,7 +68,7 @@ test "a video the media tools can measure is valid" {
     const io = std.testing.io;
     _ = try test_environment.setupEnvironment(io);
 
-    try std.testing.expectEqual(true, try validateFile(arena.allocator(), io, "../test/multiple-files/test.mp4", "video/mp4", .{
+    try std.testing.expectEqual(true, try validateFile(arena.allocator(), io, null, "../test/multiple-files/test.mp4", "video/mp4", .{
         .length = 100,
         .lastModified = 0,
     }));
@@ -80,7 +80,7 @@ test "a Photoshop file is let through without being checked" {
     const io = std.testing.io;
     _ = try test_environment.setupEnvironment(io);
 
-    try std.testing.expectEqual(true, try validateFile(arena.allocator(), io, "no-such-file.psd", "image/vnd.adobe.photoshop", .{
+    try std.testing.expectEqual(true, try validateFile(arena.allocator(), io, null, "no-such-file.psd", "image/vnd.adobe.photoshop", .{
         .length = 10,
         .lastModified = 0,
     }));
@@ -92,7 +92,7 @@ test "a file that is neither an image nor a video is valid" {
     const io = std.testing.io;
     _ = try test_environment.setupEnvironment(io);
 
-    try std.testing.expectEqual(true, try validateFile(arena.allocator(), io, "no-such-file.bin", "application/octet-stream", .{
+    try std.testing.expectEqual(true, try validateFile(arena.allocator(), io, null, "no-such-file.bin", "application/octet-stream", .{
         .length = 10,
         .lastModified = 0,
     }));
@@ -116,7 +116,7 @@ fn validateCapturing(allocator: std.mem.Allocator, io: std.Io, filePath: []const
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     console_capture.captureStderr(&stderr_capture.writer);
     defer console_capture.endConsoleCapture();
-    const valid = try validateFile(allocator, io, filePath, contentType, .{
+    const valid = try validateFile(allocator, io, null, filePath, contentType, .{
         .length = 100,
         .lastModified = 0,
     });

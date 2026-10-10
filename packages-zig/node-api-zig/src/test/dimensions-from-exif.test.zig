@@ -3,9 +3,8 @@ const node_api = @import("node-api-zig");
 const dimensionsFromExif = node_api.image.dimensionsFromExif;
 
 //
-// Covers reading a photo's size out of what the EXIF parser already read (port of
-// dimensions-from-exif.test.ts). The TypeScript cases with a negative, fractional or non-numeric side have no
-// counterpart: the parser's image size holds 16-bit unsigned integers, so it cannot carry those values.
+// Covers reading a photo's size out of what the EXIF parser already read. A negative, fractional or non-numeric
+// side has no case: the parser's image size holds 16-bit unsigned integers, so it cannot carry those values.
 //
 
 test "a parse that found the frame header gives its size" {

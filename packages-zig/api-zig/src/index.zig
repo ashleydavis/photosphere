@@ -11,12 +11,17 @@ pub const source_cleanup = @import("lib/source-cleanup.zig");
 pub const import_record = @import("lib/import-record.zig");
 pub const import_assets_types = @import("lib/import-assets.types.zig");
 pub const sync_database_types = @import("lib/sync-database.types.zig");
+pub const load_assets = @import("lib/load-assets.zig");
+pub const load_assets_types = @import("lib/load-assets.types.zig");
 pub const lan_share = @import("lib/lan-share/index.zig");
 pub const lan_share_resolve = @import("lib/lan-share/lan-share-resolve.zig");
 pub const lan_share_receive = @import("lib/lan-share/lan-share-receive.zig");
 pub const asset_query = @import("lib/asset-query.zig");
 pub const sync_settings = @import("lib/sync-settings.zig");
+pub const sync_gate = @import("lib/sync-gate.zig");
 pub const auto_import_mobile = @import("lib/auto-import-mobile.zig");
 pub const op = @import("lib/op.zig");
 pub const database_op = @import("lib/database-op.zig");
 
+pub const retention_policy = @import("lib/retention-policy.zig");
+pub const save_assets_types = @import("lib/save-assets.types.zig");

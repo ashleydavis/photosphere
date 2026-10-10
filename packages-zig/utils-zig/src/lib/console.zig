@@ -2,11 +2,11 @@ const std = @import("std");
 const standard_streams = @import("standard-streams.zig");
 
 //
-// This file has no TypeScript counterpart: it stands in for the JavaScript global `console`.
+// A console that writes lines to the process streams.
 // `console.log` and `console.debug` write a line to stdout, `console.error` and `console.warn`
 // write a line to stderr. Output can be captured by tests with setCapture.
 //
-// The global `console` in JavaScript needs no Io instance, so this uses the Io instance that
+// The console needs no Io instance from the caller, so this uses the Io instance that
 // std.debug uses (std.Options.debug_io), which is independent of the application's Io.
 //
 

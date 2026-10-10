@@ -4,14 +4,12 @@ const c = @import("openssl");
 const socket = @import("socket.zig");
 
 //
-// The TLS connections of the LAN share HTTPS server and client. This file has no TypeScript counterpart: it stands
-// in for the parts of node:https (and node:tls) that lan-share-sender.ts and lan-share-receiver.ts use, over
-// aws-lc's libssl (Node's https is OpenSSL's libssl). A connection is exposed as a std.Io.Reader and std.Io.Writer,
-// so that the HTTP messages are read and written by std.http, as Node's http module reads and writes them.
+// The TLS connections of the LAN share HTTPS server and client, over aws-lc's libssl. A connection is exposed as a
+// std.Io.Reader and std.Io.Writer, so that the HTTP messages are read and written by std.http.
 //
 
 //
-// Names used from other files (the equivalent of the TypeScript imports).
+// Names used from other files.
 //
 const errors = utils.errors;
 

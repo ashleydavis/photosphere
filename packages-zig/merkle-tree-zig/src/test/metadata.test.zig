@@ -1,5 +1,5 @@
 //
-// Tree metadata tests (port of src/test/metadata.test.ts).
+// Tree metadata tests.
 //
 
 const std = @import("std");

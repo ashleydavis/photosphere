@@ -2,8 +2,8 @@
 // Shared types for task queue system
 // These types are used by both the main task queue and worker code
 //
-// Task data, task outputs and task messages are JSON-serializable values in TypeScript (they are
-// posted to Bun workers). In Zig they are `std.json.Value`, so that handlers and backends stay
+// Task data, task outputs and task messages are JSON-serializable values. They are
+// `std.json.Value`, so that handlers and backends stay
 // generic; typed code converts with std.json.parseFromValueLeaky and std.json.Stringify.
 //
 // Memory: a value passed to a callback (a result, a message, the data given to a handler) is only
@@ -49,6 +49,12 @@ pub const ITaskContext = struct {
     // so a second import, a sync, or anything the user does still gets a worker.
     //
     maxConcurrentChildTasks: u32,
+
+    //
+    // Asks the program hosting the app (the phone's shell) for what only it can do, such as the device keychain and photo library.
+    // Null where there is no such program, which is every desktop and the command line.
+    //
+    hostRequester: ?utils.host_requester.IHostRequester,
 
     // Pointer to the implementation of sendMessage and isCancelled.
     ptr: *anyopaque,
@@ -112,7 +118,7 @@ pub const TaskPriority = enum {
     Background,
 
     //
-    // Gets the TypeScript string value of the priority ("interactive" or "background").
+    // Gets the string value of the priority ("interactive" or "background").
     //
     pub fn toString(self: TaskPriority) []const u8 {
         return switch (self) {
@@ -144,7 +150,7 @@ pub const TaskStatus = enum {
     Failed,
 
     //
-    // Gets the TypeScript string value of the status ("pending", "running", "succeeded" or "failed").
+    // Gets the string value of the status ("pending", "running", "succeeded" or "failed").
     //
     pub fn toString(self: TaskStatus) []const u8 {
         return switch (self) {
@@ -207,7 +213,7 @@ pub const ITask = struct {
 };
 
 //
-// The serialized error of a failed task (TypeScript: the `Error` deserialized from serializeError output).
+// The serialized error of a failed task.
 //
 pub const ITaskError = struct {
     //
@@ -317,8 +323,7 @@ pub const TaskMessageCallback = struct {
 
 //
 // Unsubscribe function returned by event listener registrations.
-// (A Zig closure: `function` is called with `context` and the `key` that identifies the registration,
-// where TypeScript captures the registered callback in an arrow function.)
+// (A Zig closure: `function` is called with `context` and the `key` that identifies the registration.)
 //
 pub const UnsubscribeFn = struct {
     // The object the callback was registered with.
@@ -340,8 +345,8 @@ pub const UnsubscribeFn = struct {
 
 //
 // Typed completion callback for consumers of the task queue.
-// TypeScript adds compile-time types for result.inputs and result.outputs; in Zig they are
-// std.json.Value, so this is the same closure type as WorkerTaskCompletionCallback.
+// The result inputs and outputs are std.json.Value, so this is the same closure type as
+// WorkerTaskCompletionCallback.
 //
 pub const TaskCompletionCallback = WorkerTaskCompletionCallback;
 
@@ -380,7 +385,7 @@ pub const IJobTag = struct {
 //
 // Sent whenever its progress moves, and carrying the whole job every time, so an interface that was
 // not listening when the job started still learns all of it from the next one. That happens on a
-// phone, where the system suspends the WebView while the work carries on in the native engine.
+// phone, where the system suspends the interface while the work carries on.
 //
 pub const IJobProgressMessage = struct {
     //
@@ -407,7 +412,7 @@ pub const IJobProgressMessage = struct {
     //
     // There is deliberately no completion fraction. Most jobs here scan or stream and cannot know
     // one, the interface shows a spinner rather than a bar, and a job made of several tasks has no
-    // single honest answer anyway.
+    // single answer to give anyway.
     //
     progressMessage: ?[]const u8 = null,
 };
@@ -428,8 +433,7 @@ pub const IMessageCallbackEntry = struct {
 };
 
 //
-// Callback that fires when a task is added (TypeScript: `(taskId: string) => void`).
-// This name has no TypeScript counterpart (TypeScript writes the function type inline).
+// Callback that fires when a task is added.
 //
 pub const TaskAddedCallback = struct {
     // The state of the callback, passed to function.
@@ -447,8 +451,7 @@ pub const TaskAddedCallback = struct {
 };
 
 //
-// Callback that fires when the tasks of a source are cancelled (TypeScript: `() => void`).
-// This name has no TypeScript counterpart (TypeScript writes the function type inline).
+// Callback that fires when the tasks of a source are cancelled.
 //
 pub const TasksCancelledCallback = struct {
     // The state of the callback, passed to function.
@@ -467,9 +470,7 @@ pub const TasksCancelledCallback = struct {
 
 //
 // Returns the `type` of a task message, or null when the message is not an object with a string
-// `type` (TypeScript: `message && typeof message === "object" && "type" in message ? message.type : undefined`;
-// only string types can equal a registered message type).
-// This function has no TypeScript counterpart: the expression is repeated inline in TypeScript.
+// `type` (only string types can equal a registered message type).
 //
 pub fn messageTypeOf(message: std.json.Value) ?[]const u8 {
     switch (message) {

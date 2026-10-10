@@ -1,21 +1,20 @@
 //
-// The channels that show a file or folder dialog: pick-folder, pick-file, pick-files and open-database, from the ipcMain handlers of
-// apps/desktop/src/main.ts of the same names and the functions beside them (pickFolder and pickFile of apps/desktop/src/lib/pickers.ts,
-// showDirectoryPicker, showFilePicker and openDatabase of main.ts).
+// The channels that show a file or folder dialog: pick-folder, pick-file, pick-files and open-database.
 //
 // Each is a task type, because a dialog waits for the user and the thread that handles the page's messages must not.
 //
-// What the page sees is what Electron sends back, in JSON: a dialog the user cancelled is a reply of null, where Electron replies
-// undefined.
+// What the page sees is JSON: a dialog the user cancelled is a reply of null.
 //
-// Differences from the Electron app, forced by the dialogs Ziggy shows through its shells:
-//  - The Electron dialogs start in the folder remembered in the state file (`defaultPath`). Ziggy's dialog request carries one string
-//    besides the title, the initial name, which is the suggested file name of a save dialog and, for a dialog that opens a file or a
-//    folder, the folder to start in. A save dialog is therefore given the file name only, without the remembered download folder.
-//  - Electron's `createDirectory` option (the "New Folder" button) is not passed: the shells' folder dialogs offer it themselves.
-//  - The Electron dialogs first restore the main window if it is minimised and focus it. Ziggy's dialog request has no such step.
-//  - The environment variables the Electron app reads in test mode to answer a dialog (PHOTOSPHERE_TEST_DOWNLOAD_FOLDER and
-//    PHOTOSPHERE_TEST_PICK_FILE_PATH) are not read. A test answers a dialog through the test hooks Ziggy provides.
+// What the dialogs Ziggy shows through its shells force:
+//  - Ziggy's dialog request carries one string besides the title, the initial name, which is the suggested file name of a save
+//    dialog and, for a dialog that opens a file or a folder, the folder to start in. A save dialog is therefore given the file
+//    name only, without the remembered download folder.
+//  - The "New Folder" button is not requested: the shells' folder dialogs offer it themselves.
+//  - The dialogs do not restore the main window if it is minimised or focus it. Ziggy's dialog request has no such step.
+//
+// In test mode the dialogs for the download folder and for the path to save to are answered by the environment variables
+// PHOTOSPHERE_TEST_DOWNLOAD_FOLDER and PHOTOSPHERE_TEST_PICK_FILE_PATH, so a smoke test does not block on a
+// native dialog.
 //
 
 const std = @import("std");
@@ -25,10 +24,12 @@ const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const events = @import("events.zig");
 const main_state = @import("main-state.zig");
+const test_mode = @import("test-mode.zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
 const json_util = ziggy.json_util;
 const app_state = node_api.app_state;
+const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 //
 // Shows a dialog and returns the paths the user chose, an empty list when they cancelled.
@@ -50,8 +51,7 @@ fn pickedPaths(context: *TaskContext, kind: ziggy.types.PickKind, title: ?[]cons
 }
 
 //
-// A string field of the payload, or null when it is missing or empty, as `options?.title || 'Select Folder'` of pickers.ts treats
-// an empty string as no value.
+// A string field of the payload, or null when it is missing or empty: an empty string counts as no value.
 //
 fn nonEmptyString(data: std.json.Value, name: []const u8) ?[]const u8 {
     const text = json_util.getString(data, name) orelse {
@@ -72,7 +72,7 @@ fn optionalPathReply(arena: std.mem.Allocator, path: ?[]const u8) ![]const u8 {
 
 //
 // Opens a directory picker and returns the folder chosen, or null if the user cancelled. It starts in the last folder opened in a
-// file dialog (`showDirectoryPicker` of main.ts).
+// file dialog.
 //
 fn showDirectoryPicker(context: *TaskContext, title: []const u8) !?[]const u8 {
     const state = try app_state.loadAppState(context.arena, context.io());
@@ -85,10 +85,18 @@ fn showDirectoryPicker(context: *TaskContext, title: []const u8) !?[]const u8 {
 
 //
 // Shows a folder dialog titled `title`, which starts in the folder remembered under `folder_key`, and remembers the folder chosen
-// under that key. Returns the folder's path, or null when the user cancelled (`pickFolder` of pickers.ts). The key must be one of
+// under that key. Returns the folder's path, or null when the user cancelled. The key must be one of
 // the state keys that remember a folder.
 //
+// In test mode, PHOTOSPHERE_TEST_DOWNLOAD_FOLDER answers the dialog for the download folder, so the smoke test for downloading several
+// assets does not block on a native dialog. Nothing is remembered when it does.
+//
 pub fn pickFolder(context: *TaskContext, title: []const u8, folder_key: []const u8) !?[]const u8 {
+    if (test_mode.isTestMode() and std.mem.eql(u8, folder_key, "lastDownloadFolder")) {
+        if (test_mode.envValue("PHOTOSPHERE_TEST_DOWNLOAD_FOLDER")) |download_folder| {
+            return download_folder;
+        }
+    }
     const default_path = try app_state.getFolderPath(context.arena, context.io(), folder_key);
     const paths = try pickedPaths(context, .folder, title, default_path);
     if (paths.len == 0) {
@@ -104,7 +112,7 @@ pub fn pickFolder(context: *TaskContext, title: []const u8, folder_key: []const 
 // Folder" when there is none), which starts in the folder remembered under `folderKey` ("lastFolder" when there is none), and
 // remembers the folder chosen under that key. The reply is the folder's path, or null when the user cancelled.
 //
-pub fn pickFolderHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn pickFolderChannel(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const title = nonEmptyString(data, "title") orelse "Select Folder";
     const folder_key = nonEmptyString(data, "folderKey") orelse "lastFolder";
     return try optionalPathReply(context.arena, try pickFolder(context, title, folder_key));
@@ -112,9 +120,26 @@ pub fn pickFolderHandler(context: *TaskContext, data: std.json.Value) anyerror!?
 
 //
 // Shows a save dialog with a suggested file name, remembers the folder of the path chosen as the folder to download to, and returns
-// the path, or null when the user cancelled (`pickFile` of pickers.ts).
+// the path, or null when the user cancelled.
+//
+// In test mode, PHOTOSPHERE_TEST_PICK_FILE_PATH answers the dialog, so the smoke test for downloading one asset does not block on a
+// native dialog. Nothing is remembered when it does.
 //
 pub fn pickFile(context: *TaskContext, default_filename: []const u8) !?[]const u8 {
+    if (test_mode.isTestMode()) {
+        if (test_mode.envValue("PHOTOSPHERE_TEST_PICK_FILE_PATH")) |pick_file_path| {
+            return pick_file_path;
+        }
+    }
+    return try showSaveDialog(context, default_filename);
+}
+
+//
+// Shows a save dialog with a suggested file name, remembers the folder of the path chosen as the folder to download to, and returns
+// the path, or null when the user cancelled. This is the dialog the pick-file channel shows, and the one the save-asset handler
+// shows for itself, which has no test mode answer.
+//
+pub fn showSaveDialog(context: *TaskContext, default_filename: []const u8) !?[]const u8 {
     const paths = try pickedPaths(context, .save_file, null, default_filename);
     if (paths.len == 0) {
         return null;
@@ -127,7 +152,7 @@ pub fn pickFile(context: *TaskContext, default_filename: []const u8) !?[]const u
 //
 // pick-file: the payload is the suggested file name. Replies with the path chosen in a save dialog, or null when the user cancelled.
 //
-pub fn pickFileHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn pickFileChannel(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     if (data != .string) {
         return utils.errors.throwError("The save dialog needs a suggested file name.", .{});
     }
@@ -136,9 +161,9 @@ pub fn pickFileHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]
 
 //
 // pick-files: the payload is the dialog's title. Shows a dialog to choose several files, which starts in the last folder opened in a
-// file dialog. The reply is the paths chosen, or null when the user cancelled (`showFilePicker` of main.ts).
+// file dialog. The reply is the paths chosen, or null when the user cancelled.
 //
-pub fn pickFilesHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn pickFilesChannel(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     if (data != .string) {
         return utils.errors.throwError("The file dialog needs a title.", .{});
     }
@@ -152,9 +177,9 @@ pub fn pickFilesHandler(context: *TaskContext, data: std.json.Value) anyerror!?[
 
 //
 // open-database: no payload. Shows a dialog to choose a database folder, remembers the folder that holds it, and tells the page to load
-// it (the `database-opened` event). The reply is null (`openDatabase` of main.ts).
+// it (the `database-opened` event). The reply is null.
 //
-pub fn openDatabaseHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn openDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
     const database_path = (try showDirectoryPicker(context, "Open Database")) orelse {
         return try context.arena.dupe(u8, "null");
@@ -166,3 +191,23 @@ pub fn openDatabaseHandler(context: *TaskContext, data: std.json.Value) anyerror
     try events.sendDatabaseOpened(main_state.fromContext(context).core, context.arena, database_path);
     return try context.arena.dupe(u8, "null");
 }
+
+//
+// The pick-folder channel's handler: pickFolderChannel, with its errors logged.
+//
+pub const pickFolderHandler = logExceptions(pickFolderChannel, "Error picking folder");
+
+//
+// The pick-file channel's handler: pickFileChannel, with its errors logged.
+//
+pub const pickFileHandler = logExceptions(pickFileChannel, "Error picking save location");
+
+//
+// The pick-files channel's handler: pickFilesChannel, with its errors logged.
+//
+pub const pickFilesHandler = logExceptions(pickFilesChannel, "Error picking files");
+
+//
+// The open-database channel's handler: openDatabase, with its errors logged.
+//
+pub const openDatabaseHandler = logExceptions(openDatabase, "Error opening database");

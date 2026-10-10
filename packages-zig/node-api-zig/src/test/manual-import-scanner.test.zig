@@ -12,7 +12,7 @@ const RandomUuidGenerator = utils.random_uuid_generator.RandomUuidGenerator;
 const path = node_utils.path;
 
 //
-// Gathers what a scanner pushes (TypeScript: the `async result => { pushed.push(result); }` arrow function).
+// Gathers what a scanner pushes.
 //
 const Pushed = struct {
     // Allocates the copies.
@@ -64,7 +64,7 @@ fn scanFiles(allocator: std.mem.Allocator, paths: []const []const u8, sessionTem
 }
 
 //
-// The state each test starts from (TypeScript: the beforeEach of the describe block).
+// The state each test starts from.
 //
 const ScannerTest = struct {
     // Holds the test's allocations.

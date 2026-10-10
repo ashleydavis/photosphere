@@ -7,7 +7,7 @@ const errors = utils.errors;
 const io = std.testing.io;
 
 //
-// An operation that resolves with a value or rejects (the jest.fn() of the TypeScript tests).
+// An operation that resolves with a value or rejects.
 //
 fn MockOperation(comptime ValueT: type) type {
     return struct {
@@ -38,7 +38,7 @@ fn MockOperation(comptime ValueT: type) type {
 }
 
 //
-// A record returned by an operation (TypeScript: `{ key: "value" }`).
+// A record returned by an operation.
 //
 const KeyValue = struct {
     // The value of the key.
@@ -90,7 +90,7 @@ test "should handle operations that return undefined" {
     log.install();
     defer log.uninstall();
 
-    // (Zig: an operation that resolves with undefined returns void, and a succeeded void operation is not null.)
+    // (An operation that resolves with undefined returns void, and a succeeded void operation is not null.)
     var operation: MockOperation(void) = .{ .value = {} };
 
     const result = swallowError(io, &operation);
@@ -127,8 +127,8 @@ test "should handle different error types without logging" {
 }
 
 //
-// An operation that fails with a Zig error that carries no message (TypeScript: a rejection with a
-// value that is not an Error, `mockRejectedValue("String error")`).
+// An operation that fails with a Zig error that carries no message (a rejection with a
+// value that is not an Error, such as a string).
 //
 const NonErrorOperation = struct {
     //

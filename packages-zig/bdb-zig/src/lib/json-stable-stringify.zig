@@ -6,9 +6,9 @@ const BsonValue = bson.BsonValue;
 const BsonDocument = bson.BsonDocument;
 
 //
-// No TypeScript counterpart: the TypeScript code calls the npm `json-stable-stringify` package (version 1.3.0,
-// `stringify(obj)` with no options) from `hashRecord`. This is a port of that package's index.js for the values npm
-// bson produces when it deserializes a record:
+// Writes a value as the npm `json-stable-stringify` package (version 1.3.0, `stringify(obj)` with no options) does, so
+// the hashes of records already stored stay the same. It handles the values the BSON deserializer produces for a
+// record:
 //
 // - `toJSON()` is applied first (Date -> ISO string or null, Binary -> base64, UUID -> dashed hex, ObjectId -> hex).
 // - Primitives are written with `JSON.stringify` (non-finite numbers become null).
@@ -16,7 +16,7 @@ const BsonDocument = bson.BsonDocument;
 // - Object keys are sorted with the default Array.prototype.sort order (UTF-16 code units); a field whose value
 //   stringifies to undefined is left out.
 //
-// Returns null when the whole value stringifies to undefined (the JS function returns undefined).
+// Returns null when the whole value stringifies to undefined (as the package returns undefined).
 //
 pub fn stringify(allocator: std.mem.Allocator, value: BsonValue) !?[]const u8 {
     var output: std.Io.Writer.Allocating = .init(allocator);

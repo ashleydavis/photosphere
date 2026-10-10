@@ -45,7 +45,9 @@ test "theme-changed and navigate carry a string" {
     defer app.stop();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    try events.sendThemeChanged(app.core, arena.allocator(), "dark");
+    try events.sendThemeChanged(app.core, arena.allocator(), std.json.Value{
+        .string = "dark",
+    });
     try expectEvent(&app, "{\"channel\":\"theme-changed\",\"data\":\"dark\"}");
     try events.sendNavigate(app.core, arena.allocator(), "/gallery");
     try expectEvent(&app, "{\"channel\":\"navigate\",\"data\":\"/gallery\"}");
@@ -108,4 +110,30 @@ test "platform-event carries the dev tools state and the menu action" {
     try expectEvent(&app, "{\"channel\":\"platform-event\",\"data\":{\"type\":\"devtools-state\",\"open\":true}}");
     try events.sendMenuAction(app.core, arena.allocator(), "new-database");
     try expectEvent(&app, "{\"channel\":\"platform-event\",\"data\":{\"type\":\"menu-action\",\"action\":\"new-database\"}}");
+}
+
+test "theme-changed carries the value written to the setting, whatever it is" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try events.sendThemeChanged(app.core, arena.allocator(), std.json.Value{
+        .bool = true,
+    });
+    try expectEvent(&app, "{\"channel\":\"theme-changed\",\"data\":true}");
+}
+
+test "show-notification carries a duration that is not a whole number as it is" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try events.sendShowNotification(app.core, arena.allocator(), .{
+        .message = "Hi",
+        .color = "primary",
+        .duration = 1.5,
+    });
+    try expectEvent(&app, "{\"channel\":\"show-notification\",\"data\":{\"message\":\"Hi\",\"color\":\"primary\",\"duration\":1.5}}");
 }

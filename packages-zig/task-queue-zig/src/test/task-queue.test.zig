@@ -15,7 +15,7 @@ const MockWorkerPool = task_queue_zig.mock_worker_pool.MockWorkerPool;
 const errors = utils.errors;
 
 //
-// The state shared by the tests (the variables and beforeEach/afterEach of the TypeScript describe block).
+// The state shared by the tests.
 //
 const Fixture = struct {
     // Allocator for the queue (task IDs and awaitTask results).
@@ -100,7 +100,7 @@ fn doneHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.Value, c
 }
 
 //
-// Released by the tests to let blocked handlers finish (the `taskBlocked` promise of the TypeScript tests).
+// Released by the tests to let blocked handlers finish.
 //
 var task_unblocked: std.Io.Event = .unset;
 
@@ -204,8 +204,7 @@ fn recordingHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.Val
     record_mutex.unlock(io);
 
     if (sleeps) {
-        // Holds the task until two tasks have been running at the same time, which is what the 100ms sleep of the
-        // TypeScript test is there to make happen. max_concurrent never goes down, so whichever task arrives second
+        // Holds the task until two tasks have been running at the same time, which is what the test is there to make happen. max_concurrent never goes down, so whichever task arrives second
         // releases both, and no timer is involved. A pool that never runs two at once fails the task after five seconds.
         const waitStarted = std.Io.Clock.real.now(io).toMilliseconds();
         while (true) {
@@ -345,7 +344,7 @@ fn cancelWhenWaiting(queue: *TaskQueue, mockBackend: *MockWorkerPool, awaitAllCo
     task_unblocked.set(std.testing.io);
 }
 
-test "addTask: should add a task and return a UUID" {
+test "should add a task and return a UUID" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -356,7 +355,7 @@ test "addTask: should add a task and return a UUID" {
     try fixture.queue.awaitAllTasks();
 }
 
-test "addTask: should add multiple tasks with unique IDs" {
+test "should add multiple tasks with unique IDs" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -368,7 +367,7 @@ test "addTask: should add multiple tasks with unique IDs" {
     try fixture.queue.awaitAllTasks();
 }
 
-test "addTask: hands the priority it was given to the backend" {
+test "addTask hands the priority it was given to the backend" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -388,7 +387,7 @@ test "addTask: hands the priority it was given to the backend" {
     testQueue.deinit();
 }
 
-test "addTask: hands no priority to the backend when the caller named none" {
+test "addTask hands no priority to the backend when the caller named none" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -414,7 +413,7 @@ var ordered_names: [4][]const u8 = undefined;
 
 //
 // Storage for the names in ordered_names: the task data the handler reads them from is freed when
-// the task finishes, so the names are copied here (Zig only).
+// the task finishes, so the names are copied here.
 //
 var ordered_name_buffers: [4][32]u8 = undefined;
 
@@ -430,7 +429,7 @@ var ordered_release: std.Io.Event = .unset;
 
 //
 // Records the task's name; the task named "running" holds its slot until the test releases it
-// (Zig only: tasks run on threads, so the first task has to wait for the rest to be queued).
+// (Tasks run on threads, so the first task has to wait for the rest to be queued).
 //
 fn orderedTaskHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
     _ = allocator;
@@ -445,7 +444,7 @@ fn orderedTaskHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.V
     return .{ .string = "done" };
 }
 
-test "addTask: an interactive task is dispatched before background tasks already waiting" {
+test "an interactive task is dispatched before background tasks already waiting" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -480,7 +479,7 @@ test "addTask: an interactive task is dispatched before background tasks already
     }
 }
 
-test "awaitTask: awaitTask resolves when the specific task completes" {
+test "awaitTask resolves when the specific task completes" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -493,7 +492,7 @@ test "awaitTask: awaitTask resolves when the specific task completes" {
     try std.testing.expectEqualStrings("done", result.outputs.?.string);
 }
 
-test "awaitTask: awaitTask resolves immediately when the task ID is not tracked" {
+test "awaitTask resolves immediately when the task ID is not tracked" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -509,7 +508,7 @@ fn awaitTaskOnThread(queue: *TaskQueue, taskId: []const u8, returned: *std.atomi
     returned.store(true, .release);
 }
 
-test "awaitTask: multiple awaitTask callers on the same ID all resolve when the task completes" {
+test "multiple awaitTask callers on the same ID all resolve when the task completes" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -533,7 +532,7 @@ test "awaitTask: multiple awaitTask callers on the same ID all resolve when the 
     }
 }
 
-test "awaitTask: awaitTask resolves immediately when shutdown is called while waiting" {
+test "awaitTask resolves immediately when shutdown is called while waiting" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -550,7 +549,7 @@ test "awaitTask: awaitTask resolves immediately when shutdown is called while wa
     try std.testing.expect(result == null);
 }
 
-test "awaitAllTasks: should wait for all tasks to complete" {
+test "should wait for all tasks to complete" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -566,7 +565,7 @@ test "awaitAllTasks: should wait for all tasks to complete" {
     try std.testing.expectEqual(@as(u32, 3), completed_count.load(.acquire));
 }
 
-test "awaitAllTasks: should resolve immediately if no tasks" {
+test "should resolve immediately if no tasks" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -574,7 +573,7 @@ test "awaitAllTasks: should resolve immediately if no tasks" {
     try fixture.queue.awaitAllTasks();
 }
 
-test "awaitAllTasks: should handle mixed success and failure" {
+test "should handle mixed success and failure" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -590,7 +589,7 @@ test "awaitAllTasks: should handle mixed success and failure" {
     try std.testing.expectEqual(@as(i64, 0), fixture.queue.numTasksInFlight);
 }
 
-test "awaitAllTasks: should handle empty queue" {
+test "should handle empty queue" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -598,7 +597,7 @@ test "awaitAllTasks: should handle empty queue" {
     try fixture.queue.awaitAllTasks();
 }
 
-test "awaitAllTasks: awaitAllTasks resolves immediately when shutdown is called while waiting" {
+test "awaitAllTasks resolves immediately when shutdown is called while waiting" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -613,7 +612,7 @@ test "awaitAllTasks: awaitAllTasks resolves immediately when shutdown is called 
     helper.join();
 }
 
-test "awaitAllTasks: onTasksCancelled fires resolveAllWaiters, unblocking awaitAllTasks and awaitTask callers" {
+test "onTasksCancelled fires resolveAllWaiters, unblocking awaitAllTasks and awaitTask callers" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -633,7 +632,7 @@ test "awaitAllTasks: onTasksCancelled fires resolveAllWaiters, unblocking awaitA
     try std.testing.expect(task_returned.load(.acquire));
 }
 
-test "awaitAllTasks: should wait for all tasks including slow ones" {
+test "should wait for all tasks including slow ones" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -654,7 +653,7 @@ test "awaitAllTasks: should wait for all tasks including slow ones" {
     try std.testing.expect(duration >= 100);
 }
 
-test "parallel execution: should execute tasks in parallel up to maxWorkers" {
+test "should execute tasks in parallel up to maxWorkers" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -677,7 +676,7 @@ test "parallel execution: should execute tasks in parallel up to maxWorkers" {
     try std.testing.expectEqual(@as(usize, 5), execution_order_length);
 }
 
-test "parallel execution: should respect maxWorkers limit" {
+test "should respect maxWorkers limit" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -707,7 +706,7 @@ test "parallel execution: should respect maxWorkers limit" {
     try std.testing.expectEqual(@as(usize, 10), execution_order_length);
 }
 
-test "parallel execution: should process tasks in FIFO order" {
+test "should process tasks in FIFO order" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -735,7 +734,7 @@ test "parallel execution: should process tasks in FIFO order" {
     try std.testing.expectEqualSlices(i64, &.{ 1, 2, 3, 4, 5 }, execution_order[0..execution_order_length]);
 }
 
-test "task data handling: should pass task data to handler" {
+test "should pass task data to handler" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -748,7 +747,7 @@ test "task data handling: should pass task data to handler" {
     try std.testing.expectEqualStrings(taskData, try receivedJson(fixture.allocator()));
 }
 
-test "task data handling: should handle complex data structures" {
+test "should handle complex data structures" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -764,7 +763,7 @@ test "task data handling: should handle complex data structures" {
     try std.testing.expectEqualStrings("value", nested.get("object").?.object.get("key").?.string);
 }
 
-test "task data handling: should handle null data" {
+test "should handle null data" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -776,7 +775,7 @@ test "task data handling: should handle null data" {
     try std.testing.expect(received_data.? == .null);
 }
 
-test "task data handling: should handle empty object data" {
+test "should handle empty object data" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -788,7 +787,7 @@ test "task data handling: should handle empty object data" {
     try std.testing.expectEqualStrings("{}", try receivedJson(fixture.allocator()));
 }
 
-test "task data handling: should handle array data" {
+test "should handle array data" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -801,7 +800,7 @@ test "task data handling: should handle array data" {
     try std.testing.expectEqualStrings(arrayData, try receivedJson(fixture.allocator()));
 }
 
-test "shutdown: should terminate all workers" {
+test "should terminate all workers" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -810,7 +809,7 @@ test "shutdown: should terminate all workers" {
     fixture.queue.shutdown();
 }
 
-test "shutdown: should allow shutdown multiple times" {
+test "should allow shutdown multiple times" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -820,7 +819,7 @@ test "shutdown: should allow shutdown multiple times" {
     fixture.queue.shutdown();
 }
 
-test "shutdown: should prevent callbacks from being called after shutdown" {
+test "should prevent callbacks from being called after shutdown" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -842,7 +841,7 @@ test "shutdown: should prevent callbacks from being called after shutdown" {
     try std.testing.expect(!callbackCalled);
 }
 
-test "shutdown: should prevent task messages from being received after shutdown" {
+test "should prevent task messages from being received after shutdown" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -865,8 +864,7 @@ test "shutdown: should prevent task messages from being received after shutdown"
 }
 
 //
-// A backend that records the task IDs it is given and which of its subscriptions were removed
-// (the object-literal backends of the TypeScript tests).
+// A backend that records the task IDs it is given and which of its subscriptions were removed.
 //
 const RecordingBackend = struct {
     // The task IDs passed to addTask (static storage, no allocation needed).
@@ -1009,7 +1007,7 @@ const RecordingBackend = struct {
     }
 };
 
-test "shutdown: should unsubscribe from all backend events on shutdown" {
+test "should unsubscribe from all backend events on shutdown" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -1044,7 +1042,7 @@ test "TaskQueue.init fails and removes the subscriptions it already made when th
     try std.testing.expect(failingBackend.onAnyTaskMessageUnsubscribeCalled);
 }
 
-test "source isolation: tasks from source A do not trigger completion callbacks of source B" {
+test "tasks from source A do not trigger completion callbacks of source B" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -1065,7 +1063,7 @@ test "source isolation: tasks from source A do not trigger completion callbacks 
     queueB.deinit();
 }
 
-test "addTask with explicit taskId: addTask with an explicit taskId passes that ID through to the backend" {
+test "addTask with an explicit taskId passes that ID through to the backend" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -1084,7 +1082,7 @@ test "addTask with explicit taskId: addTask with an explicit taskId passes that 
     testQueue.deinit();
 }
 
-test "constructor options: should use custom UUID generator" {
+test "should use custom UUID generator" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -1113,7 +1111,7 @@ test "constructor options: should use custom UUID generator" {
     customQueue.deinit();
 }
 
-test "constructor options: should use default UUID generator when not provided" {
+test "should use default UUID generator when not provided" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -1156,7 +1154,7 @@ fn customErrorHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.V
     return errors.throwError("Custom error message", .{});
 }
 
-test "error handling: should handle handler throwing non-Error objects" {
+test "should handle handler throwing non-Error objects" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -1174,7 +1172,7 @@ test "error handling: should handle handler throwing non-Error objects" {
     try std.testing.expectEqualStrings("StringError", recorder.errorMessages.items[0]);
 }
 
-test "error handling: should preserve error messages" {
+test "should preserve error messages" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -1290,7 +1288,7 @@ const MessageTypeRecorder = struct {
 };
 
 //
-// onAnyTaskMessage has no test of its own in TypeScript; it is what addPaths counts an import's
+// onAnyTaskMessage is what addPaths counts an import's
 // progress with, so what it does is pinned here.
 //
 test "onAnyTaskMessage delivers every message of a tracked task, whatever its type, in order" {
@@ -1323,7 +1321,7 @@ test "onAnyTaskMessage delivers every message of a tracked task, whatever its ty
     try std.testing.expectEqual(@as(usize, 3), recorder.messageTypes.items.len);
 }
 
-test "shutdown: onAnyTaskMessage callbacks receive nothing after shutdown" {
+test "onAnyTaskMessage callbacks receive nothing after shutdown" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();
@@ -1430,7 +1428,7 @@ test "unsubscribing leaves the other callbacks, and unsubscribing twice does not
     try std.testing.expect(firstAnyMessaged and !secondAnyMessaged);
 }
 
-test "awaitTask: callers awaiting different tasks each resolve when their own task completes" {
+test "callers awaiting different tasks each resolve when their own task completes" {
     var fixture: Fixture = undefined;
     try fixture.init(2);
     defer fixture.deinit();

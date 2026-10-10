@@ -1,0 +1,107 @@
+// Photosphere's Android app. The Zig library per ABI and the built page are generated into build/ziggy by
+// scripts/sync-android.sh before Gradle runs, so Gradle never runs zig.
+
+apply plugin: 'com.android.application'
+
+// The ImageMagick libraries and headers are fetched by scripts/fetch-mobile-media-tools.sh into git-ignored directories of the
+// Capacitor Android app, and this app links and packages the same ones rather than fetching a second copy.
+def imageMagickMainDir = file('../../../../android-frontend/android/app/src/main')
+def imageMagickDir = new File(imageMagickMainDir, 'cpp/imagemagick').absolutePath
+def imageMagickLibsDir = new File(imageMagickMainDir, 'jniLibs').absolutePath
+
+android {
+    namespace "au.com.codecapers.photosphere.ziggy"
+    compileSdkVersion rootProject.ext.compileSdkVersion
+    ndkVersion rootProject.ext.ndkVersion
+
+    defaultConfig {
+        applicationId "au.com.codecapers.photosphere.ziggy"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode project.hasProperty('ziggyVersionCode') ? ziggyVersionCode.toInteger() : 1
+        versionName project.hasProperty('ziggyVersionName') ? ziggyVersionName : "1.0.0"
+        ndk {
+            abiFilters 'x86_64', 'arm64-v8a'
+        }
+
+        // The run_magick C shim that calls ImageMagick's in-process dispatcher.
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared",
+                    "-DIMAGEMAGICK_DIR=${imageMagickDir}",
+                    "-DIMAGEMAGICK_LIBS_DIR=${imageMagickLibsDir}"
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['build/ziggy/jniLibs', imageMagickLibsDir]
+        }
+    }
+
+    // Build the run_magick shim with the NDK installed alongside the SDK.
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+
+    // The FFmpegKit AAR and the ImageMagick libraries each bundle libc++_shared.so; keep the first to avoid a duplicate-path packaging error.
+    packagingOptions {
+        jniLibs {
+            pickFirsts += ['**/libc++_shared.so']
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Signed with the debug key so the APK installs, as the package script documents.
+            signingConfig signingConfigs.debug
+        }
+    }
+}
+
+dependencies {
+    implementation project(':ziggy-shell-android')
+
+    // ffmpeg and ffprobe in-process via FFmpegKit, the 16KB-page-aligned Maven fork. FfmpegKitRunner reaches its com.arthenica API by reflection.
+    implementation 'com.moizhassan.ffmpeg:ffmpeg-kit-16kb:6.1.1'
+
+    // Jetpack Security: EncryptedSharedPreferences backed by the Android Keystore, which holds the phone's secrets encrypted at rest.
+    implementation "androidx.security:security-crypto:$androidxSecurityCryptoVersion"
+
+    // Plain-JVM unit tests of the Java that does not need the platform.
+    testImplementation "junit:junit:$junitVersion"
+}
+
+// Print failing and skipped tests and a run/passed/failed summary line, so the output shows what ran.
+tasks.withType(Test).configureEach {
+    testLogging {
+        events "failed", "skipped"
+        exceptionFormat "full"
+    }
+    afterSuite { desc, result ->
+        if (desc.parent == null) {
+            println "Unit tests: ${result.testCount} run, ${result.successfulTestCount} passed, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped"
+        }
+    }
+}
+
+// A build run without scripts/sync-android.sh would package an app with no library, which fails only when
+// it runs on a device. Fail the build instead, with the command that fixes it.
+tasks.register('checkZiggySync') {
+    doLast {
+        if (!fileTree('build/ziggy/jniLibs').matching { include '**/libphotosphere.so' }.any()) {
+            throw new GradleException("No libphotosphere.so under build/ziggy/jniLibs.\nRun scripts/sync-android.sh (bun run --filter=ziggy sync:android) first.")
+        }
+    }
+}
+preBuild.dependsOn checkZiggySync

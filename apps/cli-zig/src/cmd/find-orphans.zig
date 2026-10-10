@@ -19,7 +19,7 @@ const findOrphans = find_orphans.findOrphans;
 const getDirectoryForCommand = directory_picker.getDirectoryForCommand;
 
 //
-// Options of the find-orphans command (TypeScript: IFindOrphansCommandOptions extends IBaseCommandOptions).
+// Options of the find-orphans command.
 // The base options are in `base`.
 //
 pub const IFindOrphansCommandOptions = struct {

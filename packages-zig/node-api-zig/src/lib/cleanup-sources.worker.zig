@@ -69,8 +69,7 @@ pub const CLEANUP_PAGE_SIZE = 50;
 //
 // Folders are the source kind node-api can serve. Registered here as well as by the import scanner
 // because this task can run on its own, before an import has been started in this process.
-// (Zig: TypeScript does this when the module is loaded; Zig calls this from initTaskHandlers, which is where
-// TypeScript loads this module.)
+// (Called from initTaskHandlers.)
 //
 pub fn registerFolderMediaSourceBuilder() !void {
     try media_source_registry.registerMediaSourceBuilder("folder", create_auto_import_scanner.buildFolderMediaSource);
@@ -111,7 +110,7 @@ pub const ICleanupSourcesResult = struct {
 };
 
 //
-// `() => remove(sessionTempDir)` passed to swallowError. (No TypeScript counterpart: the arrow function.)
+// The operation that removes the session temp directory, passed to swallowError.
 //
 const RemoveSessionTempDirOperation = struct {
     // The directory to remove.
@@ -129,7 +128,6 @@ const RemoveSessionTempDirOperation = struct {
 // Whether the database holds the photo this item is, going by what this device recorded when it
 // hashed it. All three parts of the entry have to agree, because a photo library may reuse the
 // id of an item that has been deleted, and deleting the wrong photo is not recoverable.
-// (TypeScript: the inner isInTheDatabase function.)
 //
 fn isInTheDatabase(allocator: std.mem.Allocator, io: std.Io, localHashCache: *HashCache, metadataCollection: *IBsonCollection, item: IMediaItem) !bool {
     const cacheEntry = try localHashCache.getHash(allocator, item.sourceId) orelse {
@@ -144,7 +142,9 @@ fn isInTheDatabase(allocator: std.mem.Allocator, io: std.Io, localHashCache: *Ha
     // user's only copy of a photo. An id in the cache is good enough to skip an import; it is
     // not good enough to delete anything.
     const hashIndex = try metadataCollection.sortIndex("hash", .asc);
-    const existingRecords = try hashIndex.findByValue(io, .{ .string = try std.fmt.allocPrint(allocator, "{x}", .{cacheEntry.hash}) }, null);
+    const existingRecords = try hashIndex.findByValue(io, .{
+        .string = try std.fmt.allocPrint(allocator, "{x}", .{cacheEntry.hash}),
+    }, null);
     return existingRecords.len > 0;
 }
 
@@ -153,7 +153,9 @@ fn isInTheDatabase(allocator: std.mem.Allocator, io: std.Io, localHashCache: *Ha
 // (Zig: the task data and output are JSON values holding ICleanupSourcesData and ICleanupSourcesResult.)
 //
 pub fn cleanupSourcesHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
-    const data = try std.json.parseFromValueLeaky(ICleanupSourcesData, allocator, taskData, .{ .ignore_unknown_fields = true });
+    const data = try std.json.parseFromValueLeaky(ICleanupSourcesData, allocator, taskData, .{
+        .ignore_unknown_fields = true,
+    });
     const settings = try normaliseAutoImportSettings(allocator, data.settings);
     if (settings.sources.len == 0) {
         return errors.throwError("Cleanup was asked to run with no sources configured. There is nowhere to look.", .{});
@@ -162,7 +164,7 @@ pub fn cleanupSourcesHandler(allocator: std.mem.Allocator, io: std.Io, taskData:
     const sessionTempDir = try path.join(allocator, &.{ try getProcessTmpDir(allocator, io), "photosphere", try context.uuidGenerator.generate(allocator, io) });
     try ensureDir(io, sessionTempDir);
 
-    const credentials = try resolveStorageCredentials(allocator, io, data.storageDescriptor.databasePath, data.storageDescriptor.encryptionKey, null);
+    const credentials = try resolveStorageCredentials(allocator, io, data.storageDescriptor.databasePath, data.storageDescriptor.encryptionKey, null, context.hostRequester);
     const loadedKeys = try loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
     const created = try createStorage(allocator, io, data.storageDescriptor.databasePath, credentials.s3Config, loadedKeys.options);
     const bsonDatabase = try BsonDatabase.init(allocator, created.storage, ".db/bson", context.uuidGenerator, context.timestampProvider);
@@ -175,6 +177,7 @@ pub fn cleanupSourcesHandler(allocator: std.mem.Allocator, io: std.Io, taskData:
     const source = try buildMediaSource(allocator, settings.sources, .{
         .sessionTempDir = sessionTempDir,
         .uuidGenerator = context.uuidGenerator,
+        .hostRequester = context.hostRequester,
     });
 
     defer {
@@ -227,8 +230,7 @@ pub fn cleanupSourcesHandler(allocator: std.mem.Allocator, io: std.Io, taskData:
 }
 
 //
-// Converts the result to the JSON value returned as the task output. (No TypeScript counterpart: TypeScript
-// returns the object itself.)
+// Converts the result to the JSON value returned as the task output.
 //
 fn resultToJson(allocator: std.mem.Allocator, result: ICleanupSourcesResult) !std.json.Value {
     const text = try std.json.Stringify.valueAlloc(allocator, result, .{});

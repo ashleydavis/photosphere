@@ -1,5 +1,5 @@
 //
-// Tests for BsonCollection.iterateShards (port of src/tests/iterate-shards.test.ts).
+// Tests for BsonCollection.iterateShards.
 //
 
 const std = @import("std");
@@ -19,14 +19,14 @@ const io = std.testing.io;
 var random_uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
 
 //
-// The onDirty callback given to the collection under test (TypeScript: `() => {}`).
+// The onDirty callback given to the collection under test (a no-op).
 //
 fn onDirty(context: *anyopaque) void {
     _ = context;
 }
 
 //
-// Creates the collection under test (TypeScript: the beforeEach block).
+// Creates the collection under test.
 //
 fn newCollection(allocator: std.mem.Allocator, storage: *MemoryStorage) !*BsonCollection {
     const collection = try allocator.create(BsonCollection);
@@ -35,7 +35,7 @@ fn newCollection(allocator: std.mem.Allocator, storage: *MemoryStorage) !*BsonCo
 }
 
 //
-// Builds a TestUser document (TypeScript: the object literal).
+// Builds a TestUser document.
 //
 fn makeUser(allocator: std.mem.Allocator, id: []const u8, name: []const u8, email: []const u8, age: f64, role: []const u8) !BsonDocument {
     return BsonDocument.fromFields(allocator, &.{

@@ -2,8 +2,7 @@ const std = @import("std");
 const js_string = @import("utils-zig").js_string;
 
 //
-// This file has no TypeScript counterpart: it stands in for the regular expressions image.ts and
-// video.ts use to pull version numbers out of tool output.
+// Stands in for the regular expressions that pull version numbers out of tool output.
 //
 
 //

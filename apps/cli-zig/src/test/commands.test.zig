@@ -9,9 +9,8 @@ const encryption = @import("encryption-zig");
 const cli = @import("cli-zig");
 
 //
-// The expected output of these tests is written out here, ported from the TypeScript CLI: the report text from
-// apps/cli/src/cmd/<command>.ts, the "No database found" and "not empty" messages from apps/cli/src/lib/init-cmd.ts,
-// the worker log prefix from apps/cli/src/lib/worker-log-bun.ts and the numbers from the files of test/dbs/v6.
+// The expected output of these tests is written out here: the report text of each command, the "No database found"
+// and "not empty" messages, the worker log prefix and the numbers from the files of test/dbs/v6.
 //
 
 //
@@ -102,7 +101,7 @@ fn normalize(allocator: std.mem.Allocator, result: helpers.CliResult, path: []co
 }
 
 //
-// The "Next steps" verifyCommand (apps/cli/src/cmd/verify.ts) prints for a database without problems, <db>
+// The "Next steps" `psi verify` prints for a database without problems, <db>
 // standing for the database path.
 //
 const verify_next_steps_healthy =
@@ -124,8 +123,8 @@ const verify_next_steps_healthy =
 //
 // The report of `psi verify` for test/dbs/v6. Its files tree holds README.md (913 bytes) and the asset, display
 // and thumb files of its one asset (2,049,800 + 696,014 + 130,591 bytes): 4 files, 2,877,318 bytes, which
-// formatBytes (apps/cli/src/lib/format.ts) prints as 2.74 MiB, and a tree of 7 nodes. verifyDatabaseFiles
-// (packages/node-api/src/lib/verify.ts) checks files.dat, collection.dat, the 2 shard files and the 4 sort index
+// the byte formatter prints as 2.74 MiB, and a tree of 7 nodes. The verification
+// checks files.dat, collection.dat, the 2 shard files and the 4 sort index
 // files: 8 files, 363,161 bytes, printed as 355 KiB.
 //
 const verify_v6_report =
@@ -176,7 +175,7 @@ const verify_v6_asset_path_report =
     \\
 ++ "\n" ++ verify_next_steps_healthy;
 
-test "verify prints the report of the TypeScript CLI" {
+test "verify prints the report" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -193,7 +192,7 @@ test "verify prints the report of the TypeScript CLI" {
 }
 
 //
-// The report of summaryCommand (apps/cli/src/cmd/summary.ts) for test/dbs/v6 at <db>: its files tree holds 4 files
+// The report of `psi summary` for test/dbs/v6 at <db>: its files tree holds 4 files
 // (2.74 MiB) from 1 import and is a version 6 tree. {files}, {database} and {full} stand for the root hashes.
 //
 const summary_v6_report =
@@ -224,7 +223,7 @@ const summary_v6_report =
     \\
 ;
 
-test "summary prints the report of the TypeScript CLI" {
+test "summary prints the report" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -233,7 +232,7 @@ test "summary prints the report of the TypeScript CLI" {
     const environment = try helpers.cliEnvironment(allocator, root);
     const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
-    // The root hashes the TypeScript implementation stored in the database's trees, and their combination.
+    // The root hashes stored in the database's trees, and their combination.
     const storage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, db, null, null);
     const filesTree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, std.testing.io, ".db/files.dat", storage.storage, "FTRE")).?;
     const databaseHash = (try @import("bdb-zig").merkle_tree.getDatabaseRootHash(allocator, std.testing.io, storage.storage, ".db/bson")).?;
@@ -250,7 +249,7 @@ test "summary prints the report of the TypeScript CLI" {
 }
 
 //
-// The report of listCommand (apps/cli/src/cmd/list.ts) for test/dbs/v6: its photoDate sort index holds one asset.
+// The report of `psi list` for test/dbs/v6: its photoDate sort index holds one asset.
 // {encryption} stands for the encryption status of the asset file.
 //
 const list_v6_report =
@@ -270,7 +269,7 @@ const list_v6_report =
     \\
 ;
 
-test "list prints the report of the TypeScript CLI" {
+test "list prints the report" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -284,7 +283,7 @@ test "list prints the report of the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "ls", "--db", db, "--yes" }), expected, "", 0);
     try expectResult(try runZig(allocator, environment, &.{ "l", "--db", db, "--page-size", "1", "--yes" }), expected, "", 0);
 
-    // A page size that is not a number shows an empty page (TypeScript: `records.slice(0, NaN)`).
+    // A page size that is not a number shows an empty page.
     const emptyPage =
         \\
         \\📁 Database Files
@@ -309,7 +308,7 @@ test "list prints the report of the TypeScript CLI" {
 }
 
 //
-// The report of compareCommand (apps/cli/src/cmd/compare.ts) for test/dbs/1-asset against test/dbs/1-asset-2 with
+// The report of `psi compare` for test/dbs/1-asset against test/dbs/1-asset-2 with
 // --max 1. <root> stands for the test root.
 //
 const compare_report =
@@ -335,7 +334,7 @@ const compare_report =
     \\
 ;
 
-test "compare prints the report of the TypeScript CLI" {
+test "compare prints the report" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -356,7 +355,7 @@ test "compare prints the report of the TypeScript CLI" {
     try expectResult(same, "\nComparing two databases:\n  Source:         <root>/1-asset\n  Destination:    <root>/1-asset\n\n\n\u{1F4CA} Comparison Results\n\nNo differences detected\n", "", 0);
 }
 
-test "remove deletes the asset like the TypeScript CLI" {
+test "remove deletes the asset" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -368,7 +367,7 @@ test "remove deletes the asset like the TypeScript CLI" {
 
     try expectResult(try runZig(allocator, environment, &.{ "rm", "--db", db, assetId, "--yes" }), "\u{2713} Successfully removed asset 89171cd9-a652-4047-b869-1154bf2c95a1 from database\n", "", 0);
 
-    // The files are gone, and the tree holds only README.md with the hash the TypeScript CLI leaves.
+    // The files are gone, and the tree holds only README.md with its hash.
     const cwd = std.Io.Dir.cwd();
     for ([_][]const u8{ "asset", "display", "thumb" }) |directory| {
         try std.testing.expectError(error.FileNotFound, cwd.statFile(std.testing.io, try std.fs.path.join(allocator, &.{ db, directory, assetId }), .{}));
@@ -387,7 +386,7 @@ test "remove deletes the asset like the TypeScript CLI" {
     try std.testing.expectEqualStrings(assetId, deletedAssetIds[0].string);
 }
 
-test "export writes the asset files and prints the report of the TypeScript CLI" {
+test "export writes the asset files and prints the report" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -418,7 +417,7 @@ test "export writes the asset files and prints the report of the TypeScript CLI"
     try std.testing.expect(std.mem.startsWith(u8, missing.stderr, "Asset 00000000-0000-0000-0000-000000000000 not found in database.\n"));
 }
 
-test "root-hash and database-id print the values of the TypeScript CLI" {
+test "root-hash and database-id print the values" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -427,12 +426,12 @@ test "root-hash and database-id print the values of the TypeScript CLI" {
     const environment = try helpers.cliEnvironment(allocator, root);
     const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
-    // The values the TypeScript CLI prints for test/dbs/v6.
+    // The values printed for test/dbs/v6.
     try expectResult(try runZig(allocator, environment, &.{ "root-hash", "--db", db, "--yes" }), "c18854777b06e1b0d499230db43f74b32bf937cd892c974b673621b979f40590\n", "", 0);
     try expectResult(try runZig(allocator, environment, &.{ "database-id", "--db", db, "--yes" }), "85fe592c-9b92-4fa1-9ec5-f87f01cf8e72\n", "", 0);
 }
 
-test "origin and set-origin read and write the origin like the TypeScript CLI" {
+test "origin and set-origin read and write the origin" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -445,7 +444,7 @@ test "origin and set-origin read and write the origin like the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "set-origin", "--db", db, "s3:bucket/x", "--yes" }), "\u{2713} Origin set to: s3:bucket/x\n", "", 0);
     try expectResult(try runZig(allocator, environment, &.{ "origin", "--db", db, "--yes" }), "s3:bucket/x\n", "", 0);
 
-    // The config file the TypeScript CLI writes.
+    // The config file that is written.
     const config = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ db, ".db", "config.json" }), allocator, .unlimited);
     try std.testing.expectEqualStrings("{\n  \"origin\": \"s3:bucket/x\"\n}", config);
 
@@ -457,7 +456,7 @@ test "origin and set-origin read and write the origin like the TypeScript CLI" {
 }
 
 //
-// The report of infoCommand (apps/cli/src/cmd/info.ts) for test/dbs/v6's asset looked up by hash, by ID and by an
+// The report of `psi info` for test/dbs/v6's asset looked up by hash, by ID and by an
 // ID that is not in the database.
 //
 const info_v6_report =
@@ -530,7 +529,7 @@ fn normalizeModified(allocator: std.mem.Allocator, text: []const u8) ![]const u8
     return std.mem.concat(allocator, u8, &.{ text[0..start], "<modified>", text[end..] });
 }
 
-test "info prints the report of the TypeScript CLI" {
+test "info prints the report" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -590,7 +589,7 @@ const verify_v6_modified_report =
     \\
 ;
 
-test "verify reports a modified file like the TypeScript CLI" {
+test "verify reports a modified file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -609,7 +608,7 @@ test "verify reports a modified file like the TypeScript CLI" {
 }
 
 //
-// What loadDatabase (apps/cli/src/lib/init-cmd.ts) prints, through outro, for a database path without a files
+// What loading a database prints, through outro, for a database path without a files
 // tree, <missing> standing for the path, followed by the line of the termination handler that retains the session.
 //
 const verify_missing_report =
@@ -623,7 +622,7 @@ const verify_missing_report =
     \\
 ;
 
-test "verify reports a missing database like the TypeScript CLI" {
+test "verify reports a missing database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -637,7 +636,7 @@ test "verify reports a missing database like the TypeScript CLI" {
 }
 
 //
-// The report of `psi repair` (apps/cli/src/cmd/repair.ts) restoring the modified thumbnail of <db> from <src>.
+// The report of `psi repair` restoring the modified thumbnail of <db> from <src>.
 //
 const repair_modified_report =
     \\
@@ -674,7 +673,7 @@ const repair_modified_report =
     \\
 ;
 
-test "repair restores a modified file and prints the report of the TypeScript CLI" {
+test "repair restores a modified file and prints the report" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -698,7 +697,7 @@ test "repair restores a modified file and prints the report of the TypeScript CL
     try std.testing.expectEqualSlices(u8, original, repaired);
 }
 
-test "repair without a source or an origin fails like the TypeScript CLI" {
+test "repair without a source or an origin fails" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -715,7 +714,7 @@ test "repair without a source or an origin fails like the TypeScript CLI" {
 }
 
 //
-// The report of `psi find-orphans` (apps/cli/src/cmd/find-orphans.ts) for <db> with two stray files.
+// The report of `psi find-orphans` for <db> with two stray files.
 //
 const find_orphans_report =
     \\
@@ -734,7 +733,7 @@ const find_orphans_report =
 ;
 
 //
-// The report of `psi find-orphans` (apps/cli/src/cmd/find-orphans.ts) for <db> without stray files.
+// The report of `psi find-orphans` for <db> without stray files.
 //
 const find_orphans_none_report =
     \\
@@ -748,7 +747,7 @@ const find_orphans_none_report =
     \\
 ;
 
-test "find-orphans prints the report of the TypeScript CLI" {
+test "find-orphans prints the report" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -775,7 +774,7 @@ test "find-orphans prints the report of the TypeScript CLI" {
 }
 
 //
-// The report of `psi remove-orphans --yes` (apps/cli/src/cmd/remove-orphans.ts) for <db> with two stray files.
+// The report of `psi remove-orphans --yes` for <db> with two stray files.
 //
 const remove_orphans_report =
     \\
@@ -794,7 +793,7 @@ const remove_orphans_report =
 ;
 
 //
-// The report of `psi remove-orphans` (apps/cli/src/cmd/remove-orphans.ts) for <db> without stray files.
+// The report of `psi remove-orphans` for <db> without stray files.
 //
 const remove_orphans_none_report =
     \\
@@ -808,7 +807,7 @@ const remove_orphans_none_report =
     \\
 ;
 
-test "remove-orphans deletes the orphans and prints the report of the TypeScript CLI" {
+test "remove-orphans deletes the orphans and prints the report" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -840,7 +839,7 @@ test "remove-orphans deletes the orphans and prints the report of the TypeScript
 }
 
 //
-// The report of `psi upgrade --yes` (apps/cli/src/cmd/upgrade.ts) upgrading the v5 test database at <db>, with the
+// The report of `psi upgrade --yes` upgrading the v5 test database at <db>, with the
 // line the logger adds for the warnings.
 //
 const upgrade_v5_report =
@@ -871,7 +870,7 @@ const upgrade_v5_report =
 ;
 
 //
-// What `psi upgrade` (apps/cli/src/cmd/upgrade.ts) writes to stderr upgrading <db>. The backup command it suggests
+// What `psi upgrade` writes to stderr upgrading <db>. The backup command it suggests
 // is `xcopy` on Windows and `cp -r` everywhere else.
 //
 const upgrade_warnings = if (builtin.os.tag == .windows) upgrade_warnings_windows else upgrade_warnings_posix;
@@ -908,7 +907,7 @@ fn withoutErrorLogLine(allocator: std.mem.Allocator, text: []const u8) ![]const 
     return std.mem.concat(allocator, u8, &.{ text[0..start], text[end..] });
 }
 
-test "upgrade upgrades the v5 database like the TypeScript CLI" {
+test "upgrade upgrades the v5 database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -922,7 +921,7 @@ test "upgrade upgrades the v5 database like the TypeScript CLI" {
     result.stdout = try withoutErrorLogLine(allocator, result.stdout);
     try expectResult(result, upgrade_v5_report, upgrade_warnings, 0);
 
-    // The root hash TypeScript's upgrade of the same database gives.
+    // The root hash the upgrade of the same database gives.
     const rootHash = try runZig(allocator, environment, &.{ "root-hash", "--db", db, "--yes" });
     try std.testing.expectEqualStrings("c18854777b06e1b0d499230db43f74b32bf937cd892c974b673621b979f40590\n", rootHash.stdout);
     try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(std.testing.io, try std.fs.path.join(allocator, &.{ db, "metadata" }), .{}));
@@ -953,7 +952,7 @@ fn maskSyncTimings(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
 }
 
 //
-// The report of `psi sync` (apps/cli/src/cmd/sync.ts and packages/node-api/src/lib/sync.ts) from <root>/db to
+// The report of `psi sync` from <root>/db to
 // <root>/dest, a copy of the same database with its one asset removed: the pull deletes the asset from <root>/db.
 //
 const sync_report =
@@ -971,7 +970,7 @@ const sync_report =
     \\
 ;
 
-test "sync synchronizes two databases like the TypeScript CLI" {
+test "sync synchronizes two databases" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -996,7 +995,7 @@ test "sync synchronizes two databases like the TypeScript CLI" {
     try std.testing.expectEqualStrings(sourceHash.stdout, destHash.stdout);
 }
 
-test "sync does nothing for databases already in sync like the TypeScript CLI" {
+test "sync does nothing for databases already in sync" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1016,7 +1015,7 @@ test "sync does nothing for databases already in sync like the TypeScript CLI" {
     try expectResult(second, "Starting database sync operation...\n  Source:    <root>/db\n  Target:    <root>/dest\n\nDatabases already in sync, nothing to do.\n", "", 0);
 }
 
-test "sync refuses an encrypted destination without a key like the TypeScript CLI" {
+test "sync refuses an encrypted destination without a key" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1046,7 +1045,7 @@ test "sync refuses an encrypted destination without a key like the TypeScript CL
     try std.testing.expect(std.mem.endsWith(u8, result.stdout, "-errors.log\nTemporary files retained for inspection: <session dir>\n"));
 }
 
-test "sync rejects a key for an unencrypted destination like the TypeScript CLI" {
+test "sync rejects a key for an unencrypted destination" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1066,7 +1065,7 @@ test "sync rejects a key for an unencrypted destination like the TypeScript CLI"
     , result.stderr);
 }
 
-test "sync refuses databases that are not related like the TypeScript CLI" {
+test "sync refuses databases that are not related" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1077,7 +1076,7 @@ test "sync refuses databases that are not related like the TypeScript CLI" {
     const other = try std.fs.path.join(allocator, &.{ root, "other" });
     try helpers.copyDirectory(allocator, "../../test/dbs/1-asset", other);
 
-    // The TypeScript CLI also prints the stack of each error of the chain, which Zig errors do not have.
+    // The stack of each error of the chain is not printed, because Zig errors do not have one.
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "sync", "--db", db, "--dest", other, "--yes" }), root, "<root>");
     result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
     try std.testing.expectEqual(@as(u8, 1), result.exitCode);
@@ -1098,7 +1097,7 @@ test "sync refuses databases that are not related like the TypeScript CLI" {
     try std.testing.expect(std.mem.endsWith(u8, result.stdout, "-errors.log\nTemporary files retained for inspection: <session dir>\n"));
 }
 
-test "sync --watch rejects an interval that is not a number like the TypeScript CLI" {
+test "sync --watch rejects an interval that is not a number" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1109,7 +1108,7 @@ test "sync --watch rejects an interval that is not a number like the TypeScript 
     const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
 
-    // The TypeScript CLI also prints the stack of the error, which Zig errors do not have.
+    // The stack of the error is not printed, because Zig errors do not have one.
     const result = try runZig(allocator, environment, &.{ "sync", "--db", db, "--dest", dest, "--watch", "--interval", "hourly", "--yes" });
     try std.testing.expectEqual(@as(u8, 1), result.exitCode);
     try std.testing.expectEqualStrings("An unknown error occurred\nError: --interval must be a positive number of seconds, got \"hourly\".\n", result.stderr);
@@ -1130,7 +1129,7 @@ fn maskLockHolder(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
 }
 
 //
-// The first lines of `psi consolidate` (apps/cli/src/cmd/consolidate.ts) from <root>/db to <root>/<remote>.
+// The first lines of `psi consolidate` from <root>/db to <root>/<remote>.
 //
 fn consolidateHeader(allocator: std.mem.Allocator, remote: []const u8) ![]const u8 {
     return std.fmt.allocPrint(allocator,
@@ -1142,7 +1141,7 @@ fn consolidateHeader(allocator: std.mem.Allocator, remote: []const u8) ![]const 
     , .{remote});
 }
 
-test "consolidate creates a remote that does not exist, then finds it already joined, like the TypeScript CLI" {
+test "consolidate creates a remote that does not exist, then finds it already joined" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1172,7 +1171,7 @@ test "consolidate creates a remote that does not exist, then finds it already jo
     try expectResult(again, try std.mem.concat(allocator, u8, &.{ try consolidateHeader(allocator, "remote"), "\u{2713} Already joined to <root>/remote.\n" }), "", 0);
 }
 
-test "consolidate records a remote that is the same database as the origin like the TypeScript CLI" {
+test "consolidate records a remote that is the same database as the origin" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1190,7 +1189,7 @@ test "consolidate records a remote that is the same database as the origin like 
     try std.testing.expectEqualStrings("<root>/same\n", origin.stdout);
 }
 
-test "consolidate joins an unrelated remote like the TypeScript CLI" {
+test "consolidate joins an unrelated remote" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1201,8 +1200,7 @@ test "consolidate joins an unrelated remote like the TypeScript CLI" {
     const other = try std.fs.path.join(allocator, &.{ root, "other" });
     try helpers.copyDirectory(allocator, "../../test/dbs/1-asset-2", other);
 
-    // The warning is the local write lock that replicating the remote down cannot take while consolidation holds it,
-    // as in TypeScript.
+    // The warning is the local write lock that replicating the remote down cannot take while consolidation holds it.
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "consolidate", "--db", db, other, "--yes" }), root, "<root>");
     result.stderr = try maskLockHolder(allocator, result.stderr);
     try expectResult(result, try std.mem.concat(allocator, u8, &.{ try consolidateHeader(allocator, "other"),
@@ -1238,7 +1236,7 @@ test "consolidate joins an unrelated remote like the TypeScript CLI" {
     try std.testing.expect(std.mem.indexOf(u8, summary.stdout, "Mode:             partial\n") != null);
 }
 
-test "consolidate reports a remote it cannot lock like the TypeScript CLI" {
+test "consolidate reports a remote it cannot lock" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1277,8 +1275,8 @@ test "consolidate reports a remote it cannot lock like the TypeScript CLI" {
 }
 
 //
-// The report of `psi replicate` (apps/cli/src/cmd/replicate.ts) from <db> to <dest>, with the two lines the
-// replication task logs (packages/node-api/src/lib/replicate-database.worker.ts) through the worker log, for the
+// The report of `psi replicate` from <db> to <dest>, with the two lines the
+// replication task logs through the worker log, for the
 // counts of copied files and records.
 //
 fn replicateReport(allocator: std.mem.Allocator, copiedFiles: []const u8, copiedRecords: []const u8) ![]const u8 {
@@ -1317,7 +1315,7 @@ fn replicateReport(allocator: std.mem.Allocator, copiedFiles: []const u8, copied
     , .{ copiedFiles, copiedRecords });
 }
 
-test "replicate prints the report of the TypeScript CLI and copies the files" {
+test "replicate prints the report and copies the files" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1342,7 +1340,7 @@ test "replicate prints the report of the TypeScript CLI and copies the files" {
     try expectResult(again, try replicateReport(allocator, "0", "0"), "", 0);
 }
 
-test "replicate rejects --partial with --full like the TypeScript CLI" {
+test "replicate rejects --partial with --full" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1355,7 +1353,7 @@ test "replicate rejects --partial with --full like the TypeScript CLI" {
     try std.testing.expectEqualStrings("✗ --partial and --full cannot be used together. Please specify only one.\n", result.stderr);
 }
 
-test "replicate rejects a key for an unencrypted destination like the TypeScript CLI" {
+test "replicate rejects a key for an unencrypted destination" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1387,7 +1385,7 @@ fn runZigToFile(allocator: std.mem.Allocator, environment: *const std.process.En
 }
 
 //
-// The name versionCommand (apps/cli/src/cmd/version.ts) gives each dependency line, in the order it prints them;
+// The name `psi version` gives each dependency line, in the order it prints them;
 // ImageMagick is named for the kind of ImageMagick found.
 //
 const version_dependency_names = [_][]const []const u8{
@@ -1397,7 +1395,7 @@ const version_dependency_names = [_][]const []const u8{
 };
 
 //
-// Gets the cache directory getCacheDir (packages/node-utils/src/lib/fs.ts) returns in the CLI test environment,
+// Gets the cache directory the CLI uses in the test environment,
 // which sets neither PHOTOSPHERE_CACHE_DIR, XDG_CACHE_HOME nor LOCALAPPDATA.
 //
 fn expectedCacheDir(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map) ![]const u8 {
@@ -1411,7 +1409,7 @@ fn expectedCacheDir(allocator: std.mem.Allocator, environment: *const std.proces
 }
 
 //
-// Expects the report of versionCommand (apps/cli/src/cmd/version.ts). The versions of the tools on the machine
+// Expects the report of `psi version`. The versions of the tools on the machine
 // are not known here, so each dependency line is checked for its name and the closing status for agreeing with
 // which dependencies were found; the rest is exact.
 //
@@ -1450,7 +1448,7 @@ fn expectVersionReport(allocator: std.mem.Allocator, environment: *const std.pro
         }
     }
 
-    // verifyTools (packages/tools/src/lib/tool-verification.ts) lists the missing tools in this order.
+    // The tool verification lists the missing tools in this order.
     if (missingImageMagick) {
         try missingTools.append(allocator, "ImageMagick");
     }
@@ -1475,7 +1473,7 @@ fn expectVersionReport(allocator: std.mem.Allocator, environment: *const std.pro
     try std.testing.expectEqualStrings(expectedRest, lines.rest());
 }
 
-test "version prints the report of the TypeScript CLI" {
+test "version prints the report" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1495,7 +1493,7 @@ test "version prints the report of the TypeScript CLI" {
     try std.testing.expectEqualStrings("", quiet.stderr);
 }
 
-test "version written to a file is the report of the TypeScript CLI" {
+test "version written to a file is the report" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1508,7 +1506,7 @@ test "version written to a file is the report of the TypeScript CLI" {
     try expectVersionReport(allocator, environment, root, result.stdout);
 }
 
-test "--version prints the version like the TypeScript CLI" {
+test "--version prints the version" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1516,7 +1514,7 @@ test "--version prints the version like the TypeScript CLI" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
 
-    // The version of packages/config/src/index.ts, printed by the --version option of apps/cli/index.ts.
+    // The version of the config package, printed by the --version option of the program.
     for ([_][]const []const u8{ &.{"--version"}, &.{ "ver", "--version" }, &.{ "version", "--version" } }) |args| {
         const result = try runZig(allocator, environment, args);
         try expectResult(result, "dev\n", "", 0);
@@ -1536,8 +1534,8 @@ fn deterministicEnvironment(allocator: std.mem.Allocator, environment: *const st
 }
 
 //
-// Gets the tree.dat the TypeScript CLI writes for an empty sort index with the id: the one of the same index in
-// test/dbs/no-assets (created by the TypeScript CLI) with its index id replaced and its trailing SHA-256 checksum
+// Gets the tree.dat written for an empty sort index with the id: the one of the same index in
+// test/dbs/no-assets with its index id replaced and its trailing SHA-256 checksum
 // of the bytes before it recomputed.
 //
 fn expectedEmptySortIndexTree(allocator: std.mem.Allocator, indexDirName: []const u8, indexId: []const u8) ![]const u8 {
@@ -1554,7 +1552,7 @@ fn expectedEmptySortIndexTree(allocator: std.mem.Allocator, indexDirName: []cons
 }
 
 //
-// Expects a database to hold what createDatabase (packages/node-api/src/lib/media-file-database.ts) writes: the
+// Expects a database to hold what creating a database writes: the
 // README.md of test/dbs/no-assets (DATABASE_README_CONTENT), a config.json of `{}`, a files tree with the
 // database id and an empty sort index for hash ascending and photoDate descending with the index ids.
 //
@@ -1571,7 +1569,7 @@ fn expectCreatedDatabase(allocator: std.mem.Allocator, dbDir: []const u8, databa
 }
 
 //
-// The report of initCommand (apps/cli/src/cmd/init.ts) for a new unencrypted database at <db>.
+// The report of `psi init` for a new unencrypted database at <db>.
 //
 const init_report =
     \\
@@ -1596,7 +1594,7 @@ const init_report =
     \\
 ;
 
-test "init prints the report of the TypeScript CLI and creates the database it creates" {
+test "init prints the report and creates the database it creates" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1606,8 +1604,8 @@ test "init prints the report of the TypeScript CLI and creates the database it c
     const db = try std.fs.path.join(allocator, &.{ root, "db" });
     const deterministic = try deterministicEnvironment(allocator, environment, try std.fs.path.join(allocator, &.{ root, "ids" }));
 
-    // The UUIDs are those TestUuidGenerator (packages/node-utils/src/lib/test-uuid-generator.ts) gives for each
-    // counter, as recorded from it in packages-zig/utils-zig/src/test/fixtures/test-uuid-generator.json. The
+    // The UUIDs are those the test UUID generator gives for each
+    // counter, as recorded in packages-zig/utils-zig/src/test/fixtures/test-uuid-generator.json. The
     // counter gives the session id (1), the database id (2) and the ids of the two sort indexes (3 and 4).
     const result = try normalize(allocator, try runZig(allocator, deterministic, &.{ "init", "--db", db, "--yes" }), db, "<db>");
     try expectResult(result, init_report, "", 0);
@@ -1623,7 +1621,7 @@ test "init prints the report of the TypeScript CLI and creates the database it c
 }
 
 //
-// What createDatabase (apps/cli/src/lib/init-cmd.ts) prints, through outro, for a directory that is not empty,
+// What creating a database prints, through outro, for a directory that is not empty,
 // followed by the line of the termination handler that retains the session.
 //
 const init_not_empty_report =
@@ -1636,7 +1634,7 @@ const init_not_empty_report =
     \\
 ;
 
-test "init refuses a directory that is not empty like the TypeScript CLI" {
+test "init refuses a directory that is not empty" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1650,7 +1648,7 @@ test "init refuses a directory that is not empty like the TypeScript CLI" {
     try expectResult(result, init_not_empty_report, "", 1);
 }
 
-test "init rejects a malformed --database-id like the TypeScript CLI" {
+test "init rejects a malformed --database-id" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1659,7 +1657,7 @@ test "init rejects a malformed --database-id like the TypeScript CLI" {
     const environment = try helpers.cliEnvironment(allocator, root);
     const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
-    // normaliseDatabaseId (apps/cli/src/lib/init-cmd.ts) throws, and the error handler of apps/cli/index.ts logs
+    // Normalising the database ID throws, and the error handler of the program logs
     // it and exits with 1.
     const result = try runZig(allocator, environment, &.{ "init", "--db", db, "--database-id", "not-a-uuid", "--yes" });
     try std.testing.expectEqual(@as(u8, 1), result.exitCode);
@@ -1667,7 +1665,7 @@ test "init rejects a malformed --database-id like the TypeScript CLI" {
 }
 
 //
-// The report of initCommand (apps/cli/src/cmd/init.ts) for a new database at <db> encrypted with a generated key
+// The report of `psi init` for a new database at <db> encrypted with a generated key
 // named zig-key.
 //
 const init_encrypted_report =
@@ -1699,7 +1697,7 @@ const init_encrypted_report =
     \\
 ;
 
-test "init creates an encrypted database with a generated key like the TypeScript CLI" {
+test "init creates an encrypted database with a generated key" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1750,7 +1748,7 @@ const verify_v6_encrypted_report =
 
 //
 // Expects a command that failed before doing anything to have written the error to stderr and exited with 1, the
-// termination callbacks of initContext (apps/cli/src/lib/init-cmd.ts) having written where the log and the
+// termination callbacks of the command context having written where the log and the
 // temporary files were left to stdout.
 //
 fn expectEncryptFailure(allocator: std.mem.Allocator, result: helpers.CliResult, expectedStderr: []const u8) !void {
@@ -1761,7 +1759,7 @@ fn expectEncryptFailure(allocator: std.mem.Allocator, result: helpers.CliResult,
     try std.testing.expect(std.mem.endsWith(u8, stdout, "-errors.log\n"));
 }
 
-test "encrypt encrypts the database in place, then skips what it already encrypted, like the TypeScript CLI" {
+test "encrypt encrypts the database in place, then skips what it already encrypted" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1770,7 +1768,7 @@ test "encrypt encrypts the database in place, then skips what it already encrypt
     const environment = try helpers.cliEnvironment(allocator, root);
     const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
-    // test/dbs/v6 holds 11 files that encryptableFiles (packages/node-api/src/lib/encrypt.ts) yields: the asset,
+    // test/dbs/v6 holds 11 files that encryption yields: the asset,
     // display and thumb files, and 8 files under .db/bson.
     const first = try runZig(allocator, environment, &.{ "encrypt", "--db", db, "--key", "zig-key", "--generate-key", "--yes" });
     try expectResult(first, "\n✅ Encrypted 11 files, 0 were already encrypted.\n", "", 0);
@@ -1788,7 +1786,7 @@ test "encrypt encrypts the database in place, then skips what it already encrypt
     try expectResult(verifyResult, verify_v6_encrypted_report, "", 0);
 }
 
-test "encrypt without a key fails like the TypeScript CLI" {
+test "encrypt without a key fails" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1805,7 +1803,7 @@ test "encrypt without a key fails like the TypeScript CLI" {
     try expectEncryptFailure(allocator, missingKey, "✗ Encryption requires --key.\n");
 }
 
-test "encrypt reports a missing database like the TypeScript CLI" {
+test "encrypt reports a missing database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1818,7 +1816,7 @@ test "encrypt reports a missing database like the TypeScript CLI" {
     try expectEncryptFailure(allocator, result, "✗ No database found at: <root>/nodb\n");
 }
 
-test "encrypt requires a database directory like the TypeScript CLI" {
+test "encrypt requires a database directory" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1830,7 +1828,7 @@ test "encrypt requires a database directory like the TypeScript CLI" {
     try expectEncryptFailure(allocator, result, "✗ Database directory is required (--db).\n");
 }
 
-test "decrypt decrypts the database in place like the TypeScript CLI" {
+test "decrypt decrypts the database in place" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1842,7 +1840,7 @@ test "decrypt decrypts the database in place like the TypeScript CLI" {
     const encrypted = try runZig(allocator, environment, &.{ "encrypt", "--db", db, "--key", "zig-key", "--generate-key", "--yes" });
     try expectResult(encrypted, "\n✅ Encrypted 11 files, 0 were already encrypted.\n", "", 0);
 
-    // The 11 files that decryptableFiles (packages/node-api/src/lib/decrypt.ts) yields are all rewritten, because
+    // The 11 files that decryption yields are all rewritten, because
     // the plain storage written to is not the encrypted storage read from.
     const decrypted = try runZig(allocator, environment, &.{ "decrypt", "--db", db, "--key", "zig-key", "--yes" });
     try expectResult(decrypted, "\n✅ Decrypted 11 files, 0 were already plain.\n", "", 0);
@@ -1864,7 +1862,7 @@ test "decrypt decrypts the database in place like the TypeScript CLI" {
     try expectEncryptFailure(allocator, again, "✗ Database at <root>/db does not appear to be encrypted (no .db/encryption.pub).\n");
 }
 
-test "decrypt without a key fails like the TypeScript CLI" {
+test "decrypt without a key fails" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1881,7 +1879,7 @@ test "decrypt without a key fails like the TypeScript CLI" {
     try expectEncryptFailure(allocator, missingKey, "✗ Decryption requires --key.\n");
 }
 
-test "decrypt reports a database that is not encrypted like the TypeScript CLI" {
+test "decrypt reports a database that is not encrypted" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1904,7 +1902,7 @@ test "decrypt reports a database that is not encrypted like the TypeScript CLI" 
     try expectEncryptFailure(allocator, missing, "✗ Database at <root>/nodb does not appear to be encrypted (no .db/encryption.pub).\n");
 }
 
-test "decrypt requires a database directory like the TypeScript CLI" {
+test "decrypt requires a database directory" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1917,8 +1915,8 @@ test "decrypt requires a database directory like the TypeScript CLI" {
 }
 
 //
-// The modified time the hash tests give their files: 2024-01-02T03:04:05.678Z, which hashCommand
-// (apps/cli/src/cmd/hash.ts) prints to the second as "2024-01-02 03:04:05".
+// The modified time the hash tests give their files: 2024-01-02T03:04:05.678Z, which `psi hash`
+// prints to the second as "2024-01-02 03:04:05".
 //
 const hash_test_modified_milliseconds: i64 = 1704164645678;
 
@@ -1938,7 +1936,7 @@ fn setHashTestModifiedTime(filePath: []const u8) !void {
 }
 
 //
-// The path --verbose prints as the path for storage operations: createStorage (storage-factory.ts) converts its
+// The path --verbose prints as the path for storage operations: creating the storage converts its
 // backslashes to forward slashes, so a Windows path is printed with forward slashes.
 //
 fn storageOperationsPath(allocator: std.mem.Allocator, directory: []const u8) ![]const u8 {
@@ -1947,7 +1945,7 @@ fn storageOperationsPath(allocator: std.mem.Allocator, directory: []const u8) ![
     return forwardSlashPath;
 }
 
-test "hash prints the hash, date and size of a file like the TypeScript CLI" {
+test "hash prints the hash, date and size of a file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1972,7 +1970,7 @@ test "hash prints the hash, date and size of a file like the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "hash", prefixed }), expectedPrefixed, "", 0);
 }
 
-test "hash reports a file that is not there like the TypeScript CLI" {
+test "hash reports a file that is not there" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1995,7 +1993,7 @@ test "hash reports a file that is not there like the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "hash", "" }), "", "File path is required.\n", 1);
 }
 
-test "hash reads an encrypted file through its key like the TypeScript CLI" {
+test "hash reads an encrypted file through its key" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2033,7 +2031,7 @@ test "hash reads an encrypted file through its key like the TypeScript CLI" {
 }
 
 //
-// The report toolsCommand (apps/cli/src/cmd/tools.ts) prints before the status of the tools.
+// The report `psi tools` prints before the status of the tools.
 //
 const tools_report_header = "\n📦 Media Processing Tools Status\n\nTool Status:\n\n";
 
@@ -2056,7 +2054,7 @@ const tools_none_available_report = tools_report_header ++
 ;
 
 //
-// The heading showInstallationInstructions (apps/cli/src/lib/installation-instructions.ts) starts with.
+// The heading the installation instructions start with.
 //
 const tools_instructions_heading = "\nInstallation Instructions:\n\n";
 
@@ -2117,7 +2115,7 @@ fn copyToolFromPath(allocator: std.mem.Allocator, environment: *const std.proces
 
 //
 // Runs the Zig CLI with the arguments, writing the keys to its stdin (a pipe) and then closing it. TERM is set to
-// a terminal that isUnicodeSupported (apps/cli/src/lib/clack/prompts/common.ts) accepts on every platform, so
+// a terminal that the Unicode support check accepts on every platform, so
 // the prompts render the same symbols everywhere.
 //
 fn runZigWithInput(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, args: []const []const u8, keys: []const u8) !helpers.CliResult {
@@ -2178,7 +2176,7 @@ fn usePathOfEmptyDirectory(allocator: std.mem.Allocator, environment: *std.proce
     return binDir;
 }
 
-test "tools reports every tool available like the TypeScript CLI" {
+test "tools reports every tool available" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2214,7 +2212,7 @@ test "tools reports every tool available like the TypeScript CLI" {
     }
 }
 
-test "tools --yes reports the missing tools and shows the installation instructions like the TypeScript CLI" {
+test "tools --yes reports the missing tools and shows the installation instructions" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2236,7 +2234,7 @@ test "tools --yes reports the missing tools and shows the installation instructi
     try std.testing.expect(std.mem.endsWith(u8, instructions, tools_instructions_ending));
 }
 
-test "tools names the one missing tool like the TypeScript CLI" {
+test "tools names the one missing tool" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2279,7 +2277,7 @@ test "tools names the one missing tool like the TypeScript CLI" {
     try std.testing.expect(std.mem.indexOf(u8, instructions, "ffmpeg") == null);
 }
 
-test "tools asks before showing the installation instructions like the TypeScript CLI" {
+test "tools asks before showing the installation instructions" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2306,7 +2304,7 @@ test "tools asks before showing the installation instructions like the TypeScrip
 }
 
 //
-// The "Next steps" checkCommand (apps/cli/src/cmd/check.ts) prints after the summary, <db> standing for the
+// The "Next steps" `psi check` prints after the summary, <db> standing for the
 // database path. The first step is only printed when there are files to add.
 //
 fn checkNextSteps(allocator: std.mem.Allocator, hasFilesToAdd: bool) ![]const u8 {
@@ -2338,7 +2336,7 @@ fn setupCheck(allocator: std.mem.Allocator, name: []const u8) !*std.process.Envi
     return environment;
 }
 
-test "check reports which files are already in the database like the TypeScript CLI" {
+test "check reports which files are already in the database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2382,7 +2380,7 @@ test "check reports which files are already in the database like the TypeScript 
     try expectResult(known, expectedKnown, "", 0);
 }
 
-test "check scans a directory like the TypeScript CLI" {
+test "check scans a directory" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2409,7 +2407,7 @@ test "check scans a directory like the TypeScript CLI" {
     try expectResult(result, expected, "", 0);
 }
 
-test "check reports a file it cannot hash like the TypeScript CLI" {
+test "check reports a file it cannot hash" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2417,7 +2415,7 @@ test "check reports a file it cannot hash like the TypeScript CLI" {
     const root = std.fs.path.dirname(environment.get("PHOTOSPHERE_CACHE_DIR").?).?;
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const db = try std.fs.path.join(allocator, &.{ root, "db" });
-    // The scanner resolves the path it is given (path.resolve in TypeScript), which gives it the separator of the
+    // The scanner resolves the path it is given, which gives it the separator of the
     // platform, so the path is joined with that separator to be the one the CLI reports.
     const broken = try std.fs.path.join(allocator, &.{ root, "broken.png" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
@@ -2461,13 +2459,13 @@ test "check reports a file it cannot hash like the TypeScript CLI" {
     try std.testing.expectEqualStrings(expected, stdout);
     try std.testing.expectEqual(@as(u8, 0), result.exitCode);
 
-    // What the image tools say about the file differs between platforms, so only the line checkPaths
-    // (packages/node-api/src/lib/check.ts) writes is checked.
+    // What the image tools say about the file differs between platforms, so only the line the check
+    // writes is checked.
     const failedLine = try std.fmt.allocPrint(allocator, "Failed to get hash for file {s}\n", .{broken});
     try std.testing.expect(std.mem.endsWith(u8, result.stderr, failedLine));
 }
 
-test "check reports a missing database like the TypeScript CLI" {
+test "check reports a missing database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2481,7 +2479,7 @@ test "check reports a missing database like the TypeScript CLI" {
 }
 
 //
-// The help of the program: `psi help` and `psi --help` of apps/cli/index.ts, with the main examples and the resources.
+// The help of the program: `psi help` and `psi --help`, with the main examples and the resources.
 //
 const program_help =
     \\Usage: psi [options] [command]
@@ -2554,7 +2552,7 @@ const program_help =
 ;
 
 //
-// The listing of `psi examples` (apps/cli/src/cmd/examples.ts).
+// The listing of `psi examples`.
 //
 const examples_listing =
     \\📖 Photosphere CLI Examples
@@ -2635,7 +2633,7 @@ const examples_listing =
     \\
 ;
 
-test "examples prints the listing of the TypeScript CLI" {
+test "examples prints the listing" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2647,7 +2645,7 @@ test "examples prints the listing of the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "-q", "examples", "--yes" }), examples_listing, "", 0);
 }
 
-test "help prints the help of the program like the TypeScript CLI" {
+test "help prints the help of the program" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2662,7 +2660,7 @@ test "help prints the help of the program like the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "-q", "help", "bogus" }), program_help, "Unknown command: bogus\n", 0);
 }
 
-test "help prints the help of a command like the TypeScript CLI" {
+test "help prints the help of a command" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2724,7 +2722,7 @@ fn jsonEscapedPath(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
     return std.mem.replaceOwned(u8, allocator, path, "\\", "\\\\");
 }
 
-test "mcp answers an MCP session like the TypeScript CLI" {
+test "mcp answers an MCP session" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2737,7 +2735,7 @@ test "mcp answers an MCP session like the TypeScript CLI" {
     });
 
     // src/test/fixtures/mcp-session.jsonl is an MCP session with every tool of test/dbs/v6, <ROOT> standing for the
-    // test root. mcp-session-expected.jsonl is what the TypeScript CLI (`bun run start -- -q mcp --yes`) answered to
+    // test root. mcp-session-expected.jsonl is what `psi -q mcp --yes` answers to
     // it, fed one message at a time.
     const escapedRoot = try jsonEscapedPath(allocator, root);
     const session = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, "src/test/fixtures/mcp-session.jsonl", allocator, .unlimited);
@@ -2819,7 +2817,7 @@ fn hashCacheEnvironment(allocator: std.mem.Allocator, root: []const u8) !*std.pr
 //
 const secrets_list_rule = "\u{2500}" ** 80;
 
-test "secrets list, view and remove print the reports of the TypeScript CLI" {
+test "secrets list, view and remove print the reports" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2840,7 +2838,7 @@ test "secrets list, view and remove print the reports of the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "list" }), "No secrets found.\n", "", 0);
 }
 
-test "secrets view shows S3 credentials as JSON.parse and Object.entries read them" {
+test "secrets view shows S3 credentials entries" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2853,17 +2851,17 @@ test "secrets view shows S3 credentials as JSON.parse and Object.entries read th
         \\{"keys":{"name":"keys","type":"s3-credentials","value":"{\"b\":1,\"2\":1e21,\"b\":\"last\",\"1\":[1,null,2]}"},"null":{"name":"null","type":"s3-credentials","value":"null"},"text":{"name":"text","type":"s3-credentials","value":"\"h\u00e9\ud83d\ude00\""}}
     });
 
-    // Index keys first, the last of a repeated key, numbers and arrays as String() writes them.
+    // Index keys first, the last of a repeated key, numbers and arrays written as text.
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--name", "keys", "--yes" }), "\nName: keys\nType: s3-credentials\nValue:\n  1: 1,,2\n  2: 1e+21\n  b: last\n\n", "", 0);
-    // Object.entries(null) throws after "Value:" is logged, and the catch logs the raw value.
+    // Listing the entries of null fails after "Value:" is logged, and the failure logs the raw value.
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--name", "null", "--yes" }), "\nName: null\nType: s3-credentials\nValue:\nValue: null\n\n", "", 0);
-    // A string's entries are its UTF-16 code units; a lone surrogate is written as U+FFFD.
+    // A string's entries are its UTF-16 code units, as the output expects; a lone surrogate is written as U+FFFD.
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--name", "text", "--yes" }), "\nName: text\nType: s3-credentials\nValue:\n  0: h\n  1: \u{E9}\n  2: \u{FFFD}\n  3: \u{FFFD}\n\n", "", 0);
 }
 
-// Ported from apps/cli/src/test/cmd/secrets.test.ts: "secretsView --raw writes only the bare value to stdout" and
+// "secretsView --raw writes only the bare value to stdout" and
 // "without --raw the value is logged with labels rather than written to stdout".
-test "secrets view --raw writes only the bare value, like the TypeScript CLI" {
+test "secrets view --raw writes only the bare value" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2879,10 +2877,10 @@ test "secrets view --raw writes only the bare value, like the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--name", "enc", "--yes" }), "\nName: enc\nType: encryption-key\nValue: " ++ multiLineValue ++ "\n\n", "", 0);
 }
 
-// Ported from apps/cli/src/test/cmd/secrets.test.ts: the "logs Did you mean hint when secret not found and
-// suggestions exist" tests of secretsView, secretsEdit, secretsRemove and secretsSend, and "does not log hint when no
+// The "logs Did you mean hint when secret not found and
+// suggestions exist" cases of secrets view, edit, remove and send, and "does not log hint when no
 // suggestions exist".
-test "secrets view, edit, remove and send suggest similar names for a missing secret like the TypeScript CLI" {
+test "secrets view, edit, remove and send suggest similar names for a missing secret" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2903,9 +2901,9 @@ test "secrets view, edit, remove and send suggest similar names for a missing se
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "view", "--yes", "--name", "zzzzzzzzzzzzzz" }), "", "\u{2717} No secret named \"zzzzzzzzzzzzzz\" found.\n", 1);
 }
 
-// Ported from apps/cli/src/test/cmd/secrets.test.ts: "secretsSend does not call findSimilarSecretNames when no name
+// "secrets send does not look for similar secret names when no name
 // is provided".
-test "secrets send with no name and no secrets says so like the TypeScript CLI" {
+test "secrets send with no name and no secrets says so" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2928,7 +2926,7 @@ test "secrets send with no name and no secrets says so like the TypeScript CLI" 
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "send", "--yes" }), expected, "", 0);
 }
 
-test "secrets add and edit store and change secrets like the TypeScript CLI" {
+test "secrets add and edit store and change secrets" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2951,7 +2949,7 @@ test "secrets add and edit store and change secrets like the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "list" }), "\nName                                     Type                 Value\n" ++ secrets_list_rule ++ "\nrenamed                                  plain                ****\n\n", "", 0);
 }
 
-test "secrets send and receive transfer a secret over the local network like the TypeScript CLI" {
+test "secrets send and receive transfer a secret over the local network" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3040,9 +3038,9 @@ fn runReceiver(environment: *const std.process.Environ.Map, group: []const u8, c
 }
 
 //
-// What `psi debug merkle-tree --records` (apps/cli/src/cmd/debug.ts) prints for test/dbs/v6: the aggregate root hash, the
+// What `psi debug merkle-tree --records` prints for test/dbs/v6: the aggregate root hash, the
 // files tree, the BSON database tree, the tree of its metadata collection and of its one shard, and the one record of
-// that shard with its fields cut to 5 by truncateLongStrings.
+// that shard with its fields cut to 5 by the long string truncation.
 //
 const debug_merkle_tree_v6_records =
     \\
@@ -3230,7 +3228,7 @@ const debug_merkle_tree_v6_records =
     \\
 ;
 
-test "debug merkle-tree prints the trees and records like the TypeScript CLI" {
+test "debug merkle-tree prints the trees and records" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3261,7 +3259,7 @@ test "debug merkle-tree prints the trees and records like the TypeScript CLI" {
 const debug_original_asset = "89171cd9-a652-4047-b869-1154bf2c95a1";
 const debug_duplicate_asset = "00000000-0000-0000-0000-000000000001";
 
-test "debug finds and removes a duplicate asset, then rebuilds the sort indexes, like the TypeScript CLI" {
+test "debug finds and removes a duplicate asset, then rebuilds the sort indexes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3316,7 +3314,7 @@ test "debug finds and removes a duplicate asset, then rebuilds the sort indexes,
     try expectResult(sortIndexes, try std.fmt.allocPrint(allocator, "\n🔨 Rebuilding Sort Indexes\n  Database: {s}\n\nFound 2 existing sort indexes:\n  - hash (asc)\n  - photoDate (desc)\n\nDeleted 2 sort indexes.\n\nRebuilding sort indexes...\n\n✅ Sort indexes rebuilt successfully.\n\nRebuilt indexes:\n  - hash (asc, string)\n  - photoDate (desc, date)\n\n", .{db}), "", 0);
 }
 
-test "debug find-collisions writes an absolute --output path like the TypeScript CLI" {
+test "debug find-collisions writes an absolute --output path" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3333,7 +3331,7 @@ test "debug find-collisions writes an absolute --output path like the TypeScript
     try std.testing.expectEqualStrings("{}", try std.Io.Dir.cwd().readFileAlloc(io, absoluteOutput, allocator, .unlimited));
 }
 
-test "debug find-duplicates reports an input file it cannot read like the TypeScript CLI" {
+test "debug find-duplicates reports an input file it cannot read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3352,8 +3350,7 @@ test "debug find-duplicates reports an input file it cannot read like the TypeSc
         try maskRetainedSessionDir(allocator, missing.stdout),
     );
 
-    // Bun's JSON.parse names what it found ("Unexpected identifier"); the Zig CLI names the error of the JSON parser,
-    // as the other ported JSON.parse calls do.
+    // The Zig CLI names the error of the JSON parser.
     const badPath = try node_path.join(allocator, &.{ db, "bad.json" });
     try std.Io.Dir.cwd().writeFile(io, .{
         .sub_path = badPath,
@@ -3373,11 +3370,11 @@ test "debug find-duplicates reports an input file it cannot read like the TypeSc
 const hash_cache_test_hash = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
 
 //
-// The "bug report" hint handleError (apps/cli/index.ts) prints to stdout after an unknown error.
+// The "bug report" hint the error handler prints to stdout after an unknown error.
 //
 const bug_report_hint = "\nIf you believe this behaviour is a bug, please report it with the following command:\n   psi bug\n";
 
-test "hash-cache tools record, read back and remove entries like the TypeScript CLI" {
+test "hash-cache tools record, read back and remove entries" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3386,7 +3383,7 @@ test "hash-cache tools record, read back and remove entries like the TypeScript 
     const environment = try hashCacheEnvironment(allocator, root);
     const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
-    // hashCacheDirCommand (apps/cli/src/cmd/hash-cache-tools.ts) prints getHashCacheDir(db): <cache>/<16 hex digits
+    // `hash-cache dir` prints the hash cache directory of the database: <cache>/<16 hex digits
     // of the database path's hash>/hash-cache.
     const dirResult = try runZig(allocator, environment, &.{ "hash-cache", "dir", "--db", db });
     const cachePrefix = try std.mem.concat(allocator, u8, &.{ try std.fs.path.join(allocator, &.{ root, "cache" }), &.{std.fs.path.sep} });
@@ -3421,7 +3418,7 @@ test "hash-cache tools record, read back and remove entries like the TypeScript 
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "list", "--db", db }), "b/photo.jpg\nsource-1\n", "", 0);
 }
 
-test "hash-cache set fails like the TypeScript CLI for a hash or length the cache cannot hold" {
+test "hash-cache set fails for a hash or length the cache cannot hold" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3434,7 +3431,7 @@ test "hash-cache set fails like the TypeScript CLI for a hash or length the cach
     const badHash = try runZig(allocator, environment, &.{ "hash-cache", "set", "a.jpg", "zz" ++ hash_cache_test_hash, "1", "--db", db });
     try expectResult(badHash, bug_report_hint, "An unknown error occurred\nError: Invalid hash length: 0. Expected 32 bytes.\n", 1);
 
-    // The length is written as 6 bytes, and Node's writeUIntLE throws a RangeError for a larger one.
+    // The length is written as 6 bytes, so a larger one is out of range.
     const tooLong = try runZig(allocator, environment, &.{ "hash-cache", "set", "a.jpg", hash_cache_test_hash, "300000000000000", "--db", db });
     try expectResult(tooLong, bug_report_hint, "An unknown error occurred\nRangeError: The value of \"value\" is out of range. It must be >= 0 and < 2 ** 48. Received 300000000000000\n", 1);
 
@@ -3445,7 +3442,7 @@ test "hash-cache set fails like the TypeScript CLI for a hash or length the cach
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "count", "--db", db }), "0\n", "", 0);
 }
 
-test "hash-cache hash-file and add hash a file like the TypeScript CLI" {
+test "hash-cache hash-file and add hash a file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3464,7 +3461,7 @@ test "hash-cache hash-file and add hash a file like the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "list", "--db", db }), "../../test/test.png\n", "", 0);
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "get", "../../test/test.png", "--db", db }), pngHash ++ "\n", "", 0);
 
-    // Bun's createReadStream fails for a missing file with the path resolved against the cwd, and with no stack,
+    // Reading a missing file fails with the path resolved against the cwd, and with no stack,
     // so the error shows its message alone.
     const missingPath = try std.fs.path.join(allocator, &.{ root, "missing.png" });
     const expectedError = try std.fmt.allocPrint(allocator, "An unknown error occurred\nENOENT: no such file or directory, open '{s}'\n", .{missingPath});
@@ -3472,8 +3469,8 @@ test "hash-cache hash-file and add hash a file like the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "add", missingPath, "--db", db }), bug_report_hint, expectedError, 1);
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "count", "--db", db }), "1\n", "", 0);
 
-    // A file modified half a millisecond past -1001ms: Bun's mtime is a Date of -1000 (the Date constructor
-    // truncates mtimeMs -1000.5 towards zero), which writeUIntLE refuses.
+    // A file modified half a millisecond past -1001ms: its modification time is truncated towards zero to
+    // -1000 whole milliseconds, which the hash cache refuses.
     const oldPath = try std.fs.path.join(allocator, &.{ root, "old.png" });
     try std.Io.Dir.cwd().copyFile("../../test/test.png", std.Io.Dir.cwd(), oldPath, std.testing.io, .{});
     const oldFile = try std.Io.Dir.cwd().openFile(std.testing.io, oldPath, .{ .mode = .write_only });
@@ -3487,7 +3484,7 @@ test "hash-cache hash-file and add hash a file like the TypeScript CLI" {
     try expectResult(beforeEpoch, bug_report_hint, "An unknown error occurred\nRangeError: The value of \"value\" is out of range. It must be >= 0 and < 2 ** 48. Received -1000\n", 1);
 }
 
-test "hash-cache show and clear display and clear a database's hash cache like the TypeScript CLI" {
+test "hash-cache show and clear display and clear a database's hash cache" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3504,7 +3501,7 @@ test "hash-cache show and clear display and clear a database's hash cache like t
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "set", "b/photo.jpg", hash_cache_test_hash, "1234", "--db", db }), "", "", 0);
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "set-source", "source-1", hash_cache_test_hash, "5000000", "--db", db }), "", "", 0);
 
-    // The tools record a last modified time of 0, and formatBytes (apps/cli/src/lib/format.ts) prints the sizes.
+    // The tools record a last modified time of 0, and the byte formatter prints the sizes.
     const shown = try runZig(allocator, environment, &.{ "hash-cache", "show", "--db", db, "--yes" });
     const expectedShown = try std.fmt.allocPrint(allocator,
         \\
@@ -3543,7 +3540,7 @@ test "hash-cache show and clear display and clear a database's hash cache like t
     try expectResult(clearedAgain, "Local hash cache not found or already empty.\n", "", 0);
 }
 
-test "hash-cache commands without --db fail like the TypeScript CLI" {
+test "hash-cache commands without --db fail" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3560,7 +3557,7 @@ test "hash-cache commands without --db fail like the TypeScript CLI" {
 }
 
 //
-// The databases.toml the dbs tests start with (as TypeScript writes it): one entry with every field, one on S3 with
+// The databases.toml the dbs tests start with: one entry with every field, one on S3 with
 // none of the optional ones.
 //
 const dbs_seed_config =
@@ -3626,7 +3623,7 @@ const dbs_list_rule = "\u{2500}" ** 70;
 //
 const dbs_view_rule = "\u{2500}" ** 50;
 
-test "dbs list, view, remove and clear print the reports of the TypeScript CLI" {
+test "dbs list, view, remove and clear print the reports" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3670,7 +3667,7 @@ test "dbs list, view, remove and clear print the reports of the TypeScript CLI" 
     try expectResult(try runZig(allocator, environment, &.{ "dbs", "view", "--yes", "--name", "x" }), "", "\u{2717} No database matching the given name or path was found.\n", 1);
 }
 
-test "dbs clear removes every database like the TypeScript CLI" {
+test "dbs clear removes every database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3682,10 +3679,10 @@ test "dbs clear removes every database like the TypeScript CLI" {
     try std.testing.expectEqualStrings("databases = []\nrecent_database_names = []\n", try readDatabasesToml(allocator, root));
 }
 
-// Ported from apps/cli/src/test/cmd/dbs.test.ts: the "logs Did you mean hint when name lookup fails and suggestions
-// exist" tests of dbsView, dbsEdit, dbsRemove and dbsSend, "does not call findSimilarDatabaseNames when no name is
+// The "logs Did you mean hint when name lookup fails and suggestions
+// exist" cases of dbs view, edit, remove and send, "does not look for similar database names when no name is
 // given" and "shows no hint when no similar names exist".
-test "dbs view, edit, remove and send suggest similar names for a missing database like the TypeScript CLI" {
+test "dbs view, edit, remove and send suggest similar names for a missing database" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3712,9 +3709,9 @@ test "dbs view, edit, remove and send suggest similar names for a missing databa
     try expectResult(try runZig(allocator, environment, &.{ "dbs", "edit", "--yes", "--name", "zzzzzzzzzzzzzz" }), "", "\u{2717} No database named \"zzzzzzzzzzzzzz\" found.\n", 1);
 }
 
-// Ported from apps/cli/src/test/cmd/dbs.test.ts: "calls findSimilarKeyNames and logs hint when encryption key is not
-// in vault" (dbsAdd and dbsEdit) and "calls findSimilarSecretNames and logs hint when s3 credential is not in vault".
-test "dbs add and edit reject secrets missing from the vault with a hint like the TypeScript CLI" {
+// "looks for similar key names and logs hint when encryption key is not
+// in vault" (dbs add and dbs edit) and "looks for similar secret names and logs hint when s3 credential is not in vault".
+test "dbs add and edit reject secrets missing from the vault with a hint" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3731,7 +3728,7 @@ test "dbs add and edit reject secrets missing from the vault with a hint like th
     try std.testing.expectEqualStrings(dbs_seed_config, try readDatabasesToml(allocator, root));
 }
 
-test "dbs add and edit store databases like the TypeScript CLI" {
+test "dbs add and edit store databases" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3751,7 +3748,7 @@ test "dbs add and edit store databases like the TypeScript CLI" {
     try expectResult(try runZig(allocator, environment, &.{ "dbs", "add", "--yes", "--name", "x" }), "", "\u{2717} --name and --path are required with --yes\n", 1);
     try expectResult(try runZig(allocator, environment, &.{ "dbs", "edit", "--yes", "--name", "my-db", "--new-name", " renamed ", "--description", "Changed", "--geocoding-key", "geo" }), "\u{2713} Database \"renamed\" updated.\n", "", 0);
 
-    // What the TypeScript CLI writes for the same commands.
+    // What is written for the same commands.
     try std.testing.expectEqualStrings(
         \\recent_database_names = []
         \\
@@ -3772,11 +3769,11 @@ test "dbs add and edit store databases like the TypeScript CLI" {
     , try readDatabasesToml(allocator, root));
 
     // A rename onto another entry's name is refused by the storage layer, which throws.
-    // (TypeScript also prints the stack of the error, which has no Zig counterpart.)
+    // The stack of the error is not printed, because Zig errors do not have one.
     try expectResult(try runZig(allocator, environment, &.{ "-q", "dbs", "edit", "--yes", "--name", "photos", "--new-name", "RENAMED" }), "\nIf you believe this behaviour is a bug, please report it with the following command:\n   psi bug\n", "An unknown error occurred\nError: A database named \"RENAMED\" already exists.\n", 1);
 }
 
-test "dbs remove asks before removing and dbs view picks from a list like the TypeScript CLI" {
+test "dbs remove asks before removing and dbs view picks from a list" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3794,7 +3791,7 @@ test "dbs remove asks before removing and dbs view picks from a list like the Ty
     try std.testing.expectEqualStrings("recent_database_names = []\n\n[[databases]]\nname = \"my-db\"\ndescription = \"\"\npath = \"s3:bucket/db\"\n", try readDatabasesToml(allocator, root));
 }
 
-test "dbs send and receive transfer a database and its secrets over the local network like the TypeScript CLI" {
+test "dbs send and receive transfer a database and its secrets over the local network" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -3940,8 +3937,8 @@ test "dbs send and receive transfer a database and its secrets over the local ne
 }
 
 //
-// The header newsCommand (apps/cli/src/cmd/news.ts) prints before the feed, for the "dev" version (which
-// getLatestVersion never looks up, so no network is used).
+// The header `psi news` prints before the feed, for the "dev" version (which
+// the latest version check never looks up, so no network is used).
 //
 const news_header = "\n📋 Photosphere News\n\nRunning version: vdev\n\n";
 
@@ -3952,7 +3949,7 @@ fn writeNewsFeed(allocator: std.mem.Allocator, root: []const u8, feed: []const u
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fs.path.join(allocator, &.{ root, "news.yaml" }), .data = feed });
 }
 
-test "news prints the whole feed, newest first, marking the new items, like the TypeScript CLI" {
+test "news prints the whole feed, newest first, marking the new items" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -4088,10 +4085,10 @@ fn expectOpened(allocator: std.mem.Allocator, environment: *const std.process.En
     const io = std.testing.io;
     const recordPath = try std.fmt.allocPrint(allocator, "{s}.opened.txt", .{try openerPath(allocator, environment)});
 
-    // TODO: on Windows the opener is killed when psi exits, mirroring the TypeScript `psi bug`, which exits straight
+    // TODO: on Windows the opener is killed when psi exits, because `psi bug` exits straight
     // after starting PowerShell without `detached` (see startAttachedToThisProcess in open.zig). Whether it recorded
     // its arguments first is a race, so on Windows they are checked only when it did. Wait for the record on every
-    // platform again once both CLIs are fixed.
+    // platform again once that is fixed.
     if (builtin.os.tag == .windows) {
         const recordedBeforeExit = std.Io.Dir.cwd().readFileAlloc(io, recordPath, allocator, .unlimited) catch |err| {
             if (err == error.FileNotFound) {
@@ -4123,7 +4120,7 @@ fn expectOpened(allocator: std.mem.Allocator, environment: *const std.process.En
 }
 
 //
-// The summary bugReportCommand (apps/cli/src/cmd/bug.ts) prints for a report with this title, on this system.
+// The summary `psi bug` prints for a report with this title, on this system.
 //
 fn bugSummary(allocator: std.mem.Allocator, title: []const u8, logFile: []const u8) ![]const u8 {
     return std.fmt.allocPrint(allocator, "Title: {s}\nPhotosphere Version: dev\nSystem: {s} {s} ({s})\nLog File: {s}", .{
@@ -4156,10 +4153,10 @@ fn bugUrl(allocator: std.mem.Allocator, title: []const u8, details: []const u8, 
 }
 
 //
-// The outro bugReportCommand prints for the report (its summary, and the log file information when there is a log
+// The outro `psi bug` prints for the report (its summary, and the log file information when there is a log
 // file) in the environment of bugEnvironment: that the report was opened, even without an opener, because the
-// `open` package never waits to hear that its opener failed to start (the compiled TypeScript CLI says the same on
-// a machine without xdg-open).
+// `open` package never waits to hear that its opener failed to start, on
+// a machine without xdg-open.
 //
 fn bugOutro(allocator: std.mem.Allocator, report: []const u8) ![]const u8 {
     return std.fmt.allocPrint(allocator, "✓ Bug report opened in browser!\n\n{s}\n", .{report});
@@ -4176,7 +4173,7 @@ const bug_template_details = "## Bug Description\n<!-- Please describe the bug y
 //
 const bug_header = "\n🐛 Photosphere Bug Report\n\n\n";
 
-test "bug --yes reports the bug like the TypeScript CLI" {
+test "bug --yes reports the bug" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -4184,7 +4181,7 @@ test "bug --yes reports the bug like the TypeScript CLI" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try bugEnvironment(allocator, root, true);
 
-    // Commander stores --no-browser as the browser option, so it changes nothing, as in the TypeScript CLI.
+    // Commander stores --no-browser as the browser option, so it changes nothing.
     const outro = try bugOutro(allocator, try bugSummary(allocator, "Bug Report", "None available"));
     const url = try bugUrl(allocator, "Bug Report", bug_template_details, "No log file available", "No log file available");
     const expected = try std.mem.concat(allocator, u8, &.{ bug_header, outro });
@@ -4194,7 +4191,7 @@ test "bug --yes reports the bug like the TypeScript CLI" {
     try expectOpened(allocator, environment,url);
 }
 
-test "bug --yes includes the header of the newest log file, like the TypeScript CLI" {
+test "bug --yes includes the header of the newest log file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -4214,7 +4211,7 @@ test "bug --yes includes the header of the newest log file, like the TypeScript 
     try expectOpened(allocator, environment,try bugUrl(allocator, "Bug Report", bug_template_details, "Header line\n--- Log Start ---", logFile));
 }
 
-test "bug --yes says the report was opened even when no opener can be started, like the TypeScript CLI" {
+test "bug --yes says the report was opened even when no opener can be started" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -4241,7 +4238,7 @@ fn runZigWithPrompts(allocator: std.mem.Allocator, environment: *const std.proce
     return helpers.runWithPrompts(allocator, argv.items, prompts, terminalEnvironment);
 }
 
-test "bug asks for the details of the bug like the TypeScript CLI" {
+test "bug asks for the details of the bug" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -4250,7 +4247,7 @@ test "bug asks for the details of the bug like the TypeScript CLI" {
     const environment = try bugEnvironment(allocator, root, true);
 
     // Each prompt is first answered with nothing, which the required ones reject, and the steps end with an empty
-    // step. src/test/fixtures/bug-prompts.txt is what the TypeScript CLI (apps/cli/index.ts bug) writes for these
+    // step. src/test/fixtures/bug-prompts.txt is what `psi bug` writes for these
     // keys, up to its outro.
     const result = try runZigWithPrompts(allocator, environment, &.{"bug"}, &.{
         .{ .waitFor = "Bug title", .keys = "\rCrash on add\r" },
@@ -4269,7 +4266,7 @@ test "bug asks for the details of the bug like the TypeScript CLI" {
     try expectOpened(allocator, environment,try bugUrl(allocator, "Crash on add", details, "No log file available", "No log file available"));
 }
 
-test "bug is cancelled like the TypeScript CLI" {
+test "bug is cancelled" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -4297,7 +4294,7 @@ test "bug is cancelled like the TypeScript CLI" {
     try std.testing.expectEqual(@as(u8, 0), stepCancelled.exitCode);
 }
 
-test "debug find-duplicates reports an input that is a directory with the message Bun's readFile throws" {
+test "debug find-duplicates reports an input that is a directory with the message reading a directory gives" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

@@ -1,6 +1,6 @@
 //
 // Tests of the queue backend: handlers registered with task-queue-zig run on Ziggy's runner, code written against IQueueBackend and
-// TaskQueue works on it, and the callbacks TaskQueue is built on fire as they do on the Electron pool.
+// TaskQueue works on it, and the callbacks TaskQueue is built on fire.
 //
 
 const std = @import("std");

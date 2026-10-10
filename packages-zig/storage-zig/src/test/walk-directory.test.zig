@@ -9,7 +9,7 @@ const walk_directory = storage_zig.walk_directory;
 const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 
 //
-// Matches /^\.db(\/|$)/ (the pattern tree.ts passes).
+// Matches /^\.db(\/|$)/ (the pattern the merkle tree passes).
 //
 fn matchesDbDirectory(fullPath: []const u8) bool {
     return std.mem.eql(u8, fullPath, ".db") or std.mem.startsWith(u8, fullPath, ".db/");
@@ -118,7 +118,7 @@ fn listDirsWithEmptyToken(ptr: *anyopaque, allocator: std.mem.Allocator, io: std
 }
 
 //
-// `while (next)` in TypeScript ends the listing loop on an empty continuation token, because "" is falsy.
+// An empty continuation token ends the listing loop, like a missing one.
 //
 test "walkDirectory stops listing on an empty continuation token" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -186,8 +186,8 @@ fn noDirsListDirs(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, pat
 }
 
 //
-// A listing that runs over more than one page is followed to the end, because TypeScript's `while (next)` asks
-// for the next batch until it answers with no token.
+// A listing that runs over more than one page is followed to the end: the next batch is asked for until the
+// answer has no token.
 //
 test "walkDirectory follows a listing across pages" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

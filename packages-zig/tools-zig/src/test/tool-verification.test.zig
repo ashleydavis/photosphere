@@ -45,7 +45,7 @@ const FakeToolsDirectory = struct {
                 const scriptPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ self.path, fakeTool.name });
                 const script = try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s\\n' '{s}'\n", .{fakeTool.output});
                 try cwd.writeFile(io, .{ .sub_path = scriptPath, .data = script });
-                _ = try node_utils.exec.exec(allocator, io, try std.fmt.allocPrint(allocator, "chmod +x {s}", .{scriptPath}));
+                _ = try node_utils.exec.exec(allocator, io, null, try std.fmt.allocPrint(allocator, "chmod +x {s}", .{scriptPath}));
             }
         }
         const absolutePath = try cwd.realPathFileAlloc(io, self.path, allocator);
@@ -77,12 +77,12 @@ test "verifyFfprobe and verifyFfmpeg report unknown when their output has no ver
     });
     defer directory.destroy(io);
 
-    const ffprobeStatus = tools.Video.verifyFfprobe(allocator, io);
+    const ffprobeStatus = tools.Video.verifyFfprobe(allocator, io, null);
     try std.testing.expect(ffprobeStatus.available);
     try std.testing.expectEqualStrings("unknown", ffprobeStatus.version.?);
     try std.testing.expect(ffprobeStatus.@"error" == null);
 
-    const ffmpegStatus = tools.Video.verifyFfmpeg(allocator, io);
+    const ffmpegStatus = tools.Video.verifyFfmpeg(allocator, io, null);
     try std.testing.expect(ffmpegStatus.available);
     try std.testing.expectEqualStrings("unknown", ffmpegStatus.version.?);
     try std.testing.expect(ffmpegStatus.@"error" == null);
@@ -101,7 +101,7 @@ test "verifyTools reports every tool with its version when modern ImageMagick, f
     });
     defer directory.destroy(io);
 
-    const status = try tools.verifyTools(allocator, io);
+    const status = try tools.verifyTools(allocator, io, null);
 
     try std.testing.expect(status.allAvailable);
     try std.testing.expectEqual(@as(usize, 0), status.missingTools.len);
@@ -122,7 +122,7 @@ test "verifyImageMagick falls back to legacy convert/identify" {
     });
     defer directory.destroy(io);
 
-    const status = try tools.Image.verifyImageMagick(allocator, io);
+    const status = try tools.Image.verifyImageMagick(allocator, io, null);
 
     try std.testing.expect(status.available);
     try std.testing.expectEqualStrings("6.9.11-60", status.version.?);
@@ -140,7 +140,7 @@ test "verifyImageMagick reports unknown when the version cannot be found" {
     });
     defer directory.destroy(io);
 
-    const status = try tools.Image.verifyImageMagick(allocator, io);
+    const status = try tools.Image.verifyImageMagick(allocator, io, null);
 
     try std.testing.expect(status.available);
     try std.testing.expectEqualStrings("unknown", status.version.?);
@@ -158,7 +158,7 @@ test "verifyImageMagick needs both convert and identify for a legacy installatio
     });
     defer directory.destroy(io);
 
-    const status = try tools.Image.verifyImageMagick(allocator, io);
+    const status = try tools.Image.verifyImageMagick(allocator, io, null);
 
     try std.testing.expect(!status.available);
     try std.testing.expectEqualStrings("ImageMagick not found. Please install ImageMagick and ensure either 'magick' or 'convert'/'identify' commands are available.", status.@"error".?);
@@ -173,7 +173,7 @@ test "verifyTools lists every missing tool when nothing is installed" {
     try directory.create(allocator, io, &.{});
     defer directory.destroy(io);
 
-    const status = try tools.verifyTools(allocator, io);
+    const status = try tools.verifyTools(allocator, io, null);
 
     try std.testing.expect(!status.allAvailable);
     try std.testing.expectEqual(@as(usize, 3), status.missingTools.len);
@@ -197,7 +197,7 @@ test "verifyTools lists only the missing tools" {
     });
     defer directory.destroy(io);
 
-    const status = try tools.verifyTools(allocator, io);
+    const status = try tools.verifyTools(allocator, io, null);
 
     try std.testing.expect(!status.allAvailable);
     try std.testing.expectEqual(@as(usize, 1), status.missingTools.len);
@@ -217,7 +217,7 @@ test "getImageMagickType is modern after verifyImageMagick finds magick" {
     });
     defer directory.destroy(io);
 
-    _ = try tools.Image.verifyImageMagick(allocator, io);
+    _ = try tools.Image.verifyImageMagick(allocator, io, null);
 
     try std.testing.expectEqual(tools.image.ImageMagickType.modern, tools.Image.getImageMagickType());
 }
@@ -234,7 +234,7 @@ test "getImageMagickType is legacy after verifyImageMagick finds convert and ide
     });
     defer directory.destroy(io);
 
-    _ = try tools.Image.verifyImageMagick(allocator, io);
+    _ = try tools.Image.verifyImageMagick(allocator, io, null);
 
     try std.testing.expectEqual(tools.image.ImageMagickType.legacy, tools.Image.getImageMagickType());
 }
@@ -248,7 +248,7 @@ test "getImageMagickType is none when ImageMagick is not installed" {
     try directory.create(allocator, io, &.{});
     defer directory.destroy(io);
 
-    _ = try tools.Image.verifyImageMagick(allocator, io);
+    _ = try tools.Image.verifyImageMagick(allocator, io, null);
 
     try std.testing.expectEqual(tools.image.ImageMagickType.none, tools.Image.getImageMagickType());
 }

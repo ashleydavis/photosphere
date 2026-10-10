@@ -60,7 +60,7 @@ const pathJoin = storage_zig.storage_factory.pathJoin;
 const walkDirectory = storage_zig.walk_directory.walkDirectory;
 
 //
-// Options of the upgrade command (TypeScript: IUpgradeCommandOptions extends IBaseCommandOptions).
+// Options of the upgrade command.
 // The base options, which include `yes`, are in `base`.
 //
 pub const IUpgradeCommandOptions = struct {
@@ -79,7 +79,7 @@ const FIRST_VERSION_WITH_ENCRYPTED_DOT_DB = 6;
 //
 fn LoadTreeOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text describing the operation (read by retryOnce for its timeout message).
         pub const source = sourceText;
 
         // Allocates the loaded tree.
@@ -104,7 +104,7 @@ fn LoadTreeOperation(comptime sourceText: []const u8) type {
 // `() => saveTree(".db/files.dat", merkleTree!, assetStorage)`.
 //
 const SaveTreeOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text describing the operation (read by retryOnce for its timeout message).
     pub const source = "() => saveTree(\".db/files.dat\", merkleTree, assetStorage)";
 
     // Allocates the serialized data.
@@ -125,7 +125,7 @@ const SaveTreeOperation = struct {
 };
 
 //
-// What the traversal that fills in missing lastModified values needs (TypeScript: the variables the callback captures).
+// What the traversal that fills in missing lastModified values needs.
 //
 const IFillLastModifiedContext = struct {
     // Allocates the file information.
@@ -139,7 +139,7 @@ const IFillLastModifiedContext = struct {
 };
 
 //
-// Fills in the missing lastModified of a leaf from its file information (TypeScript: the traverseTreeAsync callback).
+// Fills in the missing lastModified of a leaf from its file information.
 //
 fn fillLastModified(context: *const IFillLastModifiedContext, node: *SortNode) anyerror!bool {
     if (node.name) |name| {
@@ -155,7 +155,7 @@ fn fillLastModified(context: *const IFillLastModifiedContext, node: *SortNode) a
 }
 
 //
-// Computes the hash of a file in storage (TypeScript: `computeHash(await assetStorage.readStream(file))`).
+// Computes the hash of a file in storage.
 //
 fn computeStorageHash(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, fileName: []const u8) ![32]u8 {
     const stream = try storage.readStream(allocator, io, fileName);
@@ -308,7 +308,7 @@ pub fn upgradeCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
 }
 
 //
-// The part of upgradeCommand that runs while the write lock is held (TypeScript: the body of the try block).
+// The part of upgradeCommand that runs while the write lock is held.
 //
 fn upgradeLocked(
     allocator: std.mem.Allocator,

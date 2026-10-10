@@ -1,5 +1,5 @@
 //
-// Tests for addItem and updateItem (port of src/test/merkle.test.ts).
+// Tests for addItem and updateItem.
 //
 
 const std = @import("std");

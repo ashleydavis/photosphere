@@ -50,7 +50,7 @@ fn drain(allocator: std.mem.Allocator, queue: *AutoImportQueue) ![]const []const
 }
 
 //
-// Asserts that two lists of ids are equal (TypeScript: `toEqual`).
+// Asserts that two lists of ids are equal.
 //
 fn expectIds(expected: []const []const u8, actual: []const []const u8) !void {
     try std.testing.expectEqual(expected.len, actual.len);

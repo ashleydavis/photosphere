@@ -195,10 +195,9 @@ test "throws if leaf has no name" {
 }
 
 //
-// `!node.name` in TypeScript is a test for a falsy name, so an empty one is refused the same way a missing one is, rather
-// than being yielded as a name nothing can look up.
+// An empty name is refused the same way a missing one is, rather than being yielded as a name nothing can look up.
 //
-test "throws if leaf has an empty name, as the falsy test of the TypeScript does" {
+test "throws if leaf has an empty name" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -601,7 +600,7 @@ var slowReadOriginal: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, 
 const SLOW_READ_DELAY_MS: i64 = 45_000;
 
 //
-// Hands the file over slowly (TypeScript: the readStream wrapped on the instance, which waits on a fake timer first).
+// Hands the file over slowly, after waiting first.
 // The wait is on the virtual clock of the test's Io, so it takes no real time.
 //
 fn slowReadStream(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!storage_zig.storage.IReadStream {
@@ -788,8 +787,8 @@ test "replicate copies a v6 database, reports progress, and a second replicate c
     const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(sourceDir).?);
     const destDir = try std.fs.path.join(allocator, &.{ fixture.dir, "replica" });
-    const source = try node_api.open_storage.openStorage(allocator, io, sourceDir, null, null);
-    const dest = try node_api.open_storage.openStorage(allocator, io, destDir, null, null);
+    const source = try node_api.open_storage.openStorage(allocator, io, sourceDir, null, null, null);
+    const dest = try node_api.open_storage.openStorage(allocator, io, destDir, null, null, null);
     const sourceDb = try node_api.media_file_database.createMediaFileDatabase(allocator, source.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
 
     var recorder: progress_recorder.ProgressRecorder = .{ .allocator = allocator };
@@ -809,7 +808,7 @@ test "replicate copies a v6 database, reports progress, and a second replicate c
     try std.testing.expectEqualStrings("Copied 1", recorder.messages.items[0]);
     try std.testing.expectEqualStrings("Copied 3 files, 1 records", recorder.messages.items[recorder.messages.items.len - 1]);
 
-    const config = (try node_api.open_storage.openStorage(allocator, io, destDir, null, null)).rawStorage;
+    const config = (try node_api.open_storage.openStorage(allocator, io, destDir, null, null, null)).rawStorage;
     const configData = (try config.read(allocator, io, ".db/config.json")).?;
     try std.testing.expectEqualStrings(try std.json.Stringify.valueAlloc(allocator, .{
         .origin = sourceDir,
@@ -836,8 +835,8 @@ test "replicate with a path filter only copies the matching files" {
     const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(sourceDir).?);
     const destDir = try std.fs.path.join(allocator, &.{ fixture.dir, "replica" });
-    const source = try node_api.open_storage.openStorage(allocator, io, sourceDir, null, null);
-    const dest = try node_api.open_storage.openStorage(allocator, io, destDir, null, null);
+    const source = try node_api.open_storage.openStorage(allocator, io, sourceDir, null, null, null);
+    const dest = try node_api.open_storage.openStorage(allocator, io, destDir, null, null, null);
     const sourceDb = try node_api.media_file_database.createMediaFileDatabase(allocator, source.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
 
     const result = try replicate_module.replicate(allocator, io, sourceDir, source.storage, sourceDb.bsonDatabase, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), dest.storage, dest.rawStorage, .{ .pathFilter = "thumb" }, null);
@@ -937,9 +936,9 @@ test "a name only the destination has is the one pruned from its tree" {
 // Replicates from one path to another in the given mode, and returns the destination's files tree.
 //
 fn replicateTo(allocator: std.mem.Allocator, io: std.Io, fixture: *ReplicateFixture, sourcePath: []const u8, destPath: []const u8, partial: bool) !IMerkleTree {
-    const source = try node_api.open_storage.openStorage(allocator, io, sourcePath, null, null);
+    const source = try node_api.open_storage.openStorage(allocator, io, sourcePath, null, null, null);
     const sourceDb = try node_api.media_file_database.createMediaFileDatabase(allocator, source.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
-    const dest = try node_api.open_storage.openStorage(allocator, io, destPath, null, null);
+    const dest = try node_api.open_storage.openStorage(allocator, io, destPath, null, null, null);
     _ = try replicate_module.replicate(allocator, io, sourcePath, source.storage, sourceDb.bsonDatabase, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), dest.storage, dest.rawStorage, .{ .partial = partial }, null);
     return (try node_api.tree.loadMerkleTree(allocator, io, dest.storage)).?;
 }

@@ -35,7 +35,7 @@ pub fn registerVerifyDatabaseTool(server: *McpServer, toolContext: *IMcpToolCont
 }
 
 //
-// The handler of `verify_database` (TypeScript: the arrow function given to registerTool). The verification runs
+// The handler of `verify_database`. The verification runs
 // with the context's allocator, because it hands what it allocates to the tasks of the worker pool.
 //
 fn verifyDatabase(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {

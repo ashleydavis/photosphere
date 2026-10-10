@@ -1,3 +1,9 @@
-# open-ios.sh
+# open-ios
 
-Runs `sync-ios.sh`, then opens the iOS project in Xcode. Invoked as `bun run --filter=ziggy open:ios`. Takes no arguments. Runs on MacOS only.
+Runs `sync-ios.sh`, then opens `shells/ios/Photosphere.xcodeproj` in Xcode.
+
+Run it on a Mac: `bun run --filter=ziggy open:ios`.
+
+## Arguments
+
+Every argument goes to `sync-ios.sh` (`--sdk`, `--arch`, `--native-dir`, `--test-hooks`, `--optimize`). Sync for the SDK you will build in Xcode (simulator or device), and when you change `--native-dir` set the `ZIGGY_NATIVE_DIR` build setting to match.

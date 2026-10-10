@@ -1,5 +1,5 @@
 //
-// Size calculation with file deletion (port of src/test/sizeDeletion.test.ts).
+// Size calculation with file deletion.
 //
 
 const std = @import("std");

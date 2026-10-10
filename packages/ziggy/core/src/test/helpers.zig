@@ -82,6 +82,24 @@ fn awaitOneTask(context: *task_runner.TaskContext, data: std.json.Value) anyerro
     });
 }
 
+fn runChildrenInTurnTask(context: *task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = data;
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+    const first = try context.runChild(allocator, "child-result", .{}, null);
+    const second = try context.runChild(allocator, "fail", .{}, null);
+    const third = try context.runChild(allocator, "child-result", .{}, null);
+    return try ziggy.json_util.stringify(context.arena, .{
+        .first = @tagName(first.status),
+        .firstResult = ziggy.json_util.Raw{ .text = first.result_json orelse "null" },
+        .second = @tagName(second.status),
+        .secondError = second.error_message orelse "",
+        .third = @tagName(third.status),
+        .thirdResult = ziggy.json_util.Raw{ .text = third.result_json orelse "null" },
+    });
+}
+
 fn childResultTask(context: *task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
     return try context.arena.dupe(u8, "\"child answer\"");
@@ -126,6 +144,7 @@ pub const task_handlers = [_]task_runner.TaskHandlerEntry{
     .{ .name = "child", .handler = childTask },
     .{ .name = "child-result", .handler = childResultTask },
     .{ .name = "await-one", .handler = awaitOneTask },
+    .{ .name = "run-children-in-turn", .handler = runChildrenInTurnTask },
     .{ .name = "blocked-parent", .handler = blockedParentTask },
     .{ .name = "flooder", .handler = flooderTask },
     .{ .name = "pick-open", .handler = pickOpenTask },

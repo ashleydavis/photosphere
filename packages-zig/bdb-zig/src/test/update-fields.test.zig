@@ -11,7 +11,7 @@ const numberValue = js_object_builders.numberValue;
 const objectValue = js_object_builders.objectValue;
 
 //
-// Asserts that a value deep equals the expected value (TypeScript: `expect(result).toEqual(expected)`).
+// Asserts that a value deep equals the expected value.
 //
 fn expectEqualValue(expected: BsonValue, actual: BsonValue) !void {
     try std.testing.expect(actual.eql(expected));

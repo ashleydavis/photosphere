@@ -6,7 +6,7 @@ const socket = @import("socket.zig");
 const https = @import("https.zig");
 
 //
-// Names used from other files (the equivalent of the TypeScript imports).
+// Names used from other files.
 //
 const IReceiverEndpoint = lan_share_types.IReceiverEndpoint;
 const errors = utils.errors;
@@ -23,8 +23,7 @@ pub const DISCOVERY_PORT: u16 = 54321;
 const BROADCAST_PREFIX = "PSIE_RECV:";
 
 //
-// How long each wait for a discovery broadcast lasts before the sender checks for a timeout or a cancel again (the
-// event loop of the TypeScript sender runs the timer and cancel() between messages).
+// How long each wait for a discovery broadcast lasts before the sender checks for a timeout or a cancel again.
 //
 const POLL_INTERVAL_MS: i32 = 100;
 
@@ -46,11 +45,10 @@ fn generatePairingCode(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 }
 
 //
-// Reads the body of a GET /pairing-code-hash response and reports whether it holds the code hash
-// (TypeScript: `(JSON.parse(hashResponse.body) as IPairingCodeHashResponse).codeHash === codeHash`).
+// Reads the body of a GET /pairing-code-hash response and reports whether it holds the code hash.
 //
 pub fn pairingCodeHashMatches(allocator: std.mem.Allocator, body: []const u8, codeHash: []const u8) !bool {
-    // JSON.parse keeps the last value of a repeated key.
+    // The last value of a repeated key wins.
     const hashBody = std.json.parseFromSliceLeaky(std.json.Value, allocator, body, .{
         .duplicate_field_behavior = .use_last,
     }) catch |err| {
@@ -93,7 +91,7 @@ pub const LanShareSender = struct {
     // than leave the caller sitting on it.
     abandonWaitForReceiver: std.atomic.Value(bool),
 
-    // True while waitForReceiver is waiting (TypeScript: abandonWaitForReceiver is set only during the wait).
+    // True while waitForReceiver is waiting (abandonWaitForReceiver is set only during the wait).
     isWaiting: std.atomic.Value(bool),
 
     // The 4-digit pairing code displayed to the user.
@@ -165,8 +163,7 @@ pub const LanShareSender = struct {
 
             // Discovery is best-effort. Ignore transient UDP socket errors (for example an
             // ECONNREFUSED surfaced from an ICMP port-unreachable) so listening for the
-            // receiver's broadcast is not aborted by a stray socket error (the TypeScript sender's
-            // `error` handler).
+            // receiver's broadcast is not aborted by a stray socket error.
             const datagram = socket.receiveFrom(udpSocket, &buffer) catch {
                 continue;
             };
@@ -285,7 +282,7 @@ pub const LanShareSender = struct {
     // discovery timeout ran out.
     // Safe to call from a signal handler or another thread: it only sets flags.
     //
-    // TODO: this mirrors a bug in the TypeScript (lan-share-sender.ts) until both are fixed: a cancel() before
+    // TODO: a cancel() before
     // waitForReceiver starts is not honoured, because waitForReceiver resets abandonWaitForReceiver and waits out its
     // whole timeout. It is the second half of the share-cancel hang explained at the TODO in apps/cli-zig dbs.zig
     // dbsSend: once the commands take over Ctrl+C before showing the pairing code, a Ctrl+C can come before the wait,
@@ -311,11 +308,9 @@ pub const LanShareSender = struct {
 };
 
 //
-// TODO: a port that is not a port is ignored and discovery keeps listening, where the TypeScript takes the
-// receiver and fails to connect.
+// TODO: a port that is not a port is ignored and discovery keeps listening.
 //
-// Reads the announced port with `parseInt(text, 10)`. Returns null for NaN, and for a number that is not a port (the
-// TypeScript sender would use it and fail to connect).
+// Reads the announced port with `parseInt(text, 10)`. Returns null for NaN, and for a number that is not a port.
 //
 pub fn parseIntLikeJavaScript(text: []const u8) ?u16 {
     const port = utils.js_number.parseInt(text, 10);

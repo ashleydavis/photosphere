@@ -1,17 +1,14 @@
 //
-// The channels that save assets to the user's disk and open a folder: save-asset, save-assets and open-path, from the ipcMain handlers of
-// the same names in apps/desktop/src/main.ts.
+// The channels that save assets to the user's disk and open a folder: save-asset, save-assets and open-path.
 //
 // Each is a task type, because they show dialogs, wait for the tasks that write the files, and start the operating system's opener.
 //
-// Differences from the Electron app, forced by how Ziggy's tasks work:
-//  - The Electron app queues the `save-asset` and `save-assets-batch` tasks with the database path as their source, so that opening
-//    another database cancels them. save-assets needs to wait for the tasks that do the writing, so they are children of the task
-//    answering the page's request, which take its source, and are cancelled with the request and not with the database. (save-asset
-//    does not wait, and queues its task under the database path as the Electron app does.)
-//  - save-asset takes one object, {assetId, assetType, filename, databasePath, destPath}, where the Electron handler took those as
-//    five arguments, because a Ziggy request carries one payload. Only the main process's MCP tool calls it (the page calls
-//    save-assets).
+// What Ziggy's tasks force:
+//  - save-assets needs to wait for the tasks that do the writing, so they are children of the task answering the page's request,
+//    which take its source, and are cancelled with the request and not with the database. (save-asset does not wait, and queues
+//    its task under the database path, so that opening another database cancels it.)
+//  - save-asset takes one object, {assetId, assetType, filename, databasePath, destPath}, because a Ziggy request carries one
+//    payload. Only the main process's MCP tool calls it (the page calls save-assets).
 //
 
 const std = @import("std");
@@ -24,6 +21,7 @@ const main_state = @import("main-state.zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
 const json_util = ziggy.json_util;
+const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 //
 // What a save-assets task of the page asks for: the assets to save, which one shows a Save As dialog and several show a folder
@@ -75,8 +73,7 @@ const IBatchOutputs = struct {
 };
 
 //
-// Queues a task as a child of the one answering the request and waits for it to end (`runWorkerTask` of main.ts, which queues a task
-// and resolves with its result).
+// Queues a task as a child of the one answering the request and waits for it to end.
 //
 fn runChildTask(context: *TaskContext, task_type: []const u8, data: anytype) !ziggy.types.Completion {
     const task_id = try context.queueChild(task_type, data, null);
@@ -88,21 +85,32 @@ fn runChildTask(context: *TaskContext, task_type: []const u8, data: anytype) !zi
 // tool, which already has a path from the model) the save dialog is skipped and the asset is written straight to that path. When it is
 // not, the user picks a path in a Save As dialog, and nothing is written when they cancel. The write is queued and not waited for.
 //
-pub fn saveAssetHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    const item = try std.json.parseFromValueLeaky(ISaveAssetItem, context.arena, data, .{
-        .ignore_unknown_fields = true,
-    });
+// The five values are read from the payload, because a Ziggy request carries one payload.
+//
+fn saveAsset(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    const asset_id = json_util.getString(data, "assetId") orelse {
+        return utils.errors.throwError("The asset to save needs its id.", .{});
+    };
+    const asset_type = json_util.getString(data, "assetType") orelse {
+        return utils.errors.throwError("The asset to save needs its type.", .{});
+    };
     const database_path = json_util.getString(data, "databasePath") orelse {
         return utils.errors.throwError("The asset to save needs the path of its database.", .{});
     };
     const given_dest_path: ?[]const u8 = if (json_util.getString(data, "destPath")) |dest_path| (if (dest_path.len > 0) dest_path else null) else null;
-    const actual_dest_path: []const u8 = given_dest_path orelse (try pickers.pickFile(context, item.filename)) orelse {
-        return try context.arena.dupe(u8, "null");
+    const actual_dest_path: []const u8 = given_dest_path orelse blk: {
+        // The file name is only the suggestion in the save dialog, so it is needed only when there is no destination.
+        const filename = json_util.getString(data, "filename") orelse {
+            return utils.errors.throwError("The asset to save needs a file name to suggest in the save dialog.", .{});
+        };
+        break :blk (try pickers.showSaveDialog(context, filename)) orelse {
+            return try context.arena.dupe(u8, "null");
+        };
     };
     const state = main_state.fromContext(context);
     const save_data = try json_util.stringify(context.arena, .{
-        .assetId = item.assetId,
-        .assetType = item.assetType,
+        .assetId = asset_id,
+        .assetType = asset_type,
         .destPath = actual_dest_path,
         .databasePath = database_path,
     });
@@ -116,7 +124,10 @@ pub fn saveAssetHandler(context: *TaskContext, data: std.json.Value) anyerror!?[
 // writes the assets, and replies with what happened, so a download costs one round trip rather than picking a destination and then
 // queueing the write separately.
 //
-pub fn saveAssetsHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+// The tasks that write the files are children of this one, and so take its source and are cancelled with the request and not with
+// the database. This handler has to wait for them.
+//
+fn saveAssets(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const arena = context.arena;
     const request = try std.json.parseFromValueLeaky(ISaveAssetsRequest, arena, data, .{
         .ignore_unknown_fields = true,
@@ -186,11 +197,10 @@ pub fn saveAssetsHandler(context: *TaskContext, data: std.json.Value) anyerror!?
 }
 
 //
-// open-path: the payload is the path of a folder. Opens it in the operating system's file manager, as `shell.openPath` of Electron does.
-// (Zig: a file manager that cannot be started is an error, where Electron's `shell.openPath` answered with a message that the handler
-// ignored.)
+// open-path: the payload is the path of a folder. Opens it in the operating system's file manager.
+// A file manager that cannot be started is an error.
 //
-pub fn openPathHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn openPath(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     if (data != .string) {
         return utils.errors.throwError("The folder to open needs a path.", .{});
     }
@@ -214,3 +224,18 @@ pub fn openPathHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]
     _ = try child.wait(context.io());
     return try context.arena.dupe(u8, "null");
 }
+
+//
+// The save-asset channel's handler: saveAsset, with its errors logged.
+//
+pub const saveAssetHandler = logExceptions(saveAsset, "Error saving asset");
+
+//
+// The save-assets channel's handler: saveAssets, with its errors logged.
+//
+pub const saveAssetsHandler = logExceptions(saveAssets, "Error saving assets");
+
+//
+// The open-path channel's handler: openPath, with its errors logged.
+//
+pub const openPathHandler = logExceptions(openPath, "Error opening path");

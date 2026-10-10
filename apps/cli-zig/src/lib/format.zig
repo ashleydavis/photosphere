@@ -1,7 +1,7 @@
 const std = @import("std");
 
 //
-// Options for formatBytes (TypeScript: `{ binary?: boolean; decimals?: number; locale?: string }`).
+// Options for formatBytes: binary or decimal units, the decimals and the locale.
 //
 pub const IFormatBytesOptions = struct {
     // Use 1024-based units (KiB, MiB, ...) instead of 1000-based units (KB, MB, ...).
@@ -57,18 +57,17 @@ pub fn formatBytes(allocator: std.mem.Allocator, bytes: f64, options: IFormatByt
 }
 
 //
-// JavaScript Math.round: rounds half up (towards +Infinity).
+// Rounds half up (towards +Infinity).
 //
 fn jsMathRound(value: f64) f64 {
     return @floor(value + 0.5);
 }
 
 //
-// Equivalent of `value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits })`
+// Formats a number for the en-US locale with no minimum and a maximum number of fraction digits,
 // for a non-negative finite value: the shortest decimal representation of the number is rounded half
 // away from zero to maximumFractionDigits, trailing zeros are dropped and the integer part is grouped
-// with commas. This function has no TypeScript counterpart (Intl.NumberFormat stand-in).
-//
+// with commas.//
 pub fn toLocaleString(allocator: std.mem.Allocator, value: f64, maximumFractionDigits: u32) ![]const u8 {
     // Intl.NumberFormat writes NaN as "NaN".
     if (std.math.isNan(value)) {

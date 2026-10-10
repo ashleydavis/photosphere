@@ -49,8 +49,7 @@ pub const IAssetServerTaskResult = struct {
 const CANCEL_POLL_INTERVAL_MS = 250;
 
 //
-// Allocates the core and the server's threads, which use it from many threads at once.
-// (No TypeScript counterpart: Node's allocator is thread safe.)
+// Allocates the core and the server's threads, which use it from many threads at once, so it has to be thread safe.
 //
 const server_allocator = std.heap.smp_allocator;
 
@@ -76,6 +75,7 @@ pub fn assetServerHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
         .uuidGenerator = context.uuidGenerator,
         .timestampProvider = context.timestampProvider,
         .sessionId = context.sessionId,
+        .hostRequester = context.hostRequester,
     });
     defer core.deinit();
 
@@ -83,8 +83,9 @@ pub fn assetServerHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
 
     const server = try HttpServer.listen(server_allocator, io, host, requestedPort, routes.requestHandler());
     const boundPort = server.port;
-    // The server waits for the requests being answered before it is closed, so nothing it uses is gone while one runs.
-    defer server.close();
+    // (Zig: when the handler fails before the server is closed below, this closes it; the server waits for the requests being
+    // answered, so nothing it uses is gone while one runs.)
+    errdefer server.close();
 
     log.info(try std.fmt.allocPrint(allocator, "Asset server task listening on http://{s}:{d}", .{ host, boundPort }));
 
@@ -100,11 +101,18 @@ pub fn assetServerHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
         try io.sleep(.fromMilliseconds(CANCEL_POLL_INTERVAL_MS), .awake);
     }
 
-    log.info(try std.fmt.allocPrint(allocator, "Asset server task on http://{s}:{d} stopped", .{ host, boundPort }));
-
+    // (Zig: what is allocated after the server is closed can fail, and the server must not be closed twice, so the message and
+    // the result are made first.)
+    const stoppedMessage = try std.fmt.allocPrint(allocator, "Asset server task on http://{s}:{d} stopped", .{ host, boundPort });
     const result: IAssetServerTaskResult = .{
         .port = boundPort,
         .host = host,
     };
-    return std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, result, .{}), .{});
+    const resultValue = try std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, result, .{}), .{});
+
+    server.close();
+
+    log.info(stoppedMessage);
+
+    return resultValue;
 }

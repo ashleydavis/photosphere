@@ -26,7 +26,7 @@ pub fn registerListDatabasesTool(server: *McpServer) !void {
 }
 
 //
-// The handler of `list_databases` (TypeScript: the arrow function given to registerTool).
+// The handler of `list_databases`.
 //
 fn listDatabases(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     _ = context;

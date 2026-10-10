@@ -99,7 +99,7 @@ test "replicateDatabaseDataToJson leaves out the optional keys that are not set"
 }
 
 //
-// What the recording backend saw (TypeScript: makeRecordingBackend's sources and cancelled lists).
+// What the recording backend saw: the sources and the cancelled lists.
 //
 const Recorded = struct {
     // The source of each task added.

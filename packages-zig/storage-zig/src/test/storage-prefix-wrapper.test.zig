@@ -90,7 +90,7 @@ test "a prefix that ends with a colon is concatenated with the path" {
 }
 
 //
-// readableLength has no test of its own in TypeScript; that the wrapper asks the storage underneath is
+// That readableLength asks the storage underneath is
 // pinned here, with an encrypted storage underneath because it is the one store that answers differently
 // from the length in the info.
 //

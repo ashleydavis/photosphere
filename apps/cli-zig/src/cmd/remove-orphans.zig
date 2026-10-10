@@ -23,7 +23,7 @@ const confirm = prompts.confirm;
 const isCancel = prompts.isCancel;
 
 //
-// Options of the remove-orphans command (TypeScript: IRemoveOrphansCommandOptions extends IBaseCommandOptions).
+// Options of the remove-orphans command.
 // The base options are in `base`.
 //
 pub const IRemoveOrphansCommandOptions = struct {

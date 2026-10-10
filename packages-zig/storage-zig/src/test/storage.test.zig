@@ -2,7 +2,7 @@ const std = @import("std");
 const storage_zig = @import("storage-zig");
 const IStorage = storage_zig.storage.IStorage;
 
-test "IStorage exposes the TypeScript method names" {
+test "IStorage exposes the storage method names" {
     try std.testing.expect(@hasDecl(IStorage, "isEmpty"));
     try std.testing.expect(@hasDecl(IStorage, "listFiles"));
     try std.testing.expect(@hasDecl(IStorage, "listDirs"));

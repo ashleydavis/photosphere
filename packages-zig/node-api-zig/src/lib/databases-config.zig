@@ -41,8 +41,7 @@ pub const IDatabasesConfig = struct {
 // device the lookup resolved to a file that cannot exist, every credential lookup found an empty
 // list, and S3 databases failed with "Region is missing" while working perfectly on desktop.
 //
-// (TypeScript: the module constant DATABASES_FILE, which reads the environment when the module loads; Zig reads it on
-// each call.)
+// (Zig: the environment is read on each call.)
 //
 fn DATABASES_FILE(allocator: std.mem.Allocator) ![]const u8 {
     return node_utils.path.join(allocator, &.{ try fs.getConfigDir(allocator), "databases.toml" });
@@ -63,8 +62,7 @@ pub fn getDatabasesConfigPath(allocator: std.mem.Allocator) ![]const u8 {
 pub const MAX_RECENT_DATABASES = 5;
 
 //
-// Gets an array property of a TOML object (null when it is absent or not an array, like Array.isArray).
-// (No TypeScript counterpart.)
+// Gets an array property of a TOML object (null when it is absent or not an array).
 //
 fn arrayProperty(object: std.json.ObjectMap, key: []const u8) ?[]const std.json.Value {
     const value = object.get(key) orelse {
@@ -77,7 +75,7 @@ fn arrayProperty(object: std.json.ObjectMap, key: []const u8) ?[]const std.json.
 }
 
 //
-// Gets the strings of an array of strings (non-string items are skipped). (No TypeScript counterpart.)
+// Gets the strings of an array of strings (non-string items are skipped).
 //
 fn stringItems(allocator: std.mem.Allocator, items: []const std.json.Value) ![]const []const u8 {
     var strings: std.ArrayList([]const u8) = .empty;
@@ -91,7 +89,7 @@ fn stringItems(allocator: std.mem.Allocator, items: []const std.json.Value) ![]c
 }
 
 //
-// Converts a TOML-shaped config object to the TypeScript IDatabasesConfig type.
+// Converts a TOML-shaped config object to an IDatabasesConfig.
 //
 pub fn tomlToDatabasesConfig(allocator: std.mem.Allocator, toml: std.json.ObjectMap) !IDatabasesConfig {
     var databases: std.ArrayList(IDatabaseEntry) = .empty;
@@ -101,13 +99,16 @@ pub fn tomlToDatabasesConfig(allocator: std.mem.Allocator, toml: std.json.Object
         }
     }
 
-    // (Zig: a recent database name that is not text is dropped, where JavaScript carries it through, because recentDatabaseNames
+    // (Zig: a recent database name that is not text is dropped, because recentDatabaseNames
     // holds text only.)
     const recentDatabaseNames = if (arrayProperty(toml, "recent_database_names")) |names|
         try stringItems(allocator, names)
     else
         &[_][]const u8{};
-    var config: IDatabasesConfig = .{ .databases = databases.items, .recentDatabaseNames = recentDatabaseNames };
+    var config: IDatabasesConfig = .{
+        .databases = databases.items,
+        .recentDatabaseNames = recentDatabaseNames,
+    };
     if (databases_config_format.stringProperty(toml, "last_database")) |lastDatabase| {
         config.lastDatabase = lastDatabase;
     }
@@ -115,7 +116,7 @@ pub fn tomlToDatabasesConfig(allocator: std.mem.Allocator, toml: std.json.Object
 }
 
 //
-// Converts the TypeScript IDatabasesConfig to the TOML on-disk shape.
+// Converts an IDatabasesConfig to the TOML on-disk layout.
 //
 pub fn databasesConfigToToml(allocator: std.mem.Allocator, config: IDatabasesConfig) !std.json.Value {
     var tomlDatabases: std.json.Array = .init(allocator);
@@ -124,23 +125,33 @@ pub fn databasesConfigToToml(allocator: std.mem.Allocator, config: IDatabasesCon
     }
     var recentDatabaseNames: std.json.Array = .init(allocator);
     for (config.recentDatabaseNames) |recentName| {
-        try recentDatabaseNames.append(.{ .string = recentName });
+        try recentDatabaseNames.append(.{
+            .string = recentName,
+        });
     }
     var toml: std.json.ObjectMap = .empty;
-    try toml.put(allocator, "databases", .{ .array = tomlDatabases });
-    try toml.put(allocator, "recent_database_names", .{ .array = recentDatabaseNames });
+    try toml.put(allocator, "databases", .{
+        .array = tomlDatabases,
+    });
+    try toml.put(allocator, "recent_database_names", .{
+        .array = recentDatabaseNames,
+    });
 
     // Only written when there is one. An absent key is what "no database is open" looks like on
     // disk, so writing an empty string instead would reopen a database whose path is nothing.
     if (config.lastDatabase) |lastDatabase| {
-        try toml.put(allocator, "last_database", .{ .string = lastDatabase });
+        try toml.put(allocator, "last_database", .{
+            .string = lastDatabase,
+        });
     }
-    return .{ .object = toml };
+    return .{
+        .object = toml,
+    };
 }
 
 //
 // Returns true if the two names match case-insensitively.
-// (Zig: ASCII letters only; JavaScript's toLowerCase also lowers non-ASCII letters, as in
+// (Zig: ASCII letters only, as in
 // fuzzy-match-zig.)
 //
 pub fn namesMatch(left: []const u8, right: []const u8) bool {
@@ -154,7 +165,10 @@ pub fn namesMatch(left: []const u8, right: []const u8) bool {
 pub fn loadDatabasesConfig(allocator: std.mem.Allocator, io: std.Io) !IDatabasesConfig {
     const databasesFile = try DATABASES_FILE(allocator);
     if (!fs.pathExists(io, databasesFile)) {
-        return .{ .databases = &.{}, .recentDatabaseNames = &.{} };
+        return .{
+            .databases = &.{},
+            .recentDatabaseNames = &.{},
+        };
     }
 
     const tomlValue = try fs.readToml(allocator, io, databasesFile);
@@ -175,8 +189,8 @@ pub fn loadDatabasesConfig(allocator: std.mem.Allocator, io: std.Io) !IDatabases
 //
 // This replaced a saveDatabasesConfig that took a whole config and wrote it. Every caller was
 // load-then-save, so two overlapping edits meant the later write silently discarded the earlier
-// one's change, with nothing to show for it. Several processes write this one file: the Electron
-// main process, the REST API and MCP utility processes, and the worker pool.
+// one's change, with nothing to show for it. Several processes write this one file: the desktop
+// shell, the REST API and MCP utility processes, and the worker pool.
 //
 // Windows is where that stopped being silent. It refuses to rename over a file another handle still
 // holds, so the overlapping renames surfaced as "EPERM: operation not permitted, rename ...
@@ -190,15 +204,23 @@ pub fn loadDatabasesConfig(allocator: std.mem.Allocator, io: std.Io) !IDatabases
 //
 pub fn updateDatabasesConfig(allocator: std.mem.Allocator, io: std.Io, mutate: anytype) !void {
     var emptyConfig: std.json.ObjectMap = .empty;
-    try emptyConfig.put(allocator, "databases", .{ .array = .init(allocator) });
-    try emptyConfig.put(allocator, "recent_database_names", .{ .array = .init(allocator) });
-    const tomlMutator: DatabasesConfigTomlMutator(@TypeOf(mutate)) = .{ .mutate = mutate };
-    try fs.updateToml(allocator, io, try DATABASES_FILE(allocator), .{ .object = emptyConfig }, &tomlMutator, 3);
+    try emptyConfig.put(allocator, "databases", .{
+        .array = .init(allocator),
+    });
+    try emptyConfig.put(allocator, "recent_database_names", .{
+        .array = .init(allocator),
+    });
+    const tomlMutator: DatabasesConfigTomlMutator(@TypeOf(mutate)) = .{
+        .mutate = mutate,
+    };
+    try fs.updateToml(allocator, io, try DATABASES_FILE(allocator), .{
+        .object = emptyConfig,
+    }, &tomlMutator, 3);
 }
 
 //
 // The mutator updateDatabasesConfig hands to updateToml: converts the TOML to a config, applies the caller's
-// mutator and converts the result back (the arrow function in TypeScript).
+// mutator and converts the result back.
 //
 fn DatabasesConfigTomlMutator(comptime MutateType: type) type {
     return struct {
@@ -242,7 +264,7 @@ pub fn findDatabase(allocator: std.mem.Allocator, io: std.Io, name: []const u8) 
 }
 
 //
-// The mutator of addDatabaseEntry (the arrow function in TypeScript).
+// The mutator of addDatabaseEntry.
 //
 const AddDatabaseEntryMutator = struct {
     // The entry to add.
@@ -272,12 +294,14 @@ const AddDatabaseEntryMutator = struct {
 // a storage-layer invariant in addition to any UX checks.
 //
 pub fn addDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, entry: IDatabaseEntry) !void {
-    const mutator: AddDatabaseEntryMutator = .{ .entry = entry };
+    const mutator: AddDatabaseEntryMutator = .{
+        .entry = entry,
+    };
     try updateDatabasesConfig(allocator, io, &mutator);
 }
 
 //
-// The mutator of updateDatabaseEntry (the arrow function in TypeScript).
+// The mutator of updateDatabaseEntry.
 //
 const UpdateDatabaseEntryMutator = struct {
     // The name of the entry to update.
@@ -331,12 +355,15 @@ const UpdateDatabaseEntryMutator = struct {
 // `originalName` is found.
 //
 pub fn updateDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, originalName: []const u8, entry: IDatabaseEntry) !void {
-    const mutator: UpdateDatabaseEntryMutator = .{ .originalName = originalName, .entry = entry };
+    const mutator: UpdateDatabaseEntryMutator = .{
+        .originalName = originalName,
+        .entry = entry,
+    };
     try updateDatabasesConfig(allocator, io, &mutator);
 }
 
 //
-// The mutator of removeDatabaseEntry (the arrow function in TypeScript).
+// The mutator of removeDatabaseEntry.
 //
 const RemoveDatabaseEntryMutator = struct {
     // The name of the entry to remove.
@@ -381,7 +408,9 @@ const RemoveDatabaseEntryMutator = struct {
 // No-op if no entry matches.
 //
 pub fn removeDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
-    const mutator: RemoveDatabaseEntryMutator = .{ .name = name };
+    const mutator: RemoveDatabaseEntryMutator = .{
+        .name = name,
+    };
     try updateDatabasesConfig(allocator, io, &mutator);
 }
 
@@ -409,7 +438,7 @@ pub fn getRecentDatabases(allocator: std.mem.Allocator, io: std.Io) ![]const IDa
 }
 
 //
-// The mutator of removeRecentDatabaseName (the arrow function in TypeScript).
+// The mutator of removeRecentDatabaseName.
 //
 const RemoveRecentDatabaseNameMutator = struct {
     // The name to remove from the recents.
@@ -436,12 +465,14 @@ const RemoveRecentDatabaseNameMutator = struct {
 // in `databases` untouched. No-op if the name is not in the recent list.
 //
 pub fn removeRecentDatabaseName(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
-    const mutator: RemoveRecentDatabaseNameMutator = .{ .name = name };
+    const mutator: RemoveRecentDatabaseNameMutator = .{
+        .name = name,
+    };
     try updateDatabasesConfig(allocator, io, &mutator);
 }
 
 //
-// The mutator of markDatabaseOpened (the arrow function in TypeScript).
+// The mutator of markDatabaseOpened.
 //
 const MarkDatabaseOpenedMutator = struct {
     // The name of the database that was opened.
@@ -480,12 +511,14 @@ const MarkDatabaseOpenedMutator = struct {
 // No-op if no entry matches.
 //
 pub fn markDatabaseOpened(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
-    const mutator: MarkDatabaseOpenedMutator = .{ .name = name };
+    const mutator: MarkDatabaseOpenedMutator = .{
+        .name = name,
+    };
     try updateDatabasesConfig(allocator, io, &mutator);
 }
 
 //
-// Returns the path of the database to reopen on the next launch, or null (undefined in TypeScript) when none is open.
+// Returns the path of the database to reopen on the next launch, or null when none is open.
 //
 pub fn getLastDatabase(allocator: std.mem.Allocator, io: std.Io) !?[]const u8 {
     const config = try loadDatabasesConfig(allocator, io);
@@ -493,7 +526,7 @@ pub fn getLastDatabase(allocator: std.mem.Allocator, io: std.Io) !?[]const u8 {
 }
 
 //
-// The mutator of setLastDatabase (the arrow function in TypeScript).
+// The mutator of setLastDatabase.
 //
 const SetLastDatabaseMutator = struct {
     // The database to reopen on the next launch, or null to clear it.
@@ -511,13 +544,15 @@ const SetLastDatabaseMutator = struct {
 };
 
 //
-// Records the database to reopen on the next launch. null (undefined in TypeScript) clears it, which is what closing a
+// Records the database to reopen on the next launch. null clears it, which is what closing a
 // database does.
 //
 // Written through updateDatabasesConfig like every other edit here, so the databases and recents
 // lists are carried through untouched rather than being rewritten from a copy read earlier.
 //
 pub fn setLastDatabase(allocator: std.mem.Allocator, io: std.Io, databasePath: ?[]const u8) !void {
-    const mutator: SetLastDatabaseMutator = .{ .databasePath = databasePath };
+    const mutator: SetLastDatabaseMutator = .{
+        .databasePath = databasePath,
+    };
     try updateDatabasesConfig(allocator, io, &mutator);
 }

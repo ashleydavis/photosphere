@@ -6,7 +6,7 @@ const key_utils = @import("key-utils.zig");
 const encryption_types = @import("encryption-types.zig");
 
 //
-// Names used from other files (the equivalent of the TypeScript imports).
+// Names used from other files.
 //
 const errors = utils.errors;
 const log = utils.log;
@@ -58,9 +58,8 @@ const TAG_BYTES = ENCRYPTION_TAG;
 // Refuses a wrapped key that the readers could not slice back out of the file.
 //
 // Checked at the write, where the wrapped key has just been produced and its length is free to read,
-// rather than where a key is loaded: this is the one check that works everywhere, because the mobile
-// crypto shim's KeyObject carries no key details to inspect and only the wrapped length says what
-// size the key really was.
+// rather than where a key is loaded: this is the one check that works everywhere, because only the
+// wrapped length says what size the key really was.
 //
 // What it prevents is losing the plaintext. Encrypting with a smaller key succeeded and wrote a file
 // that no reader here can decrypt, and said nothing at the time; making the read loud does not help,
@@ -135,8 +134,8 @@ pub fn decryptBuffer(allocator: std.mem.Allocator, data: []const u8, privateKeyM
 }
 
 //
-// Decodes the encryption type field and removes NUL characters and surrounding whitespace from it
-// (TypeScript: .toString("ascii").replace(/\0/g, "").trim()). Decoding as "ascii" drops the high bit of each byte,
+// Decodes the encryption type field and removes NUL characters and surrounding whitespace from it.
+// Decoding as "ascii" drops the high bit of each byte,
 // so every character is ASCII and the whitespace trim() removes is the ASCII whitespace.
 //
 pub fn normalizeEncryptionType(buffer: []u8, field: []const u8) []const u8 {
@@ -152,7 +151,7 @@ pub fn normalizeEncryptionType(buffer: []u8, field: []const u8) []const u8 {
 }
 
 //
-// Equivalent of JavaScript `strings.includes(value)` for an array of strings.
+// Returns true when an array of strings holds the value.
 //
 pub fn includesString(strings: []const []const u8, value: []const u8) bool {
     for (strings) |candidate| {
@@ -164,7 +163,7 @@ pub fn includesString(strings: []const []const u8, value: []const u8) bool {
 }
 
 //
-// Returns bytes [start, end) of a slice, clamped to its length (TypeScript Buffer.slice semantics).
+// Returns bytes [start, end) of a slice, clamped to its length.
 //
 fn clampedSlice(data: []const u8, start: usize, end: usize) []const u8 {
     const clampedStart = @min(start, data.len);

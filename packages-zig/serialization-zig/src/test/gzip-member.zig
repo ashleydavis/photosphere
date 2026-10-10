@@ -1,5 +1,5 @@
 //
-// Compares gzip output with golden fixtures Bun generated on Linux, field by field (no TypeScript counterpart).
+// Compares gzip output with golden fixtures Bun generated on Linux, field by field.
 //
 // A gzip member (RFC 1952) starts with a 10-byte header: ID1 ID2 CM FLG, a 4-byte MTIME, XFL and OS. Everything in it
 // and after it is the same on every platform except OS, which zlib-ng sets to the OS_CODE of the platform it is

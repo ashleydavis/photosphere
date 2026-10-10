@@ -78,7 +78,7 @@ fn optionalString(arguments: BsonDocument, name: []const u8) ?[]const u8 {
 }
 
 //
-// The handler of `search_media_files` (TypeScript: the arrow function given to registerTool).
+// The handler of `search_media_files`.
 //
 fn searchMediaFiles(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     const toolContext: *IMcpToolContext = @ptrCast(@alignCast(context.?));

@@ -357,3 +357,33 @@ test "set-database-origin with an entry whose s3 secret is not JSON is an error 
     defer allocator.free(reply);
     try std.testing.expect(std.mem.startsWith(u8, reply, "The secret that holds the S3 credentials is not valid JSON"));
 }
+
+test "a failing database request logs the error with the message of its handler" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const allocator = std.testing.allocator;
+    allocator.free(try app.requestError("remove-database-entry", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error removing database entry") != null);
+    allocator.free(try app.requestError("find-database", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error finding database") != null);
+    allocator.free(try app.requestError("add-database", "{\"name\":\"x\",\"description\":\"\"}"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error adding database") != null);
+    allocator.free(try app.requestError("update-database", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error updating database") != null);
+    allocator.free(try app.requestError("set-database-origin", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error setting database origin") != null);
+    allocator.free(try app.requestError("list-s3-dirs", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error listing S3 directories") != null);
+}
+
+test "database requests that succeed log nothing to the error output" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const allocator = std.testing.allocator;
+    allocator.free(try app.requestOk("get-databases", "null"));
+    allocator.free(try app.requestOk("add-database", "{\"name\":\"quiet\",\"description\":\"\",\"path\":\"/quiet\"}"));
+    allocator.free(try app.requestOk("find-database", "\"quiet\""));
+    try std.testing.expectEqual(@as(usize, 0), app.console_err.written().len);
+}

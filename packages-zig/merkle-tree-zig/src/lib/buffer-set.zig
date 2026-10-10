@@ -4,7 +4,6 @@ const errors = utils.errors;
 
 //
 // Returns the index of the first buffer in a bucket with the same content, or null when there is none.
-// (Zig: stands in for the JavaScript array method `bucket.some(b => b.equals(buffer))`.)
 //
 fn findBufferIndex(bucket: []const []const u8, buffer: []const u8) ?usize {
     for (bucket, 0..) |bucketBuffer, index| {
@@ -26,12 +25,11 @@ pub const BufferSet = struct {
     // Allocates the buckets.
     allocator: std.mem.Allocator,
 
-    // The buffers in buckets keyed by their numeric hash (TypeScript: `Map<number, Buffer[]>`; the array hash map
-    // iterates in insertion order like a JavaScript Map).
+    // The buffers in buckets keyed by their numeric hash (the array hash map iterates in insertion order).
     _map: std.AutoArrayHashMapUnmanaged(u32, std.ArrayList([]const u8)),
 
     //
-    // Creates an empty set (TypeScript: the constructor).
+    // Creates an empty set.
     //
     pub fn init(allocator: std.mem.Allocator) BufferSet {
         return .{ .allocator = allocator, ._map = .empty };
@@ -122,7 +120,7 @@ pub const BufferSet = struct {
     }
 
     //
-    // Returns the number of buffers in the set (TypeScript: the `size` getter).
+    // Returns the number of buffers in the set.
     //
     pub fn size(self: *const BufferSet) usize {
         var total: usize = 0;
@@ -143,14 +141,14 @@ pub const BufferSet = struct {
     }
 
     //
-    // Iterates the buffers in the set (the Zig form of the TypeScript generator).
+    // Iterates the buffers in the set.
     //
     pub fn values(self: *const BufferSet) ValueIterator {
         return .{ .buckets = self._map.values(), .bucketIndex = 0, .bufferIndex = 0 };
     }
 
     //
-    // Iterates the [buffer, buffer] pairs of the set (TypeScript: `entries()`; a Set yields each value as both).
+    // Iterates the [buffer, buffer] pairs of the set (each value is yielded as both).
     //
     pub fn entries(self: *const BufferSet) EntryIterator {
         return .{

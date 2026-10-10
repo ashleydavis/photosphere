@@ -9,8 +9,7 @@ const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const ITimestampProvider = utils.timestamp_provider.ITimestampProvider;
 
 //
-// The function that sends a task message back to the caller (TypeScript: `(message: any) => void`).
-// This name has no TypeScript counterpart. The message is only valid during the call.
+// The function that sends a task message back to the caller. The message is only valid during the call.
 //
 pub const SendMessageFn = struct {
     // The state of the function, passed to function.
@@ -98,6 +97,7 @@ pub const TaskContext = struct {
             .sessionId = self.sessionId,
             .taskId = self.taskId,
             .maxConcurrentChildTasks = self.maxConcurrentChildTasks,
+            .hostRequester = null,
             .ptr = self,
             .vtable = &vtable,
         };

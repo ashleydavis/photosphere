@@ -21,7 +21,7 @@ const path = node_utils.path;
 
 //
 // The ignore patterns every test scans with, unless it says otherwise.
-// (Zig: a pattern is the text the TypeScript regular expression matches anywhere in a name.)
+// A pattern is the text matched anywhere in a name.
 //
 const defaultScannerOptions: ScannerOptions = .{
     .ignorePatterns = &.{ "node_modules", ".git", ".DS_Store", ".db" },
@@ -67,7 +67,7 @@ const MINIMAL_MP4 = [_]u8{
 };
 
 //
-// Gathers what a scan finds (TypeScript: the `async (result) => { scannedFiles.push(result); }` arrow function).
+// Gathers what a scan finds.
 //
 const Scanned = struct {
     // Allocates the copies.
@@ -123,7 +123,7 @@ const Progress = struct {
     // The non-empty paths reported.
     updates: std.ArrayList([]const u8) = .empty,
 
-    // The last path reported (TypeScript: currentPath).
+    // The last path reported.
     currentPath: ?[]const u8 = null,
 
     // Whether any path was reported, empty or not.
@@ -157,7 +157,7 @@ const Progress = struct {
 };
 
 //
-// The state each test starts from (TypeScript: the beforeEach and afterEach of the describe block).
+// The state each test starts from.
 //
 const ScannerTest = struct {
     // Holds the test's allocations.
@@ -383,13 +383,13 @@ test "should include file metadata" {
     try std.testing.expectEqualStrings("image/png", scanned.files.items[0].fileStat.contentType.?);
 }
 
-test "a modified time before 1970 is truncated to whole milliseconds like a JavaScript Date" {
+test "a modified time before 1970 is truncated to whole milliseconds" {
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
     const io = std.testing.io;
     const filePath = try context.write("old.png", &MINIMAL_PNG);
-    // Half a millisecond past -1001ms. Bun reports mtimeMs -1000.5 and mtime.getTime() -1000.
+    // Half a millisecond past -1001ms, which truncates towards zero to -1000.
     const oldTime: std.Io.Timestamp = .{ .nanoseconds = -1000500000 };
     const photoFile = try std.Io.Dir.cwd().openFile(io, filePath, .{ .mode = .write_only });
     defer photoFile.close(io);
@@ -623,9 +623,8 @@ test "should handle invalid zip file gracefully" {
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    // (Zig: TypeScript reads the scanner's state object after the scan, through the reference the progress
-    // callback was handed. A Zig scan's state is gone when it returns, so the zip sits in a folder with a photo
-    // after it, and the progress reported for the photo carries the count.)
+    // (A scan's state is gone when it returns, so the zip sits in a folder with a photo after it, and the
+    // progress reported for the photo carries the count.)
     _ = try context.write("invalid.zip", "This is not a valid zip file");
     _ = try context.write("z.png", &MINIMAL_PNG);
     var progress = context.progress();
@@ -700,8 +699,8 @@ test "scans a zip whose entries are compressed" {
     try context.init();
     defer context.deinit();
     const allocator = context.arena.allocator();
-    // (Zig: not in the TypeScript tests. The checked in test archive is compressed with DEFLATE, the method the
-    // zips a camera or a phone writes use, so the scan inflates each entry.)
+    // (The checked in test archive is compressed with DEFLATE, the method the zips a camera or a phone writes
+    // use, so the scan inflates each entry.)
     const zipPath = try context.write("test-archive.zip", try test_files.readFile(allocator, std.testing.io, "../test/multiple-files/test-archive.zip"));
 
     const scanned = try context.scan(zipPath, defaultScannerOptions, null);
@@ -869,8 +868,8 @@ test "a zip name cut through a character outside the Basic Multilingual Plane is
     try context.init();
     defer context.deinit();
     const allocator = context.arena.allocator();
-    // 49 letters and an emoji, which is two UTF-16 code units, so `substring(0, 50)` keeps only its high
-    // surrogate, and JavaScript writes a lone surrogate out as U+FFFD.
+    // 49 letters and an emoji, which is two UTF-16 code units, so cutting to 50 units keeps only its high
+    // surrogate, and a lone surrogate is written out as U+FFFD.
     const rootName = "a" ** 49 ++ "\u{1F600}.zip";
     const zipPath = try context.write(rootName, try buildZip(allocator, &.{.{
         .name = "image.png",
@@ -887,7 +886,7 @@ test "should track ignored files count" {
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
-    // (Zig: a photo after the ignored file, so a progress report comes after it; see "should handle invalid zip
+    // (A photo after the ignored file, so a progress report comes after it; see "should handle invalid zip
     // file gracefully".)
     _ = try context.write("file1.png", &MINIMAL_PNG);
     _ = try context.write("file2.unknown", "content");
@@ -907,7 +906,7 @@ test "should track failed files count" {
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    // (Zig: see "should handle invalid zip file gracefully".)
+    // (See "should handle invalid zip file gracefully".)
     _ = try context.write("invalid.zip", "not a zip");
     _ = try context.write("z.png", &MINIMAL_PNG);
     var progress = context.progress();
