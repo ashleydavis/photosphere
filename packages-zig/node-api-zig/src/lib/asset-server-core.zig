@@ -24,6 +24,9 @@ pub const IAssetServerCoreOptions = struct {
 
     // Write-lock owner for write/apply operations (see acquireWriteLock).
     sessionId: []const u8,
+
+    // Reaches the phone's keychain for the credentials of a database, or null where there is no phone shell.
+    hostRequester: ?utils.host_requester.IHostRequester,
 };
 
 //
@@ -41,7 +44,7 @@ pub const IAssetServerCore = struct {
     vtable: *const VTable,
 
     //
-    // The functions an implementation of IAssetServerCore provides (same names as the TypeScript interface).
+    // The functions an implementation of IAssetServerCore provides.
     //
     pub const VTable = struct {
         // Loads one asset variant (thumb | display | asset) from a database directory and returns it as a byte stream.
@@ -102,6 +105,9 @@ pub const AssetServerCore = struct {
     // Write-lock owner for write/apply operations.
     sessionId: []const u8,
 
+    // Reaches the phone's keychain for the credentials of a database, or null where there is no phone shell.
+    hostRequester: ?utils.host_requester.IHostRequester,
+
     // Cache of lazy database storage instances keyed by database path.
     storageCache: std.StringHashMapUnmanaged(IStorage),
 
@@ -121,6 +127,7 @@ pub const AssetServerCore = struct {
             .uuidGenerator = options.uuidGenerator,
             .timestampProvider = options.timestampProvider,
             .sessionId = try allocator.dupe(u8, options.sessionId),
+            .hostRequester = options.hostRequester,
             .storageCache = .empty,
             .mutex = .init,
         };
@@ -167,9 +174,9 @@ pub const AssetServerCore = struct {
             return cached;
         }
         const arena = self.cache_arena.allocator();
-        const credentials = try resolve_storage_credentials.resolveStorageCredentials(arena, io, databasePath, null, null);
+        const credentials = try resolve_storage_credentials.resolveStorageCredentials(arena, io, databasePath, null, null, self.hostRequester);
         const loadedKeys = try encryption.key_utils.loadEncryptionKeysFromPem(arena, credentials.encryptionKeyPems);
-        const storage = try media_file_database.createLazyDatabaseStorage(arena, io, databasePath, credentials.s3Config, loadedKeys.options);
+        const storage = try media_file_database.createLazyDatabaseStorage(arena, io, databasePath, credentials.s3Config, loadedKeys.options, self.hostRequester);
         try self.storageCache.put(self.allocator, try arena.dupe(u8, databasePath), storage);
         return storage;
     }
@@ -194,19 +201,28 @@ pub const AssetServerCore = struct {
     // Applies metadata operations to one or more on-disk databases.
     //
     pub fn applyDatabaseOps(self: *AssetServerCore, allocator: std.mem.Allocator, io: std.Io, ops: []const IDatabaseOp) !void {
-        try apply_database_ops.applyDatabaseOps(allocator, io, self.uuidGenerator, self.timestampProvider, self.sessionId, ops);
+        try apply_database_ops.applyDatabaseOps(allocator, io, self.uuidGenerator, self.timestampProvider, self.sessionId, ops, self.hostRequester);
     }
 
+    //
+    // The IAssetServerCore.VTable.serveAsset of this core.
+    //
     fn serveAssetErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream {
         const self: *AssetServerCore = @ptrCast(@alignCast(ptr));
         return self.serveAsset(allocator, io, assetId, assetType, databasePath);
     }
 
+    //
+    // The IAssetServerCore.VTable.writeAsset of this core.
+    //
     fn writeAssetErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) anyerror!void {
         const self: *AssetServerCore = @ptrCast(@alignCast(ptr));
         return self.writeAsset(allocator, io, assetId, assetType, databasePath, contentType, inputStream, contentLength);
     }
 
+    //
+    // The IAssetServerCore.VTable.applyDatabaseOps of this core.
+    //
     fn applyDatabaseOpsErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, ops: []const IDatabaseOp) anyerror!void {
         const self: *AssetServerCore = @ptrCast(@alignCast(ptr));
         return self.applyDatabaseOps(allocator, io, ops);

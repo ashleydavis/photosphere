@@ -20,6 +20,9 @@ android {
 }
 
 dependencies {
+    // Plain-JVM unit tests of the parts that need no platform.
+    testImplementation "junit:junit:$junitVersion"
+
     // WebViewCompat.addDocumentStartJavaScript, which runs the injected script before the page's own scripts.
     implementation "androidx.webkit:webkit:${rootProject.ext.androidxWebkitVersion}"
 }

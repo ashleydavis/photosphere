@@ -1,15 +1,14 @@
 //
 // IQueueBackend: the interface that all task scheduling backends implement.
-// Real worker pools (WorkerPoolBun, WorkerPoolElectronMain, WorkerPoolInline) and
-// IPC/WebSocket proxies (ElectronQueueBackend, WebSocketQueueBackend) implement this.
+// Real worker pools and IPC/WebSocket proxies implement this.
 // TaskQueue depends only on IQueueBackend; concrete backend classes are registered once
 // at process startup via setQueueBackend().
 //
-// Threading contract of the Zig port (TypeScript backends run on one event loop):
+// Threading contract:
 // - Every method may be called from any thread.
 // - Callbacks may be invoked from any thread (e.g. a worker thread when a task completes), but the
 //   callbacks registered for a task added with addTask must fire before that task can start running
-//   (TaskQueue relies on onTaskAdded being called synchronously from addTask, as in TypeScript).
+//   (TaskQueue relies on onTaskAdded being called synchronously from addTask).
 // - After an UnsubscribeFn returns, the backend must not invoke that callback again, and no invocation of
 //   it may still be running (TaskQueue frees its state after unsubscribing). A backend may hold its own
 //   lock while invoking callbacks: the callbacks registered by TaskQueue never call back into the backend.
@@ -39,7 +38,7 @@ pub const IQueueBackend = struct {
     vtable: *const VTable,
 
     //
-    // The functions an implementation of IQueueBackend provides (same names as the TypeScript interface).
+    // The functions an implementation of IQueueBackend provides.
     //
     pub const VTable = struct {
         // Adds a task to the backend. Returns the task ID (allocated with allocator).
@@ -147,7 +146,7 @@ var _backend: ?IQueueBackend = null;
 //
 // Registers the process-level singleton queue backend.
 // Must be called once at process startup before any TaskQueue is created.
-// (Zig takes an optional so that tests can clear it; TypeScript tests pass `undefined as any`.)
+// (It takes an optional so that tests can clear it.)
 //
 pub fn setQueueBackend(backend: ?IQueueBackend) void {
     _backend = backend;

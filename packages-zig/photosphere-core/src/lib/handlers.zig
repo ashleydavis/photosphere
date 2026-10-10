@@ -1,5 +1,5 @@
 //
-// Every channel and task type Photosphere answers, in the order of the ipcMain handlers of apps/desktop/src/main.ts, and the
+// Every channel and task type Photosphere answers, and the
 // function that turns an error into the text of an error reply. The app's own core package gives these to Ziggy's core, with
 // its menu and its page.
 //
@@ -23,6 +23,9 @@ const saving_assets = @import("saving-assets.zig");
 const tools = @import("tools.zig");
 const config_and_state = @import("config-and-state.zig");
 const mobile_requests = @import("mobile-requests.zig");
+const page_query = @import("page-query.zig");
+const mobile_planning = @import("mobile-planning.zig");
+const background_work = @import("background-work.zig");
 
 //
 // The channels Photosphere answers on the thread that handles the page's messages.
@@ -73,6 +76,7 @@ pub const task_channels = [_]ziggy.core.TaskChannelEntry{
     .{ .name = "requestMediaPermission", .task_type = "requestMediaPermission" },
     .{ .name = "exportFile", .task_type = "exportFile" },
     .{ .name = "exportFiles", .task_type = "exportFiles" },
+    .{ .name = "exportTempFolder", .task_type = "exportTempFolder" },
     .{ .name = "startBackgroundImport", .task_type = "startBackgroundImport" },
     .{ .name = "stopBackgroundImport", .task_type = "stopBackgroundImport" },
     .{ .name = "secureStoreGet", .task_type = "secureStoreGet" },
@@ -120,6 +124,7 @@ pub const tasks = [_]ziggy.task_runner.TaskHandlerEntry{
     .{ .name = "requestMediaPermission", .handler = mobile_requests.requestMediaPermissionHandler },
     .{ .name = "exportFile", .handler = mobile_requests.exportFileHandler },
     .{ .name = "exportFiles", .handler = mobile_requests.exportFilesHandler },
+    .{ .name = "exportTempFolder", .handler = mobile_requests.exportTempFolderHandler },
     .{ .name = "startBackgroundImport", .handler = mobile_requests.startBackgroundImportHandler },
     .{ .name = "stopBackgroundImport", .handler = mobile_requests.stopBackgroundImportHandler },
     .{ .name = "secureStoreGet", .handler = mobile_requests.secureStoreGetHandler },
@@ -127,11 +132,19 @@ pub const tasks = [_]ziggy.task_runner.TaskHandlerEntry{
     .{ .name = "secureStoreDelete", .handler = mobile_requests.secureStoreDeleteHandler },
     .{ .name = "secureStoreKeys", .handler = mobile_requests.secureStoreKeysHandler },
     .{ .name = "ensure-auto-import", .handler = main_process.ensureAutoImportTask },
+    .{ .name = "plan-auto-import", .handler = mobile_planning.planAutoImportTask },
+    .{ .name = "plan-sync", .handler = mobile_planning.planSyncTask },
+    .{ .name = "plan-prefetch", .handler = mobile_planning.planPrefetchTask },
+    .{ .name = "read-config", .handler = mobile_planning.readConfigTask },
+    .{ .name = "write-config", .handler = mobile_planning.writeConfigTask },
+    .{ .name = "background-auto-import", .handler = background_work.autoImportLoopTask, .kind = .keep_alive },
+    .{ .name = "background-sync", .handler = background_work.syncLoopTask, .kind = .keep_alive },
+    .{ .name = "background-prefetch", .handler = background_work.prefetchLoopTask, .kind = .keep_alive },
 };
 
 //
 // Gives the text of the error reply for an error a handler returned, in words the user can act on. A thrown error gives the message
-// the code that failed recorded, which is what the page showed when the same handler threw in the Electron app. An error the
+// the code that failed recorded. An error the
 // operating system or the allocator returned gives a sentence for the common ones. Any other error is not described, so the reply carries its name.
 //
 pub fn describeError(err: anyerror) ?[]const u8 {
@@ -168,5 +181,6 @@ pub fn appHandlers(menu_json: []const u8, ui_files: []const ziggy.ui_files.UiFil
         .state = main_state.state_hooks,
         .on_task_end = main_process.onTaskEnd,
         .on_task_message = main_process.onTaskMessage,
+        .page_query = page_query.pageQuery,
     };
 }

@@ -1,5 +1,5 @@
 //
-// Tests for the metadata and timestamps of a collection (port of src/tests/metadata.test.ts).
+// Tests for the metadata and timestamps of a collection.
 //
 
 const std = @import("std");
@@ -18,8 +18,7 @@ const Date = utils.timestamp_provider.Date;
 const io = std.testing.io;
 
 //
-// Mock timestamp provider for testing - allows manual control of timestamps (the MockTimestampProvider of the
-// TypeScript utils package).
+// Mock timestamp provider for testing - allows manual control of timestamps.
 //
 const MockTimestampProvider = struct {
     // The timestamp it reports.
@@ -98,14 +97,14 @@ const MockTimestampProvider = struct {
 var random_uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
 
 //
-// The onDirty callback given to the collection under test (TypeScript: `() => {}`).
+// The onDirty callback given to the collection under test (a no-op).
 //
 fn onDirty(context: *anyopaque) void {
     _ = context;
 }
 
 //
-// Creates the collection under test (TypeScript: the beforeEach block).
+// Creates the collection under test.
 //
 fn newCollection(allocator: std.mem.Allocator, storage: *MemoryStorage, timestampProvider: *MockTimestampProvider) !*BsonCollection {
     const collection = try allocator.create(BsonCollection);
@@ -114,7 +113,7 @@ fn newCollection(allocator: std.mem.Allocator, storage: *MemoryStorage, timestam
 }
 
 //
-// Gets the internal version of a record, with its metadata (TypeScript: getInternalRecord).
+// Gets the internal version of a record, with its metadata.
 //
 fn getInternalRecord(collection: *BsonCollection, id: []const u8) !?IInternalRecord {
     var records = collection.iterateRecords();

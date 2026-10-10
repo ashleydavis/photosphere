@@ -13,7 +13,8 @@ const IS3Credentials = storage_zig.cloud_storage.IS3Credentials;
 const IEncryptionKeyPem = encryption.key_utils.IEncryptionKeyPem;
 const exportPublicKeyToPem = encryption.key_utils.exportPublicKeyToPem;
 const IVault = vault_zig.vault.IVault;
-const getVault = vault_zig.get_vault.getVault;
+const getVaultWithHost = vault_zig.get_vault.getVaultWithHost;
+const IHostRequester = utils.host_requester.IHostRequester;
 const getDefaultVaultType = vault_zig.get_vault.getDefaultVaultType;
 const IDatabaseEntry = databases_config.IDatabaseEntry;
 
@@ -49,16 +50,14 @@ pub fn parseEncryptionKeyFromVaultValue(allocator: std.mem.Allocator, value: []c
 }
 
 //
-// Equivalent of a JavaScript truthiness test of an optional string (not null and not empty).
-// (No TypeScript counterpart.)
+// Whether an optional string is set (not null and not empty).
 //
 fn isTruthy(value: ?[]const u8) bool {
     return value != null and value.?.len > 0;
 }
 
 //
-// Gets a string property of a parsed JSON object (null when it is absent or not a string, like `parsed.key`
-// reading undefined). (No TypeScript counterpart.)
+// Gets a string property of a parsed JSON object (null when it is absent or not a string).
 //
 fn jsonString(object: std.json.ObjectMap, key: []const u8) ?[]const u8 {
     const value = object.get(key) orelse {
@@ -84,14 +83,18 @@ fn jsonString(object: std.json.ObjectMap, key: []const u8) ?[]const u8 {
 // Callers pass explicit `encryptionKey` and/or `s3Key` when the path is not in databases.json
 // (for example the destination of a replicate task) or to override the registered values.
 //
+// The host is how the phone vault reaches the phone's keychain. It is null where there is no phone shell, and the phone vault then
+// fails when it is chosen.
+//
 pub fn resolveStorageCredentials(
     allocator: std.mem.Allocator,
     io: std.Io,
     databasePath: []const u8,
     encryptionKey: ?[]const u8,
     s3Key: ?[]const u8,
+    host: ?IHostRequester,
 ) !IResolvedStorageCredentials {
-    const vault = try getVault(getDefaultVaultType());
+    const vault = try getVaultWithHost(allocator, getDefaultVaultType(), host);
 
     const databases = try databases_config.getDatabases(allocator, io);
     var entry: ?IDatabaseEntry = null;
@@ -111,7 +114,7 @@ pub fn resolveStorageCredentials(
         if (isTruthy(s3KeyToUse)) {
             const secret = try vault.get(allocator, io, s3KeyToUse.?);
             if (secret) |s3Secret| {
-                // JSON.parse keeps the last value of a repeated key.
+                // The last value of a repeated key is kept.
                 const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, s3Secret.value, .{
                     .duplicate_field_behavior = .use_last,
                 }) catch |err| {
@@ -122,9 +125,9 @@ pub fn resolveStorageCredentials(
                     else => std.json.ObjectMap.empty,
                 };
 
-                // TODO: accessKeyId and secretAccessKey read as "" when the secret does not hold them, where
-                // `parsed.accessKeyId` is undefined in TypeScript. IS3Credentials types them as required, so there is no
-                // way to carry an absent one; both are credentials that cannot work either way.
+                // accessKeyId and secretAccessKey read as "" when the secret does not hold them.
+                // IS3Credentials types them as strings that are always present, so Zig has no way to carry an absent one; both
+                // are credentials that cannot work either way.
                 s3Config = .{
                     .region = jsonString(parsedObject, "region"),
                     .accessKeyId = jsonString(parsedObject, "accessKeyId") orelse "",
@@ -223,7 +226,11 @@ pub fn resolveStorageCredentials(
         log.verbose("Geocoding key: not configured");
     }
 
-    return .{ .s3Config = s3Config, .encryptionKeyPems = encryptionKeyPems, .googleApiKey = googleApiKey };
+    return .{
+        .s3Config = s3Config,
+        .encryptionKeyPems = encryptionKeyPems,
+        .googleApiKey = googleApiKey,
+    };
 }
 
 //

@@ -180,8 +180,7 @@ pub const IAutoImportScannerDeps = struct {
 };
 
 //
-// What the callback pushItem passes to scanPath needs (TypeScript: the variables the `async result => { ... }`
-// arrow function closes over).
+// What the callback pushItem passes to scanPath needs.
 //
 const PushedItemScan = struct {
     // The scanner the item belongs to.
@@ -257,7 +256,7 @@ const PushedItemScan = struct {
 //
 pub const AutoImportScanner = struct {
     //
-    // Allocates what the scanner keeps for the run. (No TypeScript counterpart.)
+    // Allocates what the scanner keeps for the run.
     //
     allocator: std.mem.Allocator,
 
@@ -309,7 +308,7 @@ pub const AutoImportScanner = struct {
     itemsByExportedPath: std.StringHashMapUnmanaged(IMediaItem),
 
     //
-    // Creates the scanner (TypeScript: the constructor).
+    // Creates the scanner.
     //
     pub fn init(allocator: std.mem.Allocator, deps: IAutoImportScannerDeps) AutoImportScanner {
         return .{
@@ -361,7 +360,7 @@ pub const AutoImportScanner = struct {
     }
 
     //
-    // `deps.isCancelled()`. (No TypeScript counterpart.)
+    // `deps.isCancelled()`.
     //
     fn isCancelled(self: *AutoImportScanner) bool {
         return self.deps.isCancelled.function(self.deps.isCancelled.context);

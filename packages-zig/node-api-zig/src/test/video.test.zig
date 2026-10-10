@@ -11,8 +11,7 @@ const getVideoDetails = node_api.video.getVideoDetails;
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
 
 //
-// (Zig: there are no TypeScript tests of video.ts; these cover what getVideoDetails produces for the checked in
-// test video.)
+// These cover what getVideoDetails produces for the checked in test video.
 //
 
 test "gets the resolution, duration and derived images of a video" {
@@ -25,7 +24,7 @@ test "gets the resolution, duration and derived images of a video" {
     defer temp_dirs.removeTempDir(io, tempDir);
     var generator = try TestUuidGenerator.init(allocator);
 
-    const details = try getVideoDetails(allocator, io, "../test/multiple-files/test.mp4", tempDir, "video/mp4", generator.uuidGenerator(), "test.mp4");
+    const details = try getVideoDetails(allocator, io, null, "../test/multiple-files/test.mp4", tempDir, "video/mp4", generator.uuidGenerator(), "test.mp4");
 
     try std.testing.expect(details.resolution.width > 0);
     try std.testing.expect(details.resolution.height > 0);
@@ -49,7 +48,7 @@ test "reads the date of a video from the JSON file beside it when the video has 
     try test_files.writeFile(io, videoPath, try test_files.readFile(allocator, io, "../test/multiple-files/test.mp4"));
     try test_files.writeFile(io, try std.mem.concat(allocator, u8, &.{ videoPath, ".json" }), "{\"photoTakenTime\":{\"timestamp\":\"1700000000\"}}");
 
-    const details = try getVideoDetails(allocator, io, videoPath, tempDir, "video/mp4", generator.uuidGenerator(), "video.mp4");
+    const details = try getVideoDetails(allocator, io, null, videoPath, tempDir, "video/mp4", generator.uuidGenerator(), "video.mp4");
 
     // The test video carries no date of its own, so the JSON file's is used.
     try std.testing.expectEqualStrings("2023-11-14T22:13:20.000Z", details.photoDate.?);
@@ -66,21 +65,21 @@ fn detailsWithJson(allocator: std.mem.Allocator, name: []const u8, json: []const
     const videoPath = try std.fs.path.join(allocator, &.{ tempDir, "video.mp4" });
     try test_files.writeFile(io, videoPath, try test_files.readFile(allocator, io, "../test/multiple-files/test.mp4"));
     try test_files.writeFile(io, try std.mem.concat(allocator, u8, &.{ videoPath, ".json" }), json);
-    const details = getVideoDetails(allocator, io, videoPath, tempDir, "video/mp4", generator.uuidGenerator(), "video.mp4");
+    const details = getVideoDetails(allocator, io, null, videoPath, tempDir, "video/mp4", generator.uuidGenerator(), "video.mp4");
     temp_dirs.removeTempDir(io, tempDir);
     return details;
 }
 
-test "a JSON timestamp is read as JavaScript's parseInt reads it" {
+test "a JSON timestamp is read as an integer, from an array or a hex string" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // parseInt(["1700000000"]) reads String(["1700000000"]), which is "1700000000".
+    // An array of one string reads as that string, "1700000000".
     const fromArray = try detailsWithJson(allocator, "video-json-array", "{\"photoTakenTime\":{\"timestamp\":[\"1700000000\"]}}");
     try std.testing.expectEqualStrings("2023-11-14T22:13:20.000Z", fromArray.photoDate.?);
 
-    // parseInt("0x10") is 16.
+    // The hex string "0x10" is 16.
     const fromHex = try detailsWithJson(allocator, "video-json-hex", "{\"photoTakenTime\":{\"timestamp\":\"0x10\"}}");
     try std.testing.expectEqualStrings("1970-01-01T00:00:16.000Z", fromHex.photoDate.?);
 }
@@ -164,7 +163,7 @@ test "reads what it can of the JSON file beside a video, as dayjs.unix(parseInt(
         verboseVtable.verbose = verboseToStdout;
         const previousLog = utils.log.log;
         utils.log.setLog(.{ .ptr = &verboseLog, .vtable = &verboseVtable });
-        const details = getVideoDetails(allocator, io, videoPath, tempDir, "video/quicktime", generator.uuidGenerator(), "video.mov");
+        const details = getVideoDetails(allocator, io, null, videoPath, tempDir, "video/quicktime", generator.uuidGenerator(), "video.mov");
         utils.log.setLog(previousLog);
         console_capture.endConsoleCapture();
 
@@ -198,7 +197,7 @@ test "a JSON file beside a video that holds null fails the video, as reading a p
     try test_files.writeFile(io, videoPath, try test_files.readFile(allocator, io, "../test/multiple-files/test.mp4"));
     try test_files.writeFile(io, try std.mem.concat(allocator, u8, &.{ videoPath, ".json" }), "null");
 
-    try std.testing.expectError(error.Thrown, getVideoDetails(allocator, io, videoPath, tempDir, "video/mp4", generator.uuidGenerator(), "video.mp4"));
+    try std.testing.expectError(error.Thrown, getVideoDetails(allocator, io, null, videoPath, tempDir, "video/mp4", generator.uuidGenerator(), "video.mp4"));
     try std.testing.expectEqualStrings("null is not an object (evaluating 'photoData.photoTakenTime')", utils.errors.lastErrorMessage());
 }
 
@@ -210,6 +209,6 @@ test "getVideoDetails refuses a content type that is not a video" {
     _ = try test_environment.setupEnvironment(io);
     var generator = try TestUuidGenerator.init(allocator);
 
-    try std.testing.expectError(error.Thrown, getVideoDetails(allocator, io, "../test/multiple-files/test.mp4", "unused", "application/octet-stream", generator.uuidGenerator(), "test.mp4"));
+    try std.testing.expectError(error.Thrown, getVideoDetails(allocator, io, null, "../test/multiple-files/test.mp4", "unused", "application/octet-stream", generator.uuidGenerator(), "test.mp4"));
     try std.testing.expectEqualStrings("Unsupported file type: application/octet-stream", utils.errors.lastErrorMessage());
 }

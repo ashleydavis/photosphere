@@ -20,9 +20,7 @@ const errors = utils.errors;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 //
-// (Zig: TypeScript mocks the hash, hash-cache, storage and media-file-database modules. The Zig port has no
-// modules to mock, so these tests give the handler a real file and a real hash cache and check what it made of
-// them.)
+// These tests give the handler a real file and a real hash cache and check what it made of them.
 //
 
 //
@@ -197,7 +195,7 @@ test "does not ask the database whether the hash is already there" {
     try context.init();
     defer context.deinit();
     // That question is answered by the orchestrator now, from a map it builds once when the run
-    // starts. (Zig: the database named in the data does not exist, so any attempt to open it would fail.)
+    // starts. (The database named in the data does not exist, so any attempt to open it would fail.)
     const data = context.makeData();
 
     const result = try context.run(data);

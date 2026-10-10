@@ -103,6 +103,9 @@ pub fn run(app_config: AppConfig, args: []const [:0]const u8) !u8 {
     return @intCast(status);
 }
 
+//
+// Says why the shell cannot go on and ends the program with a failure code.
+//
 fn fatal(comptime format: []const u8, arguments: anytype) noreturn {
     std.debug.print("ziggy shell: " ++ format ++ "\n", arguments);
     std.process.exit(1);
@@ -148,6 +151,9 @@ fn onUriSchemeRequest(request: *c.WebKitURISchemeRequest, user_data: c.gpointer)
     c.g_object_unref(stream);
 }
 
+//
+// GTK calls this when the application starts: creates the window and the web view.
+//
 fn onActivate(application: *c.GtkApplication, user_data: ?*anyopaque) callconv(.c) void {
     const shell: *Shell = @ptrCast(@alignCast(user_data.?));
     start(shell, application) catch |err| {
@@ -242,14 +248,23 @@ fn start(shell: *Shell, application: *c.GtkApplication) !void {
 
     try buildMenu(shell, box_widget, window);
 
-    const query: []const u8 = if (shell.test_mode) "?testMode=1" else "";
-    const page_url = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}index.html{s}", .{ app_url_prefix, query }, 0);
+    // The app supplies the query unread, and the core says nothing about its parts.
+    var query_length: usize = 0;
+    const query_pointer = z.ziggy_page_query(shell.core, &query_length) orelse {
+        return error.PageQueryFailed;
+    };
+    const query = query_pointer[0..query_length];
+    const query_separator: []const u8 = if (query.len > 0) "?" else "";
+    const page_url = try std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s}index.html{s}{s}", .{ app_url_prefix, query_separator, query }, 0);
     defer std.heap.c_allocator.free(page_url);
     c.webkit_web_view_load_uri(web_view, page_url.ptr);
     c.gtk_widget_show_all(window_widget);
     c.gtk_window_present(window);
 }
 
+//
+// The window size the -geometry option asks for.
+//
 const Geometry = struct {
     // The window width in pixels.
     width: c_int,
@@ -365,6 +380,9 @@ fn onDragDataReceived(widget: *c.GtkWidget, drag_context: *c.GdkDragContext, x: 
     }
 }
 
+//
+// The window is being closed: destroys the core before the window goes.
+//
 fn onDeleteEvent(window: *c.GtkWidget, event: ?*anyopaque, user_data: ?*anyopaque) callconv(.c) c.gboolean {
     _ = event;
     _ = window;
@@ -373,6 +391,9 @@ fn onDeleteEvent(window: *c.GtkWidget, event: ?*anyopaque, user_data: ?*anyopaqu
     return 0;
 }
 
+//
+// The application is shutting down: destroys the core if it still exists and discards the messages that were never delivered.
+//
 fn onShutdown(application: *c.GApplication, user_data: ?*anyopaque) callconv(.c) void {
     _ = application;
     const shell: *Shell = @ptrCast(@alignCast(user_data.?));
@@ -392,6 +413,9 @@ fn destroyCore(shell: *Shell) void {
     z.ziggy_destroy(core);
 }
 
+//
+// Frees the messages queued for the page that were never delivered.
+//
 fn discardPending(shell: *Shell) void {
     while (c.g_async_queue_try_pop(shell.queue)) |item| {
         const pending: *PendingMessage = @ptrCast(@alignCast(item));
@@ -471,6 +495,9 @@ fn quit(user_data: ?*anyopaque) callconv(.c) void {
     _ = c.g_idle_add(quitOnMainThread, shell);
 }
 
+//
+// Quits the application, run on the main thread.
+//
 fn quitOnMainThread(user_data: ?*anyopaque) callconv(.c) c.gboolean {
     const shell: *Shell = @ptrCast(@alignCast(user_data.?));
     c.g_application_quit(@ptrCast(shell.application));
@@ -581,6 +608,9 @@ fn requireString(arena: std.mem.Allocator, entry: std.json.Value, name: []const 
     return try arena.dupeZ(u8, field.string);
 }
 
+//
+// A menu item was chosen: does its action.
+//
 fn onMenuItemActivate(menu_item: *c.GtkWidget, user_data: ?*anyopaque) callconv(.c) void {
     _ = menu_item;
     const context: *MenuItemContext = @ptrCast(@alignCast(user_data.?));
@@ -818,6 +848,9 @@ fn menuAction(user_data: ?*anyopaque, action: [*c]const u8) callconv(.c) void {
     _ = c.g_idle_add(runMenuAction, request);
 }
 
+//
+// Does a menu action asked for from another thread, run on the main thread, and frees the request.
+//
 fn runMenuAction(user_data: ?*anyopaque) callconv(.c) c.gboolean {
     const request: *MenuActionRequest = @ptrCast(@alignCast(user_data.?));
     performAction(request.shell, request.action) catch |err| {

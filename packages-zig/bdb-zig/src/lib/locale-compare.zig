@@ -1,9 +1,9 @@
 const std = @import("std");
 
 //
-// No TypeScript counterpart: stands in for `a.localeCompare(b)` (no options), which the bdb TypeScript code uses to
-// order shard records by id, sort index nodes by page id, and string sort index values. JavaScript uses ICU root
-// collation. Zig has no ICU, so this emulates it: every ASCII character has its ICU primary weight (control characters
+// Compares two strings like `a.localeCompare(b)` (no options) does, to order shard records by id, sort index nodes by
+// page id, and string sort index values, as the stored data is ordered. That is ICU root collation. Zig has no ICU,
+// so this emulates it: every ASCII character has its ICU primary weight (control characters
 // are ignorable, punctuation and symbols sort before digits, digits before letters, letters compare
 // case-insensitively first), then the first difference in case decides (lowercase first). Non-ASCII characters sort
 // after all ASCII characters by code point, which differs from ICU (for example ICU sorts "é" next to "e").

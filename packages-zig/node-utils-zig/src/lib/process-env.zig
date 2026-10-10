@@ -1,8 +1,7 @@
 const std = @import("std");
 
 //
-// This file has no TypeScript counterpart: it stands in for Node's global `process.env`.
-// Zig 0.16 hands the environment to `main` (std.process.Init.environ_map) instead of making it
+// The process environment. Zig 0.16 hands the environment to `main` (std.process.Init.environ_map) instead of making it
 // global, so `main` calls setEnvironMap once and library code reads variables with getEnv.
 // Not threadsafe for writes (like the Environ.Map it wraps): set it before starting threads.
 //
@@ -30,7 +29,7 @@ pub fn getEnv(name: []const u8) ?[]const u8 {
 
 //
 // Gets the environment set with setEnvironMap (null when none), for passing to child processes
-// so they inherit `process.env` like in Node.
+// so they inherit `process.env`.
 //
 pub fn getEnvironMap() ?*const std.process.Environ.Map {
     return environ_map;

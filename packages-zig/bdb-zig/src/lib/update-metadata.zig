@@ -13,7 +13,7 @@ const Metadata = collection.Metadata;
 // Recursively updates metadata timestamps for fields that were changed.
 // For nested objects, creates nested metadata structures.
 // Returns a new metadata object (immutable) with only changed parts updated.
-// (Zig: the fields and the updates are JavaScript values, as in updateFields; the timestamp is a JS number.)
+// (The fields and the updates are JavaScript values, as in updateFields; the timestamp is a JS number.)
 //
 pub fn updateMetadata(
     allocator: std.mem.Allocator,
@@ -114,8 +114,7 @@ pub fn updateMetadata(
 }
 
 //
-// Returns `metadata.timestamp ?? 0` (No TypeScript counterpart: TypeScript reads the property inline). Throws for a
-// timestamp that is not a number.
+// Returns `metadata.timestamp ?? 0`. Throws for a timestamp that is not a number.
 //
 fn metadataTimestamp(metadata: Metadata) !f64 {
     const value = metadata.get("timestamp") orelse .undefined;
@@ -133,8 +132,7 @@ fn metadataTimestamp(metadata: Metadata) !f64 {
 }
 
 //
-// Returns `value || {}` for a metadata object (No TypeScript counterpart: TypeScript writes it inline). Throws for a
-// value that is neither a document nor missing.
+// Returns `value || {}` for a metadata object. Throws for a value that is neither a document nor missing.
 //
 fn metadataObject(value: BsonValue) !Metadata {
     switch (value) {
@@ -151,8 +149,7 @@ fn metadataObject(value: BsonValue) !Metadata {
 }
 
 //
-// Builds the leaf metadata `{ timestamp: writeTimestamp }` (No TypeScript counterpart: TypeScript writes the object
-// literal inline).
+// Builds the leaf metadata `{ timestamp: writeTimestamp }`.
 //
 fn timestampMetadata(allocator: std.mem.Allocator, writeTimestamp: f64) !BsonValue {
     return .{

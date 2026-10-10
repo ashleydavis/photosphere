@@ -34,7 +34,7 @@ fn makeTree(allocator: std.mem.Allocator) !IMerkleTree {
 }
 
 //
-// In-memory state behind a MerkleRef (TypeScript: the variables captured by makeRef's arrow functions).
+// In-memory state behind a MerkleRef.
 //
 const RefState = struct {
     // The stored tree (null when there is none).
@@ -92,7 +92,7 @@ const RefState = struct {
     }
 
     //
-    // Builds a MerkleRef backed by this state (TypeScript: makeRef).
+    // Builds a MerkleRef backed by this state.
     //
     fn makeRef(self: *RefState, allocator: std.mem.Allocator) MerkleRef {
         return MerkleRef.init(allocator, self, loader, saver, deleter, creator);

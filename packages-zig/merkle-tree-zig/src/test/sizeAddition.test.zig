@@ -1,5 +1,5 @@
 //
-// Size calculation with file addition (port of src/test/sizeAddition.test.ts).
+// Size calculation with file addition.
 //
 
 const std = @import("std");

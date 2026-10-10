@@ -2,7 +2,7 @@ const std = @import("std");
 
 //
 // An Io whose monotonic clock moves when a test waits instead of when time passes, so that a test of a retry back-off, a lock
-// wait or a timeout takes no real time. It is the Zig counterpart of the jest fake timers the TypeScript tests use. Every
+// wait or a timeout takes no real time. Every
 // function of the Io that is not about the clock is the real one.
 //
 // What a wait does depends on its length:

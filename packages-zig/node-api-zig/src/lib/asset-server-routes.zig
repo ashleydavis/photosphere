@@ -14,18 +14,27 @@ const log = &utils.log.log;
 const JSON_BODY_LIMIT = 100 * 1024;
 
 //
-// The CORS headers the original sends on every response when it owns the application (any origin may call, since the page's origin
+// The CORS headers sent on every response when it owns the application (any origin may call, since the page's origin
 // is `ziggy-app://app` or `https://ziggy-app.invalid` and never `file://`).
 //
 const cors_headers = [_]std.http.Header{
-    .{ .name = "Access-Control-Allow-Origin", .value = "*" },
-    .{ .name = "Access-Control-Allow-Methods", .value = "GET, POST, PUT, DELETE, OPTIONS" },
-    .{ .name = "Access-Control-Allow-Headers", .value = "Origin, X-Requested-With, Content-Type, Accept" },
+    .{
+        .name = "Access-Control-Allow-Origin",
+        .value = "*",
+    },
+    .{
+        .name = "Access-Control-Allow-Methods",
+        .value = "GET, POST, PUT, DELETE, OPTIONS",
+    },
+    .{
+        .name = "Access-Control-Allow-Headers",
+        .value = "Origin, X-Requested-With, Content-Type, Accept",
+    },
 };
 
 //
-// The routes of the asset server, delegating all work to the transport-agnostic core. The routes are byte-for-byte the same as the
-// original asset server: GET /asset, POST /asset, and POST /apply-database-ops. CORS headers are added only when enableCors is true
+// The routes of the asset server, delegating all work to the transport-agnostic core. The routes are:
+// GET /asset, POST /asset, and POST /apply-database-ops. CORS headers are added only when enableCors is true
 // (i.e. when the asset server owns the application rather than attaching to an existing one).
 // (Zig: there is no express application to attach routes to, so the routes are a value that answers the requests an HTTP server hands
 // it, in the order express would try them.)
@@ -48,6 +57,9 @@ pub const AssetServerRoutes = struct {
         };
     }
 
+    //
+    // The function the HTTP server calls, which gives the request to the routes it was made from.
+    //
     fn handleErased(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, request: *std.http.Server.Request) anyerror!void {
         const self: *AssetServerRoutes = @ptrCast(@alignCast(context.?));
         return self.handleRequest(allocator, io, request);
@@ -83,12 +95,24 @@ pub const AssetServerRoutes = struct {
             return self.postApplyDatabaseOps(allocator, io, request, content_type);
         }
 
-        const message = try std.fmt.allocPrint(allocator, "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Cannot {s} {s}</pre>\n</body>\n</html>\n", .{ @tagName(method), try escapeHtml(allocator, path) });
-        return self.send(request, .not_found, "text/html; charset=utf-8", message);
+        // OPTIONS is answered for a path that has routes, listing the methods the routes answer.
+        if (method == .OPTIONS) {
+            if (pathIs(path, "/asset")) {
+                return sendAllowed(request, "GET, HEAD, POST");
+            }
+            if (pathIs(path, "/apply-database-ops")) {
+                return sendAllowed(request, "POST");
+            }
+        }
+
+        const message = try std.fmt.allocPrint(allocator, "Cannot {s} {s}", .{ @tagName(method), try escapeHtml(allocator, path) });
+        return self.sendErrorPage(allocator, request, .not_found, message);
     }
 
     //
     // Handle HTTP GET requests for assets.
+    // (Zig: the route has `express.json()` before it, which reads a JSON body sent with a GET. The standard library's HTTP server
+    // does not give the body of a GET to read, so a body sent with a GET is ignored.)
     //
     fn getAsset(self: *AssetServerRoutes, allocator: std.mem.Allocator, io: std.Io, request: *std.http.Server.Request, query: []const u8) !void {
         const assetId = try queryParameter(allocator, query, "id");
@@ -108,15 +132,15 @@ pub const AssetServerRoutes = struct {
         }
 
         // The stream is opened and its first bytes read before anything is sent, so that an asset that cannot be read is answered
-        // with the 500 (in Node the headers are not sent until the first write).
+        // with the 500 (the headers are not sent until the first byte is written).
         const assetStream = self.core.serveAsset(allocator, io, assetId.?, assetType.?, databasePath.?) catch |err| {
-            return self.failedToLoadAsset(request, assetId.?, err);
+            return self.failedToLoadAsset(allocator, request, assetId.?, err);
         };
         defer assetStream.destroy(io);
         const reader = assetStream.reader();
         _ = reader.peek(1) catch |err| switch (err) {
             error.EndOfStream => {},
-            else => return self.failedToLoadAsset(request, assetId.?, err),
+            else => return self.failedToLoadAsset(allocator, request, assetId.?, err),
         };
 
         var headers: [1 + cors_headers.len]std.http.Header = undefined;
@@ -140,9 +164,8 @@ pub const AssetServerRoutes = struct {
     //
     // The catch block of GET /asset, for an error before any byte is sent.
     //
-    fn failedToLoadAsset(self: *AssetServerRoutes, request: *std.http.Server.Request, assetId: []const u8, err: anyerror) !void {
-        var message_buffer: [512]u8 = undefined;
-        log.exception(std.fmt.bufPrint(&message_buffer, "Error loading asset {s}", .{assetId}) catch "Error loading asset", err);
+    fn failedToLoadAsset(self: *AssetServerRoutes, allocator: std.mem.Allocator, request: *std.http.Server.Request, assetId: []const u8, err: anyerror) !void {
+        log.exception(try std.fmt.allocPrint(allocator, "Error loading asset {s}", .{assetId}), err);
         return self.sendHtmlText(request, .internal_server_error, "Error loading asset");
     }
 
@@ -160,13 +183,11 @@ pub const AssetServerRoutes = struct {
             return self.sendHtmlText(request, .bad_request, "Missing id, db, or type query parameter.");
         }
 
-        // `req.headers["content-type"] && parseInt(req.headers["content-length"]) || undefined`: a length of 0 is no length.
+        // A length of 0 is no length.
         const announcedLength: ?u64 = if (contentType != null and contentLength != null and contentLength.? != 0) contentLength else null;
 
         const body_buffer = try allocator.alloc(u8, 16 * 1024);
-        const body = request.readerExpectContinue(body_buffer) catch |err| {
-            return err;
-        };
+        const body = try request.readerExpectContinue(body_buffer);
         self.core.writeAsset(allocator, io, assetId.?, assetType.?, databasePath.?, contentType, body, announcedLength) catch |err| {
             log.exception(try std.fmt.allocPrint(allocator, "Error storing asset {s} ({s})", .{ assetId.?, assetType.? }), err);
             var message = errors.errorMessage(err);
@@ -186,27 +207,25 @@ pub const AssetServerRoutes = struct {
     // Responses: 400 if ops is missing or not an array; 204 on success; 500 if applying ops fails.
     //
     fn postApplyDatabaseOps(self: *AssetServerRoutes, allocator: std.mem.Allocator, io: std.Io, request: *std.http.Server.Request, contentType: ?[]const u8) !void {
-        // What `express.json()` does before the handler: it reads a JSON body of at most 100kb, and leaves the body undefined for
+        // Reads a JSON body of at most 100kb, and leaves the body undefined for
         // a request that does not say it holds JSON.
         const has_body = request.head.method.requestHasBody() and (request.head.content_length != null or request.head.transfer_encoding != .none);
         var parsed: ?std.json.Value = null;
         if (has_body and isJsonType(contentType)) {
             const body_buffer = try allocator.alloc(u8, 16 * 1024);
-            const body = request.readerExpectContinue(body_buffer) catch |err| {
-                return err;
-            };
+            const body = try request.readerExpectContinue(body_buffer);
             const text = body.allocRemaining(allocator, .limited(JSON_BODY_LIMIT)) catch |err| switch (err) {
-                error.StreamTooLong => return self.sendErrorPage(request, .payload_too_large, "request entity too large"),
+                error.StreamTooLong => return self.sendErrorPage(allocator, request, .payload_too_large, "request entity too large"),
                 else => return err,
             };
             parsed = parseJsonBody(allocator, text) catch {
-                return self.sendErrorPage(request, .bad_request, "Unexpected token in JSON");
+                return self.sendErrorPage(allocator, request, .bad_request, "Unexpected token in JSON");
             };
         }
 
-        // `body.ops` of an undefined body is a TypeError, which Express answers with a 500.
+        // A request without a JSON body is answered with a 500.
         const body_value = parsed orelse {
-            return self.sendErrorPage(request, .internal_server_error, "TypeError: Cannot read properties of undefined (reading 'ops')");
+            return self.sendErrorPage(allocator, request, .internal_server_error, "TypeError: Cannot read properties of undefined (reading 'ops')");
         };
         const ops_value: ?std.json.Value = switch (body_value) {
             .object => |object| object.get("ops"),
@@ -229,7 +248,6 @@ pub const AssetServerRoutes = struct {
 
     //
     // Reads the operations the page sent and has the core apply them.
-    // (No TypeScript counterpart: the operations are already typed in TypeScript.)
     //
     fn applyOps(self: *AssetServerRoutes, allocator: std.mem.Allocator, io: std.Io, items: []const std.json.Value) !void {
         const ops = try allocator.alloc(IDatabaseOp, items.len);
@@ -243,7 +261,10 @@ pub const AssetServerRoutes = struct {
     // The headers of a response: its content type and, when the routes add them, the CORS headers.
     //
     fn responseHeaders(self: *AssetServerRoutes, buffer: *[1 + cors_headers.len]std.http.Header, contentType: []const u8) []const std.http.Header {
-        buffer[0] = .{ .name = "Content-Type", .value = contentType };
+        buffer[0] = .{
+            .name = "Content-Type",
+            .value = contentType,
+        };
         if (!self.enableCors) {
             return buffer[0..1];
         }
@@ -271,12 +292,34 @@ pub const AssetServerRoutes = struct {
     }
 
     //
-    // The page Express's final handler sends for an error a middleware raised.
+    // The page sent for an error raised while handling a request.
+    // (Zig: the page holds the error's name and message only, with no stack.)
     //
-    fn sendErrorPage(self: *AssetServerRoutes, request: *std.http.Server.Request, status: std.http.Status, text: []const u8) !void {
-        var buffer: [512]u8 = undefined;
-        const page = std.fmt.bufPrint(&buffer, "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>{s}</pre>\n</body>\n</html>\n", .{text}) catch text;
-        return self.send(request, status, "text/html; charset=utf-8", page);
+    fn sendErrorPage(self: *AssetServerRoutes, allocator: std.mem.Allocator, request: *std.http.Server.Request, status: std.http.Status, text: []const u8) !void {
+        const page = try std.fmt.allocPrint(allocator, "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>{s}</pre>\n</body>\n</html>\n", .{text});
+        var buffer: [3 + cors_headers.len]std.http.Header = undefined;
+        buffer[0] = .{
+            .name = "Content-Type",
+            .value = "text/html; charset=utf-8",
+        };
+        buffer[1] = .{
+            .name = "Content-Security-Policy",
+            .value = "default-src 'none'",
+        };
+        buffer[2] = .{
+            .name = "X-Content-Type-Options",
+            .value = "nosniff",
+        };
+        var count: usize = 3;
+        if (self.enableCors) {
+            @memcpy(buffer[count..], &cors_headers);
+            count += cors_headers.len;
+        }
+        try request.respond(page, .{
+            .status = status,
+            .keep_alive = false,
+            .extra_headers = buffer[0..count],
+        });
     }
 
     //
@@ -296,8 +339,32 @@ pub const AssetServerRoutes = struct {
 };
 
 //
-// Attaches the asset server HTTP routes, delegating all work to the transport-agnostic core. The routes are byte-for-byte the same as
-// the original asset server: GET /asset, POST /asset, and POST /apply-database-ops. CORS headers are added only when enableCors is
+// Answers OPTIONS for a path that has routes: 200, and the methods the routes answer, in the `Allow`
+// header and as the body.
+//
+fn sendAllowed(request: *std.http.Server.Request, allowed: []const u8) !void {
+    try request.respond(allowed, .{
+        .keep_alive = false,
+        .extra_headers = &.{
+            .{
+                .name = "Allow",
+                .value = allowed,
+            },
+            .{
+                .name = "Content-Type",
+                .value = "text/plain",
+            },
+            .{
+                .name = "X-Content-Type-Options",
+                .value = "nosniff",
+            },
+        },
+    });
+}
+
+//
+// Attaches the asset server HTTP routes, delegating all work to the transport-agnostic core. The routes are:
+// GET /asset, POST /asset, and POST /apply-database-ops. CORS headers are added only when enableCors is
 // true (i.e. when the asset server owns the app rather than attaching to an existing one).
 // (Zig: returns the routes, for an HTTP server to call; there is no application to attach them to.)
 //
@@ -309,8 +376,7 @@ pub fn attachAssetServerRoutes(core: IAssetServerCore, enableCors: bool) AssetSe
 }
 
 //
-// Whether a request path is the route's path, as Express matches it: case-insensitive, and with or without a trailing slash.
-// (No TypeScript counterpart: Express does this.)
+// Whether a request path is the route's path: case-insensitive, and with or without a trailing slash.
 //
 fn pathIs(path: []const u8, route: []const u8) bool {
     var trimmed = path;
@@ -321,8 +387,8 @@ fn pathIs(path: []const u8, route: []const u8) bool {
 }
 
 //
-// Reads one parameter of a query string, as `req.query` does: the first value of the name, with percent-encoding and `+` decoded.
-// Returns null when the name is not there. (No TypeScript counterpart: Express does this.)
+// Reads one parameter of a query string: the first value of the name, with percent-encoding and `+` decoded.
+// Returns null when the name is not there.
 //
 pub fn queryParameter(allocator: std.mem.Allocator, query: []const u8, name: []const u8) !?[]const u8 {
     var pairs = std.mem.splitScalar(u8, query, '&');
@@ -340,7 +406,7 @@ pub fn queryParameter(allocator: std.mem.Allocator, query: []const u8, name: []c
 
 //
 // Decodes a component of a query string: `+` is a space and `%XX` is a byte. A `%` that does not start two hexadecimal digits is left
-// as it is, as Node's querystring does.
+// as it is.
 //
 fn decodeQueryComponent(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
     var decoded: std.ArrayList(u8) = .empty;
@@ -370,8 +436,7 @@ fn decodeQueryComponent(allocator: std.mem.Allocator, text: []const u8) ![]const
 }
 
 //
-// Escapes the characters that matter in the text of an HTML page, as Express's final handler does.
-// (No TypeScript counterpart: Express does this.)
+// Escapes the characters that matter in the text of an HTML page.
 //
 fn escapeHtml(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
     var escaped: std.ArrayList(u8) = .empty;

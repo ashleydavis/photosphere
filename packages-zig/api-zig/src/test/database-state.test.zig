@@ -37,7 +37,7 @@ fn expectOptionalString(expected: ?[]const u8, actual: ?[]const u8) !void {
 }
 
 //
-// Asserts that two states hold the same fields (TypeScript: `expect(loaded).toEqual(state)`).
+// Asserts that two states hold the same fields.
 //
 fn expectState(expected: IDatabaseState, actual: IDatabaseState) !void {
     try expectOptionalString(expected.contentHash, actual.contentHash);
@@ -223,7 +223,7 @@ test "updateDatabaseStateLocked does nothing when the lock is held by another ow
     try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "s ago (acquired at ") != null);
 }
 
-test "the state file is byte-identical to the one TypeScript writes" {
+test "the state file is byte-identical to the expected file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

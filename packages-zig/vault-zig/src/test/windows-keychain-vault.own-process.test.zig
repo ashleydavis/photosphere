@@ -7,7 +7,7 @@ const errors = utils.errors;
 
 //
 // These tests run in a test program of their own (see build.zig), because the Windows vault checks for PowerShell
-// once per process, as the TypeScript vault does once per module: in the test program that runs the other vault tests
+// once per process: in the test program that runs the other vault tests
 // the check has already been made.
 //
 

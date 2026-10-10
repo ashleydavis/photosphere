@@ -79,6 +79,9 @@ fn ComHandler(comptime Interface: type, comptime interface_id: c.IID) type {
         // The shell the handler works for.
         shell: *Shell,
 
+        //
+        // COM asks whether the object has an interface: it has IUnknown and the handler interface.
+        //
         fn queryInterface(this: [*c]Interface, requested: [*c]const c.IID, result: [*c]?*anyopaque) callconv(.c) c.HRESULT {
             if (result == null) {
                 return c.E_POINTER;
@@ -94,16 +97,25 @@ fn ComHandler(comptime Interface: type, comptime interface_id: c.IID) type {
             return c.E_NOINTERFACE;
         }
 
+        //
+        // COM adds a reference. The object lives in the shell, which outlasts the web view, so it is not counted.
+        //
         fn addRef(this: [*c]Interface) callconv(.c) c.ULONG {
             _ = this;
             return 1;
         }
 
+        //
+        // COM drops a reference. The object lives in the shell, which outlasts the web view, so it is not counted.
+        //
         fn release(this: [*c]Interface) callconv(.c) c.ULONG {
             _ = this;
             return 1;
         }
 
+        //
+        // Gives the handler that holds a COM object WebView2 calls back with.
+        //
         fn fromInterface(this: [*c]Interface) *@This() {
             return @fieldParentPtr("interface", @as(*Interface, @ptrCast(this)));
         }
@@ -209,7 +221,7 @@ const Shell = struct {
     destroyed: std.atomic.Value(bool),
     // Set on the UI thread when the window starts closing, so the creation callbacks still to come do nothing.
     closing: bool,
-    // The page's address as UTF-16, including the query in test mode. Owned.
+    // The page's address as UTF-16, including the query the app supplies. Made once the core exists. Owned.
     page_url: [:0]u16,
     // The script that exposes window.ziggy, as UTF-16. Owned.
     inject_script: [:0]u16,
@@ -329,6 +341,9 @@ fn check(what: []const u8, result: c.HRESULT) void {
     }
 }
 
+//
+// Whether two COM interface ids are the same.
+//
 fn guidEquals(left: *const c.GUID, right: *const c.GUID) bool {
     return std.mem.eql(u8, std.mem.asBytes(left), std.mem.asBytes(right));
 }
@@ -446,10 +461,6 @@ fn start(shell: *Shell, allocator: std.mem.Allocator) !u8 {
     if (ui_files.findFile(shell.app_config.ui_files, "/") == null) {
         return error.UiHasNoIndexPage;
     }
-    const query: []const u8 = if (shell.test_mode) "?testMode=1" else "";
-    const page_url_utf8 = try std.mem.concat(allocator, u8, &.{ app_url_prefix, "index.html", query });
-    defer allocator.free(page_url_utf8);
-    shell.page_url = try std.unicode.utf8ToUtf16LeAllocZ(allocator, page_url_utf8);
     var inject_script_length: usize = 0;
     const inject_script = c.ziggy_inject_script(&inject_script_length);
     shell.inject_script = try std.unicode.utf8ToUtf16LeAllocZ(allocator, inject_script[0..inject_script_length]);
@@ -569,6 +580,9 @@ fn start(shell: *Shell, allocator: std.mem.Allocator) !u8 {
     return @intCast(message.wParam & 0xFF);
 }
 
+//
+// Finds the shell a window belongs to, or null before the shell has attached itself.
+//
 fn shellOf(window: c.HWND) ?*Shell {
     const value = c.GetWindowLongPtrW(window, c.GWLP_USERDATA);
     if (value == 0) {
@@ -697,6 +711,9 @@ fn destroyCore(shell: *Shell) void {
     c.ziggy_destroy(core);
 }
 
+//
+// Frees the messages queued for the page that were never delivered.
+//
 fn discardPending(shell: *Shell, allocator: std.mem.Allocator) void {
     for (shell.queue.items) |text| {
         allocator.free(text);
@@ -847,6 +864,21 @@ fn onControllerCreated(shell: *Shell, controller: *c.ICoreWebView2Controller) vo
     }
     shell.core = c.ziggy_create(&config) orelse {
         fatal("the core could not be created", .{});
+    };
+
+    // The app supplies the query unread, and the core says nothing about its parts.
+    var query_length: usize = 0;
+    const query_pointer = c.ziggy_page_query(shell.core, &query_length) orelse {
+        fatal("the app could not make the page's query", .{});
+    };
+    const query = query_pointer[0..query_length];
+    const query_separator: []const u8 = if (query.len > 0) "?" else "";
+    const page_url_utf8 = std.mem.concat(std.heap.c_allocator, u8, &.{ app_url_prefix, "index.html", query_separator, query }) catch |err| {
+        fatal("could not make the page's address: {s}", .{@errorName(err)});
+    };
+    defer std.heap.c_allocator.free(page_url_utf8);
+    shell.page_url = std.unicode.utf8ToUtf16LeAllocZ(std.heap.c_allocator, page_url_utf8) catch |err| {
+        fatal("could not make the page's address: {s}", .{@errorName(err)});
     };
 
     var settings: ?*c.ICoreWebView2Settings = null;
@@ -1217,6 +1249,9 @@ fn pasteClipboard(shell: *Shell, web_view: *c.ICoreWebView2) void {
     ));
 }
 
+//
+// The page has been given the clipboard text to paste: checks that it worked.
+//
 fn pasteInvoke(this: [*c]c.ICoreWebView2CallDevToolsProtocolMethodCompletedHandler, error_code: c.HRESULT, result: [*c]const c.WCHAR) callconv(.c) c.HRESULT {
     _ = this;
     _ = result;
@@ -1279,6 +1314,9 @@ fn takeSelection(shell: *Shell, error_code: c.HRESULT, result: [*c]const c.WCHAR
     return true;
 }
 
+//
+// The page has returned the selected text for a copy: puts it on the clipboard.
+//
 fn copyInvoke(this: [*c]c.ICoreWebView2ExecuteScriptCompletedHandler, error_code: c.HRESULT, result: [*c]const c.WCHAR) callconv(.c) c.HRESULT {
     _ = takeSelection(ScriptExecutedHandler.fromInterface(this).shell, error_code, result);
     return c.S_OK;
@@ -1623,6 +1661,9 @@ fn itemPath(allocator: std.mem.Allocator, item: *c.IShellItem) ![]u8 {
     return std.unicode.utf16LeToUtf8Alloc(allocator, std.mem.span(@as([*:0]const u16, @ptrCast(wide))));
 }
 
+//
+// WebView2 has created its environment: asks it for the controller of the window.
+//
 fn environmentInvoke(this: [*c]c.ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, error_code: c.HRESULT, environment: [*c]c.ICoreWebView2Environment) callconv(.c) c.HRESULT {
     const shell = EnvironmentHandler.fromInterface(this).shell;
     if (shell.closing) {
@@ -1638,6 +1679,9 @@ fn environmentInvoke(this: [*c]c.ICoreWebView2CreateCoreWebView2EnvironmentCompl
     return c.S_OK;
 }
 
+//
+// WebView2 has created the controller of the window: sets up the web view.
+//
 fn controllerInvoke(this: [*c]c.ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, error_code: c.HRESULT, controller: [*c]c.ICoreWebView2Controller) callconv(.c) c.HRESULT {
     const shell = ControllerHandler.fromInterface(this).shell;
     if (shell.closing) {
@@ -1782,7 +1826,8 @@ fn memoryStream(content: []const u8) *c.IStream {
 }
 
 //
-// Answers a request to the bundled page from the files embedded in the executable. A path that is not one of them is
+// Answers a request to the bundled page from the files embedded in the executable, with a header that allows any origin to read the
+// file (the page script is a module loaded with the crossorigin attribute). A path that is not one of them is
 // answered with a 404.
 //
 fn resourceInvoke(this: [*c]c.ICoreWebView2WebResourceRequestedEventHandler, sender: [*c]c.ICoreWebView2, args: [*c]c.ICoreWebView2WebResourceRequestedEventArgs) callconv(.c) c.HRESULT {
@@ -1814,7 +1859,7 @@ fn resourceInvoke(this: [*c]c.ICoreWebView2WebResourceRequestedEventHandler, sen
     if (ui_files.findFile(shell.app_config.ui_files, path)) |file| {
         const stream = memoryStream(file.content);
         defer _ = stream.lpVtbl.*.Release.?(stream);
-        const headers = std.fmt.allocPrint(std.heap.c_allocator, "Content-Type: {s}", .{ui_files.contentType(file.path)}) catch {
+        const headers = std.fmt.allocPrint(std.heap.c_allocator, "Content-Type: {s}\r\nAccess-Control-Allow-Origin: *", .{ui_files.contentType(file.path)}) catch {
             fatal("the response headers could not be built", .{});
         };
         defer std.heap.c_allocator.free(headers);
@@ -1834,6 +1879,9 @@ fn resourceInvoke(this: [*c]c.ICoreWebView2WebResourceRequestedEventHandler, sen
     return c.S_OK;
 }
 
+//
+// Opens an address with the system's handler for it.
+//
 fn openAddress(address: []const u8) void {
     const wide = std.unicode.utf8ToUtf16LeAllocZ(std.heap.c_allocator, address) catch {
         fatal("an external link cannot be converted to UTF-16", .{});
@@ -1859,6 +1907,9 @@ fn scriptAddedInvoke(this: [*c]c.ICoreWebView2AddScriptToExecuteOnDocumentCreate
     return c.S_OK;
 }
 
+//
+// A message has been delivered to the page: checks that it worked.
+//
 fn scriptExecutedInvoke(this: [*c]c.ICoreWebView2ExecuteScriptCompletedHandler, error_code: c.HRESULT, result: [*c]const c.WCHAR) callconv(.c) c.HRESULT {
     _ = this;
     _ = result;

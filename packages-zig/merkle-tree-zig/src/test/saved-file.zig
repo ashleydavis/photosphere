@@ -1,5 +1,5 @@
 //
-// Compares a tree file saved on this platform with a golden fixture Bun saved on Linux (no TypeScript counterpart).
+// Compares a tree file saved on this platform with a golden fixture saved on Linux.
 //
 // A saved file is [data][SHA-256 checksum of data]. The data holds gzip members (RFC 1952), whose 10-byte header ends
 // with an OS field that zlib-ng sets to the OS_CODE of the platform it is compiled for (zutil.h): 10 on Windows, 19
@@ -19,7 +19,7 @@ const Sha256 = std.crypto.hash.sha2.Sha256;
 const os_byte_index = 9;
 
 //
-// The gzip member header of every golden fixture, as Bun's gzipSync at level 9 writes it on Linux: ID1 0x1f, ID2
+// The gzip member header of every golden fixture (gzip level 9, written on Linux): ID1 0x1f, ID2
 // 0x8b, CM 8 (deflate), FLG 0, MTIME 0, XFL 2 (maximum compression) and OS 3.
 //
 const fixture_header = [_]u8{ 0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03 };

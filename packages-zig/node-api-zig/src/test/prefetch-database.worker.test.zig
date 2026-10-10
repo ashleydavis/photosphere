@@ -36,7 +36,7 @@ const SHARD_PATH = ".db/bson/collections/metadata/shards/96.dat";
 const COLLECTION_PATH = ".db/bson/collections/metadata/collection.dat";
 
 //
-// A task context whose messages go nowhere (TypeScript: makeContext with a jest.fn sendMessage).
+// A task context whose messages go nowhere.
 //
 const TestContext = struct {
     // Deterministic uuids.
@@ -109,7 +109,7 @@ fn makePartialReplica(allocator: std.mem.Allocator, io: std.Io, testContext: *Te
     const localRawStorage = try test_files.directoryStorage(allocator, io, local);
 
     // The replica starts out holding every thumbnail and BSON file of the origin, so each test decides what it is
-    // missing (TypeScript: the files the mocked walk yields and the mocked local storage does not hold).
+    // missing.
     try temp_dirs.copyDirectory(allocator, io, try pathIn(allocator, origin, "thumb"), try pathIn(allocator, local, "thumb"));
     try temp_dirs.copyDirectory(allocator, io, try pathIn(allocator, origin, ".db/bson"), try pathIn(allocator, local, ".db/bson"));
 

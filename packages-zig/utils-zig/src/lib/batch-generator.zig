@@ -1,7 +1,7 @@
 const std = @import("std");
 
 //
-// The iterator returned by batchGenerator (TypeScript: the async generator batchGenerator returns).
+// The iterator returned by batchGenerator.
 // `SourceT` is a pointer to an iterator whose `next()` returns `!?T`.
 //
 pub fn BatchGenerator(comptime T: type, comptime SourceT: type) type {
@@ -50,8 +50,8 @@ pub fn BatchGenerator(comptime T: type, comptime SourceT: type) type {
 //
 // Consumes an async generator and yields its items in fixed-size batches.
 // The final batch may be smaller than batchSize if the source is exhausted.
-// (Zig: `source` is a pointer to an iterator whose `next()` returns `!?T`, and the result is an iterator whose
-// `next` yields each batch, like iterating the TypeScript generator.)
+// (`source` is a pointer to an iterator whose `next()` returns `!?T`, and the result is an iterator whose
+// `next` yields each batch.)
 //
 pub fn batchGenerator(comptime T: type, allocator: std.mem.Allocator, source: anytype, batchSize: usize) BatchGenerator(T, @TypeOf(source)) {
     return .{

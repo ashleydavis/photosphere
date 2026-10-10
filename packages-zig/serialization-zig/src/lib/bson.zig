@@ -3,10 +3,9 @@ const utils = @import("utils-zig");
 const errors = utils.errors;
 
 //
-// BSON encoding and decoding. This file has no TypeScript counterpart: the TypeScript code calls the npm `bson`
-// library (`serialize(obj)` in `BinarySerializer.writeBSON` and `deserialize(buffer)` in `BinaryDeserializer.readBSON`,
-// both with default options). This port reproduces the JavaScript-side semantics of that library as used by this repo,
-// so that re-serializing a deserialized document gives the same bytes as TypeScript does.
+// BSON encoding and decoding, following the semantics of the npm `bson` library with default options (`serialize` and
+// `deserialize`), so that existing databases stay readable. Re-serializing a deserialized document gives the same bytes
+// the library writes.
 //
 // How each BSON type maps (wire type -> BsonValue when decoding, BsonValue -> wire type when encoding):
 //
@@ -38,7 +37,7 @@ const errors = utils.errors;
 //
 // Document key order follows JavaScript object property order: keys that are array indexes ("0", "1", "42", but not
 // "01") come first in ascending numeric order, all other keys follow in insertion order. `BsonDocument.put` keeps this
-// order, so a decoded document re-encodes exactly like TypeScript re-encodes the object it deserialized.
+// order, so a decoded document re-encodes with its keys in the order the library writes.
 //
 // Decoded strings and binary data are copied into the allocator (they do not reference the input buffer).
 //
@@ -70,7 +69,7 @@ const binary_subtype_byte_array: u8 = 0x02;
 const js_int_max: i64 = 9007199254740992;
 
 //
-// Errors produced by BSON encoding and decoding (messages are recorded like TypeScript's BSONError).
+// Errors produced by BSON encoding and decoding (messages are recorded as the library's BSONError words them).
 //
 pub const BsonError = std.mem.Allocator.Error || errors.ThrownError;
 
@@ -86,7 +85,7 @@ pub const BsonBinary = struct {
 };
 
 //
-// A dynamic BSON value (the JavaScript value npm bson produces or accepts). See the table at the top of this file.
+// A dynamic BSON value (the value npm bson produces or accepts). See the table at the top of this file.
 //
 pub const BsonValue = union(enum) {
     // A JS number (decoded from double, int32 and promotable int64).
@@ -129,7 +128,7 @@ pub const BsonValue = union(enum) {
     objectId: [12]u8,
 
     //
-    // Deep equality of two values (JS `toEqual` semantics for the types above; numbers compare with ==, so NaN != NaN).
+    // Deep equality of two values (numbers compare with ==, so NaN != NaN).
     //
     pub fn eql(self: BsonValue, other: BsonValue) bool {
         if (std.meta.activeTag(self) != std.meta.activeTag(other)) {

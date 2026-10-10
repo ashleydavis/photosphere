@@ -1,4 +1,5 @@
 pub const vault = @import("lib/vault.zig");
+pub const phone_vault = @import("lib/phone-vault.zig");
 pub const plaintext_vault = @import("lib/plaintext-vault.zig");
 pub const get_vault = @import("lib/get-vault.zig");
 pub const keychain_types = @import("lib/keychain-types.zig");

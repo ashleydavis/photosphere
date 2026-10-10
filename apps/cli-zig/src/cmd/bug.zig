@@ -50,7 +50,7 @@ pub const IBugReportCommandOptions = struct {
 };
 
 //
-// The details of the bug that go into the report (TypeScript: the `bugInfo` object).
+// The details of the bug that go into the report.
 //
 pub const IBugInfo = struct {
     // The title of the GitHub issue.
@@ -70,7 +70,7 @@ pub const IBugInfo = struct {
 };
 
 //
-// The system the bug happened on (TypeScript: the object getSystemInfo returns).
+// The system the bug happened on.
 //
 pub const ISystemInfo = struct {
     // `os.platform()`.
@@ -90,7 +90,7 @@ pub const ISystemInfo = struct {
 };
 
 //
-// The versions of the media tools (TypeScript: the object getToolVersions returns).
+// The versions of the media tools.
 //
 pub const IToolVersions = struct {
     // The ImageMagick version line.
@@ -232,9 +232,6 @@ pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, options: *cons
                 cancelled(io);
             }
 
-            // (TypeScript also breaks when the step is undefined; the Zig prompt returns an empty string for it,
-            // which the next check breaks on.)
-
             const stepText = utils.js_string.trim(step.value);
             if (stepText.len == 0 and stepNumber > 1) {
                 break; // User finished entering steps
@@ -360,7 +357,7 @@ pub fn getToolVersions(allocator: std.mem.Allocator, io: std.Io) !IToolVersions 
         .ffprobe = "Not available",
     };
 
-    if (Image.verifyImageMagick(allocator, io)) |imageMagickStatus| {
+    if (Image.verifyImageMagick(allocator, io, null)) |imageMagickStatus| {
         if (imageMagickStatus.available and imageMagickStatus.version != null) {
             const kind = if (imageMagickStatus.type) |imageMagickType| @tagName(imageMagickType) else "unknown";
             versions.imagemagick = try std.fmt.allocPrint(allocator, "ImageMagick v{s} ({s})", .{ imageMagickStatus.version.?, kind });
@@ -370,12 +367,12 @@ pub fn getToolVersions(allocator: std.mem.Allocator, io: std.Io) !IToolVersions 
         // ImageMagick not available
     }
 
-    const ffmpegStatus = Video.verifyFfmpeg(allocator, io);
+    const ffmpegStatus = Video.verifyFfmpeg(allocator, io, null);
     if (ffmpegStatus.available and ffmpegStatus.version != null) {
         versions.ffmpeg = try std.fmt.allocPrint(allocator, "ffmpeg v{s}", .{ffmpegStatus.version.?});
     }
 
-    const ffprobeStatus = Video.verifyFfprobe(allocator, io);
+    const ffprobeStatus = Video.verifyFfprobe(allocator, io, null);
     if (ffprobeStatus.available and ffprobeStatus.version != null) {
         versions.ffprobe = try std.fmt.allocPrint(allocator, "ffprobe v{s}", .{ffprobeStatus.version.?});
     }
@@ -384,7 +381,7 @@ pub fn getToolVersions(allocator: std.mem.Allocator, io: std.Io) !IToolVersions 
 }
 
 //
-// A log file with its modification time (TypeScript: the objects getLatestLogFile sorts).
+// A log file with its modification time.
 //
 const ILogFileEntry = struct {
     // The path of the log file.

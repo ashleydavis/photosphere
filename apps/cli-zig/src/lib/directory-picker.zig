@@ -87,13 +87,13 @@ fn isEmptyOrNonExistent(io: std.Io, dirPath: []const u8) bool {
 }
 
 //
-// The result of a directory validator: null when the directory is valid (TypeScript `true`), otherwise
-// the message that explains why it is not (TypeScript returns a string, or false for "Invalid directory").
+// The result of a directory validator: null when the directory is valid, otherwise
+// the message that explains why it is not.
 //
 pub const ValidatorResult = ?[]const u8;
 
 //
-// A directory validator (TypeScript: `(path: string) => Promise<boolean | string>`).
+// A directory validator.
 //
 pub const Validator = *const fn (allocator: std.mem.Allocator, io: std.Io, path: []const u8) anyerror!ValidatorResult;
 
@@ -310,7 +310,7 @@ pub fn validateExistingDatabase(allocator: std.mem.Allocator, io: std.Io, path: 
 }
 
 //
-// The kind of directory a command needs (TypeScript: 'init' | 'existing').
+// The kind of directory a command needs: 'init' or 'existing'.
 //
 pub const CommandType = enum {
     // An empty or non-existent directory for a new database.

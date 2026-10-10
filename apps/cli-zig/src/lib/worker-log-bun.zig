@@ -1,9 +1,9 @@
 //
-// Worker log implementation for the CLI worker threads (TypeScript: Bun CLI workers).
+// Worker log implementation for the CLI worker threads.
 // Writes log messages directly to the console, prefixed with worker and task IDs.
 //
 // Zig workers are threads of the CLI process and share the global log, so the log of a worker is
-// thread-local: installWorkerLogRouting (no TypeScript counterpart) replaces the global log with a log
+// thread-local: installWorkerLogRouting replaces the global log with a log
 // that forwards each message to the worker log of the calling thread, or to the main log on other threads.
 //
 
@@ -185,8 +185,7 @@ pub fn setWorkerTaskId(taskId: ?[]const u8) void {
 //
 // Creates and registers the WorkerLogBun instance of the calling worker thread.
 // The instance must stay valid while the thread logs (it is usually on the thread's stack).
-// (TypeScript returns an ILog to pass to setLog; in Zig installWorkerLogRouting sends the calling
-// thread's messages to it.)
+// (installWorkerLogRouting sends the calling thread's messages to it.)
 //
 pub fn createWorkerLog(workerLog: *WorkerLogBun) void {
     workerLogInstance = workerLog;
@@ -228,7 +227,7 @@ var routing_log_state: u8 = 0;
 
 //
 // Replaces the global log with a log that sends the messages of worker threads to their worker log and
-// all other messages to the log that was installed before (no TypeScript counterpart).
+// all other messages to the log that was installed before.
 // Does nothing when the routing log is already installed.
 //
 pub fn installWorkerLogRouting() void {

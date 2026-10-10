@@ -41,10 +41,12 @@ fn waitFor(app: *TestApp, text: []const u8) !void {
 }
 
 //
-// Waits until the check that automatic import is running, which the main process makes as soon as it starts, has ended, so that a
-// test that sets what the state remembers about automatic import by hand is not undone by it.
+// Creates the main window, which asks for the page's query, and waits until the check that automatic import is running, which the main
+// process makes as soon as the window is created, has ended, so that a test that sets what the state remembers about automatic
+// import by hand is not undone by it.
 //
 fn waitForStartupCheck(app: *TestApp) !void {
+    _ = try app.core.pageQuery();
     try app.shell.expectMessageContaining("\"status\":\"succeeded\",\"outputs\":null,\"type\":\"ensure-auto-import\"");
 }
 
@@ -135,6 +137,27 @@ test "notify-database-closed forgets the database to reopen and the open databas
     try std.testing.expect(state.current_database_path == null);
 }
 
+//
+// Waits until the state says no sync is running, which the main process says when it hears that the sync task ended, a moment after the
+// page is told.
+//
+fn waitForSyncToStop(state: *main_state.MainState) !void {
+    var waited_ms: i64 = 0;
+    while (true) {
+        state.lock();
+        const running = state.is_sync_running;
+        state.unlock();
+        if (!running) {
+            return;
+        }
+        if (waited_ms >= 5000) {
+            return error.SyncNeverStopped;
+        }
+        try std.testing.io.sleep(.fromMilliseconds(10), .awake);
+        waited_ms += 10;
+    }
+}
+
 test "main-command set-sync-allowed records the decision, and an edit then queues a sync after the debounce" {
     var app: TestApp = undefined;
     try app.start();
@@ -152,14 +175,14 @@ test "main-command set-sync-allowed records the decision, and an edit then queue
     app.shell.sleepMs(200);
     try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("sync-database"));
     allocator.free(try app.requestOk("main-command", "{\"command\":\"set-sync-allowed\",\"allowed\":true}"));
-    try std.testing.expect(std.mem.indexOf(u8, app.console_out.writer.buffered(), "Sync allowed set to true") != null);
-    // No sync-database task type is registered in this core, so the task fails, which is how the end of a sync is seen: the running
-    // flag is reset and the page is told the sync completed.
-    try waitFor(&app, "\"channel\":\"sync-completed\"");
+    try std.testing.expect(std.mem.indexOf(u8, app.console_out.writer.buffered(), "Sync gate set to true") != null);
+    // The sync-database task runs against a database with no origin and ends, which is how the end of a sync is seen: the page is
+    // told the task completed and the running flag is reset.
+    try waitFor(&app, "\"type\":\"sync-database\"");
+    try waitForSyncToStop(state);
     state.lock();
     defer state.unlock();
     try std.testing.expect(state.sync_allowed);
-    try std.testing.expect(!state.is_sync_running);
 }
 
 test "main-command set-sync-allowed with allowed false schedules nothing" {
@@ -186,22 +209,24 @@ test "main-command toggle-devtools asks the shell to toggle the developer tools"
     try std.testing.expectEqualStrings("toggle-devtools\n", app.shell.chosen_actions.items);
 }
 
-test "main-command with an unknown command is an error reply" {
+test "main-command with an unknown command writes it to the console and replies nothing" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const reply = try app.requestError("main-command", "\"fly-to-the-moon\"");
+    const reply = try app.requestOk("main-command", "\"fly-to-the-moon\"");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("Unknown main-command: fly-to-the-moon", reply);
+    try std.testing.expectEqualStrings("null", reply);
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.writer.buffered(), "Unknown main-command: fly-to-the-moon") != null);
 }
 
-test "main-command without a command is an error reply" {
+test "main-command without a command is an unknown command called undefined" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const reply = try app.requestError("main-command", "{\"allowed\":true}");
+    const reply = try app.requestOk("main-command", "{\"allowed\":true}");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The main command needs the name of a command.", reply);
+    try std.testing.expectEqualStrings("null", reply);
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.writer.buffered(), "Unknown main-command: undefined") != null);
 }
 
 test "resetSyncState cancels the tasks of the database that was open when another one is opened" {
@@ -390,7 +415,7 @@ test "the periodic sync queues a sync for the open database when syncing is allo
     state.sync_periodic_ms = 40;
     state.sync_periodic_at = state.now() + 40;
     state.unlock();
-    try waitFor(&app, "\"channel\":\"sync-completed\"");
+    try waitFor(&app, "\"type\":\"sync-database\"");
 }
 
 //
@@ -459,6 +484,7 @@ test "automatic import that was switched on before the app started is started by
     defer allocator.free(config_yaml);
     try app.startWithTasksAndConfigFile(&auto_import_tasks, config_yaml);
     defer app.stop();
+    _ = try app.core.pageQuery();
     try waitFor(&app, "\"importing\":true");
     const state = main_state.fromCore(app.core);
     state.lock();
@@ -476,6 +502,7 @@ test "automatic import is started again by the periodic check after its task die
     defer allocator.free(config_yaml);
     try app.startWithTasksAndConfigFile(&auto_import_tasks, config_yaml);
     defer app.stop();
+    _ = try app.core.pageQuery();
     try waitForCount(&app, "\"importing\":true", 1);
     const state = main_state.fromCore(app.core);
     state.lock();
@@ -496,6 +523,7 @@ test "a failure to start automatic import at startup is logged, not lost" {
     // No create-default-database task is registered, so making the default database fails.
     try app.startWithTasksAndConfigFile(&[_]ziggy.task_runner.TaskHandlerEntry{}, config_yaml);
     defer app.stop();
+    _ = try app.core.pageQuery();
     var waited_ms: i64 = 0;
     while (std.mem.indexOf(u8, app.console_out.writer.buffered(), "Error starting automatic import") == null and
         std.mem.indexOf(u8, app.console_err.writer.buffered(), "Error starting automatic import") == null)
@@ -635,4 +663,204 @@ test "a replication of a database that is already listed does not list it again 
     defer arena.deinit();
     const databases = try node_api.databases_config.getDatabases(arena.allocator(), std.testing.io);
     try std.testing.expectEqual(@as(usize, 1), databases.len);
+}
+
+//
+// Whether the console, standard output or standard error, holds the text.
+//
+fn consoleHas(app: *TestApp, text: []const u8) bool {
+    return std.mem.indexOf(u8, app.console_out.writer.buffered(), text) != null or
+        std.mem.indexOf(u8, app.console_err.writer.buffered(), text) != null;
+}
+
+//
+// A stand-in for the asset server task: it says it is ready on the port it was asked for, or on a port of its own when it was asked
+// for the operating system's choice, and then runs until it is cancelled.
+//
+fn assetServerTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    const asked = ziggy.json_util.getInteger(data, "port") orelse 0;
+    const port: i64 = if (asked == 0) 40001 else asked;
+    try context.sendMessage(.{
+        .type = "asset-server-ready",
+        .port = port,
+    });
+    while (true) {
+        try context.checkCancelled();
+        try context.io().sleep(.fromMilliseconds(2), .awake);
+    }
+}
+
+//
+// Tells the main process that the asset server task failed with the message.
+//
+fn failAssetServer(app: *TestApp, message: ?[]const u8) void {
+    main_process.onTaskEnd(app.core, .{
+        .task_id = "asset-server-1",
+        .task_type = "asset-server",
+        .source = "asset-server",
+        .input_json = "{\"port\":0}",
+        .status = .failed,
+        .error_message = message,
+        .result_json = null,
+        .started = true,
+    });
+}
+
+test "an asset server that stops while the app runs is started again on the port it had" {
+    var app: TestApp = undefined;
+    try app.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{.{ .name = "asset-server", .handler = assetServerTask }});
+    defer app.stop();
+    _ = try app.core.pageQuery();
+    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"port\":40001"));
+    failAssetServer(&app, "crashed");
+    try waitForCount(&app, "\"port\":40001", 2);
+    try std.testing.expect(consoleHas(&app, "Restarting REST API worker..."));
+    try std.testing.expect(consoleHas(&app, "The asset server stopped: crashed"));
+    const state = main_state.fromCore(app.core);
+    state.lock();
+    defer state.unlock();
+    try std.testing.expect(!state.asset_server_ended);
+}
+
+test "an asset server that stops while the app is shutting down is not started again" {
+    var app: TestApp = undefined;
+    try app.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{.{ .name = "asset-server", .handler = assetServerTask }});
+    defer app.stop();
+    _ = try app.core.pageQuery();
+    const state = main_state.fromCore(app.core);
+    state.stopping.store(true, .release);
+    failAssetServer(&app, "crashed");
+    app.shell.sleepMs(200);
+    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"port\":40001"));
+    try std.testing.expect(!consoleHas(&app, "Restarting REST API worker..."));
+}
+
+test "an asset server that stops before it says which port it bound fails the start with its reason" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const state = main_state.fromCore(app.core);
+    state.lock();
+    state.asset_server_requested = true;
+    state.unlock();
+    failAssetServer(&app, "address in use");
+    try std.testing.expectError(error.Thrown, app.core.pageQuery());
+    try std.testing.expectEqualStrings("REST API failed to start: address in use", utils.errors.errorMessage(error.Thrown));
+    try std.testing.expect(!consoleHas(&app, "Restarting REST API worker..."));
+}
+
+test "an asset server that says nothing within the time allowed fails the start with the timeout message" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const state = main_state.fromCore(app.core);
+    state.lock();
+    state.asset_server_requested = true;
+    state.asset_server_start_timeout_ms = 50;
+    state.unlock();
+    try std.testing.expectError(error.Thrown, app.core.pageQuery());
+    try std.testing.expectEqualStrings("REST API failed to start within timeout", utils.errors.errorMessage(error.Thrown));
+}
+
+test "automatic import is not checked until the main window is created, and creating the window again changes nothing" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    app.shell.sleepMs(200);
+    try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("\"type\":\"ensure-auto-import\""));
+    try std.testing.expect(!consoleHas(&app, "Main window created"));
+    try waitForStartupCheck(&app);
+    try std.testing.expect(consoleHas(&app, "Main window created"));
+    _ = try app.core.pageQuery();
+    app.shell.sleepMs(200);
+    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"type\":\"ensure-auto-import\""));
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, app.console_out.writer.buffered(), "Main window created"));
+}
+
+test "a failed check of automatic import says whether it was the start or a later check" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    main_process.onTaskEnd(app.core, .{
+        .task_id = "ensure-1",
+        .task_type = "ensure-auto-import",
+        .source = "ensure-auto-import",
+        .input_json = main_state.ENSURE_AUTO_IMPORT_STARTING_INPUT,
+        .status = .failed,
+        .error_message = "no folders",
+        .result_json = null,
+        .started = true,
+    });
+    try std.testing.expect(consoleHas(&app, "Error starting automatic import: no folders"));
+    main_process.onTaskEnd(app.core, .{
+        .task_id = "ensure-2",
+        .task_type = "ensure-auto-import",
+        .source = "ensure-auto-import",
+        .input_json = main_state.ENSURE_AUTO_IMPORT_RESTARTING_INPUT,
+        .status = .failed,
+        .error_message = "no folders",
+        .result_json = null,
+        .started = true,
+    });
+    try std.testing.expect(consoleHas(&app, "Error restarting automatic import: no folders"));
+}
+
+test "an automatic import that stops with no error message says the error is unknown" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const state = main_state.fromCore(app.core);
+    state.lock();
+    state.auto_import_running = true;
+    try state.setOwned(&state.auto_import_task_id, "auto-2");
+    state.unlock();
+    main_process.onTaskEnd(app.core, .{
+        .task_id = "auto-2",
+        .task_type = "import-assets",
+        .source = "auto-import",
+        .input_json = "{}",
+        .status = .failed,
+        .error_message = null,
+        .result_json = null,
+        .started = true,
+    });
+    try std.testing.expect(consoleHas(&app, "Automatic import stopped: Unknown error"));
+}
+
+test "a sync of a database with an empty path queues no eviction, and an empty open path queues no sync" {
+    var app: TestApp = undefined;
+    try app.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{.{ .name = "evict-originals", .handler = evictOriginalsTask }});
+    defer app.stop();
+    const state = main_state.fromCore(app.core);
+    state.lock();
+    state.auto_import_running = true;
+    try state.setOwned(&state.auto_import_database_path, "");
+    state.sync_allowed = true;
+    try state.setOwned(&state.current_database_path, "");
+    state.unlock();
+    main_process.onTaskEnd(app.core, .{
+        .task_id = "sync-empty",
+        .task_type = "sync-database",
+        .source = "",
+        .input_json = "{\"databasePath\":\"\"}",
+        .status = .succeeded,
+        .error_message = null,
+        .result_json = null,
+        .started = true,
+    });
+    try state.enqueueSyncTask();
+    app.shell.sleepMs(200);
+    try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("\"evicting\""));
+    try std.testing.expect(!consoleHas(&app, "Queuing sync task"));
+    state.lock();
+    defer state.unlock();
+    try std.testing.expect(!state.is_sync_running);
+}
+
+test "main-command set-sync-allowed false logs the decision as false" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    std.testing.allocator.free(try app.requestOk("main-command", "{\"command\":\"set-sync-allowed\",\"allowed\":false}"));
+    try std.testing.expect(consoleHas(&app, "Sync gate set to false"));
 }

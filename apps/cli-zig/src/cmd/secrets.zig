@@ -14,7 +14,7 @@ const js_value = @import("bdb-zig").js_value;
 const process_signals = @import("../lib/process-signals.zig");
 
 //
-// Names used from other files (the equivalent of the TypeScript imports).
+// Names used from other files.
 //
 const getVault = vault_zig.get_vault.getVault;
 const getDefaultVaultType = vault_zig.get_vault.getDefaultVaultType;
@@ -52,14 +52,14 @@ fn trim(value: []const u8) []const u8 {
 }
 
 //
-// Formats a message into the allocator (TypeScript: a template literal).
+// Formats a message into the allocator.
 //
 fn format(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) ![]const u8 {
     return std.fmt.allocPrint(allocator, fmt, args);
 }
 
 //
-// `text.padEnd(length)`: pads with spaces to a JavaScript (UTF-16) length.
+// Pads a text on the right with spaces to a length counted in UTF-16 code units.
 //
 fn padEnd(allocator: std.mem.Allocator, value: []const u8, length: usize) ![]const u8 {
     const current = commander.jsLength(value);
@@ -171,13 +171,6 @@ pub const ISecretsSendOptions = struct {
 
     // Pairing code to use instead of generating one.
     code: ?[]const u8 = null,
-
-    // How long to wait for a receiver on the network, in milliseconds. The CLI never sets this, so a
-    // real user always gets the 60 seconds the TypeScript waits. It is a field rather than a literal
-    // in secretsSend so a test can drive the "no receiver" branch in milliseconds instead of waiting
-    // out the minute: the branch is the same code either way, only how long it waits before giving up
-    // differs. See ISecretsReceiveOptions.discoveryTimeoutMs, which is its twin.
-    discoveryTimeoutMs: i64 = 60000,
 };
 
 //
@@ -200,7 +193,7 @@ pub const ISecretsClearOptions = struct {
 };
 
 //
-// Options for the `secrets receive` command (an inline type in TypeScript).
+// Options for the `secrets receive` command.
 //
 pub const ISecretsReceiveOptions = struct {
     // Skip confirmation prompts and field editing.
@@ -208,13 +201,6 @@ pub const ISecretsReceiveOptions = struct {
 
     // Pairing code shown on the sender (required with --yes).
     code: ?[]const u8 = null,
-
-    // How long to wait for a sender on the network, in milliseconds. The CLI never sets this, so a
-    // real user always gets the 60 seconds the TypeScript waits. It is a field rather than a literal
-    // in secretsReceive so a test can drive the "no sender" branch in milliseconds instead of waiting
-    // out the minute: the branch is the same code either way, only how long it waits before giving up
-    // differs. See ISecretsSendOptions.discoveryTimeoutMs, which is its twin.
-    discoveryTimeoutMs: i64 = 60000,
 };
 
 //
@@ -335,7 +321,11 @@ pub fn secretsAdd(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecret
             exit(io, 1);
         }
 
-        try vault.set(allocator, io, .{ .name = cmdOptions.name.?, .type = cmdOptions.type.?, .value = cmdOptions.value.? });
+        try vault.set(allocator, io, .{
+            .name = cmdOptions.name.?,
+            .type = cmdOptions.type.?,
+            .value = cmdOptions.value.?,
+        });
         log.info(try pc.green(allocator, try format(allocator, "\u{2713} Secret \"{s}\" added.", .{cmdOptions.name.?})));
         return;
     }
@@ -344,7 +334,10 @@ pub fn secretsAdd(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecret
 
     const name = try text(allocator, io, .{
         .message = "Secret name (e.g. cli:geocoding or db:abc123:s3):",
-        .validate = .{ .context = null, .function = validateName },
+        .validate = .{
+            .context = null,
+            .function = validateName,
+        },
     });
 
     if (isCancel(name)) {
@@ -361,7 +354,10 @@ pub fn secretsAdd(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecret
 
     var typeOptions: [SECRET_TYPES.len]prompts.Option = undefined;
     for (SECRET_TYPES, 0..) |secretType, index| {
-        typeOptions[index] = .{ .value = secretType, .label = secretType };
+        typeOptions[index] = .{
+            .value = secretType,
+            .label = secretType,
+        };
     }
     const secretType = try select(allocator, io, .{
         .message = "Secret type:",
@@ -380,7 +376,10 @@ pub fn secretsAdd(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecret
     if (std.mem.eql(u8, secretType.value, "encryption-key")) {
         const multilineResult = try multiline(allocator, io, .{
             .message = "Secret value (paste your key, then press Ctrl+D to submit):",
-            .validate = .{ .context = null, .function = validateMultilineValue },
+            .validate = .{
+                .context = null,
+                .function = validateMultilineValue,
+            },
         });
 
         if (isCancel(multilineResult)) {
@@ -393,7 +392,10 @@ pub fn secretsAdd(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecret
     else {
         const passwordResult = try password(allocator, io, .{
             .message = "Secret value:",
-            .validate = .{ .context = null, .function = validateValue },
+            .validate = .{
+                .context = null,
+                .function = validateValue,
+            },
         });
 
         if (isCancel(passwordResult)) {
@@ -404,7 +406,11 @@ pub fn secretsAdd(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecret
         value = passwordResult.value orelse "";
     }
 
-    try vault.set(allocator, io, .{ .name = trimmedName, .type = secretType.value, .value = value });
+    try vault.set(allocator, io, .{
+        .name = trimmedName,
+        .type = secretType.value,
+        .value = value,
+    });
 
     try outro(io, try pc.green(allocator, try format(allocator, "\u{2713} Secret \"{s}\" added.", .{trimmedName})), .{});
 }
@@ -635,7 +641,11 @@ pub fn secretsEdit(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecre
             try vault.delete(allocator, io, secret.name);
         }
 
-        try vault.set(allocator, io, .{ .name = updatedName, .type = secret.type, .value = updatedValue });
+        try vault.set(allocator, io, .{
+            .name = updatedName,
+            .type = secret.type,
+            .value = updatedValue,
+        });
         log.info(try pc.green(allocator, try format(allocator, "\u{2713} Secret \"{s}\" updated.", .{updatedName})));
         return;
     }
@@ -645,7 +655,10 @@ pub fn secretsEdit(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecre
     const newName = try text(allocator, io, .{
         .message = "Secret name:",
         .initialValue = secret.name,
-        .validate = .{ .context = null, .function = validateName },
+        .validate = .{
+            .context = null,
+            .function = validateName,
+        },
     });
 
     if (isCancel(newName)) {
@@ -690,7 +703,11 @@ pub fn secretsEdit(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecre
         try vault.delete(allocator, io, secret.name);
     }
 
-    try vault.set(allocator, io, .{ .name = updatedName, .type = secret.type, .value = updatedValue });
+    try vault.set(allocator, io, .{
+        .name = updatedName,
+        .type = secret.type,
+        .value = updatedValue,
+    });
     try outro(io, try pc.green(allocator, try format(allocator, "\u{2713} Secret \"{s}\" updated.", .{updatedName})), .{});
 }
 
@@ -818,7 +835,11 @@ pub fn secretsImport(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISec
         const keyName = if (importedName.len > 0) importedName else "imported-key";
         const privateKeyPem = try node_utils.node_fs.readFile(allocator, io, privatePath);
         const vault = try getVault(getDefaultVaultType());
-        try vault.set(allocator, io, .{ .name = keyName, .type = "encryption-key", .value = privateKeyPem });
+        try vault.set(allocator, io, .{
+            .name = keyName,
+            .type = "encryption-key",
+            .value = privateKeyPem,
+        });
         log.info(try pc.green(allocator, try format(allocator, "\u{2713} Key imported as \"{s}\".", .{keyName})));
         return;
     }
@@ -827,7 +848,10 @@ pub fn secretsImport(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISec
 
     const privateKeyPath = try text(allocator, io, .{
         .message = "Path to the private key file (.key):",
-        .validate = .{ .context = @constCast(@ptrCast(&io)), .function = validatePrivateKeyPath },
+        .validate = .{
+            .context = @constCast(@ptrCast(&io)),
+            .function = validatePrivateKeyPath,
+        },
     });
 
     if (isCancel(privateKeyPath)) {
@@ -839,7 +863,11 @@ pub fn secretsImport(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISec
     const keyName = keyNameFromPath(privatePath);
     const privateKeyPem = try node_utils.node_fs.readFile(allocator, io, privatePath);
     const vault = try getVault(getDefaultVaultType());
-    try vault.set(allocator, io, .{ .name = keyName, .type = "encryption-key", .value = privateKeyPem });
+    try vault.set(allocator, io, .{
+        .name = keyName,
+        .type = "encryption-key",
+        .value = privateKeyPem,
+    });
     try outro(io, try pc.green(allocator, try format(allocator, "\u{2713} Key imported as \"{s}\".", .{keyName})), .{});
 }
 
@@ -849,11 +877,21 @@ pub fn secretsImport(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISec
 //
 fn payloadToJson(allocator: std.mem.Allocator, payload: ISecretSharePayload) !std.json.Value {
     var object: std.json.ObjectMap = .empty;
-    try object.put(allocator, "type", .{ .string = payload.type });
-    try object.put(allocator, "name", .{ .string = payload.name });
-    try object.put(allocator, "secretType", .{ .string = payload.secretType });
-    try object.put(allocator, "value", .{ .string = payload.value });
-    return .{ .object = object };
+    try object.put(allocator, "type", .{
+        .string = payload.type,
+    });
+    try object.put(allocator, "name", .{
+        .string = payload.name,
+    });
+    try object.put(allocator, "secretType", .{
+        .string = payload.secretType,
+    });
+    try object.put(allocator, "value", .{
+        .string = payload.value,
+    });
+    return .{
+        .object = object,
+    };
 }
 
 //
@@ -931,7 +969,7 @@ pub fn secretsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecre
     log.info(try pc.dim(allocator, "Hint: Run `psi secrets receive` on another device to receive this secret."));
 
     // Build the payload
-    const payload = try resolveSecretSharePayload(allocator, io, secretName);
+    const payload = try resolveSecretSharePayload(allocator, io, secretName, null);
 
     log.info(try pc.cyan(allocator, "\nSecret to send:"));
     log.info(try std.mem.concat(allocator, u8, &.{ try pc.cyan(allocator, "  Name: "), secretName }));
@@ -949,13 +987,16 @@ pub fn secretsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecre
     const spin = try spinner(allocator, io, !(cmdOptions.yes orelse false));
     try spin.start("Waiting for receiver on the local network... (Ctrl+C to cancel)");
 
-    // TODO: this mirrors a bug in the TypeScript (secrets.ts secretsSend) until both are fixed: the share-cancel hang
+    // TODO: the share-cancel hang
     // explained at the TODO in dbs.zig dbsSend. Ctrl+C is taken over only after the pairing code is shown, so a
     // SIGINT between the two is lost when SIGINT was inherited as ignored and the sender waits out 60 seconds.
-    const sigintHandler: process_signals.ISignalListener = .{ .context = &sender, .function = cancelSender };
+    const sigintHandler: process_signals.ISignalListener = .{
+        .context = &sender,
+        .function = cancelSender,
+    };
     try process_signals.on(.SIGINT, sigintHandler);
 
-    const endpoint = try sender.waitForReceiver(io, cmdOptions.discoveryTimeoutMs);
+    const endpoint = try sender.waitForReceiver(io, 60000);
     try process_signals.removeListener(.SIGINT, sigintHandler);
 
     if (endpoint == null) {
@@ -1026,7 +1067,10 @@ pub fn secretsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISe
     else {
         const codeInput = try text(allocator, io, .{
             .message = "Enter the 4-digit pairing code shown on the sender:",
-            .validate = .{ .context = null, .function = validatePairingCode },
+            .validate = .{
+                .context = null,
+                .function = validatePairingCode,
+            },
         });
 
         if (isCancel(codeInput)) {
@@ -1037,17 +1081,20 @@ pub fn secretsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISe
         code = trim(codeInput.value);
     }
 
-    var receiver = LanShareReceiver.init(io, cmdOptions.discoveryTimeoutMs);
+    var receiver = LanShareReceiver.init(io, 60000);
     defer receiver.deinit();
     try receiver.start(code);
 
     const spin = try spinner(allocator, io, !skipPrompts);
     try spin.start("Waiting for sender on the local network... (Ctrl+C to cancel)");
 
-    // TODO: this mirrors the TypeScript (secrets.ts secretsReceive) until both are fixed: the share-cancel hang
+    // TODO: the share-cancel hang
     // explained at the TODO in dbs.zig dbsSend. Ctrl+C is taken over only after the waiting message is shown,
-    // as the TypeScript does, so a SIGINT between the two is lost when SIGINT was inherited as ignored.
-    const sigintHandler: process_signals.ISignalListener = .{ .context = &receiver, .function = cancelReceiver };
+    // so a SIGINT between the two is lost when SIGINT was inherited as ignored.
+    const sigintHandler: process_signals.ISignalListener = .{
+        .context = &receiver,
+        .function = cancelReceiver,
+    };
     try process_signals.on(.SIGINT, sigintHandler);
 
     const rawPayload = try receiver.receive();
@@ -1081,7 +1128,10 @@ pub fn secretsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISe
         const nameInput = try text(allocator, io, .{
             .message = "Save secret as (name):",
             .initialValue = payload.name,
-            .validate = .{ .context = null, .function = validateName },
+            .validate = .{
+                .context = null,
+                .function = validateName,
+            },
         });
 
         if (isCancel(nameInput)) {
@@ -1092,7 +1142,7 @@ pub fn secretsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISe
         saveName = trim(nameInput.value);
     }
 
-    try importSecretPayload(allocator, io, payload, saveName);
+    try importSecretPayload(allocator, io, payload, saveName, null);
 
     try outro(io, try pc.green(allocator, try format(allocator, "\u{2713} Secret \"{s}\" imported successfully!", .{saveName})), .{});
 }

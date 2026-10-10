@@ -47,7 +47,6 @@ pub const IInternalRecord = struct {
 //
 // Decodes a record id like `Buffer.from(id.replace(/-/g, ''), 'hex')`: dashes are removed, then pairs of hex digits are
 // decoded until the first pair that is not hex (Node truncates there instead of failing).
-// (No TypeScript counterpart: the TypeScript code calls Node's Buffer.)
 //
 pub fn recordIdToBuffer(allocator: std.mem.Allocator, id: []const u8) ![]const u8 {
     var hexDigits: std.ArrayList(u8) = .empty;
@@ -146,7 +145,7 @@ pub const BsonShard = struct {
     uuidGenerator: IUuidGenerator,
 
     //
-    // Creates a shard (TypeScript: the constructor).
+    // Creates a shard.
     //
     pub fn init(allocator: std.mem.Allocator, shardId: []const u8, storage: IStorage, bsonDbPath: []const u8, collectionName: []const u8, uuidGenerator: IUuidGenerator) BsonShard {
         return .{
@@ -264,7 +263,7 @@ pub const BsonShard = struct {
     }
 
     //
-    // The merkle ref loader (TypeScript: the first arrow function in merkleTree()).
+    // The merkle ref loader.
     //
     fn merkleLoader(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!?IMerkleTree {
         const self: *BsonShard = @ptrCast(@alignCast(context));
@@ -476,7 +475,7 @@ pub const BsonShard = struct {
     }
 
     //
-    // The deserializers for every supported version of the shard file (TypeScript: the object passed to load()).
+    // The deserializers for every supported version of the shard file.
     //
     const shard_deserializers = [_]serialization.DeserializerEntry([]IInternalRecord, *BsonShard){
         .{ .version = 1, .deserializer = deserializeShardV1 },

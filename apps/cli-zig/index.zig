@@ -1,6 +1,6 @@
 //
-// Port of apps/cli/index.ts: the `psi` entry point.
-// The help of these commands is rendered here by the commander port (src/lib/commander.zig).
+// The `psi` entry point.
+// The help of these commands is rendered here by the command-line parser (src/lib/commander.zig).
 //
 
 const std = @import("std");
@@ -168,7 +168,7 @@ const FatalError = utils.fatal_error.FatalError;
 const console = utils.console;
 
 //
-// An option as declared in index.ts: the `[flags, description, default?]` tuples passed to `.option(...)`.
+// An option as declared for the program: its flags, its description and an optional default.
 //
 pub const IOptionSpec = struct {
     // The flags, e.g. "-k, --key <keyfile>".
@@ -181,7 +181,7 @@ pub const IOptionSpec = struct {
     defaultValue: ?OptionValue = null,
 };
 
-// The option tuples of index.ts (only those used by the ported commands).
+// The options shared by the commands implemented here.
 pub const dbOption: IOptionSpec = .{
     .flags = "--db <path>",
     .description = "The directory that contains the media file database",
@@ -275,7 +275,7 @@ fn optionFrom(command: *Command, spec: IOptionSpec) *Command {
 }
 
 //
-// What the add command runs with: its files and its options (TypeScript: the arguments commander passes the action).
+// What the add command runs with: its files and its options.
 //
 pub const IAddParsed = struct {
     // The media files (or directories) to add.
@@ -286,8 +286,7 @@ pub const IAddParsed = struct {
 };
 
 //
-// What the check command runs with: its files and its options (TypeScript: the arguments commander passes the
-// action).
+// What the check command runs with: its files and its options.
 //
 pub const ICheckParsed = struct {
     // The media files (or directories) to check.
@@ -298,8 +297,7 @@ pub const ICheckParsed = struct {
 };
 
 //
-// What the set-origin command runs with: its path and its options (TypeScript: the arguments commander passes the
-// action).
+// What the set-origin command runs with: its path and its options.
 //
 pub const ISetOriginParsed = struct {
     // Path or URI of the origin database.
@@ -310,8 +308,7 @@ pub const ISetOriginParsed = struct {
 };
 
 //
-// What the remove command runs with: its asset ID and options (TypeScript: the arguments commander passes the
-// action).
+// What the remove command runs with: its asset ID and options.
 //
 pub const IRemoveParsed = struct {
     // The ID of the asset to remove.
@@ -322,8 +319,7 @@ pub const IRemoveParsed = struct {
 };
 
 //
-// What the consolidate command runs with: its remote and options (TypeScript: the arguments commander passes the
-// action).
+// What the consolidate command runs with: its remote and options.
 //
 pub const IConsolidateParsed = struct {
     // Path or URI of the remote database.
@@ -334,8 +330,7 @@ pub const IConsolidateParsed = struct {
 };
 
 //
-// What the export command runs with: its asset ID, output path and options (TypeScript: the arguments commander
-// passes the action).
+// What the export command runs with: its asset ID, output path and options.
 //
 pub const IExportParsed = struct {
     // The ID of the asset to export.
@@ -349,7 +344,7 @@ pub const IExportParsed = struct {
 };
 
 //
-// What the info command runs with: its inputs and its options (TypeScript: the arguments commander passes the action).
+// What the info command runs with: its inputs and its options.
 //
 pub const IInfoParsed = struct {
     // The file paths, asset IDs or hashes to show.
@@ -360,8 +355,7 @@ pub const IInfoParsed = struct {
 };
 
 //
-// What the hash command runs with: its file path and its options (TypeScript: the arguments commander passes the
-// action).
+// What the hash command runs with: its file path and its options.
 //
 pub const IHashParsed = struct {
     // The file path to hash.
@@ -372,8 +366,7 @@ pub const IHashParsed = struct {
 };
 
 //
-// What the hash-cache add command runs with: its file and its options (TypeScript: the arguments commander passes
-// the action).
+// What the hash-cache add command runs with: its file and its options.
 //
 pub const IHashCacheAddParsed = struct {
     // The file to hash and record.
@@ -384,8 +377,7 @@ pub const IHashCacheAddParsed = struct {
 };
 
 //
-// What the hash-cache set and set-source commands run with: the key, hash, length and options (TypeScript: the
-// arguments commander passes the action).
+// What the hash-cache set and set-source commands run with: the key, hash, length and options.
 //
 pub const IHashCacheSetParsed = struct {
     // The path (set) or photo library source id (set-source) to record the hash against.
@@ -402,8 +394,7 @@ pub const IHashCacheSetParsed = struct {
 };
 
 //
-// What the hash-cache get, get-asset-id and remove commands run with: the key and options (TypeScript: the
-// arguments commander passes the action).
+// What the hash-cache get, get-asset-id and remove commands run with: the key and options.
 //
 pub const IHashCacheKeyParsed = struct {
     // The key of the entry.
@@ -628,9 +619,9 @@ pub const ParseOutcome = union(enum) {
 };
 
 //
-// What the program's hook and actions leave for `run` to do once the command line is parsed. The actions of
-// index.ts run inside `parseAsync`; here parsing and running are split so that `run` does the same work, in the
-// same order, after the parse returns.
+// What the program's hook and actions leave for `run` to do once the command line is parsed. Parsing and
+// running are split: the actions only record what to do, and `run` does the work, in order, after the parse
+// returns.
 //
 pub const IProgramState = struct {
     // Allocates the parsed options.
@@ -644,8 +635,7 @@ pub const IProgramState = struct {
 };
 
 //
-// The `--version` option callback: index.ts prints the version and exits there and then. The parse is stopped
-// here and `run` prints the version and exits.
+// The `--version` option callback: the parse is stopped here and `run` prints the version and exits.
 //
 fn versionOption(state: *IProgramState, value: ?[]const u8, previous: ?OptionValue) !?OptionValue {
     _ = value;
@@ -910,7 +900,7 @@ fn decryptAction(state: *IProgramState, args: []const ArgumentValue, options: *c
 
 //
 // The action of the bug command (`bugReportCommand`): `run` calls the command. Commander stores `--no-browser`
-// as the `browser` option, so `noBrowser` is never set, as in index.ts.
+// as the `browser` option, so `noBrowser` is never set.
 //
 fn bugAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
     _ = args;
@@ -1424,7 +1414,7 @@ fn mcpAction(state: *IProgramState, args: []const ArgumentValue, options: *const
 }
 
 //
-// The help command of index.ts: shows the help of the command with this name or alias, or the help of the program
+// The help command: shows the help of the command with this name or alias, or the help of the program
 // when there is no name or no such command. Returns the error commander stops with once the help is written.
 //
 pub fn helpCommand(program: *Command, commandName: ?[]const u8) anyerror {
@@ -1446,7 +1436,7 @@ pub fn helpCommand(program: *Command, commandName: ?[]const u8) anyerror {
 }
 
 //
-// The text index.ts adds after the help of the program: how to get help, the main examples and the resources.
+// The text added after the help of the program: how to get help, the main examples and the resources.
 //
 pub fn mainHelpText(allocator: std.mem.Allocator) ![]const u8 {
     var exampleLines: std.ArrayList([]const u8) = .empty;
@@ -1486,7 +1476,7 @@ pub fn mainHelpText(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 //
-// Defines the psi program like main() in index.ts, with the commands implemented in Zig.
+// Defines the psi program with the commands implemented in Zig.
 //
 pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Command {
     const program = Command.init(allocator, "");
@@ -2206,7 +2196,7 @@ fn secretsReceiveAction(state: *IProgramState, args: []const ArgumentValue, opti
 }
 
 //
-// The `psi secrets` command group (secretsCommand in apps/cli/src/cmd/secrets.ts).
+// The `psi secrets` command group.
 //
 fn secretsCommand(allocator: std.mem.Allocator, state: *IProgramState) *Command {
     const cmd = Command.init(allocator, "secrets")
@@ -2411,7 +2401,7 @@ fn dbsReceiveAction(state: *IProgramState, args: []const ArgumentValue, options:
 }
 
 //
-// The `psi dbs` command group (dbsCommand in apps/cli/src/cmd/dbs.ts).
+// The `psi dbs` command group.
 //
 fn dbsCommand(allocator: std.mem.Allocator, state: *IProgramState) *Command {
     const cmd = Command.init(allocator, "dbs")
@@ -2908,8 +2898,8 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            // The help ends the parse the way it does in index.ts: main() exits with 0 for the help of the program
-            // and the commands, and the secrets and dbs groups call process.exit themselves.
+            // The help ends the parse: the program exits with 0 for the help of the program and the commands, and
+            // the secrets and dbs groups exit themselves.
             const helpError = helpCommand(program, commandName);
             if (helpError != error.CommanderError and helpError != error.Exit) {
                 return helpError;

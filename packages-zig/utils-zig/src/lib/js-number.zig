@@ -2,9 +2,8 @@ const std = @import("std");
 const js_string = @import("js-string.zig");
 
 //
-// No TypeScript counterpart: stands in for JavaScript's global `parseInt` and `parseFloat`, which the TypeScript
-// code calls on text it reads from files, tools and continuation tokens. Both return a JavaScript number, so NaN is
-// how they say the text holds no number.
+// JavaScript's global `parseInt` and `parseFloat`, applied to text read from files, tools and continuation tokens.
+// Both return a JavaScript number, so NaN is how they say the text holds no number.
 //
 
 //

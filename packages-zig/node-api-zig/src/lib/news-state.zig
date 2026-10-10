@@ -23,7 +23,8 @@ const IStateFile = state_format.IStateFile;
 pub const INewsState = state_format.INewsState;
 
 //
-// The body of loadNewsState inside its try block.
+// The body of loadNewsState inside its try block. (Zig: a function of its own, because a Zig catch handles the error of
+// one expression and the try block holds several statements.)
 //
 fn loadNewsStateUnsafe(allocator: std.mem.Allocator, io: std.Io) !INewsState {
     const news = (try loadStateFile(allocator, io)).news;
@@ -58,7 +59,7 @@ pub fn loadNewsState(allocator: std.mem.Allocator, io: std.Io) !INewsState {
 }
 
 //
-// The mutator of saveNewsState (the arrow function in TypeScript).
+// The mutator of saveNewsState.
 //
 const SaveNewsStateMutator = struct {
     // The state to save.
@@ -85,7 +86,9 @@ const SaveNewsStateMutator = struct {
 // this read and this write is not discarded.
 //
 pub fn saveNewsState(allocator: std.mem.Allocator, io: std.Io, state: INewsState) !void {
-    const mutator: SaveNewsStateMutator = .{ .state = state };
+    const mutator: SaveNewsStateMutator = .{
+        .state = state,
+    };
     try updateStateFile(allocator, io, &mutator);
 }
 
@@ -98,7 +101,7 @@ pub fn getShownNewsIds(allocator: std.mem.Allocator, io: std.Io) ![]const []cons
 }
 
 //
-// The mutator of addShownNewsIds (the arrow function in TypeScript).
+// The mutator of addShownNewsIds.
 //
 const AddShownNewsIdsMutator = struct {
     // The ids to add.
@@ -134,7 +137,9 @@ pub fn addShownNewsIds(allocator: std.mem.Allocator, io: std.Io, ids: []const []
         return;
     }
 
-    const mutator: AddShownNewsIdsMutator = .{ .ids = ids };
+    const mutator: AddShownNewsIdsMutator = .{
+        .ids = ids,
+    };
     try updateStateFile(allocator, io, &mutator);
 }
 
@@ -148,7 +153,7 @@ pub fn getLastShownUpdateVersion(allocator: std.mem.Allocator, io: std.Io) !?[]c
 }
 
 //
-// The mutator of setLastShownUpdateVersion (the arrow function in TypeScript).
+// The mutator of setLastShownUpdateVersion.
 //
 const SetLastShownUpdateVersionMutator = struct {
     // The version to record.
@@ -170,6 +175,8 @@ const SetLastShownUpdateVersionMutator = struct {
 // overwrite this field.
 //
 pub fn setLastShownUpdateVersion(allocator: std.mem.Allocator, io: std.Io, version: []const u8) !void {
-    const mutator: SetLastShownUpdateVersionMutator = .{ .version = version };
+    const mutator: SetLastShownUpdateVersionMutator = .{
+        .version = version,
+    };
     try updateStateFile(allocator, io, &mutator);
 }

@@ -135,29 +135,32 @@ export function EntityCard({ title, subtitle, detail, icon, onClick, actions, ti
                 </Box>
             </Box>
 
-            <Dropdown>
-                <MenuButton
-                    slots={{ root: IconButton }}
-                    slotProps={{ root: { variant: 'plain', size: 'lg', 'data-id': 'entity-actions-menu' } }}
-                    aria-label={`Actions for ${title}`}
-                    >
-                    <MoreVert />
-                </MenuButton>
-                <Menu placement="bottom-end" sx={{ minWidth: 220 }}>
-                    {actions.map(action => (
-                        <MenuItem
-                            key={action.label}
-                            data-id={action.dataId}
-                            color={action.danger ? 'danger' : undefined}
-                            onClick={action.onClick}
-                            sx={{ minHeight: 48 }}
-                            >
-                            <ListItemDecorator>{action.icon}</ListItemDecorator>
-                            {action.label}
-                        </MenuItem>
-                    ))}
-                </Menu>
-            </Dropdown>
+            {/* Card hands its last child a data-last-child prop. Dropdown renders no element of its own and would pass it on to a DOM node it does not have (React warns), so a layout-neutral wrapper takes it instead. */}
+            <Box sx={{ display: 'contents' }}>
+                <Dropdown>
+                    <MenuButton
+                        slots={{ root: IconButton }}
+                        slotProps={{ root: { variant: 'plain', size: 'lg', 'data-id': 'entity-actions-menu' } }}
+                        aria-label={`Actions for ${title}`}
+                        >
+                        <MoreVert />
+                    </MenuButton>
+                    <Menu placement="bottom-end" sx={{ minWidth: 220 }}>
+                        {actions.map(action => (
+                            <MenuItem
+                                key={action.label}
+                                data-id={action.dataId}
+                                color={action.danger ? 'danger' : undefined}
+                                onClick={action.onClick}
+                                sx={{ minHeight: 48 }}
+                                >
+                                <ListItemDecorator>{action.icon}</ListItemDecorator>
+                                {action.label}
+                            </MenuItem>
+                        ))}
+                    </Menu>
+                </Dropdown>
+            </Box>
         </Card>
     );
 }

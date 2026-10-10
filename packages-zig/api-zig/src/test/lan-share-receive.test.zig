@@ -12,8 +12,7 @@ const ConflictResolver = api.lan_share.ConflictResolver;
 const getVault = vault_zig.get_vault.getVault;
 
 //
-// A conflict resolver that returns a fixed resolution and records the calls it gets (the `jest.fn()` resolvers of
-// the TypeScript tests).
+// A conflict resolver that returns a fixed resolution and records the calls it gets.
 //
 const RecordingResolver = struct {
     // The resolution returned for every conflict.
@@ -47,7 +46,7 @@ const RecordingResolver = struct {
 };
 
 //
-// Sets up a test: the test vault, emptied (the TypeScript tests reset their vault mocks before each test).
+// Sets up a test: the test vault, emptied.
 //
 fn useEmptyVault(allocator: std.mem.Allocator, io: std.Io) !vault_zig.vault.IVault {
     try test_vault.useTestVault();
@@ -56,7 +55,7 @@ fn useEmptyVault(allocator: std.mem.Allocator, io: std.Io) !vault_zig.vault.IVau
 }
 
 //
-// Finds the one secret of a type in a list of secrets (the `mockVaultSet.mock.calls.find` of the TypeScript tests).
+// Finds the one secret of a type in a list of secrets.
 //
 fn secretOfType(secrets: []const vault_zig.vault.ISecret, secretType: []const u8) ?vault_zig.vault.ISecret {
     for (secrets) |secret| {
@@ -121,7 +120,7 @@ test "imports database payload with all secrets" {
         },
     };
 
-    const entry = try importDatabasePayload(allocator, io, payload, resolver.resolver());
+    const entry = try importDatabasePayload(allocator, io, payload, resolver.resolver(), null);
 
     try std.testing.expectEqualStrings("shared-photos", entry.name);
     try std.testing.expectEqualStrings("Photos from another device", entry.description);
@@ -167,7 +166,7 @@ test "imports database payload with no secrets" {
         .path = "/data/simple",
     };
 
-    const entry = try importDatabasePayload(allocator, io, payload, resolver.resolver());
+    const entry = try importDatabasePayload(allocator, io, payload, resolver.resolver(), null);
 
     try std.testing.expectEqualStrings("simple-db", entry.name);
     try std.testing.expect(entry.s3Key == null);
@@ -190,7 +189,7 @@ test "imports secret payload" {
         .value = "{\"region\":\"us-east-1\",\"accessKeyId\":\"AKID\",\"secretAccessKey\":\"SECRET\"}",
     };
 
-    try importSecretPayload(allocator, io, payload, "imported1");
+    try importSecretPayload(allocator, io, payload, "imported1", null);
 
     const vault = try getVault("plaintext");
     const secret = (try vault.get(allocator, io, "imported1")).?;
@@ -230,7 +229,7 @@ test "imported database entry uses secret names from payload" {
         },
     };
 
-    const entry = try importDatabasePayload(allocator, io, payload, resolver.resolver());
+    const entry = try importDatabasePayload(allocator, io, payload, resolver.resolver(), null);
 
     // Secret names should match those in the payload, not random IDs.
     try std.testing.expectEqualStrings("default:s3", entry.s3Key.?);
@@ -255,7 +254,7 @@ test "conflict resolver reuse: skips vault.set and keeps original name" {
         },
     };
 
-    const entry = try importDatabasePayload(allocator, io, s3OnlyPayload(), resolver.resolver());
+    const entry = try importDatabasePayload(allocator, io, s3OnlyPayload(), resolver.resolver(), null);
 
     try std.testing.expectEqual(@as(usize, 1), resolver.names.items.len);
     try std.testing.expectEqualStrings("default:s3", resolver.names.items[0]);
@@ -284,7 +283,7 @@ test "conflict resolver replace: calls vault.set with original name" {
         },
     };
 
-    const entry = try importDatabasePayload(allocator, io, s3OnlyPayload(), resolver.resolver());
+    const entry = try importDatabasePayload(allocator, io, s3OnlyPayload(), resolver.resolver(), null);
 
     try std.testing.expectEqual(@as(usize, 1), resolver.names.items.len);
     try std.testing.expectEqualStrings("default:s3", resolver.names.items[0]);
@@ -313,7 +312,7 @@ test "conflict resolver rename: calls vault.set with new name and updates entry"
         },
     };
 
-    const entry = try importDatabasePayload(allocator, io, s3OnlyPayload(), resolver.resolver());
+    const entry = try importDatabasePayload(allocator, io, s3OnlyPayload(), resolver.resolver(), null);
 
     try std.testing.expectEqual(@as(usize, 1), resolver.names.items.len);
     try std.testing.expectEqualStrings("default:s3", resolver.names.items[0]);
@@ -336,7 +335,7 @@ test "conflict resolver not called when no existing secret" {
         },
     };
 
-    _ = try importDatabasePayload(allocator, io, s3OnlyPayload(), resolver.resolver());
+    _ = try importDatabasePayload(allocator, io, s3OnlyPayload(), resolver.resolver(), null);
 
     try std.testing.expectEqual(@as(usize, 0), resolver.names.items.len);
     try std.testing.expectEqual(@as(usize, 1), (try vault.list(allocator, io)).len);
@@ -366,7 +365,7 @@ test "stores encryption-key as raw PEM, not JSON-wrapped" {
         },
     };
 
-    _ = try importDatabasePayload(allocator, io, payload, resolver.resolver());
+    _ = try importDatabasePayload(allocator, io, payload, resolver.resolver(), null);
 
     try std.testing.expectEqual(@as(usize, 1), (try vault.list(allocator, io)).len);
     try std.testing.expectEqualStrings("-----RAW PRIVATE-----", (try vault.get(allocator, io, "enc-secret")).?.value);
@@ -395,7 +394,7 @@ test "stores api-key as raw string, not JSON-wrapped" {
         },
     };
 
-    _ = try importDatabasePayload(allocator, io, payload, resolver.resolver());
+    _ = try importDatabasePayload(allocator, io, payload, resolver.resolver(), null);
 
     try std.testing.expectEqual(@as(usize, 1), (try vault.list(allocator, io)).len);
     try std.testing.expectEqualStrings("raw-api-key-value", (try vault.get(allocator, io, "geo-secret")).?.value);

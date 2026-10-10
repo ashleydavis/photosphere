@@ -14,8 +14,8 @@ const registerImportMediaFilesTool = @import("import-media-files.zig").registerI
 const registerVerifyDatabaseTool = @import("verify-database.zig").registerVerifyDatabaseTool;
 
 //
-// Registers every CLI MCP tool against the given server. Pulled out of mcp.ts so the
-// command entry point stays focused on transport, lifecycle, and state.
+// Registers every CLI MCP tool against the given server. Kept apart from the
+// command entry point, which stays focused on transport, lifecycle, and state.
 //
 pub fn registerAllMcpTools(server: *McpServer, toolContext: *IMcpToolContext) !void {
     try registerListDatabasesTool(server);

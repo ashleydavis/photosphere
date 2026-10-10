@@ -28,7 +28,7 @@ const createStorageForPath = storage_helper.createStorageForPath;
 const configOrigin = sync_cmd.configOrigin;
 
 //
-// Options for the connect command (TypeScript: IConsolidateCommandOptions extends IBaseCommandOptions).
+// Options for the connect command.
 // The base options are in `base`.
 //
 pub const IConsolidateCommandOptions = struct {
@@ -42,7 +42,7 @@ pub const IConsolidateCommandOptions = struct {
 };
 
 //
-// Logs a replication progress message (TypeScript: the `progress => { log.verbose(progress); }` arrow function).
+// Logs a replication progress message.
 //
 fn onReplicateProgress(context: ?*anyopaque, progress: []const u8) void {
     _ = context;
@@ -51,7 +51,6 @@ fn onReplicateProgress(context: ?*anyopaque, progress: []const u8) void {
 
 //
 // Converts the consolidate-database task data to the JSON value that is queued.
-// (No TypeScript counterpart: TypeScript queues the object itself.)
 //
 fn consolidateDatabaseDataToJson(allocator: std.mem.Allocator, data: IConsolidateDatabaseData) !std.json.Value {
     const text = try std.json.Stringify.valueAlloc(allocator, data, .{});
@@ -151,7 +150,7 @@ pub fn consolidateCommand(allocator: std.mem.Allocator, io: std.Io, context: ICo
     log.info("Content the remote already has is not pushed a second time.");
     log.info("");
 
-    // (Zig: the block's defers are the TypeScript finally, which shuts the queue down before the exit below.)
+    // The block's defers shut the queue down before the exit below.
     {
         const queue = try TaskQueue.init(allocator, io, uuidGenerator, try std.mem.concat(allocator, u8, &.{ "consolidate-", sessionId }));
         defer queue.deinit();

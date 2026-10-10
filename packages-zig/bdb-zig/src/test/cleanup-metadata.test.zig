@@ -1,5 +1,5 @@
 //
-// Tests for cleanupMetadata (port of src/tests/cleanup-metadata.test.ts).
+// Tests for cleanupMetadata.
 //
 
 const std = @import("std");

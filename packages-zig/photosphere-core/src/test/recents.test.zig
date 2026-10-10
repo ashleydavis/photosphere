@@ -87,3 +87,11 @@ test "remove-recent-database-name logs which name was removed" {
     std.testing.allocator.free(try app.requestOk("remove-recent-database-name", "\"alpha\""));
     try std.testing.expect(std.mem.indexOf(u8, app.console_out.writer.buffered(), "Recent database removed: alpha") != null);
 }
+
+test "a failing recent database request logs the error with the message of its handler" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    std.testing.allocator.free(try app.requestError("remove-recent-database-name", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error removing recent database name") != null);
+}

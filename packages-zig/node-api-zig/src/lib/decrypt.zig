@@ -58,8 +58,8 @@ pub const IDecryptResult = struct {
 // Decrypts a single file from readStorage and writes it plain to writeStorage.
 // Skips files that are not encrypted. Updates the merkle tree entry for non-.db/ files.
 // Returns true if the file was decrypted, false if it was skipped (already plain).
-// (Zig: treeMutex, when given, is held while the merkle tree is read and updated, because the files of a batch
-// are decrypted on separate threads where TypeScript interleaves them on one.)
+// treeMutex, when given, is held while the merkle tree is read and updated, because the files of a batch
+// are decrypted on separate threads.
 //
 pub fn decryptFile(
     allocator: std.mem.Allocator,
@@ -82,7 +82,7 @@ pub fn decryptFile(
 
     const header = try readEncryptionHeader(allocator, io, rawReadStorage, fileName);
 
-    // TypeScript: `readStorage !== writeStorage`, the identity of the two storage objects.
+    // Whether the two storages are the same object.
     const sameStorage = readStorage.ptr == writeStorage.ptr and readStorage.vtable == writeStorage.vtable;
     const shouldDecrypt = header != null or !sameStorage;
     if (shouldDecrypt) {
@@ -135,7 +135,7 @@ pub fn decryptFile(
 //
 // Yields file names from readStorage that should be decrypted, skipping metadata and config files
 // that are either handled separately or not decrypted at all.
-// (Zig: an iterator; call `next` for each file name, like iterating the TypeScript decryptableFiles generator.)
+// An iterator: call `next` for each file name.
 //
 pub const DecryptableFilesIterator = struct {
     // The walk of the whole storage.
@@ -166,7 +166,7 @@ pub fn decryptableFiles(allocator: std.mem.Allocator, io: std.Io, readStorage: I
 }
 
 //
-// Decrypts one file of a batch (TypeScript: the `async fileName => { ... }` arrow function that `batch.map` runs).
+// Decrypts one file of a batch.
 // Runs concurrently with the rest of its batch, with its own allocator because the caller's is not shared between
 // threads.
 //

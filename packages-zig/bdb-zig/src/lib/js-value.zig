@@ -8,10 +8,9 @@ const js_string = @import("utils-zig").js_string;
 const hex = @import("utils-zig").hex;
 
 //
-// No TypeScript counterpart: the JavaScript language semantics that the bdb TypeScript code relies on implicitly
-// (`String(x)`, `Number(x)`, `x < y`, `x === y`, `typeof x`, `new Date(string)`, `Date.prototype.toJSON`,
-// `JSON.stringify`), applied to the values npm bson produces when it deserializes a record (see bson.zig in
-// serialization-zig for how BSON types map to BsonValue).
+// The JavaScript language semantics that the stored data relies on (`String(x)`, `Number(x)`, `x < y`, `x === y`,
+// `typeof x`, `new Date(string)`, `Date.prototype.toJSON`, `JSON.stringify`), applied to the values the BSON
+// deserializer produces for a record (see bson.zig in serialization-zig for how BSON types map to BsonValue).
 //
 // Deviations from JavaScript (documented where they apply):
 // - Local time is assumed to be UTC (Date.prototype.toString and Date.parse of a date-time without an offset).

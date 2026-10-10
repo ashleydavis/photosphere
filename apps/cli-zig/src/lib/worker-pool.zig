@@ -1,14 +1,12 @@
 //
-// Port of worker-pool-bun.ts (WorkerPoolBun) and worker.ts (the worker script).
-// TypeScript runs each worker as a Bun Worker and talks to it with messages. Zig runs each worker as a
-// std.Thread of the CLI process: a dispatched task is handed to the worker thread, which runs the handler
-// registered with task-queue-zig (worker.registerHandler) with an arena allocator owned by the task, and
-// reports the completion itself (under the pool lock, where TypeScript handles the "task-completed" message).
+// The worker pool of the CLI. Each worker is a std.Thread of the CLI process: a dispatched task is handed to
+// the worker thread, which runs the handler registered with task-queue-zig (worker.registerHandler) with an
+// arena allocator owned by the task, and reports the completion itself (under the pool lock).
 //
-// Differences that follow from threads:
+// Consequences of running workers as threads:
 // - A timed-out task's thread cannot be killed: the task is marked abandoned, the thread is detached and its
 //   result discarded (it frees the task when the handler returns), and a replacement worker is created.
-// - A handler error is a task failure, as in TypeScript. A panic ends the process; the worker's "error" event
+// - A handler error is a task failure. A panic ends the process; the worker's "error" event
 //   (handleWorkerError, then handleWorkerCrash) is used when a worker thread cannot be started, when its start-up
 //   fails (the test UUID generator or the session ID) and when a task's failure cannot be reported.
 // - Workers share the main thread's queue backend, so a handler that queues child tasks adds them to this pool
@@ -53,7 +51,7 @@ const errors = utils.errors;
 const log = &utils.log.log;
 
 //
-// How many child tasks one task may have running at once here (worker.ts).
+// How many child tasks one task may have running at once.
 //
 // Ten, because a desktop machine has cores and a fast disk to spare, and whatever queued the work is
 // usually what the user is waiting on. It is not the size of the worker pool: it is how much of that
@@ -98,7 +96,7 @@ pub const IWorkerPoolOptions = struct {
 };
 
 //
-// A task owned by the pool (TypeScript: ITask plus the Zig-only state of its execution).
+// A task owned by the pool, with the state of its execution.
 //
 const IPoolTask = struct {
     // Owns everything the task allocates, including the handler's allocations.
@@ -125,13 +123,13 @@ const IPoolTask = struct {
 // Worker state interface
 //
 const IWorkerState = struct {
-    // The thread of the worker (TypeScript: the Bun Worker), null until it has been started.
+    // The thread of the worker, null until it has been started.
     thread: ?std.Thread,
 
     // Unique numeric identifier assigned to this worker for logging and options.
     workerId: u32,
 
-    // Worker has started and can process tasks (TypeScript: sent its "ready" message).
+    // Worker has started and can process tasks.
     isReady: bool,
 
     // Worker is ready and not currently processing a task.
@@ -152,13 +150,13 @@ const IWorkerState = struct {
     // Timestamp (milliseconds) when the current task started, or null if idle.
     taskStartTime: ?i64,
 
-    // The task handed to the worker thread and not yet picked up (TypeScript: the "execute" message).
+    // The task handed to the worker thread and not yet picked up.
     assignedTask: ?*IPoolTask,
 
     // The task the worker thread is running.
     currentTask: ?*IPoolTask,
 
-    // Set when the worker is terminated (TypeScript: worker.terminate()); the thread exits when it sees it.
+    // Set when the worker is terminated; the thread exits when it sees it.
     terminated: bool,
 
     // The options of the worker.
@@ -182,7 +180,7 @@ fn Registration(comptime CallbackT: type) type {
 }
 
 //
-// Converts a JavaScript number to its string form (`${number}`).
+// Converts a number to its string form.
 //
 fn formatNumber(allocator: std.mem.Allocator, value: f64) ![]const u8 {
     var output: std.Io.Writer.Allocating = .init(allocator);
@@ -191,7 +189,7 @@ fn formatNumber(allocator: std.mem.Allocator, value: f64) ![]const u8 {
 }
 
 //
-// The delay setTimeout uses for a requested delay (utils-zig's sleep.zig).
+// The delay used for a requested timer delay (utils-zig's sleep.zig).
 //
 const setTimeoutDelay = utils.sleep.setTimeoutDelay;
 
@@ -208,7 +206,7 @@ pub const WorkerPoolBun = struct {
     // Workers that have been removed from the pool but may still have a running thread (Zig only).
     retiredWorkers: std.ArrayList(*IWorkerState),
 
-    // Maximum number of worker threads allowed (a JavaScript number: NaN never allows a worker).
+    // Maximum number of worker threads allowed (a float: NaN never allows a worker).
     maxWorkers: f64,
 
     // Options forwarded to each worker for logging and session initialization.
@@ -244,7 +242,7 @@ pub const WorkerPoolBun = struct {
     // Signalled when a task starts running or the pool shuts down, to wake the timeout monitor (Zig only).
     monitorCondition: std.Io.Condition,
 
-    // The thread that enforces the task timeouts (TypeScript: setTimeout), started with the first worker.
+    // The thread that enforces the task timeouts, started with the first worker.
     monitorThread: ?std.Thread,
 
     // Set by deinit to stop the timeout monitor (Zig only).
@@ -256,7 +254,7 @@ pub const WorkerPoolBun = struct {
     // The key of the next registration (Zig only).
     nextKey: usize,
 
-    // Generates task IDs (TypeScript: randomUUID()).
+    // Generates task IDs.
     randomUuidGenerator: RandomUuidGenerator,
 
     //
@@ -645,7 +643,7 @@ pub const WorkerPoolBun = struct {
     }
 
     //
-    // The body of a worker thread (TypeScript: worker.ts).
+    // The body of a worker thread.
     //
     fn workerMain(self: *WorkerPoolBun, workerState: *IWorkerState) void {
         var workerLog = worker_log_bun.WorkerLogBun.init(workerState.workerId, workerState.options.verbose orelse false, workerState.options.tools orelse false);
@@ -658,7 +656,7 @@ pub const WorkerPoolBun = struct {
 
         // Test providers are automatically configured when NODE_ENV === "testing"
         const isTesting = std.mem.eql(u8, node_utils.process_env.getEnv("NODE_ENV") orelse "", "testing");
-        // An error thrown while the worker starts (TypeScript: thrown by the top level of the worker script).
+        // An error raised while the worker starts.
         var startError: ?anyerror = null;
         var testUuidGenerator: ?TestUuidGenerator = null;
         if (isTesting) {
@@ -702,7 +700,7 @@ pub const WorkerPoolBun = struct {
             return;
         }
 
-        // The worker is ready (TypeScript: the "worker-ready" message).
+        // The worker is ready.
         workerState.isReady = true;
         workerState.isIdle = true;
         self.tryDispatchPending();
@@ -731,7 +729,7 @@ pub const WorkerPoolBun = struct {
                 self.handleTaskCompleted(workerState, poolTask, outputs);
             }
             else |err| {
-                // Reporting the task failed (TypeScript: an unhandled rejection in the worker script).
+                // Reporting the task failed.
                 self.handleWorkerError(workerState, err);
                 workerState.currentTask = null;
                 freeTask(poolTask);
@@ -741,8 +739,8 @@ pub const WorkerPoolBun = struct {
     }
 
     //
-    // Handles an error thrown by a worker thread outside of a task handler (TypeScript: the worker's
-    // "error" event): the error is logged and the worker is replaced, failing its task (the lock must be held).
+    // Handles an error thrown by a worker thread outside of a task handler:
+    // the error is logged and the worker is replaced, failing its task (the lock must be held).
     //
     fn handleWorkerError(self: *WorkerPoolBun, workerState: *IWorkerState, err: anyerror) void {
         var message_buffer: [64]u8 = undefined;
@@ -751,7 +749,7 @@ pub const WorkerPoolBun = struct {
     }
 
     //
-    // Executes a task handler on the worker thread (TypeScript: executeTask in worker.ts).
+    // Executes a task handler on the worker thread.
     // Returns the handler outputs, or the failure; an error is returned when the failure cannot be reported.
     //
     fn executeTask(self: *WorkerPoolBun, poolTask: *IPoolTask) !TaskOutcome {
@@ -789,7 +787,7 @@ pub const WorkerPoolBun = struct {
     };
 
     //
-    // Handles the completion of a task (TypeScript: the "task-completed" message; the lock must be held).
+    // Handles the completion of a task (the lock must be held).
     //
     fn handleTaskCompleted(self: *WorkerPoolBun, workerState: *IWorkerState, poolTask: *IPoolTask, outcome: TaskOutcome) void {
         // Clear timeout since task completed
@@ -834,8 +832,7 @@ pub const WorkerPoolBun = struct {
     }
 
     //
-    // Sends a message from the current task back to the caller (TypeScript: sendMessageFn in worker.ts
-    // and the "task-message" handling in the pool).
+    // Sends a message from the current task back to the caller.
     //
     fn sendMessageFn(context: ?*anyopaque, message: std.json.Value) void {
         const poolTask: *IPoolTask = @ptrCast(@alignCast(context.?));
@@ -849,7 +846,7 @@ pub const WorkerPoolBun = struct {
     }
 
     //
-    // The body of the timeout monitor thread (TypeScript: the setTimeout callbacks).
+    // The body of the timeout monitor thread.
     //
     fn monitorMain(self: *WorkerPoolBun) void {
         // The monitor is a thread of its own, not an Io task, so nothing can cancel it.
@@ -1004,7 +1001,7 @@ pub const WorkerPoolBun = struct {
         // If no idle worker available and we haven't reached maxWorkers, create workers for pending tasks
         //
         if (availableWorker == null and @as(f64, @floatFromInt(self.workers.items.len)) < self.maxWorkers) {
-            // Create one worker (TypeScript: workersNeeded = 1, up to the maxWorkers limit)
+            // Create one worker, up to the maxWorkers limit
             const workerState = self.createWorker();
             if (workerState.terminated) {
                 self.handleWorkerCrash(workerState);
@@ -1057,7 +1054,7 @@ pub const WorkerPoolBun = struct {
             index += 1;
         }
 
-        // Signal running tasks with the source to cancel (TypeScript: the "cancel-tasks" message).
+        // Signal running tasks with the source to cancel.
         for (self.workers.items) |workerState| {
             if (workerState.currentTask) |poolTask| {
                 if (std.mem.eql(u8, poolTask.task.source, source)) {

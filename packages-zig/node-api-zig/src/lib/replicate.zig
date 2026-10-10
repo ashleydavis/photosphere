@@ -76,8 +76,8 @@ pub const IReplicationResult = struct {
 };
 
 //
-// The isCancelled option of IReplicateOptions (TypeScript: `() => boolean`).
-// (Zig: a closure; `function` is called with `context`.)
+// The isCancelled option of IReplicateOptions.
+// A closure: `function` is called with `context`.
 //
 pub const IsCancelledCallback = struct {
     // The state of the callback, passed to function.
@@ -96,7 +96,7 @@ pub const IsCancelledCallback = struct {
 
 //
 // Options for the replication process.
-// (Zig: the TypeScript optional booleans default to false, which is how TypeScript treats undefined.)
+// The optional booleans default to false.
 //
 pub const IReplicateOptions = struct {
     //
@@ -124,7 +124,6 @@ pub const IReplicateOptions = struct {
 
 //
 // Formats a progress message into a buffer (the messages are only valid during the progress callback).
-// (No TypeScript counterpart: TypeScript uses template strings.)
 //
 fn reportProgress(progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) void {
     const callback = progressCallback orelse {
@@ -149,8 +148,7 @@ fn throwIfCancelled(isCancelled: ?IsCancelledCallback) !void {
 }
 
 //
-// The state that the copyAsset and processFile closures of replicateFiles capture.
-// (No TypeScript counterpart: TypeScript closures capture the variables of replicateFiles.)
+// The state that copyAsset and processFile share within replicateFiles.
 //
 const ReplicateFilesState = struct {
     // Allocates everything replicateFiles creates.
@@ -162,7 +160,7 @@ const ReplicateFilesState = struct {
     // The source files tree.
     merkleTree: *IMerkleTree,
 
-    // The destination files tree (TypeScript: the destMerkleTree parameter, reassigned by the closures).
+    // The destination files tree, which copyAsset and processFile replace as they update it.
     destMerkleTree: *IMerkleTree,
 
     // The storage the files are copied to.
@@ -221,7 +219,7 @@ const ReplicateFilesState = struct {
             // consolidate from at all, which is the one copy of a database that exists when the
             // origin has been lost.
             //
-            // So a file the source does not hold is left out and recorded, the way sync.ts already
+            // So a file the source does not hold is left out and recorded, the way sync.zig already
             // leaves a file it cannot copy rather than ending the pass. A file missing from a source
             // that is NOT partial is still fatal: there the tree and the files should agree, and a
             // gap between them is damage rather than design.
@@ -316,7 +314,7 @@ const ReplicateFilesState = struct {
         // timer around the whole of copyAsset, so the generous allowances inside it can
         // never be reached. Replicating a real library from S3 failed on the first file
         // that took longer than 30 seconds to move, retried it twice and gave up, and the
-        // copy ended there. sync.ts already passes the long timeout at exactly this point,
+        // copy ended there. sync.zig already passes the long timeout at exactly this point,
         // for the same reason.
         var copyAssetOperation: CopyAssetOperation = .{ .state = self, .fileName = fileName, .sourceHash = sourceFileInfo.hash };
         try retry(self.io, &copyAssetOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, try std.fmt.allocPrint(self.allocator, "Failed to copy file {s}", .{fileName}));
@@ -332,10 +330,10 @@ const ReplicateFilesState = struct {
 };
 
 //
-// `() => copyAsset(fileName, sourceFileInfo.hash)`.
+// Copies one asset from the source to the destination.
 //
 const CopyAssetOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text retryOnce puts in its timeout message.
     pub const source = "() => copyAsset(fileName, sourceFileInfo.hash)";
 
     // The replicateFiles state that copyAsset uses.
@@ -358,7 +356,7 @@ const CopyAssetOperation = struct {
 
 //
 // Replicates files from source to destination.
-// (Zig: destMerkleTree is updated through the pointer, where TypeScript reassigns its parameter.)
+// destMerkleTree is updated through the pointer.
 //
 fn replicateFiles(
     allocator: std.mem.Allocator,
@@ -400,7 +398,7 @@ fn replicateFiles(
     const namesToCopy = try std.mem.concat(allocator, []const u8, &.{ comparison.onlyInA, comparison.modified });
     log.verbose(try std.fmt.allocPrint(allocator, "Found {d} files to copy, {d} files to prune", .{ namesToCopy.len, comparison.onlyInB.len }));
 
-    // (Zig: the names pushed to result.missingFromSource are collected here.)
+    // The names pushed to result.missingFromSource are collected here.
     var missingFromSource: std.ArrayList([]const u8) = .empty;
 
     var state: ReplicateFilesState = .{
@@ -446,15 +444,15 @@ fn replicateFiles(
 
 //
 // Generator to extract leaf node names from MerkleNode arrays.
-// (Zig: returns an iterator; call `next` for each name, like iterating the TypeScript generator.)
+// Returns an iterator: call `next` for each name.
 //
 pub fn iterateLeaves(allocator: std.mem.Allocator, nodes: []const *MerkleNode) LeafNameIterator { //todo: move this to the merkle-tree package and test it.
     return .{ .allocator = allocator, .nodes = nodes, .nodeIndex = 0, .stack = .empty };
 }
 
 //
-// The iterator returned by iterateLeaves. Yields the leaf names of each node in turn, in the same order as the
-// TypeScript generator (the node itself when it is a leaf, otherwise the leaves of its left then right subtree).
+// The iterator returned by iterateLeaves. Yields the leaf names of each node in turn (the node itself when it is
+// a leaf, otherwise the leaves of its left then right subtree).
 //
 pub const LeafNameIterator = struct {
     // Allocates the stack.
@@ -517,7 +515,7 @@ pub const ICollectionRecord = struct {
 //
 fn LoadShardMerkleTreeOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the loaded tree.
@@ -546,7 +544,7 @@ fn LoadShardMerkleTreeOperation(comptime sourceText: []const u8) type {
 //
 fn LoadCollectionMerkleTreeOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the loaded tree.
@@ -572,7 +570,7 @@ fn LoadCollectionMerkleTreeOperation(comptime sourceText: []const u8) type {
 //
 fn LoadDatabaseMerkleTreeOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the loaded tree.
@@ -595,7 +593,7 @@ fn LoadDatabaseMerkleTreeOperation(comptime sourceText: []const u8) type {
 // tree1 is the primary tree (source for pass 1, dest for pass 2).
 // tree2 is the comparison tree (dest for pass 1, source for pass 2).
 // tree1Storage and tree2Storage are the storage locations for tree1 and tree2 respectively.
-// (Zig: loads the trees and returns an iterator over the records; call `next` for each record.)
+// Loads the trees and returns an iterator over the records; call `next` for each record.
 //
 pub fn iterateShardDifferences(
     allocator: std.mem.Allocator,
@@ -622,7 +620,7 @@ pub fn iterateShardDifferences(
     }
 
     // Find records in tree1 that differ from tree2
-    // TODO: fix together with the TypeScript. Records with the same content hash the same (the id is not hashed), so this diff can miss one of them. Mirrors replicate.ts on purpose; see syncDatabases in sync.zig.
+    // TODO: Records with the same content hash the same (the id is not hashed), so this diff can miss one of them. See syncDatabases in sync.zig.
     const differingNodes = try findDifferingNodes(allocator, tree1.?.merkle.?, tree2.?.merkle.?);
     return .{ .collectionName = collectionName, .recordIds = iterateLeaves(allocator, differingNodes) };
 }
@@ -656,7 +654,7 @@ pub const ShardDifferenceIterator = struct {
 // tree1 is the primary tree (source for pass 1, dest for pass 2).
 // tree2 is the comparison tree (dest for pass 1, source for pass 2).
 // tree1Storage and tree2Storage are the storage locations for tree1 and tree2 respectively.
-// (Zig: loads the collection trees and returns an iterator; the shard trees are loaded as the iterator reaches them.)
+// Loads the collection trees and returns an iterator; the shard trees are loaded as the iterator reaches them.
 //
 pub fn iterateCollectionDifferences(
     allocator: std.mem.Allocator,
@@ -693,7 +691,7 @@ pub fn iterateCollectionDifferences(
     }
 
     // Find shards in tree1 that differ from tree2
-    // TODO: fix together with the TypeScript. Records with the same content hash the same (the id is not hashed), so this diff can miss one of them. Mirrors replicate.ts on purpose; see syncDatabases in sync.zig.
+    // TODO: Records with the same content hash the same (the id is not hashed), so this diff can miss one of them. See syncDatabases in sync.zig.
     const differingShards = try findDifferingNodes(allocator, tree1.?.merkle.?, tree2.?.merkle.?);
     iterator.shardIds = iterateLeaves(allocator, differingShards);
     return iterator;
@@ -748,8 +746,8 @@ pub const CollectionDifferenceIterator = struct {
 // tree1 is the primary tree (source for pass 1, dest for pass 2).
 // tree2 is the comparison tree (dest for pass 1, source for pass 2).
 // tree1Storage and tree2Storage are the storage locations for tree1 and tree2 respectively.
-// (Zig: loads the database trees and returns an iterator; the collection and shard trees are loaded as the iterator
-// reaches them.)
+// Loads the database trees and returns an iterator; the collection and shard trees are loaded as the iterator
+// reaches them.
 //
 pub fn iterateDatabaseDifferences(allocator: std.mem.Allocator, io: std.Io, tree1Storage: IStorage, tree2Storage: IStorage) !DatabaseDifferenceIterator {
     var iterator: DatabaseDifferenceIterator = .{
@@ -779,7 +777,7 @@ pub fn iterateDatabaseDifferences(allocator: std.mem.Allocator, io: std.Io, tree
     }
 
     // Find collections in tree1 that differ from tree2
-    // TODO: fix together with the TypeScript. Records with the same content hash the same (the id is not hashed), so this diff can miss one of them. Mirrors replicate.ts on purpose; see syncDatabases in sync.zig.
+    // TODO: Records with the same content hash the same (the id is not hashed), so this diff can miss one of them. See syncDatabases in sync.zig.
     const differingCollections = try findDifferingNodes(allocator, tree1.?.merkle.?, tree2.?.merkle.?);
     iterator.collectionNames = iterateLeaves(allocator, differingCollections);
     return iterator;
@@ -827,20 +825,20 @@ pub const DatabaseDifferenceIterator = struct {
 };
 
 //
-// A set of record IDs in insertion order (TypeScript: Set<string>).
+// A set of record IDs in insertion order.
 //
 const RecordIdSet = std.StringArrayHashMapUnmanaged(void);
 
 //
-// Record ID sets by collection name in insertion order (TypeScript: Map<string, Set<string>>).
+// Record ID sets by collection name in insertion order.
 //
 const RecordIdSetsByCollection = std.StringArrayHashMapUnmanaged(RecordIdSet);
 
 //
-// `() => destColl.setInternalRecord(sourceRecord)`.
+// Sets a source record on the destination collection.
 //
 const SetInternalRecordOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text retryOnce puts in its timeout message.
     pub const source = "() => destColl.setInternalRecord(sourceRecord)";
 
     // The destination collection.
@@ -858,10 +856,10 @@ const SetInternalRecordOperation = struct {
 };
 
 //
-// `() => destColl.deleteOne(recordId)`.
+// Deletes a record from the destination collection.
 //
 const DeleteOneOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text retryOnce puts in its timeout message.
     pub const source = "() => destColl.deleteOne(recordId)";
 
     // The destination collection.
@@ -999,7 +997,7 @@ fn copyBsonMerkleTrees(allocator: std.mem.Allocator, io: std.Io, sourceStorage: 
 
 //
 // Replicates the media file database to another storage.
-// (Zig: the TypeScript optional parameters are passed as null.)
+// A caller with nothing to supply for an optional parameter passes null.
 //
 pub fn replicate(
     allocator: std.mem.Allocator,

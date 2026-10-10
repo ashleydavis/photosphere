@@ -1,6 +1,6 @@
 //
-// Every insertion order produces the same tree (port of src/test/permutation.test.ts).
-// (Zig: TypeScript generates one test per permutation; here one test checks all of them.)
+// Every insertion order produces the same tree.
+// (One test checks all of the permutations.)
 //
 
 const std = @import("std");

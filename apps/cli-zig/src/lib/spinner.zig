@@ -3,13 +3,13 @@ const utils = @import("utils-zig");
 const prompts = @import("clack/prompts.zig");
 
 //
-// Names used from other files (the equivalent of the TypeScript imports).
+// Names used from other files.
 //
 const log = &utils.log.log;
 const clackSpinner = prompts.spinner;
 
 //
-// Something to report the progress of a long wait with (TypeScript: SpinnerResult): the animated clack spinner, or
+// Something to report the progress of a long wait with: the animated clack spinner, or
 // plain log lines.
 //
 pub const SpinnerResult = union(enum) {

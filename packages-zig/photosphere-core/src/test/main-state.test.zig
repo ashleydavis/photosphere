@@ -96,8 +96,8 @@ test "enqueueSyncTask queues nothing unless syncing is allowed, a database is op
     state.sync_allowed = true;
     state.is_sync_running = true;
     state.unlock();
-    // A sync is running already, so nothing is queued. A sync that was queued would fail here (no sync task type is registered in this
-    // core), which would tell the page that it completed and reset the running flag.
+    // A sync is running already, so nothing is queued. A sync that was queued would end here (the database has no origin, so the sync is
+    // skipped), which would reset the running flag.
     try state.enqueueSyncTask();
     app.shell.sleepMs(100);
     try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("sync-completed"));
@@ -105,9 +105,16 @@ test "enqueueSyncTask queues nothing unless syncing is allowed, a database is op
     state.lock();
     state.is_sync_running = false;
     state.unlock();
-    // Everything allows it, so the sync is queued. That one fails for want of a task type, which is how its end is seen.
+    // Everything allows it, so the sync is queued. The database has no origin, so the sync is skipped, which the page is told, and the
+    // end of the task is what resets the running flag.
     try state.enqueueSyncTask();
-    try app.shell.expectMessageContaining("{\"channel\":\"sync-completed\",\"data\":null}");
+    try app.shell.expectMessageContaining("\"type\":\"sync-skipped\"");
+    try app.shell.expectMessageContaining("no origin configured");
+    var waited_ms: u32 = 0;
+    while (isSyncRunning(state) and waited_ms < 20_000) : (waited_ms += 5) {
+        app.shell.sleepMs(5);
+    }
+    try std.testing.expect(!isSyncRunning(state));
 }
 
 test "resetSyncState to the database that is already open cancels nothing, and to another one cancels its tasks" {
@@ -129,4 +136,19 @@ test "resetSyncState to the database that is already open cancels nothing, and t
     try std.testing.expect(debounceDeadline(state) == null);
     try state.resetSyncState("/another/db");
     try app.shell.expectMessageContaining("\"errorMessage\":\"Cancelled\"");
+}
+
+test "a background loop is claimed once until it is released, and the loops are claimed separately" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const state = main_state.fromCore(app.core);
+    const background_work = @import("../lib/background-work.zig");
+
+    try std.testing.expect(state.claimBackgroundLoop(.import));
+    try std.testing.expect(!state.claimBackgroundLoop(.import));
+    try std.testing.expect(state.claimBackgroundLoop(.sync));
+    state.releaseBackgroundLoop(.import);
+    try std.testing.expect(state.claimBackgroundLoop(.import));
+    try std.testing.expectEqual(background_work.ReplicaState.unknown, state.prefetch_replica_state.load(.acquire));
 }

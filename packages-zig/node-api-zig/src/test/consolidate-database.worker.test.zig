@@ -19,8 +19,7 @@ const TaskContext = task_queue_zig.task_context.TaskContext;
 const REMOTE_THUMB_PATH = "thumb/476dffbb-af9e-4cda-8006-b02f3851e86c";
 
 //
-// A task context that records the messages sent through it (TypeScript: makeContext, whose sendMessage pushes to
-// sentMessages).
+// A task context that records the messages sent through it.
 //
 const RecordingContext = struct {
     // Deterministic uuids.
@@ -110,7 +109,7 @@ fn removeDirectories(io: std.Io, dirs: Directories) void {
 }
 
 //
-// The payload a run is asked for (TypeScript: VALID_DATA, with the paths of the test's databases).
+// The payload a run is asked for, with the paths of the test's databases.
 //
 fn makeData(allocator: std.mem.Allocator, databasePath: []const u8, remotePath: []const u8) !std.json.Value {
     var data: std.json.ObjectMap = .empty;

@@ -1,14 +1,10 @@
 //
-// Tests for how a push moves a file between two encrypted databases (port of
-// src/test/lib/sync-verbatim-push.test.ts).
+// Tests for how a push moves a file between two encrypted databases.
 //
 // The stored bytes go across as they are. The ciphertext one database holds is exactly the
 // ciphertext the other would write, so decrypting it on the way out and encrypting it again on the
 // way in changes nothing but the time it takes, and on a phone that time is the whole cost of
-// pushing an original: AES-256-CBC there runs in the engine's own JavaScript at about a fifth of a
-// megabyte a second in each direction. Measured on a Pixel 6, a three megabyte photo took thirty
-// seconds to push and a ninety megabyte video a quarter of an hour, for bytes the network carries
-// in a few seconds.
+// pushing an original: AES-256-CBC is slow there, for bytes the network carries in a few seconds.
 //
 
 const std = @import("std");
@@ -37,8 +33,7 @@ const fileName = "asset/one.jpg";
 
 //
 // A key pair and the key map that reads what it wrote, as one database's keys.
-// (Zig: the key pairs are the TypeScript generated fixture keys of encryption-zig, where the TypeScript test makes a
-// fresh pair each time.)
+// The key pairs are the pre-generated fixture keys of encryption-zig.
 //
 const IDatabaseKeys = struct {
     // The storage options: the public key files are encrypted with and the private keys they are decrypted with.

@@ -5,7 +5,7 @@ const crypto = @import("node-crypto.zig");
 // Map of key identifier to private key for decryption.
 // Use "default" for old-format files (no header). Use hex-encoded SHA-256 of
 // the public key for new-format files (header contains key hash).
-// (TypeScript: Record<string, KeyObject>. Keys are looked up with get() and added with put().)
+// (Keys are looked up with get() and added with put().)
 //
 pub const IPrivateKeyMap = std.StringArrayHashMapUnmanaged(*const crypto.PrivateKey);
 

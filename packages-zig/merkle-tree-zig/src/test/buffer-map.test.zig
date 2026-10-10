@@ -1,5 +1,5 @@
 //
-// Tests for BufferMap (port of src/test/buffer-map.test.ts).
+// Tests for BufferMap.
 //
 
 const std = @import("std");
@@ -10,7 +10,7 @@ const BufferMap = merkle_tree_zig.buffer_map.BufferMap;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 //
-// The SHA-256 of a string (TypeScript: `crypto.createHash("sha256").update(text).digest()`).
+// The SHA-256 of a string.
 //
 fn sha256(text: []const u8) [Sha256.digest_length]u8 {
     var digest: [Sha256.digest_length]u8 = undefined;
@@ -164,7 +164,7 @@ test "should iterate over keys" {
 }
 
 //
-// Collects the pairs a map yields (TypeScript: `collected.push([key, value])`).
+// Collects the pairs a map yields.
 //
 const PairCollector = struct {
     // Allocates the list.

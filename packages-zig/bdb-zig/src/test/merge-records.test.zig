@@ -1,5 +1,5 @@
 //
-// Tests for mergeRecords (port of src/tests/merge-records.test.ts).
+// Tests for mergeRecords.
 //
 
 const std = @import("std");
@@ -61,7 +61,7 @@ fn fieldsOf(metadata: Metadata) BsonValue {
 }
 
 //
-// Jest's toEqual: deep equality that ignores properties whose value is undefined and the order of properties.
+// Deep equality that ignores properties whose value is undefined and the order of properties.
 //
 fn toEqual(actual: BsonValue, expected: BsonValue) bool {
     if (actual == .document and expected == .document) {
@@ -492,7 +492,7 @@ test "should preserve metadata structure after merge and cleanup" {
 // The records below are the ones smoke test 45 produces, read out of the real databases it leaves
 // behind with `bdb shard <db>/.db/bson metadata <shard>`.
 //
-// A freshly added asset carries `description: ""` as a real field (upload-asset.worker.ts writes
+// A freshly added asset carries `description: ""` as a real field (the asset upload worker writes
 // it on every import) with no per-field metadata of its own, so the origin's side of the
 // comparison falls back to the record-level timestamp, which is when the HOST created the record.
 // The device edits the description and stamps it with its OWN clock, and the merge compares the

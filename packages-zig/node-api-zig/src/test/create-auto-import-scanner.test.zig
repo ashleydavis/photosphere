@@ -33,8 +33,7 @@ const storage_factory = @import("storage-zig").storage_factory;
 //
 // The tests drive a real folder source and a real hash cache, because the question they are asking
 // is whether the identity the import writes into the cache is one a later listing produces again.
-// (Zig: the metadata collection is a real one too, holding the assets the test says the database holds, where
-// TypeScript answers the one question the scanner asks with an object of its own.)
+// The metadata collection is a real one too, holding the assets the test says the database holds.
 //
 
 //
@@ -92,7 +91,7 @@ const Pushed = struct {
 };
 
 //
-// The state each test starts from (TypeScript: the beforeEach of the describe block).
+// The state each test starts from.
 //
 const ScannerTest = struct {
     // Holds the test's allocations.
@@ -259,7 +258,7 @@ const ScannerTest = struct {
 };
 
 //
-// Makes the storage of a database directory. (No TypeScript counterpart.)
+// Makes the storage of a database directory.
 //
 fn createDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databaseDir: []const u8) !storage_factory.ICreateStorageResult {
     return storage_factory.createStorage(allocator, io, databaseDir, null, null);
@@ -302,7 +301,7 @@ test "a photo the cache knows the hash of, but not where it landed, is looked up
     defer context.deinit();
     const allocator = context.arena.allocator();
     // An earlier run hashed it but was stopped before it recorded where it went. The database is
-    // asked for that hash, exactly as the import itself would. (Zig: the id is a UUID, because the database is a
+    // asked for that hash, exactly as the import itself would. (The id is a UUID, because the database is a
     // real one and it takes only UUIDs.)
     var identity = try context.photoIdentity();
     const contentHash = photoHash();

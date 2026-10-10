@@ -51,14 +51,14 @@ pub const FileStorage = struct {
     location: []const u8,
 
     //
-    // Creates file storage (TypeScript: `new FileStorage(location)`).
+    // Creates file storage.
     //
     pub fn init(location: []const u8) FileStorage {
         return .{ .location = location };
     }
 
     //
-    // Gets the IStorage interface of this storage (TypeScript: the class implements IStorage).
+    // Gets the IStorage interface of this storage.
     //
     pub fn storage(self: *FileStorage) IStorage {
         return .{ .ptr = self, .vtable = storage_module.implement(FileStorage), .location = self.location };
@@ -250,7 +250,7 @@ pub const FileStorage = struct {
 
     //
     // Streams a file from stroage.
-    // (Zig: the file is opened here, so a missing file fails now with Node's ENOENT message instead of on the first read.)
+    // The file is opened here, so a missing file fails now with Node's ENOENT message instead of on the first read.
     //
     pub fn readStream(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
         _ = self;
@@ -268,8 +268,7 @@ pub const FileStorage = struct {
     // can do without moving anything into the engine at all. A transformed stream (an encrypting one,
     // for instance) carries no path and still goes through the pipe.
     //
-    // (Zig: a std.Io.Reader carries no path, so every stream is piped. `fs.copyFile` and the pipe
-    // write the same bytes to the same temporary file, so the result is the same.)
+    // A std.Io.Reader carries no path, so every stream is piped.
     //
     pub fn writeStream(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, _contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) !void {
         _ = self;
@@ -319,7 +318,7 @@ pub const FileStorage = struct {
 
     //
     // TODO: a lock file whose JSON has fields of other types (no owner, a string timestamp, an acquiredAt that is not
-    // toISOString output) is unreadable here, where the TypeScript carries undefined, NaN or an Invalid Date forward.
+    // toISOString output) is unreadable here.
     //
     // Checks if a write lock is acquired for the specified file.
     // Returns the lock information if it exists, undefined otherwise.
@@ -374,10 +373,9 @@ pub const FileStorage = struct {
             else if (lockFileBeingWritten(io, filePath, timestamp) catch |err| return failAcquire(allocator, timestamp, processId, owner, filePath, err)) {
                 // The lock file is empty because its owner has created it and not yet written it.
                 // Breaking it here as corrupt let two owners hold the lock at once.
-                // TODO: the TypeScript acquireWriteLock has this race: it creates the lock file and writes its JSON in
-                // one call, and a contender that reads it empty in between breaks it as corrupt, so both hold the lock.
-                // The Zig refuses the empty lock instead, because the ported unit test "should handle race conditions
-                // properly" failed on macOS CI with the race. Fix the TypeScript the same way.
+                // The lock file is created and its JSON written in one call, so a contender that reads it empty in between
+                // must refuse it and not break it as corrupt, or both would hold the lock. The unit test "should handle
+                // race conditions properly" failed on macOS CI with the race.
                 if (log.verboseEnabled()) {
                     log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},ACQUIRE_FAILED_BEING_WRITTEN,{d},{s},{s}", .{ timestamp, processId, owner, filePath }));
                 }
@@ -450,6 +448,7 @@ pub const FileStorage = struct {
     //
     // Refreshes a write lock for the specified file, updating its timestamp.
     // Throws an error if the lock is no longer owned by the specified owner.
+    // The body is a function, refreshWriteLockUnlogged, so that its failure can be logged and rethrown.
     //
     pub fn refreshWriteLock(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
         const timestamp = std.Io.Clock.real.now(io).toMilliseconds();
@@ -459,7 +458,6 @@ pub const FileStorage = struct {
             log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},REFRESH_ATTEMPT,{d},{s},{s}", .{ timestamp, processId, owner, filePath }));
         }
 
-        // (Zig: TypeScript wraps the body in one try/catch; here the body is a function so its failure can be logged and rethrown.)
         self.refreshWriteLockUnlogged(allocator, io, filePath, owner, timestamp) catch |err| {
             if (log.verboseEnabled()) {
                 log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},REFRESH_FAILED,{d},{s},{s},error:{s}", .{ timestamp, processId, owner, filePath, errors.errorMessage(err) }));
@@ -473,7 +471,7 @@ pub const FileStorage = struct {
     }
 
     //
-    // The try block of refreshWriteLock. (No TypeScript counterpart: see refreshWriteLock.)
+    // The body of refreshWriteLock, see refreshWriteLock.
     //
     fn refreshWriteLockUnlogged(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8, timestamp: i64) !void {
         // Check if lock exists and we own it
@@ -514,7 +512,7 @@ fn lockFileBeingWritten(io: std.Io, filePath: []const u8, timestamp: i64) !bool 
 
 //
 // The catch block of FileStorage.acquireWriteLock for errors other than EEXIST: logs the error and rethrows it.
-// (Zig: TypeScript wraps the method body in one try/catch; here each fallible step passes its result through this.)
+// Each fallible step of acquireWriteLock passes its result through this.
 //
 fn logAcquireError(allocator: std.mem.Allocator, timestamp: i64, processId: i64, owner: []const u8, filePath: []const u8, result: anytype) anyerror!void {
     _ = result catch |err| {
@@ -534,8 +532,7 @@ fn failAcquire(allocator: std.mem.Allocator, timestamp: i64, processId: i64, own
 }
 
 //
-// Reads the names of the entries of a directory that are (or are not) directories
-// (TypeScript: `fs.readdir(path, { withFileTypes: true })` followed by a filter on `entry.isDirectory()`).
+// Reads the names of the entries of a directory that are (or are not) directories.
 //
 fn readDirNames(allocator: std.mem.Allocator, io: std.Io, path: []const u8, directories: bool) ![][]const u8 {
     var dir = try std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true });
@@ -560,7 +557,7 @@ fn dirname(filePath: []const u8) []const u8 {
 }
 
 //
-// Copies everything from a reader into a new file (TypeScript: `pipeline(inputStream, createWriteStream(tmpPath))`).
+// Copies everything from a reader into a new file.
 //
 fn pipeline(allocator: std.mem.Allocator, io: std.Io, inputStream: *std.Io.Reader, outputPath: []const u8) !void {
     const file = try std.Io.Dir.cwd().createFile(io, outputPath, .{});
@@ -573,8 +570,8 @@ fn pipeline(allocator: std.mem.Allocator, io: std.Io, inputStream: *std.Io.Reade
 }
 
 //
-// A readable stream over a file (TypeScript: `fs.createReadStream(filePath)`).
-// Like Node's stream (autoClose), it closes the file as soon as it reads the end, so the file can be replaced
+// A readable stream over a file.
+// Like Node's file streams (autoClose), it closes the file as soon as it reads the end, so the file can be replaced
 // (a copy onto its own path renames over it) before the stream is destroyed. Windows refuses to replace an open file.
 //
 pub const FileReadStream = struct {
@@ -652,7 +649,7 @@ pub const FileReadStream = struct {
 };
 
 //
-// Opens a file for streaming (TypeScript: `createReadStream(filePath)`), failing with Node's message when it is missing.
+// Opens a file for streaming, failing with Node's message when it is missing.
 //
 fn createReadStream(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
     const file = std.Io.Dir.cwd().openFile(io, filePath, .{}) catch |err| {

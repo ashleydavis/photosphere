@@ -48,7 +48,7 @@ pub fn isDatabaseEncrypted(allocator: std.mem.Allocator, io: std.Io, assetStorag
 
 //
 // Saves the merkle tree to disk.
-// (Zig: the tree's database metadata is the BSON document described by IDatabaseMetadata.)
+// The tree's database metadata is the BSON document described by IDatabaseMetadata.
 //
 pub fn saveMerkleTree(allocator: std.mem.Allocator, io: std.Io, merkleTree: ?*IMerkleTree, assetStorage: IStorage) !void {
     const tree = merkleTree orelse {
@@ -187,7 +187,7 @@ pub const IBuildFilesTreeResult = struct {
 };
 
 //
-// Called by buildFilesTree with the number of files hashed so far (TypeScript: `(fileCount: number) => void`).
+// Called by buildFilesTree with the number of files hashed so far.
 //
 pub const IBuildFilesTreeProgress = struct {
     // The state of the callback, passed to function.
@@ -212,7 +212,7 @@ fn matchesDbDirectory(fullPath: []const u8) bool {
 }
 
 //
-// A file read and hashed by buildFilesTree (TypeScript: what the readAndHash inner function resolves to).
+// A file read and hashed by buildFilesTree.
 //
 const IReadAndHashResult = struct {
     // The file name in storage.
@@ -229,7 +229,7 @@ const IReadAndHashResult = struct {
 };
 
 //
-// Gets a file's info and hashes it (TypeScript: the readAndHash inner function of buildFilesTree).
+// Gets a file's info and hashes it.
 //
 fn readAndHash(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, fileName: []const u8) !IReadAndHashResult {
     var infoOperation: retry_operations.InfoOperation("() => storage.info(fileName)") = .{
@@ -255,9 +255,8 @@ fn readAndHash(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, file
 }
 
 //
-// Reads and hashes one file of a batch (TypeScript: the `({ fileName }) => readAndHash(fileName)` arrow function
-// that `batch.map` runs). Runs concurrently with the rest of its batch, with its own allocator because the caller's
-// is not shared between threads.
+// Reads and hashes one file of a batch. Runs concurrently with the rest of its batch, with its own allocator
+// because the caller's is not shared between threads.
 //
 const ReadAndHashTask = struct {
     // The storage holding the file.

@@ -2,7 +2,7 @@ const std = @import("std");
 const op = @import("op.zig");
 
 //
-// An operation on a record of a database, and the database it applies to (TypeScript: IDatabaseOp).
+// An operation on a record of a database, and the database it applies to.
 //
 pub const IDatabaseOp = struct {
     // The database the operation is applied to.
@@ -19,7 +19,7 @@ pub const IDatabaseOp = struct {
 };
 
 //
-// Reads an operation from the JSON object the page sends. (No TypeScript counterpart, see opSelectionFromJson.)
+// Reads an operation from the JSON object the page sends.
 //
 pub fn databaseOpFromJson(value: std.json.Value) !IDatabaseOp {
     if (value != .object) {

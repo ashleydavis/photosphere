@@ -16,7 +16,7 @@ const ICommandContext = init_cmd.ICommandContext;
 const updateDatabaseConfig = api.database_config.updateDatabaseConfig;
 
 //
-// Options of the set-origin command (TypeScript: ISetOriginCommandOptions extends IBaseCommandOptions).
+// Options of the set-origin command.
 // The base options are in `base`.
 //
 pub const ISetOriginCommandOptions = struct {
@@ -26,8 +26,8 @@ pub const ISetOriginCommandOptions = struct {
 
 //
 // Command that sets the origin of the database.
-// (Zig: `{ ...existing ?? {}, origin }` is passed as just the origin, because updateDatabaseConfig spreads the
-// existing config first itself, so the existing keys are written in the same order either way.)
+// Only the origin is passed, because updateDatabaseConfig merges it into the existing config itself, so the
+// existing keys are written in the same order either way.
 //
 pub fn setOriginCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *ISetOriginCommandOptions, originPath: []const u8) !void {
     const uuidGenerator = context.uuidGenerator;

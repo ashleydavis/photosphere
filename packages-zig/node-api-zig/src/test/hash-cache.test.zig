@@ -28,7 +28,7 @@ fn createHash(allocator: std.mem.Allocator, content: []const u8) ![]const u8 {
 }
 
 //
-// `new Date(year, monthIndex, day).getTime()` in UTC, the time zone the tests run in. (No TypeScript counterpart.)
+// The time of a date (year, month index and day) in UTC, the time zone the tests run in.
 //
 fn localDate(year: i64, monthIndex: i64, day: i64) i64 {
     // Days from 1970-01-01 to the date, by the civil-from-days algorithm run backwards.
@@ -43,7 +43,7 @@ fn localDate(year: i64, monthIndex: i64, day: i64) i64 {
 }
 
 //
-// The state each HashCache test starts from (TypeScript: the beforeEach of the describe block).
+// The state each HashCache test starts from.
 //
 const CacheTest = struct {
     // Holds the test's allocations.
@@ -361,7 +361,7 @@ test "should validate hash length" {
 }
 
 test "addHash refuses a length that does not fit 48 bits with a RangeError" {
-    // Node's `buf.writeUIntLE(value, offset, 6)` throws a RangeError for a value of 2 ** 48 or more.
+    // Writing a 48 bit integer throws a RangeError for a value of 2 ** 48 or more.
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();

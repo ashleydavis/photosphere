@@ -7,7 +7,7 @@ const isUiStateValue = state_format.isUiStateValue;
 //
 // The flat key/value view of state.yaml that the interface works in.
 //
-// The sibling of app-config-format.ts, and the same idea: `IConfig` in user-interface offers get and
+// The sibling of app-config-format.zig, and the same idea: `IConfig` in user-interface offers get and
 // set over a plain string key, and the interface knows nothing about where any of them are kept. This
 // module is the one definition of what the state keys mean, which section of state.yaml each one sits
 // in, and what it is called on disk.
@@ -16,7 +16,7 @@ const isUiStateValue = state_format.isUiStateValue;
 // a context per store and the caller asks the one it means.
 //
 // It touches no filesystem, which is what lets it be bundled into the mobile worker. The functions
-// that open the file are in state-file.ts.
+// that open the file are in state-file.zig.
 //
 // Like the config view it maps the raw document rather than filled-in defaults, so absent means
 // absent and the interface can apply its own default to a key nobody has touched.
@@ -32,7 +32,7 @@ pub const IUiSection = state_format.IUiSection;
 
 //
 // A value one of the flat state keys can hold: a boolean, a number, a string or an array of strings, as a
-// std.json.Value. (TypeScript: IAppStateValue is IUiStateValue.)
+// std.json.Value.
 //
 pub const IAppStateValue = std.json.Value;
 
@@ -102,7 +102,6 @@ pub const DECLARED_APP_STATE_KEYS = [_][]const u8{
 
 //
 // True when the key is one of DECLARED_APP_STATE_KEYS (`DECLARED_APP_STATE_KEYS.includes(key)`).
-// (No TypeScript counterpart.)
 //
 fn isDeclaredKey(key: []const u8) bool {
     for (DECLARED_APP_STATE_KEYS) |declaredKey| {
@@ -114,7 +113,7 @@ fn isDeclaredKey(key: []const u8) bool {
 }
 
 //
-// Makes a JSON string from an optional string. (No TypeScript counterpart: TypeScript holds the value as it is.)
+// Makes a JSON string from an optional string.
 //
 fn optionalString(text: ?[]const u8) ?std.json.Value {
     if (text) |value| {
@@ -126,7 +125,7 @@ fn optionalString(text: ?[]const u8) ?std.json.Value {
 }
 
 //
-// Makes a JSON array of strings. (No TypeScript counterpart: TypeScript holds the array as it is.)
+// Makes a JSON array of strings.
 //
 fn stringsToJson(allocator: std.mem.Allocator, strings: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
@@ -141,7 +140,7 @@ fn stringsToJson(allocator: std.mem.Allocator, strings: []const []const u8) !std
 }
 
 //
-// The strings of a JSON array, or undefined when any element is not a string. (No TypeScript counterpart.)
+// The strings of a JSON array, or undefined when any element is not a string.
 //
 fn stringsFromJson(allocator: std.mem.Allocator, array: std.json.Array) !?[]const []const u8 {
     var strings: std.ArrayList([]const u8) = .empty;
@@ -156,7 +155,6 @@ fn stringsFromJson(allocator: std.mem.Allocator, array: std.json.Array) !?[]cons
 
 //
 // True when the value is a finite number (`typeof value === "number" && Number.isFinite(value)`).
-// (No TypeScript counterpart.)
 //
 fn isFiniteNumber(value: std.json.Value) bool {
     return switch (value) {
@@ -169,7 +167,6 @@ fn isFiniteNumber(value: std.json.Value) bool {
 
 //
 // Gets a declared key as the value the flat view holds it as, or undefined when nothing is stored.
-// (No TypeScript counterpart: TypeScript indexes the state object by the key.)
 //
 fn declaredValue(allocator: std.mem.Allocator, state: IAppState, key: []const u8) !?IAppStateValue {
     if (std.mem.eql(u8, key, "lastFolder")) {
@@ -215,8 +212,7 @@ pub fn getAppStateValue(allocator: std.mem.Allocator, state: IAppState, key: []c
 }
 
 //
-// Throws that a key was given a value it cannot hold. (No TypeScript counterpart: TypeScript's types refuse the value
-// before the program runs, and here the value arrives as JSON.)
+// Throws that a key was given a value it cannot hold. (Zig: the value arrives as JSON.)
 //
 fn throwCannotHold(key: []const u8, expected: []const u8) errors.ThrownError {
     return errors.throwError("The state key \"{s}\" cannot hold that value, it holds {s}.", .{
@@ -226,9 +222,9 @@ fn throwCannotHold(key: []const u8, expected: []const u8) errors.ThrownError {
 }
 
 //
-// Stores a value into a declared key. (No TypeScript counterpart: TypeScript assigns the field by the key.)
+// Stores a value into a declared key.
 //
-// TypeScript assigns whatever it is given. The value arrives as JSON here, so one of the wrong kind is refused with an
+// The value arrives as JSON here, so one of the wrong kind is refused with an
 // error naming the key rather than stored where the next read would drop it.
 //
 fn setDeclaredValue(allocator: std.mem.Allocator, state: *IAppState, key: []const u8, value: IAppStateValue) !void {
@@ -280,7 +276,7 @@ fn setDeclaredValue(allocator: std.mem.Allocator, state: *IAppState, key: []cons
 }
 
 //
-// Removes a declared key. (No TypeScript counterpart: TypeScript deletes the field by the key.)
+// Removes a declared key.
 //
 fn clearDeclaredValue(state: *IAppState, key: []const u8) void {
     if (std.mem.eql(u8, key, "lastFolder")) {
@@ -328,8 +324,7 @@ pub fn setAppStateValue(allocator: std.mem.Allocator, state: *IAppState, key: []
         return;
     }
 
-    // (Zig: TypeScript's types keep anything but a boolean, a number, a string or an array of strings out of here, and
-    // the value arrives as JSON, so it is checked.)
+    // (Zig: the value arrives as JSON, so anything but a boolean, a number, a string or an array of strings is refused here.)
     if (!isUiStateValue(value.?)) {
         return throwCannotHold(key, "a boolean, a number, a string or a list of strings");
     }
@@ -376,7 +371,7 @@ fn isSection(value: ?std.json.Value) bool {
 }
 
 //
-// Gets a string field of a section (`typeof section.key === "string"`). (No TypeScript counterpart.)
+// Gets a string field of a section.
 //
 fn stringField(section: std.json.ObjectMap, key: []const u8) ?[]const u8 {
     const value = section.get(key) orelse {
@@ -481,8 +476,7 @@ fn writeSection(allocator: std.mem.Allocator, document: *std.json.ObjectMap, nam
 }
 
 //
-// A copy of a section of the document to write into, or an empty one when the document has none that is an object
-// (`isSection(merged.desktop) ? { ...merged.desktop } : {}`). (No TypeScript counterpart.)
+// A copy of a section of the document to write into, or an empty one when the document has none that is an object.
 //
 fn copyOfSection(allocator: std.mem.Allocator, merged: std.json.ObjectMap, name: []const u8) !std.json.ObjectMap {
     if (isSection(merged.get(name))) {

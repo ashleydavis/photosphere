@@ -1,5 +1,5 @@
 //
-// Tests for mergeValues (port of src/tests/merge-values.test.ts).
+// Tests for mergeValues.
 //
 
 const std = @import("std");
@@ -19,7 +19,7 @@ const objectValue = js_object_builders.objectValue;
 const toEqual = to_equal.toEqual;
 
 //
-// Builds a merge value without nested field metadata (TypeScript: `{ value, metadata: { timestamp } }`).
+// Builds a merge value without nested field metadata (`{ value, metadata: { timestamp } }`).
 //
 fn plain(value: BsonValue, timestamp: f64) MergeValue {
     return .{

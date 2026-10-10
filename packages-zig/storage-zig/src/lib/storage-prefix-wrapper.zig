@@ -19,17 +19,17 @@ const pathJoin = storage_factory.pathJoin;
 // Storage that prepends a prefix to every path before passing it to the wrapped storage.
 //
 pub const StoragePrefixWrapper = struct {
-    // The wrapped storage (TypeScript: the private `storage` field; renamed because `storage()` returns the interface).
+    // The wrapped storage (not called `storage` because `storage()` returns the interface).
     wrappedStorage: IStorage,
 
     // The prefix added to every path.
     prefix: []const u8,
 
-    // The location of the storage (TypeScript: the `location` getter, computed once here).
+    // The location of the storage, computed once at creation.
     location: []const u8,
 
     //
-    // Creates the wrapper (TypeScript: `new StoragePrefixWrapper(storage, prefix)`).
+    // Creates the wrapper.
     //
     pub fn init(allocator: std.mem.Allocator, wrappedStorage: IStorage, prefix: []const u8) !StoragePrefixWrapper {
         if (prefix.len == 0) {
@@ -43,7 +43,7 @@ pub const StoragePrefixWrapper = struct {
     }
 
     //
-    // Gets the IStorage interface of this storage (TypeScript: the class implements IStorage).
+    // Gets the IStorage interface of this storage.
     //
     pub fn storage(self: *StoragePrefixWrapper) IStorage {
         return .{ .ptr = self, .vtable = storage_module.implement(StoragePrefixWrapper), .location = self.location };

@@ -31,8 +31,7 @@ pub fn textResult(allocator: std.mem.Allocator, text: []const u8) !CallToolResul
 }
 
 //
-// The currently open database, or the result a tool answers with when none is open
-// (TypeScript: `ICurrentDatabase | CallToolResult`).
+// The currently open database, or the result a tool answers with when none is open.
 //
 pub const IDatabaseOrResult = union(enum) {
     // The open database.
@@ -55,7 +54,7 @@ pub fn requireDatabase(allocator: std.mem.Allocator, toolContext: *const IMcpToo
 
 //
 // Reduces a full IAsset to the slimmer summary returned by list/search tools.
-// (Zig: a field the asset does not have is undefined, which JSON.stringify leaves out.)
+// (A field the asset does not have is left out.)
 //
 pub fn toAssetSummary(allocator: std.mem.Allocator, asset: IAsset) !BsonValue {
     var summary: BsonDocument = .empty;
@@ -66,10 +65,9 @@ pub fn toAssetSummary(allocator: std.mem.Allocator, asset: IAsset) !BsonValue {
 }
 
 //
-// Converts a result of the Zig libraries to the JavaScript value its TypeScript counterpart is, for JSON.stringify:
-// a struct becomes an object with its fields in order, null (undefined) fields left out, an enum its name, an
-// integer or float a number, a string a string and a slice an array. (No TypeScript counterpart: the TypeScript
-// results are already JavaScript values.)
+// Converts a result of the Zig libraries to a value that is written as JSON:
+// a struct becomes an object with its fields in order, null fields left out, an enum its name, an
+// integer or float a number, a string a string and a slice an array.
 //
 pub fn toJsValue(allocator: std.mem.Allocator, value: anytype) !BsonValue {
     const ValueType = @TypeOf(value);

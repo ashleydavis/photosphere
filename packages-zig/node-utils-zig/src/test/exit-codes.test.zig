@@ -2,7 +2,7 @@ const std = @import("std");
 const node_utils = @import("node-utils-zig");
 const exit_codes = node_utils.exit_codes;
 
-test "exit codes match TypeScript" {
+test "exit codes" {
     try std.testing.expectEqual(@as(u8, 0), exit_codes.EXIT_SUCCESS);
     try std.testing.expectEqual(@as(u8, 1), exit_codes.EXIT_FAILURE);
     try std.testing.expectEqual(@as(u8, 64), exit_codes.EXIT_UNCAUGHT_EXCEPTION);

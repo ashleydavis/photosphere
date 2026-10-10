@@ -5,7 +5,7 @@ const support = @import("test-support.zig");
 const TestApp = support.TestApp;
 
 //
-// Queues a task of a type ported from the TypeScript workers, with the add-task message the page sends.
+// Queues a task of a type that has a registered handler, with the add-task message the page sends.
 //
 fn addTask(app: *TestApp, task_id: []const u8, task_type: []const u8, data_json: []const u8) !void {
     const message = try utils.json.stringify(std.testing.allocator, .{
@@ -22,7 +22,7 @@ fn addTask(app: *TestApp, task_id: []const u8, task_type: []const u8, data_json:
     app.core.postMessage(message);
 }
 
-test "a task type ported from the TypeScript workers runs on Ziggy's runner and its outputs reach the page" {
+test "a task type with a registered handler runs on Ziggy's runner and its outputs reach the page" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -36,7 +36,7 @@ test "a task type ported from the TypeScript workers runs on Ziggy's runner and 
     try app.shell.expectMessageContaining("\"taskId\":\"exists-1\",\"status\":\"succeeded\",\"outputs\":{\"exists\":false},\"type\":\"check-database-exists\"");
 }
 
-test "a ported task type that throws gives the page the message it threw" {
+test "a registered task type that throws gives the page the message it threw" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();

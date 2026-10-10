@@ -304,6 +304,16 @@ test "awaitTask returns the result of one child and a failed child is returned a
     try shell.expectMessageContaining("\"first\":\"succeeded\",\"firstResult\":\"child answer\",\"second\":\"failed\",\"secondError\":\"TestFailure\"");
 }
 
+test "runChild runs children one after another and returns each one's completion" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try helpers.createCore(&shell, 2, 2);
+    defer core.destroy();
+    try addTask(core, "p", "run-children-in-turn", "s", "null", "background");
+    try shell.expectMessageContaining("\"first\":\"succeeded\",\"firstResult\":\"child answer\",\"second\":\"failed\",\"secondError\":\"TestFailure\",\"third\":\"succeeded\",\"thirdResult\":\"child answer\"");
+}
+
 test "no more than the child task limit run at once" {
     var shell: helpers.FakeShell = undefined;
     shell.init(std.testing.allocator);

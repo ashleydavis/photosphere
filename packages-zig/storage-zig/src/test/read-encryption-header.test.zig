@@ -13,7 +13,7 @@ const PUBLIC_KEY_HASH_LENGTH = encryption.encryption_constants.PUBLIC_KEY_HASH_L
 const io = std.testing.io;
 
 //
-// The state shared by one test (TypeScript: a new MockStorage; Zig: FileStorage on a temporary directory).
+// The state shared by one test: a FileStorage on a temporary directory.
 //
 const Fixture = struct {
     // Allocates everything the test creates.
@@ -25,7 +25,7 @@ const Fixture = struct {
     // The storage the file is written to and read from.
     fileStorage: FileStorage,
 
-    // The path of the file (TypeScript: "some/file.dat").
+    // The path of the file.
     filePath: []const u8,
 
     //
@@ -48,7 +48,7 @@ const Fixture = struct {
     }
 
     //
-    // Writes the file (TypeScript: `storage.write(filePath, undefined, data)`).
+    // Writes the file.
     //
     fn write(self: *Fixture, data: []const u8) !void {
         try self.fileStorage.storage().write(self.arena.allocator(), io, self.filePath, null, data);

@@ -18,7 +18,7 @@ const exit = node_utils.termination.exit;
 //
 // Options for the `psi mcp` command. No --db on purpose: the MCP client picks a
 // database at runtime via the `list_databases` / `open_database` tools.
-// (TypeScript: IMcpCommandOptions extends IBaseCommandOptions; the base options are in `base`.)
+// The base options are in `base`.
 //
 pub const IMcpCommandOptions = struct {
     // The options shared by every command.
@@ -47,8 +47,7 @@ pub const PHOTOSPHERE_INSTRUCTIONS =
 
 //
 // Creates the server of `psi mcp` with every tool registered against the tool context.
-// (No TypeScript counterpart: the lines of mcpCommand that create the server, so that the tests can drive it without
-// the standard streams.)
+// It is separate from mcpCommand so that the tests can drive the server without the standard streams.
 //
 pub fn createMcpServer(allocator: std.mem.Allocator, toolContext: *IMcpToolContext) !*McpServer {
     const server = try allocator.create(McpServer);
@@ -68,8 +67,8 @@ pub fn createMcpServer(allocator: std.mem.Allocator, toolContext: *IMcpToolConte
 
 //
 // Implements the `psi mcp` command: a stdio MCP server with no database open by default.
-// (Zig: when stdin closes the process ends through exit(), which runs the termination callbacks, so the worker pool
-// is shut down and the session's temporary directory is removed.)
+// When stdin closes the process ends through exit(), which runs the termination callbacks, so the worker pool
+// is shut down and the session's temporary directory is removed.
 //
 pub fn mcpCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IMcpCommandOptions) !void {
     //

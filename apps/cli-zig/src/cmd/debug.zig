@@ -44,7 +44,7 @@ const jsonParse = serialization_zig.json_parse.jsonParse;
 const writeIsoString = serialization_zig.js_date.writeIsoString;
 
 //
-// Options of the debug merkle-tree command (TypeScript: IDebugMerkleTreeCommandOptions extends IBaseCommandOptions).
+// Options of the debug merkle-tree command.
 // The base options are in `base`.
 //
 pub const IDebugMerkleTreeCommandOptions = struct {
@@ -60,8 +60,8 @@ pub const IDebugMerkleTreeCommandOptions = struct {
 
 //
 // Helper function to truncate long string values and limit object fields for display
-// (Zig: the TypeScript default parameter values 100, 5 and false are passed by the caller. A string is cut after
-// maxLength UTF-16 code units, like `substring`.)
+// The caller passes the limits (the usual values being 100, 5 and false). A string is cut after
+// maxLength UTF-16 code units.
 //
 fn truncateLongStrings(allocator: std.mem.Allocator, obj: BsonValue, maxLength: usize, maxFields: usize, showAllFields: bool) !BsonValue {
     if (obj == .string) {
@@ -110,9 +110,8 @@ fn truncateLongStrings(allocator: std.mem.Allocator, obj: BsonValue, maxLength: 
 }
 
 //
-// Returns the first `length` UTF-16 code units of a string, like `text.substring(0, length)`.
-// (No TypeScript counterpart: JavaScript strings are UTF-16. Cut in the middle of a surrogate pair, the string ends
-// with the lone high surrogate, held as WTF-8, which JSON.stringify writes as a `\u` escape.)
+// Returns the first `length` UTF-16 code units of a string. Cut in the middle of a surrogate pair, the string ends
+// with the lone high surrogate, held as WTF-8, which the JSON writer writes as a `\u` escape.
 //
 pub fn utf16Substring(allocator: std.mem.Allocator, text: []const u8, length: usize) ![]const u8 {
     var units: usize = 0;
@@ -134,9 +133,8 @@ pub fn utf16Substring(allocator: std.mem.Allocator, text: []const u8, length: us
 }
 
 //
-// Returns `Object.entries(value)` for an object (no TypeScript counterpart: the call is inline in
-// truncateLongStrings). A document gives its fields, a Date has no own properties and a Long has low, high and
-// unsigned.
+// Returns the name and value of each field of an object. A document gives its fields, a Date has no fields and a
+// Long has low, high and unsigned.
 //
 fn objectEntries(allocator: std.mem.Allocator, value: BsonValue) ![]const bson.BsonField {
     switch (value) {
@@ -157,7 +155,7 @@ fn objectEntries(allocator: std.mem.Allocator, value: BsonValue) ![]const bson.B
 }
 
 //
-// Indents each line of a text (TypeScript: `text.split('\n').map(line => `${indent}${line}`).join('\n')`).
+// Indents each line of a text.
 //
 fn indentLines(allocator: std.mem.Allocator, text: []const u8, indent: []const u8) ![]const u8 {
     var lines: std.ArrayList([]const u8) = .empty;
@@ -169,7 +167,7 @@ fn indentLines(allocator: std.mem.Allocator, text: []const u8, indent: []const u
 }
 
 //
-// Returns a line of repeated characters (TypeScript: `character.repeat(count)`).
+// Returns a line of repeated characters.
 //
 fn repeat(allocator: std.mem.Allocator, character: u8, count: usize) ![]const u8 {
     const line = try allocator.alloc(u8, count);
@@ -333,7 +331,7 @@ pub fn debugMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, context:
 
 //
 // Options of the debug find-collisions command
-// (TypeScript: IDebugFindCollisionsCommandOptions extends IBaseCommandOptions). The base options, which include the
+// The base options, which include the
 // source database directory (`db`), are in `base`.
 //
 pub const IDebugFindCollisionsCommandOptions = struct {
@@ -348,7 +346,7 @@ pub const IDebugFindCollisionsCommandOptions = struct {
 
 //
 // Options of the debug find-duplicates command
-// (TypeScript: IDebugFindDuplicatesCommandOptions extends IBaseCommandOptions). The base options, which include the
+// The base options, which include the
 // source database directory (`db`, needed to read files), are in `base`.
 //
 pub const IDebugFindDuplicatesCommandOptions = struct {
@@ -368,7 +366,7 @@ pub const IDebugFindDuplicatesCommandOptions = struct {
 
 //
 // Options of the debug remove-duplicates command
-// (TypeScript: IDebugRemoveDuplicatesCommandOptions extends IBaseCommandOptions). The base options, which include the
+// The base options, which include the
 // source database directory (`db`), are in `base`.
 //
 pub const IDebugRemoveDuplicatesCommandOptions = struct {
@@ -382,7 +380,7 @@ pub const IDebugRemoveDuplicatesCommandOptions = struct {
 };
 
 //
-// The asset IDs found for one hash (TypeScript: an entry of the `hashMap` of debugFindCollisionsCommand).
+// The asset IDs found for one hash.
 //
 const IHashAssetIds = struct {
     // The hash, in hex.
@@ -393,8 +391,7 @@ const IHashAssetIds = struct {
 };
 
 //
-// Sorts collisions by the number of asset IDs, most first
-// (TypeScript: `(a, b) => b[1].length - a[1].length`, with the stable sort of Array.prototype.sort).
+// Sorts collisions by the number of asset IDs, most first. The sort is stable.
 //
 fn moreAssetIds(context: void, left: IHashAssetIds, right: IHashAssetIds) bool {
     _ = context;
@@ -404,7 +401,6 @@ fn moreAssetIds(context: void, left: IHashAssetIds, right: IHashAssetIds) bool {
 //
 // Resolves an input or output path of the collision commands: an absolute path is used as it is and a relative path
 // is joined to the database directory, while no path gives the default file in the database directory.
-// (No TypeScript counterpart: each command writes the expression inline.)
 //
 fn resolveDatabaseFilePath(allocator: std.mem.Allocator, option: ?[]const u8, dbDirResolved: []const u8, defaultFileName: []const u8) ![]const u8 {
     if (option) |filePath| {
@@ -416,8 +412,8 @@ fn resolveDatabaseFilePath(allocator: std.mem.Allocator, option: ?[]const u8, db
 }
 
 //
-// What reading a JSON input file gives (TypeScript: the outcome of the try block that reads and parses the input of
-// find-duplicates and remove-duplicates): the parsed JSON, or the message the catch block prints when it fails.
+// What reading a JSON input file of find-duplicates and remove-duplicates gives: the parsed JSON, or the message
+// printed when it fails.
 //
 const IInputFileResult = union(enum) {
     // The parsed JSON.
@@ -428,7 +424,7 @@ const IInputFileResult = union(enum) {
 };
 
 //
-// Reads and parses a JSON input file (TypeScript: `JSON.parse(await fs.readFile(inputPath, 'utf8'))`).
+// Reads and parses a JSON input file.
 //
 fn readInputFile(allocator: std.mem.Allocator, io: std.Io, inputPath: []const u8) !IInputFileResult {
     const inputContent = node_utils.node_fs.readFile(allocator, io, inputPath) catch |err| {
@@ -447,8 +443,7 @@ fn readInputFile(allocator: std.mem.Allocator, io: std.Io, inputPath: []const u8
 }
 
 //
-// Gets the fields of a parsed JSON object (TypeScript: the `as CollisionsData` and `as DuplicatesData` casts, which
-// check nothing). Anything but an object throws.
+// Gets the fields of a parsed JSON object. The contents are not checked. Anything but an object throws.
 //
 fn expectObject(value: BsonValue, description: []const u8) ![]const bson.BsonField {
     if (value != .document) {
@@ -468,7 +463,7 @@ fn expectArray(value: BsonValue, description: []const u8) ![]const BsonValue {
 }
 
 //
-// Gets a property of a parsed JSON object (TypeScript: `object.name`), undefined when it is not there.
+// Gets a property of a parsed JSON object, undefined when it is not there.
 //
 fn property(value: BsonValue, name: []const u8, description: []const u8) !BsonValue {
     const fields = try expectObject(value, description);
@@ -482,7 +477,7 @@ fn property(value: BsonValue, name: []const u8, description: []const u8) !BsonVa
 
 //
 // Resolves the database directory of the collision commands: --db, or the directory picked for an existing
-// database (TypeScript: the `if (dbDir === undefined)` block of each command).
+// database.
 //
 fn resolveDbDir(allocator: std.mem.Allocator, io: std.Io, options: *const IBaseCommandOptions) ![]const u8 {
     const nonInteractive = options.yes orelse false;
@@ -653,11 +648,10 @@ pub fn debugFindCollisionsCommand(allocator: std.mem.Allocator, io: std.Io, cont
 }
 
 //
-// The asset IDs of the files of one size (TypeScript: an entry of the `sizeGroups` map of
-// debugFindDuplicatesCommand).
+// The asset IDs of the files of one size.
 //
 const ISizeGroup = struct {
-    // The file size (a JavaScript number, compared like a Map key).
+    // The file size, as a floating point number.
     size: f64,
 
     // The asset IDs of the files of that size.
@@ -948,8 +942,7 @@ pub fn debugBuildSortIndexCommand(allocator: std.mem.Allocator, io: std.Io, cont
 }
 
 //
-// Writes the progress of buildFilesTree every 50 files
-// (TypeScript: the `(count) => { if (count % 50 === 0) { writeProgress(...) } }` arrow function).
+// Writes the progress of buildFilesTree every 50 files.
 //
 fn onFilesHashed(context: ?*anyopaque, count: u64) void {
     _ = context;

@@ -6,8 +6,8 @@ test "verifyFfprobe and verifyFfmpeg agree with the shell about availability" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const ffprobeStatus = tools.Video.verifyFfprobe(allocator, io);
-    const ffmpegStatus = tools.Video.verifyFfmpeg(allocator, io);
+    const ffprobeStatus = tools.Video.verifyFfprobe(allocator, io, null);
+    const ffmpegStatus = tools.Video.verifyFfmpeg(allocator, io, null);
     if (ffprobeStatus.available) {
         try std.testing.expect(ffprobeStatus.version != null);
         try std.testing.expect(ffprobeStatus.@"error" == null);

@@ -12,15 +12,13 @@ const IField = input_schema.IField;
 const console = utils.console;
 
 //
-// No TypeScript counterpart: stands in for the parts of the MCP TypeScript SDK (@modelcontextprotocol/sdk) that
-// `psi mcp` uses: McpServer (initialize, ping, tools/list and tools/call) and StdioServerTransport (newline-delimited
-// JSON-RPC 2.0 messages on stdin and stdout). It is written from the MCP specification
-// (https://modelcontextprotocol.io/specification) and answers the way SDK version 1.29 does, so that a client sees the
-// same responses from both CLIs.
+// The MCP server that `psi mcp` runs: initialize, ping, tools/list and tools/call, over newline-delimited
+// JSON-RPC 2.0 messages on stdin and stdout. It is written from the MCP specification
+// (https://modelcontextprotocol.io/specification) and answers the way MCP SDK version 1.29 does.
 //
-// Differences from the SDK:
-// - Requests are handled one at a time, in the order they arrive. The SDK starts each request as it arrives, so its
-//   responses can come back in a different order than the requests.
+// Notes:
+// - Requests are handled one at a time, in the order they arrive, so responses come back in the order of the
+//   requests.
 // - A line that is not JSON gets a Parse error (-32700) and a message that is not a JSON-RPC 2.0 message gets an
 //   Invalid Request error (-32600), as JSON-RPC 2.0 requires; so does a request whose params is not an object, which
 //   MCP requires. The SDK reports these to its onerror handler and answers nothing.

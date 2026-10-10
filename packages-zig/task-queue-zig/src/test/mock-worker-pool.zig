@@ -1,7 +1,6 @@
 //
 // Mock queue backend for testing TaskQueue.
-// Executes tasks in-process for fast, predictable tests. TypeScript runs them as promises on the
-// event loop; Zig runs each task on its own thread (up to maxConcurrent at a time), so handlers may block.
+// Executes tasks in-process for fast, predictable tests. Each task runs on its own thread (up to maxConcurrent at a time), so handlers may block.
 // Exported from the package (task_queue_zig.mock_worker_pool) so other packages can test code that
 // uses TaskQueue.
 //
@@ -39,7 +38,7 @@ const pool_allocator = std.heap.smp_allocator;
 
 //
 // The parts of the task context shared by every task
-// (TypeScript: Omit<ITaskContext, "sendMessage" | "isCancelled" | "taskId">).
+// (everything but sendMessage, isCancelled and taskId).
 //
 pub const IBaseContext = struct {
     // Generates unique identifiers.
@@ -51,13 +50,12 @@ pub const IBaseContext = struct {
     // Unique identifier for the session the tasks belong to.
     sessionId: []const u8,
 
-    // How many child tasks a task may have running at once
-    // (TypeScript: `baseContext?.maxConcurrentChildTasks ?? 2`).
+    // How many child tasks a task may have running at once.
     maxConcurrentChildTasks: u32 = 2,
 };
 
 //
-// A queued or running task (TypeScript: `{ id, type, data, source }`).
+// A queued or running task.
 //
 const IMockTask = struct {
     // Owns everything the task allocates, including the handler's allocations.
@@ -136,20 +134,20 @@ pub const MockWorkerPool = struct {
     // The context shared by every task.
     baseContext: IBaseContext,
 
-    // Guards every field (Zig only: tasks run on threads).
+    // Guards every field (tasks run on threads).
     mutex: std.Io.Mutex,
 
-    // Signalled when a task finishes (Zig only).
+    // Signalled when a task finishes.
     condition: std.Io.Condition,
 
-    // The threads started for tasks, joined by deinit (Zig only).
+    // The threads started for tasks, joined by deinit.
     threads: std.ArrayList(std.Thread),
 
-    // The key of the next registration (Zig only).
+    // The key of the next registration.
     nextKey: usize,
 
     //
-    // Creates the pool (TypeScript: constructor(maxConcurrent = 2, baseContext?); callers pass both).
+    // Creates the pool.
     //
     pub fn init(io: std.Io, maxConcurrent: usize, baseContext: IBaseContext) !*MockWorkerPool {
         const self = try pool_allocator.create(MockWorkerPool);
@@ -174,7 +172,7 @@ pub const MockWorkerPool = struct {
     }
 
     //
-    // Waits for the queued and running tasks to finish, joins the task threads and frees the pool (Zig only).
+    // Waits for the queued and running tasks to finish, joins the task threads and frees the pool.
     //
     pub fn deinit(self: *MockWorkerPool) void {
         self.lock();
@@ -282,7 +280,7 @@ pub const MockWorkerPool = struct {
     }
 
     //
-    // A random number for generated task IDs (TypeScript: Math.random()).
+    // A random number for generated task IDs.
     //
     fn nextRandom(self: *MockWorkerPool, io: std.Io) u64 {
         _ = self;
@@ -330,6 +328,7 @@ pub const MockWorkerPool = struct {
             .sessionId = self.baseContext.sessionId,
             .taskId = task.id,
             .maxConcurrentChildTasks = self.baseContext.maxConcurrentChildTasks,
+            .hostRequester = null,
             .ptr = task,
             .vtable = &task_context_vtable,
         };

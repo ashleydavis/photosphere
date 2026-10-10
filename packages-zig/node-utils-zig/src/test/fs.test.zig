@@ -838,6 +838,29 @@ test "a file reads back as the object it holds" {
     try std.Io.Dir.cwd().deleteFile(io, filePath);
 }
 
+test "writeYaml creates parent directories if missing and the object reads back" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "write-yaml-subdir/nested.yaml");
+    var object: std.json.ObjectMap = .empty;
+    try object.put(allocator, "name", .{
+        .string = "test",
+    });
+    try object.put(allocator, "count", .{
+        .integer = 42,
+    });
+
+    try fs.writeYaml(allocator, io, filePath, .{
+        .object = object,
+    });
+    const result = (try fs.readYaml(allocator, io, filePath)).?;
+
+    try std.testing.expectEqualStrings("{\"name\":\"test\",\"count\":42}", try std.json.Stringify.valueAlloc(allocator, result, .{}));
+    try std.Io.Dir.cwd().deleteTree(io, std.fs.path.dirname(filePath).?);
+}
+
 test "an empty file reads as undefined rather than as an empty object" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -1278,7 +1301,7 @@ test "getCacheDir uses PHOTOSPHERE_CACHE_DIR when it is set, on every platform" 
     try std.testing.expectEqualStrings("/chosen-cache", try fs.getCacheDir(allocator));
 }
 
-test "an empty override is the same as an unset one, which is how the TypeScript reads process.env" {
+test "an empty override is the same as an unset one, which is how an environment variable is read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1592,8 +1615,508 @@ test "getConfigDir is the same Unix-style path on Windows, so one support answer
     const home_variable = if (builtin.os.tag == .windows) "USERPROFILE" else "HOME";
     try environ_map.put(home_variable, "/some-home");
 
-    // Joined the way the TypeScript test does (`path.join`), because getConfigDir joins with the platform's own
+    // Joined with `path.join`, because getConfigDir joins with the platform's own
     // separator. The Windows job failed here (node-utils-zig fs test "getConfigDir is the same Unix-style path on
     // Windows") expecting "/some-home/.config/photosphere" and finding "\some-home\.config\photosphere".
     try std.testing.expectEqualStrings(try node_utils.path.join(allocator, &.{ "/some-home", ".config", "photosphere" }), try fs.getConfigDir(allocator));
+}
+
+test "outputFile writes binary data" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "binary.bin");
+
+    try fs.outputFile(allocator, io, filePath, &.{ 0, 255, 1, 128 });
+
+    const data = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+    try std.testing.expectEqualSlices(u8, &.{ 0, 255, 1, 128 }, data);
+    try fs.remove(io, std.fs.path.dirname(filePath).?);
+}
+
+test "outputFile overwrites an existing file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "file.txt");
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = filePath, .data = "old content" });
+
+    try fs.outputFile(allocator, io, filePath, "new content");
+
+    const data = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+    try std.testing.expectEqualStrings("new content", data);
+    try fs.remove(io, std.fs.path.dirname(filePath).?);
+}
+
+test "readJson throws if the file contains invalid JSON" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "invalid.json");
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = filePath, .data = "not valid json" });
+
+    try std.testing.expectError(error.SyntaxError, fs.readJson(allocator, io, filePath));
+    try fs.remove(io, std.fs.path.dirname(filePath).?);
+}
+
+test "ensureFileDir accepts a file directly in an existing directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "existing");
+    try fs.ensureDir(io, dirPath);
+    const filePath = try std.fs.path.join(allocator, &.{ dirPath, "file.txt" });
+
+    try fs.ensureFileDir(io, filePath);
+
+    try std.testing.expect(fs.pathExists(io, dirPath));
+    try fs.remove(io, dirPath);
+}
+
+test "writeJson writes an object as a JSON file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "data.json");
+    const data = try makeObject(allocator, &.{ "name", "value" }, &.{ .{ .string = "test" }, .{ .integer = 123 } });
+
+    try fs.writeJson(allocator, io, filePath, data, .minified);
+
+    try std.testing.expect(fs.pathExists(io, filePath));
+    try std.testing.expectEqualStrings("{\"name\":\"test\",\"value\":123}", try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited));
+    try fs.remove(io, std.fs.path.dirname(filePath).?);
+}
+
+test "writeJson creates parent directories" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "writejson");
+    const filePath = try std.fs.path.join(allocator, &.{ dirPath, "parent", "child", "data.json" });
+    const data = try makeObject(allocator, &.{"name"}, &.{.{ .string = "test" }});
+
+    try fs.writeJson(allocator, io, filePath, data, .minified);
+
+    try std.testing.expect(fs.pathExists(io, filePath));
+    try fs.remove(io, dirPath);
+}
+
+test "writeJson formats JSON with spaces" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "data.json");
+    const data = try makeObject(allocator, &.{"name"}, &.{.{ .string = "test" }});
+
+    try fs.writeJson(allocator, io, filePath, data, .indent_2);
+
+    try std.testing.expectEqualStrings("{\n  \"name\": \"test\"\n}", try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited));
+    try fs.remove(io, std.fs.path.dirname(filePath).?);
+}
+
+test "writeJson handles nested objects" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "data.json");
+    var numbers = std.json.Array.init(allocator);
+    try numbers.appendSlice(&.{ .{ .integer = 1 }, .{ .integer = 2 }, .{ .integer = 3 } });
+    const nested = try makeObject(allocator, &.{ "value", "array" }, &.{ .{ .integer = 123 }, .{ .array = numbers } });
+    const data = try makeObject(allocator, &.{ "name", "nested" }, &.{ .{ .string = "test" }, nested });
+
+    try fs.writeJson(allocator, io, filePath, data, .minified);
+
+    const result = try fs.readJson(allocator, io, filePath);
+    try std.testing.expectEqualStrings("test", result.object.get("name").?.string);
+    const readNested = result.object.get("nested").?.object;
+    try std.testing.expectEqual(@as(i64, 123), readNested.get("value").?.integer);
+    try std.testing.expectEqual(@as(usize, 3), readNested.get("array").?.array.items.len);
+    try std.testing.expectEqual(@as(i64, 3), readNested.get("array").?.array.items[2].integer);
+    try fs.remove(io, std.fs.path.dirname(filePath).?);
+}
+
+test "emptyDir creates the directory if it does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "empty-dir");
+
+    try fs.emptyDir(allocator, io, dirPath);
+
+    try std.testing.expect(fs.pathExists(io, dirPath));
+    try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, dirPath)).len);
+    try fs.remove(io, dirPath);
+}
+
+test "emptyDir removes all files from the directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "dir");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ dirPath, "file1.txt" }), "test1");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ dirPath, "file2.txt" }), "test2");
+
+    try fs.emptyDir(allocator, io, dirPath);
+
+    try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, dirPath)).len);
+    try fs.remove(io, dirPath);
+}
+
+test "emptyDir removes nested directories" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "dir");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ dirPath, "nested", "file.txt" }), "test");
+
+    try fs.emptyDir(allocator, io, dirPath);
+
+    try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, dirPath)).len);
+    try fs.remove(io, dirPath);
+}
+
+test "emptyDir keeps the directory itself" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "dir");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ dirPath, "file.txt" }), "test");
+
+    try fs.emptyDir(allocator, io, dirPath);
+
+    try std.testing.expect(fs.pathExists(io, dirPath));
+    try fs.remove(io, dirPath);
+}
+
+test "copy copies a file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "copy");
+    const srcPath = try std.fs.path.join(allocator, &.{ dirPath, "source.txt" });
+    const destPath = try std.fs.path.join(allocator, &.{ dirPath, "dest.txt" });
+    try fs.outputFile(allocator, io, srcPath, "test content");
+
+    try fs.copy(allocator, io, srcPath, destPath);
+
+    try std.testing.expect(fs.pathExists(io, destPath));
+    try std.testing.expectEqualStrings("test content", try std.Io.Dir.cwd().readFileAlloc(io, destPath, allocator, .unlimited));
+    try fs.remove(io, dirPath);
+}
+
+test "copy copies a directory recursively" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "copy");
+    const srcDir = try std.fs.path.join(allocator, &.{ dirPath, "source" });
+    const destDir = try std.fs.path.join(allocator, &.{ dirPath, "dest" });
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ srcDir, "file1.txt" }), "test1");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ srcDir, "nested", "file2.txt" }), "test2");
+
+    try fs.copy(allocator, io, srcDir, destDir);
+
+    try std.testing.expect(fs.pathExists(io, destDir));
+    try std.testing.expectEqualStrings("test1", try std.Io.Dir.cwd().readFileAlloc(io, try std.fs.path.join(allocator, &.{ destDir, "file1.txt" }), allocator, .unlimited));
+    try std.testing.expectEqualStrings("test2", try std.Io.Dir.cwd().readFileAlloc(io, try std.fs.path.join(allocator, &.{ destDir, "nested", "file2.txt" }), allocator, .unlimited));
+    try fs.remove(io, dirPath);
+}
+
+test "copy creates parent directories for the destination" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "copy");
+    const srcPath = try std.fs.path.join(allocator, &.{ dirPath, "source.txt" });
+    const destPath = try std.fs.path.join(allocator, &.{ dirPath, "parent", "child", "dest.txt" });
+    try fs.outputFile(allocator, io, srcPath, "test");
+
+    try fs.copy(allocator, io, srcPath, destPath);
+
+    try std.testing.expect(fs.pathExists(io, destPath));
+    try fs.remove(io, dirPath);
+}
+
+test "copy overwrites an existing file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "copy");
+    const srcPath = try std.fs.path.join(allocator, &.{ dirPath, "source.txt" });
+    const destPath = try std.fs.path.join(allocator, &.{ dirPath, "dest.txt" });
+    try fs.outputFile(allocator, io, srcPath, "new content");
+    try fs.outputFile(allocator, io, destPath, "old content");
+
+    try fs.copy(allocator, io, srcPath, destPath);
+
+    try std.testing.expectEqualStrings("new content", try std.Io.Dir.cwd().readFileAlloc(io, destPath, allocator, .unlimited));
+    try fs.remove(io, dirPath);
+}
+
+test "ensureDirSync creates a directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "sync-dir");
+
+    try fs.ensureDirSync(io, dirPath);
+
+    const stats = try std.Io.Dir.cwd().statFile(io, dirPath, .{});
+    try std.testing.expect(stats.kind == .directory);
+    try fs.remove(io, dirPath);
+}
+
+test "ensureDirSync creates nested directories recursively" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "sync");
+    const nestedPath = try std.fs.path.join(allocator, &.{ dirPath, "nested", "deep", "sync-dir" });
+
+    try fs.ensureDirSync(io, nestedPath);
+
+    try std.testing.expect(fs.pathExists(io, nestedPath));
+    try fs.remove(io, dirPath);
+}
+
+test "ensureDirSync does not throw if the directory already exists" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "existing-sync-dir");
+    try fs.ensureDirSync(io, dirPath);
+
+    try fs.ensureDirSync(io, dirPath);
+
+    try fs.remove(io, dirPath);
+}
+
+test "ensureDirSync throws if the path exists as a file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "file.txt");
+    try fs.outputFile(allocator, io, filePath, "test");
+
+    try std.testing.expectError(error.Thrown, fs.ensureDirSync(io, filePath));
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "Path exists but is not a directory") != null);
+    try fs.remove(io, filePath);
+}
+
+test "removeSync removes a file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "file.txt");
+    try fs.outputFile(allocator, io, filePath, "test");
+
+    try fs.removeSync(io, filePath);
+
+    try std.testing.expect(!fs.pathExists(io, filePath));
+}
+
+test "removeSync removes a directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "dir");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ dirPath, "file.txt" }), "test");
+
+    try fs.removeSync(io, dirPath);
+
+    try std.testing.expect(!fs.pathExists(io, dirPath));
+}
+
+test "removeSync does not throw if the file does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "non-existent.txt");
+
+    try fs.removeSync(io, filePath);
+}
+
+test "copySync copies a file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "copy-sync");
+    const srcPath = try std.fs.path.join(allocator, &.{ dirPath, "source.txt" });
+    const destPath = try std.fs.path.join(allocator, &.{ dirPath, "dest.txt" });
+    try fs.outputFile(allocator, io, srcPath, "test content");
+
+    try fs.copySync(allocator, io, srcPath, destPath);
+
+    try std.testing.expectEqualStrings("test content", try std.Io.Dir.cwd().readFileAlloc(io, destPath, allocator, .unlimited));
+    try fs.remove(io, dirPath);
+}
+
+test "copySync copies a directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "copy-sync");
+    const srcDir = try std.fs.path.join(allocator, &.{ dirPath, "source" });
+    const destDir = try std.fs.path.join(allocator, &.{ dirPath, "dest" });
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ srcDir, "file1.txt" }), "test1");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ srcDir, "nested", "file2.txt" }), "test2");
+
+    try fs.copySync(allocator, io, srcDir, destDir);
+
+    try std.testing.expect(fs.pathExists(io, destDir));
+    try std.testing.expect(fs.pathExists(io, try std.fs.path.join(allocator, &.{ destDir, "file1.txt" })));
+    try std.testing.expect(fs.pathExists(io, try std.fs.path.join(allocator, &.{ destDir, "nested", "file2.txt" })));
+    try fs.remove(io, dirPath);
+}
+
+test "copySync creates parent directories for the destination" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "copy-sync");
+    const srcPath = try std.fs.path.join(allocator, &.{ dirPath, "source.txt" });
+    const destPath = try std.fs.path.join(allocator, &.{ dirPath, "parent", "child", "dest.txt" });
+    try fs.outputFile(allocator, io, srcPath, "test");
+
+    try fs.copySync(allocator, io, srcPath, destPath);
+
+    try std.testing.expect(fs.pathExists(io, destPath));
+    try fs.remove(io, dirPath);
+}
+
+//
+// A mutator for the updateJson tests: adds `amount` to the `count` of the current document, optionally
+// writing the file itself first (a concurrent writer) on the first call or on every call.
+//
+const JsonCountMutator = struct {
+    // What is added to the count.
+    amount: i64,
+
+    // The file a concurrent writer changes, or null for none.
+    externalWriteFile: ?[]const u8,
+
+    // True to change the file on the first call only, false to change it on every call.
+    injectOnce: bool,
+
+    // How many times the file has been changed from outside.
+    external: usize = 0,
+
+    // Used to write the file.
+    io: std.Io,
+
+    //
+    // Returns `{ count: current.count + amount }`.
+    //
+    pub fn run(self: *JsonCountMutator, allocator: std.mem.Allocator, current: std.json.Value) !std.json.Value {
+        if (self.externalWriteFile) |externalPath| {
+            if (!self.injectOnce or self.external == 0) {
+                self.external += 1;
+                var text: std.ArrayList(u8) = .empty;
+                try text.print(allocator, "{{\"count\":{d},\"pad\":\"", .{if (self.injectOnce) 99 else self.external});
+                var padIndex: usize = 0;
+                while (!self.injectOnce and padIndex < self.external) {
+                    try text.append(allocator, 'x');
+                    padIndex += 1;
+                }
+                try text.appendSlice(allocator, "\"}");
+                try std.Io.Dir.cwd().writeFile(self.io, .{ .sub_path = externalPath, .data = text.items });
+            }
+        }
+        var object: std.json.ObjectMap = .empty;
+        try object.put(allocator, "count", .{ .integer = current.object.get("count").?.integer + self.amount });
+        return .{ .object = object };
+    }
+};
+
+//
+// Reads the count of a JSON file.
+//
+fn readJsonCount(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !i64 {
+    return (try fs.readJson(allocator, io, filePath)).object.get("count").?.integer;
+}
+
+test "updateJson uses the fallback and writes when the file does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-json-new.json");
+
+    var mutator: JsonCountMutator = .{ .amount = 5, .externalWriteFile = null, .injectOnce = true, .io = io };
+    try fs.updateJson(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    try std.testing.expectEqual(@as(i64, 5), try readJsonCount(allocator, io, filePath));
+    try std.testing.expectEqualStrings("{\"count\":5}", try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateJson reads existing contents and applies the mutator" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-json-existing.json");
+    try fs.writeJson(allocator, io, filePath, try countDocument(allocator, 10), .minified);
+
+    var mutator: JsonCountMutator = .{ .amount = 1, .externalWriteFile = null, .injectOnce = true, .io = io };
+    try fs.updateJson(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    try std.testing.expectEqual(@as(i64, 11), try readJsonCount(allocator, io, filePath));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateJson reloads and re-applies the mutator when the file changed under it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-json-retry.json");
+    try fs.writeJson(allocator, io, filePath, try countDocument(allocator, 0), .minified);
+
+    var mutator: JsonCountMutator = .{ .amount = 1, .externalWriteFile = filePath, .injectOnce = true, .io = io };
+    try fs.updateJson(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    try std.testing.expectEqual(@as(i64, 100), try readJsonCount(allocator, io, filePath));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateJson throws after the configured retries when the file keeps changing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-json-exhaust.json");
+    try fs.writeJson(allocator, io, filePath, try countDocument(allocator, 0), .minified);
+
+    // Grow the file each attempt so the pre-move check always sees a conflict.
+    var mutator: JsonCountMutator = .{ .amount = 1, .externalWriteFile = filePath, .injectOnce = false, .io = io };
+    try std.testing.expectError(error.Thrown, fs.updateJson(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 2));
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "kept changing") != null);
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
 }

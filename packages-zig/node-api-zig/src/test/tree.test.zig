@@ -148,7 +148,7 @@ fn addFileToFilesTree(allocator: std.mem.Allocator, io: std.Io, assetStorage: st
 fn createEmptyDatabase(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !TestDatabase {
     _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.makeTempDir(allocator, io, name);
-    const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
     const database = try node_api.media_file_database.createMediaFileDatabase(allocator, opened.storage, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider());
@@ -176,7 +176,7 @@ const TestDatabase = struct {
 fn createPopulatedDatabase(allocator: std.mem.Allocator, io: std.Io) !TestDatabase {
     _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
-    const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
     return .{ .dir = dir, .assetStorage = opened.storage, .rawStorage = opened.rawStorage };
 }
 
@@ -281,7 +281,7 @@ test "omits the content hash when the database is empty" {
     _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.makeTempDir(allocator, io, "stamp-locked-empty");
     defer temp_dirs.removeTempDir(io, dir);
-    const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
 
     try tree.stampDatabaseStateLocked(allocator, io, opened.storage, opened.rawStorage, "session-1", .{ .lastReplicatedAt = "2026-01-02T03:04:05.000Z" });
 
@@ -345,7 +345,7 @@ test "omits the content hash when the database is empty and preserves other fiel
     _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.makeTempDir(allocator, io, "stamp-state-empty");
     defer temp_dirs.removeTempDir(io, dir);
-    const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
     try api.database_state.saveDatabaseState(allocator, io, opened.rawStorage, .{ .lastModifiedAt = "2026-01-02T03:04:05.000Z" });
 
     try tree.stampDatabaseState(allocator, io, opened.storage, opened.rawStorage, .{ .lastSyncedAt = "2026-01-02T03:04:06.000Z" });
@@ -357,7 +357,7 @@ test "omits the content hash when the database is empty and preserves other fiel
 }
 
 //
-// `new Date().toISOString()`. (No TypeScript counterpart.)
+// The current time as an ISO timestamp.
 //
 fn nowIsoString(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
     const now: utils.timestamp_provider.Date = .{
@@ -401,7 +401,7 @@ test "writes lastModifiedAt but no content hash when the database is empty" {
     _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.makeTempDir(allocator, io, "stamp-modified-empty");
     defer temp_dirs.removeTempDir(io, dir);
-    const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
 
     try tree.stampDatabaseModified(allocator, io, opened.storage, opened.rawStorage);
 
@@ -448,17 +448,17 @@ test "isDatabaseEncrypted is true only when the database has the encryption mark
 }
 
 //
-// Path of the files tree in storage (the TypeScript FILES_TREE_PATH of tree.test.ts).
+// Path of the files tree in storage.
 //
 const FILES_TREE_PATH = ".db/files.dat";
 
 //
-// The ID of the trees the buildFilesTree tests build (the TypeScript TREE_ID of tree.test.ts).
+// The ID of the trees the buildFilesTree tests build.
 //
 const TREE_ID = "12345678-1234-5678-9abc-123456789abc";
 
 //
-// Returns the SHA-256 hash of a seed (TypeScript: makeHash).
+// Returns the SHA-256 hash of a seed.
 //
 fn makeHash(allocator: std.mem.Allocator, seed: []const u8) ![]const u8 {
     const digest = try allocator.create([32]u8);
@@ -467,7 +467,7 @@ fn makeHash(allocator: std.mem.Allocator, seed: []const u8) ![]const u8 {
 }
 
 //
-// Builds a files tree holding the named leaves, with `{ filesImported: 0 }` metadata (TypeScript: buildMinimalTree).
+// Builds a files tree holding the named leaves, with `{ filesImported: 0 }` metadata.
 //
 fn buildMinimalTree(allocator: std.mem.Allocator, leafNames: []const []const u8) !merkle_tree.IMerkleTree {
     var minimalTree = merkle_tree.createTree(TREE_ID);
@@ -486,8 +486,7 @@ fn buildMinimalTree(allocator: std.mem.Allocator, leafNames: []const []const u8)
 }
 
 //
-// Gets the names of the leaves of a tree's sort tree
-// (TypeScript: `[...iterateLeaves<SortNode>(tree.sort)].map(n => n.name).filter(Boolean)`).
+// Gets the names of the leaves of a tree's sort tree, leaving out the empty ones.
 //
 fn leafNamesOf(allocator: std.mem.Allocator, builtTree: *const merkle_tree.IMerkleTree) ![]const []const u8 {
     var names: std.ArrayList([]const u8) = .empty;
@@ -503,7 +502,7 @@ fn leafNamesOf(allocator: std.mem.Allocator, builtTree: *const merkle_tree.IMerk
 }
 
 //
-// Returns true when the list holds the name (TypeScript: `expect(list).toContain(name)`).
+// Returns true when the list holds the name.
 //
 fn containsName(names: []const []const u8, wanted: []const u8) bool {
     for (names) |name| {
@@ -515,7 +514,7 @@ fn containsName(names: []const []const u8, wanted: []const u8) bool {
 }
 
 //
-// Records each file count buildFilesTree reports (TypeScript: `(count) => progressCalls.push(count)`).
+// Records each file count buildFilesTree reports.
 //
 const ProgressRecorder = struct {
     // Allocates the list.
@@ -544,7 +543,7 @@ const ProgressRecorder = struct {
 };
 
 //
-// Ignores the file counts (TypeScript: `() => {}`).
+// Ignores the file counts.
 //
 fn ignoreProgress(context: ?*anyopaque, fileCount: u64) void {
     _ = context;
@@ -552,7 +551,7 @@ fn ignoreProgress(context: ?*anyopaque, fileCount: u64) void {
 }
 
 //
-// A progress callback that does nothing (TypeScript: `() => {}`).
+// A progress callback that does nothing.
 //
 const noProgress: node_api.tree.IBuildFilesTreeProgress = .{
     .context = null,

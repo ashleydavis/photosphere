@@ -11,8 +11,8 @@ const constants = encryption.encryption_constants;
 const IPrivateKeyMap = encryption.encryption_types.IPrivateKeyMap;
 
 //
-// The key pair and key map used by the tests (the TypeScript tests generate a key pair; the Zig tests use the
-// TypeScript fixture key because RSA-4096 generation is slow in Debug builds).
+// The key pair and key map used by the tests (the tests use a fixture key because RSA-4096 generation is slow in
+// Debug builds).
 //
 const TestKeys = struct {
     // The public key.
@@ -46,7 +46,7 @@ test "encrypts and decrypts with key map" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    // Mock log, so the fallback messages of decryptBuffer reach no stderr.
     var mockLog: mock_log.MockLog = .{};
     mockLog.install();
     defer mockLog.uninstall();
@@ -75,7 +75,7 @@ test "decrypts legacy payload using default key" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    // Mock log, so the fallback messages of decryptBuffer reach no stderr.
     var mockLog: mock_log.MockLog = .{};
     mockLog.install();
     defer mockLog.uninstall();
@@ -92,7 +92,7 @@ test "decrypts new-format payload using hash key in map" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    // Mock log, so the fallback messages of decryptBuffer reach no stderr.
     var mockLog: mock_log.MockLog = .{};
     mockLog.install();
     defer mockLog.uninstall();
@@ -127,7 +127,7 @@ test "throws when the data says it is encrypted and the key is not in the map" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    // Mock log, so the fallback messages of decryptBuffer reach no stderr.
     var mockLog: mock_log.MockLog = .{};
     mockLog.install();
     defer mockLog.uninstall();
@@ -156,13 +156,13 @@ test "throws when the data says it is encrypted and the wrong key is in the map"
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    // Mock log, so the fallback messages of decryptBuffer reach no stderr.
     var mockLog: mock_log.MockLog = .{};
     mockLog.install();
     defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
 
-    // (Zig: the second TypeScript fixture key pair stands in for generateKeyPair.)
+    // (The second fixture key pair stands in for a generated key pair.)
     const otherPrivateKey = try crypto.createPrivateKey(allocator, try fixtures.readFixture(allocator, "ts2-private.pem"));
     const otherKeyHashHex = try fixtures.readFixture(allocator, "ts2-public-hash.hex");
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, "secret");
@@ -178,7 +178,7 @@ test "still hands back a plaintext buffer unchanged, which is how an unencrypted
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    // Mock log, so the fallback messages of decryptBuffer reach no stderr.
     var mockLog: mock_log.MockLog = .{};
     mockLog.install();
     defer mockLog.uninstall();
@@ -197,7 +197,7 @@ test "returns data unchanged when legacy data and no default key" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    // Mock log, so the fallback messages of decryptBuffer reach no stderr.
     var mockLog: mock_log.MockLog = .{};
     mockLog.install();
     defer mockLog.uninstall();
@@ -216,7 +216,7 @@ test "returns data unchanged when shorter than 4 bytes" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    // Mock log, so the fallback messages of decryptBuffer reach no stderr.
     var mockLog: mock_log.MockLog = .{};
     mockLog.install();
     defer mockLog.uninstall();
@@ -231,7 +231,7 @@ test "returns plain data unchanged when the default key cannot decrypt it" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    // Mock log, so the fallback messages of decryptBuffer reach no stderr.
     var mockLog: mock_log.MockLog = .{};
     mockLog.install();
     defer mockLog.uninstall();
@@ -356,7 +356,7 @@ test "decryptBuffer passes an allocation failure on for new-format and legacy da
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // Mock log (TypeScript: jest.mock of the utils log), so the fallback messages of decryptBuffer reach no stderr.
+    // Mock log, so the fallback messages of decryptBuffer reach no stderr.
     var mockLog: mock_log.MockLog = .{};
     mockLog.install();
     defer mockLog.uninstall();
@@ -371,7 +371,7 @@ test "decryptBuffer passes an allocation failure on for new-format and legacy da
 test "normalizeEncryptionType decodes the field as Buffer.toString(\"ascii\") does, dropping the high bit of each byte" {
     var buffer: [4]u8 = undefined;
 
-    // Values from Buffer.from([...]).toString("ascii").replace(/\0/g, "").trim() in Bun.
+    // Expected values: the bytes decoded as ASCII (dropping the high bit), with every NUL removed and the result trimmed.
     try std.testing.expectEqualStrings("A2CB", encrypt_buffer.normalizeEncryptionType(&buffer, &.{ 0xC1, 0xB2, 0xC3, 0xC2 }));
     try std.testing.expectEqualStrings("A", encrypt_buffer.normalizeEncryptionType(&buffer, &.{ 0xA0, 0x41, 0x80, 0x00 }));
     try std.testing.expectEqualStrings("AB\x05", encrypt_buffer.normalizeEncryptionType(&buffer, &.{ 0xA0, 0x41, 0x42, 0x85 }));

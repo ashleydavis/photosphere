@@ -1,15 +1,14 @@
 //
-// Stand-in for the third-party `js-yaml` package (load and dump) used by fs.ts (readYaml, updateYaml) and
-// news-fetcher.ts (this file has no TypeScript counterpart). The loader covers the YAML that the news feed and
+// YAML load and dump. The loader covers the YAML that the news feed and
 // the state file use:
 // block mappings and sequences, flow sequences and mappings of scalars, plain, single-quoted and double-quoted
-// scalars with the core schema (null, booleans, numbers), literal and folded block scalars (| and >, which js-yaml's
+// scalars with the core schema (null, booleans, numbers), literal and folded block scalars (| and >, which the
 // dump writes for long and multi-line strings), and comments. Anchors, aliases, tags and multi-document streams are
-// not supported and report a YAMLException like js-yaml's errors for malformed input.
+// not supported and report a YAMLException for malformed input.
 //
 
 // TODO: anchors, aliases, tags, plain scalars over several lines and documents of more than one part throw a
-// YAMLException, where js-yaml reads them.
+// YAMLException.
 const std = @import("std");
 const utils = @import("utils-zig");
 const errors = utils.errors;
@@ -29,7 +28,7 @@ const Line = struct {
 };
 
 //
-// Throws the error js-yaml throws for malformed input.
+// Throws the error for malformed input.
 //
 fn yamlError(message: []const u8, lineNumber: usize) errors.ThrownError {
     errors.recordError("YAMLException", "{s} ({d}:1)", .{ message, lineNumber });
@@ -111,8 +110,8 @@ const Parser = struct {
     // The index of the next line.
     position: usize,
 
-    // Every line of the document, without its line break, as if it ended with one (js-yaml adds a final line break
-    // when there is none), so the last entry is the empty text after that break. Block scalars read these, because
+    // Every line of the document, without its line break, as if it ended with one (a final line break
+    // is added when there is none), so the last entry is the empty text after that break. Block scalars read these, because
     // their empty lines and `#` characters are content.
     rawLines: []const []const u8,
 
@@ -130,7 +129,7 @@ const Parser = struct {
 
     //
     // Reads a literal (`|`) or folded (`>`) block scalar whose header is `header` on line `lineNumber`, in a node
-    // whose parent is indented `parentIndent` (-1 at the top of the document): a port of js-yaml's readBlockScalar,
+    // whose parent is indented `parentIndent` (-1 at the top of the document),
     // with its chomping indicators (`-`, `+`) and indentation indicator. The lines it reads are skipped.
     //
     fn parseBlockScalar(self: *Parser, header: []const u8, parentIndent: i64, lineNumber: usize) !std.json.Value {
@@ -687,7 +686,7 @@ pub fn load(allocator: std.mem.Allocator, source: []const u8) !std.json.Value {
         try rawLines.append(allocator, std.mem.trimEnd(u8, rawLine, "\r"));
     }
     if (source.len > 0 and source[source.len - 1] != '\n') {
-        // js-yaml adds a line break to a document that does not end with one.
+        // A line break is added to a document that does not end with one.
         try rawLines.append(allocator, "");
     }
     var parser: Parser = .{ .allocator = allocator, .lines = lines, .position = 0, .rawLines = rawLines.items };
@@ -702,10 +701,10 @@ pub fn load(allocator: std.mem.Allocator, source: []const u8) !std.json.Value {
 }
 
 //
-// The dumper: a port of js-yaml 4.1.0's lib/dumper.js with its default options (indent 2, lineWidth 80,
-// flowLevel -1, single quotes, compatibility mode on, no sorting, no replacer), for the values a JSON value can
-// hold. Strings are handled as UTF-16 code units, as JavaScript does, so widths and positions match.
-// (js-yaml's anchors for an object that appears twice in the input (`&ref_0`) cannot happen here, because a
+// The dumper: indent 2, lineWidth 80, flowLevel -1, single quotes, compatibility mode on, no sorting, no
+// replacer, for the values a JSON value can hold. Strings are handled as UTF-16 code units, so widths and
+// positions match the YAML that is already on disk.
+// (Anchors for an object that appears twice in the input (`&ref_0`) cannot happen here, because a
 // std.json.Value is a tree.)
 //
 
@@ -720,7 +719,7 @@ const DUMP_INDENT: usize = 2;
 const DUMP_LINE_WIDTH: usize = 80;
 
 //
-// The strings YAML 1.1 read as booleans, which js-yaml quotes (DEPRECATED_BOOLEANS_SYNTAX).
+// The strings YAML 1.1 read as booleans, which the dumper quotes.
 //
 const DEPRECATED_BOOLEANS_SYNTAX = [_][]const u8{ "y", "Y", "yes", "Yes", "YES", "on", "On", "ON", "n", "N", "no", "No", "NO", "off", "Off", "OFF" };
 
@@ -745,12 +744,12 @@ const ScalarStyle = enum {
 };
 
 //
-// A string as UTF-16 code units (a JavaScript string).
+// A string as UTF-16 code units.
 //
 const Utf16 = []const u16;
 
 //
-// Growing UTF-16 output (the JavaScript string being built).
+// Growing UTF-16 output.
 //
 const Utf16Builder = std.ArrayList(u16);
 
@@ -872,7 +871,7 @@ fn needIndentIndicator(string: Utf16) bool {
 }
 
 //
-// True for js-yaml's null resolver (resolveYamlNull).
+// True for a string that resolves as null.
 //
 fn resolvesAsNull(string: Utf16) bool {
     return string.len == 0 or utf16EqualsAscii(string, "~") or utf16EqualsAscii(string, "null") or
@@ -880,7 +879,7 @@ fn resolvesAsNull(string: Utf16) bool {
 }
 
 //
-// True for js-yaml's bool resolver (resolveYamlBoolean).
+// True for a string that resolves as a boolean.
 //
 fn resolvesAsBool(string: Utf16) bool {
     const candidates = [_][]const u8{ "true", "True", "TRUE", "false", "False", "FALSE" };
@@ -909,7 +908,7 @@ fn isDigitOfBase(unit: u16, base: u8) bool {
 }
 
 //
-// True for js-yaml's int resolver (resolveYamlInteger).
+// True for a string that resolves as an integer.
 //
 fn resolvesAsInteger(string: Utf16) bool {
     const max = string.len;
@@ -1039,7 +1038,7 @@ const Cursor = struct {
 const DIGITS = "0123456789";
 
 //
-// True for js-yaml's float resolver (resolveYamlFloat and YAML_FLOAT_PATTERN).
+// True for a string that resolves as a float.
 //
 fn resolvesAsFloat(string: Utf16) bool {
     if (string.len == 0 or string[string.len - 1] == '_') {
@@ -1106,7 +1105,7 @@ fn acceptDigits(cursor: *Cursor, min: usize, max: usize) bool {
 }
 
 //
-// True for js-yaml's timestamp resolver (YAML_DATE_REGEXP and YAML_TIMESTAMP_REGEXP).
+// True for a string that resolves as a timestamp.
 //
 fn resolvesAsTimestamp(string: Utf16) bool {
     // ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
@@ -1554,8 +1553,7 @@ fn arrayIndexOf(key: []const u8) ?u32 {
 }
 
 //
-// Orders array index keys by their index before the other keys (a JavaScript object's own keys come out
-// of Object.keys that way).
+// Orders array index keys by their index before the other keys.
 //
 fn keyOrderLessThan(context: void, left: []const u8, right: []const u8) bool {
     _ = context;
@@ -1613,9 +1611,8 @@ fn writeBlockMapping(allocator: std.mem.Allocator, level: usize, object: std.jso
 }
 
 //
-// Represents a number the way js-yaml's int and float types do: an integer with the int type's
-// `object.toString(10)`, anything else with the float type's `object.toString(10)`, where an exponent without a
-// dot gets one (`1e-7` is written `1.e-7`).
+// Represents a number as YAML text: an integer in base 10, anything else as a float in base 10, where an
+// exponent without a dot gets one (`1e-7` is written `1.e-7`).
 //
 fn representNumber(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
     switch (value) {

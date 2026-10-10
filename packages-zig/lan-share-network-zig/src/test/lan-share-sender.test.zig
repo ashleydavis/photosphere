@@ -8,7 +8,7 @@ const LanShareReceiver = lan_share.lan_share_receiver.LanShareReceiver;
 const IReceiverEndpoint = lan_share.lan_share_types.IReceiverEndpoint;
 
 //
-// Makes the `{ data: "test" }` payload of the TypeScript tests (or another one-field object).
+// Makes the `{ data: "test" }` payload (or another one-field object).
 //
 fn objectPayload(allocator: std.mem.Allocator, name: []const u8, value: std.json.Value) !std.json.Value {
     var object: std.json.ObjectMap = .empty;
@@ -28,7 +28,7 @@ const IWaitOutcome = struct {
 };
 
 //
-// Runs waitForReceiver on a thread of its own (the TypeScript test holds the wait's promise instead).
+// Runs waitForReceiver on a thread of its own so that the test can cancel it.
 //
 fn waitOnThread(sender: *LanShareSender, timeoutMs: i64, outcome: *IWaitOutcome) void {
     outcome.endpoint = sender.waitForReceiver(std.testing.io, timeoutMs) catch |err| {
@@ -239,7 +239,7 @@ test "send returns false when the receiver it is given has a different pairing c
     _ = try receiver.receive();
 }
 
-test "the pairing code hash response is read as JSON.parse reads it" {
+test "the pairing code hash response is read as JSON" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -247,7 +247,7 @@ test "the pairing code hash response is read as JSON.parse reads it" {
 
     try std.testing.expect(try matches(allocator, "{\"codeHash\":\"abc\"}", "abc"));
 
-    // JSON.parse keeps the last value of a repeated key.
+    // The last value of a repeated key wins.
     try std.testing.expect(try matches(allocator, "{\"codeHash\":\"xyz\",\"codeHash\":\"abc\"}", "abc"));
 
     // A codeHash that is missing or not a string, or a body that is not an object, is not the code hash.
@@ -418,7 +418,7 @@ test "send gives up when the receiver refuses its first request, and fails on a 
     try std.testing.expect((try otherReceiver.receive()) == null);
 }
 
-test "pairingCodeHashMatches fails for a response that is not JSON, as JSON.parse does" {
+test "pairingCodeHashMatches fails for a response that is not JSON" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     try std.testing.expectError(error.Thrown, lan_share.lan_share_sender.pairingCodeHashMatches(arena.allocator(), "not json", "hash"));

@@ -1,6 +1,5 @@
 //
-// Writing a stream to storage, when that stream is reading a file and when it is not (port of
-// src/tests/file-storage-write-stream.test.ts).
+// Writing a stream to storage, when that stream is reading a file and when it is not.
 //
 // A stream that carries the path of the file it is reading is copied file to file rather than piped
 // through. Both paths have to produce identical bytes, because one of them is used for every photo taken into a

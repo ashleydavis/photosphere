@@ -22,8 +22,7 @@ const errors = utils.errors;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 //
-// (Zig: TypeScript mocks the storage and the database's findByValue. Here the database is a real one in the
-// test's directory, holding the records a test says it holds.)
+// The database is a real one in the test's directory, holding the records a test says it holds.
 //
 
 //
@@ -35,7 +34,7 @@ fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
 }
 
 //
-// The state each test starts from (TypeScript: the beforeEach of the describe block).
+// The state each test starts from.
 //
 const CleanupTest = struct {
     // Holds the test's allocations.
@@ -226,8 +225,8 @@ test "asks the database even when an asset id is recorded" {
     var context: CleanupTest = undefined;
     try context.init();
     defer context.deinit();
-    // (Zig: TypeScript counts the calls to its mocked findByValue. Here the database holds the photo under an
-    // asset id other than the one recorded, and the photo is offered, which only asking the database can find out.)
+    // (The database holds the photo under an asset id other than the one recorded, and the photo is offered, which
+    // only asking the database can find out.)
     const filePath = try context.writePhoto("in-the-database.jpg", "one");
     try context.seedCacheEntry(filePath, "one", "b1b2c3d4-e5f6-4890-abcd-ef1234567890");
     try context.holdInDatabase("one");
@@ -243,7 +242,7 @@ test "leaves a photo this device has never hashed" {
     defer context.deinit();
     // A photo imported on another device and synced in. This device has no entry for it, and
     // finding out would mean hashing the whole library, which is the cost this all exists to
-    // avoid. So it stays. (Zig: the database holds it, so only the missing cache entry keeps it.)
+    // avoid. So it stays. (The database holds it, so only the missing cache entry keeps it.)
     _ = try context.writePhoto("from-another-device.jpg", "one");
     try context.holdInDatabase("one");
 

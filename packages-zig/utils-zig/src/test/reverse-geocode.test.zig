@@ -147,7 +147,7 @@ test "reverse geocoding does nothing without an API key" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
-    // The warning goes to a capture so that nothing reaches stderr (the TypeScript test has no such case).
+    // The warning goes to a capture so that nothing reaches stderr.
     var captured = std.Io.Writer.Allocating.init(std.testing.allocator);
     defer captured.deinit();
     utils.console.setCapture(null, &captured.writer);
@@ -275,16 +275,16 @@ test "a coordinate is written in the error message as a template string writes a
     try testBadReverseGeocode(10, -1.5e300, "Bad \"lng\" field, value -1.5e+300 is less than mininmum -180");
 }
 
-test "the response body is read as axios reads it: JSON.parse, or the text itself when it is not JSON" {
+test "the response body is the parsed JSON, or the text itself when it is not JSON" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // JSON.parse keeps the last value of a repeated key.
+    // The last value of a repeated key is kept.
     const repeated = try reverse_geocode.axiosResponseData(allocator, "{\"status\":\"OK\",\"status\":\"REQUEST_DENIED\"}");
     try std.testing.expectEqualStrings("REQUEST_DENIED", repeated.object.get("status").?.string);
 
-    // axios parses silently: a body that is not JSON is handed back as text, which has no status and no results.
+    // A body that is not JSON is handed back as text, which has no status and no results.
     const notJson = try reverse_geocode.axiosResponseData(allocator, "<html>Service unavailable</html>");
     try std.testing.expectEqualStrings("<html>Service unavailable</html>", notJson.string);
     const empty = try reverse_geocode.axiosResponseData(allocator, "");

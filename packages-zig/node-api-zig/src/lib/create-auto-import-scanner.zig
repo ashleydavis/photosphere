@@ -45,7 +45,7 @@ const IMediaSourceBuildOptions = media_source_registry.IMediaSourceBuildOptions;
 //
 
 //
-// Builds a FolderMediaSource over the folder sources (TypeScript: the arrow function registered for "folder").
+// Builds a FolderMediaSource over the folder sources.
 //
 pub fn buildFolderMediaSource(allocator: std.mem.Allocator, sources: []const IAutoImportSource, options: IMediaSourceBuildOptions) anyerror!IMediaSource {
     const folders = try allocator.alloc(IFolderAutoImportSource, sources.len);
@@ -61,8 +61,7 @@ pub fn buildFolderMediaSource(allocator: std.mem.Allocator, sources: []const IAu
 // Folders are the source kind node-api can serve, so it registers the builder for them. The mobile
 // worker registers its own builder for the device photo library, and the scanner knows about
 // neither.
-// (Zig: TypeScript does this when the module is loaded; Zig calls this from initTaskHandlers, which is where
-// TypeScript loads this module.)
+// Called from initTaskHandlers.
 //
 pub fn registerFolderMediaSourceBuilder() !void {
     try registerMediaSourceBuilder("folder", buildFolderMediaSource);
@@ -70,10 +69,10 @@ pub fn registerFolderMediaSourceBuilder() !void {
 
 //
 // Everything the factory needs to build a scanner.
-// (Zig: IImportOptions is the raw JSON the import was queued with, which is what normaliseAutoImportSettings reads.)
+// The import options are the raw JSON the import was queued with, which is what normaliseAutoImportSettings reads.
 //
 pub const ICreateAutoImportScannerOptions = struct {
-    // How the import runs (TypeScript: the IImportOptions fields spread into these options).
+    // How the import runs.
     importOptions: std.json.Value,
 
     // The database's storage, for reading the merkle tree and the saved backfill position.
@@ -98,8 +97,7 @@ pub const ICreateAutoImportScannerOptions = struct {
 };
 
 //
-// The state the scanner's callbacks share (TypeScript: the variables createAutoImportScanner's inner
-// functions close over).
+// The state the scanner's callbacks share.
 //
 const AutoImportScannerCallbacks = struct {
     // The options the scanner was built with.
@@ -142,7 +140,9 @@ const AutoImportScannerCallbacks = struct {
 
         const contentHash = try std.fmt.allocPrint(allocator, "{x}", .{cacheEntry.hash});
         const hashIndex = try options.metadataCollection.sortIndex("hash", .asc);
-        const existingRecords = try hashIndex.findByValue(io, .{ .string = contentHash }, null);
+        const existingRecords = try hashIndex.findByValue(io, .{
+            .string = contentHash,
+        }, null);
         if (existingRecords.len == 0) {
             return null;
         }
@@ -183,7 +183,7 @@ const AutoImportScannerCallbacks = struct {
     }
 
     //
-    // `() => options.context.isCancelled()`.
+    // Answers whether the task this scanner runs inside has been cancelled.
     //
     fn isCancelled(context: ?*anyopaque) bool {
         const self: *AutoImportScannerCallbacks = @ptrCast(@alignCast(context.?));
@@ -191,7 +191,7 @@ const AutoImportScannerCallbacks = struct {
     }
 
     //
-    // `milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))`.
+    // Sleeps for a number of milliseconds.
     //
     fn sleepFor(context: ?*anyopaque, io: std.Io, milliseconds: u64) anyerror!void {
         _ = context;
@@ -199,7 +199,7 @@ const AutoImportScannerCallbacks = struct {
     }
 
     //
-    // `message => log.info(message)`.
+    // Logs a message at info level.
     //
     fn logInfo(context: ?*anyopaque, message: []const u8) void {
         _ = context;
@@ -208,7 +208,7 @@ const AutoImportScannerCallbacks = struct {
 };
 
 //
-// `() => options.localHashCache.save()`. (No TypeScript counterpart: the arrow function passed to swallowError.)
+// Saves the hash cache. The operation passed to swallowError.
 //
 pub const SaveHashCacheOperation = struct {
     // The cache to save.
@@ -224,7 +224,7 @@ pub const SaveHashCacheOperation = struct {
 
 //
 // Builds the scanner for one automatic import.
-// (Zig: the scanner and its state are allocated with the allocator.)
+// The scanner and its state are allocated with the allocator.
 //
 pub fn createAutoImportScanner(allocator: std.mem.Allocator, options: ICreateAutoImportScannerOptions) !*AutoImportScanner {
     const settings = try normaliseAutoImportSettings(allocator, options.importOptions);
@@ -240,6 +240,7 @@ pub fn createAutoImportScanner(allocator: std.mem.Allocator, options: ICreateAut
     const source = try buildMediaSource(allocator, settings.sources, .{
         .sessionTempDir = options.sessionTempDir,
         .uuidGenerator = options.context.uuidGenerator,
+        .hostRequester = options.context.hostRequester,
     });
 
     const callbacks = try allocator.create(AutoImportScannerCallbacks);

@@ -17,7 +17,7 @@ const Capture = struct {
 };
 
 //
-// Counts the syncs a watch runs (TypeScript: the variables the test callbacks capture).
+// Counts the syncs a watch runs.
 //
 const ISyncCounter = struct {
     // The number of syncs run.
@@ -135,7 +135,7 @@ test "runSyncWatch does not sync at all when it is stopped before it starts" {
     try std.testing.expectEqual(@as(u32, 0), counter.syncs);
 }
 
-test "runSyncWatch writes the interval as a template string writes a number and waits as setTimeout does" {
+test "runSyncWatch writes the interval as a number is written in a message and waits as a timer does" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var capture = Capture{ .stdout = .init(arena.allocator()), .stderr = .init(arena.allocator()) };
@@ -145,7 +145,7 @@ test "runSyncWatch writes the interval as a template string writes a number and 
     cli.picocolors.setColorSupportOverride(false);
     defer cli.picocolors.setColorSupportOverride(null);
 
-    // setTimeout waits 1 ms for a delay under 1 ms or past 2147483647 ms.
+    // The timer waits 1 ms for a delay under 1 ms or past 2147483647 ms.
     var tiny: ISyncCounter = .{ .stopAfter = 2 };
     try runSyncWatch(arena.allocator(), std.testing.io, .{
         .intervalSeconds = 1e-7,

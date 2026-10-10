@@ -366,7 +366,7 @@ test "tool output is written under the tool's name, and empty output is left out
 
     const content = try environment.readFile(environment.logger.getLogFilePath());
     try std.testing.expect(std.mem.indexOf(u8, content, "] [TOOL] == identify stdout ==\nImage: photo.jpg\n") != null);
-    // An empty string is falsy in TypeScript, so that stderr block is not written at all.
+    // An empty stderr is not written at all.
     try std.testing.expect(std.mem.indexOf(u8, content, "== identify stderr ==") == null);
     try std.testing.expect(std.mem.indexOf(u8, content, "] [TOOL] == ffprobe stderr ==\na warning") != null);
     // Nor is the other one, which had no stdout to write.
@@ -986,8 +986,7 @@ test "symbol gives each prompt state its own colour and symbol" {
     cli.picocolors.setColorSupportOverride(true);
     defer cli.picocolors.setColorSupportOverride(null);
 
-    // A terminal without unicode support gets the ASCII fallbacks, which is what the TypeScript does too
-    // (`is-unicode-supported` is false there). The build runner's TERM decides it, so the symbols are read from
+    // A terminal without unicode support gets the ASCII fallbacks. The build runner's TERM decides it, so the symbols are read from
     // the same `unicodeOr` the library uses rather than hardcoded to the Unicode ones.
     const stepActive = common.unicodeOr("\u{25C6}", "*");
     const stepCancel = common.unicodeOr("\u{25A0}", "x");
@@ -1132,7 +1131,7 @@ test "process_argv hands back the user arguments, and nothing when only the exec
     try std.testing.expectEqual(@as(usize, 1), cli.process_argv.getArgv().len);
     try std.testing.expectEqual(@as(usize, 0), cli.process_argv.userArgs().len);
 
-    // process.argv.slice(2) in TypeScript starts past the runtime and the script, which here is past argv[0].
+    // The user arguments start past argv[0].
     cli.process_argv.setArgv(&.{ "psi", "verify", "--db", "x" });
     try std.testing.expectEqual(@as(usize, 3), cli.process_argv.userArgs().len);
     try std.testing.expectEqualStrings("verify", cli.process_argv.userArgs()[0]);

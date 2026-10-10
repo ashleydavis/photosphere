@@ -21,9 +21,8 @@ const path = node_utils.path;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 //
-// (Zig: TypeScript mocks the open-storage, hash, hash-cache and media-file-database modules. The Zig port has no
-// modules to mock, so these tests give the handler a real file, a real hash cache and a real database holding the
-// records a test says it holds.)
+// These tests give the handler a real file, a real hash cache and a real database holding the records a test says
+// it holds.
 //
 
 //

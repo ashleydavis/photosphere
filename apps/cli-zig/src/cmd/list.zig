@@ -21,12 +21,12 @@ const BsonValue = serialization.bson.BsonValue;
 const BsonDocument = serialization.bson.BsonDocument;
 
 //
-// An asset record from the metadata collection's sort index (TypeScript: IAsset).
+// An asset record from the metadata collection's sort index.
 //
 const IAsset = bdb.sort_index.ISortIndexRecord;
 
 //
-// Options of the list command (TypeScript: IListCommandOptions extends IBaseCommandOptions).
+// Options of the list command.
 // The base options are in `base`.
 //
 pub const IListCommandOptions = struct {
@@ -126,7 +126,7 @@ pub fn listCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
 }
 
 //
-// The end index of `records.slice(0, pageSize)` for a JavaScript number pageSize: NaN is 0, a negative end
+// The end index of the records on a page for a floating point page size: NaN is 0, a negative end
 // counts back from the length, and the end is clamped to the length.
 //
 fn sliceEnd(length: usize, pageSize: f64) usize {
@@ -142,14 +142,14 @@ fn sliceEnd(length: usize, pageSize: f64) usize {
 }
 
 //
-// JavaScript truthiness of an optional page id (TypeScript: `result.nextPageId && ...`).
+// Whether an optional page id is present and not empty.
 //
 fn isSet(pageId: ?[]const u8) bool {
     return pageId != null and pageId.?.len > 0;
 }
 
 //
-// JavaScript truthiness of an optional field value (a missing field is undefined).
+// Whether an optional field value counts as set (a missing field is undefined, which does not).
 //
 fn isTruthy(value: ?BsonValue) bool {
     const present = value orelse return false;
@@ -189,7 +189,7 @@ fn toLocaleDateString(allocator: std.mem.Allocator, value: BsonValue) ![]const u
 }
 
 //
-// Gets the properties of an asset (TypeScript: `record.properties`), or null when it is missing.
+// Gets the properties of an asset, or null when it is missing.
 //
 fn getProperties(record: IAsset) ?BsonDocument {
     const properties = record.get("properties") orelse return null;
@@ -240,8 +240,8 @@ fn displayPage(allocator: std.mem.Allocator, records: []const IAsset, pageNumber
 }
 
 //
-// Waits for a key press on stdin: Ctrl+C returns false, any other key true. stdin must be a TTY (TypeScript:
-// `stdin.setRawMode` is not a function when it is not, so the command throws).
+// Waits for a key press on stdin: Ctrl+C returns false, any other key true. stdin must be a TTY, otherwise
+// setting raw mode fails and the command throws.
 //
 fn waitForUserInput(io: std.Io) !bool {
     const stdin = common.resolveInput(io, .{});
@@ -250,7 +250,7 @@ fn waitForUserInput(io: std.Io) !bool {
     }
     try stdin.setRawMode(true);
 
-    // The first chunk of input is the key (TypeScript: the first 'data' event).
+    // The first chunk of input is the key.
     stdin.reader.fillMore() catch |err| switch (err) {
         error.EndOfStream => {
             // Nothing keeps the process alive once stdin ends, so it exits with 0.

@@ -44,8 +44,7 @@ fn scannedItemLessThan(context: void, left: IScannedItem, right: IScannedItem) b
 }
 
 //
-// What the callback FolderMediaSource.scan passes to scanPaths needs (TypeScript: the variables the
-// `async result => { ... }` arrow function closes over).
+// What the callback FolderMediaSource.scan passes to scanPaths needs.
 //
 const FolderScan = struct {
     // Allocates the scanned items.
@@ -61,7 +60,7 @@ const FolderScan = struct {
     scanned: *std.ArrayList(IScannedItem),
 
     //
-    // The body of the arrow function: keeps each file the folder's recurse flag allows.
+    // Keeps each file the folder's recurse flag allows.
     //
     fn visit(context: ?*anyopaque, result: FileScannedResult) anyerror!void {
         const self: *FolderScan = @ptrCast(@alignCast(context.?));
@@ -92,7 +91,7 @@ const FolderScan = struct {
 // A media source over a list of watched folders.
 //
 pub const FolderMediaSource = struct {
-    // Allocates everything the source keeps, for as long as it lives. (No TypeScript counterpart.)
+    // Allocates everything the source keeps, for as long as it lives.
     allocator: std.mem.Allocator,
 
     // The folders being watched, each with its own recurse flag.
@@ -113,7 +112,7 @@ pub const FolderMediaSource = struct {
     diskPathsBySourceId: std.StringHashMapUnmanaged([]const u8),
 
     //
-    // Creates the source (TypeScript: the constructor).
+    // Creates the source.
     //
     pub fn init(allocator: std.mem.Allocator, folders: []const IFolderAutoImportSource, sessionTempDir: []const u8, uuidGenerator: IUuidGenerator) FolderMediaSource {
         return .{
@@ -273,8 +272,7 @@ pub const FolderMediaSource = struct {
     }
 
     //
-    // `scannedItems.findIndex(scannedItem => scannedItem.item.sourceId === cursor)`, or null for -1.
-    // (No TypeScript counterpart.)
+    // The index of the scanned item with a source id, or null when there is none.
     //
     fn findSourceIdIndex(scannedItems: []const IScannedItem, sourceId: []const u8) ?usize {
         for (scannedItems, 0..) |scannedItem, index| {

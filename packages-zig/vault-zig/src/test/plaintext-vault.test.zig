@@ -50,7 +50,7 @@ fn secretNameLessThan(context: void, left: ISecret, right: ISecret) bool {
     return std.mem.order(u8, left.name, right.name) == .lt;
 }
 
-test "get: returns undefined for a secret that does not exist" {
+test "returns undefined for a secret that does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -62,7 +62,7 @@ test "get: returns undefined for a secret that does not exist" {
     try std.testing.expect(result == null);
 }
 
-test "get: returns the secret after it has been set" {
+test "returns the secret after it has been set" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -79,7 +79,7 @@ test "get: returns the secret after it has been set" {
     try std.testing.expectEqualStrings(secret.value, result.value);
 }
 
-test "get: returns the latest value when a secret is overwritten" {
+test "returns the latest value when a secret is overwritten" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -94,7 +94,7 @@ test "get: returns the latest value when a secret is overwritten" {
     try std.testing.expectEqualStrings("new-value", result.value);
 }
 
-test "set: creates the vault directory if it does not exist" {
+test "creates the vault directory if it does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -109,7 +109,7 @@ test "set: creates the vault directory if it does not exist" {
     try std.testing.expectEqualStrings("secret", result.value);
 }
 
-test "set: stores the name, type, and value of the secret" {
+test "stores the name, type, and value of the secret" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -125,7 +125,7 @@ test "set: stores the name, type, and value of the secret" {
     try std.testing.expectEqualStrings("hunter2", result.value);
 }
 
-test "set: supports arbitrary type strings" {
+test "supports arbitrary type strings" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -139,7 +139,7 @@ test "set: supports arbitrary type strings" {
     try std.testing.expectEqualStrings("s3-credentials", result.type);
 }
 
-test "set: supports a key pair secret with both private and public key in the value" {
+test "supports a key pair secret with both private and public key in the value" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -157,7 +157,7 @@ test "set: supports a key pair secret with both private and public key in the va
     try std.testing.expectEqualStrings("-----BEGIN PUBLIC KEY-----", parsed.object.get("publicKey").?.string);
 }
 
-test "get: returns undefined when the vault file exists but holds no such name" {
+test "returns undefined when the vault file exists but holds no such name" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -171,7 +171,7 @@ test "get: returns undefined when the vault file exists but holds no such name" 
     try std.testing.expect(result == null);
 }
 
-test "set: creates the vault file when it does not exist yet" {
+test "creates the vault file when it does not exist yet" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -185,7 +185,7 @@ test "set: creates the vault file when it does not exist yet" {
     try std.testing.expectEqual(std.Io.File.Kind.file, stats.kind);
 }
 
-test "set: preserves the secrets already held in the vault file" {
+test "preserves the secrets already held in the vault file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -202,7 +202,7 @@ test "set: preserves the secrets already held in the vault file" {
     try std.testing.expectEqualStrings("three", (try vault.get(allocator, io, "third")).?.value);
 }
 
-test "list: returns an empty array when the vault is empty" {
+test "returns an empty array when the vault is empty" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -214,7 +214,7 @@ test "list: returns an empty array when the vault is empty" {
     try std.testing.expectEqual(@as(usize, 0), secrets.len);
 }
 
-test "list: returns an empty array when the vault file does not exist" {
+test "returns an empty array when the vault file does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -226,7 +226,7 @@ test "list: returns an empty array when the vault file does not exist" {
     try std.testing.expectEqual(@as(usize, 0), secrets.len);
 }
 
-test "list: returns all stored secrets" {
+test "returns all stored secrets" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -244,7 +244,7 @@ test "list: returns all stored secrets" {
     try std.testing.expectEqualStrings("beta", secrets[1].name);
 }
 
-test "list: does not include deleted secrets" {
+test "does not include deleted secrets" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -261,7 +261,7 @@ test "list: does not include deleted secrets" {
     try std.testing.expectEqualStrings("keep", secrets[0].name);
 }
 
-test "list: ignores a stray file sitting alongside the vault file" {
+test "ignores a stray file sitting alongside the vault file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -278,7 +278,7 @@ test "list: ignores a stray file sitting alongside the vault file" {
     try std.testing.expectEqual(@as(usize, 1), secrets.len);
 }
 
-test "list: returns secrets in the order a JavaScript object keeps its keys (array index names first)" {
+test "returns secrets in the order a JavaScript object keeps its keys (array index names first)" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -338,7 +338,7 @@ test "a malformed vault file: makes list throw" {
     try std.testing.expect(std.meta.isError(vault.list(allocator, io)));
 }
 
-test "delete: removes a secret so that get returns undefined afterwards" {
+test "removes a secret so that get returns undefined afterwards" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -353,7 +353,7 @@ test "delete: removes a secret so that get returns undefined afterwards" {
     try std.testing.expect(result == null);
 }
 
-test "delete: does nothing when the secret does not exist" {
+test "does nothing when the secret does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -365,7 +365,7 @@ test "delete: does nothing when the secret does not exist" {
     try vault.delete(allocator, io, "no-such-secret");
 }
 
-test "secret names with special characters: handles names containing spaces" {
+test "handles names containing spaces" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -379,7 +379,7 @@ test "secret names with special characters: handles names containing spaces" {
     try std.testing.expectEqualStrings("spaced", result.value);
 }
 
-test "secret names with special characters: handles names containing slashes" {
+test "handles names containing slashes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -393,7 +393,7 @@ test "secret names with special characters: handles names containing slashes" {
     try std.testing.expectEqualStrings("tok", result.value);
 }
 
-test "secret names with special characters: handles names containing unicode characters" {
+test "handles names containing unicode characters" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -407,7 +407,7 @@ test "secret names with special characters: handles names containing unicode cha
     try std.testing.expectEqualStrings("motdepasse", result.value);
 }
 
-test "secret names with special characters: handles multiple specially named secrets without collision" {
+test "handles multiple specially named secrets without collision" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -424,7 +424,7 @@ test "secret names with special characters: handles multiple specially named sec
     try std.testing.expectEqualStrings("percent", percent.value);
 }
 
-test "file permissions: vault file is created with owner-only permissions (0o600)" {
+test "vault file is created with owner-only permissions (0o600)" {
     if (@import("builtin").os.tag == .windows) {
         return;
     }
@@ -441,7 +441,7 @@ test "file permissions: vault file is created with owner-only permissions (0o600
     try std.testing.expectEqual(@as(u32, 0o600), try permissionBits(io, filePath));
 }
 
-test "file permissions: vault directory is created with owner-only permissions (0o700)" {
+test "vault directory is created with owner-only permissions (0o700)" {
     if (@import("builtin").os.tag == .windows) {
         return;
     }
@@ -549,14 +549,14 @@ test "vault() exposes the PlaintextVault through the IVault interface" {
 }
 
 //
-// Loads the secrets that generate.ts wrote to ts-vault/.
+// Loads the secrets that are in the golden vault file in ts-vault/.
 //
 fn loadFixtureSecrets(allocator: std.mem.Allocator, io: std.Io) ![]ISecret {
     const json = try std.Io.Dir.cwd().readFileAlloc(io, "vault-zig/src/test/fixtures/secrets.json", allocator, .unlimited);
     return std.json.parseFromSliceLeaky([]ISecret, allocator, json, .{});
 }
 
-test "interop: Zig reads a vault file written by TypeScript" {
+test "interop: Zig reads the golden vault file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -571,8 +571,7 @@ test "interop: Zig reads a vault file written by TypeScript" {
         try std.testing.expectEqualStrings(expected.value, result.value);
     }
 
-    // list returns the secrets in the order of the keys of the TypeScript object, which is the order
-    // TypeScript wrote them to the file in.
+    // list returns the secrets in the order of the keys in the file.
     const listed = try vault.list(allocator, io);
     try std.testing.expectEqual(secrets.len, listed.len);
     const raw = try std.Io.Dir.cwd().readFileAlloc(io, "vault-zig/src/test/fixtures/ts-vault/vault.json", allocator, .unlimited);
@@ -586,7 +585,7 @@ test "interop: Zig reads a vault file written by TypeScript" {
     }
 }
 
-test "interop: Zig writes a vault file byte-identical to TypeScript (so TypeScript reads it)" {
+test "interop: Zig writes a vault file byte-identical to the golden vault file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -669,10 +668,9 @@ test "DEFAULT_VAULT_DIR is under the home directory os.homedir gives, the passwd
 }
 
 //
-// A vault file whose entry is not a secret. TypeScript's get hands the value back unchecked (see the TODO on
-// toSecret), so this is where the two differ: the Zig throws, naming the entry it could not read.
+// A vault file whose entry is not a secret: get throws, naming the entry it could not read.
 //
-test "get: a vault file entry that is not a secret makes get throw" {
+test "a vault file entry that is not a secret makes get throw" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -685,7 +683,7 @@ test "get: a vault file entry that is not a secret makes get throw" {
     try std.testing.expectError(error.Thrown, vault.get(allocator, io, "broken"));
 }
 
-test "list: a vault file entry that is not a secret makes list throw" {
+test "a vault file entry that is not a secret makes list throw" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -740,7 +738,7 @@ test "readVaultFile reports an error other than the file being missing" {
 // set writes the three fields of the secret under its name, in that order, so the file is what JSON.stringify
 // of the object the caller passed would be.
 //
-test "set: writes the name, type and value in that order under the name as the key" {
+test "writes the name, type and value in that order under the name as the key" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -765,7 +763,7 @@ test "set: writes the name, type and value in that order under the name as the k
 //
 // delete removes one secret and leaves the file readable, with the others still in it.
 //
-test "delete: leaves the other secrets in place" {
+test "leaves the other secrets in place" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -790,7 +788,7 @@ test "getVaultFilePath puts vault.json inside the vault directory" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    // The path is joined with node-utils' path.join, the port of Node's path.join, which normalises every
+    // The path is joined with node-utils' path.join, which normalises every
     // separator of the segments it is given to a `\` on Windows, so the expectation is built the same way. A `/`
     // written into the format string here would survive the join and match nothing but a POSIX build.
     const expected = try node_utils.path.join(allocator, &.{ try std.fs.path.join(allocator, &.{ "home", "vaults", "photosphere" }), "vault.json" });

@@ -30,21 +30,27 @@ test "planDesktopAutoImport does not run when automatic import has never been sw
 test "planDesktopAutoImport does not run when automatic import is switched off" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const config: IAppConfig = .{ .autoImportEnabled = false };
+    const config: IAppConfig = .{
+        .autoImportEnabled = false,
+    };
     try std.testing.expect(!(try planDesktopAutoImport(arena.allocator(), config, &PHOTO_FOLDERS, APP_DATA_PATH)).shouldRun);
 }
 
 test "planDesktopAutoImport runs when automatic import is switched on" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const config: IAppConfig = .{ .autoImportEnabled = true };
+    const config: IAppConfig = .{
+        .autoImportEnabled = true,
+    };
     try std.testing.expect((try planDesktopAutoImport(arena.allocator(), config, &PHOTO_FOLDERS, APP_DATA_PATH)).shouldRun);
 }
 
 test "planDesktopAutoImport does not run when there is nothing at all to watch" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const config: IAppConfig = .{ .autoImportEnabled = true };
+    const config: IAppConfig = .{
+        .autoImportEnabled = true,
+    };
     const plan = try planDesktopAutoImport(arena.allocator(), config, &.{}, APP_DATA_PATH);
     try std.testing.expect(!plan.shouldRun);
     try std.testing.expectEqual(@as(usize, 0), plan.settings.sources.len);
@@ -53,7 +59,9 @@ test "planDesktopAutoImport does not run when there is nothing at all to watch" 
 test "planDesktopAutoImport falls back to the operating system's photo folders when none are configured" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const config: IAppConfig = .{ .autoImportEnabled = true };
+    const config: IAppConfig = .{
+        .autoImportEnabled = true,
+    };
     const folders = [_][]const u8{ "/home/someone/Pictures", "/home/someone/Camera" };
     const plan = try planDesktopAutoImport(arena.allocator(), config, &folders, APP_DATA_PATH);
     try std.testing.expectEqual(@as(usize, 2), plan.settings.sources.len);
@@ -64,7 +72,12 @@ test "planDesktopAutoImport falls back to the operating system's photo folders w
 test "planDesktopAutoImport uses the configured places rather than the operating system's" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const stored = [_]IAutoImportSource{.{ .folder = .{ .path = "/mnt/photos", .recurse = false } }};
+    const stored = [_]IAutoImportSource{.{
+        .folder = .{
+            .path = "/mnt/photos",
+            .recurse = false,
+        },
+    }};
     const config: IAppConfig = .{
         .autoImportEnabled = true,
         .autoImportSources = &stored,
@@ -77,10 +90,12 @@ test "planDesktopAutoImport uses the configured places rather than the operating
 test "planDesktopAutoImport chooses the default database location when none has been chosen" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const config: IAppConfig = .{ .autoImportEnabled = true };
+    const config: IAppConfig = .{
+        .autoImportEnabled = true,
+    };
     const plan = try planDesktopAutoImport(arena.allocator(), config, &PHOTO_FOLDERS, APP_DATA_PATH);
     try std.testing.expect(plan.isNewDefault);
-    // Joined as the TypeScript test does (`path.join`): the Windows job failed expecting "/" separators.
+    // Joined with the platform's own separator: expecting "/" fails on Windows.
     try std.testing.expectEqualStrings(try node_utils.path.join(arena.allocator(), &.{ APP_DATA_PATH, auto_import_desktop.DEFAULT_DATABASE_FOLDER_NAME }), plan.databasePath);
 }
 
@@ -105,7 +120,7 @@ test "planDesktopAutoImport counts an empty stored default as none chosen" {
     };
     const plan = try planDesktopAutoImport(arena.allocator(), config, &PHOTO_FOLDERS, APP_DATA_PATH);
     try std.testing.expect(plan.isNewDefault);
-    // Joined as the TypeScript test does (`path.join`): the Windows job failed expecting "/" separators.
+    // Joined with the platform's own separator: expecting "/" fails on Windows.
     try std.testing.expectEqualStrings(try node_utils.path.join(arena.allocator(), &.{ APP_DATA_PATH, auto_import_desktop.DEFAULT_DATABASE_FOLDER_NAME }), plan.databasePath);
 }
 
@@ -128,7 +143,7 @@ test "foldersAsSources with no folders gives no sources" {
 test "getDefaultDatabasePath sits under the application data directory" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    // Joined as the TypeScript test does (`path.join`): the Windows job failed expecting "/data/photosphere-default".
+    // Joined with the platform's own separator: expecting "/data/photosphere-default" fails on Windows.
     try std.testing.expectEqualStrings(try node_utils.path.join(arena.allocator(), &.{ "/data", auto_import_desktop.DEFAULT_DATABASE_FOLDER_NAME }), try getDefaultDatabasePath(arena.allocator(), "/data"));
 }
 

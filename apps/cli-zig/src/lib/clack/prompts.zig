@@ -1,7 +1,7 @@
 //
-// Port of the local copy of @clack/prompts (src/lib/clack/prompts/index.ts): the prompts used by the CLI.
+// The prompts used by the CLI.
 // Every prompt takes the caller's allocator (an arena) and io, and returns PromptResult(T): the value or
-// cancel (TypeScript: the value or the cancel symbol, tested with isCancel).
+// cancel (tested with isCancel).
 //
 const core = @import("core/index.zig");
 pub const isCancel = core.isCancel;

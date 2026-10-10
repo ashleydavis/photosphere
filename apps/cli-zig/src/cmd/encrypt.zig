@@ -42,7 +42,7 @@ const IEncryptProgress = node_api.encrypt.IEncryptProgress;
 const configureLog = log_module.configureLog;
 
 //
-// Options of the encrypt command (TypeScript: IEncryptCommandOptions extends IBaseCommandOptions).
+// Options of the encrypt command.
 // The base options, which include `key` (the encryption key file(s), comma-separated, the first being the default
 // key used for writing and for reading legacy-format files), are in `base`.
 //
@@ -57,7 +57,7 @@ pub const IEncryptCommandOptions = struct {
 };
 
 //
-// Writes an encrypt progress message (TypeScript: the `(msg) => writeProgress(msg)` arrow function).
+// Writes an encrypt progress message.
 //
 fn onEncryptProgress(context: ?*anyopaque, message: []const u8) void {
     _ = context;

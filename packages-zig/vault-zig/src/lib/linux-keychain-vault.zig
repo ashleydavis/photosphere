@@ -72,7 +72,7 @@ pub const ISearchEntry = struct {
 };
 
 //
-// The state of parseSearchOutput between attribute lines (the variables captured by flushEntry in TypeScript).
+// The state of parseSearchOutput between attribute lines.
 //
 const SearchParseState = struct {
     // The entries found so far.

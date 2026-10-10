@@ -560,6 +560,8 @@ const Context = struct {
             .optimize = .ReleaseFast,
             .link_libc = true,
             .strip = true,
+            // The libraries end up in Android's shared library, whose code must not depend on where it is loaded.
+            .pic = if (target.result.abi.isAndroid()) true else null,
         });
         return self.b.addLibrary(.{
             .name = name,
@@ -625,7 +627,9 @@ fn addSources(module: *std.Build.Module, dependency: *std.Build.Dependency, dire
 //
 fn globFiles(b: *std.Build, dependency: *std.Build.Dependency, directory: []const u8, extension: []const u8) ![]const []const u8 {
     const io = b.graph.io;
-    var dir = try dependency.builder.build_root.handle.openDir(io, directory, .{ .iterate = true });
+    var dir = try dependency.builder.build_root.handle.openDir(io, directory, .{
+        .iterate = true,
+    });
     defer dir.close(io);
     var files: std.ArrayList([]const u8) = .empty;
     var iterator = dir.iterate();
@@ -773,7 +777,8 @@ pub fn build(b: *std.Build, target: std.Build.ResolvedTarget, dependency: *std.B
     // AWSLC_LINK_THREADS: Threads::Threads, which is empty on macOS, whose C library has the pthread functions, and
     // not needed on Windows, where libcrypto uses the Windows threads (thread_win.c). On Windows libcrypto links
     // ws2_32, and bcrypt for MinGW (crypto/CMakeLists.txt).
-    if (context.isLinux) {
+    // Bionic holds the pthread functions itself.
+    if (context.isLinux and !target.result.abi.isAndroid()) {
         module.linkSystemLibrary("pthread", .{});
     }
     if (context.isWindows) {

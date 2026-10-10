@@ -504,11 +504,11 @@ test "should work with nested compression" {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Interoperability with Node's gzip (golden fixtures)
+// Interoperability with gzip output made by Bun (golden fixtures)
 // ---------------------------------------------------------------------------------------------------------------
 
 //
-// Writes the same values as writeAllTypes in fixtures/generate.ts.
+// Writes the same values the golden fixture was generated from.
 //
 fn writeAllTypes(allocator: std.mem.Allocator, serializer: ISerializer) !void {
     try serializer.writeUInt32(0xDEADBEEF);
@@ -545,7 +545,7 @@ fn allTypesBytes(allocator: std.mem.Allocator) ![]u8 {
 }
 
 //
-// Builds the Zig equivalent of compressed-node.bin: [u32 7][compressed writeAllTypes][u32 8].
+// Builds the same bytes as the golden fixture compressed-node.bin: [u32 7][compressed writeAllTypes][u32 8].
 //
 fn buildZigCompressed(allocator: std.mem.Allocator) ![]u8 {
     var mainSerializer = try BinarySerializer.init(allocator, 1024);
@@ -557,7 +557,7 @@ fn buildZigCompressed(allocator: std.mem.Allocator) ![]u8 {
     return mainSerializer.getBuffer();
 }
 
-test "CompressedBinaryDeserializer reads Node's gzip output (golden fixture)" {
+test "CompressedBinaryDeserializer reads gzip output made by Bun (golden fixture)" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -569,7 +569,7 @@ test "CompressedBinaryDeserializer reads Node's gzip output (golden fixture)" {
     try std.testing.expectEqual(@as(u32, 8), try mainDeserializer.readUInt32());
 }
 
-test "CompressedBinaryDeserializer reads Node's gzip output of empty and large data (golden fixtures)" {
+test "CompressedBinaryDeserializer reads gzip output made by Bun of empty and large data (golden fixtures)" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

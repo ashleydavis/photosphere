@@ -30,14 +30,15 @@ const BsonValue = bson.BsonValue;
 const IFileStat = @import("file-scanner.zig").IFileStat;
 const tools = @import("tools-zig");
 const Image = tools.Image;
+const InProcessRunner = @import("node-utils-zig").in_process_tools.InProcessRunner;
 const ILocation = utils.reverse_geocode.ILocation;
 
 //
 // Extract dominant color from thumbnail buffer using ImageMagick
 //
-pub fn extractDominantColorFromThumbnail(allocator: std.mem.Allocator, io: std.Io, inputPath: []const u8) !?[3]f64 {
+pub fn extractDominantColorFromThumbnail(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProcessRunner, inputPath: []const u8) !?[3]f64 {
     var image = Image.init(inputPath);
-    return try image.getDominantColor(allocator, io);
+    return try image.getDominantColor(allocator, io, toolRunner);
 }
 
 //
@@ -164,10 +165,9 @@ pub const IDatabaseSummary = struct {
 //
 
 //
-// TODO: a filesImported that is not a whole number reads as 0 or truncated, where JavaScript carries it through
-// (and a string grows by concatenation).
+// TODO: a filesImported that is not a whole number reads as 0 or truncated.
 //
-// Equivalent of `databaseMetadata?.filesImported || 0`. (No TypeScript counterpart: the expression is inline.)
+// Gets the number of files imported from the database metadata, or 0 when there is none.
 //
 pub fn getFilesImported(databaseMetadata: ?BsonDocument) u64 {
     const metadata = databaseMetadata orelse {
@@ -190,7 +190,7 @@ pub fn getFilesImported(databaseMetadata: ?BsonDocument) u64 {
 }
 
 //
-// Equivalent of `databaseMetadata?.isPartial === true`. (No TypeScript counterpart: the expression is inline.)
+// Whether the database metadata says the database is partial (`isPartial` is true).
 //
 pub fn isPartialDatabase(databaseMetadata: ?BsonDocument) bool {
     const metadata = databaseMetadata orelse {
@@ -206,17 +206,18 @@ pub fn isPartialDatabase(databaseMetadata: ?BsonDocument) bool {
 }
 
 //
-// Creates the metadata object literal `{ filesImported: 0 }`. (No TypeScript counterpart: the literal is inline.)
+// Creates the metadata document `{ filesImported: 0 }`.
 //
 pub fn emptyDatabaseMetadata(allocator: std.mem.Allocator) !BsonDocument {
     var metadata: BsonDocument = .empty;
-    try metadata.put(allocator, "filesImported", .{ .number = 0 });
+    try metadata.put(allocator, "filesImported", .{
+        .number = 0,
+    });
     return metadata;
 }
 
 //
-// Copies a metadata document like the object spread `{ ...databaseMetadata }` (same keys in the same order).
-// (No TypeScript counterpart: the spread is inline.)
+// Copies a metadata document (same keys in the same order).
 //
 pub fn copyDatabaseMetadata(allocator: std.mem.Allocator, databaseMetadata: BsonDocument) !BsonDocument {
     var copy: BsonDocument = .empty;
@@ -287,7 +288,7 @@ pub const IAssetDetailTimings = struct {
 };
 
 //
-// Represents the resolution of the image or video (TypeScript: IResolution in image.ts).
+// Represents the resolution of the image or video.
 //
 pub const IResolution = struct {
     //
@@ -386,12 +387,20 @@ pub fn createReadme(
     };
     try retry(io, &writeOperation, 3, 1_000, 2, 30_000, null);
 
-    var infoOperation: retry_operations.InfoOperation("() => rawStorage.info(\"README.md\")") = .{ .allocator = allocator, .storage = rawStorage, .fileName = "README.md" };
+    var infoOperation: retry_operations.InfoOperation("() => rawStorage.info(\"README.md\")") = .{
+        .allocator = allocator,
+        .storage = rawStorage,
+        .fileName = "README.md",
+    };
     const readmeInfo = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("README.md file not found after creation.", .{});
     };
 
-    var hashOperation: retry_operations.ComputeStorageHashOperation("async () => computeHash(await rawStorage.readStream(\"README.md\"))") = .{ .allocator = allocator, .storage = rawStorage, .fileName = "README.md" };
+    var hashOperation: retry_operations.ComputeStorageHashOperation("async () => computeHash(await rawStorage.readStream(\"README.md\"))") = .{
+        .allocator = allocator,
+        .storage = rawStorage,
+        .fileName = "README.md",
+    };
     const readmeHash = try retry(io, &hashOperation, 3, 1_000, 2, 30_000, null);
 
     return try merkle_tree.addItem(allocator, &merkleTree, .{
@@ -404,7 +413,6 @@ pub fn createReadme(
 
 //
 // The database dependencies returned by createMediaFileDatabase.
-// (TypeScript: the anonymous object type returned by createMediaFileDatabase.)
 //
 pub const IMediaFileDatabase = struct {
     // The storage the database was created with.
@@ -464,7 +472,11 @@ pub fn createDatabase(
 
     merkleTree = try createReadme(allocator, io, rawStorage, merkleTree);
 
-    var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(merkleTree, assetStorage)") = .{ .allocator = allocator, .merkleTree = &merkleTree, .storage = assetStorage };
+    var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(merkleTree, assetStorage)") = .{
+        .allocator = allocator,
+        .merkleTree = &merkleTree,
+        .storage = assetStorage,
+    };
     try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
 
     try api.database_config.saveDatabaseConfig(allocator, io, rawStorage, api.database_config.IDatabaseConfig{});
@@ -489,7 +501,7 @@ pub fn loadSortIndexes(
 //
 fn EnsureSortIndexOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text that stands for this operation in the timeout message of retryOnce.
         pub const source = sourceText;
 
         // The collection that owns the sort index.
@@ -518,9 +530,19 @@ fn EnsureSortIndexOperation(comptime sourceText: []const u8) type {
 // Ensures the sort index exists.
 //
 pub fn ensureSortIndex(io: std.Io, metadataCollection: *IBsonCollection) !void {
-    var hashOperation: EnsureSortIndexOperation("() => metadataCollection.sortIndex(\"hash\", \"asc\").ensure(metadataCollection, \"string\")") = .{ .metadataCollection = metadataCollection, .fieldName = "hash", .direction = .asc, .sortDataType = .string };
+    var hashOperation: EnsureSortIndexOperation("() => metadataCollection.sortIndex(\"hash\", \"asc\").ensure(metadataCollection, \"string\")") = .{
+        .metadataCollection = metadataCollection,
+        .fieldName = "hash",
+        .direction = .asc,
+        .sortDataType = .string,
+    };
     try retry(io, &hashOperation, 3, 1_000, 2, 30_000, null);
-    var photoDateOperation: EnsureSortIndexOperation("() => metadataCollection.sortIndex(\"photoDate\", \"desc\").ensure(metadataCollection, \"date\")") = .{ .metadataCollection = metadataCollection, .fieldName = "photoDate", .direction = .desc, .sortDataType = .date };
+    var photoDateOperation: EnsureSortIndexOperation("() => metadataCollection.sortIndex(\"photoDate\", \"desc\").ensure(metadataCollection, \"date\")") = .{
+        .metadataCollection = metadataCollection,
+        .fieldName = "photoDate",
+        .direction = .desc,
+        .sortDataType = .date,
+    };
     try retry(io, &photoDateOperation, 3, 1_000, 2, 30_000, null);
 }
 
@@ -528,7 +550,7 @@ pub fn ensureSortIndex(io: std.Io, metadataCollection: *IBsonCollection) !void {
 // `() => getDatabaseRootHash(assetStorage, ".db/bson")`.
 //
 const GetDatabaseRootHashOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text that stands for this operation in the timeout message of retryOnce.
     pub const source = "() => getDatabaseRootHash(assetStorage, \".db/bson\")";
 
     // Allocates the loaded tree.
@@ -607,20 +629,10 @@ pub fn streamAsset(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStor
 }
 
 //
-// Counts one more imported file in the database metadata of a merkle tree, creating the metadata when the tree has none.
-// (No TypeScript counterpart: writeAsset and writeAssetStream write this out inline. `filesImported++` is `filesImported = Number(filesImported) + 1`.)
-//
-fn countImportedFile(allocator: std.mem.Allocator, merkleTree: *IMerkleTree) !void {
-    var databaseMetadata = merkleTree.databaseMetadata orelse try emptyDatabaseMetadata(allocator);
-    const filesImported = databaseMetadata.get("filesImported") orelse BsonValue.undefined;
-    const filesImportedNumber = bdb.js_value.toNumber(allocator, filesImported) catch std.math.nan(f64);
-    try databaseMetadata.put(allocator, "filesImported", .{ .number = filesImportedNumber + 1 });
-    merkleTree.databaseMetadata = databaseMetadata;
-}
-
-//
 // Writes an asset from a buffer with a specific asset ID.
 // This is used by the REST API server to add assets uploaded via HTTP.
+// (Zig: acquireWriteLock and retry are given their parameters in full, as Zig has no default parameter
+// values; the lock is released before the failure of the try and catch blocks is returned.)
 //
 pub fn writeAsset(
     allocator: std.mem.Allocator,
@@ -645,7 +657,7 @@ pub fn writeAsset(
 
 //
 // The try and catch blocks of writeAsset, run holding the write lock.
-// (No TypeScript counterpart: the blocks are written inline; Zig needs them as a function to release the lock in the finally
+// (Zig needs them as a function to release the lock in the finally
 // block whether they failed or not.)
 //
 fn writeAssetUnderLock(
@@ -729,7 +741,13 @@ fn writeAssetTry(
     });
 
     if (std.mem.eql(u8, assetType, "asset")) {
-        try countImportedFile(allocator, &merkleTree);
+        var databaseMetadata = merkleTree.databaseMetadata orelse try emptyDatabaseMetadata(allocator);
+        const filesImported = databaseMetadata.get("filesImported") orelse BsonValue.undefined;
+        const filesImportedNumber = if (filesImported == .undefined) std.math.nan(f64) else try bdb.js_value.toNumber(allocator, filesImported);
+        try databaseMetadata.put(allocator, "filesImported", .{
+            .number = filesImportedNumber + 1,
+        });
+        merkleTree.databaseMetadata = databaseMetadata;
     }
 
     var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(merkleTree, assetStorage)") = .{
@@ -744,6 +762,8 @@ fn writeAssetTry(
 //
 // Writes an asset from a readable byte stream (same lock / merkle behavior as writeAsset).
 // Callers that know the byte length (e.g. from Content-Length) should pass it for storage backends that use a size hint.
+// (Zig: acquireWriteLock and retry are given their parameters in full, as Zig has no default parameter
+// values; the lock is released before the failure of the try and catch blocks is returned.)
 //
 pub fn writeAssetStream(
     allocator: std.mem.Allocator,
@@ -768,7 +788,7 @@ pub fn writeAssetStream(
 }
 
 //
-// The try and catch blocks of writeAssetStream, run holding the write lock. (No TypeScript counterpart: see writeAssetUnderLock.)
+// The try and catch blocks of writeAssetStream, run holding the write lock. (See writeAssetUnderLock.)
 //
 fn writeAssetStreamUnderLock(
     allocator: std.mem.Allocator,
@@ -855,7 +875,13 @@ fn writeAssetStreamTry(
     });
 
     if (std.mem.eql(u8, assetType, "asset")) {
-        try countImportedFile(allocator, &merkleTree);
+        var databaseMetadata = merkleTree.databaseMetadata orelse try emptyDatabaseMetadata(allocator);
+        const filesImported = databaseMetadata.get("filesImported") orelse BsonValue.undefined;
+        const filesImportedNumber = if (filesImported == .undefined) std.math.nan(f64) else try bdb.js_value.toNumber(allocator, filesImported);
+        try databaseMetadata.put(allocator, "filesImported", .{
+            .number = filesImportedNumber + 1,
+        });
+        merkleTree.databaseMetadata = databaseMetadata;
     }
 
     var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(merkleTree, assetStorage)") = .{
@@ -871,6 +897,7 @@ fn writeAssetStreamTry(
 // Writes an asset stream to the destination storage and then verifies the written file is
 // byte-for-byte identical to the source file before resolving. Hashes both source and dest
 // and throws if they do not match, ensuring the source is never deleted until the copy is confirmed intact.
+// (Zig: retry is given its parameters in full, as Zig has no default parameter values.)
 //
 pub fn writeAssetStreamVerified(
     allocator: std.mem.Allocator,
@@ -960,8 +987,8 @@ pub fn removeAsset(
 
 //
 // The body of removeAsset's try block, run holding the write lock.
-// (No TypeScript counterpart: the try block is written inline; Zig needs it as a function to release the lock
-// in the finally block whether it failed or not.)
+// Zig needs it as a function to release the lock
+// in the finally block whether it failed or not.
 //
 fn removeAssetUnderLock(
     allocator: std.mem.Allocator,
@@ -999,7 +1026,9 @@ fn removeAssetUnderLock(
         const filesImported = databaseMetadata.get("filesImported") orelse BsonValue.undefined;
         const filesImportedNumber = bdb.js_value.toNumber(allocator, filesImported) catch std.math.nan(f64);
         if (filesImported != .undefined and filesImportedNumber > 0) {
-            try databaseMetadata.put(allocator, "filesImported", .{ .number = filesImportedNumber - 1 });
+            try databaseMetadata.put(allocator, "filesImported", .{
+                .number = filesImportedNumber - 1,
+            });
         }
 
         // Record deleted asset ID if requested
@@ -1017,9 +1046,13 @@ fn removeAssetUnderLock(
                 }
             }
             if (!alreadyRecorded) {
-                try deletedAssetIds.append(allocator, .{ .string = assetId });
+                try deletedAssetIds.append(allocator, .{
+                    .string = assetId,
+                });
             }
-            try databaseMetadata.put(allocator, "deletedAssetIds", .{ .array = deletedAssetIds.items });
+            try databaseMetadata.put(allocator, "deletedAssetIds", .{
+                .array = deletedAssetIds.items,
+            });
         }
         merkleTree.databaseMetadata = databaseMetadata;
     }
@@ -1051,6 +1084,7 @@ fn removeAssetUnderLock(
 //
 // Returns true if the database at the given path is a partial replica (lazy database).
 // Checks the isPartial flag stored in the merkle tree's database metadata.
+// (Zig: s3Config and storageOptions are passed as null when absent.)
 //
 pub fn isDatabasePartial(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions) !bool {
     const created = try storage_zig.storage_factory.createStorage(allocator, io, databasePath, s3Config, storageOptions);
@@ -1062,8 +1096,10 @@ pub fn isDatabasePartial(allocator: std.mem.Allocator, io: std.Io, databasePath:
 // Creates storage for the given database path. If the database is a partial replica with a
 // known origin, wraps the local storage in a LazyOriginStorage so that missing files are
 // fetched from the origin and cached locally on first access.
+// (Zig: resolveStorageCredentials is given null for its optional encryptionKey and s3Key, and the LazyOriginStorage is allocated
+// with the allocator and keeps it.)
 //
-pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions) !IStorage {
+pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions, host: ?utils.host_requester.IHostRequester) !IStorage {
     const created = try storage_zig.storage_factory.createStorage(allocator, io, databasePath, s3Config, storageOptions);
 
     const config = try api.database_config.loadDatabaseConfig(allocator, io, created.rawStorage);
@@ -1076,7 +1112,7 @@ pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, datab
         return created.storage;
     }
 
-    const credentials = try resolve_storage_credentials.resolveStorageCredentials(allocator, io, origin, null, null);
+    const credentials = try resolve_storage_credentials.resolveStorageCredentials(allocator, io, origin, null, null, host);
     const loadedKeys = try encryption.key_utils.loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
     const originStorage = (try storage_zig.storage_factory.createStorage(allocator, io, origin, credentials.s3Config, loadedKeys.options)).storage;
     const lazyStorage = try allocator.create(LazyOriginStorage);
@@ -1097,7 +1133,7 @@ pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, datab
 // compare the local database against its origin, and a local read that falls back to the origin
 // makes the two look identical when they are not.
 //
-pub fn openLazyOriginStorage(allocator: std.mem.Allocator, io: std.Io, localStorage: IStorage, localRawStorage: IStorage) !IStorage {
+pub fn openLazyOriginStorage(allocator: std.mem.Allocator, io: std.Io, localStorage: IStorage, localRawStorage: IStorage, host: ?utils.host_requester.IHostRequester) !IStorage {
     const config = try api.database_config.loadDatabaseConfig(allocator, io, localRawStorage);
     const origin = configOrigin(config) orelse {
         return localStorage;
@@ -1108,7 +1144,7 @@ pub fn openLazyOriginStorage(allocator: std.mem.Allocator, io: std.Io, localStor
         return localStorage;
     }
 
-    const credentials = try resolve_storage_credentials.resolveStorageCredentials(allocator, io, origin, null, null);
+    const credentials = try resolve_storage_credentials.resolveStorageCredentials(allocator, io, origin, null, null, host);
     const loadedKeys = try encryption.key_utils.loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
     const originStorage = (try storage_zig.storage_factory.createStorage(allocator, io, origin, credentials.s3Config, loadedKeys.options)).storage;
     const lazyStorage = try allocator.create(LazyOriginStorage);
@@ -1118,7 +1154,6 @@ pub fn openLazyOriginStorage(allocator: std.mem.Allocator, io: std.Io, localStor
 
 //
 // Gets `config?.origin` when it is a non-empty string, the only truthy origin a path can be made from.
-// (No TypeScript counterpart: the expression is inline.)
 //
 fn configOrigin(config: ?std.json.Value) ?[]const u8 {
     const value = config orelse return null;
@@ -1134,11 +1169,11 @@ fn configOrigin(config: ?std.json.Value) ?[]const u8 {
 }
 
 //
-// The arrow function checkDatabaseExists passes to retryOnce:
-// `async () => { const { storage } = await openStorage(databasePath); return await merkleTreeExists(storage); }`.
+// The operation checkDatabaseExists passes to retryOnce: it opens the storage of the database path and checks that the
+// merkle tree exists.
 //
 const OpenAndCheckMerkleTreeOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text that stands for this operation in the timeout message of retryOnce.
     pub const source =
         \\async () => {
         \\        const { storage } = await openStorage(databasePath);
@@ -1152,11 +1187,14 @@ const OpenAndCheckMerkleTreeOperation = struct {
     // The path of the database to look for.
     databasePath: []const u8,
 
+    // Reaches the phone's keychain for the credentials, or null where there is no phone shell.
+    host: ?utils.host_requester.IHostRequester,
+
     //
     // Opens the storage for the path and asks whether it holds a merkle tree.
     //
     pub fn run(self: *OpenAndCheckMerkleTreeOperation, io: std.Io) !bool {
-        const opened = try open_storage.openStorage(self.allocator, io, self.databasePath, null, null);
+        const opened = try open_storage.openStorage(self.allocator, io, self.databasePath, null, null, self.host);
         return tree.merkleTreeExists(self.allocator, io, opened.storage);
     }
 };
@@ -1170,7 +1208,7 @@ const OpenAndCheckMerkleTreeOperation = struct {
 // an automatic sync may run is a separate question, decided by computeSyncAllowed from the platform's
 // reported network status.
 //
-pub fn checkDatabaseExists(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8) !bool {
+pub fn checkDatabaseExists(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, host: ?utils.host_requester.IHostRequester) !bool {
     // Open storage the same way the load path does: openStorage resolves S3/encryption credentials
     // from the database's own config, so the existence check and the actual load agree on what is
     // reachable rather than probing with no credentials.
@@ -1192,6 +1230,7 @@ pub fn checkDatabaseExists(allocator: std.mem.Allocator, io: std.Io, databasePat
     var operation: OpenAndCheckMerkleTreeOperation = .{
         .allocator = allocator,
         .databasePath = databasePath,
+        .host = host,
     };
     return retryOnce(io, &operation, DATABASE_REACHABLE_TIMEOUT);
 }

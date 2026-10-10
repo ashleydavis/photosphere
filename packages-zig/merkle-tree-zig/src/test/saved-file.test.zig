@@ -1,5 +1,5 @@
 //
-// Tests for the comparison of saved tree files with golden fixtures (no TypeScript counterpart).
+// Tests for the comparison of saved tree files with golden fixtures.
 //
 
 const std = @import("std");
@@ -7,7 +7,7 @@ const saved_file = @import("saved-file.zig");
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 //
-// The data of a fixture: a byte, then the gzip member Bun's gzipSync at level 9 writes on Linux for "a", then a byte.
+// The data of a fixture: a byte, then the gzip member that the golden fixtures carry for "a" (level 9, written on Linux), then a byte.
 //
 const fixture_data = [_]u8{ 0xaa, 0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0x4b, 0x04, 0x00, 0x43, 0xbe, 0xb7, 0xe8, 0x01, 0x00, 0x00, 0x00, 0x55 };
 

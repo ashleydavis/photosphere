@@ -1,5 +1,5 @@
 //
-// Two writes to one path, in flight at once (port of src/tests/file-storage-concurrent-write.test.ts).
+// Two writes to one path, in flight at once.
 //
 // A write is staged in a temporary file and renamed over the destination. When that temporary file
 // was named after the destination alone, both writes used the same one: each opened it, each wrote

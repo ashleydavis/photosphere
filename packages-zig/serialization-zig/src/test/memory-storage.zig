@@ -1,8 +1,7 @@
 const std = @import("std");
 
 //
-// In-memory storage for tests, providing the storage methods that save, load, loadVersion and verify use
-// (the equivalent of the MockStorage class in the TypeScript serialization tests).
+// In-memory storage for tests, providing the storage methods that save, load, loadVersion and verify use.
 //
 pub const MemoryStorage = struct {
     // Allocates stored file contents and streams.

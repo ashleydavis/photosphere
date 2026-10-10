@@ -58,7 +58,7 @@ pub fn loadImportRecord(allocator: std.mem.Allocator, io: std.Io, databasePath: 
 }
 
 //
-// The mutator recordImports hands to updateFileOptimistic (TypeScript: `record => addImportEntries(record, newEntries)`).
+// The mutator recordImports hands to updateFileOptimistic: adds the new entries to the record.
 //
 const AddEntriesMutator = struct {
     // The imports to add.
@@ -73,7 +73,7 @@ const AddEntriesMutator = struct {
 };
 
 //
-// The parse recordImports hands to updateFileOptimistic (TypeScript: parseImportRecord).
+// The parse recordImports hands to updateFileOptimistic.
 //
 const ParseRecord = struct {
     //
@@ -86,7 +86,7 @@ const ParseRecord = struct {
 };
 
 //
-// The serialize recordImports hands to updateFileOptimistic (TypeScript: serializeImportRecord).
+// The serialize recordImports hands to updateFileOptimistic.
 //
 const SerializeRecord = struct {
     //
@@ -123,7 +123,7 @@ pub fn recordImports(allocator: std.mem.Allocator, io: std.Io, databasePath: []c
 }
 
 //
-// The operation recordImports swallows the errors of (TypeScript: the arrow function passed to swallowError).
+// The operation recordImports swallows the errors of.
 //
 const UpdateImportRecordOperation = struct {
     // Allocates the record.

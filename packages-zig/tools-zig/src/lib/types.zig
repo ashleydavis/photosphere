@@ -55,7 +55,7 @@ pub const ResizeOptions = struct {
     // The extension of the output file.
     ext: []const u8,
 
-    // Keep the aspect ratio (TypeScript default: true).
+    // Keep the aspect ratio (true when not given).
     maintainAspectRatio: ?bool = null,
 };
 

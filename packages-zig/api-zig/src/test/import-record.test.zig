@@ -59,7 +59,7 @@ fn expectOptionalString(expected: ?[]const u8, actual: ?[]const u8) !void {
 }
 
 //
-// Asserts that two records are equal (TypeScript: `toEqual`).
+// Asserts that two records are equal.
 //
 fn expectRecord(expected: IImportRecord, actual: IImportRecord) !void {
     try std.testing.expectEqual(expected.truncated, actual.truncated);
@@ -123,7 +123,7 @@ test "adding nothing leaves the record alone" {
     const before = try addImportEntries(allocator, createImportRecord(), &.{try makeEntry(allocator, "one", .manual)});
     const after = try addImportEntries(allocator, before, &.{});
 
-    // (TypeScript: `toBe`, the same object; Zig: the same entries.)
+    // The same entries.
     try std.testing.expectEqual(before.entries.ptr, after.entries.ptr);
     try std.testing.expectEqual(before.entries.len, after.entries.len);
     try std.testing.expectEqual(before.truncated, after.truncated);
@@ -249,7 +249,6 @@ test "a stored record longer than the cap is trimmed and marked truncated" {
 
 //
 // The stored form is what JSON.stringify writes, so a record written by one CLI reads in the other.
-// (No TypeScript counterpart: TypeScript's serializeImportRecord is JSON.stringify itself.)
 //
 test "a record is stored as JSON.stringify writes it" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

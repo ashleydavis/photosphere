@@ -1,40 +1,57 @@
 //
-// What the main process of apps/desktop/src/main.ts remembers while the app runs: whether a database is open and which one, whether
-// syncing is allowed, whether a sync is running, the debounce and periodic sync timers, and what automatic import is doing. In the
-// Electron app these are module-level variables; here they are one value that the core holds for the app (Ziggy's app state), and
+// What the main process remembers while the app runs: whether a database is open and which one, whether
+// syncing is allowed, whether a sync is running, the debounce and periodic sync timers, and what automatic import is doing. Zig has
+// no global process state, so these are one value that the core holds for the app (Ziggy's app state), and
 // the handlers reach it through the core or through their task's context.
 //
-// The timers of `main.ts` (the debounce after an edit, the periodic sync for the life of the app, and the check that automatic import
-// is still running, which also runs once at the start) are one thread here, which wakes often,
-// finds out which deadline has passed and does what the timer's callback did.
+// The timers (the debounce after an edit, the periodic sync for the life of the app, and the check that automatic import
+// is still running, which also runs once at the start) are one thread, which wakes often,
+// finds out which deadline has passed and does what that timer is for.
 //
-// (Zig: ensureAutoImport waits for the task that creates the default database, so it can only run as a task. The timer thread
-// queues the `ensure-auto-import` task where main.ts called the function.)
+// ensureAutoImport waits for the task that creates the default database, so it can only run as a task. The timer thread
+// queues the `ensure-auto-import` task.
 //
 
 const std = @import("std");
 const ziggy = @import("ziggy-core");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
+const mobile_worker = @import("mobile-worker-zig");
+const node_utils = @import("node-utils-zig");
+const storage = @import("storage-zig");
+const config = @import("config-zig");
+const environment = @import("environment.zig");
+const file_logger = @import("file-logger.zig");
+const background_work = @import("background-work.zig");
 
 const Core = ziggy.core.Core;
 const TaskContext = ziggy.task_runner.TaskContext;
 const json_util = ziggy.json_util;
 
 //
-// How long the sync debounce waits after the last edit notification, in milliseconds (`10_000` in scheduleSync of main.ts).
+// How long the sync debounce waits after the last edit notification, in milliseconds.
 //
 pub const SYNC_DEBOUNCE_MS = 10_000;
 
 //
-// How often the periodic sync runs, in milliseconds (`5 * 60 * 1_000` in startPeriodicSync of main.ts).
+// How often the periodic sync runs, in milliseconds.
 //
 pub const SYNC_PERIODIC_MS = 5 * 60 * 1_000;
 
 //
-// How often to check that automatic import is still running, in milliseconds (`AUTO_IMPORT_RESTART_CHECK_MS` in main.ts).
+// How often to check that automatic import is still running, in milliseconds.
 //
 pub const AUTO_IMPORT_RESTART_CHECK_MS = 30_000;
+
+//
+// How long to wait for the asset server to say which port it bound, in milliseconds.
+//
+pub const ASSET_SERVER_START_TIMEOUT_MS = 60_000;
+
+//
+// The source the asset server task is queued under, so cancelling it stops the server.
+//
+pub const ASSET_SERVER_TASK_SOURCE = "asset-server";
 
 //
 // The source the `ensure-auto-import` task is queued under. It is not the source of the automatic import tasks, because ensureAutoImport
@@ -43,9 +60,45 @@ pub const AUTO_IMPORT_RESTART_CHECK_MS = 30_000;
 pub const ENSURE_AUTO_IMPORT_TASK_SOURCE = "ensure-auto-import";
 
 //
-// How often the timer thread looks at the deadlines, in milliseconds. (No TypeScript counterpart: Node wakes a timer at its time.)
+// The input of the `ensure-auto-import` task queued by mainWindowCreated, the call of ensureAutoImport at startup.
+//
+pub const ENSURE_AUTO_IMPORT_STARTING_INPUT = "\"starting\"";
+
+//
+// The input of the `ensure-auto-import` task queued on every tick of the check, the call from the automatic import restart timer.
+//
+pub const ENSURE_AUTO_IMPORT_RESTARTING_INPUT = "\"restarting\"";
+
+//
+// How often the timer thread looks at the deadlines, in milliseconds.
 //
 const TIMER_TICK_MS = 20;
+
+//
+// Asks the shell through the core's host request callback, for the code that runs at startup, before there is a task to ask through.
+//
+const CoreHostRequester = struct {
+    // The shell's configuration, with the host request callback.
+    config: *const ziggy.types.ZiggyConfig,
+
+    //
+    // The requester, valid as long as this is and does not move.
+    //
+    fn requester(self: *CoreHostRequester) utils.host_requester.IHostRequester {
+        return .{
+            .ptr = self,
+            .request = request,
+        };
+    }
+
+    //
+    // Asks the shell and returns its answer, allocated with the allocator.
+    //
+    fn request(ptr: *anyopaque, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) anyerror![]const u8 {
+        const self: *CoreHostRequester = @ptrCast(@alignCast(ptr));
+        return ziggy.task_runner.askShell(self.config, allocator, method, request_json);
+    }
+};
 
 //
 // What the main process remembers.
@@ -59,7 +112,7 @@ pub const MainState = struct {
     io: std.Io,
     // Guards every field below except `stopping`.
     mutex: std.Io.Mutex,
-    // Whether a database is currently open (`isDatabaseOpen`, which the menu state reads in main.ts). Nothing reads it here, because
+    // Whether a database is currently open. Nothing reads it, because
     // Ziggy's menu is written once and the page decides what each item does, but the page's notifications keep it true to the app.
     is_database_open: bool,
     // The path of the database that is open, or null when none is (`currentDatabasePath`). Owned by the state.
@@ -73,9 +126,10 @@ pub const MainState = struct {
     sync_debounce_at: ?i64,
     // When the periodic sync is next due, or null before it is started or after it is stopped (`syncPeriodicTimer`).
     sync_periodic_at: ?i64,
-    // When automatic import is next checked (`ensureAutoImport()` at startup and the `autoImportRestartTimer` of main.ts). Due at the
-    // start, then every `auto_import_check_ms`.
-    auto_import_check_at: i64,
+    // When automatic import is next checked (at startup and then on the restart timer), or null
+    // before the main window has been created, which is when both start. Due at once when armed, then every
+    // `auto_import_check_ms`.
+    auto_import_check_at: ?i64,
     // How often automatic import is checked. A field so that a test can shorten it.
     auto_import_check_ms: i64,
     // How long the debounce waits. A field so that a test can shorten it.
@@ -93,23 +147,63 @@ pub const MainState = struct {
     // Set while ensureAutoImport is part way through, so two config writes arriving together do not both create the default database
     // (`autoImportStarting`).
     auto_import_starting: bool,
+    // Whether the asset server task has been queued.
+    asset_server_requested: bool,
+    // The port the asset server bound, from its asset-server-ready message, or 0 before that (`restApiPort`).
+    asset_server_port: u16,
+    // Set when the asset server task ended, so a wait for its port can stop waiting for a message that will never come.
+    asset_server_ended: bool,
+    // Why the asset server ended before it said which port it bound, or null when it did not end that way. Owned by the state.
+    asset_server_error: ?[]u8,
+    // How long to wait for the asset server to say which port it bound. A field so that a test can shorten it.
+    asset_server_start_timeout_ms: i64,
+    // Which of the phone's background loops (see background-work.zig) are queued or running, by loop, so starting one that is already
+    // running does nothing and one that ended is started again.
+    background_loops_running: [background_work.LOOP_COUNT]bool,
+    // What the last completed background prefetch pass said about the replica, which the background sync loop holds back for.
+    prefetch_replica_state: std.atomic.Value(background_work.ReplicaState),
     // Makes the ids of the tasks the main process queues.
     uuid_generator: utils.random_uuid_generator.RandomUuidGenerator,
     // Tells the timer thread to end.
     stopping: std.atomic.Value(bool),
     // The timer thread.
     timer_thread: ?std.Thread,
+    // The file logger (`fileLogger`), made first when the state is made and closed last when the core is destroyed. Owned.
+    logger: *file_logger.FileLogger,
+    // The log that was installed before the file logger took its place, put back when the file logger is closed.
+    previous_log: utils.log.ILog,
 
     //
-    // Makes the state and starts the periodic sync (`startPeriodicSync()` after `initWorkers()` in main.ts), which runs for the life of the app.
+    // Makes the state and starts the periodic sync, which runs for the life of the app.
     //
     pub fn create(core: *Core) anyerror!*MainState {
-        // The handlers ported from the TypeScript workers register with task-queue-zig, which is where the runner finds them (initWorkers of
-        // main.ts starts the workers that register them).
+        // A core a shell hosts has no `main` to hand it the environment, so it is read from the process (see environment.zig). The map
+        // stays for the life of the process, because the tasks still running while the core is destroyed read it too.
+        _ = try environment.adoptProcessEnvironment(core.allocator);
+        // Android has no ImageMagick, ffmpeg or ffprobe program to start, so the shell runs them in its own process and the core asks it
+        // through its host request callback. Only the file logger's header needs them here; each task builds its own runner from its
+        // host requester.
+        var startup_host: CoreHostRequester = .{
+            .config = &core.config,
+        };
+        var startup_tools_storage: node_utils.host_tools.HostToolRunner = undefined;
+        const startup_tools = try node_utils.host_tools.toolRunnerFor(if (core.config.host_request != null) startup_host.requester() else null, &startup_tools_storage);
+        // The file logger is made first so everything after it is logged.
+        const previous_log = utils.log.log;
+        const logger = try startFileLogger(core.allocator, core.io(), startup_tools);
+        errdefer stopFileLogger(logger, previous_log);
+        // The task handlers register with task-queue-zig, which is where the runner finds them.
         try node_api.task_handlers.initTaskHandlers();
+        // A phone has a photo library to import from, which only its shell can read.
+        if (core.config.host_request != null) {
+            try mobile_worker.device_media_source.registerDeviceMediaSourceBuilder();
+        }
+        utils.console.log("Worker pool initialized");
         const state = try core.allocator.create(MainState);
         errdefer core.allocator.destroy(state);
         state.* = .{
+            .logger = logger,
+            .previous_log = previous_log,
             .allocator = core.allocator,
             .core = core,
             .io = core.io(),
@@ -120,7 +214,7 @@ pub const MainState = struct {
             .is_sync_running = false,
             .sync_debounce_at = null,
             .sync_periodic_at = null,
-            .auto_import_check_at = 0,
+            .auto_import_check_at = null,
             .auto_import_check_ms = AUTO_IMPORT_RESTART_CHECK_MS,
             .sync_debounce_ms = SYNC_DEBOUNCE_MS,
             .sync_periodic_ms = SYNC_PERIODIC_MS,
@@ -129,6 +223,13 @@ pub const MainState = struct {
             .auto_import_database_path = null,
             .auto_import_settings_json = null,
             .auto_import_starting = false,
+            .asset_server_requested = false,
+            .asset_server_port = 0,
+            .asset_server_ended = false,
+            .asset_server_error = null,
+            .asset_server_start_timeout_ms = ASSET_SERVER_START_TIMEOUT_MS,
+            .background_loops_running = [_]bool{false} ** background_work.LOOP_COUNT,
+            .prefetch_replica_state = .init(.unknown),
             .uuid_generator = .{},
             .stopping = .init(false),
             .timer_thread = null,
@@ -139,17 +240,79 @@ pub const MainState = struct {
     }
 
     //
-    // Stops the timer thread and releases everything the state owns.
+    // Does what is needed before the worker pool goes: stops the periodic sync, cancels the automatic
+    // import task if one is running, clears the debounce, and logs that the app is shutting down. Then stops the timer thread.
+    // The state stays valid, because tasks that are still running read it.
     //
-    pub fn destroy(self: *MainState) void {
+    pub fn stop(self: *MainState) void {
+        // Set first, so that nothing the stopping tasks do restarts the asset server.
         self.stopping.store(true, .release);
+        self.stopPeriodicSync();
+        var cancel_auto_import = false;
+        {
+            self.lock();
+            defer self.unlock();
+            // The automatic import task holds filesystem watchers and a temporary directory, so it is told to stop before the worker pool
+            // goes away under it.
+            if (self.auto_import_running) {
+                cancel_auto_import = true;
+                self.auto_import_running = false;
+                self.freeOwned(&self.auto_import_database_path);
+            }
+            self.sync_debounce_at = null;
+        }
+        if (cancel_auto_import) {
+            self.core.runner.cancelSource(node_api.auto_import_desktop.AUTO_IMPORT_TASK_SOURCE);
+        }
+        self.logger.handleWorkerLogMessage(.{
+            .level = .info,
+            .message = "Photosphere Desktop shutting down...",
+            .@"error" = null,
+            .tool_data = null,
+        }, "Main") catch |err| {
+            utils.log.log.exception("Could not log that the app is shutting down", err);
+        };
         if (self.timer_thread) |thread| {
             thread.join();
+            self.timer_thread = null;
         }
+    }
+
+    //
+    // Takes the right to start a background loop. Returns true when the loop was not queued or running, in which case the caller must
+    // queue it (and give the right back with releaseBackgroundLoop if it cannot), and false when it already is.
+    //
+    pub fn claimBackgroundLoop(self: *MainState, loop: background_work.Loop) bool {
+        self.lock();
+        defer self.unlock();
+        const index = @intFromEnum(loop);
+        if (self.background_loops_running[index]) {
+            return false;
+        }
+        self.background_loops_running[index] = true;
+        return true;
+    }
+
+    //
+    // Says a background loop is no longer queued or running, because its task ended.
+    //
+    pub fn releaseBackgroundLoop(self: *MainState, loop: background_work.Loop) void {
+        self.lock();
+        defer self.unlock();
+        self.background_loops_running[@intFromEnum(loop)] = false;
+    }
+
+    //
+    // Releases everything the state owns, after the task runner has stopped. The file logger is closed last
+    // to capture all shutdown logs, and the log that was installed before it takes its place again.
+    //
+    pub fn destroy(self: *MainState) void {
         self.freeOwned(&self.current_database_path);
         self.freeOwned(&self.auto_import_task_id);
         self.freeOwned(&self.auto_import_database_path);
         self.freeOwned(&self.auto_import_settings_json);
+        self.freeOwned(&self.asset_server_error);
+        stopFileLogger(self.logger, self.previous_log);
         self.allocator.destroy(self);
     }
 
@@ -219,9 +382,10 @@ pub const MainState = struct {
         {
             self.lock();
             defer self.unlock();
+            // (`currentDatabasePath &&` is false for an empty path as well as for none.)
             if (self.current_database_path) |current| {
                 const next_is_different = if (next_database_path) |next| !std.mem.eql(u8, current, next) else true;
-                if (next_is_different) {
+                if (current.len > 0 and next_is_different) {
                     to_cancel = try self.allocator.dupe(u8, current);
                 }
             }
@@ -270,8 +434,8 @@ pub const MainState = struct {
     // Queues a sync task if a database is open and no sync is already running. Connectivity checking and the sync-started and
     // sync-completed messages are the task's responsibility.
     //
-    // (Zig: when the task cannot be queued the running flag is put back before the error is returned. main.ts sets the flag, then calls
-    // addTask, and a throw there would leave the flag set so that no sync ever ran again.)
+    // When the task cannot be queued the running flag is put back before the error is returned, otherwise the flag would stay
+    // set and no sync would ever run again.
     //
     pub fn enqueueSyncTask(self: *MainState) !void {
         var arena_state = std.heap.ArenaAllocator.init(self.allocator);
@@ -282,7 +446,8 @@ pub const MainState = struct {
             self.lock();
             defer self.unlock();
             // Never auto-sync unless the page's decision permits it (sync enabled, online, and the Wi-Fi restriction satisfied).
-            if (!self.sync_allowed or self.current_database_path == null or self.is_sync_running) {
+            // (`!currentDatabasePath` is true for an empty path as well as for none.)
+            if (!self.sync_allowed or self.current_database_path == null or self.current_database_path.?.len == 0 or self.is_sync_running) {
                 return;
             }
             self.is_sync_running = true;
@@ -305,6 +470,47 @@ pub const MainState = struct {
     }
 
     //
+    // Starts the asset server the first time it is called and returns the port the server bound, once the
+    // server has said so. The page needs the address before it can render, so the page's query asks for it. A later call returns the
+    // port without starting another server. The port is the OS's choice, because the server is asked for port 0.
+    //
+    // The server is a task and the message is its
+    // asset-server-ready message, which onTaskMessage records. A server that ended before it said anything, or that said nothing for
+    // as long as the timeout, is an error the page's query reports.)
+    //
+    pub fn startAssetServer(self: *MainState) !u16 {
+        var needs_task = false;
+        {
+            self.lock();
+            defer self.unlock();
+            if (!self.asset_server_requested) {
+                self.asset_server_requested = true;
+                needs_task = true;
+            }
+        }
+        if (needs_task) {
+            try self.queueAssetServer(0);
+        }
+        const deadline = self.now() + self.asset_server_start_timeout_ms;
+        while (true) {
+            {
+                self.lock();
+                defer self.unlock();
+                if (self.asset_server_port != 0) {
+                    return self.asset_server_port;
+                }
+                if (self.asset_server_ended) {
+                    return utils.errors.throwError("REST API failed to start: {s}", .{self.asset_server_error orelse "the asset server ended before it said which port it was using"});
+                }
+            }
+            if (self.now() >= deadline) {
+                return utils.errors.throwError("REST API failed to start within timeout", .{});
+            }
+            try self.io.sleep(.fromMilliseconds(TIMER_TICK_MS), .awake);
+        }
+    }
+
+    //
     // Looks at the deadlines and does what a timer's callback did for each one that has passed.
     //
     fn runDueTimers(self: *MainState) void {
@@ -315,9 +521,11 @@ pub const MainState = struct {
             self.lock();
             defer self.unlock();
             const current = self.now();
-            if (current >= self.auto_import_check_at) {
-                self.auto_import_check_at = current + self.auto_import_check_ms;
-                run_auto_import_check = true;
+            if (self.auto_import_check_at) |due| {
+                if (current >= due) {
+                    self.auto_import_check_at = current + self.auto_import_check_ms;
+                    run_auto_import_check = true;
+                }
             }
             if (self.sync_debounce_at) |due| {
                 if (current >= due) {
@@ -338,21 +546,59 @@ pub const MainState = struct {
             };
         }
         if (run_auto_import_check) {
-            self.enqueueEnsureAutoImportTask() catch |err| {
+            self.enqueueEnsureAutoImportTask(true) catch |err| {
                 utils.log.log.exception("Error queuing the check that automatic import is running", err);
             };
         }
     }
 
     //
-    // Queues the task that makes automatic import match the config (`ensureAutoImport()` of main.ts, called at startup and on every
-    // tick of the check).
+    // Queues the task that makes automatic import match the config. The task's input says whether it
+    // is the call at startup or a tick of the check, which are worded differently when it fails ('Error starting automatic import'
+    // and 'Error restarting automatic import').
     //
-    pub fn enqueueEnsureAutoImportTask(self: *MainState) !void {
+    pub fn enqueueEnsureAutoImportTask(self: *MainState, restarting: bool) !void {
         var arena_state = std.heap.ArenaAllocator.init(self.allocator);
         defer arena_state.deinit();
         const task_id = try self.uuid_generator.generate(arena_state.allocator(), self.io);
-        try self.core.runner.addTask(task_id, "ensure-auto-import", ENSURE_AUTO_IMPORT_TASK_SOURCE, "null", .background, null);
+        const data_json: []const u8 = if (restarting) ENSURE_AUTO_IMPORT_RESTARTING_INPUT else ENSURE_AUTO_IMPORT_STARTING_INPUT;
+        try self.core.runner.addTask(task_id, "ensure-auto-import", ENSURE_AUTO_IMPORT_TASK_SOURCE, data_json, .background, null);
+    }
+
+    //
+    // Does what is needed once the main window has been created: logs that the main window was created, makes
+    // automatic import match the config, and starts the check that keeps it running. The page's query starts the asset server
+    // and reads the theme, so it calls this when it has built the query. Only the
+    // first call does anything, because these steps run once and a window made again later does not repeat them.
+    //
+    pub fn mainWindowCreated(self: *MainState) !void {
+        {
+            self.lock();
+            defer self.unlock();
+            if (self.auto_import_check_at != null) {
+                return;
+            }
+            self.auto_import_check_at = self.now() + self.auto_import_check_ms;
+        }
+        utils.log.log.event("Main window created");
+        // Automatic import picks up where it left off, so a machine that was backing photos up before it was shut down carries on
+        // without the user having to open anything.
+        try self.enqueueEnsureAutoImportTask(false);
+    }
+
+    //
+    // Queues the task that is the asset server, asking it to bind the port. The port is 0 on the first start, so that the operating system chooses a free one, and the
+    // port already chosen on a restart, so that the address the page was loaded with stays valid.
+    //
+    pub fn queueAssetServer(self: *MainState, port: u16) !void {
+        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena_state.deinit();
+        const arena = arena_state.allocator();
+        const data_json = try json_util.stringify(arena, .{
+            .port = port,
+        });
+        const task_id = try self.uuid_generator.generate(arena, self.io);
+        try self.core.runner.addTask(task_id, "asset-server", ASSET_SERVER_TASK_SOURCE, data_json, .background, null);
     }
 };
 
@@ -382,8 +628,60 @@ pub fn fromContext(context: *TaskContext) *MainState {
     return @ptrCast(@alignCast(context.appState().?));
 }
 
+//
+// Makes the file logger and installs it as the log first, then logs that the app is starting. The
+// logs are in the `logs` folder of PHOTOSPHERE_LOG_DIR, or of `photosphere` in the operating system's temporary folder when it is not
+// set.
+//
+// The tasks run in this process and write to the log themselves, so the file logger is the log.
+// A build that has been given a version is the packaged one.
+//
+fn startFileLogger(allocator: std.mem.Allocator, io: std.Io, tool_runner: ?node_utils.in_process_tools.InProcessRunner) !*file_logger.FileLogger {
+    var log_root: []const u8 = "";
+    if (node_utils.process_env.getEnv("PHOTOSPHERE_LOG_DIR")) |directory| {
+        log_root = directory;
+    }
+    var tmp_root: ?[]const u8 = null;
+    defer if (tmp_root) |text| allocator.free(text);
+    if (log_root.len == 0) {
+        tmp_root = try std.fs.path.join(allocator, &.{ try node_utils.fs.osTmpDir(allocator), "photosphere" });
+        log_root = tmp_root.?;
+    }
+    const logs_dir = try std.fs.path.join(allocator, &.{ log_root, "logs" });
+    defer allocator.free(logs_dir);
+    const logger = try file_logger.FileLogger.init(allocator, io, tool_runner, logs_dir, config.version);
+    errdefer logger.deinit();
+    utils.log.setLog(logger.ilog());
+    try logger.handleWorkerLogMessage(.{
+        .level = .info,
+        .message = "Photosphere Desktop starting...",
+        .@"error" = null,
+        .tool_data = null,
+    }, "Main");
+    const packaged = !std.mem.eql(u8, config.version, "dev");
+    const started = try std.fmt.allocPrint(allocator, "Instance started (pid={d}, packaged={s})", .{ storage.storage.processId(), if (packaged) "true" else "false" });
+    defer allocator.free(started);
+    utils.log.log.event(started);
+    return logger;
+}
+
+//
+// Puts back the log that was installed before the file logger and closes the file logger, which writes the end of both files and waits
+// for everything queued to be written.
+//
+fn stopFileLogger(logger: *file_logger.FileLogger, previous_log: utils.log.ILog) void {
+    utils.log.setLog(previous_log);
+    logger.deinit();
+}
+
 fn createForCore(core: *Core) anyerror!*anyopaque {
     return try MainState.create(core);
+}
+
+fn stopForCore(core: *Core, state: *anyopaque) void {
+    _ = core;
+    const main_state: *MainState = @ptrCast(@alignCast(state));
+    main_state.stop();
 }
 
 fn destroyForCore(core: *Core, state: *anyopaque) void {
@@ -393,9 +691,10 @@ fn destroyForCore(core: *Core, state: *anyopaque) void {
 }
 
 //
-// How the core makes and destroys the state.
+// How the core makes, stops and destroys the state.
 //
 pub const state_hooks = ziggy.core.AppState{
     .create = createForCore,
+    .stop = stopForCore,
     .destroy = destroyForCore,
 };

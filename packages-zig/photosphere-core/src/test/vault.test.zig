@@ -109,3 +109,26 @@ test "vault-delete without a name is an error reply" {
     defer std.testing.allocator.free(reply);
     try std.testing.expectEqualStrings("The request needs the name of a secret.", reply);
 }
+
+test "a failing vault request logs the error with the message of its handler" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const allocator = std.testing.allocator;
+    allocator.free(try app.requestError("vault-get", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error getting vault secret") != null);
+    allocator.free(try app.requestError("vault-set", "{\"name\":\"vault-test-log\",\"type\":\"api-key\"}"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error setting vault secret") != null);
+    allocator.free(try app.requestError("vault-delete", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error deleting vault secret") != null);
+}
+
+test "a vault request that succeeds logs nothing to the error output" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const allocator = std.testing.allocator;
+    allocator.free(try app.requestOk("vault-set", "{\"name\":\"vault-test-quiet\",\"type\":\"api-key\",\"value\":\"x\"}"));
+    allocator.free(try app.requestOk("vault-list", "null"));
+    try std.testing.expectEqual(@as(usize, 0), app.console_err.written().len);
+}

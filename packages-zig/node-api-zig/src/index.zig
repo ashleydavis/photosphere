@@ -49,24 +49,41 @@ pub const import_module = @import("lib/import.zig");
 pub const check = @import("lib/check.zig");
 pub const check_worker = @import("lib/check.worker.zig");
 pub const check_database_exists_worker = @import("lib/check-database-exists.worker.zig");
+pub const test_job_worker = @import("lib/test-job.worker.zig");
+pub const create_database_worker = @import("lib/create-database.worker.zig");
+pub const get_database_summary_worker = @import("lib/get-database-summary.worker.zig");
+pub const get_import_record_worker = @import("lib/get-import-record.worker.zig");
+pub const set_database_origin_worker = @import("lib/set-database-origin.worker.zig");
+pub const reset_app_storage_worker = @import("lib/reset-app-storage.worker.zig");
+pub const save_asset_worker = @import("lib/save-asset.worker.zig");
+pub const save_assets_batch_worker = @import("lib/save-assets-batch.worker.zig");
+pub const move_assets_worker = @import("lib/move-assets.worker.zig");
+pub const evict_originals_worker = @import("lib/evict-originals.worker.zig");
 pub const resolve_storage_credentials = @import("lib/resolve-storage-credentials.zig");
 pub const open_storage = @import("lib/open-storage.zig");
 pub const databases_config = @import("lib/databases-config.zig");
 pub const databases_config_format = @import("lib/databases-config-format.zig");
+pub const databases_config_worker = @import("lib/databases-config.worker.zig");
+pub const create_default_database_worker = @import("lib/create-default-database.worker.zig");
 pub const news_fetcher = @import("lib/news-fetcher.zig");
 pub const news_state = @import("lib/news-state.zig");
 pub const state_format = @import("lib/state-format.zig");
 pub const state_file = @import("lib/state-file.zig");
 pub const config_format = @import("lib/config-format.zig");
 pub const config_file = @import("lib/config-file.zig");
+pub const config_worker = @import("lib/config.worker.zig");
 pub const app_config_format = @import("lib/app-config-format.zig");
 pub const app_config = @import("lib/app-config.zig");
 pub const app_state_format = @import("lib/app-state-format.zig");
 pub const app_state = @import("lib/app-state.zig");
 pub const auto_import_desktop = @import("lib/auto-import-desktop.zig");
 pub const lazy_origin_storage = @import("lib/lazy-origin-storage.zig");
+pub const load_assets_worker = @import("lib/load-assets.worker.zig");
+pub const sync_database_worker = @import("lib/sync-database.worker.zig");
+pub const lan_share_worker = @import("lib/lan-share.worker.zig");
 //
-// Files with no TypeScript counterpart (the arrow functions that are passed to retry, and the fetch stand-in).
+// The operations that are passed to retry, and the GET request helper.
 //
 pub const retry_operations = @import("lib/retry-operations.zig");
 pub const fetch = @import("lib/fetch.zig");
+pub const bson_json = @import("lib/bson-json.zig");

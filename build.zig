@@ -2,6 +2,7 @@ const std = @import("std");
 const aws_lc = @import("packages-zig/encryption-zig/aws/aws-lc.zig");
 const aws_sdk = @import("packages-zig/storage-zig/aws/aws-sdk.zig");
 const zlib_ng = @import("packages-zig/serialization-zig/zlib-ng/zlib-ng.zig");
+const android_libc = @import("packages-zig/android-libc.zig");
 
 //
 // A Zig package in this directory: its module is the `src/index.zig` of the directory of the same name.
@@ -66,23 +67,101 @@ fn addQueueModules(b: *std.Build, target: std.Build.ResolvedTarget, optimize: st
 // Every Zig package in this directory, each after the packages it depends on.
 //
 const packages = [_]IPackage{
-    .{ .name = "utils-zig", .dependencies = &.{}, .link_libc = false },
-    .{ .name = "fuzzy-match-zig", .dependencies = &.{}, .link_libc = false },
-    .{ .name = "lan-share-core-zig", .dependencies = &.{}, .link_libc = false },
-    .{ .name = "node-utils-zig", .dependencies = &.{"utils-zig"}, .link_libc = true },
-    .{ .name = "encryption-zig", .dependencies = &.{"utils-zig"}, .link_libc = false },
-    .{ .name = "serialization-zig", .dependencies = &.{"utils-zig"}, .link_libc = false },
-    .{ .name = "task-queue-zig", .dependencies = &.{ "utils-zig", "node-utils-zig" }, .link_libc = false },
-    .{ .name = "tools-zig", .dependencies = &.{ "utils-zig", "node-utils-zig", "serialization-zig" }, .link_libc = false },
-    .{ .name = "vault-zig", .dependencies = &.{ "utils-zig", "node-utils-zig" }, .link_libc = false },
-    .{ .name = "storage-zig", .dependencies = &.{ "utils-zig", "node-utils-zig", "encryption-zig" }, .link_libc = false },
-    .{ .name = "merkle-tree-zig", .dependencies = &.{ "utils-zig", "serialization-zig", "storage-zig" }, .link_libc = false },
-    .{ .name = "bdb-zig", .dependencies = &.{ "utils-zig", "serialization-zig", "storage-zig", "merkle-tree-zig" }, .link_libc = false },
-    .{ .name = "lan-share-network-zig", .dependencies = &.{ "utils-zig", "node-utils-zig", "encryption-zig" }, .link_libc = true },
-    .{ .name = "api-zig", .dependencies = &.{ "utils-zig", "storage-zig", "serialization-zig", "task-queue-zig", "vault-zig", "lan-share-core-zig", "node-utils-zig", "encryption-zig", "bdb-zig" }, .link_libc = false },
-    .{ .name = "node-api-zig", .dependencies = &.{ "utils-zig", "node-utils-zig", "encryption-zig", "serialization-zig", "storage-zig", "merkle-tree-zig", "bdb-zig", "api-zig", "task-queue-zig", "vault-zig", "tools-zig" }, .link_libc = false },
-    .{ .name = "rest-api-zig", .dependencies = &.{ "utils-zig", "node-utils-zig", "node-api-zig" }, .link_libc = false },
-    .{ .name = "photosphere-core", .dependencies = &.{ "utils-zig", "node-utils-zig", "tools-zig", "encryption-zig", "storage-zig", "vault-zig", "task-queue-zig", "serialization-zig", "merkle-tree-zig", "bdb-zig", "api-zig", "node-api-zig" }, .link_libc = true },
+    .{
+        .name = "utils-zig",
+        .dependencies = &.{},
+        .link_libc = false,
+    },
+    .{
+        .name = "fuzzy-match-zig",
+        .dependencies = &.{},
+        .link_libc = false,
+    },
+    .{
+        .name = "lan-share-core-zig",
+        .dependencies = &.{},
+        .link_libc = false,
+    },
+    .{
+        .name = "node-utils-zig",
+        .dependencies = &.{"utils-zig"},
+        .link_libc = true,
+    },
+    .{
+        .name = "encryption-zig",
+        .dependencies = &.{ "utils-zig", "node-utils-zig" },
+        .link_libc = false,
+    },
+    .{
+        .name = "serialization-zig",
+        .dependencies = &.{"utils-zig"},
+        .link_libc = false,
+    },
+    .{
+        .name = "task-queue-zig",
+        .dependencies = &.{ "utils-zig", "node-utils-zig" },
+        .link_libc = false,
+    },
+    .{
+        .name = "tools-zig",
+        .dependencies = &.{ "utils-zig", "node-utils-zig", "serialization-zig" },
+        .link_libc = false,
+    },
+    .{
+        .name = "vault-zig",
+        .dependencies = &.{ "utils-zig", "node-utils-zig" },
+        .link_libc = false,
+    },
+    .{
+        .name = "storage-zig",
+        .dependencies = &.{ "utils-zig", "node-utils-zig", "encryption-zig" },
+        .link_libc = false,
+    },
+    .{
+        .name = "merkle-tree-zig",
+        .dependencies = &.{ "utils-zig", "serialization-zig", "storage-zig" },
+        .link_libc = false,
+    },
+    .{
+        .name = "bdb-zig",
+        .dependencies = &.{ "utils-zig", "serialization-zig", "storage-zig", "merkle-tree-zig" },
+        .link_libc = false,
+    },
+    .{
+        .name = "lan-share-network-zig",
+        .dependencies = &.{ "utils-zig", "node-utils-zig", "encryption-zig" },
+        .link_libc = true,
+    },
+    .{
+        .name = "api-zig",
+        .dependencies = &.{ "utils-zig", "storage-zig", "serialization-zig", "task-queue-zig", "vault-zig", "lan-share-core-zig", "node-utils-zig", "encryption-zig", "bdb-zig" },
+        .link_libc = false,
+    },
+    .{
+        .name = "node-api-zig",
+        .dependencies = &.{ "lan-share-network-zig", "utils-zig", "node-utils-zig", "encryption-zig", "serialization-zig", "storage-zig", "merkle-tree-zig", "bdb-zig", "api-zig", "task-queue-zig", "vault-zig", "tools-zig" },
+        .link_libc = false,
+    },
+    .{
+        .name = "rest-api-zig",
+        .dependencies = &.{ "utils-zig", "node-utils-zig", "node-api-zig" },
+        .link_libc = false,
+    },
+    .{
+        .name = "config-zig",
+        .dependencies = &.{},
+        .link_libc = false,
+    },
+    .{
+        .name = "mobile-worker-zig",
+        .dependencies = &.{ "utils-zig", "task-queue-zig", "api-zig", "node-api-zig" },
+        .link_libc = false,
+    },
+    .{
+        .name = "photosphere-core",
+        .dependencies = &.{ "utils-zig", "node-utils-zig", "config-zig", "mobile-worker-zig", "tools-zig", "encryption-zig", "storage-zig", "vault-zig", "task-queue-zig", "serialization-zig", "merkle-tree-zig", "bdb-zig", "api-zig", "node-api-zig" },
+        .link_libc = true,
+    },
 };
 
 //
@@ -144,10 +223,14 @@ const IStandIns = struct {
 //
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
+    // Whether the test hooks (the test control connection) are built into the apps. Never for a release.
+    const test_hooks = b.option(bool, "test-hooks", "Build the test hooks (the test control connection) into the app (never for a release)") orelse false;
+    // Whether the Windows shells are compiled without linking WebView2's loader, to check them on a machine that cannot link.
+    const compile_only = b.option(bool, "compile-only", "Compile the Windows shell without linking the WebView2 loader, to check it on a machine that cannot link") orelse false;
     // ReleaseSafe by default: the tests keep the safety checks, and the work of the database and storage tests is several times
     // slower in Debug.
     const optimize = b.option(std.builtin.OptimizeMode, "optimize", "Prioritize performance, safety, or binary size (default: ReleaseSafe)") orelse .ReleaseSafe;
-    // The packages, the CLI and their tests are built for the machine running the build only: the AWS SDK for C builds for Linux
+    // The packages, the CLI and their tests are built for the machine running the build only (Windows x86_64 and Android are cross builds of Photosphere's core only, below): the AWS SDK for C builds for Linux
     // and Windows, and for macOS natively, and zlib-ng for x86_64 on Windows. For any other target (the Ziggy example cross-builds
     // its core for the Apple, Android, Windows and Linux platforms) only Ziggy's steps are registered. The steps of the packages
     // and the tests are not registered, so asking for one fails with an unknown step instead of building a partial set.
@@ -158,11 +241,21 @@ pub fn build(b: *std.Build) !void {
         .macos => target.query.isNativeOs() and target.query.isNativeAbi(),
         else => false,
     };
-    if (!packages_supported) {
-        try addZiggy(b, internalStep(b, "tests of Ziggy"), internalStep(b, "tests of the Ziggy example"), target, optimize, addQueueModules(b, target, optimize));
+    const queue_modules = addQueueModules(b, target, optimize);
+    if (target.result.abi.isAndroid() or (!packages_supported and target.result.os.tag == .windows and target.result.cpu.arch == .x86_64)) {
+        // An Android build is a cross build of Photosphere's core and the example's core only: the packages are made for Android here (they
+        // are built for the machine running the build otherwise), but their tests and the CLI are not, since none can run on the build machine.
+        const android_ziggy_core = try addZiggyCore(b, target, optimize, false, queue_modules);
+        const android_modules = (try addPackageModules(b, target, optimize, queue_modules, android_ziggy_core.module)) orelse return;
+        try addZiggy(b, internalStep(b, "tests of Ziggy"), internalStep(b, "tests of the Ziggy example"), target, optimize, queue_modules, test_hooks, compile_only);
+        try addPhotosphere(b, target, optimize, test_hooks, compile_only, queue_modules, android_modules);
         return;
     }
-    const queue_modules = addQueueModules(b, target, optimize);
+    if (!packages_supported) {
+        try addZiggy(b, internalStep(b, "tests of Ziggy"), internalStep(b, "tests of the Ziggy example"), target, optimize, queue_modules, test_hooks, compile_only);
+        try addPhotosphereUnavailable(b, target);
+        return;
+    }
     const ziggy_core = try addZiggyCore(b, target, optimize, false, queue_modules);
     // Null means a lazy dependency is being fetched first: the build runs again once it has been, and this run registers nothing.
     const modules = (try addPackageModules(b, target, optimize, queue_modules, ziggy_core.module)) orelse return;
@@ -181,7 +274,8 @@ pub fn build(b: *std.Build) !void {
     // the Ziggy example's own workflow runs them with the tests of Ziggy through test-ziggy-example.
     const test_ziggy_step = internalStep(b, "tests of Ziggy");
     const test_ziggy_example_step = internalStep(b, "tests of the Ziggy example");
-    try addZiggy(b, test_ziggy_step, test_ziggy_example_step, target, optimize, queue_modules);
+    try addZiggy(b, test_ziggy_step, test_ziggy_example_step, target, optimize, queue_modules, test_hooks, compile_only);
+    try addPhotosphere(b, target, optimize, test_hooks, compile_only, queue_modules, modules);
     test_step.dependOn(test_ziggy_step);
     const test_ziggy_example_named_step = b.step("test-ziggy-example", "Run the tests of Ziggy and of the Ziggy example");
     test_ziggy_example_named_step.dependOn(test_ziggy_step);
@@ -251,7 +345,7 @@ fn addPackageModules(
             crypto = try aws_lc.build(b, target, b.dependency("aws-lc", .{}));
             module.linkLibrary(crypto.?);
             ssl = try aws_lc.buildSsl(b, target, b.dependency("aws-lc", .{}), crypto.?);
-            module.addImport("openssl", translateHeader(b, target, crypto.?, encryption_openssl_header));
+            module.addImport("openssl", try translateHeader(b, target, crypto.?, encryption_openssl_header));
         }
         if (std.mem.eql(u8, package.name, "serialization-zig")) {
             // zlib-ng, which gzip compression and decompression bind to.
@@ -269,7 +363,7 @@ fn addPackageModules(
             if (target.result.os.tag == .windows) {
                 module.linkSystemLibrary("ws2_32", .{});
             }
-            module.addImport("openssl", translateHeader(b, target, crypto.?, lan_share_openssl_header));
+            module.addImport("openssl", try translateHeader(b, target, crypto.?, lan_share_openssl_header));
         }
         if (std.mem.eql(u8, package.name, "photosphere-core")) {
             module.addImport("ziggy-core", ziggy_core);
@@ -283,13 +377,14 @@ fn addPackageModules(
 // MinGW headers define fortified inline wrappers of memset and friends, which translate-c turns into Zig that does not
 // compile. The declarations are the same.
 //
-fn translateHeader(b: *std.Build, target: std.Build.ResolvedTarget, crypto: *std.Build.Step.Compile, header: []const u8) *std.Build.Module {
+fn translateHeader(b: *std.Build, target: std.Build.ResolvedTarget, crypto: *std.Build.Step.Compile, header: []const u8) !*std.Build.Module {
     const translate_c = b.addTranslateC(.{
         .root_source_file = b.addWriteFiles().add("openssl.h", header),
         .target = target,
         .optimize = .Debug,
     });
     translate_c.addIncludePath(crypto.getEmittedIncludeTree());
+    try android_libc.addLibcIncludes(b, translate_c, target);
     return translate_c.createModule();
 }
 
@@ -313,7 +408,9 @@ fn addUnitTests(
     try test_root_source.appendSlice(b.allocator, "test {\n");
     for (packages) |package| {
         _ = test_files.addCopyDirectory(b.path(b.fmt("packages-zig/{s}/src", .{package.name})), b.fmt("{s}/src", .{package.name}), .{});
-        var test_dir = try b.build_root.handle.openDir(b.graph.io, b.fmt("packages-zig/{s}/src/test", .{package.name}), .{ .iterate = true });
+        var test_dir = try b.build_root.handle.openDir(b.graph.io, b.fmt("packages-zig/{s}/src/test", .{package.name}), .{
+            .iterate = true,
+        });
         defer test_dir.close(b.graph.io);
         var walker = try test_dir.walk(b.allocator);
         defer walker.deinit();
@@ -442,7 +539,9 @@ fn addOwnProcessTests(
     test_step.dependOn(&run_console_stdout.step);
 
     // The tests of the keychain vaults, each a program of its own.
-    var vault_test_dir = try b.build_root.handle.openDir(b.graph.io, "packages-zig/vault-zig/src/test", .{ .iterate = true });
+    var vault_test_dir = try b.build_root.handle.openDir(b.graph.io, "packages-zig/vault-zig/src/test", .{
+        .iterate = true,
+    });
     defer vault_test_dir.close(b.graph.io);
     var walker = try vault_test_dir.walk(b.allocator);
     defer walker.deinit();
@@ -621,7 +720,9 @@ fn addCli(
     const test_files = b.addWriteFiles();
     var test_root_source: std.ArrayList(u8) = .empty;
     try test_root_source.appendSlice(b.allocator, "test {\n");
-    var test_dir = try b.build_root.handle.openDir(b.graph.io, "apps/cli-zig/src/test", .{ .iterate = true });
+    var test_dir = try b.build_root.handle.openDir(b.graph.io, "apps/cli-zig/src/test", .{
+        .iterate = true,
+    });
     defer test_dir.close(b.graph.io);
     var walker = try test_dir.walk(b.allocator);
     defer walker.deinit();
@@ -737,21 +838,7 @@ fn addZiggyCore(
             .optimize = optimize,
             .link_libc = true,
         });
-        // Zig has no C library headers for Android. They come from the NDK, through the libc file the build is given with --libc,
-        // and the translation step is not given that file, so its include directories are read out of it here.
-        const libc_file_path = b.libc_file orelse {
-            std.debug.print("An Android build needs the NDK's C library, as a libc file: pass --libc <file>.\n", .{});
-            return error.LibcFileMissing;
-        };
-        const libc_file_text = try std.Io.Dir.cwd().readFileAlloc(b.graph.io, libc_file_path, b.allocator, .limited(64 * 1024));
-        var libc_lines = std.mem.splitScalar(u8, libc_file_text, '\n');
-        while (libc_lines.next()) |line| {
-            for ([_][]const u8{ "include_dir=", "sys_include_dir=" }) |key| {
-                if (std.mem.startsWith(u8, line, key) and line.len > key.len) {
-                    jni_translate_c.addSystemIncludePath(.{ .cwd_relative = line[key.len..] });
-                }
-            }
-        }
+        try android_libc.addLibcIncludes(b, jni_translate_c, target);
         module.addImport("jni-c", jni_translate_c.createModule());
     }
     return .{
@@ -774,7 +861,9 @@ fn embedPage(b: *std.Build, shell_module: *std.Build.Module, shell_import_name: 
     var embedded_names: std.ArrayList([]const u8) = .empty;
     var embedded_paths: std.ArrayList([]const u8) = .empty;
     var has_index = false;
-    if (b.build_root.handle.openDir(io, page_directory, .{ .iterate = true })) |opened| {
+    if (b.build_root.handle.openDir(io, page_directory, .{
+        .iterate = true,
+    })) |opened| {
         var directory = opened;
         defer directory.close(io);
         try source.appendSlice(b.allocator, b.fmt("const shell = @import(\"{s}\");\n\npub const files = [_]shell.UiFile{{\n", .{shell_import_name}));
@@ -789,13 +878,19 @@ fn embedPage(b: *std.Build, shell_module: *std.Build.Module, shell_import_name: 
             const import_name = b.fmt("ui-file-{d}", .{embedded_names.items.len});
             try embedded_names.append(b.allocator, import_name);
             try embedded_paths.append(b.allocator, b.fmt("{s}/{s}", .{ page_directory, path }));
-            try source.appendSlice(b.allocator, b.fmt("    .{{ .path = \"{s}\", .content = @embedFile(\"{s}\") }},\n", .{ path, import_name }));
+            try source.appendSlice(b.allocator, b.fmt("    .{{\n        .path = \"{s}\",\n        .content = @embedFile(\"{s}\"),\n    }},\n", .{ path, import_name }));
             if (std.mem.eql(u8, path, "index.html")) {
                 has_index = true;
             }
         }
         try source.appendSlice(b.allocator, "};\n");
-    } else |_| {}
+    } else |err| {
+        // A page directory that is missing means the page was not built, which the compile error below says. Any other failure is
+        // reported as it is.
+        if (err != error.FileNotFound) {
+            return err;
+        }
+    }
     if (!has_index) {
         source.clearRetainingCapacity();
         embedded_names.clearRetainingCapacity();
@@ -869,7 +964,9 @@ fn addDirectoryTests(
     _ = test_files.addCopyDirectory(b.path(b.fmt("{s}/src", .{directory})), "src", .{});
     var test_root_source: std.ArrayList(u8) = .empty;
     try test_root_source.appendSlice(b.allocator, "test {\n");
-    var test_dir = try b.build_root.handle.openDir(b.graph.io, b.fmt("{s}/src/test", .{directory}), .{ .iterate = true });
+    var test_dir = try b.build_root.handle.openDir(b.graph.io, b.fmt("{s}/src/test", .{directory}), .{
+        .iterate = true,
+    });
     defer test_dir.close(b.graph.io);
     var walker = try test_dir.walk(b.allocator);
     defer walker.deinit();
@@ -893,7 +990,9 @@ fn addDirectoryTests(
     // A test program for the iOS simulator failed to link with "unable to find libSystem system library" with only the sysroot given,
     // and linked past that once /usr/lib was added as a library path.
     if (target.result.os.tag == .ios) {
-        test_module.addLibraryPath(.{ .cwd_relative = "/usr/lib" });
+        test_module.addLibraryPath(.{
+            .cwd_relative = "/usr/lib",
+        });
     }
     const unit_test = b.addTest(.{
         .name = std.fs.path.basename(directory),
@@ -943,16 +1042,23 @@ fn addZiggy(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     queue: IQueueModules,
+    test_hooks: bool,
+    compile_only: bool,
 ) !void {
-    const test_hooks = b.option(bool, "test-hooks", "Build the test hooks (the test control connection) into the app (never for a release)") orelse false;
     const core = try addZiggyCore(b, target, optimize, test_hooks, queue);
     const test_core = try addZiggyCore(b, target, optimize, true, queue);
 
     // The unit tests of Ziggy's core, which run the core with the test hooks compiled in.
     const core_test_binary_step = b.step("test-binary-ziggy-core", "Build the unit test program of Ziggy's core and install it to test-bin without running it");
     try addDirectoryTests(b, framework_test_step, "packages/ziggy/core", &.{
-        .{ .name = "ziggy-core", .module = test_core.module },
-        .{ .name = "task-queue-zig", .module = queue.task_queue },
+        .{
+            .name = "ziggy-core",
+            .module = test_core.module,
+        },
+        .{
+            .name = "task-queue-zig",
+            .module = queue.task_queue,
+        },
     }, target, optimize, core_test_binary_step);
 
     // The unit tests of the parts of the shells that do not need the platform's libraries.
@@ -1025,12 +1131,136 @@ fn addZiggy(
     example_for_tests.addImport("page-files", try embedPage(b, test_core.module, "ziggy-core", "apps/ziggy-example/dist"));
     const example_test_binary_step = b.step("test-binary-ziggy-example-core", "Build the unit test program of the Ziggy example's core and install it to test-bin without running it");
     try addDirectoryTests(b, example_test_step, "apps/ziggy-example/core", &.{
-        .{ .name = "ziggy-core", .module = test_core.module },
-        .{ .name = "ziggy-example-core", .module = example_for_tests },
+        .{
+            .name = "ziggy-core",
+            .module = test_core.module,
+        },
+        .{
+            .name = "ziggy-example-core",
+            .module = example_for_tests,
+        },
     }, target, optimize, example_test_binary_step);
 
-    try addZiggyExampleLinux(b, target, optimize, core, static_library);
-    try addZiggyExampleWindows(b, target, optimize, core, static_library);
+    const example_app: IShellApp = .{
+        .name = "ziggy-example",
+        .title = "the Ziggy example",
+        .directory = "apps/ziggy-example",
+        .page_directory = "apps/ziggy-example/dist",
+    };
+    try addLinuxShell(b, example_app, target, optimize, core, static_library);
+    try addWindowsShell(b, example_app, compile_only, target, optimize, core, static_library);
+}
+
+//
+// Builds Photosphere: its core as a library for the target and its Linux and Windows shells, the same way addZiggy builds the Ziggy
+// example. The packages Photosphere's core is made of are built for the machine running the build only, so for any other target
+// addPhotosphereUnavailable registers the steps with a message that says so.
+//
+// photosphere-core imports Ziggy's core, and the app's library imports Ziggy's core too, so both must import the same module or the two
+// would hold different Core types. The module that addPackageModules made imports the core without the test hooks, so the one the app
+// uses is made again here, with Ziggy's core of this build (the test hooks when asked for).
+//
+fn addPhotosphere(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    test_hooks: bool,
+    compile_only: bool,
+    queue: IQueueModules,
+    modules: std.StringHashMap(*std.Build.Module),
+) !void {
+    const core = try addZiggyCore(b, target, optimize, test_hooks, queue);
+    const photosphere_core = b.createModule(.{
+        .root_source_file = b.path("packages-zig/photosphere-core/src/index.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    for (packages) |package| {
+        if (std.mem.eql(u8, package.name, "photosphere-core")) {
+            for (package.dependencies) |dependency_name| {
+                photosphere_core.addImport(dependency_name, modules.get(dependency_name).?);
+            }
+        }
+    }
+    photosphere_core.addImport("ziggy-core", core.module);
+
+    // The app's core: a static library (with ziggy.h installed beside it) and, for Android, a shared one.
+    const core_step = b.step("photosphere-core", "Build Photosphere's core as a library for the target");
+    const library_module = b.createModule(.{
+        .root_source_file = b.path("apps/photosphere/core/src/index.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    library_module.addImport("ziggy-core", core.module);
+    library_module.addImport("photosphere-core", photosphere_core);
+    library_module.addImport("page-files", try embedPage(b, core.module, "ziggy-core", photosphere_page_directory));
+    const static_library = b.addLibrary(.{
+        .name = "photosphere",
+        .root_module = library_module,
+        .linkage = .static,
+    });
+    // The Xcode linker is not Zig's, so the compiler runtime (for example ___zig_probe_stack) must travel inside the archive.
+    static_library.bundle_compiler_rt = true;
+    core_step.dependOn(&b.addInstallArtifact(static_library, .{}).step);
+    core_step.dependOn(&b.addInstallFileWithDir(b.path("packages/ziggy/core/src/lib/ziggy.h"), .header, "ziggy.h").step);
+    if (target.result.abi.isAndroid()) {
+        const shared_module = b.createModule(.{
+            .root_source_file = b.path("apps/photosphere/core/src/index.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        });
+        shared_module.addImport("ziggy-core", core.module);
+        shared_module.addImport("photosphere-core", photosphere_core);
+        shared_module.addImport("page-files", try embedPage(b, core.module, "ziggy-core", photosphere_page_directory));
+        // aws-c-common writes its logs to Android's log (CMake: PLATFORM_LIBS log), which is in the C library's directory. It is linked
+        // here and not by aws-c-common's static library, which would archive the system library as a member.
+        shared_module.addLibraryPath(.{
+            .cwd_relative = try android_libc.libcLibraryDirectory(b),
+        });
+        shared_module.linkSystemLibrary("log", .{});
+        const shared_library = b.addLibrary(.{
+            .name = "photosphere",
+            .root_module = shared_module,
+            .linkage = .dynamic,
+        });
+        // Android 15 and later can run with 16 KiB memory pages, and a library is loaded only when its segments are aligned to the page
+        // size, so they are aligned to the larger one.
+        shared_library.link_z_max_page_size = 16384;
+        core_step.dependOn(&b.addInstallArtifact(shared_library, .{}).step);
+    }
+
+    const photosphere_app: IShellApp = .{
+        .name = "photosphere",
+        .title = "Photosphere",
+        .directory = "apps/photosphere",
+        .page_directory = photosphere_page_directory,
+    };
+    try addLinuxShell(b, photosphere_app, target, optimize, core, static_library);
+    try addWindowsShell(b, photosphere_app, compile_only, target, optimize, core, static_library);
+}
+
+//
+// The directory the page of Photosphere's app is built into (`bun run bundle:ui` in apps/photosphere), which each shell embeds.
+//
+const photosphere_page_directory = "apps/photosphere-frontend/dist";
+
+//
+// Registers Photosphere's steps for a target its core cannot be built for, so asking for one says why instead of reporting an unknown
+// step. The packages Photosphere's core is made of include the AWS SDK for C and aws-lc, which are built for Linux, Windows and macOS,
+// each on its own platform.
+//
+fn addPhotosphereUnavailable(b: *std.Build, target: std.Build.ResolvedTarget) !void {
+    const message = if (target.result.os.tag == .ios or target.result.os.tag == .macos)
+        "Photosphere's core for an Apple platform can only be built on a Mac: it holds the AWS SDK for C and aws-lc, whose Apple sources include the Security, Network, CoreFoundation and CoreServices headers of the Apple SDK, which Zig does not ship and which this machine does not have. See docs/aws-sdk.md."
+    else
+        "Photosphere's core is built for the machine running the build, for Windows (x86_64) and for Android (with the NDK's C library as a libc file). See docs/aws-sdk.md.";
+    for ([_][]const u8{ "photosphere-core", "photosphere-linux", "photosphere-windows", "photosphere-windows-check" }) |name| {
+        const step = b.step(name, "Build Photosphere (only for the machine running the build)");
+        step.dependOn(&b.addFail(message).step);
+    }
 }
 
 //
@@ -1048,20 +1278,36 @@ const linux_runtime_libraries = [_][]const u8{
 };
 
 //
-// Builds the Ziggy example's Linux shell, installed to zig-out/bin/ziggy-example by the `ziggy-example-linux` step. The shell is Zig
-// that talks to GTK 3 and WebKitGTK 4.1 through their C headers, and to the core through ziggy.h. The built page (apps/ziggy-example/dist,
-// made by `bun run bundle:ui`) is embedded in the executable, so the executable is the whole app.
+// What differs between the apps that Ziggy's Linux and Windows shells are built for.
 //
-fn addZiggyExampleLinux(
+const IShellApp = struct {
+    // The name of the app, which names its executable and its steps (`<name>-linux`, `<name>-windows`, `<name>-windows-check`).
+    name: []const u8,
+    // The name the steps' descriptions use for the app, such as "the Ziggy example".
+    title: []const u8,
+    // The directory of the app, under which its shells (`shells/linux/src/main.zig`, `shells/windows/src/main.zig`) and the WebView2 SDK
+    // (`webview2-sdk`) are.
+    directory: []const u8,
+    // The directory of the app's built page, which is embedded in the executable.
+    page_directory: []const u8,
+};
+
+//
+// Builds an app's Linux shell, installed to zig-out/bin/<name> by the `<name>-linux` step. The shell is Zig that talks to GTK 3 and
+// WebKitGTK 4.1 through their C headers, and to the core through ziggy.h. The built page (made by `bun run bundle:ui`) is embedded in
+// the executable, so the executable is the whole app.
+//
+fn addLinuxShell(
     b: *std.Build,
+    app: IShellApp,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     core: IZiggyCore,
-    example_core_library: *std.Build.Step.Compile,
+    core_library: *std.Build.Step.Compile,
 ) !void {
-    const step = b.step("ziggy-example-linux", "Build the Ziggy example for Linux, installed to bin/ziggy-example");
+    const step = b.step(b.fmt("{s}-linux", .{app.name}), b.fmt("Build {s} for Linux, installed to bin/{s}", .{ app.title, app.name }));
     if (target.result.os.tag != .linux) {
-        step.dependOn(&b.addFail("The ziggy-example-linux step builds for a Linux target.").step);
+        step.dependOn(&b.addFail(b.fmt("The {s}-linux step builds for a Linux target.", .{app.name})).step);
         return;
     }
     var runtime_library_paths: std.ArrayList([]const u8) = .empty;
@@ -1089,44 +1335,48 @@ fn addZiggyExampleLinux(
     shell_module.addImport("c", translate_c.createModule());
     shell_module.addImport("ui-files", core.ui_files_module);
     for (runtime_library_paths.items) |path| {
-        shell_module.addObjectFile(.{ .cwd_relative = path });
+        shell_module.addObjectFile(.{
+            .cwd_relative = path,
+        });
     }
 
     const module = b.createModule(.{
-        .root_source_file = b.path("apps/ziggy-example/shells/linux/src/main.zig"),
+        .root_source_file = b.path(b.fmt("{s}/shells/linux/src/main.zig", .{app.directory})),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
     module.addImport("ziggy-shell-linux", shell_module);
-    module.addImport("ui-files", try embedPage(b, shell_module, "ziggy-shell-linux", "apps/ziggy-example/dist"));
-    module.linkLibrary(example_core_library);
+    module.addImport("ui-files", try embedPage(b, shell_module, "ziggy-shell-linux", app.page_directory));
+    module.linkLibrary(core_library);
     const executable = b.addExecutable(.{
-        .name = "ziggy-example",
+        .name = app.name,
         .root_module = module,
     });
     step.dependOn(&b.addInstallArtifact(executable, .{}).step);
 }
 
 //
-// Builds the Ziggy example's Windows shell, installed to zig-out/ziggy-example/ziggy-example.exe by the `ziggy-example-windows` step. The
-// shell is Zig that talks to Win32 and to WebView2 through their C headers. The executable is the whole app: the built page is embedded
-// in it and WebView2's loader is linked into it. The page is expected in apps/ziggy-example/dist (bun run bundle:ui) and the loader's
-// static library in apps/ziggy-example/webview2-sdk (the setup script), and the build fails when either is missing. The
-// `ziggy-example-windows-check` step compiles the shell without linking it, for a machine that cannot link a Windows executable.
+// Builds an app's Windows shell, installed to zig-out/<name>/<name>.exe by the `<name>-windows` step. The shell is Zig that talks to
+// Win32 and to WebView2 through their C headers. The executable is the whole app: the built page is embedded in it and WebView2's
+// loader is linked into it. The page is expected in the app's page directory (bun run bundle:ui) and the loader's static library in the
+// app's webview2-sdk directory (the setup script), and the build fails when either is missing. The `<name>-windows-check` step
+// compiles the shell without linking it, for a machine that cannot link a Windows executable. With compile_only the loader is not
+// linked, which is how that machine checks the shell.
 //
-fn addZiggyExampleWindows(
+fn addWindowsShell(
     b: *std.Build,
+    app: IShellApp,
+    compile_only: bool,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     core: IZiggyCore,
-    example_core_library: *std.Build.Step.Compile,
+    core_library: *std.Build.Step.Compile,
 ) !void {
-    const step = b.step("ziggy-example-windows", "Build the Ziggy example for Windows, installed to ziggy-example/ziggy-example.exe");
-    const check_step = b.step("ziggy-example-windows-check", "Compile the Ziggy example's Windows shell for type errors without linking");
-    const compile_only = b.option(bool, "compile-only", "Compile the Windows shell without linking the WebView2 loader, to check it on a machine that cannot link") orelse false;
+    const step = b.step(b.fmt("{s}-windows", .{app.name}), b.fmt("Build {s} for Windows, installed to {s}/{s}.exe", .{ app.title, app.name, app.name }));
+    const check_step = b.step(b.fmt("{s}-windows-check", .{app.name}), b.fmt("Compile {s}'s Windows shell for type errors without linking", .{app.title}));
     if (target.result.os.tag != .windows) {
-        const message = "The ziggy-example-windows steps build for a Windows target.";
+        const message = b.fmt("The {s}-windows steps build for a Windows target.", .{app.name});
         step.dependOn(&b.addFail(message).step);
         check_step.dependOn(&b.addFail(message).step);
         return;
@@ -1150,7 +1400,7 @@ fn addZiggyExampleWindows(
         .link_libc = true,
     });
     translate_c.addIncludePath(b.path("packages/ziggy/core/src/lib"));
-    translate_c.addIncludePath(b.path("apps/ziggy-example/webview2-sdk/include"));
+    translate_c.addIncludePath(b.path(b.fmt("{s}/webview2-sdk/include", .{app.directory})));
 
     const shell_module = b.createModule(.{
         .root_source_file = b.path("packages/ziggy/native/windows/src/index.zig"),
@@ -1170,37 +1420,49 @@ fn addZiggyExampleWindows(
     // Without the library the module still compiles, which is how a machine that cannot link a Windows executable checks the shell, but
     // nothing built from it links.
     if (!compile_only) {
-        shell_module.addObjectFile(b.path(b.fmt("apps/ziggy-example/webview2-sdk/{s}/WebView2LoaderStatic.lib", .{sdk_architecture})));
+        shell_module.addObjectFile(b.path(b.fmt("{s}/webview2-sdk/{s}/WebView2LoaderStatic.lib", .{ app.directory, sdk_architecture })));
     }
 
     const module = b.createModule(.{
-        .root_source_file = b.path("apps/ziggy-example/shells/windows/src/main.zig"),
+        .root_source_file = b.path(b.fmt("{s}/shells/windows/src/main.zig", .{app.directory})),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
     module.addImport("ziggy-shell-windows", shell_module);
-    module.addImport("ui-files", try embedPage(b, shell_module, "ziggy-shell-windows", "apps/ziggy-example/dist"));
-    module.linkLibrary(example_core_library);
+    module.addImport("ui-files", try embedPage(b, shell_module, "ziggy-shell-windows", app.page_directory));
+    module.linkLibrary(core_library);
     const executable = b.addExecutable(.{
-        .name = "ziggy-example",
+        .name = app.name,
         .root_module = module,
     });
     executable.subsystem = .windows;
     // The windows subsystem keeps a console from opening, but its default entry point in the MSVC C runtime calls WinMain. Zig's main is
     // exported as the C main, so the entry point is the C runtime's one that calls main.
-    executable.entry = .{ .symbol_name = "mainCRTStartup" };
+    executable.entry = .{
+        .symbol_name = "mainCRTStartup",
+    };
 
     // Compiles the shell without linking it, for a machine that cannot link a Windows executable. The link needs Microsoft's toolchain
     // because the SDK's static loader is built with it.
+    // The core library is not linked into the object: a COFF object cannot hold the library's objects, and the check has no link to
+    // resolve.
+    const check_module = b.createModule(.{
+        .root_source_file = b.path(b.fmt("{s}/shells/windows/src/main.zig", .{app.directory})),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    check_module.addImport("ziggy-shell-windows", shell_module);
+    check_module.addImport("ui-files", try embedPage(b, shell_module, "ziggy-shell-windows", app.page_directory));
     check_step.dependOn(&b.addObject(.{
-        .name = "ziggy-example-check",
-        .root_module = module,
+        .name = b.fmt("{s}-check", .{app.name}),
+        .root_module = check_module,
     }).step);
     step.dependOn(&b.addInstallArtifact(executable, .{
         .dest_dir = .{
             .override = .{
-                .custom = "ziggy-example",
+                .custom = app.name,
             },
         },
         .pdb_dir = .disabled,

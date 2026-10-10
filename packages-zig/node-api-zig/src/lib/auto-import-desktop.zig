@@ -11,8 +11,8 @@ const IAppConfig = app_config.IAppConfig;
 //
 // What the desktop app should do about automatic import, worked out from its config alone.
 //
-// The decisions live here rather than in the Electron main process so they can be unit tested: the
-// main process is left with the parts that genuinely need Electron (where the application data
+// The decisions live here rather than in the desktop shell so they can be unit tested: the
+// shell is left with the parts that need the platform (where the application data
 // directory is) and the parts that need the worker pool (creating the database, starting the task).
 //
 
@@ -84,14 +84,18 @@ pub fn getDefaultDatabasePath(allocator: std.mem.Allocator, appDataPath: []const
 pub fn planDesktopAutoImport(allocator: std.mem.Allocator, config: IAppConfig, defaultPhotoFolders: []const []const u8, appDataPath: []const u8) !IDesktopAutoImportPlan {
     const storedSources: []const IAutoImportSource = config.autoImportSources orelse &.{};
 
-    // (Zig: the settings are normalised from the JSON the TypeScript builds as an object literal. `enabled` is left out when the
-    // config has no value for it, as `undefined` is not a boolean to normaliseAutoImportSettings.)
+    // (Zig: the settings are normalised from a JSON object. `enabled` is left out when the
+    // config has no value for it, as a missing value is not a boolean to normaliseAutoImportSettings.)
     var rawSettings: std.json.ObjectMap = .empty;
     if (config.autoImportEnabled) |enabled| {
-        try rawSettings.put(allocator, "enabled", .{ .bool = enabled });
+        try rawSettings.put(allocator, "enabled", .{
+            .bool = enabled,
+        });
     }
     try rawSettings.put(allocator, "sources", try auto_import_settings.autoImportSourcesToJson(allocator, storedSources));
-    var settings = try auto_import_settings.normaliseAutoImportSettings(allocator, .{ .object = rawSettings });
+    var settings = try auto_import_settings.normaliseAutoImportSettings(allocator, .{
+        .object = rawSettings,
+    });
 
     if (settings.sources.len == 0) {
         settings.sources = try foldersAsSources(allocator, defaultPhotoFolders);

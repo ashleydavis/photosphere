@@ -4,8 +4,7 @@ const cli = @import("cli-zig");
 const prompts = cli.prompts;
 
 //
-// The clack spinner has no TypeScript tests (it is part of the vendored @clack/prompts). These check the port against
-// the TypeScript source: what start, the animation and stop write.
+// These check what the clack spinner writes on start, in the animation and on stop.
 //
 
 test "the spinner hides the cursor, animates its frames and ends with the submit symbol" {

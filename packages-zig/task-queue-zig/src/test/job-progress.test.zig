@@ -7,7 +7,7 @@ const ITaskContext = types.ITaskContext;
 const sendJobProgress = task_queue_zig.job_progress.sendJobProgress;
 
 //
-// Records the messages a handler sends through a task context (the jest.fn() of the TypeScript tests).
+// Records the messages a handler sends through a task context.
 //
 const MessageRecorder = struct {
     // Number of messages sent.
@@ -66,6 +66,7 @@ fn makeContext(recorder: *MessageRecorder, generators: *Generators) ITaskContext
         .sessionId = "session-1",
         .taskId = "task-1",
         .maxConcurrentChildTasks = 1,
+        .hostRequester = null,
         .ptr = recorder,
         .vtable = &MessageRecorder.vtable,
     };
@@ -114,7 +115,7 @@ test "carries a job that has not said what it is doing yet" {
         .name = "Syncing database",
     }, 5000, null);
 
-    // (Zig: an undefined progressMessage is left out of the message, as JSON.stringify leaves it out.)
+    // (An undefined progressMessage is left out of the message.)
     try std.testing.expectEqual(@as(usize, 1), recorder.calls);
     try std.testing.expectEqualStrings("{\"type\":\"job-progress\",\"job\":{\"id\":\"job-1\",\"name\":\"Syncing database\"},\"startedAt\":5000}", recorder.lastMessage);
 }

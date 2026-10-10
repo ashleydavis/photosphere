@@ -63,7 +63,7 @@ pub const SpinnerOptions = struct {
 };
 
 //
-// A spinner (TypeScript: the SpinnerResult object `spinner()` returns, with its closure state as fields).
+// A spinner.
 //
 pub const Spinner = struct {
     // Allocates the spinner's strings.

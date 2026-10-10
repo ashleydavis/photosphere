@@ -19,8 +19,7 @@ const retry = utils.retry.retry;
 const LOCK_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 
 //
-// Rounds like JavaScript's Math.round (halves round towards positive infinity).
-// (No TypeScript counterpart: stands in for Math.round.)
+// Rounds to the nearest integer, with halves rounding towards positive infinity.
 //
 fn mathRound(value: f64) i64 {
     return @intFromFloat(@floor(value + 0.5));
@@ -83,10 +82,10 @@ pub fn acquireWriteLock(allocator: std.mem.Allocator, io: std.Io, rawStorage: IS
 }
 
 //
-// Refreshes the write lock (the `() => rawStorage.refreshWriteLock(".db/write.lock", sessionId)` of TypeScript).
+// Refreshes the write lock.
 //
 const RefreshWriteLockOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text of the operation (read by retryOnce for its timeout message).
     pub const source = "() => rawStorage.refreshWriteLock(\".db/write.lock\", sessionId)";
 
     // Allocator for the storage implementation's temporary data.
@@ -115,10 +114,10 @@ pub fn refreshWriteLock(allocator: std.mem.Allocator, io: std.Io, rawStorage: IS
 }
 
 //
-// Releases the write lock for the database (the `() => rawStorage.releaseWriteLock(".db/write.lock")` of TypeScript).
+// Releases the write lock for the database.
 //
 const ReleaseWriteLockOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text of the operation (read by retryOnce for its timeout message).
     pub const source = "() => rawStorage.releaseWriteLock(\".db/write.lock\")";
 
     // Allocator for the storage implementation's temporary data.

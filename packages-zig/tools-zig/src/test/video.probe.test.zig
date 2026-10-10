@@ -46,7 +46,7 @@ const FakeFfmpegDirectory = struct {
             const ffmpegPath = try std.fs.path.join(allocator, &.{ self.path, "ffmpeg" });
             try cwd.writeFile(io, .{ .sub_path = ffprobePath, .data = try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s' '{s}'\n", .{probeJson}) });
             try cwd.writeFile(io, .{ .sub_path = ffmpegPath, .data = try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s\\n' \"$*\" > '{s}'\n", .{argumentsPath}) });
-            _ = try node_utils.exec.exec(allocator, io, try std.fmt.allocPrint(allocator, "chmod +x {s} {s}", .{ ffprobePath, ffmpegPath }));
+            _ = try node_utils.exec.exec(allocator, io, null, try std.fmt.allocPrint(allocator, "chmod +x {s} {s}", .{ ffprobePath, ffmpegPath }));
         }
         self.environMap = std.process.Environ.Map.init(allocator);
         try self.environMap.put("PATH", self.absolutePath);
@@ -85,8 +85,8 @@ fn probe(allocator: std.mem.Allocator, probeJson: []const u8) !tools.types.Asset
     var directory: FakeFfmpegDirectory = undefined;
     try directory.create(allocator, io, probeJson);
     defer directory.destroy(io);
-    var video = Video.init(allocator, io, "../test/multiple-files/test.mp4");
-    return video.getInfo(allocator, io);
+    var video = Video.init(allocator, io, null, "../test/multiple-files/test.mp4");
+    return video.getInfo(allocator, io, null);
 }
 
 //
@@ -97,7 +97,7 @@ fn expectProbeError(allocator: std.mem.Allocator, probeJson: []const u8, expecte
     try std.testing.expectEqualStrings(expectedMessage, utils.errors.lastErrorMessage());
 }
 
-test "ffprobe output is read as the TypeScript reads it: a null stream, a missing format and an r_frame_rate that is not a string throw Bun's TypeErrors" {
+test "ffprobe output with a null stream, a missing format and an r_frame_rate that is not a string throws TypeErrors" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -107,7 +107,7 @@ test "ffprobe output is read as the TypeScript reads it: a null stream, a missin
     try expectProbeError(allocator, "{\"format\":{},\"streams\":[{\"codec_type\":\"video\",\"r_frame_rate\":30}]}", "Failed to get video info: TypeError: videoStream.r_frame_rate.split is not a function. (In 'videoStream.r_frame_rate.split(\"/\")', 'videoStream.r_frame_rate.split' is undefined)");
 }
 
-test "ffprobe output is read as the TypeScript reads it: new Date, Number, parseFloat and parseInt of any value and the spread of the tags" {
+test "ffprobe output is read with new Date, Number, parseFloat and parseInt of any value and the spread of the tags" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -133,7 +133,7 @@ test "ffprobe output is read as the TypeScript reads it: new Date, Number, parse
     try std.testing.expectEqual(@as(?f64, 1), booleanDate.createdAt);
 }
 
-test "ffprobe output that is not an object, and a streams value that is not an array, throw Bun's TypeErrors" {
+test "ffprobe output that is not an object, and a streams value that is not an array, throw TypeErrors" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -148,7 +148,7 @@ test "ffprobe output that is not an object, and a streams value that is not an a
     try expectProbeError(allocator, "{\"format\":{},\"streams\":\"x\"}", "Failed to get video info: TypeError: probeData.streams.find is not a function. (In 'probeData.streams.find((s) => s.codec_type === \"video\")', 'probeData.streams.find' is undefined)");
 }
 
-test "ffprobe values of every JSON type are read the way TypeScript reads them" {
+test "ffprobe values of every JSON type are read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -199,7 +199,7 @@ test "the fake tools directory does not leave the detected ImageMagick installat
     const io = std.testing.io;
 
     // The real PATH, which every later test runs against.
-    if (!(try tools.Image.verifyImageMagick(allocator, io)).available) {
+    if (!(try tools.Image.verifyImageMagick(allocator, io, null)).available) {
         std.debug.print("This test needs ImageMagick installed.\n", .{});
         return error.RequiredToolsMissing;
     }
@@ -208,16 +208,16 @@ test "the fake tools directory does not leave the detected ImageMagick installat
     var directory: FakeFfmpegDirectory = undefined;
     try directory.create(allocator, io, "{}");
     defer directory.destroy(io);
-    try std.testing.expect(!(try tools.Image.verifyImageMagick(allocator, io)).available);
+    try std.testing.expect(!(try tools.Image.verifyImageMagick(allocator, io, null)).available);
     try std.testing.expectEqual(tools.image.ImageMagickType.none, tools.Image.getImageMagickType());
     directory.destroy(io);
 
     // The fake PATH is gone, so the installation is detected again, against the real one.
-    try std.testing.expect((try tools.Image.verifyImageMagick(allocator, io)).available);
+    try std.testing.expect((try tools.Image.verifyImageMagick(allocator, io, null)).available);
     try std.testing.expect(tools.Image.getImageMagickType() != .none);
 }
 
-test "extractScreenshot writes the time as a template string writes a number" {
+test "extractScreenshot writes the time the way JavaScript writes a number" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -225,10 +225,10 @@ test "extractScreenshot writes the time as a template string writes a number" {
     var directory: FakeFfmpegDirectory = undefined;
     try directory.create(allocator, io, "{}");
     defer directory.destroy(io);
-    var video = Video.init(allocator, io, "../test/multiple-files/test.mp4");
-    _ = try video.extractScreenshot(allocator, io, "out.jpg", 1e-7);
+    var video = Video.init(allocator, io, null, "../test/multiple-files/test.mp4");
+    _ = try video.extractScreenshot(allocator, io, null, "out.jpg", 1e-7);
 
-    // The command quotes both paths, as the TypeScript does (`ffmpeg -i "<file>" ... -y "<output>"`). /bin/sh takes
+    // The command quotes both paths (`ffmpeg -i "<file>" ... -y "<output>"`). /bin/sh takes
     // the quotes apart before the fake command sees the arguments, and cmd.exe hands the command line to the fake
     // .cmd exactly as it is, so on Windows the quotes are recorded too.
     const ffmpegArguments = if (builtin.os.tag == .windows)

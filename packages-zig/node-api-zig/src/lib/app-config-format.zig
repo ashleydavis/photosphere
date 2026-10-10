@@ -13,7 +13,7 @@ const ALLOWED_THEMES = config_format.ALLOWED_THEMES;
 // `IConfig` in user-interface offers get, set, add, remove and clear over a plain string key, and
 // every platform provides the get/set pair underneath it. This module is the one definition of what
 // the config keys mean: which section of the document each one sits in, and what it is called on disk.
-// The state keys are the same idea over state.yaml, in app-state-format.ts. Nothing decides between
+// The state keys are the same idea over state.yaml, in app-state-format.zig. Nothing decides between
 // the two: the interface has a context per store and the caller asks the one it means.
 //
 // It touches no filesystem, which is what lets it be bundled into the mobile worker. The functions
@@ -88,8 +88,8 @@ pub const IAppConfig = struct {
 
 //
 // A value one of the flat config keys can hold.
-// (Zig: a tagged union with a case for each of the types TypeScript's `boolean | number | string | string[] |
-// IAutoImportSource[]` names. The theme is the `string` case, holding the theme's name.)
+// (Zig: a tagged union with a case for each of the types a config value can be: boolean, number, string, list of strings
+// and list of auto-import sources. The theme is the `string` case, holding the theme's name.)
 //
 pub const IAppConfigValue = union(enum) {
     // A boolean setting.
@@ -110,13 +110,12 @@ pub const IAppConfigValue = union(enum) {
 
 //
 // Every config key that has a value, under the name the interface uses for it, in the order the keys are declared in
-// IAppConfig. (No TypeScript counterpart: TypeScript's `Record<string, IAppConfigValue>`.)
+// IAppConfig.
 //
 pub const IAppConfigSettings = std.StringArrayHashMapUnmanaged(IAppConfigValue);
 
 //
 // Gets the value of a field of IAppConfig as a flat config value, or null when the field has no value.
-// (No TypeScript counterpart: TypeScript reads the field of the object by name.)
 //
 fn fieldValue(comptime FieldType: type, field: FieldType) ?IAppConfigValue {
     const value = field orelse {
@@ -158,7 +157,7 @@ fn fieldValue(comptime FieldType: type, field: FieldType) ?IAppConfigValue {
 // no catch-all here: a key that is not a config key never reaches this module, because the routing
 // sends it to state.yaml instead.
 //
-// (Zig: a key that is not a field of IAppConfig reads as null, as an undeclared property reads as undefined.)
+// (Zig: a key that is not a field of IAppConfig reads as null.)
 //
 pub fn getAppConfigValue(config: IAppConfig, key: []const u8) ?IAppConfigValue {
     inline for (std.meta.fields(IAppConfig)) |field| {
@@ -172,11 +171,9 @@ pub fn getAppConfigValue(config: IAppConfig, key: []const u8) ?IAppConfigValue {
 //
 // Writes one flat config key. null removes it, which is what IConfig.clear means.
 //
-// (Zig: TypeScript stores whatever it is given under whatever name it is given, and appConfigToYaml then ignores it.
-// A Zig field has one type, so a value for a key that is not a config key, or a value of a type the key cannot hold
+// (Zig: a field has one type, so a value for a key that is not a config key, or a value of a type the key cannot hold
 // (including a theme that is not one of ALLOWED_THEMES), throws an error saying so instead of being stored where
-// nothing reads it. Clearing a key that is not a config key removes nothing, as `delete` of an absent property does,
-// and is not an error.)
+// nothing reads it. Clearing a key that is not a config key removes nothing, and is not an error.)
 //
 pub fn setAppConfigValue(config: *IAppConfig, key: []const u8, value: ?IAppConfigValue) !void {
     inline for (std.meta.fields(IAppConfig)) |field| {
@@ -256,8 +253,7 @@ fn isSection(value: ?std.json.Value) bool {
 // It goes through the shared normaliser rather than trusting the file, because this list reaches the
 // import task and a source with no path would have it scanning nothing while looking like it worked.
 //
-// (Zig: a source that is not an object has no fields, so it is read as one with none, as `rawSource?.type` reads
-// undefined off a null or a string.)
+// (Zig: a source that is not an object has no fields, so it is read as one with none.)
 //
 fn documentSources(allocator: std.mem.Allocator, section: std.json.ObjectMap) !?[]const IAutoImportSource {
     const rawSources = section.get("sources") orelse {
@@ -441,7 +437,7 @@ fn writeSection(allocator: std.mem.Allocator, document: *std.json.ObjectMap, nam
 }
 
 //
-// Makes a YAML boolean, or null for no value. (No TypeScript counterpart: TypeScript writes the value itself.)
+// Makes a YAML boolean, or null for no value.
 //
 fn boolValue(value: ?bool) ?std.json.Value {
     const present = value orelse {
@@ -453,7 +449,7 @@ fn boolValue(value: ?bool) ?std.json.Value {
 }
 
 //
-// Makes a YAML string, or null for no value. (No TypeScript counterpart: TypeScript writes the value itself.)
+// Makes a YAML string, or null for no value.
 //
 fn stringValue(value: ?[]const u8) ?std.json.Value {
     const present = value orelse {
@@ -472,7 +468,7 @@ fn stringValue(value: ?[]const u8) ?std.json.Value {
 // alone would drop them every time the desktop app remembered a theme.
 //
 // (Zig: the document is the std.json.Value read from disk, which is copied, not changed. The sections are copied one
-// level deep, which is as deep as TypeScript's `{ ...document }` and `{ ...merged.sync }` copy.)
+// level deep.)
 //
 pub fn appConfigToYaml(allocator: std.mem.Allocator, config: IAppConfig, document: std.json.Value) !std.json.Value {
     var merged: std.json.ObjectMap = if (isSection(document)) try document.object.clone(allocator) else .empty;

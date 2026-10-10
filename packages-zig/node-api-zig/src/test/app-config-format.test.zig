@@ -8,21 +8,21 @@ const IAppConfigValue = app_config_format.IAppConfigValue;
 const IAutoImportSource = api.auto_import_settings.IAutoImportSource;
 
 //
-// Parses a JSON literal (TypeScript: the object literal the test passes).
+// Parses a JSON literal.
 //
 fn parseJson(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
 }
 
 //
-// Turns a value into JSON text, for comparing documents (TypeScript: `toEqual`; here the order of the keys counts too).
+// Turns a value into JSON text, for comparing documents (the order of the keys counts too).
 //
 fn toJson(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
     return std.json.Stringify.valueAlloc(allocator, value, .{});
 }
 
 //
-// Reads a document and flattens it (TypeScript: `yamlToAppConfig` of the literal the test passes).
+// Reads a document and flattens it.
 //
 fn flatten(allocator: std.mem.Allocator, text: []const u8) !IAppConfig {
     return app_config_format.yamlToAppConfig(allocator, try parseJson(allocator, text));
@@ -447,7 +447,7 @@ test "setAppConfigValue: a key that is not a config setting throws an error nami
     try std.testing.expectEqualStrings("\"lastFolder\" is not a config setting.", errors.lastErrorMessage());
 }
 
-// TypeScript deletes the property whatever the key is, so clearing a key that is not a config setting leaves the config
+// The property is deleted whatever the key is, so clearing a key that is not a config setting leaves the config
 // as it was and is not an error.
 test "setAppConfigValue: clearing a key that is not a config setting changes nothing" {
     var config: IAppConfig = .{

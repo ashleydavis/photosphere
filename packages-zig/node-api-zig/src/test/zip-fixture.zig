@@ -5,7 +5,7 @@ const std = @import("std");
 //
 
 //
-// One entry of a zip the tests build (TypeScript: what is added with `zip.file` and `zip.folder`).
+// One entry of a zip the tests build: a file or a folder.
 //
 pub const IZipEntry = struct {
     // The name of the entry in the zip ("folder/" for a folder).
@@ -16,9 +16,8 @@ pub const IZipEntry = struct {
 };
 
 //
-// Builds a zip of the given entries, stored without compression, the way JSZip's generateAsync writes one by
-// default. (Zig: the Zig port of JSZip reads zips and does not write them, so the tests write their fixtures
-// themselves. Folder entries are added for every folder a file name goes through, as JSZip's createFolders does.)
+// Builds a zip of the given entries, stored without compression. (The zip reader does not write zips, so the tests
+// write their fixtures themselves. Folder entries are added for every folder a file name goes through.)
 //
 pub fn buildZip(allocator: std.mem.Allocator, entries: []const IZipEntry) ![]u8 {
     var allEntries: std.ArrayList(IZipEntry) = .empty;

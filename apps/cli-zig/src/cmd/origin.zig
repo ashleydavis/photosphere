@@ -16,7 +16,7 @@ const ICommandContext = init_cmd.ICommandContext;
 const loadDatabaseConfig = api.database_config.loadDatabaseConfig;
 
 //
-// Options of the origin command (TypeScript: IOriginCommandOptions extends IBaseCommandOptions).
+// Options of the origin command.
 // The base options are in `base`.
 //
 pub const IOriginCommandOptions = struct {
@@ -37,7 +37,7 @@ fn getOrigin(config: ?std.json.Value) ?std.json.Value {
 }
 
 //
-// JavaScript truthiness of a JSON value.
+// Whether a JSON value counts as set: not null, false, zero, NaN or an empty string.
 //
 fn isTruthy(value: std.json.Value) bool {
     return switch (value) {
@@ -52,7 +52,8 @@ fn isTruthy(value: std.json.Value) bool {
 }
 
 //
-// Formats a JSON value like JavaScript's `String(value)`.
+// Formats a JSON value as text: numbers in their shortest decimal form, strings, booleans and null as written,
+// arrays as their items joined by commas and objects as "[object Object]".
 //
 fn jsString(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
     return switch (value) {
@@ -101,7 +102,7 @@ pub fn originCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
 }
 
 //
-// `String(number)`: the number as JavaScript writes it.
+// The number as text in its shortest decimal form.
 //
 fn jsNumberString(allocator: std.mem.Allocator, number: f64) ![]const u8 {
     var output: std.Io.Writer.Allocating = .init(allocator);
@@ -110,7 +111,7 @@ fn jsNumberString(allocator: std.mem.Allocator, number: f64) ![]const u8 {
 }
 
 //
-// JavaScript truthiness of a number.
+// Whether a number counts as set: not zero or NaN.
 //
 fn isTruthyNumber(number: f64) bool {
     return number != 0 and !std.math.isNan(number);

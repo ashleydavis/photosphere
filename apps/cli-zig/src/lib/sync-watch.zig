@@ -42,8 +42,8 @@ pub fn parseWatchInterval(interval: ?[]const u8) !f64 {
 
 //
 // What a sync watch needs to run.
-// (Zig: the callbacks take a context in place of the variables a TypeScript closure captures, and syncOnce
-// reports `result.synced` rather than the whole ISyncResult, which is all the watch reads.)
+// (Zig has no closures, so the callbacks take a context, and syncOnce reports `result.synced` rather than the
+// whole ISyncResult, which is all the watch reads.)
 //
 pub const ISyncWatchOptions = struct {
     // How long to wait between syncs, in seconds.

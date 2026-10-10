@@ -1,6 +1,6 @@
 //
-// Tests for binaryTreeToArray and arrayToBinaryTree (port of src/test/binaryTreeConversion.test.ts).
-// (Zig: FlatSortNode has no left or right fields, so the `not.toHaveProperty('left')` checks hold by its type.)
+// Tests for binaryTreeToArray and arrayToBinaryTree.
+// (FlatSortNode has no left or right fields, so a flat node can never carry them.)
 //
 
 const std = @import("std");
@@ -218,12 +218,12 @@ test "should maintain correct tree structure after round-trip" {
 }
 
 
-test "arrayToBinaryTree throws for an array that ends before a parent's children, like TypeScript" {
+test "arrayToBinaryTree throws for an array that ends before a parent's children" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
-    // A parent of two children with only its first child in the array: TypeScript reads `node.right!.leafCount`
-    // of undefined.
+    // A parent of two children with only its first child in the array: the second child is missing, so reading its
+    // leaf count throws.
     try std.testing.expectError(error.Thrown, merkle_tree.arrayToBinaryTree(arena.allocator(), &.{
         .{ .nodeCount = 3, .leafCount = 2, .size = 2 },
         .{ .name = "A", .contentHash = "hash", .nodeCount = 1, .leafCount = 1, .size = 1 },

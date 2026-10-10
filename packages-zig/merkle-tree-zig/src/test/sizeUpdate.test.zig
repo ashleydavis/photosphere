@@ -1,5 +1,5 @@
 //
-// Size calculation with file updates (port of src/test/sizeUpdate.test.ts).
+// Size calculation with file updates.
 //
 
 const std = @import("std");

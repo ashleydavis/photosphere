@@ -1,10 +1,10 @@
 const std = @import("std");
 
 //
-// The on-disk shape of databases.toml and the conversions between it and the in-memory entry type.
+// The on-disk layout of databases.toml and the conversions between it and the in-memory entry type.
 //
-// Shared by desktop (databases-config.ts, which owns ~/.config/photosphere/databases.toml) and
-// mobile (databases-config.worker.ts, which owns the copy in the app's storage sandbox), so
+// Shared by desktop (databases-config.zig, which owns ~/.config/photosphere/databases.toml) and
+// mobile (databases-config.worker.zig, which owns the copy in the app's storage sandbox), so
 // there is one definition of the file format rather than one per platform. Nothing here touches the
 // filesystem, which is what lets it be bundled into the mobile worker.
 //
@@ -43,7 +43,6 @@ pub const IDatabaseEntry = struct {
 
 //
 // Gets a string property of a TOML object (null when it is absent or not a string).
-// (No TypeScript counterpart: TypeScript reads the property directly.)
 //
 pub fn stringProperty(object: std.json.ObjectMap, key: []const u8) ?[]const u8 {
     const value = object.get(key) orelse {
@@ -56,7 +55,7 @@ pub fn stringProperty(object: std.json.ObjectMap, key: []const u8) ?[]const u8 {
 }
 
 //
-// Converts a TOML-shaped database entry to the TypeScript IDatabaseEntry type.
+// Converts a TOML-shaped database entry to an IDatabaseEntry.
 // (Zig: a missing or non-string name, description or path reads as "".)
 //
 pub fn tomlEntryToDatabaseEntry(tomlEntry: std.json.Value) IDatabaseEntry {
@@ -85,24 +84,40 @@ pub fn tomlEntryToDatabaseEntry(tomlEntry: std.json.Value) IDatabaseEntry {
 }
 
 //
-// Converts a TypeScript IDatabaseEntry to the TOML on-disk shape.
+// Converts an IDatabaseEntry to the TOML on-disk layout.
 //
 pub fn databaseEntryToToml(allocator: std.mem.Allocator, entry: IDatabaseEntry) !std.json.Value {
     var tomlEntry: std.json.ObjectMap = .empty;
-    try tomlEntry.put(allocator, "name", .{ .string = entry.name });
-    try tomlEntry.put(allocator, "description", .{ .string = entry.description });
-    try tomlEntry.put(allocator, "path", .{ .string = entry.path });
+    try tomlEntry.put(allocator, "name", .{
+        .string = entry.name,
+    });
+    try tomlEntry.put(allocator, "description", .{
+        .string = entry.description,
+    });
+    try tomlEntry.put(allocator, "path", .{
+        .string = entry.path,
+    });
     if (entry.origin) |origin| {
-        try tomlEntry.put(allocator, "origin", .{ .string = origin });
+        try tomlEntry.put(allocator, "origin", .{
+            .string = origin,
+        });
     }
     if (entry.s3Key) |s3Key| {
-        try tomlEntry.put(allocator, "s3_key", .{ .string = s3Key });
+        try tomlEntry.put(allocator, "s3_key", .{
+            .string = s3Key,
+        });
     }
     if (entry.encryptionKey) |encryptionKey| {
-        try tomlEntry.put(allocator, "encryption_key", .{ .string = encryptionKey });
+        try tomlEntry.put(allocator, "encryption_key", .{
+            .string = encryptionKey,
+        });
     }
     if (entry.geocodingKey) |geocodingKey| {
-        try tomlEntry.put(allocator, "geocoding_key", .{ .string = geocodingKey });
+        try tomlEntry.put(allocator, "geocoding_key", .{
+            .string = geocodingKey,
+        });
     }
-    return .{ .object = tomlEntry };
+    return .{
+        .object = tomlEntry,
+    };
 }

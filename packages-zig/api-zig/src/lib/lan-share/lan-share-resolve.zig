@@ -5,9 +5,10 @@ const encryption = @import("encryption-zig");
 const index = @import("index.zig");
 
 //
-// Names used from other files (the equivalent of the TypeScript imports).
+// Names used from other files.
 //
-const getVault = vault_zig.get_vault.getVault;
+const getVaultWithHost = vault_zig.get_vault.getVaultWithHost;
+const IHostRequester = @import("utils-zig").host_requester.IHostRequester;
 const getDefaultVaultType = vault_zig.get_vault.getDefaultVaultType;
 const createPrivateKey = encryption.node_crypto.createPrivateKey;
 const createPublicKeyFromPrivateKey = encryption.node_crypto.createPublicKeyFromPrivateKey;
@@ -21,14 +22,13 @@ const IShareGeocodingKey = index.IShareGeocodingKey;
 const errors = utils.errors;
 
 //
-// Reads a field of the parsed S3 credentials (`parsed.region` and the like): null (undefined) when the credentials
-// have no such field or are not an object, as in TypeScript, and a TypeError when they are null. A field that is
-// there but is not text is thrown as an error naming the secret and the field (TypeScript would send it on as it
-// is).
+// Reads a field of the parsed S3 credentials (`parsed.region` and the like): null when the credentials
+// have no such field or are not an object, and a TypeError when they are null. A field that is there but is not
+// text is thrown as an error naming the secret and the field.
 //
 fn s3CredentialField(parsed: std.json.Value, secretName: []const u8, field: []const u8) !?[]const u8 {
     if (parsed == .null) {
-        // `parsed.region` of null throws, as JSON.parse("null") gives null.
+        // Credentials that parse as the JSON value null have no fields to read, so this throws.
         return errors.throwError("TypeError: Cannot read properties of null (reading '{s}')", .{field});
     }
     if (parsed != .object) {
@@ -47,13 +47,13 @@ fn s3CredentialField(parsed: std.json.Value, secretName: []const u8, field: []co
 // Builds a database share payload by reading the vault to resolve all
 // secret references on the given database config into full credential objects.
 //
-pub fn resolveDatabaseSharePayload(allocator: std.mem.Allocator, io: std.Io, entry: IShareDatabaseConfig) !IDatabaseSharePayload {
-    const vault = try getVault(getDefaultVaultType());
+pub fn resolveDatabaseSharePayload(allocator: std.mem.Allocator, io: std.Io, entry: IShareDatabaseConfig, host: ?IHostRequester) !IDatabaseSharePayload {
+    const vault = try getVaultWithHost(allocator, getDefaultVaultType(), host);
 
     var s3Credentials: ?IShareS3Credentials = null;
     if (entry.s3Key != null and entry.s3Key.?.len > 0) {
         if (try vault.get(allocator, io, entry.s3Key.?)) |secret| {
-            // JSON.parse keeps the last value of a repeated key.
+            // The last value of a repeated key is kept.
             const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, secret.value, .{
                 .duplicate_field_behavior = .use_last,
             });
@@ -106,8 +106,8 @@ pub fn resolveDatabaseSharePayload(allocator: std.mem.Allocator, io: std.Io, ent
 // Builds a secret share payload by reading a vault entry by name
 // and wrapping it in the share payload format.
 //
-pub fn resolveSecretSharePayload(allocator: std.mem.Allocator, io: std.Io, secretName: []const u8) !ISecretSharePayload {
-    const vault = try getVault(getDefaultVaultType());
+pub fn resolveSecretSharePayload(allocator: std.mem.Allocator, io: std.Io, secretName: []const u8, host: ?IHostRequester) !ISecretSharePayload {
+    const vault = try getVaultWithHost(allocator, getDefaultVaultType(), host);
     const secret = try vault.get(allocator, io, secretName) orelse {
         return errors.throwError("Secret \"{s}\" not found in vault.", .{secretName});
     };

@@ -1,8 +1,10 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const encryption = @import("encryption-zig");
 const resolve_storage_credentials = @import("resolve-storage-credentials.zig");
 const IStorage = storage_zig.storage.IStorage;
+const IHostRequester = utils.host_requester.IHostRequester;
 const IS3Credentials = storage_zig.cloud_storage.IS3Credentials;
 const IEncryptionKeyPem = encryption.key_utils.IEncryptionKeyPem;
 const IStorageOptions = encryption.encryption_types.IStorageOptions;
@@ -57,7 +59,8 @@ pub const IOpenStorageResult = struct {
 // encryptionKey and s3Key are forwarded to resolveStorageCredentials: callers supply them when
 // the path is not in databases.json (e.g. the destination of a replicate task) or to override
 // the registered values.
-// (Zig: the TypeScript optional parameters are passed as null.)
+// A caller with nothing to supply passes null.
+// host reaches the phone's keychain when the phone vault holds the credentials, and is null where there is no phone shell.
 //
 pub fn openStorage(
     allocator: std.mem.Allocator,
@@ -65,8 +68,9 @@ pub fn openStorage(
     databasePath: []const u8,
     encryptionKey: ?[]const u8,
     s3Key: ?[]const u8,
+    host: ?IHostRequester,
 ) !IOpenStorageResult {
-    const credentials = try resolveStorageCredentials(allocator, io, databasePath, encryptionKey, s3Key);
+    const credentials = try resolveStorageCredentials(allocator, io, databasePath, encryptionKey, s3Key, host);
     const loadedKeys = try loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
     const storageOptions = loadedKeys.options;
     const created = try createStorage(allocator, io, databasePath, credentials.s3Config, storageOptions);

@@ -133,7 +133,6 @@ pub fn addImportEntries(allocator: std.mem.Allocator, record: IImportRecord, new
 
 //
 // Gets a string property of a JSON object, or null when it is absent or not a string.
-// (No TypeScript counterpart: TypeScript tests `typeof candidate.x === "string"` inline.)
 //
 fn stringProperty(object: std.json.ObjectMap, name: []const u8) ?[]const u8 {
     const value = object.get(name) orelse {
@@ -153,7 +152,7 @@ fn stringProperty(object: std.json.ObjectMap, name: []const u8) ?[]const u8 {
 // empty and overwritten by the next import.
 //
 pub fn parseImportRecord(allocator: std.mem.Allocator, fileContents: []const u8) !IImportRecord {
-    // JSON.parse keeps the last value of a repeated key.
+    // The last value of a repeated key is kept.
     const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, fileContents, .{
         .duplicate_field_behavior = .use_last,
     }) catch |err| {

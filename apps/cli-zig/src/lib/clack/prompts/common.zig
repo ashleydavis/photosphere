@@ -52,7 +52,7 @@ pub fn unicodeOr(character: []const u8, fallback: []const u8) []const u8 {
 }
 
 //
-// The symbols used by the prompts (TypeScript: S_* constants, computed when used).
+// The symbols used by the prompts, computed when used.
 //
 pub fn S_STEP_ACTIVE() []const u8 {
     return unicodeOr("\u{25C6}", "*");
@@ -134,7 +134,7 @@ pub fn symbol(allocator: std.mem.Allocator, state: State) ![]const u8 {
 }
 
 //
-// The streams of a prompt (TypeScript: `input?: Readable; output?: Writable; signal?: AbortSignal`).
+// The streams of a prompt: an optional input, output and abort signal.
 // Null streams default to process.stdin and process.stdout.
 //
 pub const CommonOptions = struct {

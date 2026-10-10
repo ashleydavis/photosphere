@@ -45,8 +45,8 @@ pub const ICurrentDatabase = struct {
 // Per-process state and dependencies shared by every MCP tool implementation. Each tool
 // registers a closure over this context so it can read/write the open-database handle
 // and resolve common services without globals.
-// (Zig: the tools are registered with a pointer to this context. The open database, which TypeScript keeps in a
-// variable of mcpCommand that getDatabase, setDatabase and clearDatabase close over, is a field here.)
+// (Zig has no closures, so the tools are registered with a pointer to this context. The open database is a field
+// here.)
 //
 pub const IMcpToolContext = struct {
     //
@@ -77,8 +77,7 @@ pub const IMcpToolContext = struct {
 
     //
     // Allocates what outlives a tool call: the open database, and what the imports and verifications hand to the
-    // tasks and termination callbacks they start. (No TypeScript counterpart: JavaScript is garbage collected.)
-    //
+    // tasks and termination callbacks they start.    //
     allocator: std.mem.Allocator,
 
     //

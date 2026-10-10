@@ -41,9 +41,8 @@ const CountingUuidGenerator = struct {
 };
 
 //
-// Where test/test.jpg was taken, as TypeScript's convertExifCoordinates (packages/utils/src/lib/reverse-geocode.ts)
-// works it out from the photo's GPS tags: degrees + minutes / 60 + seconds / 3600 of each [numerator, denominator]
-// pair, made negative for the S of GPSLatitudeRef (GPSLongitudeRef is E).
+// Where test/test.jpg was taken, worked out from the photo's GPS tags: degrees + minutes / 60 + seconds / 3600 of
+// each [numerator, denominator] pair, made negative for the S of GPSLatitudeRef (GPSLongitudeRef is E).
 //
 const TEST_JPG_LOCATION: utils.reverse_geocode.ILocation = .{
     .lat = -((29.0 / 1.0) + ((1.0 / 1.0) / 60.0) + ((856.0 / 100.0) / 3600.0)),
@@ -51,8 +50,8 @@ const TEST_JPG_LOCATION: utils.reverse_geocode.ILocation = .{
 };
 
 //
-// The photoDate TypeScript's pickExifDate gives for test/test.jpg: its DateTimeOriginal, "2025:05:27 09:54:16",
-// read as UTC and written with toISOString.
+// The photoDate of test/test.jpg: its DateTimeOriginal, "2025:05:27 09:54:16", read as UTC and written as an
+// ISO timestamp.
 //
 const TEST_JPG_PHOTO_DATE = "2025-05-27T09:54:16.000Z";
 
@@ -118,7 +117,7 @@ fn describeImage(allocator: std.mem.Allocator, filePath: []const u8) ![]const u8
 }
 
 //
-// A file, the content type it is read as, and the metadata TypeScript's getImageMetadata reads from it.
+// A file, the content type it is read as, and the metadata getImageMetadata reads from it.
 //
 const IMetadataCase = struct {
     // The file.
@@ -140,7 +139,7 @@ const IMetadataCase = struct {
     dimensions: ?node_api.media_file_database.IResolution,
 };
 
-test "getImageMetadata reads the metadata TypeScript reads" {
+test "getImageMetadata reads the metadata" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -185,7 +184,7 @@ test "getImageMetadata reads the metadata TypeScript reads" {
             .photoDate = null,
             .dimensions = null,
         },
-        // A file that is not a JPEG makes exif-parser throw, which TypeScript logs and turns into nothing.
+        // A file that is not a JPEG makes the EXIF parser throw, which is logged and turned into nothing.
         .{
             .filePath = "../test/demo-news.yaml",
             .contentType = "image/jpeg",
@@ -206,7 +205,7 @@ test "getImageMetadata reads the metadata TypeScript reads" {
 }
 
 //
-// A file, the content type it is read as, and the details TypeScript's getImageDetails produces for it.
+// A file, the content type it is read as, and the details getImageDetails produces for it.
 //
 const IDetailsCase = struct {
     // The file.
@@ -237,14 +236,14 @@ const IDetailsCase = struct {
     photoDate: ?[]const u8,
 };
 
-test "getImageDetails produces the details and the files TypeScript produces" {
+test "getImageDetails produces the details and the files" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     _ = try test_environment.setupEnvironment(std.testing.io);
 
-    // resizeImage (packages/node-api/src/lib/image.ts) makes the short side minSize and the long side
-    // Math.trunc(long / short * minSize): the display at 1000 and quality 95, the thumbnail at 300 and quality 90
+    // resizeImage makes the short side minSize and the long side
+    // trunc(long / short * minSize): the display at 1000 and quality 95, the thumbnail at 300 and quality 90
     // made from the display, and the micro at 40 and quality 75 made from the thumbnail, each a JPEG resized with
     // -strip, so none keeps any EXIF. None of these files has an Orientation that needs a transformation.
     const cases = [_]IDetailsCase{
@@ -314,7 +313,7 @@ test "getImageDetails produces the details and the files TypeScript produces" {
         const tempDir = try temp_dirs.makeTempDir(allocator, std.testing.io, "image-details");
         defer temp_dirs.removeTempDir(std.testing.io, tempDir);
         var generator: CountingUuidGenerator = .{};
-        const details = try image.getImageDetails(allocator, std.testing.io, expected.filePath, tempDir, expected.contentType, generator.uuidGenerator(), expected.filePath);
+        const details = try image.getImageDetails(allocator, std.testing.io, null, expected.filePath, tempDir, expected.contentType, generator.uuidGenerator(), expected.filePath);
         try std.testing.expectEqual(expected.resolution, details.resolution);
 
         // Image.resize names each file temp_resize_<id>.jpg in the temp directory, and the IDs are generated in the
@@ -336,7 +335,7 @@ test "getImageDetails produces the details and the files TypeScript produces" {
 test "locationJson prints numbers as JSON.stringify does" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    // JSON.stringify({ lat: 91.5, lng: 1e-7 }) in Bun.
+    // The JSON of { lat: 91.5, lng: 1e-7 }.
     const text = try image.locationJson(arena.allocator(), .{
         .lat = 91.5,
         .lng = 1e-7,
@@ -464,7 +463,7 @@ test "getImageDetails turns a photo its Orientation says is on its side, and ign
     console_capture.captureStderr(&stderr_capture.writer);
     defer console_capture.endConsoleCapture();
     var generator: CountingUuidGenerator = .{};
-    const details = try image.getImageDetails(allocator, io, filePath, tempDir, "image/jpeg", generator.uuidGenerator(), filePath);
+    const details = try image.getImageDetails(allocator, io, null, filePath, tempDir, "image/jpeg", generator.uuidGenerator(), filePath);
 
     // Orientation 6 turns the 100x80 photo a quarter turn, into 80x100, before the smaller versions are made from it:
     // the short side is now the width, so each is minSize wide and Math.trunc(100 / 80 * minSize) high.
@@ -501,7 +500,7 @@ test "getImageMetadata writes coordinates that are not numbers as null, and give
     try std.testing.expect(nanMetadata.metadata != null);
     try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), try std.fmt.allocPrint(allocator, "Ignoring out of range GPS coordinates: {{\"lat\":null,\"lng\":null}}, for asset {s}.", .{nanPath})) != null);
 
-    // Numbers are written as JavaScript writes them, so a tiny one takes an exponent.
+    // Numbers are written in their shortest form, so a tiny one takes an exponent.
     const tinyPath = try writeJpegWithExif(allocator, io, tempDir, 1, &.{
         .{ .tag = 0x0002, .tiffType = 5, .count = 3, .value = try rationals(allocator, &.{ .{ 95, 1 }, .{ 0, 1 }, .{ 0, 1 } }) },
         .{ .tag = 0x0004, .tiffType = 5, .count = 3, .value = try rationals(allocator, &.{ .{ 0, 1 }, .{ 0, 1 }, .{ 1, 1000 } }) },

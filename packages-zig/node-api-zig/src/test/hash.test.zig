@@ -257,7 +257,7 @@ test "validateAndHash hashes a valid image" {
     _ = try test_environment.setupEnvironment(io);
     const contents = try test_files.readFile(allocator, io, "../test/test.png");
 
-    const hashed = (try hash.validateAndHash(allocator, io, "../test/test.png", .{ .length = contents.len, .lastModified = 42 }, "image/png", "test.png")).?;
+    const hashed = (try hash.validateAndHash(allocator, io, null, "../test/test.png", .{ .length = contents.len, .lastModified = 42 }, "image/png", "test.png")).?;
 
     var expected: [32]u8 = undefined;
     Sha256.hash(contents, &expected, .{});
@@ -280,5 +280,5 @@ test "validateAndHash returns undefined for a file that fails its validation" {
     defer mutedLog.uninstall();
     const filePath = try writeTestFile(allocator, io, workingDir, "broken.png", "this is not a png");
 
-    try std.testing.expect(try hash.validateAndHash(allocator, io, filePath, .{ .length = 17, .lastModified = 42 }, "image/png", "broken.png") == null);
+    try std.testing.expect(try hash.validateAndHash(allocator, io, null, filePath, .{ .length = 17, .lastModified = 42 }, "image/png", "broken.png") == null);
 }

@@ -35,21 +35,21 @@ fn readConfig(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8) !
 }
 
 //
-// Reads the config file and parses it as the YAML document the TypeScript tests inspect (what writeYaml was handed).
+// Reads the config file and parses it as the YAML document it holds.
 //
 fn readDocument(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8) !std.json.Value {
     return node_utils.yaml.load(allocator, try readConfig(allocator, io, configDir));
 }
 
 //
-// Turns a value into JSON text, for comparing documents (TypeScript: `toEqual`).
+// Turns a value into JSON text, for comparing documents.
 //
 fn toJson(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
     return std.json.Stringify.valueAlloc(allocator, value, .{});
 }
 
 //
-// A mutator that runs a function over the config it is handed (TypeScript: the arrow function the test passes).
+// A mutator that runs a function over the config it is handed.
 //
 const FunctionMutator = struct {
     // The function that changes the config.
@@ -569,7 +569,7 @@ const ThrowingMutator = struct {
     }
 };
 
-test "the names app-config.ts re-exports from app-config-format.ts are available from it" {
+test "the names app-config re-exports from app-config-format are available from it" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

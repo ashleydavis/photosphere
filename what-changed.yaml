@@ -206,6 +206,44 @@ targets:
     platforms:
       - darwin
 
+  # The Photosphere App: its smoke tests on the host and on each phone platform. A change anywhere in Ziggy, in the app, in the shared
+  # packages or in the user interface runs these, so the app can never change without its suite seeing it.
+  - name: test:ziggy
+    paths:
+      - apps/photosphere
+      - apps/photosphere-frontend
+      - apps/photosphere-smoke-tests
+      - packages
+      - packages-zig
+      - build.zig
+      - build.zig.zon
+
+  # The same suite on the Android emulator pool, for the same changes.
+  - name: test:ziggy:and
+    paths:
+      - apps/photosphere
+      - apps/photosphere-frontend
+      - apps/photosphere-smoke-tests
+      - packages
+      - packages-zig
+      - build.zig
+      - build.zig.zon
+    platforms:
+      - linux
+
+  # The same suite on the iOS simulator, for the same changes.
+  - name: test:ziggy:ios
+    paths:
+      - apps/photosphere
+      - apps/photosphere-frontend
+      - apps/photosphere-smoke-tests
+      - packages
+      - packages-zig
+      - build.zig
+      - build.zig.zon
+    platforms:
+      - darwin
+
   # The Zig side of the Ziggy example, kept apart from the TypeScript so that a change to one does not wait on the other:
   # building Ziggy's core and the example's core, and cross-building them for every other platform, and the Zig unit tests.
   - name: compile:zig

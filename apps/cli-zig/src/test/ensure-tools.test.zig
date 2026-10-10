@@ -13,7 +13,7 @@ test "ensureMediaProcessingTools returns when every tool is available" {
     // answer for the rest of the process, so a test that ran before this one and replaced the environment can
     // leave it believing no ImageMagick is installed when one is.
     tools.Image.resetInitialization();
-    const status = try tools.verifyTools(allocator, std.testing.io);
+    const status = try tools.verifyTools(allocator, std.testing.io, null);
     if (!status.allAvailable) {
         std.debug.print("This test needs ImageMagick and ffmpeg installed. Missing: {s}\n", .{try std.mem.join(allocator, ", ", status.missingTools)});
         return error.RequiredToolsMissing;

@@ -11,8 +11,8 @@ const log = &utils.log.log;
 
 //
 // Options for creating the asset server.
-// (Zig: there is no `app` option, which attached the routes to an existing Express application. There is no Express application to
-// attach to; node-api-zig's AssetServerRoutes is what such an application would be given, and without CORS.)
+// There is no option to attach the routes to an existing application: node-api-zig's AssetServerRoutes holds the routes, and
+// this server serves them with the CORS headers, because it owns them.
 //
 pub const IAssetServerOptions = struct {
     // Port to listen on. 0 lets the operating system assign a free port.
@@ -29,8 +29,7 @@ pub const IAssetServerOptions = struct {
 };
 
 //
-// A running asset server, which is what createAssetServer returns (TypeScript: IAssetServerResult, whose `server` is the HTTP server
-// and whose `app` is the Express application).
+// A running asset server, which is what createAssetServer returns.
 //
 pub const AssetServer = struct {
     // Allocates the server and the core. It must be safe to use from many threads.
@@ -64,6 +63,7 @@ pub const AssetServer = struct {
 
 //
 // Creates and starts an asset server on the loopback interface. The allocator must be safe to use from many threads.
+// The port is not optional, so a server cannot be asked for without one.
 //
 pub fn createAssetServer(allocator: std.mem.Allocator, io: std.Io, options: IAssetServerOptions) !*AssetServer {
     // Build the transport-agnostic core that owns the storage cache and serve/write/apply logic.
@@ -71,6 +71,7 @@ pub fn createAssetServer(allocator: std.mem.Allocator, io: std.Io, options: IAss
         .uuidGenerator = options.uuidGenerator,
         .timestampProvider = options.timestampProvider,
         .sessionId = options.sessionId,
+        .hostRequester = null,
     });
     errdefer core.deinit();
 
@@ -90,6 +91,8 @@ pub fn createAssetServer(allocator: std.mem.Allocator, io: std.Io, options: IAss
     // Start server. Port 0 is allowed and means "let the OS assign a free port" (read the actual port back from the server).
     asset_server.server = try HttpServer.listen(allocator, io, asset_server.host, options.port, asset_server.routes.requestHandler());
     asset_server.port = asset_server.server.port;
-    log.info(try std.fmt.allocPrint(allocator, "Asset server running on http://localhost:{d}", .{asset_server.port}));
+    const message = try std.fmt.allocPrint(allocator, "Asset server running on http://localhost:{d}", .{asset_server.port});
+    defer allocator.free(message);
+    log.info(message);
     return asset_server;
 }

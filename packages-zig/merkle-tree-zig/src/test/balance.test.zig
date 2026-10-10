@@ -1,5 +1,5 @@
 //
-// Tests for rotateRight, rotateLeft and rebalanceTree (port of src/test/balance.test.ts).
+// Tests for rotateRight, rotateLeft and rebalanceTree.
 //
 
 const std = @import("std");

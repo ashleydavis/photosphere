@@ -27,7 +27,7 @@ fn makeEntry(allocator: std.mem.Allocator, logicalPath: []const u8, source: Impo
 }
 
 //
-// What each test works in (TypeScript: the beforeEach of the describe block).
+// What each test works in.
 //
 const RecordTest = struct {
     // Holds the test's allocations.
@@ -54,7 +54,7 @@ const RecordTest = struct {
     }
 
     //
-    // Puts the cache directory back the way it was (TypeScript: the afterEach).
+    // Puts the cache directory back the way it was.
     //
     fn deinit(self: *RecordTest) void {
         test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
@@ -231,7 +231,7 @@ test "a record that cannot be written does not fail the import" {
     try test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", blockedRoot);
 
     // The photos are already in the database by this point. Losing the note about them must not
-    // turn a successful import into a failed one. (Zig: recordImports returns nothing, so it cannot fail.)
+    // turn a successful import into a failed one. (recordImports returns nothing, so it cannot fail.)
     recordImports(allocator, io, context.databasePath, &.{try makeEntry(allocator, "one", .manual)});
 
     try std.testing.expect(!test_files.fileExists(io, try getImportRecordPath(allocator, context.databasePath)));

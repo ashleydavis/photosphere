@@ -36,7 +36,7 @@ pub fn registerOpenDatabaseTool(server: *McpServer, toolContext: *IMcpToolContex
 }
 
 //
-// The handler of `open_database` (TypeScript: the arrow function given to registerTool). The database is loaded
+// The handler of `open_database`. The database is loaded
 // with the context's allocator, because it stays open after the call.
 //
 fn openDatabase(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {

@@ -33,7 +33,16 @@ const FeedServer = struct {
     //
     fn start(self: *FeedServer, io: std.Io, status: std.http.Status, body: []const u8) !void {
         const address = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
-        self.* = .{ .io = io, .server = try address.listen(io, .{ .reuse_address = true }), .port = 0, .group = .init, .status = status, .body = body };
+        self.* = .{
+            .io = io,
+            .server = try address.listen(io, .{
+                .reuse_address = true,
+            }),
+            .port = 0,
+            .group = .init,
+            .status = status,
+            .body = body,
+        };
         self.port = self.server.socket.address.getPort();
         try self.group.concurrent(io, serveOne, .{self});
     }
@@ -64,7 +73,12 @@ const FeedServer = struct {
         var request = httpServer.receiveHead() catch {
             return;
         };
-        request.respond(self.body, .{ .status = self.status, .keep_alive = false }) catch {};
+        request.respond(self.body, .{
+            .status = self.status,
+            .keep_alive = false,
+        }) catch |err| {
+            std.debug.panic("The feed server could not answer the request: {s}", .{@errorName(err)});
+        };
     }
 
     //

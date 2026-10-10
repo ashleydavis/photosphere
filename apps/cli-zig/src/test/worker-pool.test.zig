@@ -253,7 +253,7 @@ test "a worker that fails to start is logged and replaced, and its task waits" {
     const allocator = arena.allocator();
 
     // The test UUID generator keeps its counter under TEST_TMP_DIR: below a file, that directory cannot be
-    // created, so generating the session ID of every worker fails (TypeScript: worker.ts throws at startup).
+    // created, so generating the session ID of every worker fails.
     const root = try helpers.makeTempDir(allocator, "worker-pool-start-failure");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const blockingFile = try std.fs.path.join(allocator, &.{ root, "file" });
@@ -414,7 +414,7 @@ test "the timeout message writes the timeout as a template string writes a numbe
     // The pool installs the worker log routing in place of the global log; put the global log back after.
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
-    // `--timeout 0.0000001`: setTimeout waits 1 ms, and the message writes the timeout as JavaScript writes it.
+    // `--timeout 0.0000001`: the timer waits 1 ms, and the message writes the timeout as 1e-7.
     const pool = try WorkerPoolBun.init(std.testing.io, 1, 1e-7, .{});
     defer pool.deinit();
     var collector = Collector.init(allocator);

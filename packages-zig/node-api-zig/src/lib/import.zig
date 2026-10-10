@@ -16,7 +16,7 @@ const IImportOptions = import_assets_worker.IImportOptions;
 
 //
 // Progress callback invoked after each file event during import, receiving the running summary.
-// (Zig: a closure; `function` is called with `context`. The values are only valid during the call.)
+// A closure: `function` is called with `context`. The values are only valid during the call.
 //
 pub const AddPathsProgressCallback = struct {
     // The state of the callback, passed to function.
@@ -27,7 +27,7 @@ pub const AddPathsProgressCallback = struct {
 };
 
 //
-// What the callbacks addPaths registers share (TypeScript: the variables they close over).
+// What the callbacks addPaths registers share.
 //
 const AddPathsState = struct {
     // Allocates the copy of the path being scanned.
@@ -46,12 +46,11 @@ const AddPathsState = struct {
     queue: *TaskQueue,
 
     //
-    // Counts one task message (TypeScript: the arrow function passed to queue.onAnyTaskMessage).
+    // Counts one task message.
     //
     fn onAnyTaskMessage(context: ?*anyopaque, data: ITaskMessageData) anyerror!void {
         const self: *AddPathsState = @ptrCast(@alignCast(context.?));
-        // (Zig: a message that is not an object has no type, as reading a property of a string or number gives
-        // undefined in TypeScript.)
+        // A message that is not an object has no type.
         const message: std.json.ObjectMap = if (data.message == .object) data.message.object else .empty;
         const messageTypeValue = message.get("type") orelse std.json.Value.null;
         const messageType: []const u8 = if (messageTypeValue == .string) messageTypeValue.string else "";
@@ -91,8 +90,7 @@ const AddPathsState = struct {
     }
 
     //
-    // Ctrl-C has to reach the task, not just this process (TypeScript: the arrow function passed to
-    // registerTerminationCallback).
+    // Ctrl-C has to reach the task, not just this process.
     //
     fn shutdownOnTermination(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void {
         _ = io;
@@ -111,8 +109,8 @@ const AddPathsState = struct {
 // between the two is the same code, which is the point of it.
 //
 // Progress is reported via the optional onProgress callback.
-// (Zig: the queue and the state the callbacks share are allocated with the allocator and are never freed, because
-// the termination callback registered here can run at any time until the process exits, as in TypeScript.)
+// The queue and the state the callbacks share are allocated with the allocator and are never freed, because
+// the termination callback registered here can run at any time until the process exits.
 //
 pub fn addPaths(
     allocator: std.mem.Allocator,

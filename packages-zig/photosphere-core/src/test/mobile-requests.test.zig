@@ -19,11 +19,11 @@ test "requestMediaPermission asks the phone and passes its answer on" {
     try expectForwarded(&app, "requestMediaPermission", "null", "{\"granted\":false,\"partial\":true}", "requestMediaPermission", "null");
 }
 
-test "exportFile passes the path to the phone and its answer on, and leaves out the test outcome" {
+test "exportFile passes the path and the staged test outcome to the phone and its answer on" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    try expectForwarded(&app, "exportFile", "{\"path\":\"tmp/photo.jpg\",\"testOutcome\":\"shared\"}", "{\"path\":\"tmp/photo.jpg\"}", "exportFile", "{\"path\":\"tmp/photo.jpg\"}");
+    try expectForwarded(&app, "exportFile", "{\"path\":\"tmp/photo.jpg\",\"testOutcome\":\"shared\"}", "{\"path\":\"tmp/photo.jpg\"}", "exportFile", "{\"path\":\"tmp/photo.jpg\",\"testOutcome\":\"shared\"}");
 }
 
 test "exportFile passes on a cancelled sheet" {
@@ -37,15 +37,56 @@ test "exportFiles passes the paths to the phone and its answer on" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    try expectForwarded(&app, "exportFiles", "{\"paths\":[\"a.jpg\",\"b.jpg\"],\"testOutcome\":\"cancelled\"}", "{\"paths\":[\"a.jpg\",\"b.jpg\"]}", "exportFiles", "{\"paths\":[\"a.jpg\",\"b.jpg\"]}");
+    try expectForwarded(&app, "exportFiles", "{\"paths\":[\"a.jpg\",\"b.jpg\"],\"testOutcome\":\"cancelled\"}", "{\"paths\":[\"a.jpg\",\"b.jpg\"]}", "exportFiles", "{\"paths\":[\"a.jpg\",\"b.jpg\"],\"testOutcome\":\"cancelled\"}");
 }
 
-test "startBackgroundImport and stopBackgroundImport ask the phone and reply null" {
+test "exportTempFolder asks the phone to make the folder and passes the absolute path on" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    try expectForwarded(&app, "startBackgroundImport", "null", "null", "startBackgroundImport", "null");
-    try expectForwarded(&app, "stopBackgroundImport", "null", "null", "stopBackgroundImport", "null");
+    try expectForwarded(&app, "exportTempFolder", "{\"folder\":\".export-tmp/abc\"}", "{\"path\":\"/data/files/.export-tmp/abc\"}", "exportTempFolder", "{\"folder\":\".export-tmp/abc\"}");
+}
+
+test "exportFile refuses a test outcome that is not text" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const reply = try app.requestError("exportFile", "{\"path\":\"a.jpg\",\"testOutcome\":3}");
+    defer std.testing.allocator.free(reply);
+    try std.testing.expectEqualStrings("exportFile needs \"testOutcome\" to be text.", reply);
+    try std.testing.expect(app.last_host_method == null);
+}
+
+test "startBackgroundImport asks the phone for the notification permission first, and fails with the reason when it cannot" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    app.host_answer = "Notifications cannot be asked for here.";
+    app.host_fails = true;
+    const reply = try app.requestError("startBackgroundImport", "null");
+    defer std.testing.allocator.free(reply);
+    try std.testing.expectEqualStrings("Notifications cannot be asked for here.", reply);
+    try std.testing.expectEqualStrings("requestNotificationPermission", app.last_host_method.?);
+}
+
+test "startBackgroundImport refuses a notification answer it cannot read" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    app.host_answer = "{\"allowed\":true}";
+    const reply = try app.requestError("startBackgroundImport", "null");
+    defer std.testing.allocator.free(reply);
+    try std.testing.expectEqualStrings("The phone's answer to requestNotificationPermission could not be read.", reply);
+}
+
+test "stopBackgroundImport with nothing running replies null and asks the phone for nothing" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const reply = try app.requestOk("stopBackgroundImport", "null");
+    defer std.testing.allocator.free(reply);
+    try std.testing.expectEqualStrings("null", reply);
+    try std.testing.expect(app.last_host_method == null);
 }
 
 test "the secure store requests ask the phone's keychain and pass its answers on" {
@@ -105,6 +146,9 @@ test "requests with a field missing are error replies that name the field" {
     const missing_paths = try app.requestError("exportFiles", "{}");
     defer std.testing.allocator.free(missing_paths);
     try std.testing.expectEqualStrings("exportFiles needs \"paths\".", missing_paths);
+    const folder_reply = try app.requestError("exportTempFolder", "{}");
+    defer std.testing.allocator.free(folder_reply);
+    try std.testing.expectEqualStrings("exportTempFolder needs \"folder\".", folder_reply);
     const key_reply = try app.requestError("secureStoreGet", "{}");
     defer std.testing.allocator.free(key_reply);
     try std.testing.expectEqualStrings("secureStoreGet needs \"key\".", key_reply);

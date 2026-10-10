@@ -45,7 +45,7 @@ fn original(comptime assetId: []const u8, hash: []const u8) ITreeFile {
 }
 
 //
-// Sorts asset ids, like `.sort()` on the TypeScript array.
+// Sorts asset ids.
 //
 fn sorted(allocator: std.mem.Allocator, assetIds: []const []const u8) ![]const []const u8 {
     const copy = try allocator.dupe([]const u8, assetIds);

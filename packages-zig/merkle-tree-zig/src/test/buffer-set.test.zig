@@ -1,5 +1,5 @@
 //
-// Tests for BufferSet (port of src/test/buffer-set.test.ts).
+// Tests for BufferSet.
 //
 
 const std = @import("std");
@@ -10,7 +10,7 @@ const BufferSet = merkle_tree_zig.buffer_set.BufferSet;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 //
-// The SHA-256 of a string (TypeScript: `crypto.createHash("sha256").update(text).digest()`).
+// The SHA-256 of a string.
 //
 fn sha256(text: []const u8) [Sha256.digest_length]u8 {
     var digest: [Sha256.digest_length]u8 = undefined;
@@ -152,7 +152,7 @@ test "should iterate over values" {
 }
 
 //
-// Collects the buffers forEach passes (TypeScript: `collected.push(value)`).
+// Collects the buffers forEach passes.
 //
 const BufferCollector = struct {
     // Allocates the list.
@@ -254,7 +254,7 @@ test "should find hash 0034217e5269895c55acc694c6423f3ddb695ecbbb68635d950cee575
     defer arena.deinit();
     var bufferSet = BufferSet.init(arena.allocator());
 
-    // Both have the same TypeScript bucket value (0x6094cf5e) and would be in the same bucket
+    // Both have the same bucket value (0x6094cf5e) and would be in the same bucket
     var hashBuffer: [32]u8 = undefined;
     _ = try std.fmt.hexToBytes(&hashBuffer, "0034217e5269895c55acc694c6423f3ddb695ecbbb68635d950cee57542a4d14");
     var collisionBuffer: [32]u8 = undefined;

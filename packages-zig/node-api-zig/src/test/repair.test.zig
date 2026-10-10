@@ -18,7 +18,7 @@ const repair = node_api.repair.repair;
 const ASSET_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 
 //
-// The generators given to the databases the tests create (TypeScript: TestUuidGenerator and TestTimestampProvider).
+// The generators given to the databases the tests create.
 //
 const Generators = struct {
     // Deterministic uuids.
@@ -29,8 +29,7 @@ const Generators = struct {
 };
 
 //
-// A database created in a temporary directory (TypeScript: createStorage, createMediaFileDatabase and
-// createDatabase in the test).
+// A database created in a temporary directory.
 //
 const TestDatabase = struct {
     // The temporary directory the database is in.

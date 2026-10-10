@@ -20,7 +20,7 @@ fn isPrimitive(value: BsonValue) bool {
 }
 
 //
-// The metadata of a value to be merged (TypeScript: the inline type of MergeValue.metadata).
+// The metadata of a value to be merged.
 //
 pub const MergeValueMetadata = struct {
     //
@@ -51,8 +51,8 @@ pub const MergeValue = struct {
 };
 
 //
-// Reads a number that may be missing (TypeScript: the operand of `??`): null for a missing, undefined or null value.
-// (No TypeScript counterpart.) Throws for a value that is not a number.
+// Reads a number that may be missing: null for a missing, undefined or null value. Throws for a value that is not a
+// number.
 //
 fn optionalNumber(value: ?BsonValue) !?f64 {
     const present = value orelse {
@@ -72,8 +72,7 @@ fn optionalNumber(value: ?BsonValue) !?f64 {
 }
 
 //
-// Reads a number as a condition (TypeScript: `value` in `value || other` or `if (value)`): the number when it is
-// truthy, null when it is missing, zero or NaN. (No TypeScript counterpart.)
+// Reads a number as a condition: the number when it is truthy, null when it is missing, zero or NaN.
 //
 fn truthyNumber(value: ?BsonValue) !?f64 {
     const number = try optionalNumber(value) orelse {
@@ -86,8 +85,8 @@ fn truthyNumber(value: ?BsonValue) !?f64 {
 }
 
 //
-// Reads a metadata object that may be missing (TypeScript: the operand of `?.`): null for a missing, undefined or null
-// value. (No TypeScript counterpart.) Throws for a value that is not an object.
+// Reads a metadata object that may be missing: null for a missing, undefined or null value. Throws for a value that is
+// not an object.
 //
 fn optionalMetadata(value: ?BsonValue) !?Metadata {
     const present = value orelse {
@@ -107,8 +106,7 @@ fn optionalMetadata(value: ?BsonValue) !?Metadata {
 }
 
 //
-// Converts the metadata of a merge value to the Metadata object it is stored as (TypeScript: the metadata object
-// itself). (No TypeScript counterpart.)
+// Converts the metadata of a merge value to the Metadata object it is stored as.
 //
 fn metadataToDocument(allocator: std.mem.Allocator, metadata: MergeValueMetadata) !Metadata {
     return BsonDocument.fromFields(allocator, &.{

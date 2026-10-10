@@ -67,7 +67,7 @@ fn expectStrings(expected: []const []const u8, actual: []const []const u8) !void
 }
 
 //
-// The state each test starts from (TypeScript: the beforeEach of the describe block).
+// The state each test starts from.
 //
 const SourceTest = struct {
     // Holds the test's allocations.

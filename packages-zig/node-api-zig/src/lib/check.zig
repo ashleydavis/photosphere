@@ -41,7 +41,7 @@ pub const CheckPathsProgressCallback = struct {
 };
 
 //
-// What the callbacks checkPaths registers share (TypeScript: the variables they close over).
+// What the callbacks checkPaths registers share.
 //
 const CheckPathsState = struct {
     // Allocates the task data and the parsed task results.
@@ -73,7 +73,6 @@ const CheckPathsState = struct {
 
     //
     // Registers a callback to integrate results as tasks complete.
-    // (TypeScript: the arrow function passed to queue.onTaskComplete.)
     //
     fn onTaskComplete(context: ?*anyopaque, result: ITaskResult) anyerror!void {
         const self: *CheckPathsState = @ptrCast(@alignCast(context.?));
@@ -152,7 +151,7 @@ const CheckPathsState = struct {
     }
 
     //
-    // Queues a check-file task for a scanned file (TypeScript: the first arrow function passed to scanPaths).
+    // Queues a check-file task for a scanned file.
     //
     fn visitFile(context: ?*anyopaque, result: FileScannedResult) anyerror!void {
         const self: *CheckPathsState = @ptrCast(@alignCast(context.?));
@@ -174,7 +173,7 @@ const CheckPathsState = struct {
     }
 
     //
-    // Reports scanning progress (TypeScript: the second arrow function passed to scanPaths).
+    // Reports scanning progress.
     //
     fn onScanProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, state: *const ScannerState) void {
         const self: *CheckPathsState = @ptrCast(@alignCast(context.?));

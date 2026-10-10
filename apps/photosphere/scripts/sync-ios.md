@@ -1,5 +1,13 @@
-# sync-ios.sh
+# sync-ios
 
-Brings the iOS project up to date with the core and the UI. Invoked as `bun run --filter=ziggy sync:ios`.
+Builds Photosphere's page (`bun run bundle:ui`) and puts what the iOS Xcode project needs into a native directory: `lib/libphotosphere.a` and `include/ziggy.h` (built with Zig for iOS 14.0, the simulator or the device). The page is embedded in the library, so the app has no page files of its own.
 
-Builds the UI (`bundle-ui.sh`) and the core as a static library for the iOS targets (`bundle-core.sh`), and copies both into the Xcode project so it is current when opened in Xcode or built by `xcodebuild`. Takes no arguments. Runs on MacOS only.
+Run it on a Mac: `bun run --filter=ziggy sync:ios`.
+
+## Arguments
+
+- `--sdk <simulator|device>`: default: `simulator`. A device build is arm64 only.
+- `--arch <arm64|x86_64>`: default: this Mac's (the simulator runs the Mac's architecture).
+- `--native-dir <dir>`: default: `shells/ios/zig-out`. The library there is for one SDK and architecture, so sync again after changing either.
+- `--test-hooks`: build the library with the test control connection. Never use it for a release.
+- `--optimize <mode>`: default: `ReleaseSafe`.

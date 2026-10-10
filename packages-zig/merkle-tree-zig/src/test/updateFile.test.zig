@@ -1,5 +1,5 @@
 //
-// Tests for updateItem (port of src/test/updateFile.test.ts).
+// Tests for updateItem.
 //
 
 const std = @import("std");

@@ -1,7 +1,7 @@
 //
-// Tests for asset-server.zig (port of src/test/asset-server.test.ts).
+// Tests for asset-server.zig.
 //
-// The TypeScript test replaces the core and the routes with stubs, because it only checks the binding. These run the real ones, which
+// These run the real core and routes, which
 // is also what the second test needs: that the server answers.
 //
 
@@ -38,6 +38,9 @@ const Fixture = struct {
         utils.console.setCapture(&fixture.stdout.writer, &fixture.stderr.writer);
     }
 
+    //
+    // Stops capturing the console.
+    //
     fn deinit(fixture: *Fixture) void {
         _ = fixture;
         utils.console.setCapture(null, null);

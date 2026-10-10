@@ -26,10 +26,10 @@ const openStorage = open_storage.openStorage;
 const computeAssetHash = hash.computeAssetHash;
 
 //
-// The options of a verify-file task (TypeScript: the anonymous `{ full?: boolean }` type).
+// The options of a verify-file task.
 //
 pub const IVerifyFileOptions = struct {
-    // Enables full verification (not used by the handler, like TypeScript).
+    // Enables full verification (not used by the handler).
     full: ?bool = null,
 };
 
@@ -48,7 +48,7 @@ pub const IVerifyFileData = struct {
 };
 
 //
-// The status of a verified file (TypeScript: the "unmodified" | "modified" | "removed" | "new" string union).
+// The status of a verified file.
 //
 pub const VerifyFileStatus = enum {
     // The file is unchanged.
@@ -79,10 +79,9 @@ pub const IVerifyFileResult = struct {
 };
 
 //
-// Converts verify-file task data to the JSON value that is queued. TypeScript posts the objects to Bun workers
-// (structured clone keeps the Buffer and Date); Zig queues JSON, so the leaf's content hash is a hex string and
-// lastModified is milliseconds since the epoch. Only the leaf fields are sent (the leaf has no children).
-// (No TypeScript counterpart.)
+// Converts verify-file task data to the JSON value that is queued. The queue carries JSON, so the leaf's
+// content hash is a hex string and lastModified is milliseconds since the epoch. Only the leaf fields are sent
+// (the leaf has no children).
 //
 pub fn verifyFileDataToJson(allocator: std.mem.Allocator, data: IVerifyFileData) !std.json.Value {
     var node: std.json.ObjectMap = .empty;
@@ -120,7 +119,7 @@ pub fn verifyFileDataToJson(allocator: std.mem.Allocator, data: IVerifyFileData)
 }
 
 //
-// Gets a string property of a JSON object (null when it is absent or not a string). (No TypeScript counterpart.)
+// Gets a string property of a JSON object (null when it is absent or not a string).
 //
 fn jsonString(object: std.json.ObjectMap, key: []const u8) ?[]const u8 {
     const value = object.get(key) orelse {
@@ -133,7 +132,7 @@ fn jsonString(object: std.json.ObjectMap, key: []const u8) ?[]const u8 {
 }
 
 //
-// Gets an integer property of a JSON object (null when it is absent or not an integer). (No TypeScript counterpart.)
+// Gets an integer property of a JSON object (null when it is absent or not an integer).
 //
 fn jsonInteger(object: std.json.ObjectMap, key: []const u8) ?i64 {
     const value = object.get(key) orelse {
@@ -147,7 +146,6 @@ fn jsonInteger(object: std.json.ObjectMap, key: []const u8) ?i64 {
 
 //
 // Gets an object property of a JSON object (an empty object when it is absent or not an object).
-// (No TypeScript counterpart.)
 //
 fn jsonObject(object: std.json.ObjectMap, key: []const u8) std.json.ObjectMap {
     const value = object.get(key) orelse {
@@ -161,7 +159,6 @@ fn jsonObject(object: std.json.ObjectMap, key: []const u8) std.json.ObjectMap {
 
 //
 // Converts the JSON value of a verify-file task back to IVerifyFileData (the reverse of verifyFileDataToJson).
-// (No TypeScript counterpart.)
 //
 pub fn verifyFileDataFromJson(allocator: std.mem.Allocator, value: std.json.Value) !IVerifyFileData {
     const object = switch (value) {
@@ -201,7 +198,7 @@ pub fn verifyFileDataFromJson(allocator: std.mem.Allocator, value: std.json.Valu
 }
 
 //
-// Converts a verify-file result to the JSON value returned as the task output. (No TypeScript counterpart.)
+// Converts a verify-file result to the JSON value returned as the task output.
 //
 pub fn verifyFileResultToJson(allocator: std.mem.Allocator, result: IVerifyFileResult) !std.json.Value {
     const text = try std.json.Stringify.valueAlloc(allocator, result, .{ .emit_null_optional_fields = false });
@@ -209,10 +206,9 @@ pub fn verifyFileResultToJson(allocator: std.mem.Allocator, result: IVerifyFileR
 }
 
 //
-// TODO: always en-US in UTC, where JavaScript uses the machine's time zone and locale.
-//
-// Formats a date like JavaScript's `date.toLocaleString()` in the en-US locale ("M/D/YYYY, h:mm:ss AM"), in UTC
-// (the time zone of the environments psi runs its tests in). (No TypeScript counterpart: a JavaScript built-in.)
+// Formats a date in the en-US locale ("M/D/YYYY, h:mm:ss AM"), in UTC.
+// Zig's standard library has no time zone or locale database, so the machine's own time zone and locale cannot be
+// looked up; the date is always written in UTC (the time zone of the environments the tests run in).
 //
 pub fn toLocaleString(allocator: std.mem.Allocator, epochMilliseconds: i64) ![]const u8 {
     const millisecondsPerDay: i64 = 24 * 60 * 60 * 1000;
@@ -247,10 +243,10 @@ pub fn toLocaleString(allocator: std.mem.Allocator, epochMilliseconds: i64) ![]c
 }
 
 //
-// `async () => computeAssetHash(await storage.readStream(fileName), fileInfo)`.
+// Computes the hash of an asset by streaming it from a storage.
 //
 const ComputeAssetHashOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text retryOnce puts in its timeout message.
     pub const source = "async () => computeAssetHash(await storage.readStream(fileName), fileInfo)";
 
     // Allocates the hash.
@@ -281,16 +277,15 @@ const ComputeAssetHashOperation = struct {
 
 //
 // Handler for verifying a single file
-// (Zig: the task data is the JSON value made by verifyFileDataToJson and the output is an IVerifyFileResult as JSON.)
+// The task data is the JSON value made by verifyFileDataToJson and the output is an IVerifyFileResult as JSON.
 //
 pub fn verifyFileHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
-    _ = context;
     const data = try verifyFileDataFromJson(allocator, taskData);
     const node = data.node;
     const storageDescriptor = data.storageDescriptor;
     const fileName = node.name orelse "";
 
-    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null);
+    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.hostRequester);
     const storage = opened.storage;
 
     var infoOperation: retry_operations.InfoOperation("() => storage.info(fileName)") = .{ .allocator = allocator, .storage = storage, .fileName = fileName };

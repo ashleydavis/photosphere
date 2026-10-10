@@ -1,5 +1,5 @@
-# setup-ios.sh
+# setup-ios
 
-Installs what the iOS build needs. Invoked as `bun run --filter=ziggy setup:ios` (mirrored in the root `package.json`).
+Checks that Xcode 14.2 or newer, `xcrun simctl`, `jq` and `rsync` are present. It installs nothing, and CocoaPods are not used.
 
-Installs the iOS tooling the build needs. Takes no arguments. Runs on MacOS only and skips cleanly elsewhere.
+It is run on a Mac by `bun run --filter=ziggy setup` from the repository root, through [setup.sh](setup.md). It takes no arguments.

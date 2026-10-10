@@ -48,12 +48,10 @@ pub fn fromKeychainName(keychainName: []const u8) []const u8 {
 }
 
 //
-// The outcome of a child process that ran to completion: what the TypeScript code collects from
-// the "data" events of stdout and stderr and the "close" event of a spawned process.
-// This type has no TypeScript counterpart.
+// The outcome of a child process that ran to completion: what it wrote to stdout and stderr and how it exited.
 //
 pub const ISpawnResult = struct {
-    // The exit code, or null when the process was terminated by a signal (Node passes null to "close").
+    // The exit code, or null when the process was terminated by a signal.
     code: ?u8,
 
     // Everything the process wrote to stdout.
@@ -66,8 +64,7 @@ pub const ISpawnResult = struct {
 //
 // A function that spawns a child process with piped stdio, writes `stdinData` (if any) to its stdin,
 // closes stdin and waits for the process to exit.
-// This type has no TypeScript counterpart: it is the type of the spawn function the macOS vault tests replace
-// through setSpawnFunction (the TypeScript tests use jest.spyOn on runCommand for the same reason).
+// This is the type of the spawn function the macOS vault tests replace through setSpawnFunction.
 //
 pub const SpawnFunction = *const fn (allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, stdinData: ?[]const u8) anyerror!ISpawnResult;
 
@@ -79,8 +76,7 @@ var spawn_function: SpawnFunction = spawnChildProcess;
 
 //
 // TEST-ONLY HOOK, pending the user's approval under CLAUDE.md (which bans test-only scaffolding in app code without
-// it). It exists only because the macOS vault runs its tool by the absolute path /usr/bin/security (as the
-// TypeScript vault does), so the macOS vault tests cannot put a stand-in in its place on PATH the way the Linux and
+// it). It exists only because the macOS vault runs its tool by the absolute path /usr/bin/security, so the macOS vault tests cannot put a stand-in in its place on PATH the way the Linux and
 // Windows vault tests do, and on a Mac the real tool would touch the real keychain. It is used only by
 // src/test/macos-keychain-vault.test.zig, and it is not reachable from a program that is not a test program: referring
 // to it there is a compile error, and spawn ignores spawn_function there.
@@ -107,10 +103,8 @@ pub fn spawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8,
 }
 
 //
-// TODO: closes the child's stdin, where the TypeScript runCommand leaves the pipe open.
-//
-// The default SpawnFunction: runs the process with std.process.spawn, inheriting `process.env`.
-// A program that cannot be found fails like Node's spawn ("spawn <cmd> ENOENT").
+// The default SpawnFunction: runs the process with std.process.spawn, inheriting the process environment.
+// A program that cannot be found fails with "spawn <cmd> ENOENT".
 //
 fn spawnChildProcess(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, stdinData: ?[]const u8) anyerror!ISpawnResult {
     var child = std.process.spawn(io, .{
@@ -128,8 +122,7 @@ fn spawnChildProcess(allocator: std.mem.Allocator, io: std.Io, args: []const []c
     defer child.kill(io);
 
     if (stdinData) |data| {
-        // TypeScript attaches no error listener to child.stdin, so a failed write (EPIPE when the child exits
-        // without reading its input) is not ignored there either: it fails the command.
+        // A failed write (EPIPE when the child exits without reading its input) is not ignored: it fails the command.
         try child.stdin.?.writeStreamingAll(io, data);
     }
     child.stdin.?.close(io);

@@ -1,6 +1,6 @@
 //
-// Leaf order for every insertion order (port of src/test/sorted-leaf-order.test.ts).
-// (Zig: TypeScript generates one test per permutation; here one test checks all of them.)
+// Leaf order for every insertion order.
+// (One test checks all of the permutations.)
 //
 
 const std = @import("std");
@@ -89,7 +89,7 @@ test "permutation N should maintain sorted leaf order" {
     }
 }
 
-test "summary: documents overall behavior of leaf node ordering" {
+test "documents overall behavior of leaf node ordering" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

@@ -6,7 +6,7 @@ const errors = utils.errors;
 // A Map implementation that uses Buffers as keys.
 // Optimized for SHA-256 hashes (32 bytes).
 //
-// Similar to how Map relates to Set in JavaScript,
+// Similar to how a map relates to a set,
 // BufferMap relates to BufferSet - storing key-value pairs
 // where keys are Buffers.
 //
@@ -17,12 +17,12 @@ pub fn BufferMap(comptime V: type) type {
         // Allocates the buckets.
         allocator: std.mem.Allocator,
 
-        // The [key, value] pairs in buckets keyed by the numeric hash of the key (TypeScript:
-        // `Map<number, Array<[Buffer, V]>>`; the array hash map iterates in insertion order like a JavaScript Map).
+        // The [key, value] pairs in buckets keyed by the numeric hash of the key (the array hash map iterates in
+        // insertion order).
         _map: std.AutoArrayHashMapUnmanaged(u32, std.ArrayList(Entry)),
 
         //
-        // Creates an empty map (TypeScript: the constructor).
+        // Creates an empty map.
         //
         pub fn init(allocator: std.mem.Allocator) Self {
             return .{ .allocator = allocator, ._map = .empty };
@@ -50,8 +50,6 @@ pub fn BufferMap(comptime V: type) type {
 
         //
         // Returns the index of the entry in a bucket whose key has the same content, or null when there is none.
-        // (Zig: stands in for the JavaScript array methods `bucket.findIndex(([k]) => k.equals(key))`
-        // and `bucket.find(...)`.)
         //
         fn findEntryIndex(bucket: []const Entry, key: []const u8) ?usize {
             for (bucket, 0..) |entry, index| {
@@ -142,7 +140,7 @@ pub fn BufferMap(comptime V: type) type {
         }
 
         //
-        // Returns the number of entries (TypeScript: the `size` getter).
+        // Returns the number of entries.
         //
         pub fn size(self: *const Self) usize {
             var total: usize = 0;
@@ -181,7 +179,7 @@ pub fn BufferMap(comptime V: type) type {
         }
 
         //
-        // Iterates the [key, value] pairs (TypeScript: `entries()`, also what `for...of` iterates).
+        // Iterates the [key, value] pairs.
         //
         pub fn entries(self: *const Self) EntryIterator {
             return .{
@@ -259,7 +257,7 @@ pub fn BufferMap(comptime V: type) type {
         };
 
         //
-        // One [key, value] pair of the map (TypeScript: `[Buffer, V]`).
+        // One [key, value] pair of the map.
         //
         pub const Entry = struct {
             // The key.

@@ -36,7 +36,7 @@ pub const IHashCacheToolOptions = struct {
 
 //
 // Loads a database's hash cache, ready to be read or written.
-// (Zig: the cache is created with the allocator and lives until the process exits.)
+// The cache is created with the allocator and lives until the process exits.
 //
 fn openHashCache(allocator: std.mem.Allocator, io: std.Io, options: IHashCacheToolOptions) !*HashCache {
     const hashCache = try allocator.create(HashCache);
@@ -46,10 +46,9 @@ fn openHashCache(allocator: std.mem.Allocator, io: std.Io, options: IHashCacheTo
 }
 
 //
-// Computes the SHA-256 hash of a file (TypeScript: `computeHash(createReadStream(filePath))`).
-// A missing file fails the way Bun's createReadStream does: the path in the message is resolved against the
+// Computes the SHA-256 hash of a file.
+// A missing file fails with the path in the message resolved against the
 // cwd, and the error has no stack, so it is logged as its message alone.
-// (No TypeScript counterpart: TypeScript hashes inline.)
 //
 fn hashFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) ![]const u8 {
     return computeFileHash(allocator, io, filePath, null) catch |err| {
@@ -63,9 +62,8 @@ fn hashFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) ![]c
 }
 
 //
-// Node's `Buffer.from(text, 'hex')`: pairs of hex digits are decoded until the first pair that is not hex, where
-// Node stops instead of failing, and a trailing odd digit is ignored.
-// (No TypeScript counterpart: the TypeScript code calls Node's Buffer.)
+// Decodes hex text to bytes: pairs of hex digits are decoded until the first pair that is not hex, where
+// decoding stops instead of failing, and a trailing odd digit is ignored.
 //
 pub fn bufferFromHex(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
     var bytes: std.ArrayList(u8) = .empty;
@@ -83,9 +81,8 @@ pub fn bufferFromHex(allocator: std.mem.Allocator, text: []const u8) ![]const u8
 }
 
 //
-// The length as Node's `buf.writeUIntLE(parseInt(length, 10), offset, 6)` stores it: NaN is written as 0, and a
-// negative number or one of 2 ** 48 or more is out of range, with the number printed as JavaScript prints it.
-// (No TypeScript counterpart: the hash cache takes the JavaScript number.)
+// The length as the hash cache stores it in 6 little-endian bytes: NaN is written as 0, and a
+// negative number or one of 2 ** 48 or more is out of range, with the number printed in its shortest decimal form.
 //
 pub fn cachedLength(length: f64) !u64 {
     if (std.math.isNan(length)) {
@@ -124,7 +121,7 @@ pub fn hashCacheAddCommand(allocator: std.mem.Allocator, io: std.Io, filePath: [
     };
 
     const hashCache = try openHashCache(allocator, io, options);
-    // (Zig: fileStat.mtime is a JavaScript Date, whole milliseconds truncated towards zero.)
+    // The modification time is kept as whole milliseconds, truncated towards zero.
     try hashCache.addHash(filePath, .{
         .hash = hash,
         .length = fileStat.size,

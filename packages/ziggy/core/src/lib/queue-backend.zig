@@ -1,16 +1,16 @@
 //
-// The queue backend of Ziggy: the IQueueBackend that code written against task-queue-zig (the port of the task-queue package) talks to,
-// backed by Ziggy's task runner. It is what WorkerPoolElectronMain is to the Electron app. The runner owns the threads, the one queue (an interactive
+// The queue backend of Ziggy: the IQueueBackend that code written against task-queue-zig talks to,
+// backed by Ziggy's task runner. The runner owns the threads, the one queue (an interactive
 // task at the head, a background task at the end), cancellation by source and the pool and child task limits the platform layer
-// sets. This file owns what the TypeScript pool owns besides those: the callbacks (onTaskAdded, onTaskComplete, onTaskMessage,
+// sets. This file owns what the runner does not: the callbacks (onTaskAdded, onTaskComplete, onTaskMessage,
 // onAnyTaskMessage, onTasksCancelled) that TaskQueue is built on, and the context a handler runs with.
 //
-// A handler an app registers with task-queue-zig's registry (`worker.registerHandler`, as the TypeScript workers register theirs) runs on the
+// A handler an app registers with task-queue-zig's registry (`worker.registerHandler`) runs on the
 // runner through `fallbackHandler`, for a task type the app has no entry of its own for. It gets the ITaskContext of task-queue-zig.
 // Ziggy depends on task-queue-zig and utils-zig, which are shared packages, and on nothing of any app.
 //
-// (Zig: a task a handler queues through TaskQueue reaches `addTask` here on the handler's thread, and the runner tells which task is
-// running on that thread, which is how the child takes its parent's priority where the Electron pool asks the worker. The callbacks are
+// (A task a handler queues through TaskQueue reaches `addTask` here on the handler's thread, and the runner tells which task is
+// running on that thread, which is how the child takes its parent's priority. The callbacks are
 // invoked on the thread that ended the task or sent the message, with the backend's lock held, as the contract in task-queue-zig's
 // queue-backend.zig says.)
 //
@@ -174,10 +174,16 @@ pub const ZiggyQueueBackend = struct {
         .shutdown = shutdownErased,
     };
 
+    //
+    // Takes the lock that guards the callbacks.
+    //
     fn lock(self: *ZiggyQueueBackend) void {
         self.mutex.lockUncancelable(self.io);
     }
 
+    //
+    // Releases the lock that guards the callbacks.
+    //
     fn unlock(self: *ZiggyQueueBackend) void {
         self.mutex.unlock(self.io);
     }
@@ -185,7 +191,7 @@ pub const ZiggyQueueBackend = struct {
     //
     // Adds a task to the runner and returns its id (allocated with the allocator). The callbacks registered for the source are told
     // before the task can start. A task a running task queues runs at the priority it asked for, or at the priority of the task that
-    // queued it, or at the default (background) when nothing queued it: the Electron pool's addTaskWithParent.
+    // queued it, or at the default (background) when nothing queued it.
     //
     pub fn addTask(self: *ZiggyQueueBackend, allocator: std.mem.Allocator, io: std.Io, @"type": []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8, priority: ?TaskPriority) ![]const u8 {
         const id = if (taskId) |given| try allocator.dupe(u8, given) else try self.uuid_generator.generate(allocator, io);
@@ -298,7 +304,7 @@ pub const ZiggyQueueBackend = struct {
 
     //
     // Drops the queued tasks with the given source, tells the running ones to stop, and fires the callbacks registered for the source.
-    // (The page is told of each queued task that was dropped, as a cancelled completion, which the Electron pool did not do.)
+    // (The page is told of each queued task that was dropped, as a cancelled completion.)
     //
     pub fn cancelTasks(self: *ZiggyQueueBackend, source: []const u8) void {
         self.runner.cancelSource(source);
@@ -319,8 +325,8 @@ pub const ZiggyQueueBackend = struct {
     }
 
     //
-    // A task ended: tells the completion callbacks, as the Electron pool does when a worker reports a task completed. A task that was
-    // cancelled while it waited never reached a worker, and the Electron pool dropped it without a word, so it is not reported.
+    // A task ended: tells the completion callbacks. A task that was
+    // cancelled while it waited never reached a worker, so it is not reported.
     //
     pub fn taskEnded(self: *ZiggyQueueBackend, end: ziggy_types.TaskEnd) void {
         if (!end.started) {
@@ -403,41 +409,65 @@ pub const ZiggyQueueBackend = struct {
         }
     }
 
+    //
+    // The IQueueBackend addTask of this backend.
+    //
     fn addTaskErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, @"type": []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8, priority: ?TaskPriority) anyerror![]const u8 {
         const self: *ZiggyQueueBackend = @ptrCast(@alignCast(ptr));
         return self.addTask(allocator, io, @"type", data, source, taskId, priority);
     }
 
+    //
+    // The IQueueBackend onTaskAdded of this backend.
+    //
     fn onTaskAddedErased(ptr: *anyopaque, source: []const u8, callback: TaskAddedCallback) anyerror!UnsubscribeFn {
         const self: *ZiggyQueueBackend = @ptrCast(@alignCast(ptr));
         return self.onTaskAdded(source, callback);
     }
 
+    //
+    // The IQueueBackend onTaskComplete of this backend.
+    //
     fn onTaskCompleteErased(ptr: *anyopaque, callback: WorkerTaskCompletionCallback) anyerror!UnsubscribeFn {
         const self: *ZiggyQueueBackend = @ptrCast(@alignCast(ptr));
         return self.onTaskComplete(callback);
     }
 
+    //
+    // The IQueueBackend onTaskMessage of this backend.
+    //
     fn onTaskMessageErased(ptr: *anyopaque, messageType: []const u8, callback: TaskMessageCallback) anyerror!UnsubscribeFn {
         const self: *ZiggyQueueBackend = @ptrCast(@alignCast(ptr));
         return self.onTaskMessage(messageType, callback);
     }
 
+    //
+    // The IQueueBackend onAnyTaskMessage of this backend.
+    //
     fn onAnyTaskMessageErased(ptr: *anyopaque, callback: TaskMessageCallback) anyerror!UnsubscribeFn {
         const self: *ZiggyQueueBackend = @ptrCast(@alignCast(ptr));
         return self.onAnyTaskMessage(callback);
     }
 
+    //
+    // The IQueueBackend cancelTasks of this backend.
+    //
     fn cancelTasksErased(ptr: *anyopaque, source: []const u8) void {
         const self: *ZiggyQueueBackend = @ptrCast(@alignCast(ptr));
         self.cancelTasks(source);
     }
 
+    //
+    // The IQueueBackend onTasksCancelled of this backend.
+    //
     fn onTasksCancelledErased(ptr: *anyopaque, source: []const u8, callback: TasksCancelledCallback) anyerror!UnsubscribeFn {
         const self: *ZiggyQueueBackend = @ptrCast(@alignCast(ptr));
         return self.onTasksCancelled(source, callback);
     }
 
+    //
+    // The IQueueBackend shutdown of this backend.
+    //
     fn shutdownErased(ptr: *anyopaque) void {
         const self: *ZiggyQueueBackend = @ptrCast(@alignCast(ptr));
         self.shutdown();
@@ -504,12 +534,14 @@ fn runRegisteredHandler(user_data: ?*anyopaque, context: *TaskContext, data: std
     var bridge: ContextBridge = .{
         .context = context,
     };
+    var host_requester_storage: task_runner.TaskHostRequester = undefined;
     const task_context: ITaskContext = .{
         .uuidGenerator = backend.uuid_generator.uuidGenerator(),
         .timestampProvider = backend.timestamp_provider.timestampProvider(),
         .sessionId = backend.session_id,
         .taskId = context.taskId(),
         .maxConcurrentChildTasks = context.maxConcurrentChildTasks(),
+        .hostRequester = context.hostRequester(&host_requester_storage),
         .ptr = &bridge,
         .vtable = &ContextBridge.vtable,
     };

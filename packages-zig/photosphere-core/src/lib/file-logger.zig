@@ -1,13 +1,12 @@
 //
-// The log of the desktop app: a port of apps/desktop/src/lib/file-logger-electron.ts and of the message a worker sends to it
-// (worker-log-electron.ts, IWorkerLogMessage). It writes every log line to a log file, and every error, exception and warning
-// to a second file that is only ever written to for those, as the Electron one does.
+// The log of the desktop app, and the message a worker sends to it (WorkerLogMessage). It writes every log line to a log
+// file, and every error, exception and warning to a second file that is only ever written to for those.
 //
-// Writes are queued in memory and a thread appends them to the file, as the TypeScript queues them and awaits fs.appendFile, so a
-// call to log never waits for the disk. There is one queue and one thread for each of the two files.
+// Writes are queued in memory and a thread appends them to the file, so a call to log never waits for the disk. There is
+// one queue and one thread for each of the two files.
 //
-// Where the TypeScript uses an Electron or Node call, this takes the value as a parameter of init: the directory to log in (the
-// TypeScript derives it from PHOTOSPHERE_LOG_DIR or the operating system's temporary directory) and the app's version.
+// The caller passes the directory to log in and the app's version as parameters of init, because this file has no way
+// to find them out itself.
 //
 // How it is created: `const file_logger = try FileLogger.init(allocator, io, logs_dir, app_version);` then
 // `utils.log.setLog(file_logger.ilog());`. At shutdown call `try file_logger.close();` (which writes the footers and waits for the
@@ -120,10 +119,10 @@ pub const FileLogger = struct {
     //
     // Creates the logs directory if it is not there, and the log file and the error log file in it, with their headers. The names
     // are photosphere-<start time>.log and photosphere-<start time>-errors.log. The headers carry the system information and the
-    // versions of the tools the app uses, as the Electron log's do, where the Node, Electron and Chrome versions are the version
-    // of Zig this was built with and `app_version`. Nothing is rotated or cleaned up: the TypeScript does not do that either.
+    // versions of the tools the app uses, and the version of Zig this was built with and `app_version`. Nothing is rotated or
+    // cleaned up. `tool_runner` runs ImageMagick, ffmpeg and ffprobe in the app's process when it is not null, and null starts the programs.
     //
-    pub fn init(allocator: std.mem.Allocator, io: std.Io, logs_dir: []const u8, app_version: []const u8) !*FileLogger {
+    pub fn init(allocator: std.mem.Allocator, io: std.Io, tool_runner: ?node_utils.in_process_tools.InProcessRunner, logs_dir: []const u8, app_version: []const u8) !*FileLogger {
         const start_ms = std.Io.Clock.real.now(io).toMilliseconds();
         try node_utils.fs.ensureDir(io, logs_dir);
         const start_iso = try (utils.timestamp_provider.Date{ .epochMilliseconds = start_ms }).toISOString(allocator);
@@ -172,7 +171,7 @@ pub const FileLogger = struct {
         defer arena_state.deinit();
         const arena = arena_state.allocator();
         const system_information = try buildSystemInformation(arena, io, app_version);
-        const tool_versions = try buildToolVersions(arena, io);
+        const tool_versions = try buildToolVersions(arena, io, tool_runner);
         const header = try std.mem.join(arena, "\n", &.{
             rule_line,
             "Photosphere Desktop Log",
@@ -357,8 +356,8 @@ pub const FileLogger = struct {
     }
 
     //
-    // Logs a message sent from a worker or from the page, with the name of where it came from, as the TypeScript's
-    // handleWorkerLogMessage does. The tool level with no tool data logs nothing.
+    // Logs a message sent from a worker or from the page, with the name of where it came from. The tool level with no tool
+    // data logs nothing.
     //
     pub fn handleWorkerLogMessage(self: *FileLogger, message: WorkerLogMessage, source: []const u8) !void {
         switch (message.level) {
@@ -366,7 +365,7 @@ pub const FileLogger = struct {
             .verbose => try self.writeToFile("verbose", message.message, source),
             .@"error" => try self.logError(message.message, source),
             .exception => {
-                // The TypeScript tests the error text for truthiness, so an empty text counts as none.
+                // An empty error text counts as none.
                 var error_text: ?[]const u8 = null;
                 if (message.@"error") |text| {
                     if (text.len > 0) {
@@ -478,8 +477,8 @@ pub const FileLogger = struct {
     }
 
     //
-    // The writing thread: appends what is queued to the file until the queue is empty. A failed write drops that batch (as the
-    // TypeScript's does) and is reported on the console, where the TypeScript ignores it.
+    // The writing thread: appends what is queued to the file until the queue is empty. A failed write drops that batch
+    // and is reported on the console.
     //
     fn drainQueue(self: *FileLogger, queue: *WriteQueue) void {
         while (true) {
@@ -627,7 +626,7 @@ pub const FileLogger = struct {
     }
 
     //
-    // ILog.exception: the message and the error's cause chain, which stands where the TypeScript writes "Stack trace: ".
+    // ILog.exception: the message and the error's cause chain.
     //
     fn vtableException(ptr: *anyopaque, message: []const u8, err: anyerror) void {
         const self: *FileLogger = @ptrCast(@alignCast(ptr));
@@ -701,9 +700,9 @@ pub const FileLogger = struct {
     //
     // ILog.getLogDetails: the path of the log file and its header, read from the file on demand, not cached. The header is
     // everything up to and including the "--- Log Start ---" line, or the first 50 lines when there is no such line. Only the start of
-    // the file is read (the TypeScript reads all of it), which gives the same answer unless the marker is after the read limit
+    // the file is read, which gives the same answer as reading all of it unless the marker is after the read limit
     // or a file with no marker is longer than it. The marker is written first, when the log is created, so neither happens to a
-    // log this logger made. A log file that cannot be read is an error, as it is in the TypeScript.
+    // log this logger made. A log file that cannot be read is an error.
     //
     fn vtableGetLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!ILogDetails {
         const self: *FileLogger = @ptrCast(@alignCast(ptr));
@@ -757,9 +756,8 @@ fn reportLoggingFailure(what: []const u8, err: anyerror) void {
 }
 
 //
-// The "--- System Information ---" lines of a header. The TypeScript's Node, Electron and Chrome version lines do not exist here, so
-// the version of Zig and the version of the app stand where they are. The platform and architecture names are the ones Node's
-// os.platform() and os.arch() give.
+// The "--- System Information ---" lines of a header: the version of Zig and the version of the app, and the platform and
+// architecture names.
 //
 fn buildSystemInformation(arena: std.mem.Allocator, io: std.Io, app_version: []const u8) ![]const u8 {
     _ = io;
@@ -792,12 +790,12 @@ fn buildSystemInformation(arena: std.mem.Allocator, io: std.Io, app_version: []c
 
 //
 // The "--- Tool Versions ---" lines of a header: ImageMagick, FFmpeg and FFprobe. Where the version or the kind of ImageMagick is
-// not known the line says "unknown", where the TypeScript would print "undefined". The Zig checks of FFmpeg and FFprobe cannot
+// not known the line says "unknown". The checks of FFmpeg and FFprobe cannot
 // fail, they report the tool as not available, so the "error checking version" line exists for ImageMagick only.
 //
-fn buildToolVersions(arena: std.mem.Allocator, io: std.Io) ![]const u8 {
+fn buildToolVersions(arena: std.mem.Allocator, io: std.Io, tool_runner: ?node_utils.in_process_tools.InProcessRunner) ![]const u8 {
     const image_magick_line = blk: {
-        const status = tools.Image.verifyImageMagick(arena, io) catch {
+        const status = tools.Image.verifyImageMagick(arena, io, tool_runner) catch {
             break :blk "ImageMagick: error checking version";
         };
         if (!status.available) {
@@ -808,12 +806,12 @@ fn buildToolVersions(arena: std.mem.Allocator, io: std.Io) ![]const u8 {
             if (status.@"type") |image_magick_type| @tagName(image_magick_type) else "unknown",
         });
     };
-    const ffmpeg_status = tools.Video.verifyFfmpeg(arena, io);
+    const ffmpeg_status = tools.Video.verifyFfmpeg(arena, io, tool_runner);
     const ffmpeg_line = if (ffmpeg_status.available)
         try std.fmt.allocPrint(arena, "FFmpeg: {s}", .{ffmpeg_status.version orelse "unknown"})
     else
         "FFmpeg: not found";
-    const ffprobe_status = tools.Video.verifyFfprobe(arena, io);
+    const ffprobe_status = tools.Video.verifyFfprobe(arena, io, tool_runner);
     const ffprobe_line = if (ffprobe_status.available)
         try std.fmt.allocPrint(arena, "FFprobe: {s}", .{ffprobe_status.version orelse "unknown"})
     else

@@ -98,7 +98,7 @@ pub fn build(context: *const aws_sdk.Context, dependency: *std.Build.Dependency,
         module.addCMacro("S2N_CPUID_AVAILABLE", "1");
     }
     // The S2N_STACKTRACE option is on, and stays on only where S2N_EXECINFO_AVAILABLE (glibc and macOS).
-    if (!context.isMusl) {
+    if (!context.isMusl and !context.isAndroid) {
         module.addCMacro("S2N_EXECINFO_AVAILABLE", "1");
         module.addCMacro("S2N_STACKTRACE", "1");
     }
@@ -121,7 +121,8 @@ pub fn build(context: *const aws_sdk.Context, dependency: *std.Build.Dependency,
     });
     // OS_LIBS and m: on Apple `c Threads::Threads` (Threads::Threads is empty on macOS, whose C library has the
     // pthread functions), elsewhere `Threads::Threads dl rt`.
-    const system_libraries: []const []const u8 = if (context.isMacos) &.{ "c", "m" } else &.{ "pthread", "dl", "rt", "m" };
+    // On Android `Threads::Threads dl` and m, which bionic holds itself.
+    const system_libraries: []const []const u8 = if (context.isMacos) &.{ "c", "m" } else if (context.isAndroid) &.{} else &.{ "pthread", "dl", "rt", "m" };
     for (system_libraries) |system_library| {
         module.linkSystemLibrary(system_library, .{});
     }

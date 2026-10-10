@@ -17,7 +17,7 @@ const join = node_utils.path.join;
 const CURRENT_DATABASE_VERSION = merkle_tree.merkle_tree.CURRENT_DATABASE_VERSION;
 
 //
-// Formats a message into the allocator (TypeScript: a template literal).
+// Formats a message into the allocator.
 //
 fn text(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) ![]const u8 {
     return std.fmt.allocPrint(allocator, fmt, args);
@@ -49,11 +49,11 @@ pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io) !void {
     }
 
     // Get tool versions
-    const toolsStatus = try verifyTools(allocator, io);
+    const toolsStatus = try verifyTools(allocator, io, null);
 
     // Get ImageMagick type to display the correct name
     // Initialize ImageMagick first to ensure we have the correct type
-    _ = try Image.verifyImageMagick(allocator, io);
+    _ = try Image.verifyImageMagick(allocator, io, null);
     const imageMagickType = Image.getImageMagickType();
     var imageMagickName: []const u8 = "ImageMagick";
 

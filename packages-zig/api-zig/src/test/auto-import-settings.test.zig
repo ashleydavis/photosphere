@@ -9,14 +9,14 @@ const normaliseAutoImportSource = auto_import_settings.normaliseAutoImportSource
 const autoImportSettingsToJson = auto_import_settings.autoImportSettingsToJson;
 
 //
-// Parses a JSON literal (TypeScript: the object literal the test passes).
+// Parses a JSON literal.
 //
 fn parseJson(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
 }
 
 //
-// Asserts that two sources are equal (TypeScript: `toEqual`).
+// Asserts that two sources are equal.
 //
 fn expectSource(expected: IAutoImportSource, actual: IAutoImportSource) !void {
     try std.testing.expectEqualStrings(expected.sourceType(), actual.sourceType());
@@ -32,7 +32,7 @@ fn expectSource(expected: IAutoImportSource, actual: IAutoImportSource) !void {
 }
 
 //
-// Asserts that two lists of sources are equal (TypeScript: `toEqual`).
+// Asserts that two lists of sources are equal.
 //
 fn expectSources(expected: []const IAutoImportSource, actual: []const IAutoImportSource) !void {
     try std.testing.expectEqual(expected.len, actual.len);
@@ -42,7 +42,7 @@ fn expectSources(expected: []const IAutoImportSource, actual: []const IAutoImpor
 }
 
 //
-// Asserts that two settings are equal (TypeScript: `toEqual`).
+// Asserts that two settings are equal.
 //
 fn expectSettings(expected: IAutoImportSettings, actual: IAutoImportSettings) !void {
     try std.testing.expectEqual(expected.enabled, actual.enabled);
@@ -108,7 +108,7 @@ test "drops malformed sources and keeps the good ones" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // (JSON has no undefined: the TypeScript list ends with null and undefined, and JSON has only null.)
+    // (JSON has no undefined, so the list ends with a null.)
     const stored = try parseJson(allocator,
         \\{
         \\    "sources": [

@@ -1,6 +1,5 @@
 //
-// Integration tests of CloudStorage against a real S3 server (port of packages/storage/integration-tests/
-// cloud-storage.test.ts). They are not part of the unit tests: `zig build test-integration` runs them, and the
+// Integration tests of CloudStorage against a real S3 server. They are not part of the unit tests: `zig build test-integration` runs them, and the
 // smoke test apps/cli/smoke-tests-zig/75-s3-storage-api runs that against a local S3 emulator.
 //
 // These tests require AWS credentials and an S3 bucket to run.
@@ -11,9 +10,8 @@
 // AWS_ENDPOINT=your_endpoint (optional, for S3-compatible services)
 // TEST_S3_BUCKET=your_test_bucket_name
 //
-// (Zig: the TypeScript's describe blocks are the prefixes of the test names. The concurrent lock attempts the
-// TypeScript starts through setImmediate, process.nextTick, setTimeout and promise chains run here on threads of
-// their own, each through the one shared storage, as the TypeScript's all go through its one storage.)
+// The groups of tests are the prefixes of the test names. The concurrent lock attempts run on threads of their own,
+// each through the one shared storage.
 //
 
 const std = @import("std");
@@ -30,19 +28,19 @@ const Date = utils.timestamp_provider.Date;
 const process_allocator = std.heap.smp_allocator;
 
 //
-// The storage every test uses (TypeScript: `storage`, created in beforeAll). Held here, never moved, because a
+// The storage every test uses, created once by setUp. Held here, never moved, because a
 // CloudStorage must not move once it has been used.
 //
 var shared_storage: CloudStorage = undefined;
 
 //
-// `<bucket>/<test prefix>`, the root every test writes under (TypeScript: `location`). Null until setUp has run.
+// `<bucket>/<test prefix>`, the root every test writes under. Null until setUp has run.
 //
 var shared_location: ?[]const u8 = null;
 
 //
-// The TypeScript's beforeAll: checks the environment and creates the storage, once per test binary. The prefix
-// is unique to this run (TypeScript: `test-${Date.now()}-${random}`), so runs never see each other's files.
+// Checks the environment and creates the storage, once per test binary. The prefix
+// is unique to this run (the time and a random number), so runs never see each other's files.
 //
 fn setUp() ![]const u8 {
     if (shared_location) |location| {
@@ -80,14 +78,14 @@ fn pathOf(allocator: std.mem.Allocator, parts: []const []const u8) ![]const u8 {
 }
 
 //
-// The current time in milliseconds (TypeScript: `Date.now()`).
+// The current time in milliseconds.
 //
 fn nowMilliseconds() i64 {
     return std.Io.Clock.real.now(std.testing.io).toMilliseconds();
 }
 
 //
-// Sorts names in place, in byte order (TypeScript: `.sort()` on ASCII names).
+// Sorts names in place, in byte order.
 //
 fn sortNames(names: [][]const u8) void {
     std.mem.sort([]const u8, names, {}, struct {
@@ -325,7 +323,7 @@ const owner1 = "user-123";
 const owner2 = "user-456";
 
 //
-// A lock file of its own for each test (TypeScript: `getLockFile`).
+// A lock file of its own for each test.
 //
 fn getLockFile(allocator: std.mem.Allocator, location: []const u8, testName: []const u8, lockNum: u32) ![]const u8 {
     return std.fmt.allocPrint(allocator, "{s}/write-locks/{s}/lock-{d}.lock", .{ location, testName, lockNum });
@@ -407,8 +405,7 @@ const ILockAttempt = struct {
 
 //
 // One concurrent attempt to take a lock, run on a thread of its own: waits the given number of microseconds,
-// then tries. An error counts as not taking the lock (TypeScript's repeated race test does the same; in the
-// others an error rejects the whole Promise.all, which the expectation below fails on too).
+// then tries. An error counts as not taking the lock.
 //
 fn attemptLock(result: *ILockAttempt, lockFile: []const u8, delayMicroseconds: i64) void {
     var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
@@ -715,7 +712,7 @@ test "CloudStorage Tests Path Handling should handle various path formats correc
     }
 }
 
-// Zig: what the TypeScript suite leaves untested
+// Tests of behaviour the groups above do not cover.
 
 //
 // The bucket of the suite's location (the part before the first "/").

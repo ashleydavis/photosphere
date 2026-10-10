@@ -48,8 +48,7 @@ pub const IConsolidateProgressMessage = struct {
 };
 
 //
-// Sends a consolidate-progress task message (TypeScript: the `(pushed, total) => { ... }` arrow function in
-// consolidateDatabaseHandler, which captures context).
+// Sends a consolidate-progress task message, using the task context it holds.
 //
 const ProgressMessageSender = struct {
     // The task context used to send the message.
@@ -67,11 +66,11 @@ const ProgressMessageSender = struct {
             .pushed = pushed,
             .total = total,
         };
-        const text = std.json.Stringify.valueAlloc(allocator, message, .{}) catch {
-            return;
+        const text = std.json.Stringify.valueAlloc(allocator, message, .{}) catch |err| {
+            std.debug.panic("The consolidate-progress message could not be written: {s}", .{@errorName(err)});
         };
-        const value = std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{}) catch {
-            return;
+        const value = std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{}) catch |err| {
+            std.debug.panic("The consolidate-progress message could not be read back: {s}", .{@errorName(err)});
         };
         self.context.sendMessage(value);
     }
@@ -79,10 +78,11 @@ const ProgressMessageSender = struct {
 
 //
 // Converts a JSON-serializable value to the JSON value a task handler returns or passes on.
-// (No TypeScript counterpart: TypeScript passes the objects themselves.)
 //
 fn toJson(allocator: std.mem.Allocator, value: anytype) !std.json.Value {
-    const text = try std.json.Stringify.valueAlloc(allocator, value, .{ .emit_null_optional_fields = false });
+    const text = try std.json.Stringify.valueAlloc(allocator, value, .{
+        .emit_null_optional_fields = false,
+    });
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
 }
 
@@ -96,7 +96,9 @@ pub fn consolidateDatabaseHandler(
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
-    const data = try std.json.parseFromValueLeaky(IConsolidateDatabaseData, allocator, taskData, .{ .ignore_unknown_fields = true });
+    const data = try std.json.parseFromValueLeaky(IConsolidateDatabaseData, allocator, taskData, .{
+        .ignore_unknown_fields = true,
+    });
     if (data.databasePath.len == 0) {
         return errors.throwError("databasePath is required", .{});
     }
@@ -107,8 +109,8 @@ pub fn consolidateDatabaseHandler(
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
 
-    const local = try openStorage(allocator, io, data.databasePath, null, null);
-    const remote = try openStorage(allocator, io, data.remotePath, null, null);
+    const local = try openStorage(allocator, io, data.databasePath, null, null, context.hostRequester);
+    const remote = try openStorage(allocator, io, data.remotePath, null, null, context.hostRequester);
 
     if (!try merkleTreeExists(allocator, io, remote.storage)) {
         return errors.throwError("There is no database at \"{s}\" to consolidate into.", .{data.remotePath});

@@ -105,7 +105,7 @@ test "configureLog installs the file logger unless file logging is disabled" {
     const content = try std.Io.Dir.cwd().readFileAlloc(io, fileLogger.getLogFilePath(), allocator, .unlimited);
     try std.testing.expect(std.mem.indexOf(u8, content, "\nCommand: unknown\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, content, "] [INFO] to both\n") != null);
-    // (With verbose logging the tool checks of the header also print verbose messages, as in TypeScript.)
+    // (With verbose logging the tool checks of the header also print verbose messages.)
     try std.testing.expect(std.mem.endsWith(u8, capture.stdout.written(), "to both\n"));
 }
 

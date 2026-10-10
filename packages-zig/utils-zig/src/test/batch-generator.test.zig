@@ -3,7 +3,7 @@ const utils = @import("utils-zig");
 const batchGenerator = utils.batch_generator.batchGenerator;
 
 //
-// An iterator over the items of an array (TypeScript: the fromArray async generator).
+// An iterator over the items of an array.
 //
 const ArrayIterator = struct {
     // The items yielded.

@@ -1,5 +1,7 @@
 # setup-android.sh
 
-Installs what the Android build needs. Invoked as `bun run --filter=ziggy setup:android` (mirrored in the root `package.json`).
+One-time setup for building Photosphere for Android. It runs the Capacitor Android app (apps/android-frontend)'s `install-android-sdk.sh --install` (which installs the SDK packages and the pinned NDK) and then checks the JDK 17, SDK and NDK are where the build looks for them. It installs nothing of its own.
 
-Installs the Android SDK, NDK and CMake the build needs. Takes no arguments. Runs on Linux and MacOS.
+It is run on Linux and MacOS by `bun run --filter=ziggy setup` from the repository root, through [setup.sh](setup.md). No arguments.
+
+Needs `zig`, `bun`, `jq` and `unzip` on the PATH.

@@ -15,9 +15,9 @@ const SortNode = merkle_tree_zig.merkle_tree.SortNode;
 const js_value = bdb.js_value;
 
 //
-// Golden scenario tests: each test replays one scenario of generate.ts in Zig and checks that the database files are
-// the files TypeScript wrote (plain files byte for byte by SHA-256, gzip merkle tree files by their loaded content)
-// and that the database root hash is the same.
+// Golden scenario tests: each test replays one scenario in Zig and checks that the database files are the golden
+// files stored in the repository (plain files byte for byte by SHA-256, gzip merkle tree files by their loaded
+// content) and that the database root hash is the same.
 //
 
 const io = std.testing.io;
@@ -33,12 +33,12 @@ fn sha256Hex(allocator: std.mem.Allocator, data: []const u8) ![]const u8 {
 }
 
 //
-// The time the scenario dates are based on (generate.ts BASE_TIME: Date.UTC(2020, 0, 1)).
+// The time the scenario dates are based on (Date.UTC(2020, 0, 1)).
 //
 const BASE_TIME: i64 = 1577836800000;
 
 //
-// Builds the fields of scenario record `index` exactly like generate.ts makeFields (same keys in the same order).
+// Builds the fields of scenario record `index`, with the same keys in the same order as the golden files.
 //
 fn makeFields(allocator: std.mem.Allocator, index: i64, variant: i64) !BsonDocument {
     var fields: BsonDocument = .empty;
@@ -79,19 +79,19 @@ fn makeFields(allocator: std.mem.Allocator, index: i64, variant: i64) !BsonDocum
 }
 
 //
-// Builds a metadata document `{ timestamp }` like the scenarios in generate.ts.
+// Builds a metadata document `{ timestamp }`.
 //
 fn makeMetadata(allocator: std.mem.Allocator, timestamp: i64) !BsonDocument {
     return BsonDocument.fromFields(allocator, &.{.{ .key = "timestamp", .value = .{ .number = @floatFromInt(timestamp) } }});
 }
 
 //
-// Number of records in the create, update and build scenarios (generate.ts SCENARIO_RECORD_COUNT).
+// Number of records in the create, update and build scenarios.
 //
 const SCENARIO_RECORD_COUNT = 2000;
 
 //
-// Number of records in the large scenario (generate.ts LARGE_RECORD_COUNT).
+// Number of records in the large scenario.
 //
 const LARGE_RECORD_COUNT = 93000;
 
@@ -152,7 +152,7 @@ fn jsonInteger(value: std.json.Value) i64 {
 }
 
 //
-// Checks a merkle tree file against the summary generate.ts recorded when it loaded the TypeScript file.
+// Checks a merkle tree file against the summary recorded with the golden files.
 //
 fn expectTreeMatches(allocator: std.mem.Allocator, storage: *MemoryStorage, filePath: []const u8, typeCode: []const u8, expected: std.json.Value) !void {
     const tree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, io, filePath, storage.asStorage(), typeCode)).?;

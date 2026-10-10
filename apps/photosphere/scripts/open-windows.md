@@ -1,3 +1,5 @@
 # open-windows.sh
 
-Runs `sync-windows.sh`, then opens `shells/windows` in the editor. Invoked as `bun run --filter=ziggy open:windows`. Takes no arguments. Runs on Windows and Linux.
+Opens the Windows shell's folder, `apps/photosphere/shells/windows`, in Visual Studio Code with `code`.
+
+Run it as `bun run --filter=ziggy open:windows`. It takes no arguments.

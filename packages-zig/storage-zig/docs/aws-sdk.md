@@ -48,6 +48,8 @@ What differs from a CMake build, and why:
 | x86_64-windows | BCrypt and NCrypt | SChannel | I/O completion ports | any host |
 | x86_64-macos, aarch64-macos | CommonCrypto and the Security framework | Secure Transport, or s2n-tls over aws-lc | kqueue (dispatch queue also built) | a Mac of the same architecture |
 
+Photosphere's core builds from a Linux machine for x86_64 Windows: `zig build photosphere-core -Dtarget=x86_64-windows-gnu`, and `zig build photosphere-windows-check -Dcompile-only=true -Dtarget=x86_64-windows-gnu` for the Windows shell. Linking the shell (`photosphere-windows`) needs Microsoft's toolchain, because WebView2's static loader asks for `uuid.lib`, which Zig does not ship, so it is linked on a Windows machine. aarch64 Windows is not built: the zlib-ng build covers x86_64 only on Windows.
+
 On macOS the files in `aws/` follow the CMake files' `APPLE` branches with their default options:
 
 - aws-c-common: `source/posix`, `source/darwin` (no such directory in this release, so nothing), the `platform_fallback_stubs`, and `source/arch/arm/darwin` on aarch64 (`source/arch/intel` on x86_64, as on Linux). No `_POSIX_C_SOURCE`/`_XOPEN_SOURCE`, no thread affinity, `pthread_getname_np` with 3 arguments. It links `dl` and the CoreFoundation framework.

@@ -289,9 +289,15 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         }
         menu = ZiggyMenu(bridge: self, menuJSON: Data(bytes: menuText, count: menuLength))
 
+        // The app supplies the query, which is passed through unread.
+        var queryLength = 0
+        guard let queryText = ziggy_page_query(created, &queryLength) else {
+            ZiggyBridge.fail("the app could not make the page's query")
+        }
+        let query = String(decoding: UnsafeRawBufferPointer(start: queryText, count: queryLength), as: UTF8.self)
         var components = URLComponents(string: ZiggyBridge.appUrlPrefix + "index.html")
-        if testMode {
-            components?.query = "testMode=1"
+        if !query.isEmpty {
+            components?.percentEncodedQuery = query
         }
         guard let pageURL = components?.url else {
             ZiggyBridge.fail("could not build the page address")

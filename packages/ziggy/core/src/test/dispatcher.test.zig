@@ -397,6 +397,11 @@ fn createTestState(core: *ziggy.core.Core) anyerror!*anyopaque {
     return record;
 }
 
+fn stopTestState(core: *ziggy.core.Core, state: *anyopaque) void {
+    _ = core;
+    _ = state;
+}
+
 fn destroyTestState(core: *ziggy.core.Core, state: *anyopaque) void {
     const record: *ObserverRecord = @ptrCast(@alignCast(state));
     for (record.ends.items) |text| {
@@ -443,6 +448,7 @@ test "an app observes the end of a task and the messages it sent, and keeps its 
     observed_app.on_task_message = recordTaskMessage;
     observed_app.state = .{
         .create = createTestState,
+        .stop = stopTestState,
         .destroy = destroyTestState,
     };
     const core = try ziggy.core.Core.create(std.testing.allocator, shell.config(1, 1), observed_app);
@@ -478,10 +484,85 @@ test "a task handler reaches the app's state through its context" {
     state_app.tasks = &state_tasks;
     state_app.state = .{
         .create = createTestState,
+        .stop = stopTestState,
         .destroy = destroyTestState,
     };
     const core = try ziggy.core.Core.create(std.testing.allocator, shell.config(1, 1), state_app);
     defer core.destroy();
     core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"t2\",\"taskType\":\"read-state\",\"source\":\"src\",\"data\":null,\"priority\":\"background\"}}");
     try shell.expectMessageContaining("\"outputs\":{\"ends\":");
+}
+
+//
+// What the ordering test's state hooks do, in order, each a line delivered to the shell, so the test reads the order from the messages the
+// shell recorded.
+//
+fn deliverState(core: *ziggy.core.Core, name: []const u8) void {
+    const message = ziggy.json_util.stringify(core.allocator, .{
+        .channel = "state-hook",
+        .data = name,
+    }) catch @panic("out of memory");
+    defer core.allocator.free(message);
+    core.deliver(message);
+}
+
+fn createOrderedState(core: *ziggy.core.Core) anyerror!*anyopaque {
+    deliverState(core, "created");
+    return core;
+}
+
+fn stopOrderedState(core: *ziggy.core.Core, state: *anyopaque) void {
+    _ = state;
+    deliverState(core, "stopped");
+}
+
+fn destroyOrderedState(core: *ziggy.core.Core, state: *anyopaque) void {
+    _ = state;
+    deliverState(core, "destroyed");
+}
+
+//
+// A task that runs until it is cancelled and then says it was, as the last thing it does.
+//
+fn sayWhenCancelledTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = data;
+    try context.sendMessage(.{ .started = true });
+    while (true) {
+        context.checkCancelled() catch {
+            // The state the test made is the core itself, which the task reads through its context as a task does.
+            const core: *ziggy.core.Core = @ptrCast(@alignCast(context.appState().?));
+            deliverState(core, "task-ended");
+            return error.Cancelled;
+        };
+        try context.io().sleep(.fromMilliseconds(1), .awake);
+    }
+}
+
+test "the app's state is stopped before the task runner stops and destroyed after it, so a running task never reads a state that is gone" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const ordered_tasks = helpers.task_handlers ++ [_]ziggy.task_runner.TaskHandlerEntry{
+        .{ .name = "say-when-cancelled", .handler = sayWhenCancelledTask },
+    };
+    var ordered_app = helpers.app;
+    ordered_app.tasks = &ordered_tasks;
+    ordered_app.state = .{
+        .create = createOrderedState,
+        .stop = stopOrderedState,
+        .destroy = destroyOrderedState,
+    };
+    const core = try ziggy.core.Core.create(std.testing.allocator, shell.config(1, 1), ordered_app);
+    // A task that is still running when the core is destroyed, and says so each time round its loop.
+    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"running\",\"taskType\":\"say-when-cancelled\",\"source\":\"src\",\"data\":null,\"priority\":\"background\"}}");
+    try shell.expectMessageContaining("\"started\":true");
+    core.destroy();
+    const created = shell.indexOfContaining("\"state-hook\",\"data\":\"created\"").?;
+    const stopped = shell.indexOfContaining("\"state-hook\",\"data\":\"stopped\"").?;
+    const destroyed = shell.indexOfContaining("\"state-hook\",\"data\":\"destroyed\"").?;
+    try std.testing.expect(created < stopped);
+    // The task is cancelled when the task runner stops, which is after the state was stopped and before it is destroyed.
+    const task_ended = shell.indexOfContaining("\"state-hook\",\"data\":\"task-ended\"").?;
+    try std.testing.expect(stopped < task_ended);
+    try std.testing.expect(task_ended < destroyed);
 }

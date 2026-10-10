@@ -8,7 +8,7 @@ pub const job_progress = @import("lib/job-progress.zig");
 pub const pending_task_queue = @import("lib/pending-task-queue.zig");
 
 //
-// The in-process test backend (TypeScript: test/mock-worker-pool.ts), exported so that other
+// The in-process test backend, exported so that other
 // packages can test code that uses TaskQueue.
 //
 pub const mock_worker_pool = @import("test/mock-worker-pool.zig");

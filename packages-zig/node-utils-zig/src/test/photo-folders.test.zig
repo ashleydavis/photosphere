@@ -11,7 +11,7 @@ const readXdgPicturesDir = photo_folders.readXdgPicturesDir;
 const io = std.testing.io;
 
 //
-// Asserts that two lists of paths are equal (TypeScript: `toEqual`).
+// Asserts that two lists of paths are equal.
 //
 fn expectPaths(expected: []const []const u8, actual: []const []const u8) !void {
     try std.testing.expectEqual(expected.len, actual.len);
@@ -21,7 +21,7 @@ fn expectPaths(expected: []const []const u8, actual: []const []const u8) !void {
 }
 
 //
-// Gets the absolute path of a directory made by std.testing.tmpDir (TypeScript: createTestTempDir).
+// Gets the absolute path of a directory made by std.testing.tmpDir.
 //
 fn tempDirPath(allocator: std.mem.Allocator, tmpDir: std.testing.TmpDir) ![]const u8 {
     const currentPath = try std.process.currentPathAlloc(io, allocator);
@@ -191,8 +191,8 @@ test "returns only folders that exist on this machine" {
 }
 
 //
-// TypeScript trims the line with String.prototype.trim and matches it with /\s*/, both of which take the Unicode
-// spaces and line separators as whitespace.
+// The line is trimmed and matched with /\s*/, both of which take the Unicode spaces and line separators as
+// whitespace.
 //
 test "treats Unicode spaces around the key and the value as whitespace" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -240,10 +240,10 @@ test "readXdgPicturesDir reports running out of memory instead of reading it as 
 }
 
 //
-// `.` in the TypeScript regular expression matches no line terminator, so a value holding one does not match and
+// `.` in the regular expression matches no line terminator, so a value holding one does not match and
 // the search carries on to the next line.
 //
-test "a value holding a line terminator does not match, as in the TypeScript regular expression" {
+test "a value holding a line terminator does not match" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

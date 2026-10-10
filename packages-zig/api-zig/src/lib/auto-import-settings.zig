@@ -2,7 +2,7 @@
 // Platform-neutral settings for automatic photo import.
 //
 // These are read by the auto-import task on every platform (CLI, desktop, mobile), so nothing in
-// this file may depend on Node.js, Electron, Capacitor or the filesystem. The settings arrive from
+// this file may depend on a platform runtime or the filesystem. The settings arrive from
 // a config file that a user may have hand-edited, or that an older version of the app wrote, so
 // `normaliseAutoImportSettings` is the only supported way to turn a stored blob into settings.
 //
@@ -31,8 +31,17 @@ pub const IDeviceAlbumAutoImportSource = struct {
 };
 
 //
+// The album identifier that means the whole photo library rather than one album in it.
+//
+// A device source has to name something, and "everything on this phone" is the default a user gets
+// before they pick albums. Spelling it as a reserved id keeps the settings uniform: there is one
+// kind of device source, not a source and a separate "watch everything" flag.
+//
+pub const ALL_DEVICE_MEDIA_ALBUM_ID = "all";
+
+//
 // A place the auto-import task watches for new media.
-// (Zig: a tagged union; the tag is the TypeScript `type` discriminator.)
+// (Zig: a tagged union; the tag is the `type` discriminator.)
 //
 pub const IAutoImportSource = union(enum) {
     // A source with `type: "folder"`.
@@ -42,7 +51,7 @@ pub const IAutoImportSource = union(enum) {
     @"device-album": IDeviceAlbumAutoImportSource,
 
     //
-    // Gets the TypeScript `type` discriminator of the source.
+    // Gets the `type` discriminator of the source.
     //
     pub fn sourceType(self: IAutoImportSource) []const u8 {
         return @tagName(self);
@@ -180,42 +189,56 @@ pub fn normaliseAutoImportSettings(allocator: std.mem.Allocator, rawSettings: ?I
 }
 
 //
-// Converts a source to the JSON object it is stored and queued as (TypeScript: the object itself).
-// (No TypeScript counterpart.)
+// Converts a source to the JSON object it is stored and queued as.
 //
 pub fn autoImportSourceToJson(allocator: std.mem.Allocator, source: IAutoImportSource) !std.json.Value {
     var object: std.json.ObjectMap = .empty;
-    try object.put(allocator, "type", .{ .string = source.sourceType() });
+    try object.put(allocator, "type", .{
+        .string = source.sourceType(),
+    });
     switch (source) {
         .folder => |folder| {
-            try object.put(allocator, "path", .{ .string = folder.path });
-            try object.put(allocator, "recurse", .{ .bool = folder.recurse });
+            try object.put(allocator, "path", .{
+                .string = folder.path,
+            });
+            try object.put(allocator, "recurse", .{
+                .bool = folder.recurse,
+            });
         },
         .@"device-album" => |album| {
-            try object.put(allocator, "albumId", .{ .string = album.albumId });
+            try object.put(allocator, "albumId", .{
+                .string = album.albumId,
+            });
         },
     }
-    return .{ .object = object };
+    return .{
+        .object = object,
+    };
 }
 
 //
-// Converts a list of sources to the JSON array they are stored and queued as. (No TypeScript counterpart.)
+// Converts a list of sources to the JSON array they are stored and queued as.
 //
 pub fn autoImportSourcesToJson(allocator: std.mem.Allocator, sources: []const IAutoImportSource) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (sources) |source| {
         try array.append(try autoImportSourceToJson(allocator, source));
     }
-    return .{ .array = array };
+    return .{
+        .array = array,
+    };
 }
 
 //
-// Converts settings to the JSON object they are stored and queued as (TypeScript: the object itself).
-// (No TypeScript counterpart.)
+// Converts settings to the JSON object they are stored and queued as.
 //
 pub fn autoImportSettingsToJson(allocator: std.mem.Allocator, settings: IAutoImportSettings) !std.json.Value {
     var object: std.json.ObjectMap = .empty;
-    try object.put(allocator, "enabled", .{ .bool = settings.enabled });
+    try object.put(allocator, "enabled", .{
+        .bool = settings.enabled,
+    });
     try object.put(allocator, "sources", try autoImportSourcesToJson(allocator, settings.sources));
-    return .{ .object = object };
+    return .{
+        .object = object,
+    };
 }

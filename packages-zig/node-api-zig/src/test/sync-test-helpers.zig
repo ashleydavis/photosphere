@@ -18,12 +18,11 @@ const BsonDatabase = bdb.database.BsonDatabase;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 //
-// Helpers shared by the sync test files (the helpers each TypeScript sync test file defines for itself, and the
-// storage subclasses they make of MockStorage).
+// Helpers shared by the sync test files, and the storages they make of MockStorage.
 //
 
 //
-// The database's own hash of some contents (TypeScript: `createHash("sha256").update(contents).digest()`).
+// The database's own hash of some contents (SHA-256).
 //
 pub fn hashOf(allocator: std.mem.Allocator, contents: []const u8) ![]const u8 {
     const digest = try allocator.create([Sha256.digest_length]u8);
@@ -44,9 +43,7 @@ pub const IFileToStore = struct {
 
 //
 // Fills a storage with the given files and a merkle tree describing exactly them, under the length of each file's
-// contents, recording the given asset ids as deleted (none when empty). The tree is saved to `.db/files.dat`.
-// (TypeScript: the makeDatabase, makeDatabaseWithDeletions and fillDatabase functions of the sync tests.)
-//
+// contents, recording the given asset ids as deleted (none when empty). The tree is saved to `.db/files.dat`.//
 pub fn fillDatabase(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, databaseId: []const u8, files: []const IFileToStore, deletedAssetIds: []const []const u8) !void {
     var tree = merkle_tree.createTree(databaseId);
     for (files) |file| {
@@ -74,7 +71,7 @@ pub fn fillDatabase(allocator: std.mem.Allocator, io: std.Io, storage: IStorage,
 }
 
 //
-// Files named after themselves: each file holds its own name (TypeScript: `Buffer.from(fileName, "utf-8")`).
+// Files named after themselves: each file holds its own name as UTF-8.
 //
 pub fn filesNamed(allocator: std.mem.Allocator, fileNames: []const []const u8) ![]const IFileToStore {
     const files = try allocator.alloc(IFileToStore, fileNames.len);
@@ -88,8 +85,7 @@ pub fn filesNamed(allocator: std.mem.Allocator, fileNames: []const []const u8) !
 }
 
 //
-// A bson database for a push to flush, commit and remove deleted assets' records from (TypeScript: the
-// makeBsonDatabase stand-in; Zig: a real BsonDatabase over its own empty store, as pushFiles takes a BsonDatabase).
+// A bson database for a push to flush, commit and remove deleted assets' records from: a real BsonDatabase over its own empty store, as pushFiles takes a BsonDatabase.
 //
 pub fn makeBsonDatabase(allocator: std.mem.Allocator, storage: IStorage) !*BsonDatabase {
     const uuidGenerator = try allocator.create(node_utils.test_uuid_generator.TestUuidGenerator);
@@ -147,7 +143,7 @@ pub const Capture = struct {
 var discarded_stdout: std.Io.Writer.Discarding = .init(&.{});
 
 //
-// A storage that throws if any of it is used (TypeScript: the throwingProxy of sync-early-out.test.ts).
+// A storage that throws if any of it is used.
 //
 pub const ThrowingStorage = struct {
     // Names the storage in the error.
@@ -384,13 +380,27 @@ pub const ThrowingStorage = struct {
 };
 
 //
+// One call to writeStream, as the storage was given it.
+//
+pub const WriteStreamCall = struct {
+    // The file written.
+    filePath: []const u8,
+
+    // The content type passed.
+    contentType: ?[]const u8,
+
+    // The content length passed.
+    contentLength: ?u64,
+};
+
+//
 // A storage that passes every call through to another and watches what the sync does with it. Each field turns on
-// what one of the TypeScript sync tests' storages does:
-//   - infoLengthOverhead and readableLengthUnknown: CannotSayHowLongItReadsStorage (sync-encrypted-lengths).
-//   - declaredLengths: LengthRecordingStorage (sync-encrypted-lengths).
-//   - treeWrites: countTreeWrites (sync-tree-saves).
-//   - hashes, readStreamPaths, verifiesWhatItWrites, askedAbout and hashesWrittenWith: HashReportingStorage
-//     (sync-verification).
+// what the storage does for one kind of sync test:
+//   - infoLengthOverhead and readableLengthUnknown: a storage that cannot say how long it reads (encrypted lengths).
+//   - declaredLengths: a storage that records the lengths it was told (encrypted lengths).
+//   - treeWrites: a storage that counts the writes of the tree (tree saves).
+//   - hashes, readStreamPaths, verifiesWhatItWrites, askedAbout and hashesWrittenWith: a storage that reports the hashes
+//     it saw (verification).
 //
 pub const SpyStorage = struct {
     // Allocates what is recorded.
@@ -430,6 +440,9 @@ pub const SpyStorage = struct {
 
     // The paths info() and storedHash() were asked about.
     askedAbout: std.ArrayList([]const u8) = .empty,
+
+    // The calls to writeStream, in order.
+    writeStreamCalls: std.ArrayList(WriteStreamCall) = .empty,
 
     // The hashes handed to writeStreamHashed, by path.
     hashesWrittenWith: std.StringArrayHashMapUnmanaged([]const u8) = .empty,
@@ -552,9 +565,14 @@ pub const SpyStorage = struct {
     }
 
     //
-    // Passes writeStream through.
+    // Records the call, then passes writeStream through.
     //
     pub fn writeStream(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) !void {
+        try self.writeStreamCalls.append(self.allocator, .{
+            .filePath = try self.allocator.dupe(u8, filePath),
+            .contentType = if (contentType) |text| try self.allocator.dupe(u8, text) else null,
+            .contentLength = contentLength,
+        });
         return self.inner.writeStream(allocator, io, filePath, contentType, inputStream, contentLength);
     }
 
@@ -633,8 +651,7 @@ pub const SpyStorage = struct {
 };
 
 //
-// A clock the test drives rather than the wall clock (TypeScript: the FixedTimestampProvider of
-// sync-verification.test.ts and the SettableTimestampProvider of sync-metadata-edit.test.ts).
+// A clock the test drives rather than the wall clock.
 //
 pub const SettableTimestampProvider = struct {
     // The time every call reports, in milliseconds.
@@ -682,7 +699,7 @@ pub const SettableTimestampProvider = struct {
 };
 
 //
-// A uuid generator for a test (TypeScript: `new TestUuidGenerator()`).
+// A uuid generator for a test.
 //
 pub fn testUuidGenerator(allocator: std.mem.Allocator) !utils.uuid_generator.IUuidGenerator {
     const uuidGenerator = try allocator.create(node_utils.test_uuid_generator.TestUuidGenerator);

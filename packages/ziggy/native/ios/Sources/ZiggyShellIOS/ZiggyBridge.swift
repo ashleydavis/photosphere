@@ -78,11 +78,25 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
     private static let appUrlPrefix = "ziggy-app://app/"
 
     // The app's private data directory, which the core is given.
-    private let dataDirectory: URL
+    public let dataDirectory: URL
 
     // Whether a test hooks build was started in test mode.
     private let testMode: Bool
 
+    // Answers the core's host requests. Set by setHostRequestHandler before start and never changed after it, so the core's worker
+    // threads read it without a lock.
+    private var hostRequestHandler: ZiggyHostRequestHandler?
+
+    // Called on the main thread each time the core says the app must be kept running (true) or no longer must be (false). The app sets
+    // it before start.
+    public var keepRunningChanged: ((Bool) -> Void)?
+
+    // The requests the app itself made of the core, by the id each was sent under, with what to call when the core replies. Read and
+    // written on the main thread only.
+    private var appRequests: [String: (String?) -> Void] = [:]
+
+    // The number the next request the app makes is numbered with. The ids it makes cannot collide with the page's, which are numbers.
+    private var nextAppRequestNumber = 1
 
     // The background task that keeps an iOS app running for a while after it leaves the foreground, while the core asks for the app to
     // be kept running.
@@ -140,6 +154,15 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         self.webView.uiDelegate = self
     }
 
+
+    // Gives the bridge the handler that answers the core's host requests. It must be called before start, because the core's worker
+    // threads read the handler once the core exists.
+    public func setHostRequestHandler(_ handler: ZiggyHostRequestHandler) {
+        if core != nil || destroyed {
+            ZiggyBridge.fail("setHostRequestHandler was called after start")
+        }
+        hostRequestHandler = handler
+    }
 
     // Creates the core and loads the app's page.
     public func start() {
@@ -207,6 +230,24 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
                 capacity: capacity
             )
         }
+        if hostRequestHandler != nil {
+            config.host_request = { userData, method, requestJson, buffer, capacity in
+                guard let userData = userData, let method = method, let requestJson = requestJson, let buffer = buffer else {
+                    ZiggyBridge.fail("the core made a host request with no bridge, method, request or buffer")
+                }
+                let bridge = Unmanaged<ZiggyBridge>.fromOpaque(userData).takeUnretainedValue()
+                guard let handler = bridge.hostRequestHandler else {
+                    ZiggyBridge.fail("the core made a host request but the bridge has no handler")
+                }
+                return ZiggyHostReply.answer(
+                    handler: handler,
+                    method: String(cString: method),
+                    requestJson: String(cString: requestJson),
+                    buffer: buffer,
+                    capacity: capacity
+                )
+            }
+        }
         config.worker_threads = 5
         config.max_concurrent_child_tasks = 2
 
@@ -234,9 +275,15 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         pageHandler.core = created
 
 
+        // The app supplies the query, which is passed through unread.
+        var queryLength = 0
+        guard let queryText = ziggy_page_query(created, &queryLength) else {
+            ZiggyBridge.fail("the app could not make the page's query")
+        }
+        let query = String(decoding: UnsafeRawBufferPointer(start: queryText, count: queryLength), as: UTF8.self)
         var components = URLComponents(string: ZiggyBridge.appUrlPrefix + "index.html")
-        if testMode {
-            components?.query = "testMode=1"
+        if !query.isEmpty {
+            components?.percentEncodedQuery = query
         }
         guard let pageURL = components?.url else {
             ZiggyBridge.fail("could not build the page address")
@@ -268,6 +315,7 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         else if !keep {
             endBackgroundTask()
         }
+        keepRunningChanged?(keep)
     }
 
     // Gives the background task back to the system.
@@ -289,6 +337,10 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
     private func deliverToPage(_ text: String) {
         // A message queued before shutdown is dropped here, because shutdown promises nothing is delivered after it.
         if destroyed {
+            return
+        }
+        // A reply to a request the app made itself is for the app, not the page.
+        if consumeAppReply(text) {
             return
         }
         webView.evaluateJavaScript("window.__ziggyReceive(\(text));") { _, error in
@@ -314,6 +366,63 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
         }
         text.withCString { pointer in
             ziggy_post_message(handle, pointer, text.utf8.count)
+        }
+    }
+
+    // Sends the core a one-way message, as the page's send does. The data is anything JSON can hold. Can be called from any thread.
+    public func send(channel: String, data: Any) {
+        DispatchQueue.main.async {
+            let message: [String: Any] = [
+                "channel": channel,
+                "data": data,
+            ]
+            self.post(ZiggyBridge.jsonText(message))
+        }
+    }
+
+    // Makes a request of the core, as the page's invoke does, for an app that has to start work itself (when the system wakes it with
+    // the page not on screen, for instance). The core's reply comes to the completion on the main thread, with nil when the request
+    // succeeded and the core's reason when it failed, and it is not given to the page. Can be called from any thread.
+    public func request(channel: String, data: Any, completion: @escaping (String?) -> Void) {
+        DispatchQueue.main.async {
+            let id = "app-\(self.nextAppRequestNumber)"
+            self.nextAppRequestNumber += 1
+            self.appRequests[id] = completion
+            let message: [String: Any] = [
+                "id": id,
+                "channel": channel,
+                "data": data,
+            ]
+            self.post(ZiggyBridge.jsonText(message))
+        }
+    }
+
+    // If the message is the reply to a request the app made, hands it to that request's completion and returns true.
+    private func consumeAppReply(_ text: String) -> Bool {
+        if appRequests.isEmpty {
+            return false
+        }
+        guard let object = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any],
+              let id = object["id"] as? String,
+              let completion = appRequests.removeValue(forKey: id) else {
+            return false
+        }
+        if let succeeded = object["ok"] as? Bool, succeeded {
+            completion(nil)
+        }
+        else {
+            completion(object["error"] as? String ?? "the core gave no reason")
+        }
+        return true
+    }
+
+    // Writes a message as JSON text.
+    private static func jsonText(_ message: [String: Any]) -> String {
+        do {
+            return String(decoding: try JSONSerialization.data(withJSONObject: message), as: UTF8.self)
+        }
+        catch {
+            ZiggyBridge.fail("could not write a message to the core: \(error)")
         }
     }
 

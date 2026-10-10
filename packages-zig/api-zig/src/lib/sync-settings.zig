@@ -4,12 +4,12 @@ const std = @import("std");
 // Platform-neutral settings for automatic syncing.
 //
 // These are read by the app's interface and by the mobile background sync loop, so nothing in this
-// file may depend on Node.js, Electron, Capacitor or the filesystem. The values arrive from a config
+// file may depend on a platform runtime or the filesystem. The values arrive from a config
 // file that a user may have hand-edited, or that an older version of the app wrote, so
 // `normaliseSyncSettings` is the only supported way to turn a stored blob into settings.
 //
 // (Zig: a number the file holds (the pacing) is a std.json.Value that is a number, so an integer stays an integer when
-// it is written back, the way a JavaScript number does.)
+// it is written back.)
 //
 
 //
@@ -64,13 +64,13 @@ pub const IRawSyncSettings = std.json.Value;
 //
 // A value that is not a boolean falls back rather than being coerced, because a string "false" read
 // from a hand-edited file is truthy and would switch syncing on for somebody who wrote the opposite.
+// (Zig: a JSON null, which is `!stored`, or a value that is not an object and so has no fields, gives the defaults.)
 //
 pub fn normaliseSyncSettings(stored: ?IRawSyncSettings) ISyncSettings {
     const settings = stored orelse {
         return DEFAULT_SYNC_SETTINGS;
     };
     if (settings != .object) {
-        // (Zig: a JSON null, which is `!stored`, or a value that is not an object and so has no fields.)
         return DEFAULT_SYNC_SETTINGS;
     }
     const fields = settings.object;
@@ -117,8 +117,7 @@ pub const ISyncFile = struct {
 pub const DEFAULT_SYNC_PAUSE_MS = 5 * 60 * 1000;
 
 //
-// The value of a number as a float, or null when it is not a number (`typeof value === "number"`).
-// (No TypeScript counterpart.)
+// The value of a number as a float, or null when it is not a number.
 //
 fn numberAsFloat(value: std.json.Value) ?f64 {
     return switch (value) {

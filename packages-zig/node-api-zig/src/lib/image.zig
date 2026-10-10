@@ -1,6 +1,7 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const serialization_zig = @import("serialization-zig");
 const tools = @import("tools-zig");
 const media_file_database = @import("media-file-database.zig");
@@ -70,8 +71,7 @@ fn digitsAt(text: []const u8, start: usize, count: usize) ?i64 {
 //
 // Turns one EXIF date string into an ISO timestamp, or undefined when it is not a date.
 //
-// Matches the EXIF date format, "YYYY:MM:DD HH:mm:ss" (TypeScript: EXIF_DATE_PATTERN,
-// /^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/). A "T" is accepted in place of the space, and
+// Matches the EXIF date format, "YYYY:MM:DD HH:mm:ss". A "T" is accepted in place of the space, and
 // anything trailing (a sub-second field, a timezone offset) is ignored.
 //
 // EXIF carries no timezone, so the value is read as UTC, which is what this has always done. A
@@ -143,7 +143,7 @@ pub fn pickExifDate(allocator: std.mem.Allocator, tags: ?BsonDocument) !?[]const
 }
 
 //
-// The current time in milliseconds (TypeScript: `Date.now()`).
+// The current time in milliseconds.
 //
 fn dateNow(io: std.Io) f64 {
     return @floatFromInt(std.Io.Clock.real.now(io).toMilliseconds());
@@ -152,7 +152,7 @@ fn dateNow(io: std.Io) f64 {
 //
 // Gets the details of an image.
 //
-pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, tempDir: []const u8, contentType: []const u8, uuidGenerator: IUuidGenerator, logicalPath: []const u8) !IAssetDetails {
+pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProcessRunner, filePath: []const u8, tempDir: []const u8, contentType: []const u8, uuidGenerator: IUuidGenerator, logicalPath: []const u8) !IAssetDetails {
     _ = logicalPath;
     // filePath is always a valid file (already extracted if from zip)
     var imagePath = filePath;
@@ -175,7 +175,7 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []con
         resolution = dimensions;
     }
     else {
-        const assetInfo = try getFileInfo(allocator, io, imagePath, contentType) orelse {
+        const assetInfo = try getFileInfo(allocator, io, toolRunner, imagePath, contentType) orelse {
             return errors.throwError("Unsupported file type: {s}", .{contentType});
         };
         resolution = .{ .width = assetInfo.dimensions.width, .height = assetInfo.dimensions.height };
@@ -184,9 +184,9 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []con
 
     if (imageTransformation) |transformation| {
         // Flips orientation depending on exif data.
-        imagePath = try transformImage(allocator, io, imagePath, tempDir, transformation, uuidGenerator);
+        imagePath = try transformImage(allocator, io, toolRunner, imagePath, tempDir, transformation, uuidGenerator);
         if (transformation.changeOrientation orelse false) {
-            // (Zig: a copy is swapped, as assigning a literal to resolution would overwrite its width before the height reads it.)
+            // A copy is swapped, as assigning a literal to resolution would overwrite its width before the height reads it.
             const unswapped = resolution;
             resolution = .{
                 .width = unswapped.height,
@@ -197,15 +197,15 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []con
 
     // Produced largest first, each from the one before it rather than from the full size original.
     const displayStartedAt = dateNow(io);
-    const displayPath = try resizeImage(allocator, io, imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, uuidGenerator, DISPLAY_QUALITY);
+    const displayPath = try resizeImage(allocator, io, toolRunner, imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, uuidGenerator, DISPLAY_QUALITY);
     const displayMs = dateNow(io) - displayStartedAt;
 
     const thumbnailStartedAt = dateNow(io);
-    const thumbnailPath = try resizeImage(allocator, io, displayPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY);
+    const thumbnailPath = try resizeImage(allocator, io, toolRunner, displayPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY);
     const thumbnailMs = dateNow(io) - thumbnailStartedAt;
 
     const microStartedAt = dateNow(io);
-    const microPath = try resizeImage(allocator, io, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
+    const microPath = try resizeImage(allocator, io, toolRunner, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
     const microMs = dateNow(io) - microStartedAt;
 
     return .{
@@ -232,7 +232,7 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []con
 // What reading a photo's EXIF found.
 //
 pub const IImageMetadata = struct {
-    // Every EXIF tag, as the parser read them (a JavaScript object).
+    // Every EXIF tag, as the parser read them.
     metadata: ?BsonValue = null,
 
     // Where the photo was taken, when the EXIF says so and the position is a real one.
@@ -278,7 +278,7 @@ fn parseExif(allocator: std.mem.Allocator, fileData: []const u8) !exif_parser.Ex
 }
 
 //
-// JavaScript truthiness of a tag value (arrays and objects are truthy).
+// Whether a tag value counts as set (arrays and objects always do).
 //
 fn isTruthy(value: ?BsonValue) bool {
     const actual = value orelse return false;
@@ -342,7 +342,7 @@ pub fn locationJson(allocator: std.mem.Allocator, location: ILocation) ![]const 
 }
 
 //
-// Writes a number as JSON.stringify does: as JavaScript prints the number, and null for NaN and the infinities.
+// Writes a number as JSON: null for NaN and the infinities.
 //
 fn writeJsonNumber(writer: *std.Io.Writer, number: f64) !void {
     if (std.math.isFinite(number)) {
@@ -370,7 +370,7 @@ pub fn getImageMetadata(allocator: std.mem.Allocator, io: std.Io, filePath: []co
 }
 
 //
-// JavaScript's `Math.round`: rounds half up.
+// Rounds half up.
 //
 fn jsRound(value: f64) f64 {
     return @floor(value + 0.5);
@@ -378,9 +378,8 @@ fn jsRound(value: f64) f64 {
 
 //
 // Resize an image.
-// (TypeScript default: quality = 90; callers pass it.)
 //
-pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, inputPath: []const u8, tempDir: []const u8, resolution: IResolution, minSize: f64, uuidGenerator: IUuidGenerator, quality: f64) ![]const u8 {
+pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProcessRunner, inputPath: []const u8, tempDir: []const u8, resolution: IResolution, minSize: f64, uuidGenerator: IUuidGenerator, quality: f64) ![]const u8 {
 
     var width: f64 = undefined;
     var height: f64 = undefined;
@@ -395,13 +394,13 @@ pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, inputPath: []const 
     }
 
     var image = Image.init(inputPath);
-    return image.resize(allocator, io, .{ .width = width, .height = height, .quality = jsRound(quality), .format = "jpeg", .ext = "jpg" }, tempDir, uuidGenerator);
+    return image.resize(allocator, io, toolRunner, .{ .width = width, .height = height, .quality = jsRound(quality), .format = "jpeg", .ext = "jpg" }, tempDir, uuidGenerator);
 }
 
 //
 // Transforms an image.
 //
-pub fn transformImage(allocator: std.mem.Allocator, io: std.Io, inputPath: []const u8, tempDir: []const u8, options: IImageTransformation, uuidGenerator: IUuidGenerator) ![]const u8 {
+pub fn transformImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProcessRunner, inputPath: []const u8, tempDir: []const u8, options: IImageTransformation, uuidGenerator: IUuidGenerator) ![]const u8 {
     var image = Image.init(inputPath);
-    return image.transform(allocator, io, options, tempDir, uuidGenerator);
+    return image.transform(allocator, io, toolRunner, options, tempDir, uuidGenerator);
 }

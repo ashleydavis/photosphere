@@ -33,6 +33,10 @@ final class ZiggyNative {
     // embedded in the core library, so the app supplies nothing.
     static native byte[] injectScript();
 
+    // The query of the page's address as UTF-8, which the app supplies: the text after the question mark, empty when the app has none.
+    // The shell appends it to the page's address unread. Throws when the app could not make it.
+    static native byte[] pageQuery(long handle);
+
     // The bytes of the app's bundled page file for a request path as UTF-8 (such as "/index.html"), or null when the page has
     // no such file.
     static native byte[] uiFileContent(long handle, byte[] path);

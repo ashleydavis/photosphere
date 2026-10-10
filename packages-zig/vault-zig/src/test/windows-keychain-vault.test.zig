@@ -16,7 +16,7 @@ fn secretNameLessThan(context: void, left: ISecret, right: ISecret) bool {
 }
 
 //
-// Asserts that two secrets are equal (the toEqual of the TypeScript tests).
+// Asserts that two secrets are equal.
 //
 fn expectSecretEqual(expected: ISecret, actual: ?ISecret) !void {
     try std.testing.expect(actual != null);
@@ -25,7 +25,7 @@ fn expectSecretEqual(expected: ISecret, actual: ?ISecret) !void {
     try std.testing.expectEqualStrings(expected.value, actual.?.value);
 }
 
-test "get: returns undefined for a missing secret" {
+test "returns undefined for a missing secret" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
@@ -35,7 +35,7 @@ test "get: returns undefined for a missing secret" {
     try std.testing.expect((try vault.get(arena.allocator(), std.testing.io, "missing")) == null);
 }
 
-test "get: returns the secret after set" {
+test "returns the secret after set" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -49,7 +49,7 @@ test "get: returns the secret after set" {
     try expectSecretEqual(secret, try vault.get(allocator, io, "my-key"));
 }
 
-test "set: stores name, type, and value correctly" {
+test "stores name, type, and value correctly" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -65,7 +65,7 @@ test "set: stores name, type, and value correctly" {
     try std.testing.expectEqualStrings("creds", result.value);
 }
 
-test "set: escapes single quotes in the payload" {
+test "escapes single quotes in the payload" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -80,7 +80,7 @@ test "set: escapes single quotes in the payload" {
     try expectSecretEqual(secret, try vault.get(allocator, io, "it's"));
 }
 
-test "list: returns empty array when no secrets exist" {
+test "returns empty array when no secrets exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
@@ -90,7 +90,7 @@ test "list: returns empty array when no secrets exist" {
     try std.testing.expectEqual(@as(usize, 0), (try vault.list(arena.allocator(), std.testing.io)).len);
 }
 
-test "list: returns all stored secrets" {
+test "returns all stored secrets" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -108,7 +108,7 @@ test "list: returns all stored secrets" {
     try std.testing.expectEqualStrings("b", result[1].name);
 }
 
-test "delete: removes the secret (subsequent get returns undefined)" {
+test "removes the secret (subsequent get returns undefined)" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -123,7 +123,7 @@ test "delete: removes the secret (subsequent get returns undefined)" {
     try std.testing.expect(result == null);
 }
 
-test "delete: does nothing when the secret does not exist" {
+test "does nothing when the secret does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
@@ -133,7 +133,7 @@ test "delete: does nothing when the secret does not exist" {
     try vault.delete(arena.allocator(), std.testing.io, "nonexistent");
 }
 
-test "psi- prefix: adds psi- prefix on write and strips it on read" {
+test "adds psi- prefix on write and strips it on read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -148,7 +148,7 @@ test "psi- prefix: adds psi- prefix on write and strips it on read" {
     try std.testing.expectEqualStrings("mykey", result.name);
 }
 
-test "special characters: handles names with colons" {
+test "handles names with colons" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -162,7 +162,7 @@ test "special characters: handles names with colons" {
     try expectSecretEqual(secret, try vault.get(allocator, io, "my:s3test01"));
 }
 
-test "get runs the same PowerShell script as TypeScript" {
+test "get runs the PowerShell script" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
@@ -205,7 +205,7 @@ test "the IVault interface reaches every operation" {
     try std.testing.expect((try vault.get(allocator, std.testing.io, "k")) == null);
 }
 
-test "get: a payload with a repeated key is read with its last value, as JSON.parse reads it" {
+test "a payload with a repeated key is read with its last value" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -224,10 +224,10 @@ test "get: a payload with a repeated key is read with its last value, as JSON.pa
 
 //
 // The stand-in answers a get with exit code 0 and no output when the mode is "empty-password", which is what
-// a credential stored with an empty password looks like: TypeScript's get treats an empty stdout as a missing
+// a credential stored with an empty password looks like: get treats an empty stdout as a missing
 // secret and returns undefined.
 //
-test "get: returns undefined when the tool succeeds but writes nothing" {
+test "returns undefined when the tool succeeds but writes nothing" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -250,10 +250,10 @@ fn emptyPasswordStore(allocator: std.mem.Allocator, keychainName: []const u8) !s
 }
 
 //
-// A get whose payload is not JSON at all. TypeScript's JSON.parse throws and the error is not caught, so get
+// A get whose payload is not JSON at all. The parse error is not caught, so get
 // rejects rather than returning a secret with nothing in it.
 //
-test "get: a payload that is not JSON fails with the decoder error" {
+test "a payload that is not JSON fails with the decoder error" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -272,7 +272,7 @@ test "get: a payload that is not JSON fails with the decoder error" {
 // set stores the payload as compact JSON with the single quotes doubled, so a value holding one comes back
 // out of the keychain the way it went in.
 //
-test "set: a value holding a single quote round-trips, escaped as PowerShell needs it" {
+test "a value holding a single quote round-trips, escaped as PowerShell needs it" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -291,7 +291,7 @@ test "set: a value holding a single quote round-trips, escaped as PowerShell nee
 // the whole of what the check is for: "wxyzours" is not a photosphere account, and reading it as one would find
 // "psi-ours" and put that secret in the list a second time.
 //
-test "list: leaves out an account that is not a photosphere entry" {
+test "leaves out an account that is not a photosphere entry" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -330,7 +330,7 @@ test "checkPrereqs is true when PowerShell answers with its version" {
 // delete asks PowerShell to remove the entry, and says nothing when it fails, because a secret that is not
 // there is the outcome delete wanted.
 //
-test "delete: says nothing when the entry is not there" {
+test "says nothing when the entry is not there" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);

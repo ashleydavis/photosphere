@@ -11,7 +11,7 @@ const ICommandContext = init_cmd.ICommandContext;
 const getDatabaseSummary = node_api.media_file_database.getDatabaseSummary;
 
 //
-// Options of the root-hash command (TypeScript: IRootHashCommandOptions extends IBaseCommandOptions).
+// Options of the root-hash command.
 // The base options are in `base`.
 //
 pub const IRootHashCommandOptions = struct {

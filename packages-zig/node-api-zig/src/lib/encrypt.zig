@@ -65,8 +65,8 @@ pub const IEncryptResult = struct {
 //
 //
 // Returns true if the file was encrypted, false if it was skipped (already encrypted with the given key).
-// (Zig: treeMutex, when given, is held while the merkle tree is read and updated, because the files of a batch
-// are encrypted on separate threads where TypeScript interleaves them on one.)
+// treeMutex, when given, is held while the merkle tree is read and updated, because the files of a batch
+// are encrypted on separate threads.
 //
 pub fn encryptFile(
     allocator: std.mem.Allocator,
@@ -140,7 +140,7 @@ pub fn encryptFile(
 //
 // Yields file names from readStorage that should be encrypted, skipping metadata and config files
 // that are either handled separately or not encrypted at all.
-// (Zig: an iterator; call `next` for each file name, like iterating the TypeScript encryptableFiles generator.)
+// An iterator: call `next` for each file name.
 //
 pub const EncryptableFilesIterator = struct {
     // The walk of the whole storage.
@@ -171,7 +171,7 @@ pub fn encryptableFiles(allocator: std.mem.Allocator, io: std.Io, readStorage: I
 }
 
 //
-// Encrypts one file of a batch (TypeScript: the `async fileName => { ... }` arrow function that `batch.map` runs).
+// Encrypts one file of a batch.
 // Runs concurrently with the rest of its batch, with its own allocator because the caller's is not shared between
 // threads.
 //

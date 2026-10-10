@@ -1,6 +1,5 @@
 //
-// Tests for http-server.zig. It has no TypeScript counterpart (it stands for Node's http.createServer(app).listen(port, host)), so
-// there is no TypeScript test to port.
+// Tests for http-server.zig.
 //
 
 const std = @import("std");
@@ -196,4 +195,36 @@ test "a handler that fails closes its connection and the server answers the next
     // The failure was logged, once.
     try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "could not answer a request") != null);
     try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Boom") != null);
+}
+
+test "a request that is not HTTP is answered 400 Bad Request" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const server = try HttpServer.listen(std.heap.smp_allocator, io, "127.0.0.1", 0, .{
+        .context = null,
+        .handle = echoPath,
+    });
+    defer server.close();
+
+    const invalid = try exchange(allocator, server.port, "this is not a request\r\n\r\n");
+
+    try std.testing.expect(std.mem.startsWith(u8, invalid, "HTTP/1.1 400 Bad Request\r\n"));
+}
+
+test "a request head that is too big is answered 431" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const server = try HttpServer.listen(std.heap.smp_allocator, io, "127.0.0.1", 0, .{
+        .context = null,
+        .handle = echoPath,
+    });
+    defer server.close();
+    const huge = try allocator.alloc(u8, 20 * 1024);
+    @memset(huge, 'a');
+
+    const oversize = try exchange(allocator, server.port, try std.fmt.allocPrint(allocator, "GET / HTTP/1.1\r\nhost: 127.0.0.1\r\nx-big: {s}\r\n\r\n", .{huge}));
+
+    try std.testing.expect(std.mem.startsWith(u8, oversize, "HTTP/1.1 431 Request Header Fields Too Large\r\n"));
 }

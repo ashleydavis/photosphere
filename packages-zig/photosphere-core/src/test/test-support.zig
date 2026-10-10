@@ -51,11 +51,13 @@ pub const TestApp = struct {
     last_host_request: ?[]u8,
     // The id of the next request.
     next_request_id: u32,
+    // Whether stopCore has destroyed the core already, so stop does not destroy it again.
+    core_stopped: bool,
 
     //
     // Starts the core. The settings directory (PHOTOSPHERE_CONFIG_DIR) is a new folder that belongs to the test. The vault is the
     // plain-text one, in a directory that is the same for every test of one run of the test program, because the vault code keeps
-    // the vault it first opened (as the TypeScript does) and every test must find the directory it opened.
+    // the vault it first opened and every test must find the directory it opened.
     //
     pub fn start(self: *TestApp) !void {
         try self.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{});
@@ -101,6 +103,10 @@ pub const TestApp = struct {
         try self.environ_map.put("PHOTOSPHERE_CONFIG_DIR", config_dir);
         try self.environ_map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
         try self.environ_map.put("PHOTOSPHERE_VAULT_DIR", vault_dir);
+        // The file logger the core starts writes its files here, in a folder that belongs to the test.
+        const log_dir = try std.fs.path.join(allocator, &.{ self.tmp_path, "logs-root" });
+        defer allocator.free(log_dir);
+        try self.environ_map.put("PHOTOSPHERE_LOG_DIR", log_dir);
         process_env.setEnvironMap(&self.environ_map);
         var config = self.shell.config(2, 2);
         config.pick_paths = recordingPick;
@@ -115,6 +121,7 @@ pub const TestApp = struct {
         app.tasks = self.tasks;
         self.core = try ziggy.core.Core.create(allocator, config, app);
         self.next_request_id = 1;
+        self.core_stopped = false;
         self.pick_answer = "[]";
         self.last_pick_kind = -1;
         self.last_pick_title = null;
@@ -126,10 +133,21 @@ pub const TestApp = struct {
     }
 
     //
+    // Destroys the core and leaves everything the test owns in place, for a test that reads what the core left behind when it was destroyed
+    // (the log files, say). stop then removes the rest.
+    //
+    pub fn stopCore(self: *TestApp) void {
+        self.core.destroy();
+        self.core_stopped = true;
+    }
+
+    //
     // Stops the core and removes everything the test owns.
     //
     pub fn stop(self: *TestApp) void {
-        self.core.destroy();
+        if (!self.core_stopped) {
+            self.core.destroy();
+        }
         process_env.setEnvironMap(null);
         utils.console.setCapture(null, null);
         self.console_out.deinit();

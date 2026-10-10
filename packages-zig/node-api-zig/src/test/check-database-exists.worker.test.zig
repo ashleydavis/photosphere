@@ -51,8 +51,12 @@ const TestContext = struct {
 //
 fn run(allocator: std.mem.Allocator, io: std.Io, testContext: *TestContext, databasePath: []const u8) !ICheckDatabaseExistsResult {
     var object: std.json.ObjectMap = .empty;
-    try object.put(allocator, "databasePath", .{ .string = databasePath });
-    const output = try checkDatabaseExistsHandler(allocator, io, .{ .object = object }, testContext.context.taskContext());
+    try object.put(allocator, "databasePath", .{
+        .string = databasePath,
+    });
+    const output = try checkDatabaseExistsHandler(allocator, io, .{
+        .object = object,
+    }, testContext.context.taskContext());
     return std.json.parseFromValueLeaky(ICheckDatabaseExistsResult, allocator, output, .{});
 }
 
@@ -126,7 +130,9 @@ test "throws when the task data has no database path" {
     var testContext: TestContext = undefined;
     try testContext.init(allocator);
 
-    try std.testing.expectError(error.Thrown, checkDatabaseExistsHandler(allocator, io, .{ .object = .empty }, testContext.context.taskContext()));
+    try std.testing.expectError(error.Thrown, checkDatabaseExistsHandler(allocator, io, .{
+        .object = .empty,
+    }, testContext.context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
 }
 
@@ -139,8 +145,12 @@ test "throws a descriptive error when the database path is not a string" {
     var testContext: TestContext = undefined;
     try testContext.init(allocator);
     var object: std.json.ObjectMap = .empty;
-    try object.put(allocator, "databasePath", .{ .integer = 5 });
+    try object.put(allocator, "databasePath", .{
+        .integer = 5,
+    });
 
-    try std.testing.expectError(error.Thrown, checkDatabaseExistsHandler(allocator, io, .{ .object = object }, testContext.context.taskContext()));
+    try std.testing.expectError(error.Thrown, checkDatabaseExistsHandler(allocator, io, .{
+        .object = object,
+    }, testContext.context.taskContext()));
     try std.testing.expectEqualStrings("The check-database-exists task data is not valid: databasePath must be a string", errors.lastErrorMessage());
 }

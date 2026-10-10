@@ -117,3 +117,11 @@ test "import-share-payload with no conflictResolutions is an error reply when a 
     try std.testing.expectEqualStrings("The request needs the choices made for the secrets whose names are already taken.", reply);
     try expectVaultSecret(&app, "share-import-test-no-choices", "api-key", "old");
 }
+
+test "a failing import-share-payload request logs the error with the message of its handler" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    std.testing.allocator.free(try app.requestError("import-share-payload", "null"));
+    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error importing share payload") != null);
+}

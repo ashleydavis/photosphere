@@ -641,17 +641,8 @@ test "upgrade reports a merkle tree it cannot read and changes nothing" {
 }
 
 //
-// The discovery timeout the share commands wait for a peer, in milliseconds. A real user waits the
-// 60000 the TypeScript waits; these tests pass their own so the branch where nobody ever turns up
-// is taken at once rather than after a minute. It runs the same command with the same options a user
-// gets, so the code under it is the code the CLI runs.
-//
-const share_discovery_timeout = "1";
-
-//
-// How long the sender of the pairing-code-rejected tests waits, in milliseconds. Unlike the
-// no-peer tests this one has to be long enough for the held receiver's announcements to reach the
-// sender, since the sender only knows the code was rejected once it has read one that does not
+// How long the held receiver of the pairing-code-rejected tests stays up, in milliseconds. It has to be long enough for
+// its announcements to reach the sender, since the sender only knows the code was rejected once it has read one that does not
 // match. The receiver announces every second, so this covers several of them.
 //
 const mismatched_receiver_timeout = "4000";
@@ -679,7 +670,6 @@ test "dbs receive says no device connected when no sender turns up before the di
     try expectScenario(allocator, environment, &.{
         "dbs-receive-timeout",
         "1234",
-        share_discovery_timeout,
     }, "\nReceive Database\n" ++ network_note ++
         "Hint: Run `psi dbs send` on another device to send a database.\n" ++
         "Waiting for sender on the local network... (Ctrl+C to cancel)\n" ++
@@ -697,7 +687,6 @@ test "secrets receive says no sender connected when no sender turns up before th
     try expectScenario(allocator, environment, &.{
         "secrets-receive-timeout",
         "1234",
-        share_discovery_timeout,
     }, "\nReceive Secret\n" ++ network_note ++
         "Hint: Run `psi secrets send` on another device to send a secret.\n" ++
         "Waiting for sender on the local network... (Ctrl+C to cancel)\n" ++
@@ -716,7 +705,6 @@ test "dbs send says no device found when no receiver turns up before the discove
         "dbs-send-timeout",
         "my-db",
         "1234",
-        share_discovery_timeout,
     }, "\nSend Database\n" ++ network_note ++
         "\nDatabase to send:\n" ++
         "  Name:        my-db\n" ++
@@ -743,7 +731,6 @@ test "secrets send says no receiver found when no receiver turns up before the d
         "secrets-send-timeout",
         "s3a",
         "1234",
-        share_discovery_timeout,
     }, "\nSend Secret\n" ++ network_note ++
         "Hint: Run `psi secrets receive` on another device to receive this secret.\n" ++
         "\n" ++

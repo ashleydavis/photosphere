@@ -3,8 +3,7 @@ const node_utils = @import("node-utils-zig");
 const vault_zig = @import("vault-zig");
 
 //
-// The environment the LAN share tests run the plaintext vault with (the `jest.mock("vault", ...)` of the TypeScript
-// tests, which give getDefaultVaultType "plaintext"): PHOTOSPHERE_VAULT_TYPE=plaintext and a PHOTOSPHERE_VAULT_DIR
+// The environment the LAN share tests run the plaintext vault with: PHOTOSPHERE_VAULT_TYPE=plaintext and a PHOTOSPHERE_VAULT_DIR
 // of this test program's own, so the tests never touch the real vault. getVault keeps the first plaintext vault it
 // makes, so every test shares the one directory and uses secret names of its own.
 //
@@ -37,8 +36,7 @@ pub fn useRealEnvironment() void {
 }
 
 //
-// Deletes every secret in the test program's vault, so a test starts from an empty vault (the TypeScript tests reset
-// their vault mocks before each test).
+// Deletes every secret in the test program's vault, so a test starts from an empty vault.
 //
 pub fn clearTestVault(allocator: std.mem.Allocator, io: std.Io) !void {
     const vault = try vault_zig.get_vault.getVault("plaintext");

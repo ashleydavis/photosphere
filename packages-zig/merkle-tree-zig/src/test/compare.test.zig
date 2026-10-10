@@ -1,5 +1,5 @@
 //
-// Tests for compareTrees (port of src/test/compare.test.ts).
+// Tests for compareTrees.
 //
 
 const std = @import("std");

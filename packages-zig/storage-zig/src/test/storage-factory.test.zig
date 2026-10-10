@@ -19,7 +19,7 @@ fn readKeyFixture(allocator: std.mem.Allocator, fileName: []const u8) ![]u8 {
 }
 
 //
-// Loads the TypeScript fixture key pair and builds its key map ("default" and the key hash).
+// Loads the fixture key pair and builds its key map ("default" and the key hash).
 //
 const FixtureKeys = struct {
     // The public key.
@@ -53,13 +53,11 @@ fn resolved(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
 }
 
 //
-// Returns true when the storage is a StoragePrefixWrapper (TypeScript: `toBeInstanceOf(StoragePrefixWrapper)`).
+// Returns true when the storage is a StoragePrefixWrapper.
 //
 fn isStoragePrefixWrapper(storage: storage_zig.storage.IStorage) bool {
     return storage.vtable == storage_zig.storage.implement(StoragePrefixWrapper);
 }
-
-// describe('pathJoin')
 
 test "joins multiple segments with forward slashes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -117,16 +115,12 @@ test "pathJoin removes several trailing slashes and a lone slash" {
     try std.testing.expectEqualStrings("/abs/db/.", try pathJoin(arena.allocator(), &.{ "/abs/db", "./" }));
 }
 
-// describe('createStorage')
-
 test "throws when rootPath is an empty string" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     try std.testing.expectError(error.Thrown, createStorage(arena.allocator(), std.testing.io, "", null, null));
     try std.testing.expectEqualStrings("Path is required", utils.errors.lastErrorMessage());
 }
-
-// describe('fs: prefix')
 
 test "returns type \"fs\"" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -168,8 +162,6 @@ test "storage and rawStorage have the same location" {
     try std.testing.expectEqualStrings(try pathJoin(allocator, &.{ "fs:", try resolved(allocator, "/some/path") }), result.storage.location);
 }
 
-// describe('s3: prefix')
-
 test "returns type \"s3\"" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -198,8 +190,6 @@ test "s3 storage and rawStorage have the same location" {
     try std.testing.expectEqualStrings(result.rawStorage.location, result.storage.location);
     try std.testing.expectEqualStrings("s3:/my-bucket/my-prefix", result.storage.location);
 }
-
-// describe('no prefix (bare path)')
 
 test "returns type \"fs\" for a bare absolute path" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -232,8 +222,6 @@ test "normalizedPath resolves a relative bare path against the current directory
     std.mem.replaceScalar(u8, currentPath, '\\', '/');
     try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ currentPath, "relative", "path" }), result.normalizedPath);
 }
-
-// describe('with encryption options')
 
 test "returns type \"encrypted-fs\" when both keys are provided" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

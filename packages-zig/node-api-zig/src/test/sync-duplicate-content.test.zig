@@ -1,6 +1,5 @@
 //
-// Tests for pushing a file whose content the target already holds under another name (port of
-// src/test/lib/sync-duplicate-content.test.ts).
+// Tests for pushing a file whose content the target already holds under another name.
 //
 // A push decides what to copy by name, not by content.
 //

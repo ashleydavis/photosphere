@@ -1,7 +1,7 @@
 //
-// Tests for asset-server.worker.zig (port of src/test/lib/asset-server.worker.test.ts).
+// Tests for asset-server.worker.zig.
 //
-// The TypeScript tests mock the core to serve fixed bytes. These serve a real asset from a real database in a directory of its own.
+// These serve a real asset from a real database in a directory of its own.
 //
 
 const std = @import("std");
@@ -25,7 +25,7 @@ const io = std.testing.io;
 const ASSET_BYTES = "hello-asset-bytes";
 
 //
-// A running asset-server task: captures the messages the handler sends and lets the test cancel it, as the TypeScript test context does.
+// A running asset-server task: captures the messages the handler sends and lets the test cancel it.
 //
 const RunningTask = struct {
     // Allocates the messages and the handler's result.
@@ -251,6 +251,23 @@ test "assetServerHandler stops serving after the task is cancelled" {
         .contentType = null,
         .payload = null,
     })));
+}
+
+test "assetServerHandler logs when it is listening and when it has stopped" {
+    var task: RunningTask = undefined;
+    try task.start();
+    defer task.deinit();
+
+    const port = try task.waitForReadyPort();
+    const result = try task.cancelAndFinish();
+
+    const listening = try std.fmt.allocPrint(task.arena.allocator(), "Asset server task listening on http://127.0.0.1:{d}", .{port});
+    const stopped = try std.fmt.allocPrint(task.arena.allocator(), "Asset server task on http://127.0.0.1:{d} stopped", .{port});
+    const output = task.stdout.written();
+    try std.testing.expectEqual(port, result.port);
+    try std.testing.expect(std.mem.indexOf(u8, output, listening) != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, stopped) != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, listening).? < std.mem.indexOf(u8, output, stopped).?);
 }
 
 test "assetServerHandler binds the port it is asked for" {

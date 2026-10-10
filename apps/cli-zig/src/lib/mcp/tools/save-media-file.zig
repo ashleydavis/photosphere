@@ -50,7 +50,7 @@ pub fn registerSaveMediaFileTool(server: *McpServer, toolContext: *IMcpToolConte
 }
 
 //
-// The handler of `save_media_file` (TypeScript: the arrow function given to registerTool).
+// The handler of `save_media_file`.
 //
 fn saveMediaFile(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     const toolContext: *IMcpToolContext = @ptrCast(@alignCast(context.?));

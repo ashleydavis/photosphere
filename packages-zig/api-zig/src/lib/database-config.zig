@@ -2,7 +2,7 @@
 // Database config stored at .db/config.json.
 // Created on init/upgrade; holds configuration only (currently origin).
 // Runtime values (lastModifiedAt, lastSyncedAt, lastReplicatedAt, contentHash) live in the state
-// file (.db/state.dat, see database-state.ts).
+// file (.db/state.dat).
 //
 
 const std = @import("std");
@@ -18,7 +18,7 @@ const errors = utils.errors;
 const CONFIG_PATH = ".db/config.json";
 
 //
-// The database config. Every field is optional, as in TypeScript (null means the key is absent).
+// The database config. Every field is optional (null means the key is absent).
 // The `= null` defaults let std.json parse objects that leave keys out.
 //
 pub const IDatabaseConfig = struct {
@@ -27,11 +27,10 @@ pub const IDatabaseConfig = struct {
 };
 
 //
-// Reads .db/config.json for retry (the `() => rawStorage.read(CONFIG_PATH)` of TypeScript).
+// Reads .db/config.json for retry.
 //
 const ReadConfigOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
-    // (Bun inlines the module constant CONFIG_PATH into the function's source.)
+    // The text that stands for this operation in the timeout message of retryOnce.
     pub const source = "() => rawStorage.read(\".db/config.json\")";
 
     // Allocator for the file contents.
@@ -49,11 +48,10 @@ const ReadConfigOperation = struct {
 };
 
 //
-// Writes .db/config.json for retry (the `() => rawStorage.write(CONFIG_PATH, ...)` of TypeScript).
+// Writes .db/config.json for retry.
 //
 const WriteConfigOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
-    // (Bun inlines the module constant CONFIG_PATH into the function's source.)
+    // The text that stands for this operation in the timeout message of retryOnce.
     pub const source = "() => rawStorage.write(\".db/config.json\", \"application/json\", Buffer.from(text, \"utf8\"))";
 
     // Allocator for the storage implementation's temporary data.
@@ -75,14 +73,17 @@ const WriteConfigOperation = struct {
 
 //
 // Loads the database config from .db/config.json. Returns null if the file does not exist.
-// (Zig: returns the parsed JSON value, the equivalent of the JavaScript object JSON.parse returns, so that
+// (Zig: returns the parsed JSON value, so that
 // updateDatabaseConfig keeps its keys and their order; JSON `null` in the file is returned as .null.)
 //
 pub fn loadDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage) !?std.json.Value {
     if (!try rawStorage.fileExists(allocator, io, CONFIG_PATH)) {
         return null;
     }
-    var operation: ReadConfigOperation = .{ .allocator = allocator, .rawStorage = rawStorage };
+    var operation: ReadConfigOperation = .{
+        .allocator = allocator,
+        .rawStorage = rawStorage,
+    };
     const data = try retry(io, &operation, 3, 1_000, 2, 30_000, null) orelse {
         return null;
     };
@@ -90,7 +91,7 @@ pub fn loadDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: 
     const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{
         .allocate = .alloc_always,
 
-        // JSON.parse keeps the last value of a repeated key.
+        // The last value of a repeated key is kept.
         .duplicate_field_behavior = .use_last,
     }) catch |err| {
         errors.recordError("SyntaxError", "JSON Parse error: {s}", .{@errorName(err)});
@@ -101,20 +102,27 @@ pub fn loadDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: 
 
 //
 // Saves the full database config to .db/config.json.
-// (Zig: `config` is an IDatabaseConfig or a std.json.Value object; null fields are left out like undefined
-// properties are by JSON.stringify.)
+// (Zig: `config` is an IDatabaseConfig or a std.json.Value object; null fields are left out of the file.)
 //
 pub fn saveDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, config: anytype) !void {
-    const text = try std.json.Stringify.valueAlloc(allocator, config, .{ .whitespace = .indent_2, .emit_null_optional_fields = false });
-    var operation: WriteConfigOperation = .{ .allocator = allocator, .rawStorage = rawStorage, .data = text };
+    const text = try std.json.Stringify.valueAlloc(allocator, config, .{
+        .whitespace = .indent_2,
+        .emit_null_optional_fields = false,
+    });
+    var operation: WriteConfigOperation = .{
+        .allocator = allocator,
+        .rawStorage = rawStorage,
+        .data = text,
+    };
     try retry(io, &operation, 3, 1_000, 2, 30_000, null);
 }
 
 //
 // Updates the database config by merging partial into the existing config (or empty object).
-// (Zig: a `Partial<IDatabaseConfig>` is the same type as an `IDatabaseConfig`, with the one field optional, so an
-// `origin` partial leaves null is absent from the merge. In TypeScript a key present with the value undefined overwrites
-// the existing one, clearing it, so a caller there can blank the origin and a caller here cannot. No caller does.)
+// (Zig has no partial type, so partial is an IDatabaseConfig and every field of it is present. A field
+// that is null is a key present with no value: it overwrites the existing one, and the JSON writer
+// leaves it out, so the key is removed from the config. A partial that leaves a key out of the merge cannot be written.
+// No caller needs one.)
 //
 pub fn updateDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, partial: IDatabaseConfig) !void {
     const existing = try loadDatabaseConfig(allocator, io, rawStorage);
@@ -135,8 +143,15 @@ pub fn updateDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage
     }
     inline for (@typeInfo(IDatabaseConfig).@"struct".fields) |field| {
         if (@field(partial, field.name)) |value| {
-            try merged.put(allocator, field.name, .{ .string = value });
+            try merged.put(allocator, field.name, .{
+                .string = value,
+            });
+        }
+        else {
+            _ = merged.orderedRemove(field.name);
         }
     }
-    try saveDatabaseConfig(allocator, io, rawStorage, std.json.Value{ .object = merged });
+    try saveDatabaseConfig(allocator, io, rawStorage, std.json.Value{
+        .object = merged,
+    });
 }

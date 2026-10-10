@@ -5,6 +5,8 @@ const IFileStat = file_scanner.IFileStat;
 const IHashedData = merkle_tree_zig.merkle_tree.IHashedData;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const api = @import("api-zig");
 const hash_cache = @import("hash-cache.zig");
 const validation = @import("validation.zig");
@@ -21,7 +23,7 @@ const HASH_BUFFER_SIZE = 64 * 1024;
 
 //
 // Computes a hash from a stream.
-// (Zig: the stream is a *std.Io.Reader and the hash is returned by value; the caller destroys the stream.)
+// The stream is a *std.Io.Reader and the hash is returned by value; the caller destroys the stream.
 //
 pub fn computeHash(inputStream: *std.Io.Reader) ![Sha256.digest_length]u8 {
     var buffer: [HASH_BUFFER_SIZE]u8 = undefined;
@@ -34,8 +36,8 @@ pub fn computeHash(inputStream: *std.Io.Reader) ![Sha256.digest_length]u8 {
 }
 
 //
-// Hashes a whole file natively and returns the digest (TypeScript: `(filePath: string) => Buffer`).
-// (A Zig closure: `function` is called with `context`.)
+// Hashes a whole file natively and returns the digest.
+// A closure: `function` is called with `context`.
 //
 pub const NativeFileHasher = struct {
     // The state of the hasher, passed to function.
@@ -50,7 +52,7 @@ pub const NativeFileHasher = struct {
 //
 // Exported so the choice can be tested rather than inferred from which platform a test happens to
 // run on.
-// (Zig: the CLI's `crypto` is Node's as Bun provides it, which has no hashFileSync, so there is none.)
+// There is no native whole file hasher on this platform, so it returns null.
 //
 pub fn getNativeFileHasher() ?NativeFileHasher {
     return null;
@@ -89,7 +91,7 @@ pub fn computeFileHash(allocator: std.mem.Allocator, io: std.Io, filePath: []con
 //
 // Computes the hash of an asset storage file (no caching since data is already in merkle tree).
 // Takes a stream directly to avoid reading the file back from storage.
-// (Zig: the hash is allocated with the allocator.)
+// The hash is allocated with the allocator.
 //
 pub fn computeAssetHash(allocator: std.mem.Allocator, stream: *std.Io.Reader, fileStat: IFileStat) !IHashedData {
     //
@@ -106,8 +108,7 @@ pub fn computeAssetHash(allocator: std.mem.Allocator, stream: *std.Io.Reader, fi
     // the hashes recorded in the merkle tree, and one that differed by a byte would make the tree
     // disagree with the files it describes.
     //
-    // (Zig: getNativeFileHasher() is undefined outside the mobile worker, so this is always the
-    // streaming path.)
+    // getNativeFileHasher() returns null on this platform, so this is always the streaming path.
     //
     const hash = try computeHash(stream);
     return .{
@@ -151,6 +152,7 @@ pub fn getHashFromCache(allocator: std.mem.Allocator, filePath: []const u8, file
 pub fn validateAndHash(
     allocator: std.mem.Allocator,
     io: std.Io,
+    toolRunner: ?InProcessRunner,
     filePath: []const u8, // Actual file path (always a valid file, already extracted if from zip)
     fileStat: IFileStat,
     contentType: []const u8,
@@ -158,7 +160,7 @@ pub fn validateAndHash(
 ) !?IHashedData {
     // filePath is always a valid file (already extracted if from zip)
     // Validate the file
-    const isValid = validateFile(allocator, io, filePath, contentType, fileStat) catch |err| {
+    const isValid = validateFile(allocator, io, toolRunner, filePath, contentType, fileStat) catch |err| {
         // Use logicalPath for display (always set)
         log.exception(try std.fmt.allocPrint(allocator, "File \"{s}\" has failed its validation with error: {s}", .{ logicalPath, errors.errorMessage(err) }), err);
         return null;

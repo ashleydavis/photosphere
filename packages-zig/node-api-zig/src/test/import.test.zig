@@ -1,5 +1,5 @@
 //
-// Tests for addPaths (import.zig), which the TypeScript tests reach only through the CLI's add command.
+// Tests for addPaths (import.zig).
 //
 
 const std = @import("std");
@@ -64,7 +64,7 @@ test "addPaths imports a file into a new database, then finds it already there" 
     try std.testing.expectEqual(@as(f64, 1), progressLog.lastFilesAdded);
 
     // The same folder again: the import record already holds the photo, so the scanner skips it before opening it
-    // and no file message is sent for it (as in TypeScript).
+    // and no file message is sent for it.
     const again = try addPaths(allocator, io, uuidGenerator.uuidGenerator(), .{ .databasePath = databaseDir }, &.{photosDir}, null, "session-2", false, null, null);
     try std.testing.expectEqual(@as(f64, 0), again.filesAdded);
     try std.testing.expectEqual(@as(f64, 0), again.filesAlreadyAdded);

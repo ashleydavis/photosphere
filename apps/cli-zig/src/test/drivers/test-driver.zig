@@ -135,31 +135,29 @@ fn runScenario(init: std.process.Init) !void {
         try writeResult(allocator, io, resultPath, try cli.directory_picker.pickDirectory(allocator, io, scenarioArguments[0], scenarioArguments[1], validator));
     }
     else if (std.mem.eql(u8, scenario, "dbs-receive-timeout")) {
-        // dbs-receive-timeout <pairing code> <discovery timeout in ms>
-        try expectArgumentCount(scenarioArguments, 2);
+        // dbs-receive-timeout <pairing code>
+        try expectArgumentCount(scenarioArguments, 1);
         try writeResult(allocator, io, resultPath, null);
         var options: cli.dbs.IDbsReceiveOptions = .{
             .yes = true,
             .code = scenarioArguments[0],
-            .discoveryTimeoutMs = parseMilliseconds(scenarioArguments[1]),
         };
         try cli.dbs.dbsReceive(allocator, io, &options);
     }
     else if (std.mem.eql(u8, scenario, "dbs-send-timeout")) {
-        // dbs-send-timeout <database name> <pairing code> <discovery timeout in ms>
-        try expectArgumentCount(scenarioArguments, 3);
+        // dbs-send-timeout <database name> <pairing code>
+        try expectArgumentCount(scenarioArguments, 2);
         try writeResult(allocator, io, resultPath, null);
         var options: cli.dbs.IDbsSendOptions = .{
             .yes = true,
             .name = scenarioArguments[0],
             .code = scenarioArguments[1],
-            .discoveryTimeoutMs = parseMilliseconds(scenarioArguments[2]),
         };
         try cli.dbs.dbsSend(allocator, io, &options);
     }
     else if (std.mem.eql(u8, scenario, "dbs-send-to-mismatched-receiver")) {
         // dbs-send-to-mismatched-receiver <database name> <pairing code> <the other device's code>
-        // <discovery timeout in ms>
+        // <how long the other device stays up, in ms>
         try expectArgumentCount(scenarioArguments, 4);
         try writeResult(allocator, io, resultPath, null);
         try withMismatchedReceiver(io, scenarioArguments[2], parseMilliseconds(scenarioArguments[3]), ISendContext{
@@ -167,35 +165,32 @@ fn runScenario(init: std.process.Init) !void {
             .io = io,
             .name = scenarioArguments[0],
             .code = scenarioArguments[1],
-            .discoveryTimeoutMs = parseMilliseconds(scenarioArguments[3]),
         }, runDbsSend);
     }
     else if (std.mem.eql(u8, scenario, "secrets-receive-timeout")) {
-        // secrets-receive-timeout <pairing code> <discovery timeout in ms>
-        try expectArgumentCount(scenarioArguments, 2);
+        // secrets-receive-timeout <pairing code>
+        try expectArgumentCount(scenarioArguments, 1);
         try writeResult(allocator, io, resultPath, null);
         var options: cli.secrets.ISecretsReceiveOptions = .{
             .yes = true,
             .code = scenarioArguments[0],
-            .discoveryTimeoutMs = parseMilliseconds(scenarioArguments[1]),
         };
         try cli.secrets.secretsReceive(allocator, io, &options);
     }
     else if (std.mem.eql(u8, scenario, "secrets-send-timeout")) {
-        // secrets-send-timeout <secret name> <pairing code> <discovery timeout in ms>
-        try expectArgumentCount(scenarioArguments, 3);
+        // secrets-send-timeout <secret name> <pairing code>
+        try expectArgumentCount(scenarioArguments, 2);
         try writeResult(allocator, io, resultPath, null);
         var options: cli.secrets.ISecretsSendOptions = .{
             .yes = true,
             .name = scenarioArguments[0],
             .code = scenarioArguments[1],
-            .discoveryTimeoutMs = parseMilliseconds(scenarioArguments[2]),
         };
         try cli.secrets.secretsSend(allocator, io, &options);
     }
     else if (std.mem.eql(u8, scenario, "secrets-send-to-mismatched-receiver")) {
         // secrets-send-to-mismatched-receiver <secret name> <pairing code> <the other device's code>
-        // <discovery timeout in ms>
+        // <how long the other device stays up, in ms>
         try expectArgumentCount(scenarioArguments, 4);
         try writeResult(allocator, io, resultPath, null);
         try withMismatchedReceiver(io, scenarioArguments[2], parseMilliseconds(scenarioArguments[3]), ISendContext{
@@ -203,7 +198,6 @@ fn runScenario(init: std.process.Init) !void {
             .io = io,
             .name = scenarioArguments[0],
             .code = scenarioArguments[1],
-            .discoveryTimeoutMs = parseMilliseconds(scenarioArguments[3]),
         }, runSecretsSend);
     }
     else {
@@ -227,8 +221,6 @@ const ISendContext = struct {
     // The pairing code the sender uses.
     code: []const u8,
 
-    // How long the sender waits for a receiver, in milliseconds.
-    discoveryTimeoutMs: i64,
 };
 
 //
@@ -289,16 +281,16 @@ fn withMismatchedReceiver(io: std.Io, code: []const u8, timeoutMs: i64, context:
 }
 
 //
-// The discovery timeout a scenario argument carries, in milliseconds.
+// How long the held receiver stays up, as a scenario argument carries it, in milliseconds.
 //
 fn parseMilliseconds(text: []const u8) i64 {
     return std.fmt.parseInt(i64, text, 10) catch |err| {
-        std.debug.panic("Parsing the discovery timeout \"{s}\" failed: {t}", .{ text, err });
+        std.debug.panic("Parsing the milliseconds \"{s}\" failed: {t}", .{ text, err });
     };
 }
 
 //
-// Runs `psi dbs send` with the pairing code and discovery timeout a scenario carried, as the closure
+// Runs `psi dbs send` with the pairing code a scenario carried, as the closure
 // withMismatchedReceiver runs.
 //
 fn runDbsSend(context: ISendContext) !void {
@@ -306,13 +298,12 @@ fn runDbsSend(context: ISendContext) !void {
         .yes = true,
         .name = context.name,
         .code = context.code,
-        .discoveryTimeoutMs = context.discoveryTimeoutMs,
     };
     try cli.dbs.dbsSend(context.allocator, context.io, &options);
 }
 
 //
-// Runs `psi secrets send` with the pairing code and discovery timeout a scenario carried, as the
+// Runs `psi secrets send` with the pairing code a scenario carried, as the
 // closure withMismatchedReceiver runs.
 //
 fn runSecretsSend(context: ISendContext) !void {
@@ -320,7 +311,6 @@ fn runSecretsSend(context: ISendContext) !void {
         .yes = true,
         .name = context.name,
         .code = context.code,
-        .discoveryTimeoutMs = context.discoveryTimeoutMs,
     };
     try cli.secrets.secretsSend(context.allocator, context.io, &options);
 }

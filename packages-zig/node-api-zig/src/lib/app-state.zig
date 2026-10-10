@@ -12,16 +12,16 @@ pub const appStateToYaml = app_state_format.appStateToYaml;
 //
 // The state store the shared UI reads and writes through, backed by state.yaml.
 //
-// The sibling of app-config.ts. That one holds what the user chose; this one holds what the app
+// The sibling of app-config.zig. That one holds what the user chose; this one holds what the app
 // remembered so the interface comes back the way it was left: the folder a dialog last opened at, the
 // searches that were merely run, how the gallery was sorted, which sidebar sections are collapsed.
 //
-// What the state keys mean is not decided here. app-state-format.ts owns that, and is where the flat
+// What the state keys mean is not decided here. app-state-format.zig owns that, and is where the flat
 // view and its conversions live, so the phone's worker can be handed the same definition without
 // dragging the filesystem in with it. This module is the file half: loading it, and changing it.
 //
 
-// (TypeScript: `export * from "./app-state-format"`. Zig has no re-export of everything, so each name is re-exported.)
+// (Zig has no re-export of everything, so each name is re-exported.)
 pub const IAppState = app_state_format.IAppState;
 pub const IAppStateValue = app_state_format.IAppStateValue;
 pub const MAX_RECENT_SEARCHES = app_state_format.MAX_RECENT_SEARCHES;
@@ -40,7 +40,7 @@ pub fn loadAppState(allocator: std.mem.Allocator, io: std.Io) !IAppState {
 }
 
 //
-// The mutator updateAppState hands to updateYaml (the arrow function in TypeScript): it turns the document into the
+// The mutator updateAppState hands to updateYaml: it turns the document into the
 // state, lets the caller change it and merges it back into the document.
 //
 fn AppStateMutator(comptime MutatorT: type) type {
@@ -105,8 +105,7 @@ pub fn asFolderStateKey(folderKey: []const u8) !FolderStateKey {
             return candidate;
         }
     }
-    // (Zig: the message is built at compile time, so the list is joined from FOLDER_STATE_KEYS as the TypeScript does at
-    // run time.)
+    // (Zig: the message is built at compile time from FOLDER_STATE_KEYS.)
     const expectedKeys = comptime blk: {
         var joined: []const u8 = "";
         for (FOLDER_STATE_KEYS, 0..) |candidate, candidateIndex| {
@@ -135,7 +134,7 @@ pub fn getFolderPath(allocator: std.mem.Allocator, io: std.Io, folderKey: []cons
 }
 
 //
-// The mutator of updateFolderPath (the arrow function in TypeScript).
+// The mutator of updateFolderPath.
 //
 const UpdateFolderPathMutator = struct {
     // The key the folder is stored under.
@@ -174,7 +173,7 @@ pub fn updateFolderPath(allocator: std.mem.Allocator, io: std.Io, folderKey: []c
 }
 
 //
-// The mutator of updateLastFolder (the arrow function in TypeScript).
+// The mutator of updateLastFolder.
 //
 const UpdateLastFolderMutator = struct {
     // The folder to remember.
@@ -200,7 +199,7 @@ pub fn updateLastFolder(allocator: std.mem.Allocator, io: std.Io, folderPath: []
 }
 
 //
-// The mutator of updateLastDownloadFolder (the arrow function in TypeScript).
+// The mutator of updateLastDownloadFolder.
 //
 const UpdateLastDownloadFolderMutator = struct {
     // The folder to remember.
@@ -234,7 +233,7 @@ pub fn getRecentSearches(allocator: std.mem.Allocator, io: std.Io) ![]const []co
 }
 
 //
-// The mutator of addRecentSearch (the arrow function in TypeScript).
+// The mutator of addRecentSearch.
 //
 const AddRecentSearchMutator = struct {
     // The search to add.
@@ -266,7 +265,7 @@ pub fn addRecentSearch(allocator: std.mem.Allocator, io: std.Io, searchText: []c
 }
 
 //
-// The mutator of removeRecentSearch (the arrow function in TypeScript).
+// The mutator of removeRecentSearch.
 //
 const RemoveRecentSearchMutator = struct {
     // The search to remove.

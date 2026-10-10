@@ -51,7 +51,7 @@ pub fn registerListMediaFilesTool(server: *McpServer, toolContext: *IMcpToolCont
 }
 
 //
-// The handler of `list_media_files` (TypeScript: the arrow function given to registerTool).
+// The handler of `list_media_files`.
 //
 fn listMediaFiles(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     const toolContext: *IMcpToolContext = @ptrCast(@alignCast(context.?));

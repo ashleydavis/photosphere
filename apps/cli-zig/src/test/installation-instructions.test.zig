@@ -5,8 +5,7 @@ const utils = @import("utils-zig");
 const helpers = @import("test-helpers.zig");
 
 //
-// The fixture with the TypeScript output for this platform (generate.ts writes the Linux one,
-// generate-installation-instructions.ts the Windows and macOS ones).
+// The fixture with the expected output for this platform.
 //
 const platform_fixture = switch (builtin.os.tag) {
     .windows => "installation-instructions-win32.json",
@@ -14,7 +13,7 @@ const platform_fixture = switch (builtin.os.tag) {
     else => "installation-instructions.json",
 };
 
-test "showInstallationInstructions matches the TypeScript output of the platform" {
+test "showInstallationInstructions matches the expected output of the platform" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

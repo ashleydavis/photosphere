@@ -87,14 +87,14 @@ pub const IUploadAssetData = struct {
     dryRun: ?bool = null,
 
     // Pre-computed SHA-256 hash of the file content, supplied by the orchestrator.
-    // (Zig: hex encoded, because task data is JSON; TypeScript posts a Uint8Array.)
+    // Hex encoded, because task data is JSON.
     expectedHash: []const u8,
 };
 
 //
 // All data the orchestrator needs to write a single asset to the database.
-// (Zig: dates are milliseconds since the epoch, and the asset record is carried as the base64 of its BSON
-// serialization, because task outputs are JSON and JSON cannot tell the record's number and date types apart.)
+// Dates are milliseconds since the epoch, and the asset record is carried as the base64 of its BSON
+// serialization, because task outputs are JSON and JSON cannot tell the record's number and date types apart.
 //
 pub const IAssetDatabaseData = struct {
     // ID used for asset/thumb/display storage paths.
@@ -190,7 +190,6 @@ pub const IUploadAssetResult = struct {
 
 //
 // Encodes an asset record the way IAssetDatabaseData carries it: the base64 of its BSON serialization.
-// (No TypeScript counterpart: TypeScript posts the record itself.)
 //
 pub fn encodeAssetRecord(allocator: std.mem.Allocator, assetRecord: BsonDocument) ![]const u8 {
     const serialized = try bson.serialize(allocator, assetRecord);
@@ -200,7 +199,7 @@ pub fn encodeAssetRecord(allocator: std.mem.Allocator, assetRecord: BsonDocument
 }
 
 //
-// Decodes an asset record carried by IAssetDatabaseData. (No TypeScript counterpart.)
+// Decodes an asset record carried by IAssetDatabaseData.
 //
 pub fn decodeAssetRecord(allocator: std.mem.Allocator, encoded: []const u8) !BsonDocument {
     const decoder = std.base64.standard.Decoder;
@@ -210,14 +209,14 @@ pub fn decodeAssetRecord(allocator: std.mem.Allocator, encoded: []const u8) !Bso
 }
 
 //
-// `Date.now()`. (No TypeScript counterpart.)
+// The current time in milliseconds.
 //
 fn dateNow(io: std.Io) f64 {
     return @floatFromInt(std.Io.Clock.real.now(io).toMilliseconds());
 }
 
 //
-// `dayjs(time).toISOString()` for a date held as milliseconds. (No TypeScript counterpart.)
+// An ISO timestamp for a date held as milliseconds.
 //
 fn toISOString(allocator: std.mem.Allocator, time: i64) ![]const u8 {
     var output: std.Io.Writer.Allocating = .init(allocator);
@@ -226,12 +225,11 @@ fn toISOString(allocator: std.mem.Allocator, time: i64) ![]const u8 {
 }
 
 //
-// `() => storage.writeStream(filePath, contentType, createReadStream(localPath), contentLength)`.
-// (No TypeScript counterpart: the arrow functions passed to retry.)
+// Writes a local file to a storage as a stream.
 //
 fn WriteFileStreamOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the storage implementation's temporary data.
@@ -271,11 +269,11 @@ fn WriteFileStreamOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `() => computeFileHash(localPath, getNativeFileHasher())`.
+// Hashes a local file with the native hasher.
 //
 fn ComputeFileHashOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the hash.
@@ -294,10 +292,10 @@ fn ComputeFileHashOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `() => reverseGeocode(assetDetails.coordinates!, googleApiKey)`.
+// Reverse geocodes the coordinates of an asset.
 //
 const ReverseGeocodeOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text retryOnce puts in its timeout message.
     pub const source = "() => reverseGeocode(assetDetails.coordinates, googleApiKey)";
 
     // Allocates the result.
@@ -318,10 +316,10 @@ const ReverseGeocodeOperation = struct {
 };
 
 //
-// `() => fs.readFile(assetDetails.microPath)`.
+// Reads the micro thumbnail of an asset.
 //
 const ReadMicroOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text retryOnce puts in its timeout message.
     pub const source = "() => fs.readFile(assetDetails.microPath)";
 
     // Allocates the contents.
@@ -339,7 +337,7 @@ const ReadMicroOperation = struct {
 };
 
 //
-// `() => remove(assetTempDir)`.
+// Removes the temporary directory of an asset.
 //
 const RemoveDirOperation = struct {
     // The directory to remove.
@@ -354,8 +352,7 @@ const RemoveDirOperation = struct {
 };
 
 //
-// The labels of an asset: the task's own followed by every part of the directory the file is in
-// (TypeScript: `data.labels.concat(fileDir.replace(/\\/g, "/").split("/").filter(label => label))`).
+// The labels of an asset: the task's own followed by every part of the directory the file is in.
 //
 fn buildLabels(allocator: std.mem.Allocator, labels: []const []const u8, fileDir: []const u8) ![]const []const u8 {
     var result: std.ArrayList([]const u8) = .empty;
@@ -372,7 +369,7 @@ fn buildLabels(allocator: std.mem.Allocator, labels: []const []const u8, fileDir
 }
 
 //
-// Converts a string list to a BSON array. (No TypeScript counterpart.)
+// Converts a string list to a BSON array.
 //
 fn stringArray(allocator: std.mem.Allocator, strings: []const []const u8) ![]BsonValue {
     const values = try allocator.alloc(BsonValue, strings.len);
@@ -386,8 +383,8 @@ fn stringArray(allocator: std.mem.Allocator, strings: []const []const u8) ![]Bso
 // Handler for uploading a single asset. Extracts metadata, uploads files to storage,
 // and returns all data needed by the orchestrator for the database write.
 // Does NOT write to the database or acquire the write lock.
-// (Zig: the task data and output are JSON values holding IUploadAssetData and IUploadAssetResult; undefined is
-// JSON null.)
+// The task data and output are JSON values holding IUploadAssetData and IUploadAssetResult; undefined is
+// JSON null.
 //
 pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
     if (context.isCancelled()) {
@@ -411,11 +408,15 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
     var dominantColorMs: f64 = 0;
 
     const filePath = data.filePath;
-    // (Zig: fileStat is read by uploadAndDescribe, which is handed the data.)
+    // fileStat is read by uploadAndDescribe, which is handed the data.
     const contentType = data.contentType;
     const storageDescriptor = data.storageDescriptor;
     const googleApiKey = data.googleApiKey;
     const dryRun = data.dryRun orelse false;
+
+    // On a phone the shell runs ImageMagick and ffmpeg, and the task asks it through its host requester.
+    var toolRunnerStorage: node_utils.host_tools.HostToolRunner = undefined;
+    const toolRunner = try node_utils.host_tools.toolRunnerFor(context.hostRequester, &toolRunnerStorage);
     const uuidGenerator = context.uuidGenerator;
 
     const assetId = data.assetId;
@@ -425,7 +426,7 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
     _ = try std.fmt.hexToBytes(expectedHashBuffer, data.expectedHash);
 
     const openStorageStartedAt = dateNow(io);
-    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null);
+    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.hostRequester);
     const storage = opened.storage;
     const openStorageMs = dateNow(io) - openStorageStartedAt;
 
@@ -446,10 +447,10 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
     // filePath is always a valid file (already extracted if from zip)
     //TODO: We should be able to get this information from the validation phase instead of getting it again here.
     if (std.mem.startsWith(u8, contentType, "video")) {
-        assetDetails = try getVideoDetails(allocator, io, filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
+        assetDetails = try getVideoDetails(allocator, io, toolRunner, filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
     }
     else if (std.mem.startsWith(u8, contentType, "image")) {
-        assetDetails = try getImageDetails(allocator, io, filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
+        assetDetails = try getImageDetails(allocator, io, toolRunner, filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
     }
 
     const assetPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", assetId });
@@ -462,7 +463,7 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
         }
     }
 
-    const uploaded = uploadAndDescribe(allocator, io, data, context, assetDetails, storage, expectedHashBuffer, assetPath, thumbPath, displayPath, dryRun, googleApiKey, &uploadMs, &geocodeMs, &dominantColorMs) catch |err| {
+    const uploaded = uploadAndDescribe(allocator, io, data, context, toolRunner, assetDetails, storage, expectedHashBuffer, assetPath, thumbPath, displayPath, dryRun, googleApiKey, &uploadMs, &geocodeMs, &dominantColorMs) catch |err| {
         log.exception(try std.fmt.allocPrint(allocator, "Error importing file {s} ({s})", .{ filePath, assetId }), err);
         var failedMessage: std.json.ObjectMap = .empty;
         try failedMessage.put(allocator, "type", .{ .string = "import-failed" });
@@ -525,14 +526,15 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
 
 //
 // The body of uploadAssetHandler's inner try block: uploads the asset and its derivatives and builds the
-// record, or returns undefined (null) when the task is cancelled part way.
-// (No TypeScript counterpart: the try block is written inline; Zig needs it as a function to catch its errors.)
+// record, or returns null when the task is cancelled part way.
+// It is a function so uploadAssetHandler can catch its errors.
 //
 fn uploadAndDescribe(
     allocator: std.mem.Allocator,
     io: std.Io,
     data: IUploadAssetData,
     context: ITaskContext,
+    toolRunner: ?node_utils.in_process_tools.InProcessRunner,
     assetDetails: ?IAssetDetails,
     storage: IStorage,
     expectedHashBuffer: []const u8,
@@ -589,11 +591,8 @@ fn uploadAndDescribe(
         //
         // Reading the copy back was the unaccounted half of every import into an encrypted
         // database. A stream out of an encrypted store has no file behind it, so the native
-        // hasher could not be used and the bytes were decrypted and hashed in the engine's
-        // own JavaScript instead, at about a fifth of a megabyte a second on a Pixel 6: a
-        // photo spent seven seconds being written and seven more being read back, and one
-        // 87MB video spent seven and a half minutes on each. Measured across 46 photos and
-        // videos, the read-back was as long as the write it was checking.
+        // hasher could not be used and the bytes were decrypted and hashed in software
+        // instead, so the read-back took as long as the write it was checking.
         //
         // What a store can say about the copy without reading it, it is asked. One that hands
         // out what it holds is checked by length, and one that cannot say how long its copy
@@ -768,7 +767,7 @@ fn uploadAndDescribe(
 
     const dominantColorStartedAt = dateNow(io);
     const color: ?[3]f64 = if (assetDetails) |details|
-        try extractDominantColorFromThumbnail(allocator, io, details.thumbnailPath)
+        try extractDominantColorFromThumbnail(allocator, io, toolRunner, details.thumbnailPath)
     else
         null;
     dominantColorMs.* = dateNow(io) - dominantColorStartedAt;

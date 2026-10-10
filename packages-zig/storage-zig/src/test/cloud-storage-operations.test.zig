@@ -215,7 +215,7 @@ test "read reports the error of a server that is having trouble, naming the file
     try std.testing.expectError(error.Thrown, fixture.storage.read(fixture.allocator, std.testing.io, "bucket/dir/file.txt"));
 
     //
-    // (Zig: a WrappedError folds the cause's message into its own, so it reads twice: once from the format
+    // (A WrappedError folds the cause's message into its own, so it reads twice: once from the format
     // and once from the cause, as every other WrappedError message in this package does.)
     //
     try std.testing.expectEqualStrings("Failed to read bucket/dir/file.txt: Slow down: Slow down", utils.errors.lastErrorMessage());
@@ -619,7 +619,7 @@ test "releaseWriteLock ignores an error, because the lock not being there is the
     try std.testing.expectEqual(@as(usize, 1), fixture.client.countOf(.DeleteObjectCommand));
 }
 
-test "every operation drops the leading slash of a key, as TypeScript does" {
+test "every operation drops the leading slash of a key" {
     const fixture = try Fixture.init(struct {
         fn handler(command: S3Command) anyerror!S3CommandOutput {
             return switch (command) {

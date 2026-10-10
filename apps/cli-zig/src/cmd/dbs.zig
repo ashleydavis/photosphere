@@ -14,7 +14,7 @@ const commander = @import("../lib/commander.zig");
 const process_signals = @import("../lib/process-signals.zig");
 
 //
-// Names used from other files (the equivalent of the TypeScript imports).
+// Names used from other files.
 //
 const getVault = vault_zig.get_vault.getVault;
 const getDefaultVaultType = vault_zig.get_vault.getDefaultVaultType;
@@ -146,13 +146,6 @@ pub const IDbsSendOptions = struct {
 
     // Pairing code to use instead of generating one.
     code: ?[]const u8 = null,
-
-    // How long to wait for a receiver on the network, in milliseconds. The CLI never sets this, so a
-    // real user always gets the 60 seconds the TypeScript waits. It is a field rather than a literal
-    // in dbsSend so a test can drive the "no receiver" branch in milliseconds instead of waiting out
-    // the minute: the branch is the same code either way, only how long it waits before giving up
-    // differs. See IDbsReceiveOptions.discoveryTimeoutMs, which is its twin.
-    discoveryTimeoutMs: i64 = 60000,
 };
 
 //
@@ -164,7 +157,7 @@ pub const IDbsClearOptions = struct {
 };
 
 //
-// Options for the `dbs receive` command (an inline type in TypeScript).
+// Options for the `dbs receive` command.
 //
 pub const IDbsReceiveOptions = struct {
     // Skip confirmation prompts and field editing.
@@ -172,13 +165,6 @@ pub const IDbsReceiveOptions = struct {
 
     // Pairing code shown on the other device (required with --yes).
     code: ?[]const u8 = null,
-
-    // How long to wait for a sender on the network, in milliseconds. The CLI never sets this, so a
-    // real user always gets the 60 seconds the TypeScript waits. It is a field rather than a literal
-    // in dbsReceive so a test can drive the "no sender" branch in milliseconds instead of waiting
-    // out the minute: the branch is the same code either way, only how long it waits before giving
-    // up differs. See IDbsSendOptions.discoveryTimeoutMs, which is its twin.
-    discoveryTimeoutMs: i64 = 60000,
 };
 
 //
@@ -189,14 +175,14 @@ fn trim(value: []const u8) []const u8 {
 }
 
 //
-// Formats a message into the allocator (TypeScript: a template literal).
+// Formats a message into the allocator.
 //
 fn format(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) ![]const u8 {
     return std.fmt.allocPrint(allocator, fmt, args);
 }
 
 //
-// `text.padEnd(length)`: pads with spaces to a JavaScript (UTF-16) length.
+// Pads a text on the right with spaces to a length counted in UTF-16 code units.
 //
 fn padEnd(allocator: std.mem.Allocator, value: []const u8, length: usize) ![]const u8 {
     const current = commander.jsLength(value);
@@ -1278,7 +1264,7 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOp
         .s3Key = entry.s3Key,
         .encryptionKey = entry.encryptionKey,
         .geocodingKey = entry.geocodingKey,
-    });
+    }, null);
 
     // Display resolved fields
     try logPayloadFields(allocator, "\nDatabase to send:", payload);
@@ -1317,7 +1303,7 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOp
     const spin = try spinner(allocator, io, !skipPrompts);
     try spin.start("Waiting for other device on local network... (Ctrl+C to cancel)");
 
-    // TODO: this mirrors a bug in the TypeScript (dbs.ts dbsSend) until both are fixed. Ctrl+C is taken over only
+    // TODO: Ctrl+C is taken over only
     // after the pairing code and the waiting message are shown. A SIGINT that lands in between is not the command's
     // to handle: in a terminal it kills the process, but a process started as a background job of a shell without
     // job control inherits SIGINT as ignored (the smoke test pool starts every test that way, and the `set -m` of
@@ -1328,7 +1314,7 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOp
     // sender took its receiver's loopback announcements until it exited. Reproduced on Linux by holding back the
     // SIGINT rt_sigaction with strace (--inject=rt_sigaction:delay_enter=3s:when=13): the sender ran on for 63
     // seconds after SIGINT, and exited in 0.1 seconds once the listener was registered before the code was logged.
-    // Fix both CLIs by registering this listener before the pairing code is logged (and see the TODO on
+    // Fix by registering this listener before the pairing code is logged (and see the TODO on
     // LanShareSender.cancel for a cancel that comes before the wait).
     const sigintHandler: process_signals.ISignalListener = .{
         .context = &sender,
@@ -1336,7 +1322,7 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOp
     };
     try process_signals.on(.SIGINT, sigintHandler);
 
-    const endpoint = try sender.waitForReceiver(io, cmdOptions.discoveryTimeoutMs);
+    const endpoint = try sender.waitForReceiver(io, 60000);
     try process_signals.removeListener(.SIGINT, sigintHandler);
 
     if (endpoint == null) {
@@ -1381,7 +1367,7 @@ const IConflictResolverContext = struct {
 };
 
 //
-// The resolver function of buildConflictResolver (the arrow function in TypeScript).
+// The resolver function of buildConflictResolver.
 //
 fn resolveSecretConflict(context: ?*anyopaque, allocator: std.mem.Allocator, secretName: []const u8, secretType: []const u8) anyerror!IConflictResolution {
     const resolverContext: *IConflictResolverContext = @ptrCast(@alignCast(context.?));
@@ -1469,8 +1455,8 @@ fn buildConflictResolver(allocator: std.mem.Allocator, io: std.Io, skipPrompts: 
 }
 
 //
-// Converts the payload a receiver got to the database share payload (the `rawPayload as IDatabaseSharePayload` of
-// TypeScript). A payload without the fields a database share has is thrown as an error.
+// Converts the payload a receiver got to the database share payload.
+// A payload without the fields a database share has is thrown as an error.
 //
 fn toDatabaseSharePayload(allocator: std.mem.Allocator, rawPayload: std.json.Value) !IDatabaseSharePayload {
     return std.json.parseFromValueLeaky(IDatabaseSharePayload, allocator, rawPayload, .{
@@ -1519,16 +1505,15 @@ pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsRec
         code = trim(codeInput.value);
     }
 
-    var receiver = LanShareReceiver.init(io, cmdOptions.discoveryTimeoutMs);
+    var receiver = LanShareReceiver.init(io, 60000);
     defer receiver.deinit();
     try receiver.start(code);
 
     const spin = try spinner(allocator, io, !skipPrompts);
     try spin.start("Waiting for sender on the local network... (Ctrl+C to cancel)");
 
-    // TODO: this mirrors the TypeScript (dbs.ts dbsReceive) until both are fixed: the share-cancel hang explained at
-    // the TODO in dbsSend. Ctrl+C is taken over only after the waiting message is shown, as
-    // the TypeScript does, so a SIGINT between the two is lost when SIGINT was inherited as ignored.
+    // TODO: the share-cancel hang explained at the TODO in dbsSend. Ctrl+C is taken over only after the waiting
+    // message is shown, so a SIGINT between the two is lost when SIGINT was inherited as ignored.
     const sigintHandler: process_signals.ISignalListener = .{
         .context = &receiver,
         .function = cancelReceiver,
@@ -1582,7 +1567,7 @@ pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsRec
     }
 
     // Import the payload
-    const dbEntry = try importDatabasePayload(allocator, io, payload, try buildConflictResolver(allocator, io, skipPrompts));
+    const dbEntry = try importDatabasePayload(allocator, io, payload, try buildConflictResolver(allocator, io, skipPrompts), null);
     try addDatabaseEntry(allocator, io, .{
         .name = dbEntry.name,
         .description = dbEntry.description,

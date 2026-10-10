@@ -12,7 +12,7 @@ const IConfigTheme = config_format.IConfigTheme;
 //
 // `IConfig` in user-interface offers get, set, add, remove and clear over a string key, and this is
 // what backs it: the settings the user chose. What the app remembered is the sibling store in
-// app-state.ts, reached through its own context, so nothing anywhere has to work out which of the two
+// app-state.zig, reached through its own context, so nothing anywhere has to work out which of the two
 // a key belongs to.
 //
 // What the keys mean is not decided here. app-config-format.zig owns that, and is where the flat view
@@ -43,7 +43,7 @@ pub fn loadAppConfig(allocator: std.mem.Allocator, io: std.Io) !IAppConfig {
 }
 
 //
-// The mutator updateAppConfig hands to updateYaml (the arrow function in TypeScript): it turns the document into the
+// The mutator updateAppConfig hands to updateYaml: it turns the document into the
 // flat config, lets the caller change it and merges it back into the document.
 //
 fn AppConfigMutator(comptime MutatorT: type) type {
@@ -94,7 +94,7 @@ pub fn getTheme(allocator: std.mem.Allocator, io: std.Io) !IConfigTheme {
 }
 
 //
-// The mutator setTheme hands to updateAppConfig (the arrow function in TypeScript). (No TypeScript counterpart.)
+// The mutator setTheme hands to updateAppConfig.
 //
 const SetThemeMutator = struct {
     // The theme to store.

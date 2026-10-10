@@ -7,7 +7,7 @@ const PromptOutcome = prompt_module.PromptOutcome;
 const Action = settings.Action;
 
 //
-// An option of a select prompt (TypeScript: Option<Value> with a string value).
+// An option of a select prompt with a string value.
 //
 pub const SelectOption = struct {
     // Internal data for this option.

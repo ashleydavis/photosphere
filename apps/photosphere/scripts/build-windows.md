@@ -1,5 +1,5 @@
 # build-windows.sh
 
-Runs `sync-windows.sh`, then builds the Windows shell with `zig build` from the root of the repository. Invoked as `bun run --filter=ziggy build:windows`.
+Builds the Windows app. It is `sync-windows.sh` under another name and takes the same options, so see [sync-windows.md](sync-windows.md).
 
-Takes no arguments. Runs on Windows, and cross-compiles from Linux.
+Run it as `bun run --filter=ziggy build:windows -- [options]`.

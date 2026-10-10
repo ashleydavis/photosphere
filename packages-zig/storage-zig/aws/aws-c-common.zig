@@ -54,6 +54,12 @@ pub fn addCommonDefines(context: *const aws_sdk.Context, module: *std.Build.Modu
     if (context.isLinux or context.isMacos) {
         module.addCMacro("HAVE_SYSCONF", "1");
     }
+    // ANDROID: the Android CMake toolchain defines it for every file, and the libraries test it (aws-c-io's host resolver calls
+    // getaddrinfo without hints on Android, because bionic rejects the AI_ALL and AI_V4MAPPED flags with EAI_BADFLAGS). Zig's C
+    // compiler defines only __ANDROID__.
+    if (context.isAndroid) {
+        module.addCMacro("ANDROID", "1");
+    }
     // AWS_ENABLE_TRACING is off.
     module.addCMacro("INTEL_NO_ITTNOTIFY_API", "1");
 }
@@ -76,8 +82,8 @@ pub fn build(context: *const aws_sdk.Context, dependency: *std.Build.Dependency)
         .AWS_HAVE_GCC_INLINE_ASM = true,
         .AWS_HAVE_MSVC_INTRINSICS_X64 = false,
         .AWS_HAVE_POSIX_LARGE_FILE_SUPPORT = true,
-        // execinfo.h is in glibc and macOS, not in musl.
-        .AWS_HAVE_EXECINFO = (context.isLinux and !context.isMusl) or context.isMacos,
+        // execinfo.h is in glibc and macOS, not in musl, and in bionic only from API level 33 (the minimum here is lower).
+        .AWS_HAVE_EXECINFO = (context.isLinux and !context.isMusl and !context.isAndroid) or context.isMacos,
         .AWS_HAVE_WINAPI_DESKTOP = context.isWindows,
         .AWS_HAVE_LINUX_IF_LINK_H = context.isLinux,
         .AWS_HAVE_AVX2_INTRINSICS = extensions and context.isX86_64,
@@ -103,6 +109,13 @@ pub fn build(context: *const aws_sdk.Context, dependency: *std.Build.Dependency)
         try sources.appendSlice(b.allocator, try aws_sdk.globCSources(b, dependency, "source/posix"));
         // "source/darwin/*.c" matches nothing in this release (it has no source/darwin directory).
         try sources.appendSlice(b.allocator, try aws_sdk.globCSources(b, dependency, "source/darwin"));
+        try sources.append(b.allocator, "source/platform_fallback_stubs/system_info.c");
+        try sources.append(b.allocator, "source/platform_fallback_stubs/file_direct_io.c");
+    }
+    else if (context.isAndroid) {
+        // CMAKE_SYSTEM_NAME is Android: its own logging source and the fallback system info and direct IO sources.
+        try sources.appendSlice(b.allocator, try aws_sdk.globCSources(b, dependency, "source/posix"));
+        try sources.appendSlice(b.allocator, try aws_sdk.globCSources(b, dependency, "source/android"));
         try sources.append(b.allocator, "source/platform_fallback_stubs/system_info.c");
         try sources.append(b.allocator, "source/platform_fallback_stubs/file_direct_io.c");
     }
@@ -163,6 +176,11 @@ pub fn build(context: *const aws_sdk.Context, dependency: *std.Build.Dependency)
         module.linkSystemLibrary("dl", .{});
         module.linkFramework("CoreFoundation", .{});
     }
+    else if (context.isAndroid) {
+        // PLATFORM_LIBS log is not linked here: Zig puts a system library a static library names into the archive as a member, so
+        // liblog is linked by the shared library that holds this one (see addPhotosphere in build.zig). Bionic holds the dl, m, pthread
+        // and rt functions itself.
+    }
     else {
         for ([_][]const u8{ "dl", "m", "pthread", "rt" }) |system_library| {
             module.linkSystemLibrary(system_library, .{});
@@ -201,15 +219,23 @@ fn addPrivateSettings(context: *const aws_sdk.Context, module: *std.Build.Module
     else {
         module.addCMacro("_POSIX_C_SOURCE", "200809L");
         module.addCMacro("_XOPEN_SOURCE", "500");
-        // AwsThreadAffinity.cmake: pthread_attr_setaffinity_np exists in glibc; musl only has pthread_setaffinity_np.
-        if (context.isMusl) {
+        // AwsThreadAffinity.cmake: Android does not support thread affinity; pthread_attr_setaffinity_np exists in glibc, and musl
+        // only has pthread_setaffinity_np.
+        if (context.isAndroid) {
+            module.addCMacro("AWS_AFFINITY_METHOD", "AWS_AFFINITY_METHOD_NONE");
+        }
+        else if (context.isMusl) {
             module.addCMacro("AWS_AFFINITY_METHOD", "AWS_AFFINITY_METHOD_PTHREAD");
         }
         else {
             module.addCMacro("AWS_AFFINITY_METHOD", "AWS_AFFINITY_METHOD_PTHREAD_ATTR");
         }
-        // AwsThreadName.cmake: glibc's pthread_setname_np takes 2 arguments and pthread_getname_np 3.
+        // AwsThreadName.cmake: glibc's pthread_setname_np takes 2 arguments and pthread_getname_np 3. Bionic's pthread_setname_np takes
+        // 2 arguments too, but its pthread_getname_np is declared only from API level 26, and the minimum here is lower, so the
+        // probe finds no getter there.
         module.addCMacro("AWS_PTHREAD_SETNAME_TAKES_2ARGS", "1");
-        module.addCMacro("AWS_PTHREAD_GETNAME_TAKES_3ARGS", "1");
+        if (!context.isAndroid) {
+            module.addCMacro("AWS_PTHREAD_GETNAME_TAKES_3ARGS", "1");
+        }
     }
 }

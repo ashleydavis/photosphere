@@ -55,7 +55,7 @@ pub const InternalClackSettings = struct {
 };
 
 //
-// The settings (TypeScript: `settings`).
+// The settings.
 //
 pub const settings: InternalClackSettings = .{
     .aliases = &.{
@@ -95,7 +95,7 @@ pub fn actionNamed(name: []const u8) ?Action {
 
 //
 // Check if a key is an alias for a default action
-// (the TypeScript function takes a string or an array of possibly undefined strings).
+// (the keys are a list of possibly missing strings).
 //
 pub fn isActionKey(keys: []const ?[]const u8, action: Action) bool {
     for (keys) |value| {

@@ -1,6 +1,5 @@
 //
-// Tests for asset-server-routes.zig. TypeScript has no test file of its own for the routes: they are exercised through the asset-server
-// task test (src/test/lib/asset-server.worker.test.ts), which mocks the core. These run the routes against a fake core, over a real
+// Tests for asset-server-routes.zig. These run the routes against a fake core, over a real
 // HTTP server on the loopback interface, and look at what the core was asked and what the client was answered.
 //
 
@@ -21,23 +20,32 @@ const HttpServer = node_utils.http_server.HttpServer;
 const io = std.testing.io;
 
 //
-// A stream over bytes held in memory (TypeScript: `Readable.from([ASSET_BYTES])`).
+// A stream over bytes held in memory.
 //
 const BytesStream = struct {
     // The reader over the bytes.
     reader: std.Io.Reader,
 
+    //
+    // The reader over the bytes.
+    //
     fn readerFunction(ptr: *anyopaque) *std.Io.Reader {
         const self: *BytesStream = @ptrCast(@alignCast(ptr));
         return &self.reader;
     }
 
+    //
+    // Frees the stream.
+    //
     fn destroyFunction(ptr: *anyopaque, streamIo: std.Io) void {
         _ = streamIo;
         const self: *BytesStream = @ptrCast(@alignCast(ptr));
         std.heap.smp_allocator.destroy(self);
     }
 
+    //
+    // The functions of the stream.
+    //
     const vtable: IReadStream.VTable = .{
         .reader = readerFunction,
         .destroy = destroyFunction,
@@ -45,8 +53,7 @@ const BytesStream = struct {
 };
 
 //
-// A stand-in for the core: it answers from what the test set, and remembers what it was asked (TypeScript: the mocked core of the
-// asset-server task test, whose functions are jest mocks). It is used by one request at a time.
+// A stand-in for the core: it answers from what the test set, and remembers what it was asked. It is used by one request at a time.
 //
 const FakeCore = struct {
     // The bytes serveAsset streams.
@@ -89,12 +96,18 @@ const FakeCore = struct {
         };
     }
 
+    //
+    // The functions of the fake core.
+    //
     const vtable: IAssetServerCore.VTable = .{
         .serveAsset = serveAsset,
         .writeAsset = writeAsset,
         .applyDatabaseOps = applyDatabaseOps,
     };
 
+    //
+    // Remembers what it was asked and streams the bytes the test set, or fails with the error it set.
+    //
     fn serveAsset(ptr: *anyopaque, allocator: std.mem.Allocator, streamIo: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream {
         _ = allocator;
         _ = streamIo;
@@ -114,6 +127,9 @@ const FakeCore = struct {
         };
     }
 
+    //
+    // Remembers what it was asked and the body it was given, and fails with the error the test set, if any.
+    //
     fn writeAsset(ptr: *anyopaque, allocator: std.mem.Allocator, writeIo: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) anyerror!void {
         _ = allocator;
         _ = writeIo;
@@ -130,6 +146,9 @@ const FakeCore = struct {
         }
     }
 
+    //
+    // Remembers how many ops it was given and the record id of the first, and fails with the error the test set, if any.
+    //
     fn applyDatabaseOps(ptr: *anyopaque, allocator: std.mem.Allocator, applyIo: std.Io, ops: []const IDatabaseOp) anyerror!void {
         _ = allocator;
         _ = applyIo;
@@ -208,6 +227,9 @@ const Run = struct {
     // What the code under test wrote to standard error.
     stderr: std.Io.Writer.Allocating,
 
+    //
+    // Captures the log, and starts the server.
+    //
     fn start(run: *Run, enableCors: bool) !void {
         run.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         run.stderr = std.Io.Writer.Allocating.init(std.heap.smp_allocator);
@@ -215,6 +237,9 @@ const Run = struct {
         try run.fixture.start(enableCors);
     }
 
+    //
+    // Stops the server and frees what the run held.
+    //
     fn stop(run: *Run) void {
         run.fixture.stop();
         utils.console.setCapture(null, null);
@@ -222,8 +247,6 @@ const Run = struct {
         run.arena.deinit();
     }
 };
-
-// describe("GET /asset")
 
 test "GET /asset serves the bytes the core streams as application/octet-stream and gives the core the id, type and database" {
     var run: Run = undefined;
@@ -352,8 +375,6 @@ test "the query is decoded: percent-encoding and plus" {
     try std.testing.expectEqualStrings("a b|thumb|C:\\photos one", run.fixture.fake.served[0..run.fixture.fake.servedLength]);
 }
 
-// describe("POST /asset")
-
 test "POST /asset writes the body through the core with the content type and the length, and answers 204" {
     var run: Run = undefined;
     try run.start(true);
@@ -423,8 +444,6 @@ test "POST /asset returns 500 with the error's message and logs it when the core
     try std.testing.expectEqualStrings("DiskFull", reply.body);
     try std.testing.expect(std.mem.indexOf(u8, run.stderr.written(), "Error storing asset a (thumb)") != null);
 }
-
-// describe("POST /apply-database-ops")
 
 const SET_OP = "{\"databaseId\":\"/db/a\",\"collectionName\":\"metadata\",\"recordId\":\"asset-1\",\"op\":{\"type\":\"set\",\"fields\":{\"description\":\"x\"}}}";
 
@@ -585,7 +604,7 @@ test "OPTIONS is answered 200 OK with the CORS headers for any path" {
     }
 }
 
-test "no CORS headers are added when the routes are attached to a server they do not own, and OPTIONS is not special" {
+test "no CORS headers are added when the routes are attached to a server they do not own, and OPTIONS is answered by the router" {
     var run: Run = undefined;
     try run.start(false);
     defer run.stop();
@@ -597,8 +616,46 @@ test "no CORS headers are added when the routes are attached to a server they do
     try std.testing.expectEqual(@as(u16, 200), success.status);
     try std.testing.expect(success.allowOrigin == null);
     try std.testing.expect(success.allowMethods == null);
-    try std.testing.expectEqual(@as(u16, 404), options.status);
+    // Express answers OPTIONS itself for a path that has routes.
+    try std.testing.expectEqual(@as(u16, 200), options.status);
+    try std.testing.expectEqualStrings("GET, HEAD, POST", options.allow.?);
+    try std.testing.expectEqualStrings("GET, HEAD, POST", options.body);
     try std.testing.expect(options.allowOrigin == null);
+}
+
+test "OPTIONS for apply-database-ops lists POST, and OPTIONS for a path that is not a route is a 404, when the routes do not own the server" {
+    var run: Run = undefined;
+    try run.start(false);
+    defer run.stop();
+    const allocator = run.arena.allocator();
+
+    const apply = try run.fixture.get(allocator, .OPTIONS, "/apply-database-ops");
+    const nothing = try run.fixture.get(allocator, .OPTIONS, "/nothing");
+
+    try std.testing.expectEqual(@as(u16, 200), apply.status);
+    try std.testing.expectEqualStrings("POST", apply.allow.?);
+    try std.testing.expectEqualStrings("POST", apply.body);
+    try std.testing.expectEqualStrings("text/plain", apply.contentType.?);
+    try std.testing.expectEqualStrings("nosniff", apply.contentTypeOptions.?);
+    try std.testing.expectEqual(@as(u16, 404), nothing.status);
+    try std.testing.expect(std.mem.indexOf(u8, nothing.body, "<pre>Cannot OPTIONS /nothing</pre>") != null);
+}
+
+test "the pages Express sends for a 404 and for an error carry the content security headers" {
+    var run: Run = undefined;
+    try run.start(true);
+    defer run.stop();
+    const allocator = run.arena.allocator();
+
+    const missing = try run.fixture.get(allocator, .GET, "/nothing");
+    const unparsable = try run.fixture.post(allocator, "/apply-database-ops", "application/json", "{\"ops\":[");
+
+    for ([_]http_requests.Reply{ missing, unparsable }) |reply| {
+        try std.testing.expectEqualStrings("default-src 'none'", reply.contentSecurityPolicy.?);
+        try std.testing.expectEqualStrings("nosniff", reply.contentTypeOptions.?);
+        try std.testing.expectEqualStrings("text/html; charset=utf-8", reply.contentType.?);
+        try std.testing.expectEqualStrings("*", reply.allowOrigin.?);
+    }
 }
 
 test "a path that is not a route is answered 404 Cannot GET, and so is a route asked with another method" {

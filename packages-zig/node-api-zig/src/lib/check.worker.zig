@@ -4,6 +4,7 @@
 
 const std = @import("std");
 const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
 const task_queue_zig = @import("task-queue-zig");
 const hash_module = @import("hash.zig");
@@ -45,7 +46,7 @@ pub const ICheckFileData = struct {
 };
 
 //
-// The hash of the checked file (TypeScript: the anonymous type of ICheckFileResult.hashedFile).
+// The hash of the checked file.
 //
 pub const ICheckHashedFile = struct {
     // hex string
@@ -74,7 +75,7 @@ pub const ICheckFileResult = struct {
 };
 
 //
-// Converts a result to the JSON value a task outputs. (No TypeScript counterpart: TypeScript returns the object.)
+// Converts a result to the JSON value a task outputs.
 //
 fn resultToJson(allocator: std.mem.Allocator, result: ICheckFileResult) !std.json.Value {
     const text = try std.json.Stringify.valueAlloc(allocator, result, .{
@@ -100,6 +101,10 @@ pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
 
+    // On a phone the shell runs ImageMagick and ffmpeg, and the task asks it through its host requester.
+    var toolRunnerStorage: node_utils.host_tools.HostToolRunner = undefined;
+    const toolRunner = try node_utils.host_tools.toolRunnerFor(context.hostRequester, &toolRunnerStorage);
+
     // Load hash cache (read-only)
     var localHashCache = try HashCache.init(hashCacheDir, true); // readonly = true
     defer localHashCache.deinit();
@@ -113,7 +118,7 @@ pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.
     if (hashedFile == null) {
         // Not in cache - compute hash
         // filePath is always a valid file (already extracted if from zip)
-        hashedFile = try validateAndHash(allocator, io, filePath, fileStat, contentType, data.logicalPath);
+        hashedFile = try validateAndHash(allocator, io, toolRunner, filePath, fileStat, contentType, data.logicalPath);
         if (hashedFile == null) {
             return resultToJson(allocator, .{
                 .hashedFile = null,
@@ -124,7 +129,7 @@ pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.
     }
 
     // Recreate storage and metadata collection in the worker
-    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null);
+    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.hostRequester);
     const database = try createMediaFileDatabase(allocator, opened.storage, uuidGenerator, timestampProvider);
     const metadataCollection = database.metadataCollection;
 

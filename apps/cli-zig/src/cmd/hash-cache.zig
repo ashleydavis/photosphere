@@ -19,7 +19,7 @@ const errorMessage = utils.errors.errorMessage;
 const formatErrorChain = utils.wrapped_error.formatErrorChain;
 
 //
-// Options of the hash-cache show command (TypeScript: IHashCacheCommandOptions extends IBaseCommandOptions).
+// Options of the hash-cache show command.
 // The base options are in `base`.
 //
 pub const IHashCacheCommandOptions = struct {
@@ -45,7 +45,7 @@ pub fn hashCacheCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
 }
 
 //
-// The body of the try block of hashCacheCommand. (No TypeScript counterpart: TypeScript catches inline.)
+// Shows the hash cache of a database.
 //
 fn showHashCache(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IHashCacheCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
@@ -105,8 +105,7 @@ fn displayHashCacheEntries(allocator: std.mem.Allocator, hashCache: *HashCache) 
 }
 
 //
-// Formats a modified time like `lastModified.toISOString().replace('T', ' ').slice(0, 19)`.
-// (No TypeScript counterpart: TypeScript formats inline.)
+// Formats a modified time as an ISO date and time with a space in place of the "T", cut to whole seconds.
 //
 pub fn formatModified(allocator: std.mem.Allocator, lastModified: i64) ![]const u8 {
     const isoString = try (Date{ .epochMilliseconds = lastModified }).toISOString(allocator);

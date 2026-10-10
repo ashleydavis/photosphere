@@ -1,8 +1,8 @@
 const std = @import("std");
 
 //
-// No TypeScript counterpart: stands in for `a.localeCompare(b, undefined, { numeric: true })`, which FileStorage uses to
-// sort directory listings like S3 does. JavaScript uses ICU root collation with numeric ordering. Zig has no ICU, so
+// Stands in for `a.localeCompare(b, undefined, { numeric: true })`, which sorts directory listings the way S3 does
+// (ICU root collation with numeric ordering). Zig has no ICU, so
 // this emulates it for the names that storage holds: every ASCII character has its ICU primary weight (control
 // characters are ignorable, punctuation sorts before digits, letters compare case-insensitively first and then
 // lowercase before uppercase), and each run of digits compares by numeric value. Non-ASCII characters sort after all

@@ -22,7 +22,7 @@ pub const noLogDetails: ILogDetails = .{
 };
 
 //
-// The output of an external tool passed to ILog.tool (TypeScript: `{ stdout?: string; stderr?: string }`).
+// The output of an external tool passed to ILog.tool.
 //
 pub const IToolOutput = struct {
     // The standard output of the tool, if any.
@@ -33,7 +33,7 @@ pub const IToolOutput = struct {
 };
 
 //
-// The interface implemented by every log. `verboseEnabled` is a property in TypeScript and a method here.
+// The interface implemented by every log.
 //
 pub const ILog = struct {
     // The log implementation.
@@ -156,7 +156,7 @@ pub fn setLog(_log: ILog) void {
 }
 
 //
-// The default log, which writes to the console (the object literal assigned to `log` in TypeScript).
+// The default log, which writes to the console.
 //
 pub const ConsoleLog = struct {
     // True when verbose logging is enabled (always false for the console log).

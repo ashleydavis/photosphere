@@ -1,5 +1,10 @@
-# package-macos.sh
+# package-macos
 
-Builds the MacOS app (`build-macos.sh`) and packages it for distribution. Invoked as `bun run --filter=ziggy package:macos`.
+Builds the MacOS app in Release and packs `out/macos/photosphere-<version>-macos-<arch>.dmg` (with a link to `/Applications`) and `out/macos/photosphere-<version>-macos-<arch>.zip`. The build files go in `shells/macos/zig-out/package`. The version comes from `apps/photosphere/package.json`. The app is ad hoc signed, not notarized.
 
-Produces a `dmg` with `hdiutil` and a `zip`, unsigned and not notarised, in the MacOS output folder, named `photosphere-<version>-mac-<arch>.<ext>`. Takes no arguments. Runs on MacOS only.
+Run it on a Mac: `bun run --filter=ziggy package:macos`.
+
+## Arguments
+
+- `--arch <arm64|x86_64>`: default: this Mac's.
+- `--output-dir <dir>`: where the packages go. Default: `out/macos`.

@@ -10,7 +10,7 @@ const resolveStorageCredentials = node_api.resolve_storage_credentials.resolveSt
 const errors = utils.errors;
 
 //
-// The environment variables the TypeScript tests clear before and after each test.
+// The environment variables the tests clear before and after each test.
 //
 const credential_variables = [_][]const u8{ "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_ENDPOINT", "PSI_ENCRYPTION_KEY", "GOOGLE_API_KEY" };
 
@@ -40,7 +40,7 @@ fn setSecret(allocator: std.mem.Allocator, io: std.Io, name: []const u8, secretT
 }
 
 //
-// Reads one of the TypeScript generated keys of encryption-zig.
+// Reads one of the pre-generated keys of encryption-zig.
 //
 fn readKey(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const u8 {
     return test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ fixture_dirs.KEYS_DIR, name }));
@@ -54,7 +54,7 @@ test "returns empty credentials for a local path with no database entry" {
     const configDir = try setup(allocator, io, "");
     defer temp_dirs.removeTempDir(io, configDir);
 
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null);
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null, null);
 
     try std.testing.expect(result.s3Config == null);
     try std.testing.expectEqual(@as(usize, 0), result.encryptionKeyPems.len);
@@ -70,7 +70,7 @@ test "does not look up S3 credentials for a non-s3: path" {
     defer temp_dirs.removeTempDir(io, configDir);
     try setSecret(allocator, io, "my-s3-secret", "s3-credentials", "not json");
 
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null);
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null, null);
 
     try std.testing.expect(result.s3Config == null);
 }
@@ -84,7 +84,7 @@ test "loads S3 credentials from vault for an s3: path" {
     defer temp_dirs.removeTempDir(io, configDir);
     try setSecret(allocator, io, "s3secret", "s3-credentials", "{\"region\":\"us-west-2\",\"accessKeyId\":\"AKID\",\"secretAccessKey\":\"SECRET\",\"endpoint\":\"https://s3.example.com\"}");
 
-    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null);
+    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null, null);
 
     try std.testing.expect(result.s3Config != null);
     try std.testing.expectEqualStrings("us-west-2", result.s3Config.?.region.?);
@@ -93,7 +93,7 @@ test "loads S3 credentials from vault for an s3: path" {
     try std.testing.expectEqualStrings("https://s3.example.com", result.s3Config.?.endpoint.?);
 }
 
-test "an S3 secret with a repeated key is read with its last value, as JSON.parse reads it" {
+test "an S3 secret with a repeated key is read with its last value" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -102,7 +102,7 @@ test "an S3 secret with a repeated key is read with its last value, as JSON.pars
     defer temp_dirs.removeTempDir(io, configDir);
     try setSecret(allocator, io, "s3secret", "s3-credentials", "{\"region\":\"first\",\"accessKeyId\":\"AKID\",\"secretAccessKey\":\"SECRET\",\"region\":\"second\"}");
 
-    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null);
+    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null, null);
 
     try std.testing.expectEqualStrings("second", result.s3Config.?.region.?);
 }
@@ -121,7 +121,7 @@ test "falls back to AWS env vars for s3: path when vault entry is missing" {
         test_environment.setEnv(name, null) catch {};
     };
 
-    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null);
+    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null, null);
 
     try std.testing.expect(result.s3Config != null);
     try std.testing.expectEqualStrings("ENV_AKID", result.s3Config.?.accessKeyId);
@@ -138,7 +138,7 @@ test "uses explicit s3Key argument to look up S3 credentials when the path is no
     defer temp_dirs.removeTempDir(io, configDir);
     try setSecret(allocator, io, "explicit-s3", "s3-credentials", "{\"region\":\"ap-southeast-2\",\"accessKeyId\":\"EXPLICIT_AKID\",\"secretAccessKey\":\"EXPLICIT_SECRET\"}");
 
-    const result = try resolveStorageCredentials(allocator, io, "s3:other-bucket:/photos", null, "explicit-s3");
+    const result = try resolveStorageCredentials(allocator, io, "s3:other-bucket:/photos", null, "explicit-s3", null);
 
     try std.testing.expect(result.s3Config != null);
     try std.testing.expectEqualStrings("EXPLICIT_AKID", result.s3Config.?.accessKeyId);
@@ -155,7 +155,7 @@ test "explicit s3Key argument takes priority over the databases.json entry s3Key
     try setSecret(allocator, io, "registered-s3", "s3-credentials", "{\"region\":\"us-east-2\",\"accessKeyId\":\"REGISTERED_AKID\",\"secretAccessKey\":\"REGISTERED_SECRET\"}");
     try setSecret(allocator, io, "explicit-s3-priority", "s3-credentials", "{\"region\":\"us-east-2\",\"accessKeyId\":\"EXPLICIT_AKID\",\"secretAccessKey\":\"EXPLICIT_SECRET\"}");
 
-    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, "explicit-s3-priority");
+    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, "explicit-s3-priority", null);
 
     try std.testing.expectEqualStrings("EXPLICIT_AKID", result.s3Config.?.accessKeyId);
 }
@@ -168,7 +168,7 @@ test "explicit s3Key argument is ignored for non-s3: paths" {
     const configDir = try setup(allocator, io, "");
     defer temp_dirs.removeTempDir(io, configDir);
 
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, "explicit-s3");
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, "explicit-s3", null);
 
     try std.testing.expect(result.s3Config == null);
 }
@@ -187,7 +187,7 @@ test "vault entry takes priority over AWS env vars for S3 credentials" {
         test_environment.setEnv(name, null) catch {};
     };
 
-    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null);
+    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null, null);
 
     try std.testing.expectEqualStrings("VAULT_AKID", result.s3Config.?.accessKeyId);
 }
@@ -202,7 +202,7 @@ test "loads encryption key from vault when database entry has encryptionKey (raw
     const privateKeyPem = try readKey(allocator, io, "ts-private.pem");
     try setSecret(allocator, io, "enc-secret", "encryption-key", privateKeyPem);
 
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null);
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null, null);
 
     try std.testing.expectEqual(@as(usize, 1), result.encryptionKeyPems.len);
     try std.testing.expectEqualStrings(privateKeyPem, result.encryptionKeyPems[0].privateKeyPem);
@@ -217,7 +217,7 @@ test "throws when database entry encryptionKey is set but vault entry is missing
     const configDir = try setup(allocator, io, "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = \"/local/db\"\nencryption_key = \"missing-enc\"\n");
     defer temp_dirs.removeTempDir(io, configDir);
 
-    try std.testing.expectError(error.Thrown, resolveStorageCredentials(allocator, io, "/local/db", null, null));
+    try std.testing.expectError(error.Thrown, resolveStorageCredentials(allocator, io, "/local/db", null, null, null));
     try std.testing.expectEqualStrings("Encryption key \"missing-enc\" not found in vault", errors.lastErrorMessage());
 }
 
@@ -231,7 +231,7 @@ test "resolves encryptionKey param as a vault secret name when it is not a file 
     const privateKeyPem = try readKey(allocator, io, "ts-private.pem");
     try setSecret(allocator, io, "my-enc-secret", "encryption-key", privateKeyPem);
 
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", "my-enc-secret", null);
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", "my-enc-secret", null, null);
 
     try std.testing.expectEqual(@as(usize, 1), result.encryptionKeyPems.len);
     try std.testing.expectEqualStrings(privateKeyPem, result.encryptionKeyPems[0].privateKeyPem);
@@ -246,7 +246,7 @@ test "resolves encryptionKey param as a file path when the file exists" {
     defer temp_dirs.removeTempDir(io, configDir);
     const keyPath = fixture_dirs.KEYS_DIR ++ "/ts2-private.pem";
 
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", keyPath, null);
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", keyPath, null, null);
 
     try std.testing.expectEqual(@as(usize, 1), result.encryptionKeyPems.len);
     try std.testing.expectEqualStrings(try readKey(allocator, io, "ts2-private.pem"), result.encryptionKeyPems[0].privateKeyPem);
@@ -263,7 +263,7 @@ test "encryptionKey param takes priority over database entry encryptionKey" {
     const privateKeyPem = try readKey(allocator, io, "ts2-private.pem");
     try setSecret(allocator, io, "param-enc", "encryption-key", privateKeyPem);
 
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", "param-enc", null);
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", "param-enc", null, null);
 
     try std.testing.expectEqualStrings(privateKeyPem, result.encryptionKeyPems[0].privateKeyPem);
 }
@@ -282,7 +282,7 @@ test "loads encryption key from PSI_ENCRYPTION_KEY env var (vault secret name) w
         test_environment.setEnv(name, null) catch {};
     };
 
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null);
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null, null);
 
     try std.testing.expectEqual(@as(usize, 1), result.encryptionKeyPems.len);
     try std.testing.expectEqualStrings(privateKeyPem, result.encryptionKeyPems[0].privateKeyPem);
@@ -297,7 +297,7 @@ test "loads geocoding key from vault when database entry has geocodingKey" {
     defer temp_dirs.removeTempDir(io, configDir);
     try setSecret(allocator, io, "geo-secret", "api-key", "geo-api-key-123");
 
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null);
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null, null);
 
     try std.testing.expectEqualStrings("geo-api-key-123", result.googleApiKey.?);
 }
@@ -314,7 +314,7 @@ test "falls back to GOOGLE_API_KEY env var when geocoding vault entry is missing
         test_environment.setEnv(name, null) catch {};
     };
 
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null);
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null, null);
 
     try std.testing.expectEqualStrings("env-geo-key", result.googleApiKey.?);
 }
@@ -332,7 +332,7 @@ test "vault geocoding entry takes priority over GOOGLE_API_KEY env var" {
         test_environment.setEnv(name, null) catch {};
     };
 
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null);
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null, null);
 
     try std.testing.expectEqualStrings("vault-geo-key", result.googleApiKey.?);
 }
@@ -345,7 +345,7 @@ test "throws when encryptionKey value is neither a file nor a vault secret" {
     const configDir = try setup(allocator, io, "");
     defer temp_dirs.removeTempDir(io, configDir);
 
-    try std.testing.expectError(error.Thrown, resolveStorageCredentials(allocator, io, "/local/db", "nonexistent", null));
+    try std.testing.expectError(error.Thrown, resolveStorageCredentials(allocator, io, "/local/db", "nonexistent", null, null));
     try std.testing.expectEqualStrings("Encryption key \"nonexistent\" (via -k flag) is neither a file path nor a vault secret name", errors.lastErrorMessage());
 }
 
@@ -358,15 +358,14 @@ test "s3Config has undefined endpoint when not provided in vault value" {
     defer temp_dirs.removeTempDir(io, configDir);
     try setSecret(allocator, io, "s3secret-no-endpoint", "s3-credentials", "{\"region\":\"us-east-1\",\"accessKeyId\":\"AK\",\"secretAccessKey\":\"SK\"}");
 
-    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null);
+    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null, null);
 
     try std.testing.expect(result.s3Config.?.endpoint == null);
 }
 
 //
 // IS3Credentials types accessKeyId and secretAccessKey as required, so a secret that does not hold them resolves to the
-// empty string where `parsed.accessKeyId` is undefined in TypeScript. Both are credentials that cannot work either way,
-// so the secret is still resolved rather than refused.
+// empty string. Both are credentials that cannot work either way, so the secret is still resolved rather than refused.
 //
 test "an S3 secret without an access key resolves to the empty string, as the required field types force" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -377,7 +376,7 @@ test "an S3 secret without an access key resolves to the empty string, as the re
     defer temp_dirs.removeTempDir(io, configDir);
     try setSecret(allocator, io, "s3secret-no-key", "s3-credentials", "{\"region\":\"us-east-1\"}");
 
-    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null);
+    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null, null);
 
     try std.testing.expectEqualStrings("", result.s3Config.?.accessKeyId);
     try std.testing.expectEqualStrings("", result.s3Config.?.secretAccessKey);
@@ -396,7 +395,7 @@ test "resolves comma-separated encryptionKey param as multiple vault secrets" {
     try setSecret(allocator, io, "key1", "encryption-key", firstPem);
     try setSecret(allocator, io, "key2", "encryption-key", secondPem);
 
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", "key1,key2", null);
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", "key1,key2", null, null);
 
     try std.testing.expectEqual(@as(usize, 2), result.encryptionKeyPems.len);
     try std.testing.expectEqualStrings(firstPem, result.encryptionKeyPems[0].privateKeyPem);
@@ -415,7 +414,7 @@ test "resolves comma-separated encryptionKey param with whitespace trimming" {
     try setSecret(allocator, io, "key-a", "encryption-key", firstPem);
     try setSecret(allocator, io, "key-b", "encryption-key", secondPem);
 
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", " key-a , key-b ", null);
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", " key-a , key-b ", null, null);
 
     try std.testing.expectEqual(@as(usize, 2), result.encryptionKeyPems.len);
     try std.testing.expectEqualStrings(firstPem, result.encryptionKeyPems[0].privateKeyPem);
@@ -433,7 +432,7 @@ test "comma-separated encryptionKey names are trimmed of the whitespace String.p
     try setSecret(allocator, io, "key-a", "encryption-key", firstPem);
 
     // A no-break space and an ideographic space are whitespace to trim().
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", "\u{00A0}key-a\u{3000},\u{3000}", null);
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", "\u{00A0}key-a\u{3000},\u{3000}", null, null);
 
     try std.testing.expectEqual(@as(usize, 1), result.encryptionKeyPems.len);
     try std.testing.expectEqualStrings(firstPem, result.encryptionKeyPems[0].privateKeyPem);
@@ -448,7 +447,7 @@ test "geocoding vault entry stored as raw string" {
     defer temp_dirs.removeTempDir(io, configDir);
     try setSecret(allocator, io, "geo-secret-raw", "api-key", "geo-key-456");
 
-    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null);
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null, null);
 
     try std.testing.expectEqualStrings("geo-key-456", result.googleApiKey.?);
 }

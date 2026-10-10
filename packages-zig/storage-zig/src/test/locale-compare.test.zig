@@ -14,7 +14,7 @@ test "localeCompareNumeric compares numbers by value and letters case-insensitiv
 }
 
 //
-// A pair of names and the sign of `left.localeCompare(right, undefined, { numeric: true })` in TypeScript.
+// A pair of names and the sign of `left.localeCompare(right, undefined, { numeric: true })` in JavaScript.
 //
 const ExpectedComparison = struct {
     // The left name.
@@ -23,14 +23,14 @@ const ExpectedComparison = struct {
     // The right name.
     right: []const u8,
 
-    // The sign TypeScript localeCompare gives: -1, 0 or 1.
+    // The sign localeCompare gives: -1, 0 or 1.
     sign: i32,
 };
 
 //
-// Name pairs and the signs TypeScript localeCompare gives for them, copied from the committed golden fixture
-// packages-zig/merkle-tree-zig/src/test/fixtures/compare-names.json (generated with compareNames, which is
-// `left.localeCompare(right, undefined, { numeric: true })` like FileStorage.listFiles). They are the hand-picked pairs
+// Name pairs and the signs localeCompare gives for them, copied from the committed golden fixture
+// packages-zig/merkle-tree-zig/src/test/fixtures/compare-names.json (generated with
+// `left.localeCompare(right, undefined, { numeric: true })`, the order FileStorage.listFiles uses). They are the hand-picked pairs
 // followed by generated pairs over the alphabet "aAbB01-_./ " and over digits.
 //
 const expected_comparisons = [_]ExpectedComparison{
@@ -184,7 +184,7 @@ const expected_comparisons = [_]ExpectedComparison{
     .{ .left = "94320", .right = "94324", .sign = -1 },
 };
 
-test "localeCompareNumeric gives the sign TypeScript localeCompare gives for storage names" {
+test "localeCompareNumeric gives the sign localeCompare gives for storage names" {
     var mismatches: usize = 0;
     for (expected_comparisons) |comparison| {
         const actualSign = std.math.sign(locale_compare.localeCompareNumeric(comparison.left, comparison.right));

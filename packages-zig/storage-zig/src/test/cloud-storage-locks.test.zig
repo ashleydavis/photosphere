@@ -1,5 +1,5 @@
 //
-// Tests for the write locks of CloudStorage (port of src/tests/cloud-storage-locks.test.ts).
+// Tests for the write locks of CloudStorage.
 //
 
 const std = @import("std");
@@ -41,20 +41,20 @@ fn lockBody(allocator: std.mem.Allocator, owner: []const u8, timestamp: i64) !S3
 }
 
 //
-// The name of a command, as the TypeScript reads it from `command.constructor.name`.
+// The name of a command.
 //
 fn commandName(command: S3Command) []const u8 {
     return @tagName(command);
 }
 
 //
-// Answers a command for a test (the TypeScript test's handler).
+// Answers a command for a test.
 //
 const Handler = *const fn (sender: *Sender, name: []const u8) anyerror!S3CommandOutput;
 
 //
 // Replaces the storage's S3 client with one that answers from a handler and records the commands it was sent,
-// so a test can drive acquireWriteLock through an exact server response (the TypeScript's createStorage).
+// so a test can drive acquireWriteLock through an exact server response.
 //
 const Sender = struct {
     // Allocates the recorded command names and the answers.
@@ -197,7 +197,7 @@ const RecordingLog = struct {
 const lockPath = "test-bucket/db/.db/write.lock";
 
 //
-// The current time in milliseconds (TypeScript: `Date.now()`).
+// The current time in milliseconds.
 //
 fn now() i64 {
     return std.Io.Clock.real.now(std.testing.io).toMilliseconds();
@@ -280,7 +280,7 @@ test "still breaks a lock that has aged past the timeout and takes it" {
 }
 
 //
-// readableLength has no test of its own in TypeScript; what it says of an S3 object is pinned here.
+// What readableLength says of an S3 object is pinned here.
 //
 test "readableLength is the length in the info, because an object hands out what it holds" {
     var storage = CloudStorage.init(std.testing.io, "s3:", null);

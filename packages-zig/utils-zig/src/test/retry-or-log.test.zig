@@ -6,7 +6,7 @@ const errors = utils.errors;
 const virtual_time_io = @import("virtual-time-io.zig");
 
 //
-// An operation that fails a number of times and then resolves (the jest.fn() of the TypeScript tests).
+// An operation that fails a number of times and then resolves.
 //
 fn MockOperation(comptime ValueT: type) type {
     return struct {
@@ -40,7 +40,7 @@ fn MockOperation(comptime ValueT: type) type {
 }
 
 //
-// A record returned by an operation (TypeScript: `{ key: "value" }`).
+// A record returned by an operation.
 //
 const KeyValue = struct {
     // The value of the key.
@@ -48,8 +48,7 @@ const KeyValue = struct {
 };
 
 //
-// Gets the elapsed milliseconds since `start` (TypeScript mocks sleep and checks what it was called
-// with; Zig measures how long the sleeps took on the virtual clock).
+// Gets the elapsed milliseconds since `start`, which is how long the sleeps took on the virtual clock.
 //
 fn elapsedMilliseconds(io: std.Io, start: std.Io.Timestamp) i64 {
     return start.durationTo(std.Io.Clock.awake.now(io)).toMilliseconds();
@@ -136,7 +135,7 @@ test "should use custom error message" {
     try std.testing.expectEqualStrings("Custom error message", log.lastMessage);
 }
 
-test "an empty error message is the same as none, which is how TypeScript reads it" {
+test "an empty error message is the same as none" {
     var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
     virtual_time.init(std.testing.allocator);
     defer virtual_time.deinit();
@@ -165,7 +164,7 @@ test "should use default maxAttempts of 3" {
     var operation: MockOperation([]const u8) = .{ .value = "", .alwaysFails = true };
     const start = std.Io.Clock.awake.now(io);
 
-    // (Zig has no default parameters: the TypeScript defaults are passed.)
+    // (Zig has no default parameters: the conventional values are passed.)
     _ = try retryOrLog(io, &operation, "Test error", 3, 1, 2);
 
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
@@ -337,7 +336,7 @@ test "should handle operations that return undefined" {
     log.install();
     defer log.uninstall();
 
-    // (Zig: an operation that resolves with undefined returns void, and a succeeded void operation is not null.)
+    // (An operation that resolves with undefined returns void, and a succeeded void operation is not null.)
     var operation: MockOperation(void) = .{ .value = {} };
 
     const result = try retryOrLog(io, &operation, "Test error", 3, 1000, 2);

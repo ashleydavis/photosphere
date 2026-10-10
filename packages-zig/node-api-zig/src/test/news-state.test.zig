@@ -35,10 +35,12 @@ fn readState(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8) ![
 }
 
 //
-// The news state as JSON (what the TypeScript tests compare with toEqual).
+// The news state as JSON.
 //
 fn stateJson(allocator: std.mem.Allocator, state: news_state.INewsState) ![]const u8 {
-    return std.json.Stringify.valueAlloc(allocator, state, .{ .emit_null_optional_fields = false });
+    return std.json.Stringify.valueAlloc(allocator, state, .{
+        .emit_null_optional_fields = false,
+    });
 }
 
 test "is the state file, not a news.yaml of its own" {
@@ -141,7 +143,10 @@ test "writes shown_news_ids in snake_case under the news section" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-save");
-    try news_state.saveNewsState(allocator, io, .{ .shownNewsIds = &.{ "a", "b" }, .feed = &.{} });
+    try news_state.saveNewsState(allocator, io, .{
+        .shownNewsIds = &.{ "a", "b" },
+        .feed = &.{},
+    });
     try std.testing.expectEqualStrings("news:\n  shown_news_ids:\n    - a\n    - b\n", try readState(allocator, io, configDir));
 }
 
@@ -151,7 +156,11 @@ test "writes last_shown_update_version when set" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-save-version");
-    try news_state.saveNewsState(allocator, io, .{ .shownNewsIds = &.{}, .lastShownUpdateVersion = "1.2.3", .feed = &.{} });
+    try news_state.saveNewsState(allocator, io, .{
+        .shownNewsIds = &.{},
+        .lastShownUpdateVersion = "1.2.3",
+        .feed = &.{},
+    });
     try std.testing.expectEqualStrings("news:\n  last_shown_update_version: 1.2.3\n", try readState(allocator, io, configDir));
 }
 
@@ -162,7 +171,10 @@ test "leaves every other section of the state file alone" {
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-other-sections");
     try writeState(allocator, io, configDir, "desktop:\n  last_folder: /home/someone/photos\nsearches:\n  recent:\n    - beach\ngallery:\n  sort: name\n  row_height: 240\nui:\n  sidebar-collapsed-databases: true\n");
-    try news_state.saveNewsState(allocator, io, .{ .shownNewsIds = &.{"a"}, .feed = &.{} });
+    try news_state.saveNewsState(allocator, io, .{
+        .shownNewsIds = &.{"a"},
+        .feed = &.{},
+    });
     try std.testing.expectEqualStrings(
         "desktop:\n  last_folder: /home/someone/photos\nsearches:\n  recent:\n    - beach\ngallery:\n  sort: name\n  row_height: 240\nnews:\n  shown_news_ids:\n    - a\nui:\n  sidebar-collapsed-databases: true\n",
         try readState(allocator, io, configDir),
@@ -276,7 +288,7 @@ test "returns [] when the file does not exist" {
     try std.testing.expectEqual(@as(usize, 0), (try news_state.getShownNewsIds(allocator, io)).len);
 }
 
-test "news changes keep every other section of a state file the desktop app wrote, as TypeScript writes it" {
+test "news changes keep every other section of a state file the desktop app wrote" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -290,16 +302,15 @@ test "news changes keep every other section of a state file the desktop app wrot
     try news_state.addShownNewsIds(allocator, io, &.{ "second-1", "first-1" });
     try news_state.setLastShownUpdateVersion(allocator, io, "9.9.9");
 
-    // What TypeScript writes after the same three calls: updateStateFile reads the file through yamlToStateFile
-    // and writes stateFileToYaml of it with js-yaml's dump (packages/node-api/src/lib/state-format.ts), so the
-    // sections come out in the order stateFileToYaml builds them, the news section gains shown_news_ids and
-    // last_shown_update_version ahead of feed, the dropped values are gone, and js-yaml quotes the strings that
+    // What the desktop app writes after the same three calls: the file is read and written back whole, so the
+    // sections come out in a fixed order, the news section gains shown_news_ids and
+    // last_shown_update_version ahead of feed, the dropped values are gone, and the YAML writer quotes the strings that
     // would read back as something else ('yes', 'Hello: world', '1', '10').
     try std.testing.expectEqualStrings(
         "desktop:\n  last_folder: /home/someone/My Photos\n  dev_tools_open: false\nsearches:\n  recent:\n    - 'yes'\n    - beach\ngallery:\n  sort: date\n  row_height: 180.5\nnews:\n  shown_news_ids:\n    - first-1\n    - first-2\n    - second-1\n  last_shown_update_version: 9.9.9\n  feed:\n    - id: f1\n      message: 'Hello: world'\n      color: primary\n      duration: 5000\n    - id: f2\n      message: bad colour\nui:\n  '1': one\n  sidebar-collapsed: true\n  widths:\n    - '10'\n    - wide\n",
         try readState(allocator, io, configDir),
     );
 
-    // And what TypeScript's loadNewsState reads back from it.
+    // And what loadNewsState reads back from it.
     try std.testing.expectEqualStrings("{\"shownNewsIds\":[\"first-1\",\"first-2\",\"second-1\"],\"lastShownUpdateVersion\":\"9.9.9\",\"feed\":[{\"id\":\"f1\",\"message\":\"Hello: world\",\"color\":\"primary\",\"duration\":5000},{\"id\":\"f2\",\"message\":\"bad colour\"}]}", try stateJson(allocator, try news_state.loadNewsState(allocator, io)));
 }

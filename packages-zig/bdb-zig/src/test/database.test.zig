@@ -27,7 +27,7 @@ const ID2 = "22222222-2222-4222-a222-222222222222";
 var test_uuid_generator: utils.test_uuid_generator.TestUuidGenerator = .{};
 
 //
-// Creates the database under test (TypeScript: the beforeEach block).
+// Creates the database under test.
 //
 fn newDatabase(allocator: std.mem.Allocator, storage: *MemoryStorage) !*BsonDatabase {
     return BsonDatabase.init(allocator, storage.asStorage(), "", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
@@ -70,7 +70,7 @@ test "should return different collection instances for different names" {
 }
 
 //
-// Returns true when the list holds the name (TypeScript: `expect(list).toContain(name)`).
+// Returns true when the list holds the name.
 //
 fn containsName(names: []const []const u8, wanted: []const u8) bool {
     for (names) |name| {
@@ -236,8 +236,8 @@ test "commit removes a collection from the database tree when its last record is
     try std.testing.expect(storage.getFile("collections/users/collection.dat") == null);
 }
 
-test "a database committed by Zig has the root hash TypeScript computes for the same records" {
-    // The 50-assets test database was written by TypeScript. Re-setting every record into an empty database gives
+test "a database committed by Zig has the root hash of the stored test database for the same records" {
+    // The 50-assets test database was written earlier and is stored in the repository. Re-setting every record into an empty database gives
     // the same collection root hash, because merkle hashes only depend on the record hashes.
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -254,7 +254,7 @@ test "a database committed by Zig has the root hash TypeScript computes for the 
         try destinationCollection.setInternalRecord(io, record);
 
         // Committed after every record: the collection keeps at most 8 shards cached and drops a newly created
-        // shard straight away when the other 8 are dirty, which would lose its record (as in TypeScript).
+        // shard straight away when the other 8 are dirty, which would lose its record.
         try destinationDatabase.commit(io);
     }
 
@@ -264,7 +264,7 @@ test "a database committed by Zig has the root hash TypeScript computes for the 
 }
 
 //
-// Builds an external record with one string field (TypeScript: the `{ _id, name }` literal).
+// Builds an external record with one string field.
 //
 fn makeExternalRecord(allocator: std.mem.Allocator, id: []const u8, key: []const u8, value: []const u8) !BsonDocument {
     var record: BsonDocument = .empty;

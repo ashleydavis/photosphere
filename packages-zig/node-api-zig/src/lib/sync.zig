@@ -72,8 +72,8 @@ pub const ISyncResult = struct {
 };
 
 //
-// The optional onLocalChange callback of syncDatabases and syncDatabase (TypeScript:
-// `(change: ISyncChange) => void`). (Zig: a closure; `function` is called with `context`.)
+// The optional onLocalChange callback of syncDatabases and syncDatabase.
+// A closure: `function` is called with `context`.
 //
 pub const SyncChangeCallback = struct {
     // The state of the callback, passed to function.
@@ -91,15 +91,14 @@ pub const SyncChangeCallback = struct {
 };
 
 //
-// The current time in milliseconds (TypeScript: `Date.now()`). (No TypeScript counterpart.)
+// The current time in milliseconds.
 //
 fn now(io: std.Io) i64 {
     return std.Io.Clock.real.now(io).toMilliseconds();
 }
 
 //
-// The asset ids a merkle tree records as deleted, in order (TypeScript:
-// `new Set(merkleTree?.databaseMetadata?.deletedAssetIds || [])`). (No TypeScript counterpart.)
+// The asset ids a merkle tree records as deleted, in order.
 //
 fn deletedAssetIdsOf(allocator: std.mem.Allocator, merkleTree: ?IMerkleTree) !std.StringArrayHashMapUnmanaged(void) {
     var deletedIds: std.StringArrayHashMapUnmanaged(void) = .empty;
@@ -130,11 +129,11 @@ fn deletedAssetIdsOf(allocator: std.mem.Allocator, merkleTree: ?IMerkleTree) !st
 }
 
 //
-// `() => pushFiles(...)`, the step of syncDatabases that pushes files from one database to the other.
+// The step of syncDatabases that pushes files from one database to the other.
 //
 fn PushFilesOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates everything the push keeps.
@@ -162,11 +161,11 @@ fn PushFilesOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `() => syncDatabase(...)`, the step of syncDatabases that merges one database's records into the other.
+// The step of syncDatabases that merges one database's records into the other.
 //
 fn SyncDatabaseOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the merged records.
@@ -194,11 +193,11 @@ fn SyncDatabaseOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `() => bsonDatabase.commit()`.
+// Commits the BSON database.
 //
 fn CommitOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // The database to commit.
@@ -214,11 +213,11 @@ fn CommitOperation(comptime sourceText: []const u8) type {
 }
 
 //
-// `() => stampDatabaseState(assetStorage, rawStorage, { lastSyncedAt: syncedAt })`.
+// Stamps the database state with the time it was last synced.
 //
 fn StampDatabaseStateOperation(comptime sourceText: []const u8) type {
     return struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text retryOnce puts in its timeout message.
         pub const source = sourceText;
 
         // Allocates the state.
@@ -244,7 +243,7 @@ fn StampDatabaseStateOperation(comptime sourceText: []const u8) type {
 
 //
 // Syncs between source and target databases.
-// (Zig: the TypeScript optional onLocalChange is passed as null.)
+// A caller with no onLocalChange passes null.
 //
 pub fn syncDatabases(
     allocator: std.mem.Allocator,
@@ -264,10 +263,9 @@ pub fn syncDatabases(
     // nothing to sync. Reading the two small state files avoids acquiring the remote write lock and
     // downloading the remote merkle trees when there are no differences.
     //
-    // TODO: fix together with the TypeScript (sync.ts). A record's hash covers its fields but not its id,
-    // so two databases that each hold a different record with the same content have equal content hashes
-    // and this early-out skips the sync, leaving each side without the other's record. This mirrors the
-    // TypeScript on purpose until both are fixed.
+    // TODO: A record's hash covers its fields but not its id, so two databases that each hold a
+    // different record with the same content have equal content hashes and this early-out skips the
+    // sync, leaving each side without the other's record.
     //
     const sourceState = try loadDatabaseState(allocator, io, sourceRawStorage);
     const targetState = try loadDatabaseState(allocator, io, targetRawStorage);
@@ -313,8 +311,8 @@ pub fn syncDatabases(
 
 //
 // The finally block of syncDatabases' two locked sections: releases the write lock whether the section succeeded or
-// not, then passes on the section's result. (No TypeScript counterpart: TypeScript writes try/finally inline. The
-// error message of a failed section is kept across the release, which records errors of its own.)
+// not, then passes on the section's result. The error message of a failed section is kept across the release,
+// which records errors of its own.
 //
 pub fn releaseWriteLockAfter(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, sectionResult: anyerror!void) !void {
     var sectionError: errors.ErrorRecord = undefined;
@@ -325,8 +323,7 @@ pub fn releaseWriteLockAfter(allocator: std.mem.Allocator, io: std.Io, rawStorag
 }
 
 //
-// The body of syncDatabases' first try block, run holding the source's write lock.
-// (No TypeScript counterpart: the try block is written inline.)
+// The body of syncDatabases' first locked section, run holding the source's write lock.
 //
 fn pullIncomingFiles(
     allocator: std.mem.Allocator,
@@ -389,8 +386,7 @@ fn pullIncomingFiles(
 }
 
 //
-// The body of syncDatabases' second try block, run holding the target's write lock.
-// (No TypeScript counterpart: the try block is written inline.)
+// The body of syncDatabases' second locked section, run holding the target's write lock.
 //
 fn pushOutgoingFiles(
     allocator: std.mem.Allocator,
@@ -480,11 +476,8 @@ const IFileToConsider = struct {
 // ciphertext one holds is exactly the ciphertext the other would write, so it goes across as it is,
 // with no decryption on the way out and no encryption on the way in.
 //
-// On a phone those two are the whole cost of pushing an original. AES-256-CBC there runs in the
-// embedded engine's own JavaScript at about a fifth of a megabyte a second in each direction, so a
-// push of twenty originals measured on a Pixel 6 moved 48MB in 472 seconds, about 100KB/s on a
-// network that carries 11.8MB/s from the same phone, and a ninety megabyte video was a quarter of an
-// hour. The bytes themselves, sent as they are stored, go from the file to the socket natively.
+// On a phone those two are the whole cost of pushing an original, because AES-256-CBC is slow there.
+// The bytes themselves, sent as they are stored, go from the file to the socket natively.
 //
 pub const IPushBytes = struct {
     // The storage each file's bytes are read from.
@@ -546,8 +539,7 @@ pub fn chooseHowToPushBytes(allocator: std.mem.Allocator, io: std.Io, sourceAsse
 }
 
 //
-// The state of a push (TypeScript: the variables the copyFile and sayWhereTheTimeWent closures of pushFiles
-// capture).
+// The state of a push, shared by copyFile and sayWhereTheTimeWent.
 //
 const PushState = struct {
     // Allocates the tree and the messages.
@@ -714,7 +706,7 @@ const PushState = struct {
         // made of, and handing it over means nothing has to compute it: S3 checks the body against it
         // and refuses a write that does not match, while a store that cannot check it writes the
         // stream as usual. On a phone that is the difference between a sync and a stalled one, since
-        // the SDK would otherwise hash every byte in the embedded engine's pure JavaScript SHA-256.
+        // the SDK would otherwise hash every byte itself.
         //
         // What is sent, and what the target is told it is. Through the databases the stream is what
         // the database holds and the hash is the tree's, which is of exactly that. Verbatim, the
@@ -804,10 +796,10 @@ const PushState = struct {
 };
 
 //
-// `() => copyFile(file.name, file.hash)`.
+// Copies one file of a push.
 //
 const CopyFileOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text retryOnce puts in its timeout message.
     pub const source = "() => copyFile(file.name, file.hash)";
 
     // The state of the push.
@@ -861,7 +853,7 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: I
         );
     }
 
-    // TODO: fix together with the TypeScript. Files with the same content hash the same (the file name is not hashed), so equal roots can hide a file one side lacks. Mirrors sync.ts on purpose; see syncDatabases.
+    // TODO: Files with the same content hash the same (the file name is not hashed), so equal roots can hide a file one side lacks. See syncDatabases.
     // Don't do anything if the source and target merkle trees are identical.
     if (sourceMerkleTree.merkle != null and targetMerkleTree.merkle != null
         and std.mem.eql(u8, sourceMerkleTree.merkle.?.hash, targetMerkleTree.merkle.?.hash)) {
@@ -1079,9 +1071,9 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: I
 
 //
 // Extracts leaf node names from MerkleNode arrays.
-// (Zig: collects the names into a list in place of the TypeScript generator yielding them.)
+// Collects the names into a list.
 //
-// `!node.name` in TypeScript is a test for a falsy name, so an empty one throws there and it throws here.
+// A leaf with an empty name is an error, as a leaf with no name is.
 //
 fn iterateLeaves(allocator: std.mem.Allocator, leaves: *std.ArrayList([]const u8), nodes: []const *MerkleNode) !void { //todo: This could be a shared function in the merkle-tree package.
     for (nodes) |node| {
@@ -1106,8 +1098,7 @@ fn iterateLeaves(allocator: std.mem.Allocator, leaves: *std.ArrayList([]const u8
 }
 
 //
-// The leaf names of MerkleNode arrays, in order (TypeScript: a loop over `iterateLeaves(nodes)`).
-// (No TypeScript counterpart.)
+// The leaf names of MerkleNode arrays, in order.
 //
 fn leavesOf(allocator: std.mem.Allocator, nodes: []const *MerkleNode) ![]const []const u8 {
     var leaves: std.ArrayList([]const u8) = .empty;
@@ -1133,8 +1124,8 @@ const ISyncDiffRecord = struct {
 };
 
 //
-// Receives each differing record (Zig: the sync diff generators call this in place of yielding the record, so each
-// record is handled before the next one is looked up, as the TypeScript `for await` does).
+// Receives each differing record. The sync diff functions call this as each record is found, so each
+// record is handled before the next one is looked up.
 //
 const DiffVisitor = struct {
     // The state of the visitor, passed to function.
@@ -1152,7 +1143,7 @@ const DiffVisitor = struct {
 };
 
 //
-// Removes the dashes from a record id (TypeScript: `recordId.replace(/-/g, '')`). (No TypeScript counterpart.)
+// Removes the dashes from a record id.
 //
 fn withoutDashes(allocator: std.mem.Allocator, recordId: []const u8) ![]const u8 {
     const normalized = try allocator.alloc(u8, recordId.len);
@@ -1175,7 +1166,7 @@ fn iterateShardDifferences(
     visitor: DiffVisitor,
 ) !void {
 
-    // TODO: fix together with the TypeScript. Records with the same content hash the same (the id is not hashed), so this can skip or lose one of them. Mirrors sync.ts on purpose; see syncDatabases.
+    // TODO: Records with the same content hash the same (the id is not hashed), so this can skip or lose one of them. See syncDatabases.
     const diff = try findMerkleTreeDifferences(allocator, if (sourceShardTree) |shardTree| shardTree.merkle else null, if (targetShardTree) |shardTree| shardTree.merkle else null);
     const sourceShard = try sourceCollection.shard(shardId);
     const targetShard = try targetCollection.shard(shardId);
@@ -1244,7 +1235,7 @@ fn iterateCollectionDifferences(
     targetCollectionTree: ?*IMerkleTree,
     visitor: DiffVisitor,
 ) !void {
-    // TODO: fix together with the TypeScript. Records with the same content hash the same (the id is not hashed), so this can skip or lose one of them. Mirrors sync.ts on purpose; see syncDatabases.
+    // TODO: Records with the same content hash the same (the id is not hashed), so this can skip or lose one of them. See syncDatabases.
     const diff = try findMerkleTreeDifferences(allocator, if (sourceCollectionTree) |collectionTree| collectionTree.merkle else null, if (targetCollectionTree) |collectionTree| collectionTree.merkle else null);
 
     // Track shard keys we've seen to avoid duplicates (only track, don't collect all)
@@ -1295,7 +1286,7 @@ fn iterateDatabaseDifferences( //todo: todo this could be in the bdb package and
         return;
     }
 
-    // TODO: fix together with the TypeScript. Records with the same content hash the same (the id is not hashed), so this can skip or lose one of them. Mirrors sync.ts on purpose; see syncDatabases.
+    // TODO: Records with the same content hash the same (the id is not hashed), so this can skip or lose one of them. See syncDatabases.
     const diff = try findMerkleTreeDifferences(allocator, if (sourceDbTree) |dbTree| dbTree.merkle else null, if (targetDbTree) |dbTree| dbTree.merkle else null);
 
     // Track collections we've seen to avoid duplicates (only track, don't collect all)
@@ -1355,7 +1346,7 @@ fn iterateDatabaseDifferences( //todo: todo this could be in the bdb package and
 }
 
 //
-// The state of syncDatabase's `for await` loop over the differing records (TypeScript: the variables its body uses).
+// The state of syncDatabase's loop over the differing records.
 //
 const SyncDatabaseState = struct {
     // Allocates the merged records.
@@ -1377,7 +1368,7 @@ const SyncDatabaseState = struct {
     mergedCount: u64 = 0,
 
     //
-    // Handles one differing record (TypeScript: the body of the `for await` loop).
+    // Handles one differing record.
     //
     fn visit(context: *anyopaque, diff: ISyncDiffRecord) anyerror!void {
         const self: *SyncDatabaseState = @ptrCast(@alignCast(context));
@@ -1427,7 +1418,7 @@ const SyncDatabaseState = struct {
 // Syncs database records from source to target using hierarchical merkle-tree based diffing.
 // targetDeletedIds: asset IDs that have been intentionally deleted from the target database.
 // Records whose IDs are in this set will not be inserted into the target even if they exist in source.
-// (Zig: the TypeScript optional onLocalChange is passed as null.)
+// A caller with no onLocalChange passes null.
 //
 pub fn syncDatabase(
     allocator: std.mem.Allocator,
@@ -1440,7 +1431,7 @@ pub fn syncDatabase(
     const sourceDbTree = try (try sourceBsonDatabase.merkleTree()).get(io);
     const targetDbTree = try (try targetBsonDatabase.merkleTree()).get(io);
 
-    // TODO: fix together with the TypeScript. Records with the same content hash the same (the id is not hashed), so this can skip or lose one of them. Mirrors sync.ts on purpose; see syncDatabases.
+    // TODO: Records with the same content hash the same (the id is not hashed), so this can skip or lose one of them. See syncDatabases.
     if (sourceDbTree != null and sourceDbTree.?.merkle != null and targetDbTree != null and targetDbTree.?.merkle != null) { //todo: move this comparison to the iterateDatabaseDifferences function.
         if (std.mem.eql(u8, sourceDbTree.?.merkle.?.hash, targetDbTree.?.merkle.?.hash)) {
             log.verbose("Databases are identical, no sync needed.");

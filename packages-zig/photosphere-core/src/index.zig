@@ -4,3 +4,4 @@
 //
 
 pub const handlers = @import("lib/handlers.zig");
+pub const menu = @import("lib/menu.zig");

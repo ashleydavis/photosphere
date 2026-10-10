@@ -61,8 +61,7 @@ pub const IWriteLockInfo = struct {
 };
 
 //
-// The contents of a lock file, as `JSON.stringify(lockInfo)` writes them and `JSON.parse` reads them back.
-// (No TypeScript counterpart: TypeScript builds and reads an anonymous object.)
+// The contents of a lock file, as JSON.
 //
 pub const LockFileContent = struct {
     // The owner of the lock.
@@ -76,10 +75,8 @@ pub const LockFileContent = struct {
 };
 
 //
-// Reads the lock information from the contents of a lock file (TypeScript: `JSON.parse(lockContent.trim())`
-// followed by `{ owner, acquiredAt: new Date(lockData.acquiredAt), timestamp }`).
-// (Zig: content that is not the JSON the lock methods write, including an acquiredAt that `new Date` could not
-// parse, fails with the error JSON.parse would raise.)
+// Reads the lock information from the contents of a lock file. Content that is not the JSON the lock methods
+// write, including an acquiredAt that is not a date, fails with a parse error.
 //
 pub fn parseLockContent(allocator: std.mem.Allocator, lockContent: []const u8) !IWriteLockInfo {
     const trimmed = utils.js_string.trim(lockContent);
@@ -100,8 +97,8 @@ pub fn parseLockContent(allocator: std.mem.Allocator, lockContent: []const u8) !
 }
 
 //
-// Parses the YYYY-MM-DDTHH:mm:ss.sssZ form `toISOString` writes (TypeScript: `new Date(isoString)`), or returns
-// null for any other text. (No TypeScript counterpart: stands in for the Date parser of the JavaScript runtime.)
+// Parses the YYYY-MM-DDTHH:mm:ss.sssZ form `toISOString` writes, or returns
+// null for any other text.
 //
 pub fn parseISOString(text: []const u8) ?Date {
     if (text.len != 24 or text[4] != '-' or text[7] != '-' or text[10] != 'T' or text[13] != ':' or text[16] != ':' or text[19] != '.' or text[23] != 'Z') {
@@ -146,7 +143,7 @@ pub fn parseISOString(text: []const u8) ?Date {
 }
 
 //
-// Gets the id of this process (TypeScript: `process.pid`). (No TypeScript counterpart: stands in for the runtime.)
+// Gets the id of this process.
 //
 pub fn processId() i64 {
     return switch (builtin.os.tag) {
@@ -157,8 +154,8 @@ pub fn processId() i64 {
 }
 
 //
-// A readable stream returned by IStorage.readStream (the equivalent of a Node Readable).
-// Callers read from `reader()` and must call `destroy()` when finished (like Readable.destroy()).
+// A readable stream returned by IStorage.readStream.
+// Callers read from `reader()` and must call `destroy()` when finished.
 //
 pub const IReadStream = struct {
     // Pointer to the implementation.
@@ -210,7 +207,7 @@ pub const IStorage = struct {
     location: []const u8,
 
     //
-    // The functions an implementation of IStorage provides (same names as the TypeScript interface).
+    // The functions an implementation of IStorage provides.
     //
     pub const VTable = struct {
         // Returns true if the specified directory is empty.
@@ -345,11 +342,8 @@ pub const IStorage = struct {
     // whose body does not match it, which is a stronger guarantee than checking afterwards), and one
     // that cannot ignores it and writes the stream as usual.
     //
-    // It exists because computing the hash is the expensive part on a phone. The AWS SDK hashes
-    // whatever it is asked to checksum in the embedded engine's pure JavaScript SHA-256, which runs
-    // at well under a megabyte a second: measured on a Pixel 6, one 100MB video held the upload for
-    // over a quarter of an hour without a byte reaching the server. The sync already knows every
-    // file's hash, because it is what the merkle tree is made of.
+    // It exists because computing the hash is the expensive part of an upload, most of all on a phone,
+    // and the sync already knows every file's hash, because it is what the merkle tree is made of.
     //
     // Returns true when the store checked the bytes against the hash as it wrote them, so the caller
     // needs nothing further to know the copy is right. False when it could not, and the caller checks
@@ -372,9 +366,8 @@ pub const IStorage = struct {
     // copy against what was sent costs one small request instead of the whole file again. A store
     // with no such answer says so, and the caller reads the file back and hashes it as before.
     //
-    // On a phone that difference is the difference between working and not: the sync's verification
-    // read-back downloads every file a second time and hashes it with the embedded engine's pure
-    // JavaScript SHA-256, which runs at well under a megabyte a second.
+    // On a phone that difference matters: the sync's verification read-back downloads every file a
+    // second time and hashes it.
     //
     pub fn storedHash(self: IStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!?[]const u8 {
         return self.vtable.storedHash(self.ptr, allocator, io, filePath);
@@ -471,8 +464,7 @@ pub const IStorage = struct {
 
 //
 // Builds the IStorage vtable for a storage implementation whose methods have the same names and parameters as
-// IStorage (with `self: *Implementation` in place of the type erased pointer). (No TypeScript counterpart: a TS class
-// implements the interface directly.)
+// IStorage (with `self: *Implementation` in place of the type erased pointer).
 //
 pub fn implement(comptime Implementation: type) *const IStorage.VTable {
     //
@@ -657,7 +649,7 @@ pub fn implement(comptime Implementation: type) *const IStorage.VTable {
 
 //
 // Builds the IReadStream vtable for a stream type with `reader(self) *std.Io.Reader` and `destroy(self, io) void`
-// methods. (No TypeScript counterpart.)
+// methods.
 //
 pub fn implementReadStream(comptime Implementation: type) *const IReadStream.VTable {
     //

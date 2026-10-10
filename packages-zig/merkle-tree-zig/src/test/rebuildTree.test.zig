@@ -1,7 +1,6 @@
 //
-// Tests for rebuildTree. The TypeScript package has no tests for rebuildTree, so these are new; they check
-// what the TypeScript rebuildTree does: keep every leaf not under a removed path, in sorted order, in a clean
-// tree with a built merkle tree, the same id and the same database metadata, and throw for a malformed leaf.
+// Tests for rebuildTree. They check that it keeps every leaf not under a removed path, in sorted order, in a clean
+// tree with a built merkle tree, the same id and the same database metadata, and that it throws for a malformed leaf.
 //
 
 const std = @import("std");

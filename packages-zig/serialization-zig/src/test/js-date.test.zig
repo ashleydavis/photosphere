@@ -96,9 +96,9 @@ test "parseDate reads a date-time separated by a space, as Date.parse and new Da
     // Node and Bun read a date-time with no zone offset as local time, so `new Date("2025-05-27 09:54:16")`
     // measured 1748303656000 on a machine at UTC+10:00, which is 10 hours (36000000 ms) before the UTC reading
     // below. This module assumes local time is UTC (see the deviations in js-date.zig), so it reads the UTC
-    // reading. What matters here is that the text is a date at all rather than NaN: the TypeScript
-    // packages/tools/src/lib/image.ts hands exactly this text (an EXIF DateTimeOriginal of "2025:05:27
-    // 09:54:16" with its date colons rewritten as dashes) to `new Date`.
+    // reading. What matters here is that the text is a date at all rather than NaN: image metadata
+    // reading hands exactly this text (an EXIF DateTimeOriginal of "2025:05:27 09:54:16" with its date colons
+    // rewritten as dashes) to the date parser.
     try std.testing.expectEqual(@as(f64, 1748339656000), js_date.parseDate("2025-05-27 09:54:16"));
     try std.testing.expectEqual(@as(f64, 1748339656000), js_date.parseDate("2025-05-27T09:54:16"));
     try std.testing.expectEqual(@as(f64, 1748339640000), js_date.parseDate("2025-05-27 09:54"));

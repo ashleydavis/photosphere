@@ -48,7 +48,13 @@ var pool_timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
 // Returns the per process directory.
 //
 pub fn setupEnvironment(io: std.Io) ![]const u8 {
-    if (environment != null) {
+    if (environment) |existing| {
+        // Every package's tests run in this one program, and many of them clear the process environment when they finish, so it is
+        // installed again on every call. A test that points the scratch space at a directory of its own removes the variable when it
+        // finishes, so it is put back to this process's directory too. Otherwise a test that runs after one of them writes to the
+        // shared system temp directory.
+        try existing.put("PHOTOSPHERE_TMP_DIR", process_dir);
+        node_utils.process_env.setEnvironMap(existing);
         return process_dir;
     }
     console_capture.endConsoleCapture();

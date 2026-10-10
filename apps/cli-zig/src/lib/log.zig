@@ -43,8 +43,7 @@ pub const ILogOptions = struct {
 var fileLogger: ?*FileLogger = null;
 
 //
-// Prints a line of the CLI's output built from a format string (no TypeScript counterpart: TypeScript uses
-// template strings). The line is written whole, however long it is.
+// Prints a line of the CLI's output built from a format string. The line is written whole, however long it is.
 //
 fn writeOutputLineFormat(comptime format: []const u8, args: anytype) void {
     var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);

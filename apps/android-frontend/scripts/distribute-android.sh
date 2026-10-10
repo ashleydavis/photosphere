@@ -56,19 +56,31 @@ fi
 # reads anyway.
 RELEASE_NOTES="$(cd "$REPO_DIR" && bash ./scripts/release-notes.sh --limit 20)"
 
-# The version the app reports lives in a tracked file that a local build leaves saying "dev", so it
-# is rewritten for the build and put back afterwards, however the build ends. The backup name is
+# The version the app reports lives in tracked files that a local build leaves saying "dev" (the
+# TypeScript config and the two Zig configs that set-build-config.sh also stamps), so they are
+# rewritten for the build and put back afterwards, however the build ends. The backup names are
 # unique so a second distribute running beside this one cannot restore the wrong contents.
-BUILD_CONFIG="$REPO_DIR/packages/config/src/index.ts"
+BUILD_CONFIGS=(
+    "$REPO_DIR/packages/config/src/index.ts"
+    "$REPO_DIR/packages-zig/config-zig/src/index.zig"
+    "$REPO_DIR/apps/cli-zig/src/lib/config.zig"
+)
+BUILD_CONFIG_BACKUPS=()
 mkdir -p "$REPO_DIR/tmp"
-BUILD_CONFIG_BACKUP="$(mktemp "$REPO_DIR/tmp/build-config-backup.XXXXXX")"
-cp "$BUILD_CONFIG" "$BUILD_CONFIG_BACKUP"
+for BUILD_CONFIG in "${BUILD_CONFIGS[@]}"; do
+    BUILD_CONFIG_BACKUP="$(mktemp "$REPO_DIR/tmp/build-config-backup.XXXXXX")"
+    cp "$BUILD_CONFIG" "$BUILD_CONFIG_BACKUP"
+    BUILD_CONFIG_BACKUPS+=("$BUILD_CONFIG_BACKUP")
+done
 
 # Restores what was there before, including on a failed build, so an interrupted distribute never
 # leaves a stamped version behind for every later local build to report.
 restore_build_config() {
-    cp "$BUILD_CONFIG_BACKUP" "$BUILD_CONFIG"
-    rm -f "$BUILD_CONFIG_BACKUP"
+    local index
+    for index in "${!BUILD_CONFIGS[@]}"; do
+        cp "${BUILD_CONFIG_BACKUPS[$index]}" "${BUILD_CONFIGS[$index]}"
+        rm -f "${BUILD_CONFIG_BACKUPS[$index]}"
+    done
 }
 trap restore_build_config EXIT
 

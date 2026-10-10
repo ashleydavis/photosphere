@@ -1,5 +1,5 @@
 //
-// Hexadecimal text for bytes. This file has no TypeScript counterpart: the TypeScript calls `buffer.toString("hex")`.
+// Hexadecimal text for bytes.
 //
 
 const std = @import("std");

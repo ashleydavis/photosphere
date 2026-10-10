@@ -6,7 +6,7 @@ const normaliseSyncSettings = sync_settings.normaliseSyncSettings;
 const resolveSyncPauseMs = sync_settings.resolveSyncPauseMs;
 
 //
-// Parses a JSON literal (TypeScript: the object literal the test passes).
+// Parses a JSON literal.
 //
 fn parseJson(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});

@@ -36,7 +36,7 @@ const reader_buffer_length = 64 * 1024;
 //
 // NOTE: Breaking up an S3 download into multiple HTTP requests makes it really slow.
 //
-// (Zig: a pull-based std.Io.Reader; `_read` runs when the reader needs more data. Chunk buffers are allocated with the
+// (A pull-based std.Io.Reader that fetches the next chunk when the reader needs more data. Chunk buffers are allocated with the
 // page allocator and freed when the next chunk arrives or the stream is destroyed.)
 //
 pub const S3RangeReadableStream = struct {
@@ -83,14 +83,14 @@ pub const S3RangeReadableStream = struct {
     // The number of bytes of `chunk` already read.
     chunkOffset: usize,
 
-    // True once the end of the stream was reached (TypeScript: `this.push(null)`).
+    // True once the end of the stream was reached.
     ended: bool,
 
-    // The error that stopped the stream, if any (TypeScript: `this.destroy(err)`).
+    // The error that stopped the stream, if any.
     err: ?anyerror,
 
     //
-    // Creates the stream (TypeScript: `new S3RangeReadableStream(s3, bucket, key)`).
+    // Creates the stream.
     //
     pub fn init(allocator: std.mem.Allocator, io: std.Io, s3: *S3Client, bucket: []const u8, key: []const u8) !*S3RangeReadableStream {
         const self = try allocator.create(S3RangeReadableStream);
@@ -126,7 +126,7 @@ pub const S3RangeReadableStream = struct {
     }
 
     //
-    // Releases the stream (TypeScript: `destroy()`); no further requests are made.
+    // Releases the stream; no further requests are made.
     //
     pub fn destroy(self: *S3RangeReadableStream, io: std.Io) void {
         _ = io;
@@ -157,10 +157,10 @@ pub const S3RangeReadableStream = struct {
     }
 
     //
-    // One attempt at fetching the next chunk (the function passed to retry in TypeScript).
+    // One attempt at fetching the next chunk (the function passed to retry).
     //
     const ChunkAttempt = struct {
-        // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+        // The text that names this operation in the retry timeout message (read by retryOnce).
         pub const source = "async () => {\n        successfulChunkIndex = nextChunkIndex;\n        nextChunkIndex = Math.min(nextChunkIndex + 1, CHUNK_SIZES.length - 1);\n        const chunkSize = CHUNK_SIZES[successfulChunkIndex];\n        requestedChunkSize = chunkSize;\n        const rangeStart = this.offset, rangeEnd = rangeStart + chunkSize - 1, response = await this.s3.send(new GetObjectCommand({\n          Bucket: this.bucket,\n          Key: this.key,\n          Range: `bytes=${rangeStart}-${rangeEnd}`\n        }));\n        if (this.fileSize === void 0 && response.ContentRange) {\n          const match = response.ContentRange.match(/\\/(\\d+)$/);\n          if (match)\n            this.fileSize = parseInt(match[1], 10);\n        }\n        if (!response.Body)\n          return;\n        return await response.Body.transformToByteArray();\n      }";
 
         // The stream.

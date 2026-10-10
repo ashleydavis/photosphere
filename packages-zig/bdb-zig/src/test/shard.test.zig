@@ -46,7 +46,7 @@ fn makeRecord(allocator: std.mem.Allocator, id: []const u8, name: []const u8) !I
 }
 
 //
-// Asserts two records are equal (TypeScript: `toEqual`).
+// Asserts two records are deeply equal.
 //
 fn expectRecordEqual(expected: IInternalRecord, actual: ?IInternalRecord) !void {
     try std.testing.expect(actual != null);
@@ -435,7 +435,7 @@ test "BsonShard flush followed by setRecord reloads from storage first" {
     try std.testing.expectEqual(@as(usize, 2), (try shard.records(io)).count());
 }
 
-test "BsonShard loads a version 1 shard file written by TypeScript" {
+test "BsonShard loads a stored version 1 shard file" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -490,7 +490,7 @@ test "BsonShard writes the same shard payload as the test database records" {
             try std.testing.expectEqualSlices(u8, sourceFile[4 .. sourceFile.len - 32], destinationFile[8 .. destinationFile.len - 32]);
         }
 
-        // The record hashes equal the hashes TypeScript stored in the shard merkle tree.
+        // The record hashes equal the hashes stored in the shard merkle tree.
         const sourceTree = (try (try sourceShard.merkleTree()).get(io)).?;
         const destinationTree = (try (try destinationShard.merkleTree()).get(io)).?;
         try std.testing.expectEqualSlices(u8, sourceTree.merkle.?.hash, destinationTree.merkle.?.hash);

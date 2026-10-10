@@ -15,7 +15,7 @@ test "IDatabaseDescriptor parses from task data JSON with and without the option
     try std.testing.expectEqualStrings("my-key", with_key.encryptionKey.?);
 }
 
-test "IDatabaseDescriptor serializes with the TypeScript field names" {
+test "IDatabaseDescriptor serializes with the field names" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const descriptor: IDatabaseDescriptor = .{ .databasePath = "fs:/db", .encryptionKey = null };

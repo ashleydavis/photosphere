@@ -99,7 +99,7 @@ pub fn emptySharedVaultDir(allocator: std.mem.Allocator) ![]const u8 {
 
 //
 // A reader that delivers its input one chunk per read, like a terminal delivers keypresses (and like the
-// TypeScript fixture generator writes one key per chunk).
+// recorded fixtures hold one key per chunk).
 //
 pub const ChunkedReader = struct {
     // The reader interface.
@@ -380,7 +380,7 @@ pub const IDriverResult = struct {
 
 //
 // Keys typed into one prompt of the test driver: once the prompt's text has appeared on stdout, the keys are
-// written to stdin in one go. Like TypeScript, a prompt drops the rest of the chunk it was reading when it
+// written to stdin in one go. A prompt drops the rest of the chunk it was reading when it
 // finishes, so each prompt's keys are only written once that prompt is showing (as a person types them).
 //
 pub const IPromptKeys = struct {

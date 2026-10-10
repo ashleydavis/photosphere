@@ -67,7 +67,7 @@ const TestDataV3 = struct {
 };
 
 //
-// What the deserializers return for any version (TypeScript: TestDataV1 | TestDataV2 | TestDataV3).
+// What the deserializers return for any version.
 //
 const TestData = struct {
     // A name.
@@ -84,7 +84,7 @@ const TestData = struct {
 };
 
 //
-// Serializer and deserializer functions that write data as a JSON string (like JSON.stringify/JSON.parse in the TS tests).
+// Serializer and deserializer functions that write data as a JSON string.
 //
 fn Json(comptime T: type) type {
     return struct {
@@ -271,7 +271,7 @@ test "save throws when the type code is not 4 characters" {
     try expectThrownContaining(serialization.save(allocator, io, &storage, "bad.bin", data, 1, "TOOLONG", serializeV1), "Type code must be exactly 4 ASCII characters, got \"TOOLONG\" (length 7)");
 }
 
-test "save output matches TypeScript save (golden fixture)" {
+test "save output matches the golden fixture" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1001,7 +1001,7 @@ test "loadVersion returns undefined for short or missing files" {
 // ---------------------------------------------------------------------------------------------------------------
 
 //
-// Writes the same values as writeAllTypes in fixtures/generate.ts.
+// Writes the same values the golden fixture was generated from.
 //
 fn writeAllTypes(allocator: std.mem.Allocator, serializer: ISerializer) !void {
     try serializer.writeUInt32(0xDEADBEEF);
@@ -1054,7 +1054,7 @@ pub fn expectAllTypes(allocator: std.mem.Allocator, deserializer: IDeserializer)
     try std.testing.expect((try deserializer.readBSON()).eql(try allTypesBson(allocator)));
 }
 
-test "BinarySerializer output matches TypeScript BinarySerializer (golden fixture)" {
+test "BinarySerializer output matches the golden fixture" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1066,7 +1066,7 @@ test "BinarySerializer output matches TypeScript BinarySerializer (golden fixtur
     try std.testing.expectEqualSlices(u8, expected, serializer.getBuffer());
 }
 
-test "BinaryDeserializer reads TypeScript BinarySerializer output (golden fixture)" {
+test "BinaryDeserializer reads the BinarySerializer output in the golden fixture" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1095,7 +1095,7 @@ test "BinarySerializer grows its buffer from a small initial capacity" {
     }
 }
 
-test "BinaryDeserializer checkBounds error message matches TypeScript" {
+test "BinaryDeserializer checkBounds error message" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1121,7 +1121,7 @@ const ShardRecord = struct {
 };
 
 //
-// Reads a version 1 shard (TypeScript: BsonShard.deserializeShardV1).
+// Reads a version 1 shard.
 //
 fn deserializeShardV1(allocator: std.mem.Allocator, _: void, deserializer: IDeserializer) anyerror![]ShardRecord {
     const recordCount = try deserializer.readUInt32();
@@ -1135,7 +1135,7 @@ fn deserializeShardV1(allocator: std.mem.Allocator, _: void, deserializer: IDese
 }
 
 //
-// Summary of a shard record written by generate.ts.
+// Summary of a shard record in the golden fixture.
 //
 const ShardRecordSummary = struct {
     // The record id as hex.
@@ -1152,7 +1152,7 @@ const ShardRecordSummary = struct {
 };
 
 //
-// Summary of the files tree written by generate.ts.
+// Summary of the files tree in the golden fixture.
 //
 const FilesTreeSummary = struct {
     // The tree UUID as hex.
@@ -1163,7 +1163,7 @@ const FilesTreeSummary = struct {
 };
 
 //
-// The summary of the v6 database written by generate.ts.
+// The summary of the v6 database in the golden fixture.
 //
 const V6Summary = struct {
     // The records of shard 96.
@@ -1174,7 +1174,7 @@ const V6Summary = struct {
 };
 
 //
-// Reads the summary of the v6 database written by generate.ts.
+// Reads the summary of the v6 database in the golden fixture.
 //
 fn readV6Summary(allocator: std.mem.Allocator) !V6Summary {
     const json = try readFixture(allocator, "v6-summary.json");
@@ -1239,7 +1239,7 @@ test "load reads the real files tree from test/dbs/v6 including its gzip string 
         strings: [][]const u8,
 
         //
-        // Reads the start of a v6 merkle tree (TypeScript: deserializeMerkleTreeV6).
+        // Reads the start of a v6 merkle tree.
         //
         fn deserialize(treeAllocator: std.mem.Allocator, _: void, deserializer: IDeserializer) anyerror!@This() {
             const databaseMetadata = try deserializer.readBSON();
@@ -1312,7 +1312,7 @@ test "save names the file it could not write once every retry has failed" {
     const allocator = arena.allocator();
     var storage: FailingStorage = .{};
 
-    // (Zig: the retry warnings are captured, because the test runner fails a test that writes to stderr.)
+    // (The retry warnings are captured, because the test runner fails a test that writes to stderr.)
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
@@ -1332,7 +1332,7 @@ test "load names the file it could not read once every retry has failed" {
     const allocator = arena.allocator();
     var storage: FailingStorage = .{};
 
-    // (Zig: the retry warnings are captured, because the test runner fails a test that writes to stderr.)
+    // (The retry warnings are captured, because the test runner fails a test that writes to stderr.)
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
@@ -1354,7 +1354,7 @@ test "verify names the file it could not read once every retry has failed" {
     const allocator = arena.allocator();
     var storage: FailingStorage = .{};
 
-    // (Zig: the retry warnings are captured, because the test runner fails a test that writes to stderr.)
+    // (The retry warnings are captured, because the test runner fails a test that writes to stderr.)
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
@@ -1400,7 +1400,7 @@ test "the type code is read as toString(\"ascii\") reads it, which drops the hig
     try expectTestData(.{ .name = "test", .value = 42 }, loaded);
 }
 
-test "load reports the checksum mismatch when a legacy file's deserializer fails, like the TypeScript try/catch" {
+test "load reports the checksum mismatch when a legacy file's deserializer fails" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1416,7 +1416,7 @@ test "load reports the checksum mismatch when a legacy file's deserializer fails
     };
 
     // A file long enough for the legacy layout, with 32 bytes at the end that are not its checksum. Version 1 has a
-    // deserializer, and that deserializer throws, so the TypeScript catches it and reports the checksum mismatch.
+    // deserializer, and that deserializer throws, so load catches it and reports the checksum mismatch.
     var legacy = try BinarySerializer.init(allocator, 1024);
     try legacy.writeUInt32(1);
     try legacy.writeString("payload");

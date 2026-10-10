@@ -1,10 +1,9 @@
 //
-// Port of packages/config (src/index.ts): the version and build metadata of the CLI.
-// There is no config-zig package, so the two constants live here.
+// The version and build metadata of the CLI.
 //
 
 //
-// The build metadata of the CLI (TypeScript: `buildMetadata`).
+// The build metadata of the CLI.
 //
 pub const IBuildMetadata = struct {
     // The commit the CLI was built from.

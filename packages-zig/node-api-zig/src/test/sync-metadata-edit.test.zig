@@ -1,5 +1,5 @@
 //
-// Tests for a metadata edit reaching the origin through a sync (port of src/test/lib/sync-metadata-edit.test.ts).
+// Tests for a metadata edit reaching the origin through a sync.
 //
 
 const std = @import("std");
@@ -27,7 +27,7 @@ const assetId = "11111111-2222-3333-4444-555555555555";
 // Builds a database at the given directory holding one metadata record, and returns its path.
 // `originDescription` is the description the record is created with. Passing null leaves the
 // field off the record entirely; passing "" is what the real add path does, because
-// upload-asset.worker.ts writes `description: description || ""` on every asset it imports. The
+// the upload asset task writes `description: ""` on every asset it imports without one. The
 // two are not interchangeable in a merge: an absent field loses to any present one outright,
 // while an empty string is a value that competes on its timestamp like any other.
 //
@@ -71,7 +71,7 @@ fn makeOriginDatabase(allocator: std.mem.Allocator, io: std.Io, workingDir: []co
 //
 fn applySetOp(allocator: std.mem.Allocator, io: std.Io, clock: *SettableTimestampProvider, databasePath: []const u8, recordId: []const u8, fields: BsonDocument) !void {
     const created = try createStorage(allocator, io, databasePath, null, null);
-    const assetStorage = try media_file_database.openLazyOriginStorage(allocator, io, created.storage, created.rawStorage);
+    const assetStorage = try media_file_database.openLazyOriginStorage(allocator, io, created.storage, created.rawStorage, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, assetStorage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
     try media_file_database.loadSortIndexes(allocator, assetStorage, database.metadataCollection);
 
@@ -214,7 +214,7 @@ test "a description set on a device whose clock is far behind still reaches the 
 // nothing and loses nothing: mergeValues returns the other side outright when one value is
 // undefined, before it compares timestamps at all. That is why they passed while smoke test 45
 // failed. Every asset the real import path writes carries `description: ""`
-// (upload-asset.worker.ts), which is a value, not an absence, so it competes on its timestamp.
+// (the upload asset task), which is a value, not an absence, so it competes on its timestamp.
 // These are the cases test 45 actually exercises.
 
 test "a description set over an empty one reaches the origin" {

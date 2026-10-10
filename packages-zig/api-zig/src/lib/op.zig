@@ -1,11 +1,10 @@
 const std = @import("std");
 
 //
-// Operations to apply to a database record (TypeScript: IOp, ISetOp, IPushOp, IPullOp and the IOpSelection that is any one of
-// them).
+// Operations to apply to a database record: set, push and pull, and the selection that is any one of them.
 //
-// (Zig: the type of an operation is the tag of the union, so IOp, whose only field is that type, is not a type of its own. A value
-// an operation holds is any JSON value, the way the TypeScript `any` is.)
+// (Zig: the type of an operation is the tag of the union, so it is not a field of its own. A value
+// an operation holds is any JSON value.)
 //
 
 //
@@ -54,9 +53,8 @@ pub const IOpSelection = union(enum) {
 
 //
 // Reads an operation from the JSON object the page sends: `{ type: "set", fields }`, `{ type: "push", field, value }` or
-// `{ type: "pull", field, value }`. (No TypeScript counterpart: TypeScript trusts the shape of the parsed JSON, and a
-// malformed operation fails later, where a missing property is read. Here it fails when it is read, with a message that says
-// which part is wrong.)
+// `{ type: "pull", field, value }`. A malformed operation fails when it is read, with error.InvalidOp. A push or
+// pull with no `value` holds null.
 //
 pub fn opSelectionFromJson(value: std.json.Value) !IOpSelection {
     if (value != .object) {

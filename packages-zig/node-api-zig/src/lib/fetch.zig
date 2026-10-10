@@ -1,8 +1,6 @@
 //
-// Stand-in for the global `fetch` of the runtime (this file has no TypeScript counterpart): a GET request that
-// resolves to the status and the body text, like `const response = await fetch(url); response.ok;
-// response.status; await response.text()`. Redirects are followed. Network failures return the Zig error
-// (fetch rejects).
+// A GET request that resolves to the status and the body text. Redirects are followed. Network failures
+// return the Zig error.
 //
 
 const std = @import("std");

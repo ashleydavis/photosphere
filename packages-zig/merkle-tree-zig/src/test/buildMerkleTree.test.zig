@@ -1,5 +1,5 @@
 //
-// Tests for buildMerkleTree (port of src/test/buildMerkleTree.test.ts).
+// Tests for buildMerkleTree.
 //
 
 const std = @import("std");
@@ -83,7 +83,7 @@ fn countLeaves(merkleNode: ?*const MerkleNode) usize {
 }
 
 //
-// Names like `file_000` (TypeScript: `file_${i.toString().padStart(width, '0')}`).
+// Names like `file_000`, with the number padded with zeros to the width.
 //
 fn paddedFileNames(allocator: std.mem.Allocator, count: usize, width: usize) ![]const []const u8 {
     const names = try allocator.alloc([]const u8, count);

@@ -8,7 +8,7 @@ const socket = @import("socket.zig");
 const https = @import("https.zig");
 
 //
-// Names used from other files (the equivalent of the TypeScript imports).
+// Names used from other files.
 //
 const IPairingCodeHashResponse = lan_share_types.IPairingCodeHashResponse;
 const generateKeyPairSync = encryption.node_crypto.generateKeyPairSync;
@@ -33,14 +33,12 @@ const BROADCAST_INTERVAL_MS = 1000;
 const DISCOVERY_PORT: u16 = 54321;
 
 //
-// How long the receiver's threads wait at a time before checking whether the receive has finished (the event loop
-// of the TypeScript receiver runs its timers and handlers between events).
+// How long the receiver's threads wait at a time before checking whether the receive has finished.
 //
 const POLL_INTERVAL_MS: i32 = 100;
 
 //
-// How long a connection may sit idle between requests before it is closed (Node's http server's default
-// keepAliveTimeout).
+// How long a connection may sit idle between requests before it is closed.
 //
 const KEEP_ALIVE_TIMEOUT_MS: i64 = 5000;
 
@@ -65,7 +63,7 @@ pub const ISelfSignedCert = struct {
 pub fn generateSelfSignedCert(allocator: std.mem.Allocator, io: std.Io) !ISelfSignedCert {
     const keyPair = try generateKeyPairSync(allocator, io, 2048);
 
-    // Node has no built-in certificate generator, so the certificate is built with a small inline ASN.1 builder.
+    // The certificate is built with a small inline ASN.1 builder.
     const cert = try buildSelfSignedCert(allocator, io, keyPair.publicKey, keyPair.privateKey);
 
     const fingerprint = sha256Hex(try extractDerFromPem(allocator, cert));
@@ -301,8 +299,7 @@ pub fn encodeAsn1Explicit(allocator: std.mem.Allocator, tagNumber: u8, content: 
 // Accepts a single payload delivery from a sender after pairing code verification.
 //
 // The server accepts connections on a thread of its own, serves each connection on a thread of its own, and
-// broadcasts on another, where the TypeScript receiver has them all on Node's event loop. What they share is kept in
-// atomics. Call deinit once finished with the receiver.
+// broadcasts on another. What they share is kept in atomics. Call deinit once finished with the receiver.
 //
 pub const LanShareReceiver = struct {
     // Allocates what the receiver keeps between calls and what its threads allocate (thread-safe).
@@ -458,7 +455,7 @@ pub const LanShareReceiver = struct {
         // Discovery is best-effort. A failed broadcast or loopback send (for example an
         // ECONNREFUSED surfaced from an ICMP port-unreachable when no sender is listening on
         // 127.0.0.1 yet) must not stop the receiver, which still serves the transfer over its
-        // HTTPS server (the TypeScript receiver's `error` handler ignores them).
+        // HTTPS server.
         socket.sendTo(udpSocket, message, .{ .address = .{ 255, 255, 255, 255 }, .port = DISCOVERY_PORT }) catch {};
         // Also send to loopback so same-machine discovery works on macOS, where
         // 255.255.255.255 broadcasts are not reliably looped back between processes.
@@ -545,7 +542,7 @@ pub const LanShareReceiver = struct {
     //
     fn serveConnection(self: *LanShareReceiver, handle: socket.Handle) void {
         const connection = https.Connection.accept(std.heap.smp_allocator, &self.serverContext.?, handle) catch {
-            // A failed handshake (a port scan, a client that went away) only loses that connection, as with Node.
+            // A failed handshake (a port scan, a client that went away) only loses that connection.
             return;
         };
         defer connection.close();
@@ -632,7 +629,7 @@ pub const LanShareReceiver = struct {
             defer std.heap.smp_allocator.free(rawBody);
 
             self.arenaMutex.lockUncancelable(self.io);
-            // JSON.parse keeps the last value of a repeated key.
+            // The last value of a repeated key wins.
             const parsed = std.json.parseFromSliceLeaky(std.json.Value, self.allocator(), rawBody, .{
                 .duplicate_field_behavior = .use_last,
             });
@@ -642,9 +639,8 @@ pub const LanShareReceiver = struct {
                 return true;
             };
 
-            // TODO: replicates a TypeScript bug. `parsed.codeHash` of a body of `null` throws inside the request's 'end'
-            // handler, an uncaught TypeError that ends the receiving process, so one request from any device on the
-            // LAN stops `psi dbs receive`. Fix it in the TypeScript first, then here.
+            // TODO: reading `codeHash` of a body of `null` ends the receiving process as an uncaught TypeError, so one
+            // request from any device on the LAN stops `psi dbs receive`. It should be answered with an error instead.
             if (shareRequest == .null) {
                 errors.recordError("TypeError", "null is not an object (evaluating 'parsed.codeHash')", .{});
                 node_utils.termination.shutdownOnUncaughtException(self.io, error.Thrown);
@@ -667,7 +663,7 @@ pub const LanShareReceiver = struct {
     }
 
     //
-    // JavaScript falsiness of a JSON value (`!value`).
+    // Whether a JSON value is falsy: null, false, zero, NaN or an empty string.
     //
     fn isFalsy(value: std.json.Value) bool {
         return switch (value) {

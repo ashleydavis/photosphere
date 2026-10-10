@@ -1,5 +1,5 @@
 //
-// Tests for the aws-c-s3 binding (src/lib/s3-client.zig), which has no TypeScript counterpart.
+// Tests for the aws-c-s3 binding (src/lib/s3-client.zig).
 //
 
 const std = @import("std");
@@ -45,7 +45,7 @@ test "decodeXmlEntities decodes the entities the SDK decodes, one entity after a
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // What the JavaScript SDK made of the same keys (read from a server by the TypeScript CloudStorage).
+    // What a reference S3 client made of the same keys, read from a server.
     try std.testing.expectEqualStrings("1A2B3©4 5&bogus;6&lt;7<8>9\"10'11¢12£13¥14€15®16₹17&#1234567;18😀19\x0020&AMP;", try decodeXmlEntities(allocator, "1&#65;2&#x42;3&copy;4&nbsp;5&bogus;6&amp;lt;7&lt;8&gt;9&quot;10&apos;11&cent;12&pound;13&yen;14&euro;15&reg;16&inr;17&#1234567;18&#x1F600;19&#0;20&AMP;"));
     try std.testing.expectEqualStrings("a\u{FFFD}b&#60;c>e>fAg&#12345678;h&#x0000041;i&#x110000;j k", try decodeXmlEntities(allocator, "a&#xD800;b&#38;#60;c&#x3e;e&#x3E;f&#00065;g&#12345678;h&#x0000041;i&#x110000;j&nbsp;k"));
     try std.testing.expectEqualStrings("'''>><<\"\"&&&", try decodeXmlEntities(allocator, "&apos;&#39;&#x27;&gt;&#62;&lt;&#x3C;&quot;&#34;&amp;&#38;&#x26;"));

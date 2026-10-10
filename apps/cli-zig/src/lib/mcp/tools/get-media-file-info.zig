@@ -37,7 +37,7 @@ pub fn registerGetMediaFileInfoTool(server: *McpServer, toolContext: *IMcpToolCo
 }
 
 //
-// The handler of `get_media_file_info` (TypeScript: the arrow function given to registerTool).
+// The handler of `get_media_file_info`.
 //
 fn getMediaFileInfo(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     const toolContext: *IMcpToolContext = @ptrCast(@alignCast(context.?));

@@ -123,7 +123,7 @@ fn reportProgress(progressCallback: ?ProgressCallback, comptime format: []const 
 }
 
 //
-// The state of a repair (TypeScript: the variables the repairFile and checkFile closures capture).
+// The state of a repair, shared by repairFile and checkFile.
 //
 const RepairState = struct {
     // Allocates the lists and messages.
@@ -301,7 +301,7 @@ const RepairState = struct {
     }
 
     //
-    // Checks a node and its asset's database record (TypeScript: the arrow function passed to traverseTreeAsync).
+    // Checks a node and its asset's database record.
     //
     fn visitNode(self: *RepairState, node: *SortNode) anyerror!bool {
         const allocator = self.allocator;
@@ -365,10 +365,10 @@ const RepairState = struct {
 };
 
 //
-// `() => metadataCollection.insertOne(minimalRecord)`.
+// Inserts the minimal record into the metadata collection.
 //
 const InsertOneOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text retryOnce puts in its timeout message.
     pub const source = "() => metadataCollection.insertOne(minimalRecord)";
 
     // The collection to insert into.
@@ -386,10 +386,10 @@ const InsertOneOperation = struct {
 };
 
 //
-// `() => metadataCollection.updateOne(assetId, { hash: expectedHashHex })`.
+// Sets the expected hash on an asset's record in the metadata collection.
 //
 const UpdateOneOperation = struct {
-    // The Bun toString() of the TypeScript operation (read by retryOnce for its timeout message).
+    // The text retryOnce puts in its timeout message.
     pub const source = "() => metadataCollection.updateOne(assetId, { hash: expectedHashHex })";
 
     // The collection to update.
@@ -413,7 +413,7 @@ const UpdateOneOperation = struct {
 // Repairs the media file database by restoring corrupted or missing files from a source database.
 // Also checks that each asset in the merkle tree has a database record with the correct id and hash,
 // and repairs wrong or missing hashes and synthesizes missing records.
-// (Zig: the TypeScript optional progressCallback is passed as null.)
+// A caller with no progress callback passes null.
 //
 pub fn repair(
     allocator: std.mem.Allocator,
@@ -478,7 +478,7 @@ pub fn repair(
     if (state.recordsRepaired.items.len > 0 or state.repaired.items.len > 0) {
         var now: std.Io.Writer.Allocating = .init(allocator);
         try js_date.writeIsoString(&now.writer, std.Io.Clock.real.now(io).toMilliseconds());
-        // (TypeScript passes "repair" as the session id.)
+        // The session id is "repair".
         try tree.stampDatabaseStateLocked(allocator, io, assetStorage, rawStorage, "repair", .{ .lastModifiedAt = now.written() });
     }
 

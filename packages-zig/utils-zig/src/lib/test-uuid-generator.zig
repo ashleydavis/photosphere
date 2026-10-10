@@ -78,7 +78,7 @@ pub const TestUuidGenerator = struct {
     //
     // Generates the UUID for a counter value. Reproduces the JavaScript number semantics exactly:
     // multiplications are double precision, bitwise operators convert with ToInt32/ToUint32.
-    // Public (private in TypeScript) so the file-backed TestUuidGenerator in node-utils-zig can share it.
+    // Public so the file-backed TestUuidGenerator in node-utils-zig can share it.
     //
     pub fn generateDeterministicUuid(allocator: std.mem.Allocator, counter: f64) ![]const u8 {
         // Use multiple hash functions to create good distribution

@@ -19,7 +19,7 @@ var store: std.StringArrayHashMapUnmanaged([]const u8) = .empty;
 var store_arena: std.heap.ArenaAllocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 
 //
-// Empties the fake store and installs the fake spawn function (the beforeEach of the TypeScript tests).
+// Empties the fake store and installs the fake spawn function.
 //
 fn resetStore() void {
     store = .empty;
@@ -28,7 +28,7 @@ fn resetStore() void {
 }
 
 //
-// Restores the real spawn function (the afterEach of the TypeScript tests).
+// Restores the real spawn function.
 //
 fn restoreSpawn() void {
     keychain_types.setSpawnFunction(null);
@@ -118,7 +118,7 @@ fn secretNameLessThan(context: void, left: ISecret, right: ISecret) bool {
 }
 
 //
-// Asserts that two secrets are equal (the toEqual of the TypeScript tests).
+// Asserts that two secrets are equal.
 //
 fn expectSecretEqual(expected: ISecret, actual: ?ISecret) !void {
     try std.testing.expect(actual != null);
@@ -127,7 +127,7 @@ fn expectSecretEqual(expected: ISecret, actual: ?ISecret) !void {
     try std.testing.expectEqualStrings(expected.value, actual.?.value);
 }
 
-test "get: returns undefined for a missing secret" {
+test "returns undefined for a missing secret" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     resetStore();
@@ -137,7 +137,7 @@ test "get: returns undefined for a missing secret" {
     try std.testing.expect((try vault.get(arena.allocator(), std.testing.io, "missing")) == null);
 }
 
-test "get: returns the secret after set" {
+test "returns the secret after set" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -151,7 +151,7 @@ test "get: returns the secret after set" {
     try expectSecretEqual(secret, try vault.get(allocator, io, "my-key"));
 }
 
-test "set: stores name, type, and value correctly" {
+test "stores name, type, and value correctly" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -167,7 +167,7 @@ test "set: stores name, type, and value correctly" {
     try std.testing.expectEqualStrings("creds", result.value);
 }
 
-test "set: does not duplicate entry on overwrite" {
+test "does not duplicate entry on overwrite" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -188,7 +188,7 @@ test "set: does not duplicate entry on overwrite" {
     try std.testing.expectEqual(@as(usize, 1), dup_count);
 }
 
-test "set: stores the payload as compact JSON like JSON.stringify" {
+test "stores the payload as compact JSON" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     resetStore();
@@ -199,7 +199,7 @@ test "set: stores the payload as compact JSON like JSON.stringify" {
     try std.testing.expectEqualStrings("{\"type\":\"plain\",\"value\":\"a \\\"quoted\\\"\\nline\"}", store.get("psi-k").?);
 }
 
-test "list: returns empty array when no secrets exist" {
+test "returns empty array when no secrets exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     resetStore();
@@ -209,7 +209,7 @@ test "list: returns empty array when no secrets exist" {
     try std.testing.expectEqual(@as(usize, 0), (try vault.list(arena.allocator(), std.testing.io)).len);
 }
 
-test "list: returns all stored secrets" {
+test "returns all stored secrets" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -227,7 +227,7 @@ test "list: returns all stored secrets" {
     try std.testing.expectEqualStrings("b", result[1].name);
 }
 
-test "list: excludes entries from other services" {
+test "excludes entries from other services" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     resetStore();
@@ -240,7 +240,7 @@ test "list: excludes entries from other services" {
     try std.testing.expectEqual(@as(usize, 0), (try vault.list(arena.allocator(), std.testing.io)).len);
 }
 
-test "delete: removes the secret (subsequent get returns undefined)" {
+test "removes the secret (subsequent get returns undefined)" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -255,7 +255,7 @@ test "delete: removes the secret (subsequent get returns undefined)" {
     try std.testing.expect(result == null);
 }
 
-test "delete: no longer appears in list after delete" {
+test "no longer appears in list after delete" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -270,7 +270,7 @@ test "delete: no longer appears in list after delete" {
     try std.testing.expectEqual(@as(usize, 0), secrets.len);
 }
 
-test "delete: does nothing when the secret does not exist" {
+test "does nothing when the secret does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     resetStore();
@@ -280,7 +280,7 @@ test "delete: does nothing when the secret does not exist" {
     try vault.delete(arena.allocator(), std.testing.io, "nonexistent");
 }
 
-test "psi- prefix: adds psi- prefix on write and strips it on read" {
+test "adds psi- prefix on write and strips it on read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -295,7 +295,7 @@ test "psi- prefix: adds psi- prefix on write and strips it on read" {
     try std.testing.expectEqualStrings("mykey", result.name);
 }
 
-test "special characters: handles names with colons" {
+test "handles names with colons" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -309,7 +309,7 @@ test "special characters: handles names with colons" {
     try expectSecretEqual(secret, try vault.get(allocator, io, "my:s3test01"));
 }
 
-test "special characters: handles names with slashes" {
+test "handles names with slashes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -393,7 +393,7 @@ test "the IVault interface reaches every operation" {
     try std.testing.expect((try vault.get(allocator, std.testing.io, "k")) == null);
 }
 
-test "get: a payload with a repeated key is read with its last value, as JSON.parse reads it" {
+test "a payload with a repeated key is read with its last value" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -407,10 +407,10 @@ test "get: a payload with a repeated key is read with its last value, as JSON.pa
 }
 
 //
-// A payload that is not JSON at all. TypeScript's JSON.parse throws and the error is not caught, so get
+// A payload that is not JSON at all. The parse error is not caught, so get
 // rejects rather than returning a secret with nothing in it.
 //
-test "get: a payload that is not JSON fails with the decoder error" {
+test "a payload that is not JSON fails with the decoder error" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -443,7 +443,7 @@ test "checkPrereqs is true when the security tool answers with its version" {
 // delete says nothing when the secret is not there, because a secret that is not there is the outcome delete
 // wanted.
 //
-test "delete: says nothing when the secret is not there" {
+test "says nothing when the secret is not there" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     resetStore();

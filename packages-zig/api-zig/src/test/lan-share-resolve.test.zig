@@ -12,8 +12,8 @@ const getVault = vault_zig.get_vault.getVault;
 const errors = utils.errors;
 
 //
-// Generates an RSA private key PEM for the tests that share an encryption key (the TypeScript tests mock
-// node:crypto so that a fake PEM passes; Zig derives the public key for real). 2048 bits keeps the tests fast.
+// Generates an RSA private key PEM for the tests that share an encryption key. The public key is derived for
+// real. 2048 bits keeps the tests fast.
 //
 fn generatePrivateKeyPem(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
     return (try encryption.node_crypto.generateKeyPairSync(allocator, io, 2048)).privateKey;
@@ -62,7 +62,7 @@ test "resolves database payload with all secrets" {
         .geocodingKey = "ghi11111",
     };
 
-    const payload = try resolveDatabaseSharePayload(allocator, io, entry);
+    const payload = try resolveDatabaseSharePayload(allocator, io, entry, null);
 
     try std.testing.expectEqualStrings("database", payload.type);
     try std.testing.expectEqualStrings("my-photos", payload.name);
@@ -96,7 +96,7 @@ test "resolves database payload with no secrets" {
         .path = "/data/simple",
     };
 
-    const payload = try resolveDatabaseSharePayload(allocator, std.testing.io, entry);
+    const payload = try resolveDatabaseSharePayload(allocator, std.testing.io, entry, null);
 
     try std.testing.expectEqualStrings("database", payload.type);
     try std.testing.expectEqualStrings("simple-db", payload.name);
@@ -120,7 +120,7 @@ test "resolves database payload when secret ID exists but vault entry is missing
         .s3Key = "missing123",
     };
 
-    const payload = try resolveDatabaseSharePayload(allocator, io, entry);
+    const payload = try resolveDatabaseSharePayload(allocator, io, entry, null);
 
     try std.testing.expect(payload.s3Credentials == null);
 }
@@ -147,7 +147,7 @@ test "derives publicKeyPem from raw-PEM encryption-key value" {
         .encryptionKey = "raw-pem-key",
     };
 
-    const payload = try resolveDatabaseSharePayload(allocator, io, entry);
+    const payload = try resolveDatabaseSharePayload(allocator, io, entry, null);
 
     try std.testing.expectEqualStrings(privateKeyPem, payload.encryptionKey.?.privateKeyPem);
     try std.testing.expect(std.mem.startsWith(u8, payload.encryptionKey.?.publicKeyPem.?, "-----BEGIN PUBLIC KEY-----\n"));
@@ -155,8 +155,7 @@ test "derives publicKeyPem from raw-PEM encryption-key value" {
 }
 
 //
-// TypeScript reads `parsed.region` and sends whatever it is, so credentials stored without a region are shared
-// without one (JSON.stringify leaves the undefined field out of the payload).
+// Credentials stored without a region are shared without one (the field is left out of the payload).
 //
 test "S3 credentials without a region are shared without one" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -179,7 +178,7 @@ test "S3 credentials without a region are shared without one" {
         .s3Key = "no-region",
     };
 
-    const payload = try resolveDatabaseSharePayload(allocator, io, entry);
+    const payload = try resolveDatabaseSharePayload(allocator, io, entry, null);
     try std.testing.expect(payload.s3Credentials.?.region == null);
     try std.testing.expectEqualStrings("AKID", payload.s3Credentials.?.accessKeyId.?);
     try std.testing.expectEqualStrings("SECRET", payload.s3Credentials.?.secretAccessKey.?);
@@ -207,7 +206,7 @@ test "an S3 secret with a repeated key is read with its last value, as JSON.pars
         .s3Key = "repeated",
     };
 
-    const payload = try resolveDatabaseSharePayload(allocator, io, entry);
+    const payload = try resolveDatabaseSharePayload(allocator, io, entry, null);
     try std.testing.expectEqualStrings("second", payload.s3Credentials.?.region.?);
 }
 
@@ -225,7 +224,7 @@ test "resolves secret share payload" {
         .value = "{\"region\":\"us-east-1\",\"accessKeyId\":\"AKID\",\"secretAccessKey\":\"SECRET\"}",
     });
 
-    const payload = try resolveSecretSharePayload(allocator, io, "abc12345");
+    const payload = try resolveSecretSharePayload(allocator, io, "abc12345", null);
 
     try std.testing.expectEqualStrings("secret", payload.type);
     try std.testing.expectEqualStrings("s3-credentials", payload.secretType);
@@ -239,7 +238,7 @@ test "resolves secret share payload throws when secret not found" {
     try test_vault.useTestVault();
     defer test_vault.useRealEnvironment();
 
-    try std.testing.expectError(error.Thrown, resolveSecretSharePayload(arena.allocator(), std.testing.io, "nonexistent"));
+    try std.testing.expectError(error.Thrown, resolveSecretSharePayload(arena.allocator(), std.testing.io, "nonexistent", null));
     try std.testing.expectEqualStrings("Secret \"nonexistent\" not found in vault.", errors.lastErrorMessage());
 }
 
@@ -260,7 +259,7 @@ fn resolveWithS3Value(allocator: std.mem.Allocator, io: std.Io, value: []const u
         .path = "s3:bucket",
         .s3Key = "odd-credentials",
     };
-    return resolveDatabaseSharePayload(allocator, io, entry);
+    return resolveDatabaseSharePayload(allocator, io, entry, null);
 }
 
 test "S3 credentials that are not an object share no fields, like reading properties of a primitive" {

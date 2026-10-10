@@ -43,7 +43,7 @@ const TaskQueue = task_queue_zig.task_queue.TaskQueue;
 const WATCH_RESTART_INTERVAL_MS = 5000;
 
 //
-// Options of the add command (TypeScript: IAddCommandOptions extends IBaseCommandOptions).
+// Options of the add command.
 // The base options are in `base`.
 //
 pub const IAddCommandOptions = struct {
@@ -66,21 +66,21 @@ pub const IAddCommandOptions = struct {
 };
 
 //
-// `value.toString().padStart(4)` for a count. (No TypeScript counterpart.)
+// Writes a count as text padded on the left with spaces to four characters.
 //
 fn padCount(allocator: std.mem.Allocator, value: f64) ![]const u8 {
     return utils.format.padStart(allocator, try utils.format.numberToString(allocator, value), 4, ' ');
 }
 
 //
-// What the progress callback needs (TypeScript: the variables the arrow function passed to addPaths closes over).
+// What the progress callback needs.
 //
 pub const ProgressState = struct {
     // The command options.
     options: *IAddCommandOptions,
 
     //
-    // Writes the progress line (TypeScript: the `(currentlyScanning, summary) => { ... }` arrow function).
+    // Writes the progress line.
     //
     fn onProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, summary: *const IAddSummary) void {
         const self: *ProgressState = @ptrCast(@alignCast(context.?));
@@ -94,7 +94,7 @@ pub const ProgressState = struct {
     }
 
     //
-    // Builds the progress line. (No TypeScript counterpart: the body of the arrow function.)
+    // Builds the progress line.
     //
     pub fn buildProgressMessage(self: *ProgressState, allocator: std.mem.Allocator, currentlyScanning: ?[]const u8, summary: *const IAddSummary) ![]const u8 {
         const dryRun = self.options.dryRun orelse false;
@@ -214,8 +214,7 @@ pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCon
         // a system prompt in front of it.
         log.info(try pc.dim(allocator, "Looking for source files the database already holds..."));
         _ = try cleanUpImportedSources(allocator, io, uuidGenerator, storageDescriptor, try watchSettings(allocator, io, paths), sessionId);
-        // TODO: this mirrors a bug in the TypeScript (add.ts addCommand) until both are fixed: the number of
-        // source files deleted is not written after "Source files deleted: ".
+        // The number of source files deleted is not written after "Source files deleted: ".
         log.info("Source files deleted: ");
     }
 

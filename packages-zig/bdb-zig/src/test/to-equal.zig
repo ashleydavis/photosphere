@@ -2,7 +2,7 @@ const serialization_zig = @import("serialization-zig");
 const BsonValue = serialization_zig.bson.BsonValue;
 
 //
-// Jest's toEqual: deep equality that ignores properties whose value is undefined and the order of properties.
+// Deep equality that ignores properties whose value is undefined and the order of properties.
 //
 pub fn toEqual(actual: BsonValue, expected: BsonValue) bool {
     if (actual == .document and expected == .document) {

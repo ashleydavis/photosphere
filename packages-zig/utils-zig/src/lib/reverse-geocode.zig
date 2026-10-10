@@ -232,7 +232,7 @@ const fields = [_][]const []const u8{
 //
 pub fn parseReverseGeocodeResult(allocator: std.mem.Allocator, result: std.json.Value) ![]const u8 {
 
-    // The value found for each field, by the index of the field in `fields` (TypeScript: `values[key]`).
+    // The value found for each field, by the index of the field in `fields`.
     var values: [fields.len]?[]const u8 = [_]?[]const u8{null} ** fields.len;
 
     // `result.address_components` of a value that is not an object is undefined, which cannot be iterated.
@@ -322,7 +322,7 @@ pub fn chooseBestResult(allocator: std.mem.Allocator, results: std.json.Value) !
 }
 
 //
-// Sends a GET request for JSON (TypeScript: `axios.get(url, { headers: { Accept: "application/json" } })`), which
+// Sends a GET request for JSON (with an Accept header of "application/json"), which
 // rejects when the status is not 2xx. Returns the parsed body.
 //
 fn getJson(allocator: std.mem.Allocator, io: std.Io, url: []const u8) !std.json.Value {
@@ -342,9 +342,9 @@ fn getJson(allocator: std.mem.Allocator, io: std.Io, url: []const u8) !std.json.
 }
 
 //
-// Reads a response body as axios does for a request that asks for no particular response type: JSON.parse of the
-// text (which keeps the last value of a repeated key), or the text itself when it is not JSON (axios parses
-// silently). (No TypeScript counterpart: axios's transformResponse.)
+// Reads a response body for a request that asks for no particular response type: the parsed JSON of the
+// text (which keeps the last value of a repeated key), or the text itself when it is not JSON (a body that is not
+// JSON is not an error).
 //
 pub fn axiosResponseData(allocator: std.mem.Allocator, body: []const u8) !std.json.Value {
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, body, .{

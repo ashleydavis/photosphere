@@ -31,12 +31,12 @@ const js_value = bdb.js_value;
 const BsonValue = serialization.bson.BsonValue;
 
 //
-// An asset record from the metadata collection (TypeScript: IAsset).
+// An asset record from the metadata collection.
 //
 const IAsset = bdb.collection.IRecord;
 
 //
-// Options of the info command (TypeScript: IInfoCommandOptions extends IBaseCommandOptions).
+// Options of the info command.
 // The base options (which hold verbose, tools and yes) are in `base`.
 //
 pub const IInfoCommandOptions = struct {
@@ -128,7 +128,7 @@ const FileAnalysis = struct {
 };
 
 //
-// The state of the scan callbacks (TypeScript: the variables captured by the arrow functions).
+// The state of the scan callbacks.
 //
 const ScanState = struct {
     // Allocates the results.
@@ -145,7 +145,7 @@ const ScanState = struct {
 };
 
 //
-// Analyzes each scanned file (TypeScript: the file callback passed to scanPaths).
+// Analyzes each scanned file.
 //
 fn visitScannedFile(context: ?*anyopaque, fileResult: FileScannedResult) anyerror!void {
     const state: *ScanState = @ptrCast(@alignCast(context.?));
@@ -164,7 +164,7 @@ fn visitScannedFile(context: ?*anyopaque, fileResult: FileScannedResult) anyerro
 }
 
 //
-// Shows scan progress (TypeScript: the progress callback passed to scanPaths).
+// Shows scan progress.
 //
 fn scanProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, scannerState: *const ScannerState) void {
     _ = scannerState;
@@ -279,14 +279,14 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
 }
 
 //
-// Gets a field of an asset (TypeScript: `asset.<name>`), undefined when it is missing.
+// Gets a field of an asset, undefined when it is missing.
 //
 fn field(asset: IAsset, name: []const u8) BsonValue {
     return asset.get(name) orelse .undefined;
 }
 
 //
-// JavaScript truthiness of a field value.
+// Whether a field value counts as set: not undefined, null, false, zero, NaN or an empty string.
 //
 fn isTruthy(value: BsonValue) bool {
     return switch (value) {
@@ -336,7 +336,7 @@ fn analyzeFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, c
 
     // Analyze file content using the unified getFileInfo function
     // Files are already unpacked, so we can use the file path directly
-    if (getFileInfo(allocator, io, filePath, contentType)) |maybeAssetInfo| {
+    if (getFileInfo(allocator, io, null, filePath, contentType)) |maybeAssetInfo| {
         if (maybeAssetInfo) |assetInfo| {
             fileAnalysis.assetInfo = assetInfo;
         }
@@ -349,7 +349,7 @@ fn analyzeFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, c
 }
 
 //
-// Hashes a file's contents (TypeScript: `computeHash(createReadStream(filePath))`).
+// Hashes a file's contents.
 //
 fn hashFile(io: std.Io, filePath: []const u8) ![32]u8 {
     const file = try std.Io.Dir.cwd().openFile(io, filePath, .{});

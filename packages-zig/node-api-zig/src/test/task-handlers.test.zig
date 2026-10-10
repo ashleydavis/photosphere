@@ -32,7 +32,7 @@ test "initTaskHandlers registers the check-database-exists handler" {
     try std.testing.expect(task_queue_zig.worker.getHandler("check-database-exists") == node_api.check_database_exists_worker.checkDatabaseExistsHandler);
 }
 
-test "initTaskHandlers registers the folder media source builder, as loading its modules does in TypeScript" {
+test "initTaskHandlers registers the folder media source builder" {
     node_api.media_source_registry.clearMediaSourceBuilders();
     try node_api.task_handlers.initTaskHandlers();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -47,8 +47,51 @@ test "initTaskHandlers registers the folder media source builder, as loading its
     }}, .{
         .sessionTempDir = "/tmp/session",
         .uuidGenerator = generator.uuidGenerator(),
+        .hostRequester = null,
     });
 
     const folderSource: *node_api.folder_media_source.FolderMediaSource = @ptrCast(@alignCast(source.ptr));
     try std.testing.expectEqualStrings("/photos", folderSource.folders[0].path);
+}
+
+test "initTaskHandlers registers a handler for every task type of the application" {
+    const taskTypes = [_][]const u8{
+        "test-job",
+        "verify-file",
+        "check-file",
+        "load-assets",
+        "prefetch-database",
+        "upload-asset",
+        "sync-database",
+        "replicate-database",
+        "save-asset",
+        "save-assets-batch",
+        "create-database",
+        "create-default-database",
+        "import-assets",
+        "hash-file",
+        "get-database-summary",
+        "get-import-record",
+        "set-database-origin",
+        "move-assets",
+        "asset-server",
+        "receive-share",
+        "find-receiver",
+        "send-payload",
+        "check-database-exists",
+        "evict-originals",
+        "cleanup-sources",
+        "consolidate-database",
+        "reset-app-storage",
+    };
+    try node_api.task_handlers.initTaskHandlers();
+
+    for (taskTypes) |taskType| {
+        try std.testing.expect(task_queue_zig.worker.getHandler(taskType) != null);
+    }
+    try std.testing.expect(task_queue_zig.worker.getHandler("test-job") == node_api.test_job_worker.testJobHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler("receive-share") == node_api.lan_share_worker.receiveShareHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler("find-receiver") == node_api.lan_share_worker.findReceiverHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler("send-payload") == node_api.lan_share_worker.sendPayloadHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler("reset-app-storage") == node_api.reset_app_storage_worker.resetAppStorageHandler);
 }

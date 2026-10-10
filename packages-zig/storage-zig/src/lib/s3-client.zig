@@ -4,14 +4,13 @@ const node_utils = @import("node-utils-zig");
 const aws = @import("aws-c");
 
 //
-// A thin binding to the AWS SDK for C (aws-c-s3 and the libraries under it). No TypeScript counterpart: it stands in
-// for the parts of `@aws-sdk/client-s3` (S3Client and the commands CloudStorage sends) and `@aws-sdk/lib-storage`
-// (Upload) that CloudStorage uses. The SDK resolves the endpoint (the S3 endpoint rules), signs (SigV4), sends,
+// A thin binding to the AWS SDK for C (aws-c-s3 and the libraries under it), covering the S3Client commands and the
+// Upload that CloudStorage uses. The SDK resolves the endpoint (the S3 endpoint rules), signs (SigV4), sends,
 // uploads in parts, computes the Content-MD5 and parses XML; this file builds the command messages (the path, query
-// string and headers the JavaScript SDK serializes each command to) and maps the results. Command inputs
-// and outputs keep the JavaScript SDK's PascalCase field names so CloudStorage reads like the TypeScript. Errors
-// returned by S3 are thrown with the S3 error code as the error name (utils errors.lastErrorName(), the SDK's
-// `err.name`) and the HTTP status in lastHttpStatusCode() (the SDK's `err.$metadata.httpStatusCode`).
+// string and headers each command serializes to) and maps the results. Command inputs
+// and outputs use the PascalCase field names of the S3 API. Errors
+// returned by S3 are thrown with the S3 error code as the error name (utils errors.lastErrorName())
+// and the HTTP status in lastHttpStatusCode().
 //
 
 const errors = utils.errors;
@@ -22,7 +21,7 @@ const errors = utils.errors;
 threadlocal var last_http_status_code: u16 = 0;
 
 //
-// Gets the HTTP status code of the most recent S3 error thrown on this thread (TypeScript: `err.$metadata?.httpStatusCode`).
+// Gets the HTTP status code of the most recent S3 error thrown on this thread.
 //
 pub fn lastHttpStatusCode() u16 {
     return last_http_status_code;
@@ -355,7 +354,7 @@ pub fn staticErrorName(io: std.Io, code: []const u8) ![]const u8 {
 }
 
 //
-// The error name the JavaScript SDK gives an S3 error response whose body has no <Error><Code> (for example the
+// The error name given to an S3 error response whose body has no <Error><Code> (for example the
 // response to a HEAD request, which has no body): loadRestXmlErrorCode's "NotFound" for a 404, else "Unknown".
 //
 pub fn errorNameForStatus(status: u16) []const u8 {
@@ -580,8 +579,8 @@ fn replaceNumericReferences(allocator: std.mem.Allocator, text: []const u8, base
 // aws-c-s3 keeps the status and body only of responses it will not retry. A 500 or 503, or any response whose
 // <Error><Code> is one it retries (InternalError, SlowDown, RequestTimeout, ...), fails with its own error code,
 // response status 0 and no body (s3_meta_request.c, aws_s3_meta_request_set_fail_synced), so those are thrown as
-// the SDK's error ("Response code indicates internal server error") where the JavaScript SDK throws the Code and
-// Message of the body.
+// the SDK's error ("Response code indicates internal server error") rather than the Code and
+// Message of a body.
 //
 fn throwResultError(allocator: std.mem.Allocator, io: std.Io, result: *const MetaRequestCall) anyerror {
     if (result.responseStatus == 0) {
@@ -608,7 +607,7 @@ fn throwResultError(allocator: std.mem.Allocator, io: std.Io, result: *const Met
 // never reached the server, whatever its method. "The connection has closed or is closing" can also come after
 // the request was written, when the server may have acted on it, so only a GET or HEAD, which change nothing, is
 // sent again for it. A body streamed with aws_s3_meta_request_poll_write cannot be replayed, so its request never
-// is. (No TypeScript counterpart: see S3Client.run.)
+// is. (See S3Client.run.)
 //
 pub fn canResendOnClosedConnection(errorCode: c_int, responseStatus: c_int, method: []const u8, streamedBody: bool) bool {
     if (responseStatus != 0 or streamedBody) {
@@ -987,7 +986,7 @@ const ClientRuntime = struct {
     // The retry strategy (one attempt per request).
     retryStrategy: *SingleAttemptRetryStrategy,
 
-    // The S3 endpoint rules (the same rule set as the JavaScript SDK's endpoint resolver).
+    // The S3 endpoint rules (the standard rule set of the AWS SDKs).
     endpointRuleEngine: *aws.aws_endpoints_rule_engine,
 
     // The aws-c-s3 client.
@@ -1205,7 +1204,7 @@ pub const ICopyObjectInput = struct {
 };
 
 //
-// A command sent to the client (TypeScript: the command objects passed to `S3Client.send`).
+// A command sent to the client.
 //
 pub const S3Command = union(enum) {
     // ListObjectsV2Command.
@@ -1248,8 +1247,7 @@ pub const S3CommandOutput = union(enum) {
 };
 
 //
-// Answers the client's commands in place of the SDK. The TypeScript tests replace the client with an
-// object whose `send` answers each command; a Zig test sets this on the client for the same effect.
+// Answers the client's commands in place of the SDK. A test sets this on the client to answer each command itself.
 //
 pub const ISend = struct {
     // Passed to `function`.
@@ -1260,7 +1258,7 @@ pub const ISend = struct {
 };
 
 //
-// Throws an S3 service exception (TypeScript: an error with `name` and `$metadata.httpStatusCode`), for an
+// Throws an S3 service exception with the given error name and HTTP status, for an
 // ISend answering a command with an error.
 //
 pub fn throwServiceException(name: []const u8, message: []const u8, httpStatusCode: u16) anyerror {
@@ -1286,7 +1284,7 @@ pub const S3Client = struct {
     runtime: ?*ClientRuntime,
 
     //
-    // Creates a client (TypeScript: `new S3Client(config)`).
+    // Creates a client.
     //
     pub fn init(io: std.Io, config: IS3ClientConfig) S3Client {
         initLibrary(io);
@@ -1451,8 +1449,8 @@ pub const S3Client = struct {
 
     //
     // Resolves the endpoint of a request on a bucket with the S3 endpoint rules (virtual-hosted-style unless the
-    // endpoint host is an IP address or the bucket name is not a valid host name label, like the JavaScript SDK,
-    // which CloudStorage creates without forcePathStyle). Returns the URL, for example "http://127.0.0.1:9000/bucket"
+    // endpoint host is an IP address or the bucket name is not a valid host name label; CloudStorage
+    // creates the client without forcePathStyle). Returns the URL, for example "http://127.0.0.1:9000/bucket"
     // or "https://bucket.s3.us-east-1.amazonaws.com".
     //
     pub fn resolveEndpoint(self: *S3Client, allocator: std.mem.Allocator, bucket: []const u8) ![]const u8 {
@@ -1496,8 +1494,7 @@ pub const S3Client = struct {
     // and body) when it succeeded and throws the S3 or SDK error when it did not.
     //
     // A request sent on a pooled connection the server had already closed is sent once more, on a new connection,
-    // when canResendOnClosedConnection says that is safe. Node's HTTP agent, which the JavaScript SDK sends through,
-    // drops a keep-alive socket as soon as the server closes it and so never sends a request on one; aws-c-http
+    // when canResendOnClosedConnection says that is safe. aws-c-http
     // notices the close on its event loop and can hand the connection out in the moment before it has. S3 servers
     // close the connection after some error responses (MinIO does after a refused conditional PutObject), so the
     // read of the write lock that follows a refused lock write failed with "socket is closed" or "The connection
@@ -1721,8 +1718,7 @@ pub const S3Client = struct {
     }
 
     //
-    // GetObject, optionally for a byte range such as "bytes=0-99" (one request, like the JavaScript SDK's
-    // GetObjectCommand).
+    // GetObject, optionally for a byte range such as "bytes=0-99" (one request).
     //
     pub fn getObject(self: *S3Client, allocator: std.mem.Allocator, io: std.Io, bucket: []const u8, key: []const u8, range: ?[]const u8) !GetObjectOutput {
         if (self.send) |send| {
@@ -1935,8 +1931,8 @@ fn addHeader(message: *aws.aws_http_message, name: []const u8, value: []const u8
 const special_url_schemes = [_][]const u8{ "http", "https", "ftp", "ws", "wss", "file" };
 
 //
-// The endpoint as the JavaScript SDK hands it to the endpoint rules, `new URL(endpoint).href`: an endpoint that is
-// not a URL is a TypeError (with Bun's message), and the empty path of a URL with a special scheme is "/". (std.Uri
+// The endpoint as handed to the endpoint rules, in the form of the WHATWG URL `href`: an endpoint that is
+// not a URL is a TypeError, and the empty path of a URL with a special scheme is "/". (std.Uri
 // stands in for the WHATWG URL parser, so an endpoint that only one of them accepts is judged differently.)
 //
 pub fn endpointHref(allocator: std.mem.Allocator, endpoint: []const u8) ![]const u8 {
@@ -2286,8 +2282,7 @@ pub const IUploadOptions = struct {
 
 //
 // Uploads a buffer or a stream with the SDK's PutObject (an aws-c-s3 PUT_OBJECT meta request), which sends one
-// PutObject when the body fits in one part and a multipart upload otherwise (TypeScript:
-// `new Upload({ client, params, partSize, queueSize }).done()` from @aws-sdk/lib-storage).
+// PutObject when the body fits in one part and a multipart upload otherwise.
 //
 pub const Upload = struct {
     // The upload options.

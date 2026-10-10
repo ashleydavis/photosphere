@@ -182,8 +182,8 @@ pub const TaskEnd = struct {
     error_message: ?[]const u8,
     // The JSON text of the result, when it succeeded with one.
     result_json: ?[]const u8,
-    // Whether a handler was called for the task. A task cancelled while it waited in the queue never started, and the Electron pool
-    // reports no completion for one.
+    // Whether a handler was called for the task. A task cancelled while it waited in the queue never started, and no completion
+    // is reported for one.
     started: bool,
 };
 
@@ -202,7 +202,7 @@ pub const TaskSentMessage = struct {
 };
 
 //
-// Lets the app see every task end and every message a task sends, as the Electron main process does with the worker pool's
+// Lets the app see every task end and every message a task sends, through
 // onTaskComplete and onAnyTaskMessage. Both functions are called from the thread the event happened on, with no lock held, and the
 // values are valid only during the call.
 //

@@ -1,5 +1,5 @@
 //
-// Tests for encryptFile (port of src/test/lib/encrypt-file.test.ts).
+// Tests for encryptFile.
 //
 
 const std = @import("std");
@@ -24,8 +24,7 @@ const Sha256 = std.crypto.hash.sha2.Sha256;
 const VALID_UUID = "12345678-1234-5678-9abc-123456789abc";
 
 //
-// Gets the hash of the public key of the key pair used across all encryptFile tests, loaded from the fixture keys
-// (TypeScript: generated when the file loads).
+// Gets the hash of the public key of the key pair used across all encryptFile tests, loaded from the fixture keys.
 //
 fn getPublicKeyHash(allocator: std.mem.Allocator) ![]const u8 {
     const encryptKeyPair = try fixture_keys.loadFixtureKeyPair(allocator, std.testing.io);

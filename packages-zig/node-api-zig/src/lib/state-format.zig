@@ -1,9 +1,11 @@
 const std = @import("std");
+const node_utils = @import("node-utils-zig");
+const errors = @import("utils-zig").errors;
 
 //
 // The on-disk contents of state.yaml and the conversions between it and the in-memory type.
 //
-// This is the sibling of config-format.ts, and the split between them is what each file is for.
+// This is the sibling of config-format.zig, and the split between them is what each file is for.
 // config.yaml holds what the user chose: the theme, what automatic import watches, whether syncing
 // runs. state.yaml holds what the app remembers on its own so the interface comes back the way it was
 // left: the folder a dialog last opened at, which sidebar sections are collapsed, how the gallery was
@@ -17,7 +19,7 @@ const std = @import("std");
 // it is the only definition of the file format, so the reader and the writer cannot drift apart.
 //
 // (Zig: the YAML documents (IYamlStateFile and its sections) are std.json.Value objects, which is what
-// node-utils-zig's YAML stand-in reads and writes, so they have no separate struct types. A value the
+// node-utils-zig's YAML reader and writer work in, so they have no separate struct types. A value the
 // interface keeps (IUiStateValue: boolean, number, string or string[]) is a std.json.Value of that kind.)
 //
 
@@ -28,14 +30,15 @@ const std = @import("std");
 // cannot be declared in advance: a collapsible section builds its own key from its id, so a new one in
 // a later release brings a new key with it. Before this section existed the desktop app accepted every
 // one of these and then dropped it on the way to disk, so a collapsed sidebar never survived a restart.
-// (Zig: each interface key and what was last stored under it, in insertion order.)
+// (Zig: each interface key and what was last stored under it. Keys keep their insertion order,
+// because std.json.ObjectMap is ordered by insertion.)
 //
 pub const IUiSection = std.json.ObjectMap;
 
 //
 // One news item as the app has it in hand, which is the part of a published item a toast needs.
 //
-// Held here rather than reusing INewsItem from news-fetcher.ts because that module reads files and
+// Held here rather than reusing INewsItem from news-fetcher.zig because that module reads files and
 // this one is bundled into the mobile worker, and because this is a cache of what was fetched rather
 // than the published format itself.
 //
@@ -177,7 +180,7 @@ fn isSection(value: ?std.json.Value) bool {
 }
 
 //
-// Gets a string field of a section (`typeof section.key === "string"`). (No TypeScript counterpart.)
+// Gets a string field of a section.
 //
 fn stringField(section: std.json.ObjectMap, key: []const u8) ?[]const u8 {
     const value = section.get(key) orelse {
@@ -187,15 +190,14 @@ fn stringField(section: std.json.ObjectMap, key: []const u8) ?[]const u8 {
 }
 
 //
-// True when the value is a number (`typeof value === "number"`). (No TypeScript counterpart.)
+// True when the value is a number.
 //
 fn isNumber(value: std.json.Value) bool {
     return value == .integer or value == .float or value == .number_string;
 }
 
 //
-// True when the value is a finite number (`typeof value === "number" && Number.isFinite(value)`).
-// (No TypeScript counterpart.)
+// True when the value is a finite number.
 //
 fn isFiniteNumber(value: std.json.Value) bool {
     return switch (value) {
@@ -207,7 +209,7 @@ fn isFiniteNumber(value: std.json.Value) bool {
 }
 
 //
-// The strings of an array (`array.filter(entry => typeof entry === "string")`). (No TypeScript counterpart.)
+// The strings of an array, leaving out any entry that is not a string.
 //
 fn stringsOf(allocator: std.mem.Allocator, array: std.json.Array) ![]const []const u8 {
     var strings: std.ArrayList([]const u8) = .empty;
@@ -219,9 +221,6 @@ fn stringsOf(allocator: std.mem.Allocator, array: std.json.Array) ![]const []con
     return strings.items;
 }
 
-//
-// TODO: object keys keep their insertion order, where JavaScript lists integer-like keys first in numeric order
-// (the ui section's keys, which the desktop interface chooses).
 //
 // True when the value is one an interface key is allowed to hold.
 //
@@ -427,14 +426,18 @@ pub fn yamlToStateFile(allocator: std.mem.Allocator, document: ?std.json.Value) 
 }
 
 //
-// Makes a YAML sequence of strings. (No TypeScript counterpart: TypeScript writes the array itself.)
+// Makes a YAML sequence of strings.
 //
 fn stringArray(allocator: std.mem.Allocator, strings: []const []const u8) !std.json.Value {
     var array = std.json.Array.init(allocator);
     for (strings) |text| {
-        try array.append(.{ .string = text });
+        try array.append(.{
+            .string = text,
+        });
     }
-    return .{ .array = array };
+    return .{
+        .array = array,
+    };
 }
 
 //
@@ -442,18 +445,28 @@ fn stringArray(allocator: std.mem.Allocator, strings: []const []const u8) !std.j
 //
 fn newsFeedItemToYaml(allocator: std.mem.Allocator, item: INewsFeedItem) !std.json.Value {
     var yamlItem: std.json.ObjectMap = .empty;
-    try yamlItem.put(allocator, "id", .{ .string = item.id });
-    try yamlItem.put(allocator, "message", .{ .string = item.message });
+    try yamlItem.put(allocator, "id", .{
+        .string = item.id,
+    });
+    try yamlItem.put(allocator, "message", .{
+        .string = item.message,
+    });
     if (item.color) |color| {
-        try yamlItem.put(allocator, "color", .{ .string = color });
+        try yamlItem.put(allocator, "color", .{
+            .string = color,
+        });
     }
     if (item.duration) |duration| {
         try yamlItem.put(allocator, "duration", duration);
     }
     if (item.link) |link| {
-        try yamlItem.put(allocator, "link", .{ .string = link });
+        try yamlItem.put(allocator, "link", .{
+            .string = link,
+        });
     }
-    return .{ .object = yamlItem };
+    return .{
+        .object = yamlItem,
+    };
 }
 
 //
@@ -462,7 +475,9 @@ fn newsFeedItemToYaml(allocator: std.mem.Allocator, item: INewsFeedItem) !std.js
 //
 fn writeSection(allocator: std.mem.Allocator, document: *std.json.ObjectMap, name: []const u8, section: std.json.ObjectMap) !void {
     if (section.count() > 0) {
-        try document.put(allocator, name, .{ .object = section });
+        try document.put(allocator, name, .{
+            .object = section,
+        });
         return;
     }
     _ = document.orderedRemove(name);
@@ -479,13 +494,19 @@ pub fn stateFileToYaml(allocator: std.mem.Allocator, state: IStateFile) !std.jso
 
     var desktop: std.json.ObjectMap = .empty;
     if (state.desktop.lastFolder) |lastFolder| {
-        try desktop.put(allocator, "last_folder", .{ .string = lastFolder });
+        try desktop.put(allocator, "last_folder", .{
+            .string = lastFolder,
+        });
     }
     if (state.desktop.lastDownloadFolder) |lastDownloadFolder| {
-        try desktop.put(allocator, "last_download_folder", .{ .string = lastDownloadFolder });
+        try desktop.put(allocator, "last_download_folder", .{
+            .string = lastDownloadFolder,
+        });
     }
     if (state.desktop.devToolsOpen) |devToolsOpen| {
-        try desktop.put(allocator, "dev_tools_open", .{ .bool = devToolsOpen });
+        try desktop.put(allocator, "dev_tools_open", .{
+            .bool = devToolsOpen,
+        });
     }
     try writeSection(allocator, &document, "desktop", desktop);
 
@@ -497,7 +518,9 @@ pub fn stateFileToYaml(allocator: std.mem.Allocator, state: IStateFile) !std.jso
 
     var gallery: std.json.ObjectMap = .empty;
     if (state.gallery.sort) |sort| {
-        try gallery.put(allocator, "sort", .{ .string = sort });
+        try gallery.put(allocator, "sort", .{
+            .string = sort,
+        });
     }
     if (state.gallery.rowHeight) |rowHeight| {
         try gallery.put(allocator, "row_height", rowHeight);
@@ -509,19 +532,96 @@ pub fn stateFileToYaml(allocator: std.mem.Allocator, state: IStateFile) !std.jso
         try news.put(allocator, "shown_news_ids", try stringArray(allocator, state.news.shownNewsIds));
     }
     if (state.news.lastShownUpdateVersion) |version| {
-        try news.put(allocator, "last_shown_update_version", .{ .string = version });
+        try news.put(allocator, "last_shown_update_version", .{
+            .string = version,
+        });
     }
     if (state.news.feed.len > 0) {
         var feed = std.json.Array.init(allocator);
         for (state.news.feed) |item| {
             try feed.append(try newsFeedItemToYaml(allocator, item));
         }
-        try news.put(allocator, "feed", .{ .array = feed });
+        try news.put(allocator, "feed", .{
+            .array = feed,
+        });
     }
     try writeSection(allocator, &document, "news", news);
 
     try writeSection(allocator, &document, "ui", try state.ui.clone(allocator));
 
-    return .{ .object = document };
+    return .{
+        .object = document,
+    };
 }
 
+//
+// The state a reader falls back to when there is no file, used wherever a caller needs the defaults
+// without having a document to convert.
+//
+pub fn defaultStateFile(allocator: std.mem.Allocator) !IStateFile {
+    return yamlToStateFile(allocator, null);
+}
+
+//
+// The result of parsing a state file: the state, and whether the text was readable at all.
+//
+pub const IParsedStateFile = struct {
+    //
+    // The state. The defaults when the text could not be parsed.
+    //
+    state: IStateFile,
+
+    //
+    // True when the text is not valid YAML, so `state` is the defaults rather than anything the file
+    // asked for. The caller reports it, so a file that has stopped working is not silent.
+    //
+    malformed: bool,
+
+    //
+    // What the YAML parser said, when it refused the text. Absent otherwise.
+    //
+    parseError: ?[]const u8 = null,
+
+    //
+    // The document as it was parsed. Undefined for an empty file and for text that would not parse.
+    //
+    document: ?std.json.Value = null,
+};
+
+//
+// Parses the text of a state file, reporting whether it was readable.
+//
+// Text that will not parse comes back as the defaults rather than throwing, for the same reason an
+// absent file does: nothing in here is worth refusing to start over. Losing it costs the user a
+// collapsed sidebar and a remembered folder, and the app writes a fresh one as soon as anything is
+// touched.
+//
+// (Zig: only the YAML parser's own refusal (a thrown YAMLException) is reported as malformed; running out of memory is
+// not a parse failure and is returned as the error it is.)
+//
+pub fn parseStateYamlChecked(allocator: std.mem.Allocator, text: []const u8) !IParsedStateFile {
+    const loaded = node_utils.yaml.load(allocator, text) catch |err| {
+        if (err != error.Thrown) {
+            return err;
+        }
+        return .{
+            .state = try defaultStateFile(allocator),
+            .malformed = true,
+            .parseError = try errors.errorToString(allocator, err),
+        };
+    };
+
+    const parsed: ?std.json.Value = if (loaded == .null) null else loaded;
+    return .{
+        .state = try yamlToStateFile(allocator, parsed),
+        .malformed = false,
+        .document = if (isSection(parsed)) parsed else null,
+    };
+}
+
+//
+// Renders the state as the text of a state file.
+//
+pub fn buildStateYaml(allocator: std.mem.Allocator, state: IStateFile) ![]const u8 {
+    return node_utils.yaml.dump(allocator, try stateFileToYaml(allocator, state));
+}

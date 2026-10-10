@@ -2,13 +2,12 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 //
-// This file has no TypeScript counterpart: it stands in for Node's `process.on('SIGINT' | 'SIGTERM', listener)` and
-// `process.removeListener(...)`, which secrets.ts and the clack spinner use to be told of Ctrl+C. As in Node, while a
-// listener is registered for a signal the signal no longer ends the process: the listeners are called instead, and
+// Lets the secrets commands and the clack spinner register listeners for SIGINT and SIGTERM, to be told of Ctrl+C.
+// While a listener is registered for a signal the signal no longer ends the process: the listeners are called instead, and
 // once the last one is removed the signal's default action (ending the process) is back.
 //
 // The listeners are called on a thread of this module's own, never inside the signal handler, so they may do
-// anything a normal function may. On Windows Ctrl+C arrives as SIGINT (like Node); SIGTERM is never received there.
+// anything a normal function may. On Windows Ctrl+C arrives as SIGINT; SIGTERM is never received there.
 //
 
 //

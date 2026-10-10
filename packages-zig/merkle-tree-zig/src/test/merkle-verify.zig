@@ -1,5 +1,5 @@
 //
-// Test helpers shared by the merkle tree tests (the equivalent of src/test/merkle-verify.ts).
+// Test helpers shared by the merkle tree tests.
 //
 
 const std = @import("std");
@@ -17,7 +17,7 @@ const Sha256 = std.crypto.hash.sha2.Sha256;
 pub const TEST_TIMESTAMP: i64 = 1_700_000_000_000;
 
 //
-// The tree id the TypeScript tests use.
+// The tree id the tests use.
 //
 pub const TEST_TREE_ID = "12345678-1234-5678-9abc-123456789abc";
 
@@ -34,8 +34,7 @@ pub fn createHashedItem(name: []const u8) HashedItem {
 }
 
 //
-// Computes the SHA-256 of content, allocated so it can be used as a hash slice
-// (TypeScript: `crypto.createHash('sha256').update(content).digest()`).
+// Computes the SHA-256 of content, allocated so it can be used as a hash slice.
 //
 pub fn sha256(allocator: std.mem.Allocator, content: []const u8) ![]const u8 {
     const digest = try allocator.create([Sha256.digest_length]u8);
@@ -44,7 +43,7 @@ pub fn sha256(allocator: std.mem.Allocator, content: []const u8) ![]const u8 {
 }
 
 //
-// Creates a hashed item whose hash is the SHA-256 of content (the helper most TypeScript test files define).
+// Creates a hashed item whose hash is the SHA-256 of content.
 //
 pub fn createSha256HashedItem(allocator: std.mem.Allocator, name: []const u8, content: []const u8, length: u64) !HashedItem {
     return .{
@@ -133,7 +132,7 @@ pub fn sortTreeShape(allocator: std.mem.Allocator, sortNode: ?*const SortNode) !
 }
 
 //
-// Checks the invariants _expectNode in merkle-verify.ts checks on every node: leaves have a name, a content hash,
+// Checks the invariants of every node: leaves have a name, a content hash,
 // nodeCount 1 and minName equal to the name; internal nodes have nodeCount >= 3 and minName equal to the left minName.
 //
 fn expectNodeInvariants(sortNode: *const SortNode) !void {
@@ -155,8 +154,7 @@ fn expectNodeInvariants(sortNode: *const SortNode) !void {
 }
 
 //
-// Checks that a node matches the expected structure (TypeScript: expectNode with a nested structure object;
-// Zig: the expected structure is written as a shape string, for example "(C,(E,D))").
+// Checks that a node matches the expected structure, which is written as a string, for example "(C,(E,D))".
 //
 pub fn expectNode(allocator: std.mem.Allocator, sortNode: *const SortNode, expectedShape: []const u8) !void {
     try expectNodeInvariants(sortNode);
@@ -187,7 +185,7 @@ pub fn collectMerkleLeafNames(allocator: std.mem.Allocator, names: *std.ArrayLis
 }
 
 //
-// Returns true when a list of names contains a name (Jest: `expect(list).toContain(name)`).
+// Returns true when a list of names contains a name.
 //
 pub fn containsName(names: []const []const u8, name: []const u8) bool {
     for (names) |candidate| {
@@ -199,7 +197,7 @@ pub fn containsName(names: []const []const u8, name: []const u8) bool {
 }
 
 //
-// Sorts names in JavaScript default sort order (ASCII names in the tests, so byte order).
+// Sorts names in the default string order (ASCII names in the tests, so byte order).
 //
 pub fn sortNames(names: [][]const u8) void {
     std.mem.sort([]const u8, names, {}, lessThanName);
@@ -214,7 +212,7 @@ fn lessThanName(context: void, left: []const u8, right: []const u8) bool {
 }
 
 //
-// Generates all permutations of names (the generatePermutations helper of several TypeScript test files).
+// Generates all permutations of names.
 //
 pub fn generatePermutations(allocator: std.mem.Allocator, names: []const []const u8) ![]const []const []const u8 {
     if (names.len <= 1) {

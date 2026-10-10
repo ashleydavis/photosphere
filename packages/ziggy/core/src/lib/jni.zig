@@ -19,6 +19,7 @@ const types = @import("types.zig");
 const core_module = @import("core.zig");
 const ui_files = @import("ui-files.zig");
 const inject_script = @import("inject-script.zig");
+const host_reply = @import("host-reply.zig");
 
 //
 // The Java interface the core calls back into.
@@ -43,6 +44,8 @@ const Bridge = struct {
     keep_alive_method: c.jmethodID,
     // ZiggyHost.pickPathsJson(int, String, String).
     pick_paths_method: c.jmethodID,
+    // ZiggyHost.hostRequest(byte[], byte[]).
+    host_request_method: c.jmethodID,
     // The core, once it has been created.
     core: *core_module.Core,
     // The owned copy of the test port file path, or null when there is none. The core keeps the pointer, so it lives as long as the core.
@@ -198,7 +201,11 @@ fn deliverCallback(user_data: ?*anyopaque, message_ptr: [*]const u8, message_len
     defer envTable(env).DeleteLocalRef.?(env, array);
     envTable(env).SetByteArrayRegion.?(env, array, 0, @intCast(message_len), @ptrCast(message_ptr));
     failOnPendingException(env, "Ziggy JNI: could not copy a message into a byte array");
-    var arguments = [1]c.jvalue{.{ .l = array }};
+    var arguments = [1]c.jvalue{
+        .{
+            .l = array,
+        },
+    };
     envTable(env).CallVoidMethodA.?(env, bridge.host, bridge.on_core_message_method, &arguments);
     failOnPendingException(env, "Ziggy JNI: ZiggyHost.onCoreMessage threw");
 }
@@ -246,6 +253,66 @@ fn quitCallback(user_data: ?*anyopaque) callconv(.c) void {
 }
 
 //
+// What a signal that is only there to interrupt a blocked system call does when it arrives: nothing.
+//
+fn doNothingSignalHandler(signal_number: c_int) callconv(.c) void {
+    _ = signal_number;
+}
+
+//
+// WORKAROUND, with the reason and what it fixed.
+//
+// The problem: every task the core cancels while it is blocked in a system call (the test control connection's reads, the retry timer
+// that openStorage cancels after a read finishes) is cancelled by sending its thread SIGIO, which returns the call early. That needs
+// a do-nothing SIGIO handler, and Zig 0.16.0's threaded Io installs it when it is created with options (the test control connection's
+// is). It builds the sigaction struct in the layout glibc uses, and Android's libc has the flags first, so the install lands as no
+// handler at all, the default action is restored, and the first cancel of a blocked task ends the whole app with "I/O possible"
+// (signal 29). Every Android scenario died this way: the app log stops mid-load and the harness times out waiting for a log line.
+//
+// What this does: installs the same do-nothing handler for SIGIO and SIGPIPE through the NDK's own struct sigaction and sigaction. It
+// has to run after the core is created, because creating the core is what makes Zig overwrite the handler, and it checks by reading
+// the handler back so a lost install is loud.
+//
+// TODO: investigate and remove. Check whether a later Zig fixes the struct layout for Android, and whether the threaded Io should be
+// given a way to skip installing its own handler. The Zig threaded Io's deinit also restores the handler it replaced, which on Android
+// is the default, so the handler is gone again once the test control connection stops.
+//
+fn installSignalHandlers() void {
+    var action = std.mem.zeroes(c.struct_sigaction);
+    action.unnamed_0.sa_handler = doNothingSignalHandler;
+    if (c.sigaction(c.SIGIO, &action, null) != 0) {
+        @panic("Ziggy JNI: could not install the SIGIO handler");
+    }
+    if (c.sigaction(c.SIGPIPE, &action, null) != 0) {
+        @panic("Ziggy JNI: could not install the SIGPIPE handler");
+    }
+    var installed = std.mem.zeroes(c.struct_sigaction);
+    if (c.sigaction(c.SIGIO, null, &installed) != 0) {
+        @panic("Ziggy JNI: could not read the SIGIO handler back");
+    }
+    if (installed.unnamed_0.sa_handler != doNothingSignalHandler) {
+        @panic("Ziggy JNI: the SIGIO handler was not the one installed");
+    }
+}
+
+//
+// The native host callback that does a menu action. A phone has no menu bar and none of the shell's own actions (reload, zoom,
+// full screen, quit), so every action reaches the page as a menu-action message, the way an action of the page's own does on a
+// desktop. The core calls it from the thread of the test control connection.
+//
+fn menuActionCallback(user_data: ?*anyopaque, action: [*:0]const u8) callconv(.c) void {
+    const bridge: *Bridge = @ptrCast(@alignCast(user_data.?));
+    const message = std.json.Stringify.valueAlloc(std.heap.smp_allocator, .{
+        .channel = "menu-action",
+        .data = .{
+            .action = std.mem.span(action),
+        },
+    }, .{}) catch @panic("Ziggy JNI: out of memory building a menu-action message");
+    defer std.heap.smp_allocator.free(message);
+    bridge.core.postMessage(message);
+}
+
+//
 // The native host callback that keeps the app running, or says it need not be, by calling ZiggyHost.keepAlive. The core calls it
 // from the thread that queued or ended the task.
 //
@@ -255,7 +322,9 @@ fn keepAliveCallback(user_data: ?*anyopaque, keep_running: bool) callconv(.c) vo
     defer detach(attachment);
     const env = attachment.env;
     var arguments = [1]c.jvalue{
-        .{ .z = if (keep_running) c.JNI_TRUE else c.JNI_FALSE },
+        .{
+            .z = if (keep_running) c.JNI_TRUE else c.JNI_FALSE,
+        },
     };
     envTable(env).CallVoidMethodA.?(env, bridge.host, bridge.keep_alive_method, &arguments);
     failOnPendingException(env, "Ziggy JNI: ZiggyHost.keepAlive threw");
@@ -295,9 +364,15 @@ fn pickPathsCallback(user_data: ?*anyopaque, kind: i32, title: ?[*:0]const u8, i
         envTable(env).DeleteLocalRef.?(env, initial_name_string);
     };
     var arguments = [3]c.jvalue{
-        .{ .i = kind },
-        .{ .l = title_string },
-        .{ .l = initial_name_string },
+        .{
+            .i = kind,
+        },
+        .{
+            .l = title_string,
+        },
+        .{
+            .l = initial_name_string,
+        },
     };
     const answer = envTable(env).CallObjectMethodA.?(env, bridge.host, bridge.pick_paths_method, &arguments);
     failOnPendingException(env, "Ziggy JNI: ZiggyHost.pickPathsJson threw");
@@ -312,6 +387,73 @@ fn pickPathsCallback(user_data: ?*anyopaque, kind: i32, title: ?[*:0]const u8, i
     envTable(env).GetByteArrayRegion.?(env, @ptrCast(answer), 0, @intCast(length), @ptrCast(buffer));
     failOnPendingException(env, "Ziggy JNI: could not copy the picker answer");
     return @intCast(length);
+}
+
+//
+// Makes a Java byte array holding a copy of the bytes, or null with an exception pending when it could not be made.
+//
+fn newJavaBytes(env: *c.JNIEnv, bytes: []const u8) c.jbyteArray {
+    const array = envTable(env).NewByteArray.?(env, @intCast(bytes.len));
+    if (array == null) {
+        return null;
+    }
+    envTable(env).SetByteArrayRegion.?(env, array, 0, @intCast(bytes.len), @ptrCast(bytes.ptr));
+    if (envTable(env).ExceptionCheck.?(env) == c.JNI_TRUE) {
+        envTable(env).DeleteLocalRef.?(env, array);
+        return null;
+    }
+    return array;
+}
+
+//
+// The native host callback that does one thing only the app's own code can do, by calling ZiggyHost.hostRequest, which may wait for
+// the user. The core calls it from a worker thread with no lock held. The method and the request cross as UTF-8 bytes, and Java answers
+// with a status byte (1 when it did what was asked, 0 when it could not) followed by the answer or the reason. Every way the call can
+// fail is returned as a failure with a reason, so the core reports it to the page.
+//
+fn hostRequestCallback(user_data: ?*anyopaque, method: [*:0]const u8, request_json: [*:0]const u8, buffer: [*]u8, capacity: usize) callconv(.c) isize {
+    const bridge: *Bridge = @ptrCast(@alignCast(user_data.?));
+    const method_name = std.mem.span(method);
+    const attachment = attach(bridge.java_vm);
+    defer detach(attachment);
+    const env = attachment.env;
+    const method_array = newJavaBytes(env, method_name);
+    if (method_array == null) {
+        failOnPendingException(env, "Ziggy JNI: could not make the host request method");
+        return host_reply.writeHostReply(false, method_name, "The host request could not be sent to the app.", buffer, capacity);
+    }
+    defer envTable(env).DeleteLocalRef.?(env, method_array);
+    const request_array = newJavaBytes(env, std.mem.span(request_json));
+    if (request_array == null) {
+        failOnPendingException(env, "Ziggy JNI: could not make the host request argument");
+        return host_reply.writeHostReply(false, method_name, "The host request could not be sent to the app.", buffer, capacity);
+    }
+    defer envTable(env).DeleteLocalRef.?(env, request_array);
+    var arguments = [2]c.jvalue{
+        .{
+            .l = method_array,
+        },
+        .{
+            .l = request_array,
+        },
+    };
+    const answer = envTable(env).CallObjectMethodA.?(env, bridge.host, bridge.host_request_method, &arguments);
+    failOnPendingException(env, "Ziggy JNI: ZiggyHost.hostRequest threw");
+    if (answer == null) {
+        return host_reply.writeHostReply(false, method_name, "The app gave no answer to the host request.", buffer, capacity);
+    }
+    defer envTable(env).DeleteLocalRef.?(env, answer);
+    const length: usize = @intCast(envTable(env).GetArrayLength.?(env, @ptrCast(answer)));
+    if (length < 1) {
+        return host_reply.writeHostReply(false, method_name, "The app's answer to the host request was empty.", buffer, capacity);
+    }
+    const text = std.heap.smp_allocator.alloc(u8, length) catch {
+        return host_reply.writeHostReply(false, method_name, "The core ran out of memory reading the app's answer to a host request.", buffer, capacity);
+    };
+    defer std.heap.smp_allocator.free(text);
+    envTable(env).GetByteArrayRegion.?(env, @ptrCast(answer), 0, @intCast(length), @ptrCast(text.ptr));
+    failOnPendingException(env, "Ziggy JNI: could not copy the answer to a host request");
+    return host_reply.writeHostReply(text[0] == 1, method_name, text[1..], buffer, capacity);
 }
 
 //
@@ -369,6 +511,10 @@ fn createBridge(env: *c.JNIEnv, allocator: std.mem.Allocator, arguments: CreateA
         return error.JavaException;
     };
 
+    bridge.host_request_method = envTable(env).GetMethodID.?(env, host_class, "hostRequest", "([B[B)[B") orelse {
+        return error.JavaException;
+    };
+
     bridge.host = envTable(env).NewGlobalRef.?(env, arguments.host);
     if (bridge.host == null) {
         return error.JavaException;
@@ -394,7 +540,7 @@ fn createBridge(env: *c.JNIEnv, allocator: std.mem.Allocator, arguments: CreateA
         .os_version = osVersionCallback,
         .quit = quitCallback,
         .pick_paths = pickPathsCallback,
-        .menu_action = null,
+        .menu_action = menuActionCallback,
         .keep_alive = keepAliveCallback,
         .worker_threads = arguments.worker_threads,
         .max_concurrent_child_tasks = arguments.max_concurrent_child_tasks,
@@ -402,9 +548,10 @@ fn createBridge(env: *c.JNIEnv, allocator: std.mem.Allocator, arguments: CreateA
         .data_dir = data_dir.ptr,
         .test_mode = arguments.test_mode != c.JNI_FALSE,
         .test_port_file = if (bridge.test_port_file) |port_file| port_file.ptr else null,
-        .host_request = null,
+        .host_request = hostRequestCallback,
     };
     bridge.core = try core_module.Core.create(allocator, config, app);
+    installSignalHandlers();
     return bridge;
 }
 
@@ -414,6 +561,9 @@ fn createBridge(env: *c.JNIEnv, allocator: std.mem.Allocator, arguments: CreateA
 //
 pub fn exportJni(comptime app: core_module.AppHandlers) void {
     const Exports = struct {
+        //
+        // Called when the virtual machine loads the library: checks that it supports the JNI version the entry points use.
+        //
         fn onLoad(java_vm: *c.JavaVM, reserved: ?*anyopaque) callconv(.c) c.jint {
             _ = reserved;
             var env: ?*c.JNIEnv = null;
@@ -423,12 +573,18 @@ pub fn exportJni(comptime app: core_module.AppHandlers) void {
             return c.JNI_VERSION_1_6;
         }
 
+        //
+        // Says whether this library was built with the test hooks.
+        //
         fn testHooksEnabled(env: *c.JNIEnv, class: c.jclass) callconv(.c) c.jboolean {
             _ = env;
             _ = class;
             return if (build_options.test_hooks) c.JNI_TRUE else c.JNI_FALSE;
         }
 
+        //
+        // Creates the core for the app's host object and returns its handle, or zero with a Java exception pending.
+        //
         fn create(
             env: *c.JNIEnv,
             class: c.jclass,
@@ -460,6 +616,9 @@ pub fn exportJni(comptime app: core_module.AppHandlers) void {
             return @intCast(@intFromPtr(bridge));
         }
 
+        //
+        // Destroys the core of the handle and releases everything the bridge held.
+        //
         fn destroy(env: *c.JNIEnv, class: c.jclass, handle: c.jlong) callconv(.c) void {
             _ = class;
             const bridge: *Bridge = @ptrFromInt(@as(usize, @intCast(handle)));
@@ -472,6 +631,9 @@ pub fn exportJni(comptime app: core_module.AppHandlers) void {
             std.heap.smp_allocator.destroy(bridge);
         }
 
+        //
+        // Passes a message from the page to the core.
+        //
         fn postMessage(env: *c.JNIEnv, class: c.jclass, handle: c.jlong, message: c.jbyteArray) callconv(.c) void {
             _ = class;
             const bridge: *Bridge = @ptrFromInt(@as(usize, @intCast(handle)));
@@ -485,6 +647,9 @@ pub fn exportJni(comptime app: core_module.AppHandlers) void {
             bridge.core.postMessage(copy);
         }
 
+        //
+        // Asks the core what to do with an address the web view is about to load.
+        //
         fn checkUrl(env: *c.JNIEnv, class: c.jclass, handle: c.jlong, url: c.jbyteArray) callconv(.c) c.jint {
             _ = class;
             const bridge: *Bridge = @ptrFromInt(@as(usize, @intCast(handle)));
@@ -498,8 +663,10 @@ pub fn exportJni(comptime app: core_module.AppHandlers) void {
             return @intFromEnum(bridge.core.checkUrl(copy));
         }
 
+        //
         // Copies the Java byte array of a request path and finds the bundled page's file for it. Null when there is no such
         // file, or when the path could not be copied (in which case a Java exception is pending).
+        //
         fn findUiFile(env: *c.JNIEnv, handle: c.jlong, path: c.jbyteArray) ?*const ui_files.UiFile {
             const bridge: *Bridge = @ptrFromInt(@as(usize, @intCast(handle)));
             const copy = copyJavaBytes(env, std.heap.smp_allocator, path) catch |err| {
@@ -512,7 +679,9 @@ pub fn exportJni(comptime app: core_module.AppHandlers) void {
             return bridge.core.uiFile(copy);
         }
 
-
+        //
+        // Gives the script to inject into the page before it loads, as UTF-8 bytes.
+        //
         fn injectScript(env: *c.JNIEnv, class: c.jclass) callconv(.c) c.jbyteArray {
             _ = class;
             const array = envTable(env).NewByteArray.?(env, @intCast(inject_script.text.len));
@@ -524,6 +693,30 @@ pub fn exportJni(comptime app: core_module.AppHandlers) void {
             failOnPendingException(env, "Ziggy JNI: could not copy the inject script into a byte array");
             return array;
         }
+
+        //
+        // The query of the page's address as UTF-8 bytes, or null, with a Java exception pending, when the app could not make it.
+        //
+        fn pageQuery(env: *c.JNIEnv, class: c.jclass, handle: c.jlong) callconv(.c) c.jbyteArray {
+            _ = class;
+            const bridge: *Bridge = @ptrFromInt(@as(usize, @intCast(handle)));
+            const text = bridge.core.pageQuery() catch |err| {
+                throwJava(env, "java/lang/IllegalStateException", @errorName(err));
+                return null;
+            };
+            const array = envTable(env).NewByteArray.?(env, @intCast(text.len));
+            if (array == null) {
+                failOnPendingException(env, "Ziggy JNI: could not allocate a byte array for the page query");
+                fatal(env, "Ziggy JNI: could not allocate a byte array for the page query");
+            }
+            envTable(env).SetByteArrayRegion.?(env, array, 0, @intCast(text.len), @ptrCast(text.ptr));
+            failOnPendingException(env, "Ziggy JNI: could not copy the page query into a byte array");
+            return array;
+        }
+
+        //
+        // Gives the bytes of a file of the bundled page, or null when the page has no such file.
+        //
         fn uiFileContent(env: *c.JNIEnv, class: c.jclass, handle: c.jlong, path: c.jbyteArray) callconv(.c) c.jbyteArray {
             _ = class;
             const file = findUiFile(env, handle, path) orelse {
@@ -539,6 +732,9 @@ pub fn exportJni(comptime app: core_module.AppHandlers) void {
             return array;
         }
 
+        //
+        // Gives the content type of a file of the bundled page, or null when the page has no such file.
+        //
         fn uiFileContentType(env: *c.JNIEnv, class: c.jclass, handle: c.jlong, path: c.jbyteArray) callconv(.c) c.jstring {
             _ = class;
             const file = findUiFile(env, handle, path) orelse {
@@ -552,13 +748,34 @@ pub fn exportJni(comptime app: core_module.AppHandlers) void {
             return text;
         }
     };
-    @export(&Exports.onLoad, .{ .name = "JNI_OnLoad" });
-    @export(&Exports.testHooksEnabled, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_testHooksEnabled" });
-    @export(&Exports.create, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_create" });
-    @export(&Exports.destroy, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_destroy" });
-    @export(&Exports.postMessage, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_postMessage" });
-    @export(&Exports.checkUrl, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_checkUrl" });
-    @export(&Exports.injectScript, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_injectScript" });
-    @export(&Exports.uiFileContent, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_uiFileContent" });
-    @export(&Exports.uiFileContentType, .{ .name = "Java_dev_ziggy_shell_ZiggyNative_uiFileContentType" });
+    @export(&Exports.onLoad, .{
+        .name = "JNI_OnLoad",
+    });
+    @export(&Exports.testHooksEnabled, .{
+        .name = "Java_dev_ziggy_shell_ZiggyNative_testHooksEnabled",
+    });
+    @export(&Exports.create, .{
+        .name = "Java_dev_ziggy_shell_ZiggyNative_create",
+    });
+    @export(&Exports.destroy, .{
+        .name = "Java_dev_ziggy_shell_ZiggyNative_destroy",
+    });
+    @export(&Exports.postMessage, .{
+        .name = "Java_dev_ziggy_shell_ZiggyNative_postMessage",
+    });
+    @export(&Exports.checkUrl, .{
+        .name = "Java_dev_ziggy_shell_ZiggyNative_checkUrl",
+    });
+    @export(&Exports.injectScript, .{
+        .name = "Java_dev_ziggy_shell_ZiggyNative_injectScript",
+    });
+    @export(&Exports.pageQuery, .{
+        .name = "Java_dev_ziggy_shell_ZiggyNative_pageQuery",
+    });
+    @export(&Exports.uiFileContent, .{
+        .name = "Java_dev_ziggy_shell_ZiggyNative_uiFileContent",
+    });
+    @export(&Exports.uiFileContentType, .{
+        .name = "Java_dev_ziggy_shell_ZiggyNative_uiFileContentType",
+    });
 }

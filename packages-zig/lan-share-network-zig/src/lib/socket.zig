@@ -3,10 +3,9 @@ const builtin = @import("builtin");
 const utils = @import("utils-zig");
 
 //
-// The UDP and TCP sockets the LAN share sender and receiver use. This file has no TypeScript counterpart: it stands
-// in for the parts of node:dgram and node:net that lan-share-sender.ts and lan-share-receiver.ts use. It calls the
+// The UDP and TCP sockets the LAN share sender and receiver use. It calls the
 // operating system's socket API directly (the C library's on Linux and macOS, Winsock on Windows) rather than
-// std.Io.net, because the discovery socket needs SO_REUSEADDR on a UDP socket (Node's `reuseAddr: true`), which
+// std.Io.net, because the discovery socket needs SO_REUSEADDR on a UDP socket, which
 // std.Io.net only offers for listening TCP sockets.
 //
 // Every wait is a poll with a timeout, so a caller can give up on a wait (a timeout or a cancel) without a second
@@ -14,7 +13,7 @@ const utils = @import("utils-zig");
 //
 
 //
-// Names used from other files (the equivalent of the TypeScript imports).
+// Names used from other files.
 //
 const errors = utils.errors;
 
@@ -260,9 +259,8 @@ fn setFlag(handle: Handle, option: u32, operation: []const u8) !void {
 }
 
 //
-// Creates a UDP socket (dgram `createSocket("udp4")`). With reuseAddress, several sockets can bind the same port
-// (dgram's `reuseAddr: true`, which libuv turns into SO_REUSEADDR, and SO_REUSEPORT on macOS). With allowBroadcast,
-// the socket can send to 255.255.255.255 (dgram's `setBroadcast(true)`).
+// Creates an IPv4 UDP socket. With reuseAddress, several sockets can bind the same port (SO_REUSEADDR, and
+// SO_REUSEPORT on macOS). With allowBroadcast, the socket can send to 255.255.255.255.
 //
 pub fn createUdp(reuseAddress: bool, allowBroadcast: bool) !Handle {
     const handle = try create(if (is_windows) std.os.windows.ws2_32.SOCK.DGRAM else std.c.SOCK.DGRAM);

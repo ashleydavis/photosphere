@@ -1,6 +1,7 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const serialization_zig = @import("serialization-zig");
 const tools = @import("tools-zig");
 const media_file_database = @import("media-file-database.zig");
@@ -29,16 +30,15 @@ const resizeImage = image.resizeImage;
 const transformImage = image.transformImage;
 
 //
-// The current time in milliseconds (TypeScript: `Date.now()`).
+// The current time in milliseconds.
 //
 fn dateNow(io: std.Io) f64 {
     return @floatFromInt(std.Io.Clock.real.now(io).toMilliseconds());
 }
 
 //
-// `date.toISOString()` for a JavaScript time value, which a Date truncates to whole milliseconds: throws a RangeError
-// with the given message for an Invalid Date, a time that is NaN or more than 8.64e15 milliseconds from 1970. Date
-// says "Invalid time value", and dayjs says "Invalid Date". (No TypeScript counterpart.)
+// Formats a time in milliseconds since 1970 as an ISO timestamp, truncated to whole milliseconds. Throws a RangeError
+// with the given message for a time that is NaN or more than 8.64e15 milliseconds from 1970.
 //
 fn toISOString(allocator: std.mem.Allocator, time: f64, invalidMessage: []const u8) ![]const u8 {
     if (std.math.isNan(time) or !(@abs(time) <= 8.64e15)) {
@@ -58,24 +58,24 @@ fn toISOString(allocator: std.mem.Allocator, time: f64, invalidMessage: []const 
 //
 // Gets the details of a video.
 //
-pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, tempDir: []const u8, contentType: []const u8, uuidGenerator: IUuidGenerator, logicalPath: []const u8) !IAssetDetails {
+pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProcessRunner, filePath: []const u8, tempDir: []const u8, contentType: []const u8, uuidGenerator: IUuidGenerator, logicalPath: []const u8) !IAssetDetails {
     _ = logicalPath;
     // filePath is always a valid file (already extracted if from zip)
     const videoPath = filePath;
 
     const metadataStartedAt = dateNow(io);
-    const assetInfo = try getFileInfo(allocator, io, videoPath, contentType) orelse {
+    const assetInfo = try getFileInfo(allocator, io, toolRunner, videoPath, contentType) orelse {
         return errors.throwError("Unsupported file type: {s}", .{contentType});
     };
     const metadataMs = dateNow(io) - metadataStartedAt;
 
     // Extract screenshot at 1 second or middle of video
-    var video = Video.init(allocator, io, videoPath);
+    var video = Video.init(allocator, io, toolRunner, videoPath);
     const screenshotPath = try path.join(allocator, &.{ tempDir, try std.mem.concat(allocator, u8, &.{ "thumb_", try uuidGenerator.generate(allocator, io), ".jpg" }) });
     const duration = assetInfo.duration;
     const screenshotTime = @min(if (duration != null and isTruthy(duration.?)) duration.? / 2 else 1, 300); // Max 5 minutes
     const screenshotStartedAt = dateNow(io);
-    _ = try video.extractScreenshot(allocator, io, screenshotPath, screenshotTime);
+    _ = try video.extractScreenshot(allocator, io, toolRunner, screenshotPath, screenshotTime);
     const screenshotMs = dateNow(io) - screenshotStartedAt;
 
     var resolution: IResolution = .{
@@ -83,15 +83,15 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []con
         .height = assetInfo.dimensions.height,
     };
     const thumbnailStartedAt = dateNow(io);
-    var thumbnailPath = try resizeImage(allocator, io, screenshotPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, 90);
+    var thumbnailPath = try resizeImage(allocator, io, toolRunner, screenshotPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, 90);
 
     const metadataDocument: ?BsonDocument = if (assetInfo.metadata) |metadata| (if (metadata == .document) metadata.document else null) else null;
     const imageTransformation = try getVideoTransformation(allocator, metadataDocument);
     if (imageTransformation) |transformation| {
         // Flips orientation depending on exif data.
-        thumbnailPath = try transformImage(allocator, io, thumbnailPath, tempDir, transformation, uuidGenerator);
+        thumbnailPath = try transformImage(allocator, io, toolRunner, thumbnailPath, tempDir, transformation, uuidGenerator);
         if (transformation.changeOrientation orelse false) {
-            // (Zig: a copy is swapped, as assigning a literal to resolution would overwrite its width before the height reads it.)
+            // A copy is swapped, as assigning a literal to resolution would overwrite its width before the height reads it.
             const unswapped = resolution;
             resolution = .{
                 .width = unswapped.height,
@@ -103,7 +103,7 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []con
     const thumbnailMs = dateNow(io) - thumbnailStartedAt;
 
     const microStartedAt = dateNow(io);
-    const microPath = try resizeImage(allocator, io, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
+    const microPath = try resizeImage(allocator, io, toolRunner, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
     const microMs = dateNow(io) - microStartedAt;
 
     var photoDate: ?[]const u8 = if (assetInfo.createdAt) |createdAt| try toISOString(allocator, createdAt, "Invalid time value") else null;
@@ -164,8 +164,8 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, filePath: []con
 }
 
 //
-// `photoData.photoTakenTime?.timestamp` for the value parsed from the JSON file. Reading a property of null or
-// undefined throws a TypeError, as it does in JavaScript. (No TypeScript counterpart.)
+// The photoTakenTime timestamp of the value parsed from the JSON file. Reading a property of null or
+// undefined throws a TypeError.
 //
 fn photoTakenTimestamp(photoData: BsonValue) !BsonValue {
     switch (photoData) {
@@ -188,14 +188,14 @@ fn photoTakenTimestamp(photoData: BsonValue) !BsonValue {
 }
 
 //
-// JavaScript truthiness of a number. (No TypeScript counterpart.)
+// Whether a number counts as set (not zero and not NaN).
 //
 fn isTruthy(value: f64) bool {
     return value != 0 and !std.math.isNan(value);
 }
 
 //
-// JavaScript truthiness of a value. (No TypeScript counterpart.)
+// Whether a value counts as set.
 //
 fn isValueTruthy(value: BsonValue) bool {
     return switch (value) {
@@ -210,8 +210,8 @@ fn isValueTruthy(value: BsonValue) bool {
 }
 
 //
-// `String(value)` for a value JSON can hold: an array is its elements joined with commas (null and undefined
-// elements as nothing), and an object is "[object Object]". (No TypeScript counterpart.)
+// A value JSON can hold as text: an array is its elements joined with commas (null and undefined
+// elements as nothing), and an object is "[object Object]".
 //
 fn jsString(allocator: std.mem.Allocator, value: BsonValue) anyerror![]const u8 {
     return switch (value) {
@@ -235,7 +235,7 @@ fn jsString(allocator: std.mem.Allocator, value: BsonValue) anyerror![]const u8 
 }
 
 //
-// `String(number)` for a JavaScript number. (No TypeScript counterpart.)
+// A number as text.
 //
 fn jsNumberString(allocator: std.mem.Allocator, number: f64) ![]const u8 {
     var output: std.Io.Writer.Allocating = .init(allocator);
@@ -245,7 +245,6 @@ fn jsNumberString(allocator: std.mem.Allocator, number: f64) ![]const u8 {
 
 //
 // Matches /([+-]\d+\.\d+)([+-]\d+\.\d+)/ at a position: the length of the `[+-]\d+\.\d+` there, or null.
-// (No TypeScript counterpart: TypeScript runs the regular expression.)
 //
 fn matchSignedDecimal(text: []const u8, start: usize) ?usize {
     var index = start;

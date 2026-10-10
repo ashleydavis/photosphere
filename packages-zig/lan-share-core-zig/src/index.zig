@@ -1,6 +1,6 @@
 //
-// Platform-agnostic LAN-share payload types and the shared secret-import loop. In TypeScript this zero-dependency
-// package is shared by desktop (the Node `api` package, writing to the OS vault) and mobile.
+// Platform-agnostic LAN-share payload types and the shared secret-import loop. This zero-dependency package is
+// shared by the desktop and mobile apps.
 //
 
 const std = @import("std");
@@ -30,8 +30,8 @@ pub const IShareS3Credentials = struct {
     name: []const u8,
 
     // AWS region (e.g. "us-east-1").
-    // (Zig: optional, because TypeScript sends whatever the stored credentials hold, and undefined when they
-    // have no region; the same holds for the two keys.)
+    // (Optional, because the sender sends whatever the stored credentials hold, and nothing when they have no
+    // region; the same holds for the two keys.)
     region: ?[]const u8 = null,
 
     // Access key ID for authentication.
@@ -99,7 +99,7 @@ pub const IDatabaseSharePayload = struct {
 };
 
 //
-// The action of a conflict resolution (the string union of IConflictResolution.action in TypeScript).
+// The action of a conflict resolution.
 //
 pub const ConflictAction = enum {
     // Overwrite the existing entry.

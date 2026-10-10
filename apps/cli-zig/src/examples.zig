@@ -1,5 +1,5 @@
 //
-// Port of apps/cli/src/examples.ts: the usage examples shown in the help of the commands.
+// The usage examples shown in the help of the commands.
 //
 
 const std = @import("std");

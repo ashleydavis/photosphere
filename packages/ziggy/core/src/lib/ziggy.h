@@ -168,6 +168,12 @@ bool ziggy_parse_accelerator(const char *text, size_t text_len, ziggy_accelerato
 // of strings. Returns false, after logging why, when a path is not a readable file or the text is not such an array.
 bool ziggy_files_dropped(void *handle, const char *paths_json, size_t paths_len);
 
+// Returns the query of the page's address, which the app supplies, as the text after the question mark (NUL terminated, empty when
+// the app has none), valid until the next call or ziggy_destroy. The shell appends a question mark and this text to the page's
+// address and passes it through unread. The length, not counting the terminator, is written to the pointer given. Returns NULL,
+// after printing why, when the app could not make it, and the shell then does not load the page.
+const char *ziggy_page_query(void *handle, size_t *length);
+
 // Returns true when the library was built with the test hooks.
 bool ziggy_test_hooks_enabled(void);
 

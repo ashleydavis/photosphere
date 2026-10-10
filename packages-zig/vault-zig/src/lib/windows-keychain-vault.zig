@@ -68,7 +68,7 @@ fn runPowerShell(allocator: std.mem.Allocator, io: std.Io, script: []const u8) !
 }
 
 //
-// Escapes single quotes for a PowerShell single-quoted string (TypeScript: `.replace(/'/g, "''")`).
+// Escapes single quotes for a PowerShell single-quoted string (each single quote is doubled).
 //
 fn escapeSingleQuotes(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
     return std.mem.replaceOwned(u8, allocator, text, "'", "''");
@@ -140,7 +140,7 @@ pub const WindowsKeychainVault = struct {
             .ignore_unknown_fields = true,
             .allocate = .alloc_always,
 
-            // JSON.parse keeps the last value of a repeated key.
+            // The last value of a repeated key is kept.
             .duplicate_field_behavior = .use_last,
         }) catch |err| {
             return errors.throwError("JSON Parse error: {s}", .{@errorName(err)});

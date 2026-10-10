@@ -1,6 +1,5 @@
 //
-// Tests of visualize.zig (the TypeScript visualize.ts has no tests of its own; the expected text was produced by
-// the TypeScript visualizeTree for the same trees).
+// Tests of visualize.zig.
 //
 
 const std = @import("std");

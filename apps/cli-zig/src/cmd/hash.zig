@@ -1,5 +1,5 @@
 //
-// Port of apps/cli/src/cmd/hash.ts: computes the hash of a file using the same algorithm as the database.
+// Computes the hash of a file using the same algorithm as the database.
 //
 
 const std = @import("std");
@@ -21,7 +21,7 @@ const configureS3IfNeeded = init_cmd.configureS3IfNeeded;
 const createStorageForPath = storage_helper.createStorageForPath;
 
 //
-// Options of the hash command (TypeScript: IHashCommandOptions).
+// Options of the hash command.
 //
 pub const IHashCommandOptions = struct {
     // Enables verbose logging.

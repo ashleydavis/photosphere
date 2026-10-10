@@ -200,7 +200,7 @@ test "readStream streams the file contents" {
     try std.testing.expectEqualSlices(u8, data, try test_files.readAll(allocator, stream.reader()));
 }
 
-test "readStream fails with the Node ENOENT message for a missing file" {
+test "readStream fails with the ENOENT message for a missing file" {
     var fixture: Fixture = undefined;
     try fixture.init("file-storage-read-stream-missing");
     defer fixture.deinit();
@@ -280,7 +280,7 @@ test "copyTo copies a file and creates the destination directory" {
 }
 
 //
-// readableLength has no test of its own in TypeScript; what it says of a file on disk is pinned here.
+// What readableLength says of a file on disk is pinned here.
 //
 test "readableLength is the length in the info, because a file hands out what it holds" {
     var fileStorage = FileStorage.init("fs:");
@@ -292,8 +292,7 @@ test "readableLength is the length in the info, because a file hands out what it
 }
 
 //
-// writeStreamHashed and storedHash have no test of their own in TypeScript; what they do for a file on disk is pinned
-// here.
+// What writeStreamHashed and storedHash do for a file on disk is pinned here.
 //
 test "writeStreamHashed writes the stream and says the filesystem did not check the hash" {
     var fixture: Fixture = undefined;

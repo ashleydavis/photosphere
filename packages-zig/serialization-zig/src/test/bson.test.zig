@@ -1,5 +1,5 @@
 //
-// Tests for bson.zig. The golden fixtures in fixtures/bson were serialized by the npm `bson` library (see fixtures/generate.ts).
+// Tests for bson.zig. The golden fixtures in fixtures/bson were serialized by the npm `bson` library.
 //
 
 const std = @import("std");
@@ -41,7 +41,7 @@ fn array(allocator: std.mem.Allocator, elements: []const BsonValue) !BsonValue {
 //
 // Checks a case against its fixtures:
 //   - serializing the document gives the bytes npm bson serialized for the same JS value (<name>.bson),
-//   - deserializing those bytes and serializing again gives what TypeScript writes when it does the same (<name>.reencoded.bson).
+//   - deserializing those bytes and serializing again gives what npm bson writes when it does the same (<name>.reencoded.bson).
 // Returns the deserialized document.
 //
 fn expectFixture(allocator: std.mem.Allocator, name: []const u8, expected_document: ?BsonDocument) !BsonDocument {

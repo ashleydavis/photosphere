@@ -34,12 +34,26 @@ pub fn groupOpsByDatabaseId(allocator: std.mem.Allocator, ops: []const IDatabase
 }
 
 //
-// Reads a JSON value as the BSON value `JSON.parse` would give for it.
-// (No TypeScript counterpart: TypeScript values are already JavaScript values.)
+// Reads a JSON value as a BSON value.
 //
 fn toBsonValue(allocator: std.mem.Allocator, value: std.json.Value) !BsonValue {
     const text = try std.json.Stringify.valueAlloc(allocator, value, .{});
     return serialization_zig.json_parse.jsonParse(allocator, text);
+}
+
+//
+// Whether two values are the same: scalars by value, while objects
+// and arrays only by identity, which a value read from an operation never has with one already in the record.
+//
+fn isSameValue(left: BsonValue, right: BsonValue) bool {
+    switch (left) {
+        .document, .array, .binary => {
+            return false;
+        },
+        else => {
+            return left.eql(right);
+        },
+    }
 }
 
 //
@@ -53,7 +67,7 @@ pub fn applyMetadataDatabaseOps(allocator: std.mem.Allocator, io: std.Io, metada
 
         switch (op.op) {
             .set => |setOp| {
-                // `const { _id: _ignoredFromFields, ...updates } = op.op.fields`.
+                // Every field except _id: the record is addressed by recordId, so an _id in the fields is ignored.
                 var updates: BsonDocument = .empty;
                 var iterator = setOp.fields.iterator();
                 while (iterator.next()) |entry| {
@@ -80,7 +94,7 @@ pub fn applyMetadataDatabaseOps(allocator: std.mem.Allocator, io: std.Io, metada
                 const value = try toBsonValue(allocator, pushOp.value);
                 var included = false;
                 for (asArray.items) |item| {
-                    if (item.eql(value)) {
+                    if (isSameValue(item, value)) {
                         included = true;
                         break;
                     }
@@ -89,7 +103,9 @@ pub fn applyMetadataDatabaseOps(allocator: std.mem.Allocator, io: std.Io, metada
                     try asArray.append(allocator, value);
                 }
                 var partial: BsonDocument = .empty;
-                try partial.put(allocator, pushOp.field, .{ .array = asArray.items });
+                try partial.put(allocator, pushOp.field, .{
+                    .array = asArray.items,
+                });
                 _ = try metadataCollection.updateOne(io, op.recordId, partial, .{});
             },
             .pull => |pullOp| {
@@ -102,14 +118,16 @@ pub fn applyMetadataDatabaseOps(allocator: std.mem.Allocator, io: std.Io, metada
                 if (previous) |previousValue| {
                     if (previousValue == .array) {
                         for (previousValue.array) |item| {
-                            if (!item.eql(value)) {
+                            if (!isSameValue(item, value)) {
                                 try filtered.append(allocator, item);
                             }
                         }
                     }
                 }
                 var partial: BsonDocument = .empty;
-                try partial.put(allocator, pullOp.field, .{ .array = filtered.items });
+                try partial.put(allocator, pullOp.field, .{
+                    .array = filtered.items,
+                });
                 _ = try metadataCollection.updateOne(io, op.recordId, partial, .{});
             },
         }
@@ -119,8 +137,10 @@ pub fn applyMetadataDatabaseOps(allocator: std.mem.Allocator, io: std.Io, metada
 //
 // Persists metadata changes to disk for one or more databases (grouped by each op's databaseId).
 // uuidGenerator and timestampProvider are passed through to the BSON database; sessionId owns .db/write.lock during writes.
+// (Zig: the write lock is acquired with 3 attempts, the default of acquireWriteLock's maxAttempts, as Zig has no default
+// parameter values; the lock is released before the failure of the try block is returned, as the finally block does.)
 //
-pub fn applyDatabaseOps(allocator: std.mem.Allocator, io: std.Io, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, sessionId: []const u8, ops: []const IDatabaseOp) !void {
+pub fn applyDatabaseOps(allocator: std.mem.Allocator, io: std.Io, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, sessionId: []const u8, ops: []const IDatabaseOp, host: ?utils.host_requester.IHostRequester) !void {
     if (ops.len == 0) {
         return;
     }
@@ -129,7 +149,7 @@ pub fn applyDatabaseOps(allocator: std.mem.Allocator, io: std.Io, uuidGenerator:
     for (groups.keys(), groups.values()) |databasePath, pathOps| {
         const created = try storage_zig.storage_factory.createStorage(allocator, io, databasePath, null, null);
         const rawStorage = created.rawStorage;
-        const assetStorage = try media_file_database.createLazyDatabaseStorage(allocator, io, databasePath, null, null);
+        const assetStorage = try media_file_database.createLazyDatabaseStorage(allocator, io, databasePath, null, null, host);
         const database = try media_file_database.createMediaFileDatabase(allocator, assetStorage, uuidGenerator, timestampProvider);
         try media_file_database.loadSortIndexes(allocator, assetStorage, database.metadataCollection);
 
@@ -145,8 +165,7 @@ pub fn applyDatabaseOps(allocator: std.mem.Allocator, io: std.Io, uuidGenerator:
 
 //
 // The try block of applyDatabaseOps, run holding the write lock.
-// (No TypeScript counterpart: the block is written inline; Zig needs it as a function to release the lock in the finally block
-// whether it failed or not.)
+// Zig needs it as a function to release the lock whether it failed or not.
 //
 fn applyGroupUnderLock(allocator: std.mem.Allocator, io: std.Io, assetStorage: storage_zig.storage.IStorage, rawStorage: storage_zig.storage.IStorage, database: media_file_database.IMediaFileDatabase, pathOps: []const IDatabaseOp) !void {
     try applyMetadataDatabaseOps(allocator, io, database.metadataCollection, pathOps);

@@ -21,7 +21,7 @@ test "PUBLIC_KEY_HASH_LENGTH is 32" {
     try std.testing.expectEqual(@as(usize, 32), constants.PUBLIC_KEY_HASH_LENGTH);
 }
 
-test "header lengths match the TypeScript values" {
+test "header lengths match the file format values" {
     try std.testing.expectEqual(@as(usize, 528), constants.LEGACY_HEADER_LENGTH);
     try std.testing.expectEqual(@as(usize, 44), constants.NEW_FORMAT_HEADER_LENGTH);
     try std.testing.expectEqual(@as(usize, 572), constants.NEW_FORMAT_PAYLOAD_OFFSET);

@@ -67,8 +67,7 @@ pub const IPrefetchDatabaseResult = struct {
 };
 
 //
-// Gets `config?.origin` when it is a non-empty string (null otherwise, which is what `!config?.origin` rejects).
-// (No TypeScript counterpart: the expression is inline.)
+// Gets the config's origin when it is a non-empty string, and null otherwise.
 //
 fn configOrigin(config: ?std.json.Value) ?[]const u8 {
     const value = config orelse {
@@ -92,7 +91,7 @@ fn configOrigin(config: ?std.json.Value) ?[]const u8 {
 //
 // Yields file paths that exist in origin but are missing locally,
 // covering thumbnails and the BSON database (collections + sort indexes).
-// (Zig: an iterator; call `next` for each path, like iterating the TypeScript missingFiles generator.)
+// An iterator: call `next` for each path.
 //
 const MissingFilesIterator = struct {
     // Allocates the walks and the paths.
@@ -107,7 +106,7 @@ const MissingFilesIterator = struct {
     // The partial replica the files are fetched into.
     localStorage: IStorage,
 
-    // The directories walked, in order (TypeScript: `["thumb", ".db/bson"]`).
+    // The directories walked, in order.
     dirs: []const []const u8 = &.{ "thumb", ".db/bson" },
 
     // The index of the next directory of `dirs` to walk.
@@ -140,8 +139,7 @@ const MissingFilesIterator = struct {
 };
 
 //
-// Copies one missing file down from the origin (TypeScript: the `async filePath => { ... }` arrow function that
-// `batch.map` runs). Runs concurrently with the rest of its batch, with its own allocator because the caller's is
+// Copies one missing file down from the origin. Runs concurrently with the rest of its batch, with its own allocator because the caller's is
 // not shared between threads.
 //
 const FetchFileTask = struct {
@@ -184,8 +182,8 @@ const FetchFileTask = struct {
         // Measured on a Pixel 6, that killed the prefetch 38 minutes in, with every thumbnail
         // already fetched and the index files left behind.
         //
-        // `sync.ts` and `replicate.ts` pass it at exactly this point in their own copy loops and
-        // `sync.ts` carries a comment about having been bitten by it on a phone. This is the same
+        // sync.zig and replicate.zig pass it at exactly this point in their own copy loops and
+        // sync.zig carries a comment about having been bitten by it on a phone. This is the same
         // mistake in a third place.
         var copyOperation: retry_operations.CopyStreamOperation("async () => {\n        const stream = await originStorage.readStream(filePath);\n        await localStorage.writeStream(filePath, undefined, stream);\n      }") = .{
             .allocator = allocator,
@@ -199,9 +197,8 @@ const FetchFileTask = struct {
 };
 
 //
-// Fetches a batch of files at once and waits for all of them (TypeScript: `await Promise.all(batch.map(...))`),
+// Fetches a batch of files at once and waits for all of them,
 // throwing the error of the first one that failed.
-// (No TypeScript counterpart: Promise.all is inline.)
 //
 fn fetchBatch(allocator: std.mem.Allocator, io: std.Io, originStorage: IStorage, localStorage: IStorage, batch: []const []const u8) !void {
     const tasks = try allocator.alloc(FetchFileTask, batch.len);
@@ -229,7 +226,6 @@ fn fetchBatch(allocator: std.mem.Allocator, io: std.Io, originStorage: IStorage,
 
 //
 // Converts the prefetch result to the JSON value returned as the task output.
-// (No TypeScript counterpart: TypeScript returns the object itself.)
 //
 fn prefetchResultToJson(allocator: std.mem.Allocator, result: IPrefetchDatabaseResult) !std.json.Value {
     const text = try std.json.Stringify.valueAlloc(allocator, result, .{});
@@ -243,7 +239,7 @@ fn prefetchResultToJson(allocator: std.mem.Allocator, result: IPrefetchDatabaseR
 // are missing from the local replica, copying them from origin storage.
 //
 // Exits immediately when called against a full (non-partial) database.
-// (Zig: the task data and output are JSON values holding IPrefetchDatabaseData and IPrefetchDatabaseResult.)
+// The task data and output are JSON values holding IPrefetchDatabaseData and IPrefetchDatabaseResult.
 //
 pub fn prefetchDatabaseHandler(
     allocator: std.mem.Allocator,
@@ -271,7 +267,7 @@ pub fn prefetchDatabaseHandler(
     //
     // Check whether this is a partial database. Skip immediately for full databases.
     //
-    const local = try openStorage(allocator, io, data.databasePath, null, null);
+    const local = try openStorage(allocator, io, data.databasePath, null, null, context.hostRequester);
     const localStorage = local.storage;
     const rawStorage = local.rawStorage;
     const merkleTree = try loadMerkleTree(allocator, io, localStorage);
@@ -287,7 +283,7 @@ pub fn prefetchDatabaseHandler(
         return prefetchResultToJson(allocator, nothingToFetch);
     };
 
-    const originStorage = (try openStorage(allocator, io, origin, null, null)).storage;
+    const originStorage = (try openStorage(allocator, io, origin, null, null, context.hostRequester)).storage;
 
     var missingFiles: MissingFilesIterator = .{
         .allocator = allocator,

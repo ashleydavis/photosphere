@@ -1,6 +1,5 @@
 //
-// Tests for the periodic save of the target's merkle tree during a push (port of
-// src/test/lib/sync-tree-saves.test.ts).
+// Tests for the periodic save of the target's merkle tree during a push.
 //
 // It exists so an interrupted push does not start again from nothing, and it is meant to happen every
 // hundred files. Zero divides by a hundred exactly, so a push that copied nothing saved the whole
@@ -28,8 +27,7 @@ const throughTheDatabases = node_api.sync.throughTheDatabases;
 const dbId = "6f1b2c3d-4e5f-4a6b-8c9d-0e1f2a3b4c5d";
 
 //
-// Names count files from a pattern: `<prefix><index><suffix>`, the index padded to three digits when asked
-// (TypeScript: `Array.from({ length }, (_, index) => ...)`).
+// Names count files from a pattern: `<prefix><index><suffix>`, the index padded to three digits when asked.
 //
 fn namesFrom(allocator: std.mem.Allocator, count: usize, prefix: []const u8, suffix: []const u8, padded: bool) ![]const []const u8 {
     const names = try allocator.alloc([]const u8, count);
@@ -43,7 +41,7 @@ fn namesFrom(allocator: std.mem.Allocator, count: usize, prefix: []const u8, suf
 }
 
 //
-// A push that only copies, into a target that counts its tree writes (TypeScript: countTreeWrites).
+// A push that only copies, into a target that counts its tree writes.
 //
 fn pushCountingTreeWrites(allocator: std.mem.Allocator, io: std.Io, source: *MemoryStorage, targetStore: *MemoryStorage) !*SpyStorage {
     const target = try allocator.create(SpyStorage);
@@ -100,8 +98,7 @@ test "a run of leaves that copy nothing after the hundredth file does not write 
     // walks and copies nothing for because their assets are deleted. That is the count resting on
     // a hundred while leaf after leaf goes by, which is what a real library does: a Pixel 6
     // pushing to an origin it shares most of its photos with walked 479 leaves and copied 98.
-    // (Zig: the TypeScript test's deleted ids are `z-000.jpg` and so on, which its stand-in bson database accepts; a
-    // real BsonDatabase only takes ids that are hex, so these are hex ids that sort after `a-`.)
+    // (A real BsonDatabase only takes ids that are hex, so the deleted ids are hex ids that sort after `a-`.)
     const toCopy = try namesFrom(allocator, 100, "asset/a-", ".jpg", true);
     const deleted = try namesFrom(allocator, 50, "fe000000-0000-0000-0000-000000000", "", true);
     const deletedPaths = try namesFrom(allocator, 50, "asset/fe000000-0000-0000-0000-000000000", "", true);
