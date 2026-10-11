@@ -534,6 +534,33 @@ wait_for_log() {
 WAIT_FOR_EITHER_MATCH=""
 
 #
+# Waits until app.log contains the pattern anywhere, from the first line, and leaves wait_for_log's cursor where it was. This is for a
+# line the app may have logged before or after the line the cursor is on, where wait_for_log would miss it when it came first.
+# Usage: wait_for_log_anywhere <tmp_dir> <pattern> [timeout]
+#
+wait_for_log_anywhere() {
+    local tmp_dir="$1"
+    local pattern="$2"
+    local timeout="${3:-$DEFAULT_WAIT_TIMEOUT}"
+    local ticks=$((timeout * POLL_TICKS_PER_SECOND))
+    log_info "Waiting for log pattern anywhere in the log: $pattern"
+    while [ "$ticks" -gt 0 ]; do
+        if [ -f "$tmp_dir/app.log" ] && grep -qF -- "$pattern" "$tmp_dir/app.log"; then
+            log_info "Found: $pattern"
+            return 0
+        fi
+        sleep "$POLL_INTERVAL_SECONDS"
+        ticks=$((ticks - 1))
+    done
+    log_error "Timed out waiting for log pattern: $pattern"
+    log_error "Last 30 lines of app.log:"
+    tail -30 "$tmp_dir/app.log" 2>/dev/null | while IFS= read -r line; do
+        echo "  $line"
+    done
+    exit 1
+}
+
+#
 # Polls app.log for two patterns at once and reports whichever the app logs first in
 # WAIT_FOR_EITHER_MATCH: "first", "second", or empty if neither appears before the timeout. Returns 0
 # when one of them matched and 1 on the timeout, so a caller can tell "neither happened" apart from

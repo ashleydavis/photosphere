@@ -16,3 +16,7 @@ A Zig executable hosting WebView2 through its C-compatible COM interface. The in
 ## Project and build
 
 The shell is built by the `build.zig` at the root of the repository. `sync:windows` builds the core as a static library and the UI and copies them into the project, then `zig build` builds the shell from the root of the repository. `open:windows` opens the project in the editor. Runs on Windows, and cross-compiles from Linux. See [Photosphere App](../../README.md).
+
+## Icon and second copies
+
+The executable carries `icons/photosphere.ico` as a resource (`photosphere.rc`), and the shell's window class loads it as `icon_resource`. The shell does the `focus-window` action the core asks for when a second copy of the app was started by restoring the window if it is minimised and bringing it to the front, and flashes the taskbar button when Windows refuses the foreground.

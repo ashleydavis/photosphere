@@ -178,6 +178,12 @@ wait_for_log "$TMP_DIR" "Database opened: $(basename "$S3_DB_PATH")"
 echo "$GALLERY_LOG_CURSOR" > "$TMP_DIR/.log-cursor"
 log_success "The shared S3 credentials and encryption key both work from inside the embedded JS engine"
 
+# Opening a database records it as the most recent one, and that write can finish after the gallery has loaded, particularly when the
+# machine is busy. Closing before it finishes makes the app log that the database was closed before its opening was recorded and then
+# rebuild the databases page, which closes a card menu the test has just opened. The line is looked for in the whole log because it can
+# come before or after the lines the waits above stopped at.
+wait_for_log_anywhere "$TMP_DIR" "Database opened: shared-encrypted"
+
 # --- 4. Close the database through the app's own UI. ---
 
 # Closing here is not tidiness: it removes the auto-open race that tests 17 and 36 both had to work

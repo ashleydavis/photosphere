@@ -4,6 +4,7 @@
     package-windows.sh, which defines:
         Version     the app's version, as major.minor.build
         SourceDir   the directory holding photosphere.exe, which is the whole app
+        IconFile    the app's .ico file, shown for the installer in Installed apps and on the Start menu shortcut
     The installer is unsigned and installs for the current user only, into %LOCALAPPDATA%\Programs\Photosphere, so it
     needs no administrator rights. It adds a Start menu shortcut, and Windows Installer adds the entry in Installed apps.
 -->
@@ -13,6 +14,8 @@
         <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" InstallPrivileges="limited" Platform="x64" />
         <MajorUpgrade DowngradeErrorMessage="A newer version of Photosphere is already installed." />
         <MediaTemplate EmbedCab="yes" />
+        <Icon Id="PhotosphereIcon.ico" SourceFile="$(var.IconFile)" />
+        <Property Id="ARPPRODUCTICON" Value="PhotosphereIcon.ico" />
 
         <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="LocalAppDataFolder">
@@ -39,7 +42,7 @@
 
         <DirectoryRef Id="ProgramMenuFolder">
             <Component Id="StartMenuShortcut" Guid="EDE931D7-3BD7-44D0-BB42-88610A3F442B" Win64="yes">
-                <Shortcut Id="PhotosphereShortcut" Name="Photosphere" Target="[INSTALLFOLDER]photosphere.exe" WorkingDirectory="INSTALLFOLDER" />
+                <Shortcut Id="PhotosphereShortcut" Name="Photosphere" Target="[INSTALLFOLDER]photosphere.exe" WorkingDirectory="INSTALLFOLDER" Icon="PhotosphereIcon.ico" />
                 <RegistryValue Root="HKCU" Key="Software\au.com.codecapers.photosphere" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
             </Component>
         </DirectoryRef>

@@ -35,6 +35,8 @@ pub const AppConfig = struct {
     default_width: c_int,
     // The window's height when the command line does not give one.
     default_height: c_int,
+    // The number of the icon resource in the executable (the `1 ICON` of a resource script) the window shows, or null when the app has none.
+    icon_resource: ?u16,
     // The files of the app's bundled page, embedded in the executable. One of them must be "index.html".
     ui_files: []const ui_files.UiFile,
 };
@@ -521,6 +523,10 @@ fn start(shell: *Shell, allocator: std.mem.Allocator) !u8 {
     window_class.hInstance = instance;
     // IDC_ARROW, the standard arrow, which the resource macro MAKEINTRESOURCE would write as 32512.
     window_class.hCursor = c.LoadCursorW(null, @ptrFromInt(32512));
+    if (shell.app_config.icon_resource) |icon_resource| {
+        window_class.hIcon = c.LoadIconW(instance, @ptrFromInt(icon_resource));
+        window_class.hIconSm = window_class.hIcon;
+    }
     window_class.lpszClassName = window_class_name.ptr;
     if (c.RegisterClassExW(&window_class) == 0) {
         return error.WindowClassFailed;
@@ -1135,6 +1141,26 @@ fn runAction(shell: *Shell, action: []const u8) void {
         .undo, .redo, .select_all => {
             runEditCommand(shell, web_view, actions_lib.editCommand(known).?);
         },
+        .focus_window => {
+            focusWindow(shell);
+        },
+    }
+}
+
+//
+// Brings the window to the front, restoring it first when it is minimized, because a second copy of the app was started. Windows
+// may refuse to give the foreground to a process that has no input to answer, in which case the taskbar button flashes instead.
+//
+fn focusWindow(shell: *Shell) void {
+    if (c.IsIconic(shell.window) != 0) {
+        _ = c.ShowWindow(shell.window, c.SW_RESTORE);
+    }
+    if (c.SetForegroundWindow(shell.window) == 0) {
+        var flash = std.mem.zeroes(c.FLASHWINFO);
+        flash.cbSize = @sizeOf(c.FLASHWINFO);
+        flash.hwnd = shell.window;
+        flash.dwFlags = c.FLASHW_ALL | c.FLASHW_TIMERNOFG;
+        _ = c.FlashWindowEx(&flash);
     }
 }
 

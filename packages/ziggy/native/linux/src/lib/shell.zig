@@ -29,6 +29,8 @@ pub const AppConfig = struct {
     default_width: c_int,
     // The window's height when the command line does not give one.
     default_height: c_int,
+    // The PNG file of the window icon, or null when the app has none and the window shows the desktop's generic one.
+    icon_png: ?[]const u8,
     // The files of the app's bundled page, embedded in the executable. One of them must be "index.html".
     ui_files: []const ui_files.UiFile,
 };
@@ -101,6 +103,23 @@ pub fn run(app_config: AppConfig, args: []const [:0]const u8) !u8 {
         return error.GtkApplicationFailed;
     }
     return @intCast(status);
+}
+
+//
+// Sets the window's icon from the bytes of a PNG file.
+//
+fn setWindowIcon(window: *c.GtkWindow, icon_png: []const u8) void {
+    const loader = c.gdk_pixbuf_loader_new_with_type("png", null) orelse {
+        fatal("could not create the icon loader", .{});
+    };
+    defer c.g_object_unref(loader);
+    if (c.gdk_pixbuf_loader_write(loader, icon_png.ptr, icon_png.len, null) == 0) {
+        fatal("could not read the window icon", .{});
+    }
+    if (c.gdk_pixbuf_loader_close(loader, null) == 0) {
+        fatal("could not finish reading the window icon", .{});
+    }
+    c.gtk_window_set_icon(window, c.gdk_pixbuf_loader_get_pixbuf(loader));
 }
 
 //
@@ -202,6 +221,9 @@ fn start(shell: *Shell, application: *c.GtkApplication) !void {
     shell.window = window;
     c.gtk_window_set_title(window, shell.app_config.title.ptr);
     c.gtk_window_set_default_size(window, width, height);
+    if (shell.app_config.icon_png) |icon_png| {
+        setWindowIcon(window, icon_png);
+    }
 
     try turnSandboxOffWhenItCannotStart();
     const web_view_widget = c.webkit_web_view_new();
@@ -661,6 +683,9 @@ fn performAction(shell: *Shell, action: []const u8) !void {
     }
     else if (std.mem.eql(u8, action, "zoom-reset")) {
         c.webkit_web_view_set_zoom_level(web_view, 1.0);
+    }
+    else if (std.mem.eql(u8, action, "focus-window")) {
+        c.gtk_window_present(shell.window.?);
     }
     else if (editingCommand(action)) |command| {
         c.webkit_web_view_execute_editing_command(web_view, command);

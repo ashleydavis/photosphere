@@ -1154,6 +1154,8 @@ fn addZiggy(
         .title = "the Ziggy example",
         .directory = "apps/ziggy-example",
         .page_directory = "apps/ziggy-example/dist",
+        .linux_icon = null,
+        .windows_resource = null,
     };
     try addLinuxShell(b, example_app, target, optimize, core, static_library);
     try addWindowsShell(b, example_app, compile_only, target, optimize, core, static_library);
@@ -1245,6 +1247,8 @@ fn addPhotosphere(
         .title = "Photosphere",
         .directory = "apps/photosphere",
         .page_directory = photosphere_page_directory,
+        .linux_icon = "apps/photosphere/icons/photosphere-512.png",
+        .windows_resource = "apps/photosphere/shells/windows/photosphere.rc",
     };
     try addLinuxShell(b, photosphere_app, target, optimize, core, static_library);
     try addWindowsShell(b, photosphere_app, compile_only, target, optimize, core, static_library);
@@ -1281,6 +1285,7 @@ const linux_runtime_libraries = [_][]const u8{
     "libgio-2.0.so.0",
     "libgdk-3.so.0",
     "libgtk-3.so.0",
+    "libgdk_pixbuf-2.0.so.0",
     "libjavascriptcoregtk-4.1.so.0",
     "libwebkit2gtk-4.1.so.0",
 };
@@ -1298,6 +1303,10 @@ const IShellApp = struct {
     directory: []const u8,
     // The directory of the app's built page, which is embedded in the executable.
     page_directory: []const u8,
+    // The PNG file of the app's window icon on Linux, which the shell's `app-icon` import gives to the app's main file, or null for none.
+    linux_icon: ?[]const u8,
+    // The Windows resource script of the app's executable icon, or null for none.
+    windows_resource: ?[]const u8,
 };
 
 //
@@ -1355,6 +1364,11 @@ fn addLinuxShell(
         .link_libc = true,
     });
     module.addImport("ziggy-shell-linux", shell_module);
+    if (app.linux_icon) |icon| {
+        module.addAnonymousImport("app-icon", .{
+            .root_source_file = b.path(icon),
+        });
+    }
     module.addImport("ui-files", try embedPage(b, shell_module, "ziggy-shell-linux", app.page_directory));
     module.linkLibrary(core_library);
     const executable = b.addExecutable(.{
@@ -1438,6 +1452,11 @@ fn addWindowsShell(
         .link_libc = true,
     });
     module.addImport("ziggy-shell-windows", shell_module);
+    if (app.windows_resource) |resource| {
+        module.addWin32ResourceFile(.{
+            .file = b.path(resource),
+        });
+    }
     module.addImport("ui-files", try embedPage(b, shell_module, "ziggy-shell-windows", app.page_directory));
     module.linkLibrary(core_library);
     const executable = b.addExecutable(.{
@@ -1462,6 +1481,11 @@ fn addWindowsShell(
         .link_libc = true,
     });
     check_module.addImport("ziggy-shell-windows", shell_module);
+    if (app.windows_resource) |resource| {
+        check_module.addWin32ResourceFile(.{
+            .file = b.path(resource),
+        });
+    }
     check_module.addImport("ui-files", try embedPage(b, shell_module, "ziggy-shell-windows", app.page_directory));
     check_step.dependOn(&b.addObject(.{
         .name = b.fmt("{s}-check", .{app.name}),

@@ -7,6 +7,7 @@ test "the shell's own actions are recognised by name" {
     try std.testing.expectEqual(actions.Action.toggle_devtools, actions.fromName("toggle-devtools").?);
     try std.testing.expectEqual(actions.Action.select_all, actions.fromName("select-all").?);
     try std.testing.expectEqual(actions.Action.zoom_reset, actions.fromName("zoom-reset").?);
+    try std.testing.expectEqual(actions.Action.focus_window, actions.fromName("focus-window").?);
     try std.testing.expectEqual(@as(?actions.Action, null), actions.fromName("start-short"));
 }
 

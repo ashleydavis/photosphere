@@ -13,3 +13,7 @@ The Android shell is a Java activity that hosts a `WebView` and passes messages 
 ## Project and build
 
 A Gradle project. `sync:android` builds the UI, which the core library embeds, and the core as a shared library per ABI (`libphotosphere.so`) into `app/build/ziggy/jniLibs`, then Gradle builds the APK. The application id is `au.com.codecapers.photosphere.ziggy`, so an install never replaces the Capacitor app. `open:android` opens the project in Android Studio. Runs on Linux and MacOS. See [Photosphere App](../../README.md).
+
+## Icon
+
+The launcher icons are in `app/src/main/res/mipmap-*`, named by `android:icon` and `android:roundIcon` in the manifest.

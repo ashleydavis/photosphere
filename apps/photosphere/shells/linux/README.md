@@ -16,3 +16,7 @@ A Zig executable using GTK 3 and WebKitGTK 4.1 through declarations of the funct
 ## Project and build
 
 The shell is built by the `build.zig` at the root of the repository. `sync:linux` builds the core as a static library and the UI and copies them into the project, then `zig build` builds the shell from the root of the repository. `open:linux` opens the project in the editor. Runs on Linux. See [Photosphere App](../../README.md).
+
+## Icon and second copies
+
+The window icon is `icons/photosphere-512.png`, embedded in the executable and given to the shell as `icon_png`. The shell does the `focus-window` action the core asks for when a second copy of the app was started by bringing the window to the front.

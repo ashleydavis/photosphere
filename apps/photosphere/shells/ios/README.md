@@ -16,3 +16,7 @@ ImageMagick runs in-process through `run_magick.c`, linked against the static li
 ## Project and build
 
 An Xcode project that builds with Xcode 14.2 on macOS 12.7.6. No version is raised. `sync:ios` builds the UI and the core as a static library (`libphotosphere.a`, with the UI embedded) into `shells/ios/zig-out`; the bundle id is `au.com.codecapers.photosphere.ziggy`, then `xcodebuild` builds the app. `open:ios` opens the project in Xcode. Runs on MacOS only. See [Photosphere App](../../README.md).
+
+## Icon
+
+The app icon is the `AppIcon` set in `Photosphere/Assets.xcassets`, made from `icons/photosphere-1024.png`.
