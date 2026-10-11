@@ -5,6 +5,7 @@ const task_queue_zig = @import("task-queue-zig");
 const MockWorkerPool = task_queue_zig.mock_worker_pool.MockWorkerPool;
 const temp_dirs = @import("temp-dirs.zig");
 const console_capture = @import("console-capture.zig");
+const lan_share_network = @import("lan-share-network-zig");
 
 //
 // The process wide environment of the test program: an isolated config dir, vault and temp dir, and a MockWorkerPool
@@ -68,6 +69,10 @@ pub fn setupEnvironment(io: std.Io) ![]const u8 {
     // The scratch space the code under test writes to (an uploaded asset's resized copies, a session's temporary files) is inside the
     // directory this process owns, so two test programs running at once cannot reach each other's files.
     try map.put("PHOTOSPHERE_TMP_DIR", process_dir);
+    // Discovery broadcasts go to one port for the whole machine, so this program uses a port of its own, or its receivers and senders hear
+    // the ones of every other test program running at the same time.
+    const discovery_port = try lan_share_network.socket.freeUdpPort();
+    try map.put("PHOTOSPHERE_LAN_SHARE_PORT", try std.fmt.allocPrint(process_allocator, "{d}", .{discovery_port}));
     _ = map.orderedRemove("PSI_ENCRYPTION_KEY");
     _ = map.orderedRemove("GOOGLE_API_KEY");
     _ = map.orderedRemove("AWS_ACCESS_KEY_ID");

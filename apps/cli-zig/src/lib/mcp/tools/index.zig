@@ -1,4 +1,5 @@
-const protocol = @import("../protocol.zig");
+const mcp_zig = @import("mcp-zig");
+const protocol = mcp_zig.protocol;
 const types = @import("../types.zig");
 const McpServer = protocol.McpServer;
 const IMcpToolContext = types.IMcpToolContext;

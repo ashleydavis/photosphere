@@ -771,8 +771,9 @@ test "getDeviceFreeBytes measures the nearest existing ancestor of a directory t
     const missing = try std.fs.path.join(allocator, &.{ tempDir, "not", "made", "yet" });
 
     try std.testing.expect(try evict_originals_worker.getDeviceFreeBytes(allocator, io, missing) > 0);
-    try std.testing.expectEqual(
-        try evict_originals_worker.getDeviceFreeBytes(allocator, io, tempDir),
-        try evict_originals_worker.getDeviceFreeBytes(allocator, io, missing),
-    );
+    // The two measurements are taken a moment apart and other programs write to the disk in between, so they are compared with a gigabyte of
+    // room for that.
+    const measuredAtDirectory: f64 = try evict_originals_worker.getDeviceFreeBytes(allocator, io, tempDir);
+    const measuredAtMissing: f64 = try evict_originals_worker.getDeviceFreeBytes(allocator, io, missing);
+    try std.testing.expect(@abs(measuredAtDirectory - measuredAtMissing) < 1024.0 * 1024.0 * 1024.0);
 }

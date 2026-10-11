@@ -101,6 +101,8 @@ pub const TestApp = struct {
         defer allocator.free(vault_dir);
         self.environ_map = std.process.Environ.Map.init(allocator);
         try self.environ_map.put("PHOTOSPHERE_CONFIG_DIR", config_dir);
+        // The MCP server takes a free port, because tests running side by side would fight over its fixed one.
+        try self.environ_map.put("PHOTOSPHERE_MCP_PORT", "0");
         try self.environ_map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
         try self.environ_map.put("PHOTOSPHERE_VAULT_DIR", vault_dir);
         // The file logger the core starts writes its files here, in a folder that belongs to the test.
@@ -108,7 +110,8 @@ pub const TestApp = struct {
         defer allocator.free(log_dir);
         try self.environ_map.put("PHOTOSPHERE_LOG_DIR", log_dir);
         process_env.setEnvironMap(&self.environ_map);
-        var config = self.shell.config(2, 2);
+        // One worker more than the long-running tasks of the main process hold (the asset server and the MCP server), or nothing else runs.
+        var config = self.shell.config(3, 2);
         config.pick_paths = recordingPick;
         config.host_request = recordingHostRequest;
         const data_dir = try allocator.dupeZ(u8, self.tmp_path);

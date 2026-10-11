@@ -67,19 +67,21 @@ fn startAndDiscover(receiver: *LanShareReceiver, sender: *LanShareSender, code: 
 }
 
 test "cancel stops the sender" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    var sender = try LanShareSender.init(allocator, std.testing.io, try objectPayload(allocator, "data", .{ .string = "test" }), null);
+    var sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, try objectPayload(allocator, "data", .{ .string = "test" }), null);
     // Should not throw
     sender.cancel();
 }
 
 test "cancel ends a wait in progress instead of leaving it to time out" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    var sender = try LanShareSender.init(allocator, std.testing.io, try objectPayload(allocator, "data", .{ .string = "test" }), try pairing_code.pairingCode());
+    var sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, try objectPayload(allocator, "data", .{ .string = "test" }), try pairing_code.pairingCode());
 
     // The timeout is far longer than this test is allowed to take, so the wait can only finish
     // because cancel() ended it.
@@ -99,10 +101,11 @@ test "cancel ends a wait in progress instead of leaving it to time out" {
 }
 
 test "pairingCode is a 4-digit string when not supplied" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const sender = try LanShareSender.init(allocator, std.testing.io, try objectPayload(allocator, "data", .{ .string = "test" }), null);
+    const sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, try objectPayload(allocator, "data", .{ .string = "test" }), null);
     try std.testing.expectEqual(@as(usize, 4), sender.pairingCode.len);
     const code = try std.fmt.parseInt(u32, sender.pairingCode, 10);
     try std.testing.expect(code >= 1000);
@@ -110,18 +113,20 @@ test "pairingCode is a 4-digit string when not supplied" {
 }
 
 test "pairingCode uses the supplied value when provided" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const sender = try LanShareSender.init(allocator, std.testing.io, try objectPayload(allocator, "data", .{ .string = "test" }), "4321");
+    const sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, try objectPayload(allocator, "data", .{ .string = "test" }), "4321");
     try std.testing.expectEqualStrings("4321", sender.pairingCode);
 }
 
 test "waitForReceiver returns endpoint or null within timeout" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    var sender = try LanShareSender.init(allocator, std.testing.io, try objectPayload(allocator, "data", .{ .string = "test" }), null);
+    var sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, try objectPayload(allocator, "data", .{ .string = "test" }), null);
     // The wait is on the socket, which no virtual clock reaches, so the timeout is kept short.
     const result = try sender.waitForReceiver(std.testing.io, 50);
     if (result) |endpoint| {
@@ -132,6 +137,7 @@ test "waitForReceiver returns endpoint or null within timeout" {
 }
 
 test "full send-receive round trip" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -142,11 +148,11 @@ test "full send-receive round trip" {
     const code = try pairing_code.pairingCode();
 
     // Start receiver with the known code
-    var receiver = LanShareReceiver.init(std.testing.io, 15000);
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 15000);
     defer receiver.deinit();
 
     // Start sender with the same code
-    var sender = try LanShareSender.init(allocator, std.testing.io, payload, code);
+    var sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, payload, code);
     try std.testing.expectEqualStrings(code, sender.pairingCode);
 
     const endpoint = try startAndDiscover(&receiver, &sender, code);
@@ -170,6 +176,7 @@ test "full send-receive round trip" {
 // the share for good, so any unrelated share announcing during the test's discovery window failed
 // it.
 test "discovery ignores a receiver whose pairing code is not the one being looked for" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -178,13 +185,13 @@ test "discovery ignores a receiver whose pairing code is not the one being looke
     // Stands in for an unrelated share happening at the same time: another worktree's smoke tests,
     // another machine on the LAN, or the app itself. It announces on the same machine-wide
     // discovery port, so this sender hears it.
-    var foreignReceiver = LanShareReceiver.init(std.testing.io, 15000);
+    var foreignReceiver = LanShareReceiver.init(discoveryPort, std.testing.io, 15000);
     defer foreignReceiver.deinit();
 
     // The sender is listening before the stranger announces, so it hears the announcement the stranger makes as it starts, and
     // the test does not wait for the next one a second later. The wait has no timeout the test could run out of: it goes on
     // until the sender is cancelled, which is what shows that it held out.
-    var sender = try LanShareSender.init(allocator, std.testing.io, try objectPayload(allocator, "message", .{ .string = "test" }), try pairing_code.otherPairingCode(foreignCode));
+    var sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, try objectPayload(allocator, "message", .{ .string = "test" }), try pairing_code.otherPairingCode(foreignCode));
     var outcome: IWaitOutcome = .{};
     const waiting = try std.Thread.spawn(.{}, waitOnThread, .{ &sender, 60000, &outcome });
     while (!sender.isWaiting.load(.acquire)) {
@@ -216,6 +223,7 @@ test "discovery ignores a receiver whose pairing code is not the one being looke
 }
 
 test "send returns false when the receiver it is given has a different pairing code" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -225,13 +233,13 @@ test "send returns false when the receiver it is given has a different pairing c
     // The endpoint is obtained by a sender that does hold the matching code, because discovery now
     // refuses to hand a mismatched receiver to anybody. The pairing-code check inside send() is a
     // second line of defence and is still worth covering on its own.
-    var receiver = LanShareReceiver.init(std.testing.io, 15000);
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 15000);
     defer receiver.deinit();
 
-    var matchingSender = try LanShareSender.init(allocator, std.testing.io, payload, code);
+    var matchingSender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, payload, code);
     const endpoint = try startAndDiscover(&receiver, &matchingSender, code);
 
-    var mismatchedSender = try LanShareSender.init(allocator, std.testing.io, payload, try pairing_code.otherPairingCode(code));
+    var mismatchedSender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, payload, try pairing_code.otherPairingCode(code));
     const success = try mismatchedSender.send(endpoint);
     try std.testing.expect(!success);
 
@@ -279,24 +287,25 @@ test "the announced port is read as parseInt(text, 10) reads it" {
 //
 // Sends a payload from a sender to a receiver with the same pairing code and returns what the receiver received.
 //
-fn sendAndReceive(allocator: std.mem.Allocator, payload: std.json.Value) !?std.json.Value {
+fn sendAndReceive(discoveryPort: u16, allocator: std.mem.Allocator, payload: std.json.Value) !?std.json.Value {
     const code = try pairing_code.pairingCode();
-    var receiver = LanShareReceiver.init(std.testing.io, 15000);
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 15000);
     defer receiver.deinit();
-    var sender = try LanShareSender.init(allocator, std.testing.io, payload, code);
+    var sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, payload, code);
     const endpoint = try startAndDiscover(&receiver, &sender, code);
     try std.testing.expect(try sender.send(endpoint));
     return receiver.receive();
 }
 
 test "a falsy payload is received as no payload, as the callers' `if (!rawPayload)` reads it" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    try std.testing.expect((try sendAndReceive(allocator, .{ .bool = false })) == null);
-    try std.testing.expect((try sendAndReceive(allocator, .{ .integer = 0 })) == null);
-    try std.testing.expect((try sendAndReceive(allocator, .{ .string = "" })) == null);
-    try std.testing.expectEqualStrings("x", (try sendAndReceive(allocator, .{ .string = "x" })).?.string);
+    try std.testing.expect((try sendAndReceive(discoveryPort, allocator, .{ .bool = false })) == null);
+    try std.testing.expect((try sendAndReceive(discoveryPort, allocator, .{ .integer = 0 })) == null);
+    try std.testing.expect((try sendAndReceive(discoveryPort, allocator, .{ .string = "" })) == null);
+    try std.testing.expectEqualStrings("x", (try sendAndReceive(discoveryPort, allocator, .{ .string = "x" })).?.string);
 }
 
 //
@@ -305,6 +314,9 @@ test "a falsy payload is received as no payload, as the callers' `if (!rawPayloa
 const IAnnouncer = struct {
     // The datagrams to send, in order, every round.
     datagrams: []const []const u8,
+
+    // The discovery port to send them to.
+    port: u16,
 
     // Set to stop sending.
     stop: std.atomic.Value(bool),
@@ -319,20 +331,22 @@ fn announceUntilStopped(announcer: *IAnnouncer) void {
     defer lan_share.socket.close(udpSocket);
     while (!announcer.stop.load(.acquire)) {
         for (announcer.datagrams) |datagram| {
-            lan_share.socket.sendTo(udpSocket, datagram, .{ .address = .{ 255, 255, 255, 255 }, .port = lan_share.lan_share_sender.DISCOVERY_PORT }) catch {};
-            lan_share.socket.sendTo(udpSocket, datagram, .{ .address = .{ 127, 0, 0, 1 }, .port = lan_share.lan_share_sender.DISCOVERY_PORT }) catch {};
+            lan_share.socket.sendTo(udpSocket, datagram, .{ .address = .{ 255, 255, 255, 255 }, .port = announcer.port }) catch {};
+            lan_share.socket.sendTo(udpSocket, datagram, .{ .address = .{ 127, 0, 0, 1 }, .port = announcer.port }) catch {};
         }
         std.Io.sleep(std.testing.io, .fromMilliseconds(50), .awake) catch {};
     }
 }
 
 test "discovery skips announcements it cannot read, and reads a fingerprint that holds colons" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const code = try pairing_code.pairingCode();
     const codeHash = lan_share.lan_share_sender.sha256Hex(code);
     var announcer: IAnnouncer = .{
+        .port = discoveryPort,
         .datagrams = &.{
             "not an announcement",
             "PSIE_RECV:4321",
@@ -347,7 +361,7 @@ test "discovery skips announcements it cannot read, and reads a fingerprint that
     defer thread.join();
     defer announcer.stop.store(true, .release);
 
-    var sender = try LanShareSender.init(allocator, std.testing.io, .null, code);
+    var sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, .null, code);
     const endpoint = (try sender.waitForReceiver(std.testing.io, 10000)).?;
     try std.testing.expectEqual(@as(u16, 4321), endpoint.port);
     try std.testing.expectEqualStrings("aa:bb", endpoint.certFingerprint);
@@ -356,8 +370,8 @@ test "discovery skips announcements it cannot read, and reads a fingerprint that
 //
 // Starts a receiver and finds it with a sender holding its code, without sending any request to it.
 //
-fn discoverReceiver(allocator: std.mem.Allocator, receiver: *LanShareReceiver, code: []const u8) !IReceiverEndpoint {
-    var finder = try LanShareSender.init(allocator, std.testing.io, .null, code);
+fn discoverReceiver(discoveryPort: u16, allocator: std.mem.Allocator, receiver: *LanShareReceiver, code: []const u8) !IReceiverEndpoint {
+    var finder = try LanShareSender.init(discoveryPort, allocator, std.testing.io, .null, code);
     return startAndDiscover(receiver, &finder, code);
 }
 
@@ -373,15 +387,16 @@ fn spendRequests(allocator: std.mem.Allocator, endpoint: IReceiverEndpoint, coun
 }
 
 test "send refuses a receiver whose certificate is not the one announced" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const code = try pairing_code.pairingCode();
-    var receiver = LanShareReceiver.init(std.testing.io, 15000);
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 15000);
     defer receiver.deinit();
-    const endpoint = try discoverReceiver(allocator, &receiver, code);
+    const endpoint = try discoverReceiver(discoveryPort, allocator, &receiver, code);
 
-    var sender = try LanShareSender.init(allocator, std.testing.io, .{ .string = "x" }, code);
+    var sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, .{ .string = "x" }, code);
     var forged = endpoint;
     forged.certFingerprint = "00";
     try std.testing.expectError(error.Thrown, sender.send(forged));
@@ -392,27 +407,28 @@ test "send refuses a receiver whose certificate is not the one announced" {
 }
 
 test "send gives up when the receiver refuses its first request, and fails on a status it does not expect" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     // The whole budget spent: the check of the code is refused with 429.
     const code = try pairing_code.pairingCode();
-    var receiver = LanShareReceiver.init(std.testing.io, 15000);
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 15000);
     defer receiver.deinit();
-    const endpoint = try discoverReceiver(allocator, &receiver, code);
+    const endpoint = try discoverReceiver(discoveryPort, allocator, &receiver, code);
     try spendRequests(allocator, endpoint, 5);
-    var sender = try LanShareSender.init(allocator, std.testing.io, .{ .string = "x" }, code);
+    var sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, .{ .string = "x" }, code);
     try std.testing.expect(!try sender.send(endpoint));
     try std.testing.expect((try receiver.receive()) == null);
 
     // All but one request spent: the check passes and the payload is refused with 429.
     const otherCode = try pairing_code.otherPairingCode(code);
-    var otherReceiver = LanShareReceiver.init(std.testing.io, 15000);
+    var otherReceiver = LanShareReceiver.init(discoveryPort, std.testing.io, 15000);
     defer otherReceiver.deinit();
-    const otherEndpoint = try discoverReceiver(allocator, &otherReceiver, otherCode);
+    const otherEndpoint = try discoverReceiver(discoveryPort, allocator, &otherReceiver, otherCode);
     try spendRequests(allocator, otherEndpoint, 4);
-    var otherSender = try LanShareSender.init(allocator, std.testing.io, .{ .string = "x" }, otherCode);
+    var otherSender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, .{ .string = "x" }, otherCode);
     try std.testing.expectError(error.Thrown, otherSender.send(otherEndpoint));
     try std.testing.expectEqualStrings("Unexpected status code: 429", utils.errors.lastErrorMessage());
     try std.testing.expect((try otherReceiver.receive()) == null);

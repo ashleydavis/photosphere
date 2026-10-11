@@ -26,6 +26,7 @@ const mobile_requests = @import("mobile-requests.zig");
 const page_query = @import("page-query.zig");
 const mobile_planning = @import("mobile-planning.zig");
 const background_work = @import("background-work.zig");
+const mcp_server = @import("mcp-server.zig");
 
 //
 // The channels Photosphere answers on the thread that handles the page's messages.
@@ -35,6 +36,7 @@ pub const channels = [_]ziggy.core.ChannelEntry{
     .{ .name = "main-command", .handler = main_process.mainCommandHandler },
     .{ .name = "notify-database-edited", .handler = main_process.notifyDatabaseEditedHandler },
     .{ .name = "renderer-log", .handler = logging.rendererLogHandler },
+    .{ .name = "mcp-tool-response", .handler = mcp_server.mcpToolResponseHandler },
 };
 
 //
@@ -132,6 +134,7 @@ pub const tasks = [_]ziggy.task_runner.TaskHandlerEntry{
     .{ .name = "secureStoreDelete", .handler = mobile_requests.secureStoreDeleteHandler },
     .{ .name = "secureStoreKeys", .handler = mobile_requests.secureStoreKeysHandler },
     .{ .name = "ensure-auto-import", .handler = main_process.ensureAutoImportTask },
+    .{ .name = "mcp-server", .handler = mcp_server.mcpServerTask },
     .{ .name = "plan-auto-import", .handler = mobile_planning.planAutoImportTask },
     .{ .name = "plan-sync", .handler = mobile_planning.planSyncTask },
     .{ .name = "plan-prefetch", .handler = mobile_planning.planPrefetchTask },

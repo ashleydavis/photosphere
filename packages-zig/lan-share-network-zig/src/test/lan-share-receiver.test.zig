@@ -20,7 +20,8 @@ fn requestReceiver(allocator: std.mem.Allocator, receiver: *const LanShareReceiv
 }
 
 test "cancel resolves receive with null" {
-    var receiver = LanShareReceiver.init(std.testing.io, 60000);
+    const discoveryPort = try lan_share.socket.freeUdpPort();
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 60000);
     defer receiver.deinit();
     try receiver.start(try pairing_code.pairingCode());
 
@@ -36,13 +37,14 @@ test "cancel resolves receive with null" {
 }
 
 test "receive times out and returns null" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     // The receiver's wait for its timeout is a wait on the Io it is given, so a virtual clock ends it at once.
     var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
     virtual_time.init(std.testing.allocator);
     defer virtual_time.deinit();
     const io = virtual_time.io();
 
-    var receiver = LanShareReceiver.init(io, 500); // 500ms timeout
+    var receiver = LanShareReceiver.init(discoveryPort, io, 500); // 500ms timeout
     defer receiver.deinit();
     try receiver.start(try pairing_code.pairingCode());
 
@@ -58,11 +60,12 @@ test "receive times out and returns null" {
 }
 
 test "GET /pairing-code-hash returns hash of the provided code" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const code = try pairing_code.pairingCode();
-    var receiver = LanShareReceiver.init(std.testing.io, 10000);
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
 
@@ -76,11 +79,12 @@ test "GET /pairing-code-hash returns hash of the provided code" {
 }
 
 test "accepts payload with correct code hash" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const code = try pairing_code.pairingCode();
-    var receiver = LanShareReceiver.init(std.testing.io, 10000);
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
 
@@ -101,10 +105,11 @@ test "accepts payload with correct code hash" {
 }
 
 test "rejects payload with wrong code hash" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    var receiver = LanShareReceiver.init(std.testing.io, 10000);
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(try pairing_code.pairingCode());
 
@@ -125,10 +130,11 @@ test "rejects payload with wrong code hash" {
 }
 
 test "aborts and returns 429 after exceeding the request budget" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    var receiver = LanShareReceiver.init(std.testing.io, 10000);
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(try pairing_code.pairingCode());
 
@@ -153,11 +159,12 @@ test "aborts and returns 429 after exceeding the request budget" {
 }
 
 test "does not abort when request count stays within budget" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const code = try pairing_code.pairingCode();
-    var receiver = LanShareReceiver.init(std.testing.io, 10000);
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
 
@@ -234,11 +241,12 @@ test "generateSelfSignedCert makes a certificate the HTTPS server loads, with th
 }
 
 test "a payload with a repeated key is read with its last value" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const code = try pairing_code.pairingCode();
-    var receiver = LanShareReceiver.init(std.testing.io, 10000);
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
 
@@ -254,11 +262,12 @@ test "a payload with a repeated key is read with its last value" {
 }
 
 test "answers a body that is not JSON with 400 and a path it does not serve with 404, and keeps waiting" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const code = try pairing_code.pairingCode();
-    var receiver = LanShareReceiver.init(std.testing.io, 10000);
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
 
@@ -282,9 +291,9 @@ test "answers a body that is not JSON with 400 and a path it does not serve with
 //
 // Posts a payload written as JSON text with the right code hash, and returns what the receiver received.
 //
-fn receivePayloadText(allocator: std.mem.Allocator, payloadText: []const u8) !?std.json.Value {
+fn receivePayloadText(discoveryPort: u16, allocator: std.mem.Allocator, payloadText: []const u8) !?std.json.Value {
     const code = try pairing_code.pairingCode();
-    var receiver = LanShareReceiver.init(std.testing.io, 10000);
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
     const codeHash = sha256Hex(code);
@@ -298,20 +307,22 @@ fn receivePayloadText(allocator: std.mem.Allocator, payloadText: []const u8) !?s
 }
 
 test "a payload that is zero written as a fraction is falsy, and a number too long for an integer is not" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    try std.testing.expect((try receivePayloadText(allocator, "0.0")) == null);
-    try std.testing.expectEqual(@as(f64, 1.5), (try receivePayloadText(allocator, "1.5")).?.float);
-    try std.testing.expectEqualStrings("123456789012345678901234567890", (try receivePayloadText(allocator, "123456789012345678901234567890")).?.number_string);
+    try std.testing.expect((try receivePayloadText(discoveryPort, allocator, "0.0")) == null);
+    try std.testing.expectEqual(@as(f64, 1.5), (try receivePayloadText(discoveryPort, allocator, "1.5")).?.float);
+    try std.testing.expectEqualStrings("123456789012345678901234567890", (try receivePayloadText(discoveryPort, allocator, "123456789012345678901234567890")).?.number_string);
 }
 
 test "a connection kept alive is served request after request, those sent together too, until it sits idle" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const code = try pairing_code.pairingCode();
-    var receiver = LanShareReceiver.init(std.testing.io, 30000);
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 30000);
     defer receiver.deinit();
     try receiver.start(code);
 

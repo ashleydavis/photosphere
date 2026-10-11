@@ -1292,7 +1292,7 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOp
     }
 
     // Create sender (generates or uses supplied pairing code)
-    var sender = try LanShareSender.init(allocator, io, try payloadToJson(allocator, payload), cmdOptions.code);
+    var sender = try LanShareSender.init(try lan_share.lan_share_types.discoveryPort(), allocator, io, try payloadToJson(allocator, payload), cmdOptions.code);
 
     // Display the pairing code: the user must enter this on the other device
     log.info("");
@@ -1505,7 +1505,7 @@ pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsRec
         code = trim(codeInput.value);
     }
 
-    var receiver = LanShareReceiver.init(io, 60000);
+    var receiver = LanShareReceiver.init(try lan_share.lan_share_types.discoveryPort(), io, 60000);
     defer receiver.deinit();
     try receiver.start(code);
 

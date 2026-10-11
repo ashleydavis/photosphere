@@ -9,13 +9,24 @@ const getDefaultVaultType = get_vault.getDefaultVaultType;
 const PlaintextVault = vault_zig.plaintext_vault.PlaintextVault;
 const errors = utils.errors;
 const process_env = node_utils.process_env;
+const isolated_vault = @import("isolated-vault.zig");
 
 test "getVault: returns a PlaintextVault for type \"plaintext\"" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const previous = process_env.getEnvironMap();
+    process_env.setEnvironMap(try isolated_vault.environmentWithIsolatedVault(arena.allocator(), std.testing.io));
+    defer process_env.setEnvironMap(previous);
     const vault = try getVault("plaintext");
     try std.testing.expect(vault.vtable == &PlaintextVault.vtable);
 }
 
 test "getVault: returns the same instance on repeated calls for the same type" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const previous = process_env.getEnvironMap();
+    process_env.setEnvironMap(try isolated_vault.environmentWithIsolatedVault(arena.allocator(), std.testing.io));
+    defer process_env.setEnvironMap(previous);
     const first = try getVault("plaintext");
     const second = try getVault("plaintext");
     try std.testing.expect(first.ptr == second.ptr);
@@ -103,10 +114,9 @@ test "getVault(\"keychain\"): returns the correct platform vault instance" {
 test "getVault: a keychain vault and a plaintext vault are separate instances" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var environ_map = std.process.Environ.Map.init(arena.allocator());
-    try environ_map.put("PHOTOSPHERE_VAULT_DIR", "vault-zig/src/test/fixtures/ts-vault");
-    process_env.setEnvironMap(&environ_map);
-    defer process_env.setEnvironMap(null);
+    const previous = process_env.getEnvironMap();
+    process_env.setEnvironMap(try isolated_vault.environmentWithIsolatedVault(arena.allocator(), std.testing.io));
+    defer process_env.setEnvironMap(previous);
 
     const plaintext = try getVault("plaintext");
     const keychain = try getVault("keychain");

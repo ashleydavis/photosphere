@@ -265,7 +265,7 @@ fn holdReceiver(context: *IHeldReceiver) void {
 //
 fn withMismatchedReceiver(io: std.Io, code: []const u8, timeoutMs: i64, context: ISendContext, run: *const fn (ISendContext) anyerror!void) !void {
     var held = IHeldReceiver{
-        .receiver = lan_share_network.lan_share_receiver.LanShareReceiver.init(io, timeoutMs),
+        .receiver = lan_share_network.lan_share_receiver.LanShareReceiver.init(try lan_share_network.lan_share_types.discoveryPort(), io, timeoutMs),
         .code = code,
         .io = io,
         .isBroadcasting = .init(false),

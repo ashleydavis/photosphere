@@ -2959,6 +2959,8 @@ test "secrets send and receive transfer a secret over the local network" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, receiverRoot) catch {};
     const senderEnvironment = try setupSecrets(allocator, senderRoot);
     const receiverEnvironment = try helpers.cliEnvironment(allocator, receiverRoot);
+    // The sender and the receiver find each other on the discovery port, so both use the sender's.
+    try receiverEnvironment.put("PHOTOSPHERE_LAN_SHARE_PORT", senderEnvironment.get("PHOTOSPHERE_LAN_SHARE_PORT").?);
 
     // Discovery is machine-wide, so the pairing code is drawn per run: a fixed one could pair with the receiver of
     // another run of this test.
@@ -3822,6 +3824,8 @@ test "dbs send and receive transfer a database and its secrets over the local ne
 
     // The receiver already holds a secret named geo, which is reused rather than overwritten.
     const receiverEnvironment = try helpers.cliEnvironment(allocator, receiverRoot);
+    // The sender and the receiver find each other on the discovery port, so both use the sender's.
+    try receiverEnvironment.put("PHOTOSPHERE_LAN_SHARE_PORT", senderEnvironment.get("PHOTOSPHERE_LAN_SHARE_PORT").?);
     const receiverVaultDir = try std.fs.path.join(allocator, &.{ receiverRoot, "vault" });
     try std.Io.Dir.cwd().createDirPath(std.testing.io, receiverVaultDir);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
