@@ -132,7 +132,7 @@ pub fn receiveShareHandler(allocator: std.mem.Allocator, io: std.Io, taskData: s
     const data = try std.json.parseFromValueLeaky(IReceiveShareTaskData, allocator, taskData, .{
         .ignore_unknown_fields = true,
     });
-    var receiver = LanShareReceiver.init(io, SHARE_TIMEOUT_MS);
+    var receiver = LanShareReceiver.init(try lan_share_network.lan_share_types.discoveryPort(), io, SHARE_TIMEOUT_MS);
     defer receiver.deinit();
     try receiver.start(data.code);
 
@@ -161,7 +161,7 @@ pub fn findReceiverHandler(allocator: std.mem.Allocator, io: std.Io, taskData: s
     const data = try std.json.parseFromValueLeaky(IFindReceiverTaskData, allocator, taskData, .{
         .ignore_unknown_fields = true,
     });
-    var sender = try LanShareSender.init(allocator, io, .null, data.code);
+    var sender = try LanShareSender.init(try lan_share_network.lan_share_types.discoveryPort(), allocator, io, .null, data.code);
 
     var watcher: CancellationWatcher = undefined;
     try watcher.start(context, io, &sender, cancelSender);
@@ -188,7 +188,7 @@ pub fn sendPayloadHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
     const data = try std.json.parseFromValueLeaky(ISendPayloadTaskData, allocator, taskData, .{
         .ignore_unknown_fields = true,
     });
-    var sender = try LanShareSender.init(allocator, io, data.payload, data.code);
+    var sender = try LanShareSender.init(try lan_share_network.lan_share_types.discoveryPort(), allocator, io, data.payload, data.code);
     const endpoint: IReceiverEndpoint = .{
         .address = data.endpoint.address,
         .port = data.endpoint.port,

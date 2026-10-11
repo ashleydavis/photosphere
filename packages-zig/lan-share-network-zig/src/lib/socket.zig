@@ -321,6 +321,17 @@ pub fn localPort(handle: Handle) !u16 {
 }
 
 //
+// Finds a UDP port nobody is using at the moment, for a test that needs its own discovery port. The port is free when this returns, not
+// reserved.
+//
+pub fn freeUdpPort() !u16 {
+    const handle = try createUdp(true, false);
+    defer close(handle);
+    try bind(handle, .{ .address = .{ 0, 0, 0, 0 }, .port = 0 });
+    return localPort(handle);
+}
+
+//
 // Starts listening for connections on a bound TCP socket.
 //
 pub fn listen(handle: Handle) !void {

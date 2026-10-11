@@ -13,6 +13,7 @@
 //
 
 const std = @import("std");
+const builtin = @import("builtin");
 const ziggy = @import("ziggy-core");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
@@ -23,6 +24,8 @@ const config = @import("config-zig");
 const environment = @import("environment.zig");
 const file_logger = @import("file-logger.zig");
 const background_work = @import("background-work.zig");
+const mcp_bridge = @import("mcp-bridge.zig");
+const single_instance = @import("single-instance.zig");
 
 const Core = ziggy.core.Core;
 const TaskContext = ziggy.task_runner.TaskContext;
@@ -54,6 +57,11 @@ pub const ASSET_SERVER_START_TIMEOUT_MS = 60_000;
 pub const ASSET_SERVER_TASK_SOURCE = "asset-server";
 
 //
+// The source the MCP server task is queued under, so cancelling it stops the server.
+//
+pub const MCP_SERVER_TASK_SOURCE = "mcp-server";
+
+//
 // The source the `ensure-auto-import` task is queued under. It is not the source of the automatic import tasks, because ensureAutoImport
 // cancels that source and must not cancel itself.
 //
@@ -73,6 +81,11 @@ pub const ENSURE_AUTO_IMPORT_RESTARTING_INPUT = "\"restarting\"";
 // How often the timer thread looks at the deadlines, in milliseconds.
 //
 const TIMER_TICK_MS = 20;
+
+//
+// How often the first copy of the app looks for the signal a second copy leaves, in milliseconds.
+//
+pub const SINGLE_INSTANCE_CHECK_MS = 500;
 
 //
 // Asks the shell through the core's host request callback, for the code that runs at startup, before there is a task to ask through.
@@ -157,6 +170,12 @@ pub const MainState = struct {
     asset_server_error: ?[]u8,
     // How long to wait for the asset server to say which port it bound. A field so that a test can shorten it.
     asset_server_start_timeout_ms: i64,
+    // The meeting point of the MCP server and the page, which holds the tool calls waiting for the page and the port the server bound.
+    mcp_bridge: mcp_bridge.McpBridge,
+    // The lock this copy holds so that no other copy runs, or null when the rule does not apply to it (a build with no version, a test or a phone).
+    single_instance: ?single_instance.SingleInstance,
+    // When the signal of a second copy is next looked for, or null when this copy holds no lock.
+    single_instance_check_at: ?i64,
     // Which of the phone's background loops (see background-work.zig) are queued or running, by loop, so starting one that is already
     // running does nothing and one that ended is started again.
     background_loops_running: [background_work.LOOP_COUNT]bool,
@@ -228,12 +247,16 @@ pub const MainState = struct {
             .asset_server_ended = false,
             .asset_server_error = null,
             .asset_server_start_timeout_ms = ASSET_SERVER_START_TIMEOUT_MS,
+            .mcp_bridge = mcp_bridge.McpBridge.init(core.allocator, core.io()),
+            .single_instance = null,
+            .single_instance_check_at = null,
             .background_loops_running = [_]bool{false} ** background_work.LOOP_COUNT,
             .prefetch_replica_state = .init(.unknown),
             .uuid_generator = .{},
             .stopping = .init(false),
             .timer_thread = null,
         };
+        try state.applySingleInstanceRule();
         state.startPeriodicSync();
         state.timer_thread = try std.Thread.spawn(.{}, timerMain, .{state});
         return state;
@@ -312,6 +335,10 @@ pub const MainState = struct {
         self.freeOwned(&self.auto_import_database_path);
         self.freeOwned(&self.auto_import_settings_json);
         self.freeOwned(&self.asset_server_error);
+        self.mcp_bridge.deinit();
+        if (self.single_instance) |*instance| {
+            instance.release(self.io);
+        }
         stopFileLogger(self.logger, self.previous_log);
         self.allocator.destroy(self);
     }
@@ -511,16 +538,82 @@ pub const MainState = struct {
     }
 
     //
+    // Takes the lock that keeps a second copy of the packaged app from running, or, when another copy holds it, logs that this one is quitting
+    // and asks the shell to quit. The rule does not apply to a build with no version, a test or a phone, which all log that the lock was acquired.
+    //
+    pub fn applySingleInstanceRule(self: *MainState) !void {
+        try self.enforceSingleInstance(single_instance.ruleApplies());
+    }
+
+    //
+    // Does what applySingleInstanceRule does once it has decided whether the rule applies to this copy.
+    //
+    pub fn enforceSingleInstance(self: *MainState, rule_applies: bool) !void {
+        const pid = storage.storage.processId();
+        const packaged: []const u8 = if (single_instance.isUnpackaged()) "false" else "true";
+        if (rule_applies) {
+            switch (try single_instance.acquire(self.allocator, self.io, std.mem.span(self.core.config.data_dir))) {
+                .acquired => |instance| {
+                    self.lock();
+                    defer self.unlock();
+                    self.single_instance = instance;
+                    self.single_instance_check_at = self.now() + SINGLE_INSTANCE_CHECK_MS;
+                },
+                .denied => {
+                    var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+                    defer arena_state.deinit();
+                    utils.log.log.event(try std.fmt.allocPrint(arena_state.allocator(), "Single instance lock denied (pid={d}, packaged={s}); quitting", .{ pid, packaged }));
+                    const quit = self.core.config.quit orelse {
+                        return utils.errors.throwError("Another copy of the app is running and this platform gives no way to quit this one.", .{});
+                    };
+                    quit(self.core.config.user_data);
+                    return;
+                },
+            }
+        }
+        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena_state.deinit();
+        utils.log.log.event(try std.fmt.allocPrint(arena_state.allocator(), "Single instance lock acquired (pid={d}, packaged={s})", .{ pid, packaged }));
+    }
+
+    //
+    // Looks for the signal a second copy of the app leaves when it is started and quits, and brings this copy's window to the front when it is
+    // there. The shell does the bringing to the front, as the `focus-window` action.
+    //
+    pub fn checkSecondInstance(self: *MainState) !void {
+        const instance = if (self.single_instance) |*held| held else {
+            return;
+        };
+        if (!try instance.takeSignal(self.io)) {
+            return;
+        }
+        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena_state.deinit();
+        utils.log.log.event(try std.fmt.allocPrint(arena_state.allocator(), "Second-instance signal received by pid={d}", .{storage.storage.processId()}));
+        const menu_action = self.core.config.menu_action orelse {
+            return;
+        };
+        menu_action(self.core.config.user_data, "focus-window");
+    }
+
+    //
     // Looks at the deadlines and does what a timer's callback did for each one that has passed.
     //
     fn runDueTimers(self: *MainState) void {
         var run_debounced = false;
         var run_periodic = false;
         var run_auto_import_check = false;
+        var run_single_instance_check = false;
         {
             self.lock();
             defer self.unlock();
             const current = self.now();
+            if (self.single_instance_check_at) |due| {
+                if (current >= due) {
+                    self.single_instance_check_at = current + SINGLE_INSTANCE_CHECK_MS;
+                    run_single_instance_check = true;
+                }
+            }
             if (self.auto_import_check_at) |due| {
                 if (current >= due) {
                     self.auto_import_check_at = current + self.auto_import_check_ms;
@@ -548,6 +641,11 @@ pub const MainState = struct {
         if (run_auto_import_check) {
             self.enqueueEnsureAutoImportTask(true) catch |err| {
                 utils.log.log.exception("Error queuing the check that automatic import is running", err);
+            };
+        }
+        if (run_single_instance_check) {
+            self.checkSecondInstance() catch |err| {
+                utils.log.log.exception("Error looking for a second instance of the app", err);
             };
         }
     }
@@ -584,6 +682,22 @@ pub const MainState = struct {
         // Automatic import picks up where it left off, so a machine that was backing photos up before it was shut down carries on
         // without the user having to open anything.
         try self.enqueueEnsureAutoImportTask(false);
+        // A phone has no MCP server. A server that cannot start is not worth stopping the app for, so the app carries on without it.
+        if (builtin.os.tag != .ios and !builtin.abi.isAndroid()) {
+            self.queueMcpServer() catch |err| {
+                utils.log.log.exception("MCP server failed to start, continuing without it", err);
+            };
+        }
+    }
+
+    //
+    // Queues the task that is the MCP server.
+    //
+    pub fn queueMcpServer(self: *MainState) !void {
+        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena_state.deinit();
+        const task_id = try self.uuid_generator.generate(arena_state.allocator(), self.io);
+        try self.core.runner.addTask(task_id, "mcp-server", MCP_SERVER_TASK_SOURCE, "null", .background, null);
     }
 
     //

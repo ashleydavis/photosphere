@@ -28,11 +28,6 @@ const MAX_REQUESTS = 5;
 const BROADCAST_INTERVAL_MS = 1000;
 
 //
-// UDP port used for discovery broadcasts.
-//
-const DISCOVERY_PORT: u16 = 54321;
-
-//
 // How long the receiver's threads wait at a time before checking whether the receive has finished.
 //
 const POLL_INTERVAL_MS: i32 = 100;
@@ -329,6 +324,9 @@ pub const LanShareReceiver = struct {
     // The port the HTTPS server listens on (`httpsServer.address().port`).
     httpsPort: u16,
 
+    // The UDP port the receiver announces itself to.
+    discoveryPort: u16,
+
     // The UDP socket for broadcasting availability.
     udpSocket: ?socket.Handle,
 
@@ -359,8 +357,9 @@ pub const LanShareReceiver = struct {
     //
     // Creates the receiver (`new LanShareReceiver(timeoutMs)`).
     //
-    pub fn init(io: std.Io, timeoutMs: i64) LanShareReceiver {
+    pub fn init(discoveryPort: u16, io: std.Io, timeoutMs: i64) LanShareReceiver {
         return .{
+            .discoveryPort = discoveryPort,
             .arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator),
             .arenaMutex = .init,
             .io = io,
@@ -456,10 +455,10 @@ pub const LanShareReceiver = struct {
         // ECONNREFUSED surfaced from an ICMP port-unreachable when no sender is listening on
         // 127.0.0.1 yet) must not stop the receiver, which still serves the transfer over its
         // HTTPS server.
-        socket.sendTo(udpSocket, message, .{ .address = .{ 255, 255, 255, 255 }, .port = DISCOVERY_PORT }) catch {};
+        socket.sendTo(udpSocket, message, .{ .address = .{ 255, 255, 255, 255 }, .port = self.discoveryPort }) catch {};
         // Also send to loopback so same-machine discovery works on macOS, where
         // 255.255.255.255 broadcasts are not reliably looped back between processes.
-        socket.sendTo(udpSocket, message, .{ .address = .{ 127, 0, 0, 1 }, .port = DISCOVERY_PORT }) catch {};
+        socket.sendTo(udpSocket, message, .{ .address = .{ 127, 0, 0, 1 }, .port = self.discoveryPort }) catch {};
     }
 
     //

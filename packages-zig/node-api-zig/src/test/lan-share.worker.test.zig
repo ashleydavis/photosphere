@@ -215,7 +215,7 @@ test "receiveShareHandler calls receiver.start with the supplied code and return
 
     // A sender holding the code finds the receiver the handler started and delivers the payload to it. A receiver started
     // with any other code would not be found, so this shows the handler started the receiver with the code it was given.
-    var sender = try LanShareSender.init(allocator, io, payload, "4242");
+    var sender = try LanShareSender.init(try lan_share_network.lan_share_types.discoveryPort(), allocator, io, payload, "4242");
     const endpoint = (try sender.waitForReceiver(io, 60000)) orelse {
         return error.ReceiverNotFound;
     };
@@ -274,7 +274,7 @@ test "findReceiverHandler constructs the sender with the code and returns the di
     var run: HandlerRun = undefined;
     try run.start(io, findReceiverHandler, try codeData(allocator, "3333"), &context);
     defer run.deinit();
-    var receiver = LanShareReceiver.init(io, 60000);
+    var receiver = LanShareReceiver.init(try lan_share_network.lan_share_types.discoveryPort(), io, 60000);
     defer receiver.deinit();
 
     // The handler's sender hears the receiver's announcement only when it holds the receiver's code.
@@ -332,9 +332,9 @@ test "sendPayloadHandler constructs the sender with payload/code, sends to the e
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const payload = try sampleSecretPayload(allocator);
-    var receiver = LanShareReceiver.init(io, 60000);
+    var receiver = LanShareReceiver.init(try lan_share_network.lan_share_types.discoveryPort(), io, 60000);
     defer receiver.deinit();
-    var finder = try LanShareSender.init(allocator, io, .null, "6666");
+    var finder = try LanShareSender.init(try lan_share_network.lan_share_types.discoveryPort(), allocator, io, .null, "6666");
     const endpoint = try startAndDiscover(&receiver, &finder, "6666");
 
     const result = try sendPayloadHandler(allocator, io, try sendData(allocator, payload, "6666", endpoint), context.taskContext());
@@ -354,9 +354,9 @@ test "sendPayloadHandler returns success false when the receiver rejects the pay
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const payload = try sampleSecretPayload(allocator);
-    var receiver = LanShareReceiver.init(io, 60000);
+    var receiver = LanShareReceiver.init(try lan_share_network.lan_share_types.discoveryPort(), io, 60000);
     defer receiver.deinit();
-    var finder = try LanShareSender.init(allocator, io, .null, "6666");
+    var finder = try LanShareSender.init(try lan_share_network.lan_share_types.discoveryPort(), allocator, io, .null, "6666");
     const endpoint = try startAndDiscover(&receiver, &finder, "6666");
 
     // The receiver holds 6666 and the task is given 7777, so the receiver's pairing code hash does not match.

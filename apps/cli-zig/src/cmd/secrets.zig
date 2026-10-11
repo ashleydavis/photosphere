@@ -988,7 +988,7 @@ pub fn secretsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISecre
     log.info("");
 
     // Create sender (generates or uses supplied pairing code)
-    var sender = try LanShareSender.init(allocator, io, try payloadToJson(allocator, payload), cmdOptions.code);
+    var sender = try LanShareSender.init(try lan_share.lan_share_types.discoveryPort(), allocator, io, try payloadToJson(allocator, payload), cmdOptions.code);
 
     // Display the pairing code: the user must enter this on the receiver device
     log.info(try pc.cyan(allocator, try format(allocator, "  Pairing code: {s}", .{try pc.bold(allocator, sender.pairingCode)})));
@@ -1097,7 +1097,7 @@ pub fn secretsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *ISe
         code = trim(codeInput.value);
     }
 
-    var receiver = LanShareReceiver.init(io, timeoutSeconds * 1000);
+    var receiver = LanShareReceiver.init(try lan_share.lan_share_types.discoveryPort(), io, timeoutSeconds * 1000);
     defer receiver.deinit();
     try receiver.start(code);
 

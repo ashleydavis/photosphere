@@ -6,6 +6,7 @@ const std = @import("std");
 const utils = @import("utils-zig");
 const builtin = @import("builtin");
 const node_utils = @import("node-utils-zig");
+const lan_share_network = @import("lan-share-network-zig");
 
 //
 // Reads and parses a JSON fixture from src/test/fixtures (the tests run with the package directory as cwd).
@@ -243,6 +244,9 @@ pub fn cliEnvironment(allocator: std.mem.Allocator, root: []const u8) !*std.proc
     try map.put("NO_COLOR", "1");
     try map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
     try map.put("PHOTOSPHERE_VAULT_DIR", try std.fs.path.join(allocator, &.{ root, "vault" }));
+    // Discovery broadcasts go to one UDP port for the whole machine, so each test has a port of its own, or its sender hears the receivers of
+    // the tests and suites running beside it.
+    try map.put("PHOTOSPHERE_LAN_SHARE_PORT", try std.fmt.allocPrint(allocator, "{d}", .{try lan_share_network.socket.freeUdpPort()}));
     const tmpDir = try std.fs.path.join(allocator, &.{ root, "tmp" });
     try std.Io.Dir.cwd().createDirPath(std.testing.io, tmpDir);
     // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows.

@@ -13,11 +13,6 @@ const errors = utils.errors;
 const mathRandom = node_utils.fs.mathRandom;
 
 //
-// UDP port used for discovery broadcasts.
-//
-pub const DISCOVERY_PORT: u16 = 54321;
-
-//
 // Prefix string for receiver broadcast messages.
 //
 const BROADCAST_PREFIX = "PSIE_RECV:";
@@ -81,6 +76,9 @@ pub const LanShareSender = struct {
     // The opaque payload to send to the receiver.
     payload: std.json.Value,
 
+    // The UDP port the sender listens on for receiver broadcasts.
+    discoveryPort: u16,
+
     // The UDP socket used for listening to receiver broadcasts.
     udpSocket: ?socket.Handle,
 
@@ -108,8 +106,9 @@ pub const LanShareSender = struct {
     //
     // Creates the sender (`new LanShareSender(payload, pairingCode?)`): a null pairing code generates one.
     //
-    pub fn init(allocator: std.mem.Allocator, io: std.Io, payload: std.json.Value, pairingCode: ?[]const u8) !LanShareSender {
+    pub fn init(discoveryPort: u16, allocator: std.mem.Allocator, io: std.Io, payload: std.json.Value, pairingCode: ?[]const u8) !LanShareSender {
         return .{
+            .discoveryPort = discoveryPort,
             .allocator = allocator,
             .payload = payload,
             .pairingCode = pairingCode orelse try generatePairingCode(allocator, io),
@@ -133,7 +132,7 @@ pub const LanShareSender = struct {
         const udpSocket = try socket.createUdp(true, false);
         self.udpSocket = udpSocket;
         errdefer self.cleanupUdp();
-        try socket.bind(udpSocket, .{ .address = .{ 0, 0, 0, 0 }, .port = DISCOVERY_PORT });
+        try socket.bind(udpSocket, .{ .address = .{ 0, 0, 0, 0 }, .port = self.discoveryPort });
 
         const deadline = std.Io.Clock.awake.now(io).toMilliseconds() + timeoutMs;
 

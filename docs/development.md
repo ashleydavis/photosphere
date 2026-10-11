@@ -59,6 +59,7 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - fuzzy-match-zig - Zig port of fuzzy-match
         - lan-share-core-zig - Zig port of the core of lan-share
         - lan-share-network-zig - Zig port of the network side of lan-share
+        - mcp-zig - The MCP server (JSON-RPC protocol, tool input schemas and the Streamable HTTP transport) that the `psi mcp` command and the desktop app both run
         - mobile-worker-zig - Zig port of mobile-worker (the planning task handlers the phone runs)
         - merkle-tree-zig - Zig port of merkle-tree
         - node-api-zig - Zig port of node-api

@@ -133,6 +133,11 @@ const packages = [_]IPackage{
         .link_libc = true,
     },
     .{
+        .name = "mcp-zig",
+        .dependencies = &.{ "utils-zig", "node-utils-zig", "serialization-zig", "bdb-zig" },
+        .link_libc = false,
+    },
+    .{
         .name = "api-zig",
         .dependencies = &.{ "utils-zig", "storage-zig", "serialization-zig", "task-queue-zig", "vault-zig", "lan-share-core-zig", "node-utils-zig", "encryption-zig", "bdb-zig" },
         .link_libc = false,
@@ -159,7 +164,7 @@ const packages = [_]IPackage{
     },
     .{
         .name = "photosphere-core",
-        .dependencies = &.{ "utils-zig", "node-utils-zig", "config-zig", "mobile-worker-zig", "tools-zig", "encryption-zig", "storage-zig", "vault-zig", "task-queue-zig", "serialization-zig", "merkle-tree-zig", "bdb-zig", "api-zig", "node-api-zig" },
+        .dependencies = &.{ "utils-zig", "node-utils-zig", "config-zig", "mobile-worker-zig", "tools-zig", "encryption-zig", "storage-zig", "vault-zig", "task-queue-zig", "serialization-zig", "merkle-tree-zig", "bdb-zig", "mcp-zig", "api-zig", "node-api-zig" },
         .link_libc = true,
     },
 };
@@ -689,6 +694,7 @@ const cli_dependency_names = [_][]const u8{
     "serialization-zig",
     "merkle-tree-zig",
     "bdb-zig",
+    "mcp-zig",
     "api-zig",
     "node-api-zig",
     "lan-share-core-zig",

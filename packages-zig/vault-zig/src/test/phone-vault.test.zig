@@ -5,6 +5,8 @@ const PhoneVault = vault_zig.phone_vault.PhoneVault;
 const ISecret = vault_zig.vault.ISecret;
 const IHostRequester = utils.host_requester.IHostRequester;
 const errors = utils.errors;
+const node_utils = @import("node-utils-zig");
+const isolated_vault = @import("isolated-vault.zig");
 
 //
 // A host that keeps keychain items in memory and answers the secureStore requests the way the phone's shell does. It records the
@@ -245,6 +247,9 @@ test "getVaultWithHost: the phone type without a host is an error" {
 test "getVaultWithHost: another type is the vault getVault returns" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const previous = node_utils.process_env.getEnvironMap();
+    node_utils.process_env.setEnvironMap(try isolated_vault.environmentWithIsolatedVault(arena.allocator(), std.testing.io));
+    defer node_utils.process_env.setEnvironMap(previous);
     const vault = try vault_zig.get_vault.getVaultWithHost(arena.allocator(), "plaintext", null);
     try std.testing.expect(vault.vtable == &vault_zig.plaintext_vault.PlaintextVault.vtable);
 }
