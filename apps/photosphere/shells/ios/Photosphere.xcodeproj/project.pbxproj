@@ -26,6 +26,7 @@
 		B1000000000000000000000E /* BackgroundPasses.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000E /* BackgroundPasses.swift */; };
 		B1000000000000000000000F /* run_magick.c in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000F /* run_magick.c */; };
 		B10000000000000000000010 /* FFmpegKitFullSPM in Frameworks */ = {isa = PBXBuildFile; productRef = B60000000000000000000001 /* FFmpegKitFullSPM */; };
+		A10000000000000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -51,6 +52,7 @@
 		B2000000000000000000000F /* run_magick.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c; path = run_magick.c; sourceTree = "<group>"; };
 		B20000000000000000000010 /* run_magick.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = run_magick.h; sourceTree = "<group>"; };
 		B20000000000000000000011 /* Photosphere-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Photosphere-Bridging-Header.h"; sourceTree = "<group>"; };
+		A20000000000000000000007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -82,6 +84,7 @@
 				A20000000000000000000001 /* ViewController.swift */,
 				A20000000000000000000002 /* AppDelegate.swift */,
 				A20000000000000000000003 /* Info.plist */,
+				A20000000000000000000007 /* Assets.xcassets */,
 				B2000000000000000000000F /* run_magick.c */,
 				B20000000000000000000010 /* run_magick.h */,
 				B20000000000000000000011 /* Photosphere-Bridging-Header.h */,
@@ -188,6 +191,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000005 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -262,6 +266,7 @@
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INFOPLIST_FILE = Photosphere/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -323,6 +328,7 @@
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INFOPLIST_FILE = Photosphere/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

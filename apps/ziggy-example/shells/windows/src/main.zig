@@ -14,6 +14,7 @@ pub fn main(init: std.process.Init) !u8 {
         .title = "Ziggy example",
         .default_width = 900,
         .default_height = 800,
+        .icon_resource = null,
         .ui_files = &ui.files,
     }, args);
 }

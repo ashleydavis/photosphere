@@ -2391,9 +2391,124 @@ jobs:
         timeout-minutes: 75
         run: bun run test:ziggy:ios
 
+  package-photosphere:
+    # The Photosphere App packaged for each desktop platform, unsigned, by the same package scripts a developer runs. The
+    # version comes from the release tag, the way build-desktop gets it: v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>.
+    # Windows needs the WebView2 SDK and the WiX Toolset, which the setup step fetches. The Zig build restores the AWS SDK for C
+    # that build-aws-sdk compiled, so it is not compiled again here.
+    timeout-minutes: 75
+    needs: [prepare-tag, build-aws-sdk]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-latest
+            package: package:linux
+            arguments: ""
+          - name: windows
+            os: windows-latest
+            package: package:windows
+            arguments: "x64"
+          - name: macos-arm64
+            os: macos-latest
+            package: package:macos
+            arguments: ""
+          - name: macos-x64
+            os: macos-15-intel
+            package: package:macos
+            arguments: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      # The Linux shell links the runtime libraries by file name, so no development packages are needed. WebKitGTK plays video
+      # through GStreamer, so the packaged app depends on those plugins.
+      - name: Install the build and packaging tools (Linux)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: libgtk-3-0 libwebkit2gtk-4.1-0 libgdk-pixbuf-2.0-0 gstreamer1.0-plugins-good gstreamer1.0-libav zip
+          verify: zip
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Fetch the WebView2 SDK and the WiX Toolset (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: bun run --filter=ziggy setup
+
+      # The same cache zig-smoke-tests restores, written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
+
+      - name: Set config
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
+            VERSION="${VERSION#v}"
+            VERSION="$(bash ./scripts/set-build-config.sh --tag "$VERSION" --commit "${{ github.sha }}")"
+          else
+            VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Package
+        shell: bash
+        run: bun run --filter=ziggy ${{ matrix.package }} -- ${{ matrix.arguments }} --version "$VERSION"
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-app-${{ matrix.name }}
+          path: apps/photosphere/out/${{ runner.os == 'Linux' && 'linux' || runner.os == 'Windows' && 'windows' || 'macos' }}/*
+          if-no-files-found: error
+          retention-days: 2
+
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, compile, build-aws-sdk, build-zig-linux-x64, build-zig-windows-x64, build-zig-macos-arm64, build-zig-macos-x64, zig-unit-tests, zig-smoke-tests, ziggy-photosphere-smoke-tests, ziggy-photosphere-ios-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, android-smoke-tests, ios-smoke-tests]
+    needs: [prepare-tag, compile, build-aws-sdk, build-zig-linux-x64, build-zig-windows-x64, build-zig-macos-arm64, build-zig-macos-x64, zig-unit-tests, zig-smoke-tests, ziggy-photosphere-smoke-tests, ziggy-photosphere-ios-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, package-photosphere, android-smoke-tests, ios-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -2438,6 +2553,13 @@ jobs:
         with:
           pattern: photosphere-desktop-*-build
           path: ./artifacts/desktop
+          merge-multiple: true
+
+      - name: Download the Photosphere App packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: photosphere-app-*
+          path: ./artifacts/app
           merge-multiple: true
 
       - name: Download the Zig CLI artifacts
@@ -2518,6 +2640,7 @@ jobs:
             ./artifacts/photosphere-cli-zig-macos-x64.tar.gz
             ./artifacts/photosphere-cli-zig-macos-arm64.tar.gz
             ./artifacts/desktop/**/*
+            ./artifacts/app/*
           body: |
             ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere release {0}', needs.prepare-tag.outputs.tag) || format('Photosphere nightly build - {0}', github.sha) }}
 

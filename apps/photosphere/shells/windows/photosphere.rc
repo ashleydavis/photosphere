@@ -1,0 +1,3 @@
+// The icon of the Photosphere executable: the first icon in the file is what Explorer, the taskbar and the shortcut show, and
+// the window class loads it by this number.
+1 ICON "../../icons/photosphere.ico"

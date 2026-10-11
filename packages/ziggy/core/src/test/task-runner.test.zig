@@ -197,17 +197,21 @@ test "several tasks run at the same time up to the pool size and the rest wait t
     try expectCompleted(&shell, "t3", "succeeded");
 }
 
-test "a duplicate task id among live tasks is refused" {
+test "two live tasks with the same id both run and each reports its completion" {
     var shell: helpers.FakeShell = undefined;
     shell.init(std.testing.allocator);
     defer shell.deinit();
-    const core = try helpers.createCore(&shell, 1, 1);
+    const core = try helpers.createCore(&shell, 2, 1);
     defer core.destroy();
-    try addTask(core, "same", "spin", "s", "null", "background");
-    core.postMessage("{\"id\":1,\"channel\":\"add-task\",\"data\":{\"taskId\":\"same\",\"taskType\":\"quick\",\"source\":\"s\",\"data\":null,\"priority\":\"background\"}}");
-    try shell.expectMessageContaining("{\"id\":1,\"ok\":false,\"error\":\"DuplicateTaskId\"}");
-    try cancelSource(core, "s");
-    try expectCompleted(&shell, "same", "cancelled");
+    try addTask(core, "same", "sleep", "s", "{\"ms\":30,\"name\":\"first\"}", "background");
+    try addTask(core, "same", "quick", "s", "null", "background");
+    var attempts: usize = 0;
+    while (shell.countContaining("task-completed\",\"data\":{\"taskId\":\"same\"") < 2 and attempts < 400) {
+        shell.sleepMs(5);
+        attempts += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 2), shell.countContaining("task-completed\",\"data\":{\"taskId\":\"same\""));
+    try std.testing.expectEqual(@as(usize, 0), shell.countContaining("DuplicateTaskId"));
 }
 
 test "add-task without a task type is an error reply" {

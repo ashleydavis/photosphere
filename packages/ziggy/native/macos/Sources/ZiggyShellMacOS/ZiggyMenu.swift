@@ -296,6 +296,16 @@ final class ZiggyMenu: NSObject {
             setZoom(webView, Double(webView.pageZoom) - 0.1)
         case "zoom-reset":
             setZoom(webView, 1.0)
+        case "focus-window":
+            guard let window = webView.window else {
+                ZiggyBridge.report("focus-window: the web view is not in a window")
+                return
+            }
+            if window.isMiniaturized {
+                window.deminiaturize(nil)
+            }
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
         default:
             bridge.postMenuAction(action)
         }

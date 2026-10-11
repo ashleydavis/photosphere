@@ -13,6 +13,7 @@ apple_require_tool hdiutil ditto jq
 ARCH="$(apple_host_arch)"
 OUTPUT_DIR="$APPLE_APP_DIR/out/macos"
 BUILD_DIR="$APPLE_APP_DIR/shells/macos/zig-out/package"
+VERSION="$(apple_package_version)"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -24,13 +25,16 @@ while [ $# -gt 0 ]; do
             OUTPUT_DIR="$2"
             shift 2
             ;;
+        --version)
+            VERSION="$2"
+            shift 2
+            ;;
         *)
-            apple_fail "unknown argument '$1'. Options: --arch, --output-dir."
+            apple_fail "unknown argument '$1'. Options: --arch, --output-dir, --version."
             ;;
     esac
 done
 
-VERSION="$(apple_package_version)"
 BASE_NAME="photosphere-$VERSION-macos-$ARCH"
 mkdir -p "$OUTPUT_DIR" "$BUILD_DIR"
 

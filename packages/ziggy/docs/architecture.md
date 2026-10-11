@@ -182,11 +182,13 @@ A desktop app has a menu, written once in Zig and drawn natively by the shell of
 
 The app gives the core its menu as JSON text in `menu_json` of its handlers. It is an array of menus, each `{"label", "items"}`, where an item is `{"label", "action", "accelerator"}`, or `{"separator": true}`, and may hold its own `"items"` for a submenu. A shell reads the text with `ziggy_menu_json` and reads each shortcut with `ziggy_parse_accelerator`, which gives modifier bits and a key name so no shell parses shortcut text itself. A shortcut is modifiers and a key joined by plus signs, in Electron's form: `CmdOrCtrl+Shift+I`, `F12`, `CmdOrCtrl+Plus`. `CmdOrCtrl` is Command on MacOS and Control elsewhere.
 
-Every shell does these actions itself, because only the shell can: `quit`, `close-window`, `reload`, `toggle-devtools`, `toggle-fullscreen`, `zoom-in`, `zoom-out`, `zoom-reset`, `undo`, `redo`, `cut`, `copy`, `paste` and `select-all`. Any other action is the app's. The shell sends `{"channel": "menu-action", "data": {"action": "<action>"}}` to the core, and the core hands it to the page as a `menu-action` event. The page decides what it means, and the example's page presses the same button the item stands for.
+Every shell does these actions itself, because only the shell can: `quit`, `close-window`, `reload`, `toggle-devtools`, `toggle-fullscreen`, `zoom-in`, `zoom-out`, `zoom-reset`, `undo`, `redo`, `cut`, `copy`, `paste`, `select-all` and `focus-window`, which the core asks for when a second copy of the app was started and which brings the window to the front, restoring it first if it is minimised. Any other action is the app's. The shell sends `{"channel": "menu-action", "data": {"action": "<action>"}}` to the core, and the core hands it to the page as a `menu-action` event. The page decides what it means, and the example's page presses the same button the item stands for.
 
 Shortcuts are registered with the window, so they work wherever the focus is, including inside the web view.
 
 The developer tools open with `toggle-devtools` in every build, release included, and are not a test hook.
+
+The window icon is the app's: on Linux `AppConfig.icon_png` holds the bytes of a PNG file, which an app's build gives to its main file with an `app-icon` import, and on Windows `AppConfig.icon_resource` is the number of an icon in the executable's resources, which the app's build adds from a resource script. An app with no icon passes null and shows the desktop's generic one. On MacOS, iOS and Android the icon belongs to the app's bundle, from an asset catalog or the launcher icons in the app's resources.
 
 ## Test hooks
 

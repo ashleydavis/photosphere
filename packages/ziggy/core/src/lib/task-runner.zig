@@ -526,8 +526,9 @@ pub const TaskRunner = struct {
     }
 
     //
-    // Queues a top level task and returns at once. The ids of live tasks must be unique. When reply_id_json is given, the task
-    // answers the page request with that id: its end is reported as that request's reply, and no task-completed event is sent.
+    // Queues a top level task and returns at once. Two live tasks may share an id, and each reports its own completion. When
+    // reply_id_json is given, the task answers the page request with that id: its end is reported as that request's reply, and no
+    // task-completed event is sent.
     //
     pub fn addTask(self: *TaskRunner, task_id: []const u8, task_type: []const u8, source: []const u8, data_json: []const u8, priority: TaskPriority, reply_id_json: ?[]const u8) !void {
         const task = try self.createTask(task_id, task_type, source, data_json, priority, null);
@@ -539,11 +540,6 @@ pub const TaskRunner = struct {
         defer self.unlock();
         if (self.shutting_down) {
             return error.ShuttingDown;
-        }
-        for (self.live.items) |live_task| {
-            if (std.mem.eql(u8, live_task.id, task_id)) {
-                return error.DuplicateTaskId;
-            }
         }
         try self.live.append(self.allocator, task);
         errdefer _ = self.live.pop();

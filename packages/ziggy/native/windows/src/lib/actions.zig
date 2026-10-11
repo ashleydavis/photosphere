@@ -22,6 +22,7 @@ pub const Action = enum {
     copy,
     paste,
     select_all,
+    focus_window,
 };
 
 //

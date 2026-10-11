@@ -17,6 +17,7 @@ pub fn main(init: std.process.Init) !u8 {
         .title = "Photosphere",
         .default_width = 1200,
         .default_height = 800,
+        .icon_resource = 1,
         .ui_files = &ui.files,
     }, args);
 }
