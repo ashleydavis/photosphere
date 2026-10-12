@@ -1,6 +1,7 @@
 const std = @import("std");
 const errors = @import("errors.zig");
 const js_number = @import("js-number.zig");
+const js_date = @import("js-date.zig");
 
 //
 // Options for transforming an image.
@@ -35,8 +36,6 @@ const IOrientation = union(enum) {
 };
 
 //
-// TODO: a Date renders as `date`, where String(date) writes the date.
-//
 // Reads a JavaScript value (serialization-zig's BsonValue, taken by duck typing because utils cannot depend on
 // serialization) as an orientation.
 //
@@ -51,7 +50,16 @@ fn toOrientation(allocator: std.mem.Allocator, value: anytype) std.mem.Allocator
         .boolean => |boolean| .{ .other = if (boolean) "true" else "false" },
         .array => |items| .{ .other = try arrayToString(allocator, items) },
         .document => .{ .other = "[object Object]" },
-        else => .{ .other = try allocator.dupe(u8, @tagName(value)) },
+        .date => |time| blk: {
+            var output: std.Io.Writer.Allocating = .init(allocator);
+            js_date.writeDateString(&output.writer, time) catch return error.OutOfMemory;
+            break :blk .{ .other = output.written() };
+        },
+        // A Long, a Binary and an ObjectId are objects whose toString gives the decimal number, the bytes read as UTF-8 and
+        // the hexadecimal id.
+        .int64 => |number| .{ .other = try std.fmt.allocPrint(allocator, "{d}", .{number}) },
+        .binary => |binary| .{ .other = try std.fmt.allocPrint(allocator, "{f}", .{std.unicode.fmtUtf8(binary.data)}) },
+        .objectId => |id| .{ .other = try allocator.dupe(u8, &std.fmt.bytesToHex(id, .lower)) },
     };
 }
 
@@ -178,8 +186,6 @@ pub fn getImageTransformation(allocator: std.mem.Allocator, exif: anytype) !?IIm
 }
 
 //
-// TODO: streams that are not an array give no transformation, where `for...of` throws a TypeError.
-//
 // Gets the transformation for a video. The metadata is a JavaScript object (serialization-zig's BsonDocument, or
 // null for undefined), taken by duck typing like getImageTransformation.
 //
@@ -197,9 +203,15 @@ pub fn getVideoTransformation(allocator: std.mem.Allocator, metadata: anytype) !
 
     var rotation: ?[]const u8 = null;
 
+    // `for...of` over a string walks its characters, none of which has a rotation, and throws a TypeError for any other value
+    // that is not an array (worded as Node words it).
     const streamList = switch (streams) {
         .array => |items| items,
-        else => return null,
+        .string => return null,
+        else => {
+            errors.recordError("TypeError", "metadata.streams is not iterable", .{});
+            return error.Thrown;
+        },
     };
     for (streamList) |stream| {
         const streamRotation = switch (stream) {

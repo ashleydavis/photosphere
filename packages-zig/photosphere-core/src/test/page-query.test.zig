@@ -112,3 +112,10 @@ test "a query is an error when the asset server says nothing within the time all
 
     try std.testing.expectError(error.Thrown, app.core.pageQuery());
 }
+
+test "a value of the query is written as encodeURIComponent writes it" {
+    const allocator = std.testing.allocator;
+    const encoded = try page_query.encodeUriComponent(allocator, "a b!*'()~-_.\xc3\xa9&=/:?#%");
+    defer allocator.free(encoded);
+    try std.testing.expectEqualStrings("a%20b!*'()~-_.%C3%A9%26%3D%2F%3A%3F%23%25", encoded);
+}

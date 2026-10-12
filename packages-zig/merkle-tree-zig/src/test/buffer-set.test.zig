@@ -285,3 +285,21 @@ test "should find hash 0034217e5269895c55acc694c6423f3ddb695ecbbb68635d950cee575
     _ = try std.fmt.hexToBytes(&hashBuffer2, "0034217e5269895c55acc694c6423f3ddb695ecbbb68635d950cee57542a4d14");
     try std.testing.expectEqual(true, try bufferSet.has(&hashBuffer2));
 }
+
+//
+// A buffer whose bucket is taken by another buffer is still not in the set: all zeros and a buffer whose first two
+// 4-byte chunks are equal both XOR to bucket 0, so the delete finds the bucket and must not find the buffer in it.
+//
+test "should return false when deleting a non-existent buffer that shares a bucket with one in the set" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var bufferSet = BufferSet.init(arena.allocator());
+    var present = [_]u8{0} ** 32;
+    @memcpy(present[0..8], &[_]u8{ 1, 2, 3, 4, 1, 2, 3, 4 });
+    const absent = [_]u8{0} ** 32;
+    _ = try bufferSet.add(&present);
+
+    try std.testing.expect(!try bufferSet.delete(&absent));
+    try std.testing.expectEqual(@as(usize, 1), bufferSet.size());
+    try std.testing.expect(try bufferSet.has(&present));
+}

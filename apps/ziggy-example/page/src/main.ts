@@ -99,6 +99,25 @@ interface IFileRoundtrip {
     text: string;
 }
 //
+// The reply of the task-stats channel.
+//
+interface ITaskStats {
+    // How many tasks have ended since the app started.
+    tasksEnded: number;
+
+    // How many messages tasks have sent since the app started.
+    messagesSent: number;
+}
+
+//
+// What an app-event carries: the id of a task the app's own code queued.
+//
+interface IAppEvent {
+    // The task the app queued.
+    queued: string;
+}
+
+//
 // What a menu-action event carries.
 //
 interface IMenuActionEvent {
@@ -246,6 +265,51 @@ function startEdgeChecks(): void {
         }
     });
 }
+//
+// What the app's own code in the core does: an error it describes, a task that reads its own context and the app's state, a task that
+// runs children one after another, tasks queued and cancelled from the app's code, the counts the app keeps by observing tasks, and an
+// event the app sends that the page stops listening for.
+//
+function startAppFacilities(): void {
+    const result = element("app-result");
+    element("app-refuse").addEventListener("click", async () => {
+        try {
+            await window.ziggy.invoke<IJsonValue>("refuse", null);
+            result.textContent = "the refuse channel did not fail";
+        }
+        catch (error) {
+            result.textContent = `error reply: ${(error as Error).message}`;
+        }
+    });
+    element("app-describe").addEventListener("click", () => {
+        queueTask("describe-self", "describe-source", null);
+    });
+    element("app-run-in-turn").addEventListener("click", () => {
+        queueTask("run-in-turn", "run-in-turn-source", { children: 3 });
+    });
+    element("app-queue").addEventListener("click", async () => {
+        const taskId = await window.ziggy.invoke<string>("queue-from-app", { source: "app-source" });
+        appendTo("app-result", `queued by the app: ${taskId}`);
+    });
+    element("app-start-long").addEventListener("click", () => {
+        queueTask("hello-long", "app-cancel-source", { durationMs: 60000, stepMs: 100, children: 0 });
+    });
+    element("app-cancel").addEventListener("click", async () => {
+        await window.ziggy.invoke<IJsonValue>("cancel-from-app", { source: "app-cancel-source" });
+    });
+    element("app-stats").addEventListener("click", async () => {
+        const stats = await window.ziggy.invoke<ITaskStats>("task-stats", null);
+        result.textContent = `tasks ended ${stats.tasksEnded}, messages sent ${stats.messagesSent}`;
+    });
+    element("app-stop-listening").addEventListener("click", () => {
+        window.ziggy.removeAllListeners("app-event");
+        appendTo("app-result", "stopped listening for app events");
+    });
+    window.ziggy.onMessage<IAppEvent>("app-event", event => {
+        appendTo("event-log", `app-event queued ${event.queued}`);
+    });
+}
+
 //
 // The file and folder pickers. Each is a request to the core on the Electron app's channel for it, and the reply is shown in
 // the page. A cancelled dialog replies null.
@@ -405,6 +469,9 @@ function listenForEvents(): void {
         if (event.taskId.startsWith("os-version") && event.result.status === "succeeded") {
             element("edge-result").textContent = `operating system: ${String(event.result.outputs)}`;
         }
+        if ((event.taskId.startsWith("describe-self") || event.taskId.startsWith("run-in-turn")) && event.result.status === "succeeded") {
+            appendTo("app-result", `${event.result.type}: ${JSON.stringify(event.result.outputs)}`);
+        }
     });
 }
 
@@ -468,6 +535,7 @@ listenForMenuActions();
 listenForTestCommands();
 startTasks();
 startEdgeChecks();
+startAppFacilities();
 startPickers();
 startMedia();
 startStorage();

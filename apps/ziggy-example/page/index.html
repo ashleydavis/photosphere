@@ -41,6 +41,18 @@
         <div data-id="edge-result"></div>
     </section>
     <section>
+        <h2>The app's own code in the core</h2>
+        <button data-id="app-refuse">Invoke a channel whose error the app describes</button>
+        <button data-id="app-describe">Start a task that describes itself</button>
+        <button data-id="app-run-in-turn">Start a task that runs children one after another</button>
+        <button data-id="app-queue">Queue a task from the app's code</button>
+        <button data-id="app-start-long">Start a long task for the app to cancel</button>
+        <button data-id="app-cancel">Cancel it from the app's code</button>
+        <button data-id="app-stats">Ask the app how many tasks ended</button>
+        <button data-id="app-stop-listening">Stop listening for app events</button>
+        <pre data-id="app-result"></pre>
+    </section>
+    <section>
         <h2>Edit menu</h2>
         <textarea data-id="notes" rows="3" cols="50" placeholder="Type here, then try the Edit menu"></textarea>
     </section>

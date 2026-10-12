@@ -50,14 +50,15 @@ To have Photosphere do it for you, switch on "Automatic import" in the desktop o
 
 ## Bundled tools and licences
 
-The Photosphere App bundles ImageMagick (ImageMagick licence) and FFmpeg (LGPL-2.1+), with ImageMagick's libjpeg, libpng, libwebp and zlib delegates, built from source into the app and called in process, so image and video processing works without anything installed. The CLI and the old Electron desktop app use ImageMagick and ffmpeg installed on the host system. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Photosphere's own code is MIT licensed (see [LICENSE](LICENSE)). To update the bundled versions, see [docs/updating-mobile-imagemagick-ffmpeg.md](docs/updating-mobile-imagemagick-ffmpeg.md).
+The Photosphere App bundles ImageMagick (ImageMagick licence) and FFmpeg (LGPL-2.1+), with ImageMagick's libjpeg, libpng, libwebp and zlib delegates, built from source into the app and called in process, so image and video processing works without anything installed. The CLI uses ImageMagick and ffmpeg installed on the host system. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Photosphere's own code is MIT licensed (see [LICENSE](LICENSE)). To update the bundled versions, see [docs/updating-mobile-imagemagick-ffmpeg.md](docs/updating-mobile-imagemagick-ffmpeg.md).
 
 ## Running Photosphere locally for development
 
-After `bun install`, run `bun run setup` for the one-time, per-platform environment setup. It fans out to each package's own `setup` script (`bun --filter '*' setup`): the Android SDK toolchain on Linux/macOS and the iOS CocoaPods on macOS, each skipping cleanly where it does not apply. Install the git hooks (`bash scripts/install-hooks.sh`) and the pinned toolchain (`mise install`) separately. See [Development](docs/development.md) for the full walkthrough.
+After `bun install`, run `bun run setup` for the one-time, per-platform environment setup. It fans out to each package's own `setup` script (`bun --filter '*' setup`): the Android SDK and NDK on Linux/macOS, an Xcode check on macOS, and the WebView2 SDK, WiX Toolset and C++ toolchain on Windows, each skipping cleanly where it does not apply. Install the git hooks (`bash scripts/install-hooks.sh`) and the pinned toolchain (`mise install`) separately. See [Development](docs/development.md) for the full walkthrough.
 
-- [Development](docs/development.md) - Setup, the common commands, and how to run each app.
-- [Ziggy architecture](packages/ziggy/docs/architecture.md) - How the Photosphere App on Windows, macOS, Linux, Android and iOS is put together.
+- [Development](docs/development.md) - Setup, the project layout, the common commands, and how to run each app.
+- [Ziggy architecture](packages/ziggy/docs/architecture.md) - Ziggy, the application shell the Photosphere App runs on for Windows, macOS, Linux, Android and iOS, and how Photosphere is built on it.
+- [Photosphere App](apps/photosphere/README.md) - Building, running and packaging the app on each platform.
 - [Ziggy example](apps/ziggy-example/README.md) - The small complete app built on Ziggy, kept as the reference for building an app on it.
 - [Testing](docs/testing/README.md) - Unit tests, CLI and Photosphere App smoke tests, and the manual end-to-end scripts.
 - [UI stories](packages/user-interface/src/stories/README.md) - Every page, modal, dialog, and component in isolation, and the story player that cycles them on desktop, Android, and iOS.

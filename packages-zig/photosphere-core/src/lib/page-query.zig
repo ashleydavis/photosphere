@@ -27,15 +27,32 @@ pub fn pageQuery(core: *Core, allocator: std.mem.Allocator, test_mode: bool) any
     const theme = try app_config.getTheme(allocator, core.io());
     const rest_api_url = try std.fmt.allocPrint(allocator, "http://localhost:{d}", .{port});
     const test_mode_parameter: []const u8 = if (test_mode) "&testMode=1" else "";
-    const query = try std.fmt.allocPrint(allocator, "restApiUrl={f}&theme={f}{s}", .{
-        std.fmt.alt(std.Uri.Component{
-            .raw = rest_api_url,
-        }, .formatEscaped),
-        std.fmt.alt(std.Uri.Component{
-            .raw = @tagName(theme),
-        }, .formatEscaped),
+    const query = try std.fmt.allocPrint(allocator, "restApiUrl={s}&theme={s}{s}", .{
+        try encodeUriComponent(allocator, rest_api_url),
+        try encodeUriComponent(allocator, @tagName(theme)),
         test_mode_parameter,
     });
     try state.mainWindowCreated();
     return query;
+}
+
+//
+// Writes text as JavaScript's encodeURIComponent writes it, which is how the page's address is built and read: every byte that is not
+// a letter, a digit or one of -_.!~*'() becomes %XX.
+//
+pub fn encodeUriComponent(allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
+    var encoded: std.Io.Writer.Allocating = .init(allocator);
+    errdefer encoded.deinit();
+    try std.Uri.Component.percentEncode(&encoded.writer, raw, isUriComponentChar);
+    return try encoded.toOwnedSlice();
+}
+
+//
+// Whether encodeURIComponent leaves a byte as it is.
+//
+fn isUriComponentChar(char: u8) bool {
+    return switch (char) {
+        'A'...'Z', 'a'...'z', '0'...'9', '-', '_', '.', '!', '~', '*', '\'', '(', ')' => true,
+        else => false,
+    };
 }

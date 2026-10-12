@@ -7,6 +7,9 @@ const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_environment = @import("test-environment.zig");
+const test_files = @import("test-files.zig");
+const fixture_dirs = @import("fixture-dirs.zig");
+const console_capture = @import("console-capture.zig");
 const media_file_database = node_api.media_file_database;
 const addPaths = node_api.import_module.addPaths;
 const IAddSummary = media_file_database.IAddSummary;
@@ -93,11 +96,11 @@ const IImportFixture = struct {
 // Creates the fixture: a new database and an empty folder for photos.
 //
 fn createImportFixture(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !*IImportFixture {
-    _ = try helpers.setupEnvironment(io);
+    _ = try test_environment.setupEnvironment(io);
     try node_api.task_handlers.initTaskHandlers();
     const fixture = try allocator.create(IImportFixture);
     fixture.uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
-    fixture.root = try helpers.makeTempDir(allocator, io, name);
+    fixture.root = try temp_dirs.makeTempDir(allocator, io, name);
     fixture.databaseDir = try std.fmt.allocPrint(allocator, "{s}/db", .{fixture.root});
     fixture.photosDir = try std.fmt.allocPrint(allocator, "{s}/photos", .{fixture.root});
     const created = try @import("storage-zig").storage_factory.createStorage(allocator, io, fixture.databaseDir, null, null);
@@ -125,7 +128,7 @@ test "addPaths counts a photo whose content the database already holds as alread
     const io = std.testing.io;
     defer node_utils.termination.clearTerminationCallbacks();
     const fixture = try createImportFixture(allocator, io, "add-paths-skipped");
-    defer helpers.removeTempDir(io, fixture.root);
+    defer temp_dirs.removeTempDir(io, fixture.root);
     try copyTestFile(allocator, io, "test.jpg", fixture.photosDir, "first.jpg");
     const otherDir = try std.fmt.allocPrint(allocator, "{s}/other", .{fixture.root});
     try copyTestFile(allocator, io, "test.jpg", otherDir, "same-content.jpg");
@@ -154,9 +157,9 @@ test "addPaths counts the files the scanner ignores" {
     const io = std.testing.io;
     defer node_utils.termination.clearTerminationCallbacks();
     const fixture = try createImportFixture(allocator, io, "add-paths-ignored");
-    defer helpers.removeTempDir(io, fixture.root);
+    defer temp_dirs.removeTempDir(io, fixture.root);
     try copyTestFile(allocator, io, "test.jpg", fixture.photosDir, "photo.jpg");
-    try helpers.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/notes.txt", .{fixture.photosDir}), "not media");
+    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/notes.txt", .{fixture.photosDir}), "not media");
 
     const summary = try addPaths(allocator, io, fixture.uuidGenerator.uuidGenerator(), .{ .databasePath = fixture.databaseDir }, &.{fixture.photosDir}, null, "ignored-session-1", false, null, null);
 
@@ -175,12 +178,12 @@ test "addPaths counts an image that cannot be read as failed" {
     const io = std.testing.io;
     defer node_utils.termination.clearTerminationCallbacks();
     const fixture = try createImportFixture(allocator, io, "add-paths-failed");
-    defer helpers.removeTempDir(io, fixture.root);
-    try helpers.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/broken.jpg", .{fixture.photosDir}), "these bytes are not a jpeg");
+    defer temp_dirs.removeTempDir(io, fixture.root);
+    try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/broken.jpg", .{fixture.photosDir}), "these bytes are not a jpeg");
 
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    helpers.captureStderr(&stderr_capture.writer);
-    defer helpers.endConsoleCapture();
+    console_capture.captureStderr(&stderr_capture.writer);
+    defer console_capture.endConsoleCapture();
 
     const summary = try addPaths(allocator, io, fixture.uuidGenerator.uuidGenerator(), .{ .databasePath = fixture.databaseDir }, &.{fixture.photosDir}, null, "failed-session-1", false, null, null);
 
@@ -197,14 +200,14 @@ test "addPaths queues the Google API key, the options and the encryption key it 
     const io = std.testing.io;
     defer node_utils.termination.clearTerminationCallbacks();
     const fixture = try createImportFixture(allocator, io, "add-paths-options");
-    defer helpers.removeTempDir(io, fixture.root);
+    defer temp_dirs.removeTempDir(io, fixture.root);
 
     // A png has no coordinates, so the key is never used to look up a place.
     try copyTestFile(allocator, io, "test.png", fixture.photosDir, "photo.png");
 
     const summary = try addPaths(allocator, io, fixture.uuidGenerator.uuidGenerator(), .{
         .databasePath = fixture.databaseDir,
-        .encryptionKey = helpers.KEYS_DIR ++ "/ts-private.pem",
+        .encryptionKey = fixture_dirs.KEYS_DIR ++ "/ts-private.pem",
     }, &.{fixture.photosDir}, "a-google-api-key", "options-session-1", false, null, .{
         .auto = false,
         .sources = &.{},
@@ -213,13 +216,13 @@ test "addPaths queues the Google API key, the options and the encryption key it 
     try std.testing.expectEqual(@as(f64, 1), summary.filesAdded);
 
     // The key reached the upload, which wrote the asset encrypted.
-    const original = try helpers.readFile(allocator, io, "../../test/test.png");
+    const original = try test_files.readFile(allocator, io, "../../test/test.png");
     const assetsDir = try std.fmt.allocPrint(allocator, "{s}/asset", .{fixture.databaseDir});
     var assets = try std.Io.Dir.cwd().openDir(io, assetsDir, .{ .iterate = true });
     defer assets.close(io);
     var iterator = assets.iterate();
     const assetEntry = (try iterator.next(io)).?;
-    const stored = try helpers.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ assetsDir, assetEntry.name }));
+    const stored = try test_files.readFile(allocator, io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ assetsDir, assetEntry.name }));
     try std.testing.expect(!std.mem.eql(u8, original, stored));
 }
 
@@ -231,7 +234,7 @@ test "the termination callback addPaths registers shuts the queue down without f
     const io = std.testing.io;
     defer node_utils.termination.clearTerminationCallbacks();
     const fixture = try createImportFixture(allocator, io, "add-paths-termination");
-    defer helpers.removeTempDir(io, fixture.root);
+    defer temp_dirs.removeTempDir(io, fixture.root);
     try copyTestFile(allocator, io, "test.jpg", fixture.photosDir, "photo.jpg");
 
     _ = try addPaths(allocator, io, fixture.uuidGenerator.uuidGenerator(), .{ .databasePath = fixture.databaseDir }, &.{fixture.photosDir}, null, "termination-session-1", false, null, null);

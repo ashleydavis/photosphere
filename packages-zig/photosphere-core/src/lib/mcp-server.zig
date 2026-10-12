@@ -400,15 +400,9 @@ pub fn mcpToolResponseHandler(core: *Core, arena: std.mem.Allocator, data: std.j
 }
 
 //
-// The port the server asks for: the fixed one, a free one in test mode so that two instances running together do not collide, or the one
-// PHOTOSPHERE_MCP_PORT names (0 is a free one) when the fixed one is taken by another program.
+// The port the server asks for: the fixed one, or a free one (0) in test mode so that two instances running together do not collide.
 //
-fn requestedPort() !u16 {
-    if (test_mode.envValue("PHOTOSPHERE_MCP_PORT")) |text| {
-        return std.fmt.parseInt(u16, text, 10) catch {
-            return utils.errors.throwError("PHOTOSPHERE_MCP_PORT must be a port number, not \"{s}\".", .{text});
-        };
-    }
+fn requestedPort() u16 {
     return if (test_mode.isTestMode()) 0 else MCP_PORT;
 }
 
@@ -433,7 +427,7 @@ pub fn mcpServerTask(context: *TaskContext, data: std.json.Value) anyerror!?[]co
         .server = server,
         .stopping = &stopping,
     };
-    const requested_port = try requestedPort();
+    const requested_port = requestedPort();
     const http_server = try HttpServer.listen(server_allocator, io, MCP_HOST, requested_port, routes.requestHandler());
     errdefer {
         stopping.store(true, .release);

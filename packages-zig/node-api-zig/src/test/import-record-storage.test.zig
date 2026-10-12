@@ -57,7 +57,9 @@ const RecordTest = struct {
     // Puts the cache directory back the way it was.
     //
     fn deinit(self: *RecordTest) void {
-        test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
+        test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch |err| {
+            std.debug.panic("PHOTOSPHERE_CACHE_DIR could not be put back: {s}", .{@errorName(err)});
+        };
         temp_dirs.removeTempDir(std.testing.io, self.runRoot);
         self.arena.deinit();
     }
@@ -267,11 +269,11 @@ fn recordOneWriter(databasePath: []const u8, index: usize) void {
     var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const logicalPath = std.fmt.allocPrint(allocator, "writer-{d}", .{index}) catch {
-        return;
+    const logicalPath = std.fmt.allocPrint(allocator, "writer-{d}", .{index}) catch |err| {
+        std.debug.panic("A writer could not name its entry: {s}", .{@errorName(err)});
     };
-    const entry = makeEntry(allocator, logicalPath, .manual) catch {
-        return;
+    const entry = makeEntry(allocator, logicalPath, .manual) catch |err| {
+        std.debug.panic("A writer could not make its entry: {s}", .{@errorName(err)});
     };
     recordImports(allocator, std.testing.io, databasePath, &.{entry});
 }

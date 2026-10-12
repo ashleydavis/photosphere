@@ -43,6 +43,22 @@ test "an unknown channel gets an error reply" {
     try std.testing.expectEqualStrings("{\"id\":1,\"ok\":false,\"error\":\"UnknownChannel\"}", reply);
 }
 
+test "test-result and test-page-ready are error replies when the core is not in test mode" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try helpers.createCore(&shell, 1, 1);
+    defer core.destroy();
+    core.postMessage("{\"id\":1,\"channel\":\"test-result\",\"data\":{\"requestId\":1,\"result\":null}}");
+    const first = try lastMessage(&shell);
+    defer std.testing.allocator.free(first);
+    try std.testing.expectEqualStrings("{\"id\":1,\"ok\":false,\"error\":\"TestControlNotRunning\"}", first);
+    core.postMessage("{\"id\":2,\"channel\":\"test-page-ready\",\"data\":null}");
+    const second = try lastMessage(&shell);
+    defer std.testing.allocator.free(second);
+    try std.testing.expectEqualStrings("{\"id\":2,\"ok\":false,\"error\":\"TestControlNotRunning\"}", second);
+}
+
 test "malformed JSON is reported as a core-error event and the core keeps working" {
     var shell: helpers.FakeShell = undefined;
     shell.init(std.testing.allocator);

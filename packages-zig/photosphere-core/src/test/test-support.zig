@@ -101,8 +101,9 @@ pub const TestApp = struct {
         defer allocator.free(vault_dir);
         self.environ_map = std.process.Environ.Map.init(allocator);
         try self.environ_map.put("PHOTOSPHERE_CONFIG_DIR", config_dir);
-        // The MCP server takes a free port, because tests running side by side would fight over its fixed one.
-        try self.environ_map.put("PHOTOSPHERE_MCP_PORT", "0");
+        // The core runs in test mode, as the smoke tests run the app, so the MCP server takes a free port: tests running side by side
+        // would fight over its fixed one.
+        try self.environ_map.put("PHOTOSPHERE_TEST_MODE", "1");
         try self.environ_map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
         try self.environ_map.put("PHOTOSPHERE_VAULT_DIR", vault_dir);
         // The file logger the core starts writes its files here, in a folder that belongs to the test.

@@ -61,7 +61,7 @@ const FakeToolsDirectory = struct {
     fn destroy(self: *FakeToolsDirectory, io: std.Io) void {
         node_utils.process_env.setEnvironMap(null);
         tools.Image.resetInitialization();
-        std.Io.Dir.cwd().deleteTree(io, self.path) catch {};
+        std.Io.Dir.cwd().deleteTree(io, self.path) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ self.path, @errorName(err) });
     }
 };
 

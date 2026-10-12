@@ -205,7 +205,11 @@ pub const Debounced = struct {
                 } };
             }
             self.loopLock.unlock(self.io);
-            self.io.futexWaitTimeout(u32, &self.timerGeneration.raw, generation, timeout) catch {};
+            // The timer thread is not a task of the Io, so nothing can cancel its wait. Should one be cancelled all the same,
+            // the timer would spin without waiting, so that is a crash rather than a quiet busy loop.
+            self.io.futexWaitTimeout(u32, &self.timerGeneration.raw, generation, timeout) catch |err| {
+                std.debug.panic("The timer thread of a throttled function could not wait: {s}", .{@errorName(err)});
+            };
         }
     }
 

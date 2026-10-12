@@ -113,3 +113,66 @@ test "parseStateYamlChecked: an empty file and a file that is not a mapping have
     try std.testing.expect(!list.malformed);
     try std.testing.expect(list.document == null);
 }
+
+test "stateFileToYaml writes the last download folder into the desktop section" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var state = try state_format.defaultStateFile(allocator);
+    state.desktop.lastDownloadFolder = "/downloads";
+
+    const document = try state_format.stateFileToYaml(allocator, state);
+
+    const desktop = document.object.get("desktop").?.object;
+    try std.testing.expectEqual(@as(usize, 1), desktop.count());
+    try std.testing.expectEqualStrings("/downloads", desktop.get("last_download_folder").?.string);
+}
+
+//
+// An allocator that refuses the first allocation asked of it and passes every later one to the allocator it wraps, so the
+// code under test runs out of memory once and can still build whatever it returns afterwards.
+//
+const FailFirstAllocator = struct {
+    // The allocator every allocation after the first goes to.
+    inner: std.mem.Allocator,
+
+    // Whether the first allocation has been refused yet.
+    refused: bool = false,
+
+    //
+    // Gets the allocator interface.
+    //
+    fn allocator(self: *FailFirstAllocator) std.mem.Allocator {
+        return .{
+            .ptr = self,
+            .vtable = &.{
+                .alloc = alloc,
+                .resize = std.mem.Allocator.noResize,
+                .remap = std.mem.Allocator.noRemap,
+                .free = std.mem.Allocator.noFree,
+            },
+        };
+    }
+
+    //
+    // Refuses the first allocation and passes on the rest.
+    //
+    fn alloc(context: *anyopaque, length: usize, alignment: std.mem.Alignment, returnAddress: usize) ?[*]u8 {
+        const self: *FailFirstAllocator = @ptrCast(@alignCast(context));
+        if (!self.refused) {
+            self.refused = true;
+            return null;
+        }
+        return self.inner.rawAlloc(length, alignment, returnAddress);
+    }
+};
+
+test "parseStateYamlChecked passes on running out of memory rather than reporting the text as malformed" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var failFirst: FailFirstAllocator = .{
+        .inner = arena.allocator(),
+    };
+
+    try std.testing.expectError(error.OutOfMemory, state_format.parseStateYamlChecked(failFirst.allocator(), "gallery:\n  sort: name\n"));
+}

@@ -321,3 +321,13 @@ test "bufferFromBase64 decodes like Buffer.from" {
     try std.testing.expectEqualSlices(u8, "ABC", try bufferFromBase64(allocator, "QU JD"));
     try std.testing.expectEqualSlices(u8, &.{ 0x41, 0x4f, 0xbf }, try bufferFromBase64(allocator, "QU-_"));
 }
+
+//
+// The digits of the base64 alphabet stand for 52 to 61: "YTE5" ends in one and is "a19".
+//
+test "bufferFromBase64 decodes the digits of the alphabet" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expectEqualSlices(u8, "a19", try storage_zig.cloud_storage.bufferFromBase64(allocator, "YTE5"));
+}

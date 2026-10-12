@@ -257,8 +257,8 @@ final class ZiggyMenu: NSObject {
             if let undoManager = webView.undoManager, undoManager.groupsByEvent {
                 // Every open group is closed, not just a single one: undo raises an exception when any group is open ("undo
                 // was called with too many nested undo groups"), and the groups the earlier actions opened can add up to more
-                // than one before the event that would close them ever runs. The macOS smoke test job of the Ziggy example
-                // workflow (run 37458283805, scenario 13-menu-edit) crashed the app with that exception from this method.
+                // than one before the event that would close them ever runs, and an app whose menu chose undo after several
+                // editing actions crashed with that exception from this method.
                 while undoManager.groupingLevel > 0 {
                     undoManager.endUndoGrouping()
                 }

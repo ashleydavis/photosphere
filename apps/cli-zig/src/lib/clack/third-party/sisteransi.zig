@@ -1,6 +1,5 @@
 //
-// Port of the parts of the third-party `sisteransi` package used by the clack prompts
-// (this file has no TypeScript counterpart in the repo).
+// Port of the parts of the third-party `sisteransi` package used by the clack prompts.
 //
 
 const std = @import("std");

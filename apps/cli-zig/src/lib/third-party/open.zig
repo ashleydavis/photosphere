@@ -1,6 +1,6 @@
 //
-// Port of the parts of the third-party `open` package (v10) used by `psi bug`: `open(target)` with no options
-// (this file has no TypeScript counterpart in the repo). It starts the platform's opener for the target and
+// Port of the parts of the third-party `open` package (v10) used by `psi bug`: `open(target)` with no options.
+// It starts the platform's opener for the target and
 // returns without waiting for it (`wait: false`).
 //
 
@@ -102,8 +102,7 @@ pub fn open(allocator: std.mem.Allocator, io: std.Io, target: []const u8) !void 
     }
     // An opener that cannot be started (not installed, not executable) is not a failure of `open`: the package's
     // `childProcess.spawn` reports it later, as an 'error' event on the child that nothing listens for, so its
-    // promise has already resolved. The compiled TypeScript CLI says "Bug report opened in browser!" on a machine
-    // without xdg-open, and so does this. The error is still logged, with --verbose, rather than lost.
+    // promise has already resolved. `psi bug` says "Bug report opened in browser!" on a machine without xdg-open. The error is still logged, with --verbose, rather than lost.
     const opener = std.process.spawn(io, spawnOptions) catch |err| {
         log.verbose(try std.fmt.allocPrint(allocator, "Failed to start {s}: {s}", .{ openerCommand.command, @errorName(err) }));
         return;

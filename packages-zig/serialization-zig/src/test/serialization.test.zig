@@ -271,6 +271,40 @@ test "save throws when the type code is not 4 characters" {
     try expectThrownContaining(serialization.save(allocator, io, &storage, "bad.bin", data, 1, "TOOLONG", serializeV1), "Type code must be exactly 4 ASCII characters, got \"TOOLONG\" (length 7)");
 }
 
+test "save counts the type code in UTF-16 code units and writes the low byte of each, like Buffer.from(typeCode, \"ascii\")" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+
+    const data: TestDataV1 = .{ .name = "test", .value = 42 };
+
+    // "aé€" is three characters and seven bytes of UTF-8; "a😀" is three UTF-16 code units (the emoji is two).
+    try expectThrownContaining(serialization.save(allocator, io, &storage, "short.bin", data, 1, "aé€", serializeV1), "Type code must be exactly 4 ASCII characters, got \"aé€\" (length 3)");
+    try expectThrownContaining(serialization.save(allocator, io, &storage, "emoji.bin", data, 1, "a😀", serializeV1), "Type code must be exactly 4 ASCII characters, got \"a😀\" (length 3)");
+
+    // U+00E9 becomes 0xE9, U+20AC becomes 0xAC, and the two halves of U+1F600 (D83D DE00) become 0x3D and 0x00.
+    try serialization.save(allocator, io, &storage, "wide.bin", data, 1, "aé€x", serializeV1);
+    try std.testing.expectEqualSlices(u8, &.{ 0x61, 0xE9, 0xAC, 0x78 }, (try storage.read(allocator, io, "wide.bin")).?[4..8]);
+    try serialization.save(allocator, io, &storage, "pair.bin", data, 1, "a😀b", serializeV1);
+    try std.testing.expectEqualSlices(u8, &.{ 0x61, 0x3D, 0x00, 0x62 }, (try storage.read(allocator, io, "pair.bin")).?[4..8]);
+}
+
+test "readString replaces each ill-formed UTF-8 sequence with U+FFFD, like toString(\"utf8\")" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // The bytes and the text Bun's toString("utf8") gives for them: a lone 0xFF, a truncated three-byte sequence, a truncated
+    // four-byte sequence and an encoded surrogate (0xED 0xA0 0x80, three replacements).
+    const bytes = [_]u8{ 0x61, 0xFF, 0x62, 0xE2, 0x82, 0x63, 0xF0, 0x9F, 0x98, 0xED, 0xA0, 0x80 };
+    var serializer = try BinarySerializer.init(allocator, 64);
+    try serializer.writeUInt32(bytes.len);
+    try serializer.writeBytes(&bytes);
+    var deserializer = BinaryDeserializer.init(allocator, serializer.getBuffer());
+    try std.testing.expectEqualStrings("a\u{FFFD}b\u{FFFD}c\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}", try deserializer.readString());
+}
+
 test "save output matches the golden fixture" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

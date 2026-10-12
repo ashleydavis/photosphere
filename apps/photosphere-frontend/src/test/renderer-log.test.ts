@@ -86,6 +86,33 @@ describe("createRendererLog", () => {
         expect(ziggy.sent).toEqual([{ channel: 'renderer-log', data: { level: 'tool', message: "magick", toolData: { stdout: "out" } } }]);
     });
 
+    test("writes both streams of tool output to the console when nothing else forwards the console", () => {
+        const ziggy = new FakeZiggy();
+        const log = createRendererLog(ziggy, false);
+
+        log.tool("magick", { stdout: "out", stderr: "err" });
+
+        expect(consoleLog).toHaveBeenCalledWith("== magick stdout ==\nout");
+        expect(consoleLog).toHaveBeenCalledWith("== magick stderr ==\nerr");
+        expect(ziggy.sent).toEqual([{ channel: 'renderer-log', data: { level: 'tool', message: "magick", toolData: { stdout: "out", stderr: "err" } } }]);
+    });
+
+    test("writes a debug message to the console and forwards it", () => {
+        const consoleDebug = jest.spyOn(console, 'debug').mockImplementation(() => {});
+        try {
+            const ziggy = new FakeZiggy();
+            const log = createRendererLog(ziggy, false);
+
+            log.debug("details");
+
+            expect(consoleDebug).toHaveBeenCalledWith("details");
+            expect(ziggy.sent).toEqual([{ channel: 'renderer-log', data: { level: 'debug', message: "details" } }]);
+        }
+        finally {
+            consoleDebug.mockRestore();
+        }
+    });
+
     test("does not forward verbose messages, which are off", () => {
         const ziggy = new FakeZiggy();
         const log = createRendererLog(ziggy, false);

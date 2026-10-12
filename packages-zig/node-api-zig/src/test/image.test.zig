@@ -519,3 +519,18 @@ test "getImageMetadata writes coordinates that are not numbers as null, and give
     try std.testing.expect(scalarMetadata.coordinates == null);
     try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), try std.fmt.allocPrint(allocator, "Failed to get exif data from {s}", .{scalarPath})) != null);
 }
+
+test "getImageDetails refuses a file whose content type no image tool can read" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    _ = try test_environment.setupEnvironment(io);
+    const tempDir = try temp_dirs.makeTempDir(allocator, io, "image-details-unsupported");
+    defer temp_dirs.removeTempDir(io, tempDir);
+    var uuidGenerator: CountingUuidGenerator = .{};
+
+    // A PNG has no EXIF to give its size, so the image tool is asked, and it is asked by the content type.
+    try std.testing.expectError(error.Thrown, image.getImageDetails(allocator, io, null, "../test/test.png", tempDir, "application/x-unknown", uuidGenerator.uuidGenerator(), "test.png"));
+    try std.testing.expectEqualStrings("Unsupported file type: application/x-unknown", utils.errors.lastErrorMessage());
+}

@@ -671,6 +671,60 @@ test "every operation drops the leading slash of a key" {
     }
 }
 
+//
+// fileExists, storedHash, readStream and writeStreamHashed each drop the leading slash of the key themselves, so
+// each is sent a path whose key starts with one and must name the key without it.
+//
+test "fileExists, storedHash, readStream and writeStreamHashed drop the leading slash of a key" {
+    const fixture = try Fixture.init(objectPresent);
+    defer fixture.deinit();
+
+    const allocator = fixture.allocator;
+    const io = std.testing.io;
+    try std.testing.expect(try fixture.storage.fileExists(allocator, io, "bucket//dir/file.txt"));
+    _ = try fixture.storage.storedHash(allocator, io, "bucket//dir/file.txt");
+    const rangeStream = try fixture.storage.readStream(allocator, io, "bucket//dir/file.txt");
+    defer rangeStream.destroy(io);
+    try std.testing.expectEqualStrings(objectContents, try rangeStream.reader().allocRemaining(allocator, .unlimited));
+    var emptyInput = std.Io.Reader.fixed("");
+    const sha256 = [_]u8{0} ** 32;
+    _ = try fixture.storage.writeStreamHashed(allocator, io, "bucket//dir/file.txt", null, &emptyInput, 0, &sha256);
+
+    try std.testing.expectEqual(@as(usize, 2), fixture.client.countOf(.HeadObjectCommand));
+    try std.testing.expectEqual(@as(usize, 1), fixture.client.countOf(.GetObjectCommand));
+    try std.testing.expectEqual(@as(usize, 1), fixture.client.countOf(.PutObjectCommand));
+    for (fixture.client.commands.items) |command| {
+        switch (command) {
+            .GetObjectCommand => |input| try std.testing.expectEqualStrings("dir/file.txt", input.Key),
+            .HeadObjectCommand => |input| try std.testing.expectEqualStrings("dir/file.txt", input.Key),
+            .PutObjectCommand => |input| try std.testing.expectEqualStrings("dir/file.txt", input.Key),
+            else => return error.UnexpectedCommand,
+        }
+    }
+}
+
+test "refreshWriteLock drops the leading slash of a key" {
+    const fixture = try Fixture.init(struct {
+        fn handler(command: S3Command) anyerror!S3CommandOutput {
+            return switch (command) {
+                .GetObjectCommand => S3CommandOutput{ .GetObject = .{
+                    .Body = @constCast("{\"owner\":\"first\",\"acquiredAt\":\"2024-02-29T23:59:59.999Z\",\"timestamp\":1709251199999}"),
+                    .ContentRange = null,
+                } },
+                else => .none,
+            };
+        }
+    }.handler);
+    defer fixture.deinit();
+
+    try fixture.storage.refreshWriteLock(fixture.allocator, std.testing.io, "bucket//.db/write.lock", "first");
+
+    try std.testing.expectEqual(@as(usize, 1), fixture.client.countOf(.GetObjectCommand));
+    try std.testing.expectEqual(@as(usize, 1), fixture.client.countOf(.PutObjectCommand));
+    try std.testing.expectEqualStrings(".db/write.lock", fixture.client.firstOf(.GetObjectCommand).GetObjectCommand.Key);
+    try std.testing.expectEqualStrings(".db/write.lock", fixture.client.firstOf(.PutObjectCommand).PutObjectCommand.Key);
+}
+
 test "a path that names no bucket, or an empty key, is refused by every operation that parses one" {
     const fixture = try Fixture.init(objectPresent);
     defer fixture.deinit();

@@ -309,35 +309,42 @@ fn readPlanOrReport(allocator: std.mem.Allocator, host: LoopHost, plan_task: []c
 }
 
 //
-// Runs the steps of a plan in order, with the CPU held awake for the length of the pass. Returns what the steps did, or null when the
-// pass was abandoned: the loop was stopped, or a step did not work (which is reported). The rest of the pass is abandoned and not the
-// loop: what failed is tried again on the next pass, from the plan.
+// How running the steps of a pass ended.
 //
-fn runSteps(allocator: std.mem.Allocator, host: LoopHost, plan: IPlan, label: []const u8, results: *std.ArrayList(IStepResult)) bool {
+const StepsOutcome = enum {
+    // Every step succeeded.
+    completed,
+    // The loop was stopped before a step started.
+    stopped,
+    // A step failed or did not succeed, which is reported.
+    failed,
+};
+
+//
+// Runs the steps of a plan in order, with the CPU held awake for the length of the pass, collecting what each did into results. The
+// rest of the pass is abandoned, and not the loop, when the loop is stopped before a step or a step does not work: what failed is tried
+// again on the next pass, from the plan. A step that does not work is reported even when the loop is being stopped, because a stop
+// cancels the step and says nothing about why it ended.
+//
+fn runSteps(allocator: std.mem.Allocator, host: LoopHost, plan: IPlan, label: []const u8, results: *std.ArrayList(IStepResult)) StepsOutcome {
     for (plan.steps) |step| {
         if (host.isStopped()) {
-            return false;
+            return .stopped;
         }
         const result = host.runStep(allocator, step) catch |err| {
-            if (host.isStopped()) {
-                return false;
-            }
             host.reportError(std.fmt.allocPrint(allocator, "{s} step \"{s}\" failed: {s}", .{ label, step.@"type", describe(allocator, err) }) catch "A step failed.");
-            return false;
+            return .failed;
         };
         if (!result.succeeded) {
-            if (host.isStopped()) {
-                return false;
-            }
             host.reportError(std.fmt.allocPrint(allocator, "{s} step \"{s}\" did not succeed.", .{ label, step.@"type" }) catch "A step did not succeed.");
-            return false;
+            return .failed;
         }
         results.append(allocator, result) catch {
             host.reportError("The loop ran out of memory.");
-            return false;
+            return .failed;
         };
     }
-    return true;
+    return .completed;
 }
 
 //
@@ -489,13 +496,17 @@ fn prefetchPass(allocator: std.mem.Allocator, host: LoopHost, replica_state: *st
     host.report(std.fmt.allocPrint(allocator, "Filling in \"{s}\".", .{plan.database_path}) catch "Filling in a replica.");
 
     var results: std.ArrayList(IStepResult) = .empty;
-    if (!runSteps(allocator, host, plan, "Prefetch", &results)) {
-        // Stalled, not complete. A step that failed tells us nothing about what is left, and a sync that waited on it would wait for
-        // ever.
-        if (!host.isStopped()) {
+    switch (runSteps(allocator, host, plan, "Prefetch", &results)) {
+        .completed => {},
+        .stopped => {
+            return .ran;
+        },
+        .failed => {
+            // Stalled, not complete. A step that failed tells us nothing about what is left, and a sync that waited on it would wait
+            // for ever.
             replica_state.store(.stalled, .release);
-        }
-        return .ran;
+            return .ran;
+        },
     }
 
     var anything_fetched = false;
@@ -626,9 +637,7 @@ const TaskLoopHost = struct {
         const self: *TaskLoopHost = @ptrCast(@alignCast(ptr));
         const completion = try self.runChild(allocator, step.@"type", step.data);
         if (completion.status != .succeeded) {
-            if (!self.context.isCancelled()) {
-                self.reportErrorMessage(std.fmt.allocPrint(allocator, "Background {s} task \"{s}\" failed: {s}", .{ self.loop.label(), step.@"type", completion.error_message orelse "no reason given" }) catch "A background task failed.");
-            }
+            self.reportErrorMessage(std.fmt.allocPrint(allocator, "Background {s} task \"{s}\" failed: {s}", .{ self.loop.label(), step.@"type", completion.error_message orelse "no reason given" }) catch "A background task failed.");
             return .{
                 .succeeded = false,
                 .files_fetched = 0,

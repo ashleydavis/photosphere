@@ -3,6 +3,7 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const serialization_zig = @import("serialization-zig");
+const bdb = @import("bdb-zig");
 const tools = @import("tools-zig");
 const media_file_database = @import("media-file-database.zig");
 const image = @import("image.zig");
@@ -210,28 +211,11 @@ fn isValueTruthy(value: BsonValue) bool {
 }
 
 //
-// A value JSON can hold as text: an array is its elements joined with commas (null and undefined
-// elements as nothing), and an object is "[object Object]".
+// A value as text, the way `String(value)` writes it: an array is its elements joined with commas (null and
+// undefined elements as nothing), and an object is "[object Object]".
 //
-fn jsString(allocator: std.mem.Allocator, value: BsonValue) anyerror![]const u8 {
-    return switch (value) {
-        .string => |text| text,
-        .number, .double => |number| jsNumberString(allocator, number),
-        .int32 => |number| std.fmt.allocPrint(allocator, "{d}", .{number}),
-        .int64 => |number| std.fmt.allocPrint(allocator, "{d}", .{number}),
-        .boolean => |boolean| if (boolean) "true" else "false",
-        .null => "null",
-        .undefined => "undefined",
-        .array => |elements| {
-            var parts: std.ArrayList([]const u8) = .empty;
-            for (elements) |element| {
-                try parts.append(allocator, if (element == .null or element == .undefined) "" else try jsString(allocator, element));
-            }
-            return std.mem.join(allocator, ",", parts.items);
-        },
-        .document => "[object Object]",
-        else => errors.throwError("String() of a {s} value is not ported", .{@tagName(value)}),
-    };
+fn jsString(allocator: std.mem.Allocator, value: BsonValue) ![]const u8 {
+    return bdb.js_value.toString(allocator, value);
 }
 
 //

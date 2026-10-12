@@ -23,7 +23,7 @@ const max_update_length: usize = 1 << 30;
 const aes_block_length: usize = 16;
 
 //
-// An RSA public key (node:crypto KeyObject of type 'public'). The key is kept as its DER SubjectPublicKeyInfo in
+// A public key (node:crypto KeyObject of type 'public'). The key is kept as its DER SubjectPublicKeyInfo in
 // memory from the allocator it was created with, and parsed into a libcrypto EVP_PKEY for each operation, so nothing
 // has to be freed.
 //
@@ -31,7 +31,10 @@ pub const PublicKey = struct {
     // The DER SubjectPublicKeyInfo (KeyObject.export({ type: 'spki', format: 'der' })).
     spki: []const u8,
 
-    // The length of the modulus in bytes.
+    // True for an RSA key (KeyObject.asymmetricKeyType 'rsa'). publicEncrypt and privateDecrypt refuse any other type.
+    is_rsa: bool,
+
+    // The length of the modulus in bytes (0 for a key that is not RSA, which has none).
     modulus_length: usize,
 
     //
@@ -43,7 +46,7 @@ pub const PublicKey = struct {
 };
 
 //
-// An RSA private key (node:crypto KeyObject of type 'private'), kept as its DER PKCS#8 PrivateKeyInfo like PublicKey.
+// A private key (node:crypto KeyObject of type 'private'), kept as its DER PKCS#8 PrivateKeyInfo like PublicKey.
 //
 pub const PrivateKey = struct {
     // The DER PKCS#8 PrivateKeyInfo (KeyObject.export({ type: 'pkcs8', format: 'der' })).
@@ -201,13 +204,22 @@ fn encodePkcs8(allocator: std.mem.Allocator, key: *c.EVP_PKEY) ![]u8 {
 }
 
 //
-// Makes a PublicKey from a parsed RSA key.
+// Makes a PublicKey from a parsed key.
 //
 fn makePublicKey(allocator: std.mem.Allocator, key: *c.EVP_PKEY) !PublicKey {
+    const isRsa = c.EVP_PKEY_id(key) == c.EVP_PKEY_RSA;
     return PublicKey{
         .spki = try encodeSpki(allocator, key),
-        .modulus_length = @intCast(c.EVP_PKEY_size(key)),
+        .is_rsa = isRsa,
+        .modulus_length = if (isRsa) @intCast(c.EVP_PKEY_size(key)) else 0,
     };
+}
+
+//
+// Throws the error OpenSSL 3 gives, under Node, for an RSA operation on a key that is not RSA.
+//
+fn throwNotRsa() errors.ThrownError {
+    return errors.throwError("error:03000096:digital envelope routines::operation not supported for this keytype", .{});
 }
 
 //
@@ -308,15 +320,10 @@ pub fn generateKeyPairSync(allocator: std.mem.Allocator, io: std.Io, modulusLeng
 }
 
 //
-// TODO: a key that is not RSA is refused when it is loaded, where node:crypto accepts it and encryption fails
-// later with OpenSSL's message.
-//
-// Makes a PrivateKey from a parsed key, which must be RSA.
+// Makes a PrivateKey from a parsed key of any type, as node:crypto does: a key that is not RSA is refused by the operations
+// that need RSA, publicEncrypt and privateDecrypt.
 //
 fn makePrivateKey(allocator: std.mem.Allocator, key: *c.EVP_PKEY) !*const PrivateKey {
-    if (c.EVP_PKEY_id(key) != c.EVP_PKEY_RSA) {
-        return throwUnsupportedKey();
-    }
     const privateKey = try allocator.create(PrivateKey);
     privateKey.* = PrivateKey{
         .pkcs8 = try encodePkcs8(allocator, key),
@@ -327,7 +334,7 @@ fn makePrivateKey(allocator: std.mem.Allocator, key: *c.EVP_PKEY) !*const Privat
 
 //
 // Creates a private key from PEM text (node:crypto createPrivateKey), with PEM_read_bio_PrivateKey. Accepts
-// unencrypted PKCS#8 ("PRIVATE KEY") and PKCS#1 ("RSA PRIVATE KEY") RSA keys.
+// unencrypted PKCS#8 ("PRIVATE KEY") keys of any type and PKCS#1 ("RSA PRIVATE KEY") RSA keys.
 //
 pub fn createPrivateKey(allocator: std.mem.Allocator, keyPem: []const u8) !*const PrivateKey {
     c.ERR_clear_error();
@@ -373,7 +380,7 @@ fn readPublicKeyPem(keyPem: []const u8) !?*c.EVP_PKEY {
 
 //
 // Creates a public key from PEM text (node:crypto createPublicKey). Accepts SPKI ("PUBLIC KEY") and
-// PKCS#1 ("RSA PUBLIC KEY") RSA keys, and private key PEMs (the public half is returned, like Node).
+// PKCS#1 ("RSA PUBLIC KEY") RSA keys, SPKI keys of any type, and private key PEMs (the public half is returned, like Node).
 //
 pub fn createPublicKey(allocator: std.mem.Allocator, keyPem: []const u8) !*const PublicKey {
     c.ERR_clear_error();
@@ -382,9 +389,6 @@ pub fn createPublicKey(allocator: std.mem.Allocator, keyPem: []const u8) !*const
         return createPublicKeyFromPrivateKey(privateKey);
     };
     defer c.EVP_PKEY_free(key);
-    if (c.EVP_PKEY_id(key) != c.EVP_PKEY_RSA) {
-        return throwUnsupportedKey();
-    }
     const publicKey = try allocator.create(PublicKey);
     publicKey.* = try makePublicKey(allocator, key);
     return publicKey;
@@ -442,6 +446,9 @@ fn setOaepPadding(context: *c.EVP_PKEY_CTX) !void {
 //
 pub fn publicEncrypt(allocator: std.mem.Allocator, io: std.Io, publicKey: *const PublicKey, data: []const u8) ![]u8 {
     _ = io;
+    if (!publicKey.is_rsa) {
+        return throwNotRsa();
+    }
     c.ERR_clear_error();
     const key = try parsePublicKey(publicKey);
     defer c.EVP_PKEY_free(key);
@@ -476,6 +483,9 @@ pub fn publicEncrypt(allocator: std.mem.Allocator, io: std.Io, publicKey: *const
 // as long as the modulus, so a shorter one is padded here, which gives the error Node reports for it.
 //
 pub fn privateDecrypt(allocator: std.mem.Allocator, privateKey: *const PrivateKey, data: []const u8) ![]u8 {
+    if (!privateKey.public_key.is_rsa) {
+        return throwNotRsa();
+    }
     const modulusLength = privateKey.public_key.modulus_length;
     if (data.len > modulusLength) {
         return errors.throwError("error:0200006C:rsa routines::data greater than mod len", .{});

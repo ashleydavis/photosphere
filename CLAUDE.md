@@ -114,9 +114,12 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run test:zig` - Unit tests of the Zig CLI and of every Zig package (`zig build test` at the repository root)
 - `bun run test:cli:zig` - Zig CLI smoke tests (apps/cli/smoke-tests-zig): the TypeScript CLI smoke suites with the commands run by the Zig CLI, and a TypeScript `psi verify` of every database it writes
 - `bun run test:lan-share:cli-desktop` (alias `tlcd`) - CLI to desktop LAN share smoke tests, both directions
-- `bun run test:ziggy` - Ziggy desktop smoke tests, on the host operating system
-- `bun run test:ziggy:and` - Ziggy smoke tests on the Android emulator pool or device
-- `bun run test:ziggy:ios` - Ziggy smoke tests on the iOS simulator (macOS only)
+- `bun run test:ziggy` - Photosphere App smoke tests, on the host operating system. `PHOTOSPHERE_SMOKE_SCENARIO=<number or name>` runs one scenario
+- `bun run test:ziggy:and` - Photosphere App smoke tests on the Android emulator pool or device
+- `bun run test:ziggy:ios` - Photosphere App smoke tests on the iOS simulator, or a connected iOS device (macOS only)
+- `bun run test:ziggy-example` - Ziggy example smoke tests, on the host operating system
+- `bun run test:ziggy-example:and` - Ziggy example smoke tests on the Android emulator pool or device
+- `bun run test:ziggy-example:ios` - Ziggy example smoke tests on the iOS simulator, or a connected iOS device (macOS only)
 - `bun run test:harness` - The mobile test harness's own tests (run lock, work queue and worker pool, timeout helper). Needs no device
 - `bun run test:electron` - Build and run Electron smoke tests
 - `bun run test:everything:plan` - Print which test scripts would run and why, without running anything
@@ -148,7 +151,9 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - [UI stories](packages/user-interface/src/stories/README.md) - The stories browser (every page/modal/dialog/component in isolation) and the cross-platform story player. Run the stories on Android/iOS to check pages fit on a phone screen
 - [Testing](docs/testing/README.md) - How to run the automated tests, the manual e2e scripts, and the UI stories
 - [Background tasks](docs/background-tasks.md) - How to add a new background task type (worker handler, registration, frontend consumption)
-- [Ziggy architecture](packages/ziggy/docs/architecture.md) - The Zig and system web view application shell: parts, message protocol, adding a channel or a task type, test hooks, and edits made to existing UI code
+- [Ziggy architecture](packages/ziggy/docs/architecture.md) - The Zig and system web view application shell: parts, message protocol, adding a channel, a task type or a native host callback, test hooks, how Photosphere is built on it, and the edits made to existing UI code
+- [Photosphere App](apps/photosphere/README.md) - Building, running and packaging the Photosphere App on each platform, and which platform each script runs on
+- [Ziggy example](apps/ziggy-example/README.md) - The small complete app built on Ziggy, kept as the reference for building an app on it
 - [Delivering the Android app to testers](docs/android-tester-distribution.md) - Getting a build to Android testers through Firebase App Distribution
 - [Mobile native media tools](docs/mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired and activated (iOS/Android)
 - [Updating mobile ImageMagick/ffmpeg](docs/updating-mobile-imagemagick-ffmpeg.md) - How to update the bundled versions (see also `scripts/update-mobile-media-tools.sh`)

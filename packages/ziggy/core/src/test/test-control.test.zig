@@ -550,3 +550,111 @@ test "the screenshot command on a shell with no screenshot callback says what is
     defer if (client.answer) |text| std.testing.allocator.free(text);
     try std.testing.expectEqualStrings("{\"error\":\"HostCallbackMissing\"}", client.answer.?);
 }
+
+//
+// Sends one line to the control connection of a core and returns its answer, allocated with the testing allocator.
+//
+fn answerFor(core: *ziggy.core.Core, line: []const u8) ![]u8 {
+    var client = Client{
+        .allocator = std.testing.allocator,
+        .port = core.control.?.port,
+        .line = line,
+        .answer = null,
+        .closed_without_answer = false,
+    };
+    const thread = try std.Thread.spawn(.{}, Client.run, .{&client});
+    thread.join();
+    return client.answer orelse error.ClosedWithoutAnswer;
+}
+
+test "the quit command on a shell with no quit callback says what is missing" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    var config = shell.config(1, 1);
+    var port_file_buffer: [256]u8 = undefined;
+    const port_file = try std.fmt.bufPrintZ(&port_file_buffer, ".zig-cache/tmp/{s}/port.txt", .{tmp.sub_path});
+    config.test_mode = true;
+    config.test_port_file = port_file.ptr;
+    config.quit = null;
+    const core = try ziggy.core.Core.create(std.testing.allocator, config, helpers.app);
+    defer core.destroy();
+    const answer = try answerFor(core, "{\"command\":\"quit\"}");
+    defer std.testing.allocator.free(answer);
+    try std.testing.expectEqualStrings("{\"error\":\"HostCallbackMissing\"}", answer);
+}
+
+test "the menu command without an action is an invalid command and chooses nothing" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try startControlledCore(&shell, &tmp);
+    defer core.destroy();
+    const answer = try answerFor(core, "{\"command\":\"menu\"}");
+    defer std.testing.allocator.free(answer);
+    try std.testing.expectEqualStrings("{\"error\":\"InvalidCommand\"}", answer);
+    try std.testing.expectEqual(@as(usize, 0), shell.chosen_actions.items.len);
+}
+
+test "the drop command without paths is an invalid command" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try startControlledCore(&shell, &tmp);
+    defer core.destroy();
+    const answer = try answerFor(core, "{\"command\":\"drop\"}");
+    defer std.testing.allocator.free(answer);
+    try std.testing.expectEqualStrings("{\"error\":\"InvalidCommand\"}", answer);
+}
+
+test "an answer for a dialog with no paths, or with paths that are not an array, is refused" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try startControlledCore(&shell, &tmp);
+    defer core.destroy();
+    const missing = try answerFor(core, "{\"command\":\"pick-answer\"}");
+    defer std.testing.allocator.free(missing);
+    try std.testing.expectEqualStrings("{\"error\":\"InvalidCommand\"}", missing);
+    const not_array = try answerFor(core, "{\"command\":\"pick-answer\",\"paths\":\"/one.txt\"}");
+    defer std.testing.allocator.free(not_array);
+    try std.testing.expectEqualStrings("{\"error\":\"InvalidCommand\"}", not_array);
+}
+
+test "a second answer for the next dialog replaces the first" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try startControlledCore(&shell, &tmp);
+    defer core.destroy();
+    const first = try answerFor(core, "{\"command\":\"pick-answer\",\"paths\":[\"/first.txt\"]}");
+    defer std.testing.allocator.free(first);
+    try std.testing.expectEqualStrings("{\"ok\":true}", first);
+    const second = try answerFor(core, "{\"command\":\"pick-answer\",\"paths\":[\"/second.txt\"]}");
+    defer std.testing.allocator.free(second);
+    try std.testing.expectEqualStrings("{\"ok\":true}", second);
+    core.postMessage("{\"id\":31,\"channel\":\"pick-open-request\",\"data\":\"Title\"}");
+    try shell.expectMessageContaining("{\"id\":31,\"ok\":true,\"data\":[\"/second.txt\"]}");
+}
+
+test "a test-result without a request id is an error reply" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try startControlledCore(&shell, &tmp);
+    defer core.destroy();
+    core.postMessage("{\"id\":5,\"channel\":\"test-result\",\"data\":{\"result\":null}}");
+    try shell.expectMessageContaining("{\"id\":5,\"ok\":false,\"error\":\"MissingRequestId\"}");
+}

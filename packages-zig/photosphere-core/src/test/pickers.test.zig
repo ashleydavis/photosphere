@@ -182,6 +182,7 @@ test "pick-file ignores PHOTOSPHERE_TEST_PICK_FILE_PATH outside test mode" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
+    try app.environ_map.put("PHOTOSPHERE_TEST_MODE", "0");
     try app.environ_map.put("PHOTOSPHERE_TEST_PICK_FILE_PATH", "/from/the/environment.jpg");
     app.pick_answer = "[\"/downloads/photo.jpg\"]";
     const reply = try app.requestOk("pick-file", "\"photo.jpg\"");

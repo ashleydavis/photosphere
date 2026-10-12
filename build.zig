@@ -838,6 +838,9 @@ const IZiggyCore = struct {
 
     // The list of the bundled page's files and the lookup in it, which the shells of the platforms that embed the page import.
     ui_files_module: *std.Build.Module,
+
+    // How a shell hands the core the answer to a host request, which the shells that answer host requests in Zig import.
+    host_reply_module: *std.Build.Module,
 };
 
 //
@@ -873,6 +876,12 @@ fn addZiggyCore(
         .optimize = optimize,
     });
 
+    const host_reply_module = b.createModule(.{
+        .root_source_file = b.path("packages/ziggy/core/src/lib/host-reply.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     // The Android shell reaches the core through JNI, written in Zig against the NDK's own jni.h. Only an Android target has that
     // header, so the import exists only for one.
     if (target.result.abi.isAndroid()) {
@@ -888,6 +897,7 @@ fn addZiggyCore(
     return .{
         .module = module,
         .ui_files_module = ui_files_module,
+        .host_reply_module = host_reply_module,
     };
 }
 
@@ -1106,6 +1116,10 @@ fn addZiggy(
         .{
             .name = "node-utils-zig",
             .module = queue.node_utils,
+        },
+        .{
+            .name = "utils-zig",
+            .module = queue.utils,
         },
     }, target, optimize, core_test_binary_step);
 
@@ -1435,6 +1449,7 @@ fn addLinuxShell(
     });
     shell_module.addImport("c", translate_c.createModule());
     shell_module.addImport("ui-files", core.ui_files_module);
+    shell_module.addImport("host-reply", core.host_reply_module);
     for (runtime_library_paths.items) |path| {
         shell_module.addObjectFile(.{
             .cwd_relative = path,

@@ -525,3 +525,40 @@ test "throws the error of a sync that fails, after sending sync-started" {
     try expectMessageTypes(allocator, &scenario, &.{"sync-started"});
 }
 
+test "sends an asset the origin changed, that the local database also holds, as an updated asset" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var mutedLog: mock_log.MutedLog = .{};
+    mutedLog.install();
+    defer mutedLog.uninstall();
+    _ = try test_environment.setupEnvironment(io);
+    var scenario: Scenario = undefined;
+    try scenario.init(allocator, io, "sync-database-updated", null);
+    defer scenario.deinit(io);
+    // The origin changes the record both sides hold.
+    const originOpened = try node_api.open_storage.openStorage(allocator, io, scenario.origin.dir, null, null, null);
+    const originDatabase = try openDatabase(allocator, io, scenario.origin.dir);
+    const updates = try BsonDocument.fromFields(allocator, &.{
+        .{
+            .key = "description",
+            .value = .{ .string = "Changed at the origin" },
+        },
+    });
+    try std.testing.expect(try originDatabase.metadataCollection.updateOne(io, SHARED_ASSET_ID, updates, .{}));
+    try originDatabase.bsonDatabase.commit(io);
+    try node_api.tree.stampDatabaseModified(allocator, io, originOpened.storage, originOpened.rawStorage);
+    try originDatabase.bsonDatabase.flush();
+
+    _ = try scenario.run(allocator, io, false);
+
+    const batches = try scenario.context.messagesOfType("sync-batch");
+    try std.testing.expectEqual(@as(usize, 1), batches.len);
+    try std.testing.expectEqual(@as(usize, 0), batches[0].object.get("added").?.array.items.len);
+    try std.testing.expectEqual(@as(usize, 0), batches[0].object.get("deletedIds").?.array.items.len);
+    const updated = batches[0].object.get("updated").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), updated.len);
+    try std.testing.expectEqualStrings(SHARED_ASSET_ID, updated[0].object.get("_id").?.string);
+    try std.testing.expectEqualStrings("Changed at the origin", updated[0].object.get("description").?.string);
+}

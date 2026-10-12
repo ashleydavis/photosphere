@@ -73,7 +73,7 @@ const FakeFfmpegDirectory = struct {
     fn destroy(self: *FakeFfmpegDirectory, io: std.Io) void {
         node_utils.process_env.setEnvironMap(null);
         tools.Image.resetInitialization();
-        std.Io.Dir.cwd().deleteTree(io, self.path) catch {};
+        std.Io.Dir.cwd().deleteTree(io, self.path) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ self.path, @errorName(err) });
     }
 };
 
@@ -267,4 +267,25 @@ test "extractScreenshot writes the time the way JavaScript writes a number" {
     else
         "-i ../test/multiple-files/test.mp4 -ss 1e-7 -vframes 1 -q:v 2 -y out.jpg";
     try std.testing.expectEqualStrings(ffmpegArguments, try directory.ffmpegArguments(allocator, io));
+}
+
+// String() of an array joins its elements with commas, so parseFloat and parseInt read up to the first comma; and a string spreads
+// its UTF-16 code units, so a character outside the BMP gives two entries, each a lone surrogate written as U+FFFD.
+test "ffprobe arrays of several values are read from their joined text and a tag string spreads its code units" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const values = try probe(allocator, "{\"format\":{\"duration\":[\"7.5\",\"x\"],\"bit_rate\":[\"12\",\"34\"],\"tags\":\"a\u{1F600}\"},\"streams\":[{\"codec_type\":\"video\"}]}");
+    try std.testing.expectEqual(@as(?f64, 7.5), values.duration);
+    try std.testing.expectEqual(@as(?f64, 12), values.bitrate);
+    const fields = values.metadata.?.document.fields.items;
+    try std.testing.expectEqual(@as(usize, 6), fields.len);
+    try std.testing.expectEqualStrings("0", fields[0].key);
+    try std.testing.expectEqualStrings("a", fields[0].value.string);
+    try std.testing.expectEqualStrings("1", fields[1].key);
+    try std.testing.expectEqualStrings("\u{FFFD}", fields[1].value.string);
+    try std.testing.expectEqualStrings("2", fields[2].key);
+    try std.testing.expectEqualStrings("\u{FFFD}", fields[2].value.string);
+    try std.testing.expectEqualStrings("videoCodec", fields[3].key);
 }

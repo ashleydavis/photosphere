@@ -398,3 +398,31 @@ test "refreshWriteLock fails when there is no lock" {
     try std.testing.expectEqualStrings("Cannot refresh write lock: lock does not exist for test-bucket/db/.db/write.lock", utils.errors.errorMessage(error.Thrown));
     try std.testing.expect(!sender.wasSent("PutObjectCommand"));
 }
+
+//
+// Each step of a refresh is written to the verbose log: the attempt, then the success, or the failure with its error.
+//
+test "refreshWriteLock logs the attempt, the success and the failure" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var sender: Sender = undefined;
+    var storage = createStorage(arena.allocator(), &sender, ownLockHandler);
+    defer storage.s3.deinit();
+
+    var recordingLog: RecordingLog = .{
+        .messages = std.Io.Writer.Allocating.init(arena.allocator()),
+        .verbose_enabled = true,
+    };
+    const previousLog = utils.log.log;
+    utils.log.setLog(recordingLog.ilog());
+    defer utils.log.setLog(previousLog);
+
+    try storage.refreshWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-a");
+    try std.testing.expectError(error.Thrown, storage.refreshWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-b"));
+
+    const messages = recordingLog.messages.written();
+    try std.testing.expect(std.mem.indexOf(u8, messages, "REFRESH_ATTEMPT") != null);
+    try std.testing.expect(std.mem.indexOf(u8, messages, "REFRESH_SUCCESS") != null);
+    try std.testing.expect(std.mem.indexOf(u8, messages, "REFRESH_FAILED") != null);
+    try std.testing.expect(std.mem.indexOf(u8, messages, "error:Cannot refresh write lock: lock is owned by owner-a, not owner-b") != null);
+}

@@ -87,15 +87,15 @@ Run the CLI to desktop LAN share suite, which shares secrets and databases in bo
 bun run test:lan-share:cli-desktop
 ```
 
-Run the Ziggy smoke tests, which drive the Ziggy application shell (see [Ziggy architecture](../../packages/ziggy/docs/architecture.md) and [Ziggy smoke tests](../../apps/photosphere-smoke-tests/README.md)). The desktop suite runs on the host operating system, the mobile suites on the Android emulator pool or device and on the iOS simulator:
+Run the Photosphere App smoke tests, which drive the Photosphere App on Ziggy through its test hooks (see [Ziggy architecture](../../packages/ziggy/docs/architecture.md) and [Photosphere smoke tests](../../apps/photosphere-smoke-tests/README.md)). The desktop suite runs on the host operating system, the mobile suites on the Android emulator pool or device and on the iOS simulator or a connected iOS device. `PHOTOSPHERE_SMOKE_SCENARIO=<number or name>` in front of any of them runs one scenario:
 
 ```bash
 bun run test:ziggy       # desktop, on the host operating system
 bun run test:ziggy:and   # Android emulator or attached device
-bun run test:ziggy:ios   # iOS simulator (needs macOS with Xcode)
+bun run test:ziggy:ios   # iOS simulator or connected device (needs macOS with Xcode)
 ```
 
-Run the Ziggy example's smoke tests. The example is a small complete app built on Ziggy, and its suite is part of every full test run, so a change to Ziggy always runs it (see the [Ziggy example README](../../apps/ziggy-example/README.md) for what each scenario checks).
+Run the Ziggy example's smoke tests. The example is a small complete app built on Ziggy, and its suite is part of every full test run, so a change to Ziggy always runs it (see the [Ziggy example README](../../apps/ziggy-example/README.md), and [its runner's notes](../../apps/ziggy-example/smoke-tests/run.md) for what each scenario checks).
 
 ```bash
 bun run test:ziggy-example       # desktop, on the host operating system
@@ -222,8 +222,6 @@ Measured again on five emulators with 43 tests, standalone with a warm build and
 - The APK checksum is hashed once per run rather than once before each of the 43 tests.
 - The LAN-share tests are no longer serialised against each other, which was 102s that could not overlap inside a 145s loop.
 
-See `docs/plans/done/plan-halve-test-and-duration.md` for every measurement.
-
 Take any measurement only when the machine is quiet. The same suite measured 231s while another `bun run test:everything` was running beside it, because `suite_share` hands a competing suite a fraction of the emulators.
 
 Bring up a pool of five alongside your own emulator:
@@ -305,9 +303,6 @@ The story player cycles the live app through every story (in light and then dark
 bun run stories:ziggy      # Photosphere App on the host operating system
 bun run stories:ziggy:and  # Photosphere App on the Android emulator or attached device
 bun run stories:ziggy:ios  # Photosphere App on the iOS simulator
-bun run stories            # Electron desktop (deprecated)
-bun run stories:and        # Capacitor Android app (deprecated)
-bun run stories:ios        # Capacitor iOS app (deprecated)
 ```
 
 The web build has no scripted runner: start it with `bun run dev:web`, open `http://localhost:8080/#/stories`, and click **▶ Play on automatic** to cycle the stories by hand. The port is `apps/dev-frontend/vite.config.ts`, which pins 8080.
@@ -445,3 +440,5 @@ The one exception is the news feed. `POST /seed-news` still goes through the app
 - [screenshots.md](screenshots.md) - Capturing desktop app screenshots via the test control server
 - [stories README](../../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player
 - `apps/smoke-tests/tests/<n>-<name>/` - Mobile smoke tests (`bun run test:and` / `bun run test:ios`), platform-neutral and numbered
+- `apps/photosphere-smoke-tests/<n>-<name>/` - Photosphere App smoke tests (`bun run test:ziggy` / `bun run test:ziggy:and` / `bun run test:ziggy:ios`), platform-neutral and numbered. See [its README](../../apps/photosphere-smoke-tests/README.md)
+- `apps/ziggy-example/smoke-tests/<n>-<name>/` - Ziggy example smoke tests (`bun run test:ziggy-example` and its `:and` and `:ios` forms), with the desktop-only ones in `desktop-only/`. See [its runner's notes](../../apps/ziggy-example/smoke-tests/run.md)

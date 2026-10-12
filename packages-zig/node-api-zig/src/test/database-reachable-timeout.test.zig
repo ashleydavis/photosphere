@@ -135,7 +135,9 @@ test "checkDatabaseExists gives up when the storage never answers, rather than w
     const previous = try allocator.dupe(u8, test_environment.getEnvironment().get("PHOTOSPHERE_CONFIG_DIR").?);
     const configDir = try temp_dirs.makeTempDir(allocator, io, "database-reachable-timeout-config");
     defer temp_dirs.removeTempDir(io, configDir);
-    defer test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", previous) catch {};
+    defer test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", previous) catch |err| {
+        std.debug.panic("PHOTOSPHERE_CONFIG_DIR could not be put back: {s}", .{@errorName(err)});
+    };
     try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "databases.toml" }), "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = \"s3:bucket/unreachable\"\ns3_key = \"database-reachable-timeout-s3\"\n");
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
     const vault = try vault_zig.get_vault.getVault("plaintext");
@@ -166,7 +168,9 @@ test "checkDatabaseExists answers normally when the storage does answer" {
     const previous = try allocator.dupe(u8, test_environment.getEnvironment().get("PHOTOSPHERE_CONFIG_DIR").?);
     const configDir = try temp_dirs.makeTempDir(allocator, io, "database-reachable-answers-config");
     defer temp_dirs.removeTempDir(io, configDir);
-    defer test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", previous) catch {};
+    defer test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", previous) catch |err| {
+        std.debug.panic("PHOTOSPHERE_CONFIG_DIR could not be put back: {s}", .{@errorName(err)});
+    };
     try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "databases.toml" }), "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = \"s3:bucket/reachable\"\ns3_key = \"database-reachable-answers-s3\"\n");
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
     const vault = try vault_zig.get_vault.getVault("plaintext");

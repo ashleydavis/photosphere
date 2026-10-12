@@ -31,10 +31,11 @@ var vaultInstancesMutex: std.Io.Mutex = .init;
 
 //
 // Returns the default vault type from the PHOTOSPHERE_VAULT_TYPE environment
-// variable, falling back to "phone" on Android, where the keychain is the phone's, and to "keychain" elsewhere.
+// variable, falling back to "phone" on Android and iOS, where the keychain is the phone's (as the mobile worker's vault always
+// reads the device keychain), and to "keychain" elsewhere.
 //
 pub fn getDefaultVaultType() []const u8 {
-    return process_env.getEnv("PHOTOSPHERE_VAULT_TYPE") orelse if (builtin.abi.isAndroid()) "phone" else "keychain";
+    return process_env.getEnv("PHOTOSPHERE_VAULT_TYPE") orelse if (builtin.abi.isAndroid() or builtin.os.tag == .ios) "phone" else "keychain";
 }
 
 //

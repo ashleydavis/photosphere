@@ -3,7 +3,7 @@
 import PackageDescription
 
 // Ziggy's shell code for iOS: owns the WKWebView, injects window.ziggy, and moves messages between the page and the Zig
-// core through the C interface in ziggy.h. The Zig static library itself (libziggy_example.a for an app) is linked by the app
+// core through the C interface in ziggy.h. The app's own Zig static library, which holds the core, is linked by the app
 // project, not by this package.
 let package = Package(
     name: "ZiggyShellIOS",

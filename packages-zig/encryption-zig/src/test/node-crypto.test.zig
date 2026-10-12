@@ -427,14 +427,27 @@ const encrypted_private_key_pem =
     \\
 ;
 
-test "createPrivateKey and createPublicKey refuse keys that are not RSA" {
+test "createPrivateKey and createPublicKey accept keys that are not RSA, which publicEncrypt and privateDecrypt refuse as Node does" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    try std.testing.expectError(error.Thrown, crypto.createPrivateKey(allocator, ec_private_key_pem));
-    try std.testing.expectEqualStrings("error:1E08010C:DECODER routines::unsupported", utils.errors.lastErrorMessage());
-    try std.testing.expectError(error.Thrown, crypto.createPublicKey(allocator, ec_public_key_pem));
-    try std.testing.expectEqualStrings("error:1E08010C:DECODER routines::unsupported", utils.errors.lastErrorMessage());
+    const privateKey = try crypto.createPrivateKey(allocator, ec_private_key_pem);
+    const publicKey = try crypto.createPublicKey(allocator, ec_public_key_pem);
+
+    // The keys keep their DER, as Node's KeyObject does.
+    try std.testing.expectEqualSlices(u8, try pemBody(allocator, ec_private_key_pem), try crypto.exportPrivateKey(allocator, privateKey, .der));
+    try std.testing.expectEqualSlices(u8, try pemBody(allocator, ec_public_key_pem), try crypto.exportPublicKey(allocator, publicKey, .der));
+
+    // Node (OpenSSL 3) refuses RSA-OAEP with an EC key, and the length of the ciphertext is not looked at first.
+    try std.testing.expectError(error.Thrown, crypto.publicEncrypt(allocator, std.testing.io, publicKey, "x"));
+    try std.testing.expectEqualStrings("error:03000096:digital envelope routines::operation not supported for this keytype", utils.errors.lastErrorMessage());
+    try std.testing.expectError(error.Thrown, crypto.privateDecrypt(allocator, privateKey, &([_]u8{0} ** 64)));
+    try std.testing.expectEqualStrings("error:03000096:digital envelope routines::operation not supported for this keytype", utils.errors.lastErrorMessage());
+
+    // The same for an Ed25519 key.
+    const edPublic = try crypto.createPublicKey(allocator, "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAjS+NunLOstVECDmDQPLqwrZg0dFpzIq47ztCmq9hEMA=\n-----END PUBLIC KEY-----\n");
+    try std.testing.expectError(error.Thrown, crypto.publicEncrypt(allocator, std.testing.io, edPublic, "x"));
+    try std.testing.expectEqualStrings("error:03000096:digital envelope routines::operation not supported for this keytype", utils.errors.lastErrorMessage());
 }
 
 test "createPrivateKey fails for an encrypted key instead of asking for a passphrase" {
@@ -546,15 +559,18 @@ test "publicEncrypt and privateDecrypt report libcrypto's error for keys it cann
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // createPublicKey and createPrivateKey only make RSA keys; these are built by hand, as nothing else makes them.
+    // Keys that say they are RSA and are not (unreadable DER, and an EC key), built by hand because createPublicKey and
+    // createPrivateKey never make one: libcrypto refuses them itself.
     const unreadablePublic: crypto.PublicKey = .{
         .spki = "not a key",
+        .is_rsa = true,
         .modulus_length = 256,
     };
     try std.testing.expectError(error.Thrown, crypto.publicEncrypt(allocator, std.testing.io, &unreadablePublic, "data"));
     try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "error:") != null);
     const ecPublic: crypto.PublicKey = .{
         .spki = try pemBody(allocator, ec_public_key_pem),
+        .is_rsa = true,
         .modulus_length = 64,
     };
     try std.testing.expectError(error.Thrown, crypto.publicEncrypt(allocator, std.testing.io, &ecPublic, "data"));

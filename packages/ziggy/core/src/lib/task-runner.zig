@@ -419,13 +419,16 @@ pub fn askShell(config: *const ZiggyConfig, allocator: std.mem.Allocator, method
         return utils.errors.throwError("{s} needs the phone's shell, and this program has none.", .{method});
     };
     const method_text = try allocator.dupeZ(u8, method);
+    defer allocator.free(method_text);
     const request_text = try allocator.dupeZ(u8, request_json);
+    defer allocator.free(request_text);
     const buffer = try allocator.alloc(u8, 256 * 1024);
+    defer allocator.free(buffer);
     const length = host_request(config.user_data, method_text.ptr, request_text.ptr, buffer.ptr, buffer.len);
     if (length < 0) {
         return utils.errors.throwError("{s} failed: {s}", .{ method, buffer[0..@intCast(-length)] });
     }
-    return buffer[0..@intCast(length)];
+    return try allocator.dupe(u8, buffer[0..@intCast(length)]);
 }
 
 //

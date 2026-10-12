@@ -53,11 +53,67 @@ const BytesStream = struct {
 };
 
 //
+// A stream that gives the bytes it holds and then fails, the way a read from storage fails part way through a file.
+//
+const FailingStream = struct {
+    // The reader the routes read from.
+    reader: std.Io.Reader,
+
+    // The bytes given before the failure.
+    bytes: []const u8,
+
+    // How many of the bytes have been given.
+    given: usize,
+
+    //
+    // The reader of the stream.
+    //
+    fn readerFunction(ptr: *anyopaque) *std.Io.Reader {
+        const self: *FailingStream = @ptrCast(@alignCast(ptr));
+        return &self.reader;
+    }
+
+    //
+    // Frees the stream.
+    //
+    fn destroyFunction(ptr: *anyopaque, streamIo: std.Io) void {
+        _ = streamIo;
+        const self: *FailingStream = @ptrCast(@alignCast(ptr));
+        std.heap.smp_allocator.free(self.reader.buffer);
+        std.heap.smp_allocator.destroy(self);
+    }
+
+    //
+    // Gives the bytes not yet given, then fails.
+    //
+    fn streamFunction(reader: *std.Io.Reader, writer: *std.Io.Writer, limit: std.Io.Limit) std.Io.Reader.StreamError!usize {
+        const self: *FailingStream = @alignCast(@fieldParentPtr("reader", reader));
+        if (self.given == self.bytes.len) {
+            return error.ReadFailed;
+        }
+        const count = try writer.write(limit.sliceConst(self.bytes[self.given..]));
+        self.given += count;
+        return count;
+    }
+
+    //
+    // The functions of the stream.
+    //
+    const vtable: IReadStream.VTable = .{
+        .reader = readerFunction,
+        .destroy = destroyFunction,
+    };
+};
+
+//
 // A stand-in for the core: it answers from what the test set, and remembers what it was asked. It is used by one request at a time.
 //
 const FakeCore = struct {
     // The bytes serveAsset streams.
     assetBytes: []const u8 = "hello-asset-bytes",
+
+    // Whether the stream serveAsset returns fails once it has given the asset bytes.
+    streamFailsAfterAssetBytes: bool = false,
 
     // What serveAsset fails with, when set.
     serveError: ?anyerror = null,
@@ -116,6 +172,25 @@ const FakeCore = struct {
         self.servedLength = (try std.fmt.bufPrint(&self.served, "{s}|{s}|{s}", .{ assetId, assetType, databasePath })).len;
         if (self.serveError) |err| {
             return err;
+        }
+        if (self.streamFailsAfterAssetBytes) {
+            const failing = try std.heap.smp_allocator.create(FailingStream);
+            failing.* = .{
+                .reader = .{
+                    .vtable = &.{
+                        .stream = FailingStream.streamFunction,
+                    },
+                    .buffer = try std.heap.smp_allocator.alloc(u8, 64),
+                    .seek = 0,
+                    .end = 0,
+                },
+                .bytes = self.assetBytes,
+                .given = 0,
+            };
+            return .{
+                .ptr = failing,
+                .vtable = &FailingStream.vtable,
+            };
         }
         const stream = try std.heap.smp_allocator.create(BytesStream);
         stream.* = .{
@@ -335,6 +410,35 @@ test "GET /asset returns 500 and logs the error when the core cannot load the as
     try std.testing.expectEqual(@as(u16, 500), reply.status);
     try std.testing.expectEqualStrings("Error loading asset", reply.body);
     try std.testing.expect(std.mem.indexOf(u8, run.stderr.written(), "Error loading asset missing") != null);
+}
+
+test "GET /asset returns 500 and logs the error when the asset cannot be read before its first byte" {
+    var run: Run = undefined;
+    try run.start(true);
+    defer run.stop();
+    const allocator = run.arena.allocator();
+    run.fixture.fake.assetBytes = "";
+    run.fixture.fake.streamFailsAfterAssetBytes = true;
+
+    const reply = try run.fixture.get(allocator, .GET, "/asset?id=unreadable&type=thumb&db=%2Fdb");
+
+    try std.testing.expectEqual(@as(u16, 500), reply.status);
+    try std.testing.expectEqualStrings("Error loading asset", reply.body);
+    try std.testing.expect(std.mem.indexOf(u8, run.stderr.written(), "Error loading asset unreadable") != null);
+}
+
+test "GET /asset logs the error and ends the response without the rest of the asset when a read fails part way through" {
+    var run: Run = undefined;
+    try run.start(true);
+    defer run.stop();
+    const allocator = run.arena.allocator();
+    run.fixture.fake.assetBytes = "the-first-part";
+    run.fixture.fake.streamFailsAfterAssetBytes = true;
+
+    // The status has gone out with the first bytes, so the failure cannot be answered with a 500: the client gets a
+    // response it cannot read to its end, rather than one that looks complete.
+    try std.testing.expectError(error.HttpConnectionClosing, run.fixture.get(allocator, .GET, "/asset?id=broken&type=thumb&db=%2Fdb"));
+    try std.testing.expect(std.mem.indexOf(u8, run.stderr.written(), "Error loading asset broken") != null);
 }
 
 test "HEAD /asset is answered like GET, without the body" {
@@ -686,6 +790,18 @@ test "a path that is shown in the 404 page is escaped" {
 
     try std.testing.expectEqual(@as(u16, 404), reply.status);
     try std.testing.expect(std.mem.indexOf(u8, reply.body, "<script>") == null);
+}
+
+test "a path holding characters that mean something in HTML is shown escaped in the 404 page" {
+    var run: Run = undefined;
+    try run.start(true);
+    defer run.stop();
+    const allocator = run.arena.allocator();
+
+    const reply = try run.fixture.get(allocator, .GET, "/a&b'c<d>e\"f");
+
+    try std.testing.expectEqual(@as(u16, 404), reply.status);
+    try std.testing.expect(std.mem.indexOf(u8, reply.body, "<pre>Cannot GET /a&amp;b&#39;c&lt;d&gt;e&quot;f</pre>") != null);
 }
 
 // The functions the routes are built from

@@ -282,6 +282,11 @@ test "the announced port is read as parseInt(text, 10) reads it" {
     // NaN is not a port.
     try std.testing.expectEqual(@as(?u16, null), parsePort("port"));
     try std.testing.expectEqual(@as(?u16, null), parsePort(""));
+
+    // A number outside the port range is not a port either.
+    try std.testing.expectEqual(@as(?u16, null), parsePort("65536"));
+    try std.testing.expectEqual(@as(?u16, null), parsePort("-1"));
+    try std.testing.expectEqual(@as(?u16, 65535), parsePort("65535"));
 }
 
 //

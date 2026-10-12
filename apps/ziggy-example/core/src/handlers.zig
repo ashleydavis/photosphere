@@ -9,10 +9,11 @@ pub const media_server = @import("lib/media-server.zig");
 const menu = @import("lib/menu.zig");
 const page_query = @import("lib/page-query.zig");
 const pickers = @import("lib/pickers.zig");
+const app_state = @import("lib/app-state.zig");
 const page = @import("page-files");
 
 //
-// The example's channels and task types.
+// The example's channels and task types, and the state, observers and error describer it gives the core.
 //
 pub const app = ziggy.core.AppHandlers{
     .channels = &[_]ziggy.core.ChannelEntry{
@@ -32,7 +33,27 @@ pub const app = ziggy.core.AppHandlers{
             .name = "fail",
             .handler = channels.failHandler,
         },
+        .{
+            .name = "refuse",
+            .handler = app_state.refuseHandler,
+        },
+        .{
+            .name = "task-stats",
+            .handler = app_state.taskStatsHandler,
+        },
+        .{
+            .name = "queue-from-app",
+            .handler = app_state.queueFromAppHandler,
+        },
+        .{
+            .name = "cancel-from-app",
+            .handler = app_state.cancelFromAppHandler,
+        },
     },
+    .state = app_state.state_hooks,
+    .on_task_end = app_state.onTaskEnd,
+    .on_task_message = app_state.onTaskMessage,
+    .describe_error = app_state.describeError,
     .menu_json = menu.menu_json,
     .ui_files = &page.files,
     .page_query = page_query.pageQuery,
@@ -70,6 +91,14 @@ pub const app = ziggy.core.AppHandlers{
         .{
             .name = "os-version",
             .handler = hello_tasks.osVersionHandler,
+        },
+        .{
+            .name = "describe-self",
+            .handler = app_state.describeSelfHandler,
+        },
+        .{
+            .name = "run-in-turn",
+            .handler = app_state.runInTurnHandler,
         },
         .{
             .name = "media-server",

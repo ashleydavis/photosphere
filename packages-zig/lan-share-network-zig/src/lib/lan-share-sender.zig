@@ -307,9 +307,8 @@ pub const LanShareSender = struct {
 };
 
 //
-// TODO: a port that is not a port is ignored and discovery keeps listening.
-//
-// Reads the announced port with `parseInt(text, 10)`. Returns null for NaN, and for a number that is not a port.
+// Reads the announced port with `parseInt(text, 10)`. Returns null for NaN, and for a number outside the port range,
+// which a u16 cannot hold, so an announcement with such a port is ignored and discovery keeps listening.
 //
 pub fn parseIntLikeJavaScript(text: []const u8) ?u16 {
     const port = utils.js_number.parseInt(text, 10);

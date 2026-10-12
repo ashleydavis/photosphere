@@ -36,6 +36,21 @@ fn MockOperation(comptime ValueT: type) type {
 }
 
 //
+// An operation that throws an error of its own class, named "CustomError".
+//
+const CustomErrorOperation = struct {
+    //
+    // Runs the operation.
+    //
+    pub fn run(self: *CustomErrorOperation, io: std.Io) ![]const u8 {
+        _ = self;
+        _ = io;
+        errors.recordError("CustomError", "Custom error message", .{});
+        return error.Thrown;
+    }
+};
+
+//
 // An operation that fails with an error that is not a thrown message.
 //
 const RuntimeErrorOperation = struct {
@@ -66,7 +81,7 @@ test "should return result on success" {
     try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
 }
 
-test "should return null and log error on failure" {
+test "should return undefined and log error on failure" {
     const io = std.testing.io;
     var log: ExceptionLog = .{};
     log.install();
@@ -109,7 +124,23 @@ test "should work with different return types" {
     try std.testing.expectEqualStrings("value", tryOrLog(io, &object_operation, "").?.key);
 }
 
-test "should handle operations that return nothing" {
+test "should handle operations that return undefined" {
+    const io = std.testing.io;
+    var log: ExceptionLog = .{};
+    log.install();
+    defer log.uninstall();
+
+    // (An operation that resolves with undefined returns void, and a succeeded void operation is not null.)
+    var operation: MockOperation(void) = .{ .value = {} };
+
+    const result = tryOrLog(io, &operation, "");
+
+    try std.testing.expect(result != null);
+    try std.testing.expectEqual(@as(u32, 1), operation.calls);
+    try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
+}
+
+test "should handle operations that return null" {
     const io = std.testing.io;
     var log: ExceptionLog = .{};
     log.install();
@@ -129,6 +160,26 @@ test "should handle different error types" {
     var log: ExceptionLog = .{};
     log.install();
     defer log.uninstall();
+    var operation: CustomErrorOperation = .{};
+
+    const result = tryOrLog(io, &operation, "");
+
+    try std.testing.expect(result == null);
+    try std.testing.expectEqual(@as(u32, 1), log.exceptionCalls);
+    try std.testing.expectEqualStrings("Operation failed", log.lastMessage);
+    try std.testing.expectEqual(error.Thrown, log.lastError.?);
+    try std.testing.expectEqualStrings("CustomError", errors.lastErrorName());
+    try std.testing.expectEqualStrings("Custom error message", errors.lastErrorMessage());
+}
+
+//
+// (A Zig error carries no object, so the error that is not a thrown Error is a runtime error with no message recorded.)
+//
+test "should handle non-Error objects thrown" {
+    const io = std.testing.io;
+    var log: ExceptionLog = .{};
+    log.install();
+    defer log.uninstall();
     var operation: RuntimeErrorOperation = .{};
 
     const result = tryOrLog(io, &operation, "");
@@ -137,4 +188,18 @@ test "should handle different error types" {
     try std.testing.expectEqual(@as(u32, 1), log.exceptionCalls);
     try std.testing.expectEqualStrings("Operation failed", log.lastMessage);
     try std.testing.expectEqual(error.FileNotFound, log.lastError.?);
+}
+
+test "should not throw errors" {
+    const io = std.testing.io;
+    var log: ExceptionLog = .{};
+    log.install();
+    defer log.uninstall();
+    var operation: MockOperation([]const u8) = .{ .value = "unused", .fails = true, .failureMessage = "This should not be thrown" };
+
+    // (tryOrLog's result is an optional, not an error union, so nothing it returns can be an error.)
+    const result: ?[]const u8 = tryOrLog(io, &operation, "");
+
+    try std.testing.expect(result == null);
+    try std.testing.expect(log.exceptionCalls > 0);
 }

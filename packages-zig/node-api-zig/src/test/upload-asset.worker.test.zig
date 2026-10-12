@@ -386,6 +386,27 @@ test "sends import-failed and cleans up on upload error" {
     try std.testing.expect(!context.databaseHas("display/asset-1"));
 }
 
+test "fails naming the file when the file to upload is not there" {
+    var context: UploadTest = undefined;
+    try context.init();
+    defer context.deinit();
+    const allocator = context.arena.allocator();
+
+    // The failure is logged on the console; captured so nothing reaches the test program's stderr.
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    console_capture.captureStderr(&stderr_capture.writer);
+    defer console_capture.endConsoleCapture();
+    var data = context.makeUploadAssetData();
+    data.filePath = try std.fs.path.join(allocator, &.{ context.tempDir, "photos", "gone.jpg" });
+    // (Not an image or a video, so nothing reads the file before it is uploaded.)
+    data.contentType = "application/octet-stream";
+
+    try std.testing.expectError(error.Thrown, context.run(data));
+
+    try std.testing.expect(context.messages.sentType("import-failed"));
+    try std.testing.expect(std.mem.endsWith(u8, utils.errors.lastErrorMessage(), try std.fmt.allocPrint(allocator, "ENOENT: no such file or directory, open '{s}'", .{data.filePath})));
+}
+
 //
 // Reading the three copies back out of the store to learn their hashes was the unaccounted half
 // of every import into an encrypted database: the bytes came back through software decryption and

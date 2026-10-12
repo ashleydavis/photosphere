@@ -16,10 +16,9 @@
 // directory" would be one bad caller away from deleting somebody's photo library, and nothing in the
 // type system would catch it. The only paths it can ever reach are the two it reads for itself.
 //
-// Runs on both platforms via the shared task queue: desktop, the CLI and the dev server register it
-// through initTaskHandlers and mobile through mobile-worker-entry. On mobile every delete goes
-// through the worker's fs shims, which resolve inside the app's storage sandbox and refuse to leave
-// it, so the boundary holds even if this code is wrong.
+// Runs on every platform via the shared task queue: the app's core and the CLI register it through
+// initTaskHandlers. On a phone the deletes go straight to the filesystem, so the two directories
+// getConfigDir() and getCacheDir() answer are the only boundary.
 //
 
 const std = @import("std");

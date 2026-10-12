@@ -70,7 +70,7 @@ test "should return result on first attempt" {
 
     try std.testing.expectEqualStrings("success", result.?);
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(io, start) < 10_000);
+    try std.testing.expectEqual(@as(i64, 0), elapsedMilliseconds(io, start));
     try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
 }
 
@@ -92,7 +92,7 @@ test "should return result after retries" {
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
 
     // Two sleeps, of 100ms and 200ms.
-    try std.testing.expect(elapsedMilliseconds(io, start) >= 300);
+    try std.testing.expectEqual(@as(i64, 300), elapsedMilliseconds(io, start));
     try std.testing.expectEqual(@as(u32, 2), log.exceptionCalls);
 }
 
@@ -112,7 +112,7 @@ test "should return undefined and log error after all retries exhausted" {
 
     try std.testing.expect(result == null);
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(io, start) >= 300);
+    try std.testing.expectEqual(@as(i64, 300), elapsedMilliseconds(io, start));
     try std.testing.expectEqual(@as(u32, 3), log.exceptionCalls); // 2 retries + 1 final failure
     try std.testing.expectEqualStrings("Test error", log.lastMessage);
     try std.testing.expectEqualStrings("Operation failed", errors.errorMessage(log.lastError.?));
@@ -168,7 +168,7 @@ test "should use default maxAttempts of 3" {
     _ = try retryOrLog(io, &operation, "Test error", 3, 1, 2);
 
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(io, start) >= 3);
+    try std.testing.expectEqual(@as(i64, 3), elapsedMilliseconds(io, start));
 }
 
 test "should use default waitTimeMS of 1000" {
@@ -186,7 +186,7 @@ test "should use default waitTimeMS of 1000" {
     _ = try retryOrLog(io, &operation, "Test error", 2, 1000, 2);
 
     try std.testing.expectEqual(@as(u32, 2), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(io, start) >= 1000);
+    try std.testing.expectEqual(@as(i64, 1000), elapsedMilliseconds(io, start));
 }
 
 test "should use default waitTimeScale of 2" {
@@ -204,7 +204,7 @@ test "should use default waitTimeScale of 2" {
     _ = try retryOrLog(io, &operation, "Test error", 3, 100, 2);
 
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(io, start) >= 300);
+    try std.testing.expectEqual(@as(i64, 300), elapsedMilliseconds(io, start));
 }
 
 test "should work with custom waitTimeScale" {
@@ -224,7 +224,7 @@ test "should work with custom waitTimeScale" {
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
 
     // Two sleeps, of 100ms and 300ms.
-    try std.testing.expect(elapsedMilliseconds(io, start) >= 400);
+    try std.testing.expectEqual(@as(i64, 400), elapsedMilliseconds(io, start));
 }
 
 test "should not sleep on last attempt" {
@@ -239,15 +239,13 @@ test "should not sleep on last attempt" {
     var operation: MockOperation([]const u8) = .{ .value = "", .alwaysFails = true };
     const start = std.Io.Clock.awake.now(io);
 
-    // A scale large enough that a sleep after the last attempt could not go unnoticed.
-    _ = try retryOrLog(io, &operation, "Test error", 2, 100, 100);
+    // (Zig has no default parameters: the conventional waitTimeScale of 2 is passed.)
+    _ = try retryOrLog(io, &operation, "Test error", 2, 100, 2);
 
     try std.testing.expectEqual(@as(u32, 2), operation.calls);
 
-    // One sleep of 100ms (a sleep after the last attempt would add 10000ms).
-    const elapsed = elapsedMilliseconds(io, start);
-    try std.testing.expect(elapsed >= 100);
-    try std.testing.expect(elapsed < 10_000);
+    // One sleep of 100ms (a sleep after the last attempt would add 200ms).
+    try std.testing.expectEqual(@as(i64, 100), elapsedMilliseconds(io, start));
     try std.testing.expectEqual(@as(u32, 2), log.exceptionCalls); // 1 retry + 1 final failure
 }
 
@@ -267,7 +265,7 @@ test "should return undefined immediately when maxAttempts is 1" {
 
     try std.testing.expect(result == null);
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(io, start) < 10_000);
+    try std.testing.expectEqual(@as(i64, 0), elapsedMilliseconds(io, start));
     try std.testing.expectEqual(@as(u32, 1), log.exceptionCalls);
     try std.testing.expectEqualStrings("Test error", log.lastMessage);
 }

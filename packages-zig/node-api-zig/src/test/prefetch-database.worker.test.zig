@@ -390,3 +390,62 @@ test "fails with the error of a file it could not fetch" {
     try std.testing.expectError(error.Thrown, prefetchDatabaseHandler(allocator, io, try makeData(allocator, dirs.local), testContext.context.taskContext()));
     try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "Failed to prefetch " ++ THUMB_PATH));
 }
+
+//
+// How long the one file takes to come out of the origin, in milliseconds. Comfortably over retry's 30 second default and far
+// under the long timeout a file copy is meant to get, so it separates the two: with the default the copy is abandoned, with the
+// long one it finishes. The metadata hash index of a real database is nine files of about 13 MB each, and a phone cannot pull one
+// of those down and write it inside thirty seconds.
+//
+const SLOW_READ_DELAY_MS: i64 = 45_000;
+
+//
+// Opens a file as the virtual time Io does, after waiting SLOW_READ_DELAY_MS on its clock first when the file is the origin's
+// copy of SHARD_PATH. The local replica's copy (under the directory named "local") opens at once.
+//
+fn openOriginShardSlowly(userdata: ?*anyopaque, dir: std.Io.Dir, subPath: []const u8, options: std.Io.Dir.OpenFileOptions) std.Io.File.OpenError!std.Io.File {
+    const threaded: *std.Io.Threaded = @ptrCast(@alignCast(userdata.?));
+    const virtualTime: *virtual_time_io.VirtualTimeIo = @fieldParentPtr("threaded", threaded);
+    const virtualIo = virtualTime.io();
+    var isLocal = false;
+    var components = std.mem.tokenizeAny(u8, subPath, "/\\");
+    while (components.next()) |component| {
+        if (std.mem.eql(u8, component, "local")) {
+            isLocal = true;
+        }
+    }
+    const isShard = std.mem.endsWith(u8, subPath, SHARD_PATH) or std.mem.endsWith(u8, subPath, "collections\\metadata\\shards\\96.dat");
+    if (isShard and !isLocal) {
+        virtualIo.sleep(.fromMilliseconds(SLOW_READ_DELAY_MS), .awake) catch {
+            return error.Canceled;
+        };
+    }
+    return virtualTime.vtable.dirOpenFile(userdata, dir, subPath, options);
+}
+
+test "copies a file that takes longer than the default retry timeout to read" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    const testContext = try makeContext(allocator, io, false);
+    const dirs = try makePartialReplica(allocator, io, testContext, true);
+    defer temp_dirs.removeTempDir(io, dirs.root);
+    try deleteFileIn(allocator, io, dirs.local, SHARD_PATH);
+
+    // The origin hands the file over slowly. The Io is wrapped rather than replaced so everything else about it is untouched.
+    var slowVTable = virtual_time.vtable;
+    slowVTable.dirOpenFile = openOriginShardSlowly;
+    const slowIo: std.Io = .{
+        .userdata = io.userdata,
+        .vtable = &slowVTable,
+    };
+
+    const result = try prefetchDatabaseHandler(allocator, slowIo, try makeData(allocator, dirs.local), testContext.context.taskContext());
+
+    try expectResult(result, 1, 0);
+    try std.testing.expectEqualStrings(try test_files.readFile(allocator, io, try pathIn(allocator, dirs.origin, SHARD_PATH)), try test_files.readFile(allocator, io, try pathIn(allocator, dirs.local, SHARD_PATH)));
+}

@@ -16,6 +16,7 @@
 const std = @import("std");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
+const node_utils = @import("node-utils-zig");
 const mobile_worker = @import("mobile-worker-zig");
 const sandbox_module = @import("sandbox.zig");
 const Sandbox = sandbox_module.Sandbox;
@@ -229,11 +230,13 @@ test "plan-auto-import puts a new default database in the app data directory whe
 
     const result = try planAutoImportHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json("{\"appDataPath\":\"/data/app\"}"), sandbox.context());
 
-    try sandbox_module.expectString("/data/app/photosphere-default", result, "databasePath");
+    // Joined the way the platform joins paths, as the desktop TypeScript test expects it.
+    const expectedPath = try node_utils.path.join(sandbox.arenaAllocator(), &.{ "/data/app", DEFAULT_DATABASE_FOLDER_NAME });
+    try sandbox_module.expectString(expectedPath, result, "databasePath");
     const created = stepData(at(result, "steps").?, "create-default-database").?;
-    try sandbox_module.expectString("/data/app/photosphere-default", created, "databasePath");
+    try sandbox_module.expectString(expectedPath, created, "databasePath");
     const imported = stepData(at(result, "steps").?, "import-assets").?;
-    try sandbox_module.expectString("/data/app/photosphere-default", at(imported, "storageDescriptor").?, "databasePath");
+    try sandbox_module.expectString(expectedPath, at(imported, "storageDescriptor").?, "databasePath");
 }
 
 test "plan-auto-import keeps the database the user chose, whatever data directory the request names" {

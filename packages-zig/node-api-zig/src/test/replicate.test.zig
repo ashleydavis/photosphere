@@ -980,3 +980,44 @@ test "keeps the rest of the source's metadata" {
 
     try std.testing.expectEqual(node_api.media_file_database.getFilesImported(partialTree.databaseMetadata), node_api.media_file_database.getFilesImported(rebuiltTree.databaseMetadata));
 }
+
+test "replicate deletes a record the destination holds and the source does not" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(sourceDir).?);
+    const destDir = try std.fs.path.join(allocator, &.{ fixture.dir, "replica" });
+    const source = try node_api.open_storage.openStorage(allocator, io, sourceDir, null, null, null);
+    const dest = try node_api.open_storage.openStorage(allocator, io, destDir, null, null, null);
+    const sourceDb = try node_api.media_file_database.createMediaFileDatabase(allocator, source.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
+    _ = try replicate_module.replicate(allocator, io, sourceDir, source.storage, sourceDb.bsonDatabase, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), dest.storage, dest.rawStorage, null, null);
+
+    // The replica gains a record the source never had.
+    const extraId = "00000000-0000-4000-8000-0000000000ee";
+    const destDb = try node_api.media_file_database.createMediaFileDatabase(allocator, dest.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
+    var extraRecord = try @import("serialization-zig").bson.BsonDocument.fromFields(allocator, &.{
+        .{
+            .key = "_id",
+            .value = .{ .string = extraId },
+        },
+        .{
+            .key = "origFileName",
+            .value = .{ .string = "extra.jpg" },
+        },
+    });
+    try destDb.metadataCollection.insertOne(io, &extraRecord, null);
+    try destDb.bsonDatabase.commit(io);
+    try destDb.bsonDatabase.flush();
+
+    const secondSourceDb = try node_api.media_file_database.createMediaFileDatabase(allocator, source.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
+    const result = try replicate_module.replicate(allocator, io, sourceDir, source.storage, secondSourceDb.bsonDatabase, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), dest.storage, dest.rawStorage, null, null);
+
+    try std.testing.expectEqual(@as(u64, 1), result.copiedRecords);
+    const checkDb = try node_api.media_file_database.createMediaFileDatabase(allocator, dest.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
+    try std.testing.expect((try checkDb.metadataCollection.getOne(io, extraId)) == null);
+    try checkDb.bsonDatabase.flush();
+}

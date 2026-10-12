@@ -10,7 +10,8 @@ const node_api = @import("node-api-zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const fixture_keys = @import("fixture-keys.zig");
 const sync_helpers = @import("sync-test-helpers.zig");
-const helpers = @import("test-helpers.zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const errors = utils.errors;
 const HashedItem = merkle_tree.HashedItem;
@@ -409,10 +410,10 @@ test "encrypt fails with the error of a file that cannot be written" {
     try readStorage.write(allocator, io, "some/file.dat", "application/octet-stream", "file content");
 
     // A directory sits where the encrypted file would be written.
-    const writeDir = try helpers.makeTempDir(allocator, io, "encrypt-write-failure");
-    defer helpers.removeTempDir(io, writeDir);
+    const writeDir = try temp_dirs.makeTempDir(allocator, io, "encrypt-write-failure");
+    defer temp_dirs.removeTempDir(io, writeDir);
     try std.Io.Dir.cwd().createDirPath(io, try std.fmt.allocPrint(allocator, "{s}/some/file.dat", .{writeDir}));
-    const writeStorage = try helpers.directoryStorage(allocator, io, writeDir);
+    const writeStorage = try test_files.directoryStorage(allocator, io, writeDir);
 
     try std.testing.expectError(error.IsDir, encrypt(allocator, io, readStorage, writeStorage, noProgress, keyPair.publicKey, readStorage));
 }

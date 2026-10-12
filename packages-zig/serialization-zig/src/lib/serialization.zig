@@ -973,10 +973,8 @@ pub const CompressedBinaryDeserializer = struct {
 
 //
 // Implementation of IDeserializer for reading binary data
-// (Strings, buffers and bytes are returned as slices of the input buffer; BSON documents are allocated).
-//
-// TODO: a readString whose bytes are not valid UTF-8 returns them as they are, where `toString("utf8")` replaces every
-// invalid byte with U+FFFD. Matching it needs an allocation to build the replacement string.
+// (Strings, buffers and bytes are returned as slices of the input buffer; BSON documents, and a string whose bytes are
+// not valid UTF-8, are allocated).
 //
 pub const BinaryDeserializer = struct {
     // Allocates decoded BSON documents.
@@ -1088,9 +1086,14 @@ pub const BinaryDeserializer = struct {
     pub fn readString(self: *BinaryDeserializer) DeserializerError![]const u8 {
         const length = try self.readUInt32();
         try self.checkBounds(length);
-        const value = self.buffer[self.position .. self.position + length];
+        const bytes = self.buffer[self.position .. self.position + length];
         self.position += length;
-        return value;
+        if (std.unicode.utf8ValidateSlice(bytes)) {
+            return bytes;
+        }
+
+        // `toString("utf8")` replaces each ill-formed sequence with U+FFFD, as the WHATWG UTF-8 decoder does.
+        return std.fmt.allocPrint(self.allocator, "{f}", .{std.unicode.fmtUtf8(bytes)});
     }
 
     //
@@ -1292,14 +1295,27 @@ const TYPE_CODE_LENGTH = 4;
 
 //
 // Checks that a type code is exactly 4 characters and returns its bytes
+// (`Buffer.from(typeCode, "ascii")`: the length is counted in UTF-16 code units, as a JavaScript string's is, and each code
+// unit becomes its low byte. Text that is not UTF-8 counts a code unit per byte).
 //
-// TODO: the bytes are passed through unchanged, so a character above U+00FF has no single byte to become. Every type code in this repo is four ASCII letters.
-//
-fn typeCodeToBuffer(typeCode: []const u8) errors.ThrownError![]const u8 {
-    if (typeCode.len != TYPE_CODE_LENGTH) {
-        return errors.throwError("Type code must be exactly {d} ASCII characters, got \"{s}\" (length {d})", .{ TYPE_CODE_LENGTH, typeCode, typeCode.len });
+fn typeCodeToBuffer(typeCode: []const u8) errors.ThrownError![TYPE_CODE_LENGTH]u8 {
+    const isUtf8 = std.unicode.utf8ValidateSlice(typeCode);
+    const length = if (isUtf8) std.unicode.calcUtf16LeLen(typeCode) catch unreachable else typeCode.len;
+    if (length != TYPE_CODE_LENGTH) {
+        return errors.throwError("Type code must be exactly {d} ASCII characters, got \"{s}\" (length {d})", .{ TYPE_CODE_LENGTH, typeCode, length });
     }
-    return typeCode;
+    var bytes: [TYPE_CODE_LENGTH]u8 = undefined;
+    if (isUtf8) {
+        var codeUnits: [TYPE_CODE_LENGTH]u16 = undefined;
+        _ = std.unicode.utf8ToUtf16Le(&codeUnits, typeCode) catch unreachable;
+        for (codeUnits, 0..) |codeUnit, index| {
+            bytes[index] = @truncate(std.mem.littleToNative(u16, codeUnit));
+        }
+    }
+    else {
+        @memcpy(&bytes, typeCode);
+    }
+    return bytes;
 }
 
 //
@@ -1395,7 +1411,8 @@ pub fn save(
     var binarySerializer = try BinarySerializer.init(allocator, 1024);
 
     try binarySerializer.writeUInt32(version);
-    try binarySerializer.writeBytes(try typeCodeToBuffer(typeCode));
+    const typeCodeBytes = try typeCodeToBuffer(typeCode);
+    try binarySerializer.writeBytes(&typeCodeBytes);
     try serializer(allocator, data, binarySerializer.asSerializer());
 
     const serializedData = binarySerializer.getBuffer();

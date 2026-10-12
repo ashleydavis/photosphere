@@ -162,10 +162,15 @@ fn watchForCancel(context: *TaskContext, stopping: *std.atomic.Value(bool), port
             if (address.connect(context.io(), .{ .mode = .stream })) |stream| {
                 stream.close(context.io());
             }
-            else |_| {}
+            else |err| {
+                // Without the connection the accepting loop never wakes, and the task never ends.
+                std.debug.panic("media server: could not wake the accepting loop to stop it: {s}", .{@errorName(err)});
+            }
             return;
         };
-        context.io().sleep(.fromMilliseconds(50), .awake) catch {};
+        context.io().sleep(.fromMilliseconds(50), .awake) catch |err| {
+            std.debug.panic("media server: the watch for a cancel could not wait: {s}", .{@errorName(err)});
+        };
     }
 }
 

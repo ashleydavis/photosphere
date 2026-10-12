@@ -64,6 +64,34 @@ log_success "The cancelled share stopped and the dialog closed"
 
 # --- 2. Share again and carry it through to a receiver. ---
 
+# The receiving app is started and its dialog opened before the share, because the sender waits for a receiver only for a fixed time.
+# Claiming a second emulator waits for one to come free, which can take minutes while other suites hold the pool, and that wait used
+# to come out of the sender's.
+case "$PLATFORM" in
+    ios)
+        ;;
+    *)
+        mkdir -p "$TMP_DIR/receiver/vault" "$TMP_DIR/receiver/config"
+        if [ "$PLATFORM" = "android" ]; then
+            # The broadcast of a host receiver leaves through the host's default interface, not the bridge the emulators share, so the
+            # second copy of the app runs on a second emulator.
+            android_claim_peer_device || exit 1
+        fi
+        start_app "$TMP_DIR/receiver"
+        RECEIVER_PORT="$APP_PORT"
+        wait_for_ready "$RECEIVER_PORT"
+
+        send_command "$RECEIVER_PORT" navigate '{"page":"databases"}' || exit 1
+        wait_for_log "$TMP_DIR/receiver" "Databases page loaded"
+
+        # The receive action is in the page's actions menu on a phone. A desktop has no such menu and the click finds nothing.
+        send_command "$RECEIVER_PORT" click '{"dataId":"page-actions-menu"}' || exit 1
+        send_command "$RECEIVER_PORT" click '{"dataId":"receive-database-button"}' || exit 1
+        wait_for_log "$TMP_DIR/receiver" "Receive database dialog opened"
+        wait_for_value "$RECEIVER_PORT" "receive-database-start-button" "Start"
+        ;;
+esac
+
 send_command "$SENDER_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
 send_command "$SENDER_PORT" click '{"dataId":"share-database-button"}' || exit 1
 # Same wait as the first share, for the same reason.
@@ -91,25 +119,6 @@ case "$PLATFORM" in
         fi
         ;;
     *)
-        mkdir -p "$TMP_DIR/receiver/vault" "$TMP_DIR/receiver/config"
-        if [ "$PLATFORM" = "android" ]; then
-            # The broadcast of a host receiver leaves through the host's default interface, not the bridge the emulators share, so the
-            # second copy of the app runs on a second emulator.
-            android_claim_peer_device || exit 1
-        fi
-        start_app "$TMP_DIR/receiver"
-        RECEIVER_PORT="$APP_PORT"
-        wait_for_ready "$RECEIVER_PORT"
-
-        send_command "$RECEIVER_PORT" navigate '{"page":"databases"}' || exit 1
-        wait_for_log "$TMP_DIR/receiver" "Databases page loaded"
-
-        # The receive action is in the page's actions menu on a phone. A desktop has no such menu and the click finds nothing.
-        send_command "$RECEIVER_PORT" click '{"dataId":"page-actions-menu"}' || exit 1
-        send_command "$RECEIVER_PORT" click '{"dataId":"receive-database-button"}' || exit 1
-        wait_for_log "$TMP_DIR/receiver" "Receive database dialog opened"
-        wait_for_value "$RECEIVER_PORT" "receive-database-start-button" "Start"
-
         send_command "$RECEIVER_PORT" type "{\"dataId\":\"receive-database-code-input\",\"text\":\"$second_code\"}" || exit 1
         send_command "$RECEIVER_PORT" click '{"dataId":"receive-database-start-button"}' || exit 1
         wait_for_log "$TMP_DIR/receiver" "Database review step"

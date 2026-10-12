@@ -385,3 +385,17 @@ test "decrypt throws when merkle tree cannot be loaded" {
     try std.testing.expectError(error.Thrown, decrypt(allocator, io, readStorage, writeStorage, noProgress, readStorage));
     try std.testing.expect(std.mem.indexOf(u8, errors.errorMessage(error.Thrown), "Failed to load merkle tree") != null);
 }
+
+test "decryptFile throws when the file it is asked to decrypt is not there" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var readStore = MemoryStorage.init(allocator);
+    var writeStore = MemoryStorage.init(allocator);
+    const readStorage = readStore.asStorage();
+    var tree = try buildMinimalFilesTree(allocator, &.{"asset/missing"});
+
+    try std.testing.expectError(error.Thrown, node_api.decrypt.decryptFile(allocator, io, "asset/missing", readStorage, writeStore.asStorage(), readStorage, &tree, null));
+    try std.testing.expectEqualStrings("Source file \"asset/missing\" does not exist.", errors.lastErrorMessage());
+}

@@ -1,4 +1,5 @@
 const std = @import("std");
+const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const in_process_tools = node_utils.in_process_tools;
 const exec = node_utils.exec.exec;
@@ -97,6 +98,16 @@ test "splitCommand fails on a quote that is not closed and on shell syntax" {
     try std.testing.expectError(error.Thrown, in_process_tools.splitCommand(arena.allocator(), "magick 'a"));
     try std.testing.expectError(error.Thrown, in_process_tools.splitCommand(arena.allocator(), "magick a | b"));
     try std.testing.expectError(error.Thrown, in_process_tools.splitCommand(arena.allocator(), "magick \"$HOME\""));
+}
+
+test "splitCommand keeps the character after a backslash and fails on a backslash at the end" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const words = try in_process_tools.splitCommand(arena.allocator(), "magick a\\ b");
+    try std.testing.expectEqual(@as(usize, 2), words.len);
+    try std.testing.expectEqualStrings("a b", words[1]);
+    try std.testing.expectError(error.Thrown, in_process_tools.splitCommand(arena.allocator(), "magick a\\"));
+    try std.testing.expectEqualStrings("The command ends with a backslash: magick a\\", utils.errors.lastErrorMessage());
 }
 
 test "exec gives a magick command to the runner with its arguments and returns the output" {

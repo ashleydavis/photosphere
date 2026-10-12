@@ -695,3 +695,38 @@ test "saved tree can be loaded and has correct databaseMetadata" {
     try std.testing.expect(loaded.?.databaseMetadata != null);
     try std.testing.expect(node_api.media_file_database.getFilesImported(loaded.?.databaseMetadata) >= 1);
 }
+
+//
+// A readStream that refuses every file, for a storage whose files cannot be read.
+//
+fn refuseReadStream(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!storage_zig.storage.IReadStream {
+    _ = ptr;
+    _ = allocator;
+    _ = io;
+    return errors.throwError("The file {s} cannot be read.", .{filePath});
+}
+
+test "fails with the error of a file it could not read and hash" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    var memoryStorage = MemoryStorage.init(allocator);
+    var storage = memoryStorage.asStorage();
+    try storage.write(allocator, io, "asset/f1", "application/octet-stream", "a");
+    // The file is listed and has info, but its bytes cannot be read.
+    var refusingVTable = storage.vtable.*;
+    refusingVTable.readStream = refuseReadStream;
+    storage.vtable = &refusingVTable;
+    // The retries log each failure; captured so nothing reaches the test program's stderr.
+    var stderrCapture = std.Io.Writer.Allocating.init(allocator);
+    console_capture.captureStderr(&stderrCapture.writer);
+    defer console_capture.endConsoleCapture();
+
+    var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
+    try std.testing.expectError(error.Thrown, tree.buildFilesTree(allocator, io, storage, noProgress, uuidGenerator.uuidGenerator()));
+    try std.testing.expect(std.mem.endsWith(u8, errors.lastErrorMessage(), "The file asset/f1 cannot be read."));
+}

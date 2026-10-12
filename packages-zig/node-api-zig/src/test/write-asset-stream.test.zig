@@ -11,6 +11,7 @@ const merkle_tree_zig = @import("merkle-tree-zig");
 const node_api = @import("node-api-zig");
 const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 const test_files = @import("test-files.zig");
+const temp_dirs = @import("temp-dirs.zig");
 const sync_test_helpers = @import("sync-test-helpers.zig");
 const DatabaseFixture = @import("database-fixture.zig").DatabaseFixture;
 const media_file_database = node_api.media_file_database;
@@ -343,6 +344,29 @@ test "writeAsset throws and releases the lock when the lock is held by another s
 
     try std.testing.expectError(error.Thrown, media_file_database.writeAsset(allocator, io, fixture.database.assetStorage, fixture.rawStorage, "session-1", "a1", "asset", null, "abcd"));
     try std.testing.expectEqualStrings("Failed to acquire write lock.", utils.errors.errorMessage(error.Thrown));
+}
+
+test "writeAsset fails for a directory that holds no database, and leaves no file behind" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var retrying: Retrying = undefined;
+    retrying.init();
+    defer retrying.deinit();
+    const io = retrying.virtual_time.io();
+    const emptyDir = try temp_dirs.makeTempDir(allocator, io, "write-asset-no-database");
+    defer temp_dirs.removeTempDir(io, emptyDir);
+    const storage = try test_files.directoryStorage(allocator, io, emptyDir);
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(null, &stderr_capture.writer);
+    defer utils.console.setCapture(null, null);
+
+    try std.testing.expectError(error.Thrown, media_file_database.writeAsset(allocator, io, storage, storage, "session-1", "a1", "asset", null, "abcd"));
+
+    try std.testing.expectEqualStrings("Failed to load media file database.", utils.errors.errorMessage(error.Thrown));
+    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Failed to add asset \"asset/a1\" from buffer") != null);
+    try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ emptyDir, "asset", "a1" })));
+    try std.testing.expect((try storage.checkWriteLock(allocator, io, ".db/write.lock")) == null);
 }
 
 test "streamAsset reads back the bytes of an asset by type and id" {

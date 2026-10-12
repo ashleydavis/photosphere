@@ -1,6 +1,6 @@
 //
 // Port of the third-party `wrap-ansi` package (v9.0.2), used by the clack prompts to wrap each frame
-// to the terminal width (this file has no TypeScript counterpart in the repo).
+// to the terminal width.
 // Only the options used by clack are supported: `{ hard: true, trim: false }` with word wrapping on.
 // A null column count stands for `process.stdout.columns` being undefined (stdout is not a TTY), for
 // which wrap-ansi returns every line unchanged.

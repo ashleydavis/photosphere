@@ -190,7 +190,7 @@ test "RecentDaysRetentionPolicy evicts originals outside the window, oldest firs
     try expectIds(&.{ "ancient", "old" }, try select(arena.allocator(), recentDaysPolicy, &candidates, defaultContext()));
 }
 
-test "RecentDaysRetentionPolicy keeps an original exactly on the boundary" {
+test "RecentDaysRetentionPolicy an original exactly on the boundary is kept" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const candidates = [_]IEvictionCandidate{importedDaysAgo("boundary", 30)};

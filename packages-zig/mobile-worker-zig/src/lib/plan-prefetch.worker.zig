@@ -124,8 +124,8 @@ fn refuse(reason: []const u8, settings: ISyncSettings, pauseBetweenRunsMs: std.j
 
 //
 // Handler for the plan-prefetch task.
-// (Zig: the input data and the context are ignored. The host is how the platform is asked for the
-// connection type.)
+// (Zig: the input data is ignored, and the context's host requester goes to openStorage. The host is how the platform is
+// asked for the connection type.)
 //
 pub fn planPrefetchHandler(
     allocator: std.mem.Allocator,

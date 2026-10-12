@@ -7,6 +7,7 @@ const IStorage = storage_zig.storage.IStorage;
 const BsonDocument = serialization_zig.bson.BsonDocument;
 const parseDate = serialization_zig.js_date.parseDate;
 const IBsonDatabase = bdb.database.BsonDatabase;
+const errors = @import("utils-zig").errors;
 
 //
 // A media file record (Zig records are the BSON documents
@@ -112,18 +113,30 @@ fn isTruthy(value: ?[]const u8) bool {
 }
 
 //
-// The value of a string field of an asset, or "" when it is missing or not a string.
+// The text of a field of an asset about to be lowercased (`(asset.field || "").toLowerCase()`): "" when the field is
+// missing or falsy, its text when it is a string, and a TypeError when it is any other value, which has no toLowerCase.
 //
-// TODO: a field that is there but is not text reads as "". The fields this filters on are text, so nothing produces one.
-//
-fn stringField(asset: IAsset, name: []const u8) []const u8 {
+fn stringField(asset: IAsset, name: []const u8) ![]const u8 {
     const value = asset.get(name) orelse {
         return "";
     };
-    return switch (value) {
-        .string => |text| text,
-        else => "",
+    const isFalsy = switch (value) {
+        .number, .double => |number| number == 0 or std.math.isNan(number),
+        .int32 => |number| number == 0,
+        .int64 => |number| number == 0,
+        .string => |text| text.len == 0,
+        .undefined, .null => true,
+        .boolean => |boolean| !boolean,
+        else => false,
     };
+    if (isFalsy) {
+        return "";
+    }
+    if (value == .string) {
+        return value.string;
+    }
+    errors.recordError("TypeError", "(asset.{s} || \"\").toLowerCase is not a function. (In '(asset.{s} || \"\").toLowerCase()', '(asset.{s} || \"\").toLowerCase' is undefined)", .{ name, name, name });
+    return error.Thrown;
 }
 
 //
@@ -162,14 +175,14 @@ fn matchesAsset(
     dateToMs: ?f64,
 ) !bool {
     if (queryLower.len > 0) {
-        const origFileName = try std.ascii.allocLowerString(allocator, stringField(asset, "origFileName"));
-        const location = try std.ascii.allocLowerString(allocator, stringField(asset, "location"));
+        const origFileName = try std.ascii.allocLowerString(allocator, try stringField(asset, "origFileName"));
+        const location = try std.ascii.allocLowerString(allocator, try stringField(asset, "location"));
         if (std.mem.indexOf(u8, origFileName, queryLower) == null and std.mem.indexOf(u8, location, queryLower) == null) {
             return false;
         }
     }
     if (contentTypePrefix) |prefix| {
-        const assetContentType = try std.ascii.allocLowerString(allocator, stringField(asset, "contentType"));
+        const assetContentType = try std.ascii.allocLowerString(allocator, try stringField(asset, "contentType"));
         if (!std.mem.startsWith(u8, assetContentType, prefix)) {
             return false;
         }

@@ -203,3 +203,14 @@ test "parse needs simple values turned off, the only way Photosphere calls it" {
     var parser = exif_parser.Parser.create(&.{});
     try std.testing.expectError(error.FlagNotPorted, parser.parse(std.testing.allocator));
 }
+
+test "getSectionName names the restart markers with their index, and gives no name to a marker it does not know" {
+    const rst = jpeg.getSectionName(0xD3);
+    try std.testing.expectEqualStrings("RST", rst.name.?);
+    try std.testing.expectEqual(@as(?u8, 3), rst.index);
+    const sof = jpeg.getSectionName(0xC2);
+    try std.testing.expectEqualStrings("SOF", sof.name.?);
+    try std.testing.expectEqual(@as(?u8, 2), sof.index);
+    const unknown = jpeg.getSectionName(0x01);
+    try std.testing.expect(unknown.name == null);
+}

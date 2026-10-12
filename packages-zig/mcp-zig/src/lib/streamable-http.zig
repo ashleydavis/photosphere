@@ -81,6 +81,15 @@ pub const StreamableHttpRoutes = struct {
             if (method == .GET) {
                 return self.getMcp(io, request, headers);
             }
+            if (method == .HEAD) {
+                // Express gives a HEAD to the GET route, and the SDK's transport answers a method it does not handle with a 405.
+                return sendJsonErrorWithHeaders(allocator, request, .method_not_allowed, -32000, "Method not allowed.", &.{
+                    .{
+                        .name = "Allow",
+                        .value = "GET, POST, DELETE",
+                    },
+                });
+            }
             if (method == .OPTIONS) {
                 return sendAllowed(request, "GET,HEAD,POST");
             }
@@ -94,11 +103,10 @@ pub const StreamableHttpRoutes = struct {
     // POST /mcp: reads the body the way `express.json()` does, and gives the messages to the server.
     //
     fn postMcp(self: *StreamableHttpRoutes, allocator: std.mem.Allocator, io: std.Io, request: *std.http.Server.Request, headers: IHeaders) !void {
-        // Reads a JSON body of at most 100kb, and leaves the body empty for a request that does not say it holds JSON.
+        // Reads a JSON body of at most 100kb, and leaves the body unset for a request that does not say it holds JSON or that has
+        // no body, as `express.json()` does.
         const has_body = request.head.method.requestHasBody() and (request.head.content_length != null or request.head.transfer_encoding != .none);
-        var body: std.json.Value = .{
-            .object = .empty,
-        };
+        var parsed_body: ?std.json.Value = null;
         if (has_body and isJsonType(headers.content_type)) {
             const body_buffer = try allocator.alloc(u8, 16 * 1024);
             const reader = try request.readerExpectContinue(body_buffer);
@@ -106,7 +114,7 @@ pub const StreamableHttpRoutes = struct {
                 error.StreamTooLong => return sendErrorPage(allocator, request, .payload_too_large, "request entity too large"),
                 else => return err,
             };
-            body = parseJsonBody(allocator, text) catch {
+            parsed_body = parseJsonBody(allocator, text) catch {
                 return sendErrorPage(allocator, request, .bad_request, "Unexpected token in JSON");
             };
         }
@@ -116,9 +124,22 @@ pub const StreamableHttpRoutes = struct {
         if (std.mem.indexOf(u8, accept, "application/json") == null or std.mem.indexOf(u8, accept, "text/event-stream") == null) {
             return sendJsonError(allocator, request, .not_acceptable, -32000, "Not Acceptable: Client must accept both application/json and text/event-stream");
         }
-        if (!containsText(headers.content_type orelse "", "application/json")) {
+        if (std.mem.indexOf(u8, headers.content_type orelse "", "application/json") == null) {
             return sendJsonError(allocator, request, .unsupported_media_type, -32000, "Unsupported Media Type: Content-Type must be application/json");
         }
+
+        // A body `express.json()` left unset is read by the transport itself, as JSON of any kind and with no limit.
+        const body = parsed_body orelse body: {
+            var text: []const u8 = "";
+            if (has_body) {
+                const body_buffer = try allocator.alloc(u8, 16 * 1024);
+                const reader = try request.readerExpectContinue(body_buffer);
+                text = try reader.allocRemaining(allocator, .unlimited);
+            }
+            break :body std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{}) catch {
+                return sendJsonError(allocator, request, .bad_request, -32700, "Parse error: Invalid JSON");
+            };
+        };
 
         // A single message or a batch of them.
         var messages: std.ArrayList(std.json.Value) = .empty;
@@ -390,13 +411,6 @@ fn isJsonType(content_type: ?[]const u8) bool {
 }
 
 //
-// Whether a text contains another, ignoring case (a Content-Type may be written in any case).
-//
-fn containsText(text: []const u8, wanted: []const u8) bool {
-    return std.ascii.indexOfIgnoreCase(text, wanted) != null;
-}
-
-//
 // Reads a JSON body the way `express.json()` does in its strict mode: only an object or an array is accepted.
 //
 fn parseJsonBody(allocator: std.mem.Allocator, text: []const u8) !std.json.Value {
@@ -470,6 +484,19 @@ const IJsonRpcError = struct {
 // Sends a refusal as a JSON-RPC error with the status.
 //
 fn sendJsonError(allocator: std.mem.Allocator, request: *std.http.Server.Request, status: std.http.Status, code: i32, message: []const u8) !void {
+    return sendJsonErrorWithHeaders(allocator, request, status, code, message, &.{});
+}
+
+//
+// Sends a refusal as a JSON-RPC error with the status and the headers besides the Content-Type.
+//
+fn sendJsonErrorWithHeaders(allocator: std.mem.Allocator, request: *std.http.Server.Request, status: std.http.Status, code: i32, message: []const u8, headers: []const std.http.Header) !void {
+    var extra_headers: std.ArrayList(std.http.Header) = .empty;
+    try extra_headers.appendSlice(allocator, headers);
+    try extra_headers.append(allocator, .{
+        .name = "Content-Type",
+        .value = "application/json",
+    });
     const body: IJsonRpcErrorBody = .{
         .jsonrpc = "2.0",
         .@"error" = .{
@@ -481,12 +508,7 @@ fn sendJsonError(allocator: std.mem.Allocator, request: *std.http.Server.Request
     try request.respond(try std.json.Stringify.valueAlloc(allocator, body, .{}), .{
         .status = status,
         .keep_alive = false,
-        .extra_headers = &.{
-            .{
-                .name = "Content-Type",
-                .value = "application/json",
-            },
-        },
+        .extra_headers = extra_headers.items,
     });
 }
 

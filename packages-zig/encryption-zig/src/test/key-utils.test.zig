@@ -2,7 +2,6 @@ const std = @import("std");
 const encryption = @import("encryption-zig");
 const utils = @import("utils-zig");
 const fixtures = @import("fixtures.zig");
-const mock_log = @import("mock-log.zig");
 
 const key_utils = encryption.key_utils;
 const crypto = encryption.node_crypto;
@@ -214,9 +213,10 @@ test "loadPrivateKey returns null for a file that is not a key" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    var mockLog: mock_log.MockLog = .{};
-    mockLog.install();
-    defer mockLog.uninstall();
+    var stdout: std.Io.Writer.Allocating = .init(allocator);
+    var stderr: std.Io.Writer.Allocating = .init(allocator);
+    utils.console.setCapture(&stdout.writer, &stderr.writer);
+    defer utils.console.setCapture(null, null);
     var tmpDir = std.testing.tmpDir(.{});
     defer tmpDir.cleanup();
 
@@ -226,7 +226,29 @@ test "loadPrivateKey returns null for a file that is not a key" {
         .data = "not a key",
     });
     try std.testing.expect(key_utils.loadPrivateKey(allocator, std.testing.io, keyFilePath) == null);
-    try std.testing.expectEqual(@as(u32, 1), mockLog.exceptionCalls);
+    const expected = try std.mem.concat(allocator, u8, &.{ "Error loading private key from ", keyFilePath, ": Error: error:1E08010C:DECODER routines::unsupported\n" });
+    try std.testing.expectEqualStrings(expected, stderr.written());
+    try std.testing.expectEqualStrings("", stdout.written());
+}
+
+test "loadPublicKey returns null for a file that is not a key" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var stdout: std.Io.Writer.Allocating = .init(allocator);
+    var stderr: std.Io.Writer.Allocating = .init(allocator);
+    utils.console.setCapture(&stdout.writer, &stderr.writer);
+    defer utils.console.setCapture(null, null);
+    var tmpDir = std.testing.tmpDir(.{});
+    defer tmpDir.cleanup();
+
+    const keyFilePath = try std.fs.path.join(allocator, &.{ try tempDirPath(allocator, tmpDir), "bad.pub" });
+    try tmpDir.dir.writeFile(std.testing.io, .{
+        .sub_path = "bad.pub",
+        .data = "not a key",
+    });
+    try std.testing.expect(key_utils.loadPublicKey(allocator, std.testing.io, keyFilePath) == null);
+    try std.testing.expect(std.mem.startsWith(u8, stderr.written(), try std.mem.concat(allocator, u8, &.{ "Error loading public key from ", keyFilePath, ": Error: " })));
 }
 
 test "loadOrGenerateKeyPair loads a saved pair and does not generate when disabled" {
@@ -262,4 +284,103 @@ test "loadOrGenerateKeyPair generates and saves a pair when none exists and gene
     const generatedHash = try key_utils.hashPublicKey(allocator, generated.publicKey);
     const reloadedHash = try key_utils.hashPublicKey(allocator, reloaded.publicKey);
     try std.testing.expectEqualSlices(u8, &generatedHash, &reloadedHash);
+}
+
+test "loadEncryptionKeys returns empty options when no key paths are provided" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const result = try key_utils.loadEncryptionKeys(allocator, std.testing.io, &.{}, false);
+    try std.testing.expect(!result.isEncrypted);
+    try std.testing.expect(result.options.decryptionKeyMap == null);
+    try std.testing.expect(result.options.encryptionPublicKey == null);
+}
+
+test "loadEncryptionKeys builds decryptionKeyMap and encryptionPublicKey for a single key path" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmpDir = std.testing.tmpDir(.{});
+    defer tmpDir.cleanup();
+
+    const keyPath = try std.fs.path.join(allocator, &.{ try tempDirPath(allocator, tmpDir), "test-single-key-loadEncryptionKeys.key" });
+    const result = try key_utils.loadEncryptionKeys(allocator, std.testing.io, &.{keyPath}, true);
+
+    try std.testing.expect(result.isEncrypted);
+    const map = result.options.decryptionKeyMap.?;
+    const writeKey = result.options.encryptionPublicKey.?;
+    const defaultKey = map.get("default").?;
+    const hashHex = std.fmt.bytesToHex(try key_utils.hashPublicKey(allocator, writeKey), .lower);
+    const entryKey = map.get(&hashHex).?;
+    try std.testing.expect(entryKey == defaultKey);
+
+    // The keys are usable: the AES key wrapped with the write key comes back with the default key.
+    const encrypted = try crypto.publicEncrypt(allocator, std.testing.io, writeKey, "hello");
+    try std.testing.expectEqualStrings("hello", try crypto.privateDecrypt(allocator, defaultKey, encrypted));
+}
+
+test "loadEncryptionKeys registers multiple keys and uses the first as default/write key" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmpDir = std.testing.tmpDir(.{});
+    defer tmpDir.cleanup();
+
+    const directory = try tempDirPath(allocator, tmpDir);
+    const keyPath1 = try std.fs.path.join(allocator, &.{ directory, "test-multi-key-loadEncryptionKeys-1.key" });
+    const keyPath2 = try std.fs.path.join(allocator, &.{ directory, "test-multi-key-loadEncryptionKeys-2.key" });
+
+    const result = try key_utils.loadEncryptionKeys(allocator, std.testing.io, &.{ keyPath1, keyPath2 }, true);
+
+    try std.testing.expect(result.isEncrypted);
+    const map = result.options.decryptionKeyMap.?;
+    const writeKey = result.options.encryptionPublicKey.?;
+    try std.testing.expectEqual(@as(usize, 3), map.count());
+
+    // The first key is the default and matches the encryptionPublicKey hash entry.
+    const defaultPrivate = map.get("default").?;
+    const writeHashHex = std.fmt.bytesToHex(try key_utils.hashPublicKey(allocator, writeKey), .lower);
+    try std.testing.expect(map.get(&writeHashHex).? == defaultPrivate);
+    const firstPair = (try key_utils.loadOrGenerateKeyPair(allocator, std.testing.io, keyPath1, false)).?;
+    const firstHashHex = std.fmt.bytesToHex(try key_utils.hashPublicKey(allocator, firstPair.publicKey), .lower);
+    try std.testing.expectEqualStrings(&firstHashHex, &writeHashHex);
+}
+
+test "loadEncryptionKeys derives a public key from a private key when .pub is missing (generateKey=false)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmpDir = std.testing.tmpDir(.{});
+    defer tmpDir.cleanup();
+
+    const keyPem = try loadFixturePem(allocator, "ts");
+    try tmpDir.dir.writeFile(std.testing.io, .{
+        .sub_path = "test-private-only-loadEncryptionKeys.key",
+        .data = keyPem.privateKeyPem,
+    });
+    const keyPath = try std.fs.path.join(allocator, &.{ try tempDirPath(allocator, tmpDir), "test-private-only-loadEncryptionKeys.key" });
+
+    const result = try key_utils.loadEncryptionKeys(allocator, std.testing.io, &.{keyPath}, false);
+
+    try std.testing.expect(result.isEncrypted);
+    const map = result.options.decryptionKeyMap.?;
+    const writeKey = result.options.encryptionPublicKey.?;
+    const defaultKey = map.get("default").?;
+    const writeHashHex = std.fmt.bytesToHex(try key_utils.hashPublicKey(allocator, writeKey), .lower);
+    const entryKey = map.get(&writeHashHex).?;
+    try std.testing.expect(entryKey == defaultKey);
+    try std.testing.expectEqualStrings(try fixtures.readFixture(allocator, "ts-public-hash.hex"), &writeHashHex);
+}
+
+test "loadEncryptionKeys throws a fatal error naming the key when the private key is missing (generateKey=false)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmpDir = std.testing.tmpDir(.{});
+    defer tmpDir.cleanup();
+
+    const keyPath = try std.fs.path.join(allocator, &.{ try tempDirPath(allocator, tmpDir), "missing.key" });
+    try std.testing.expectError(error.FatalError, key_utils.loadEncryptionKeys(allocator, std.testing.io, &.{keyPath}, false));
+    const expected = try std.mem.concat(allocator, u8, &.{ "Private key not found: ", keyPath, "\nUse --generate-key to create a new key or specify an existing key file either in the current directory or in the ~/.config/photosphere/keys directory." });
+    try std.testing.expectEqualStrings(expected, utils.errors.lastErrorMessage());
 }

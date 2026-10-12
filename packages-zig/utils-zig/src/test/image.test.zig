@@ -33,8 +33,28 @@ const TestValue = union(enum) {
     // undefined.
     undefined,
 
-    // A date (a value the orientation code has no JavaScript rendering for).
+    // A date, as milliseconds since the epoch.
     date: i64,
+
+    // A 64-bit integer that is not a JavaScript number (a bson Long).
+    int64: i64,
+
+    // Binary data (a bson Binary).
+    binary: TestBinary,
+
+    // A 12-byte ObjectId.
+    objectId: [12]u8,
+};
+
+//
+// A stand-in for a bson Binary.
+//
+const TestBinary = struct {
+    // The binary subtype.
+    subType: u8,
+
+    // The bytes.
+    data: []const u8,
 };
 
 //
@@ -177,7 +197,10 @@ test "getImageTransformation renders an orientation it does not know like JavaSc
         .{ .value = .{ .array = &.{.null} }, .message = "Unsupported orientation: null" },
         .{ .value = .{ .array = &.{.{ .array = &.{ .{ .number = 6 }, .null, .{ .string = "x" } } }} }, .message = "Unsupported orientation: 6,,x" },
         .{ .value = .{ .document = .{ .keys = &.{}, .values = &.{} } }, .message = "Unsupported orientation: [object Object]" },
-        .{ .value = .{ .date = 0 }, .message = "Unsupported orientation: date" },
+        .{ .value = .{ .date = 0 }, .message = "Unsupported orientation: Thu Jan 01 1970 00:00:00 GMT+0000 (Coordinated Universal Time)" },
+        .{ .value = .{ .int64 = 9007199254740993 }, .message = "Unsupported orientation: 9007199254740993" },
+        .{ .value = .{ .binary = .{ .subType = 0, .data = &.{ 0x61, 0xFF, 0x62 } } }, .message = "Unsupported orientation: a\u{FFFD}b" },
+        .{ .value = .{ .objectId = .{ 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0x01, 0x23, 0x45, 0x67 } }, .message = "Unsupported orientation: 0123456789abcdef01234567" },
     };
     inline for (cases) |case| {
         try std.testing.expectError(error.Thrown, image.getImageTransformation(allocator, withOrientation(case.value)));
@@ -201,6 +224,15 @@ test "getVideoTransformation needs no transformation for falsy streams or rotati
         } }},
     };
     try std.testing.expect((try image.getVideoTransformation(allocator, @as(?TestDocument, metadata))) == null);
+}
+
+test "getVideoTransformation throws a TypeError for truthy streams that cannot be iterated" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try std.testing.expectError(error.Thrown, image.getVideoTransformation(allocator, @as(?TestDocument, TestDocument{ .keys = &.{"streams"}, .values = &.{.{ .number = 5 }} })));
+    try std.testing.expectEqualStrings("TypeError", utils.errors.lastErrorName());
+    try std.testing.expectEqualStrings("metadata.streams is not iterable", utils.errors.lastErrorMessage());
 }
 
 test "getVideoTransformation reads a rotation held as a string" {
