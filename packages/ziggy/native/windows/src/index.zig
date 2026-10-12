@@ -5,4 +5,3 @@
 pub const shell = @import("lib/shell.zig");
 pub const run = shell.run;
 pub const AppConfig = shell.AppConfig;
-pub const UiFile = @import("ui-files").UiFile;

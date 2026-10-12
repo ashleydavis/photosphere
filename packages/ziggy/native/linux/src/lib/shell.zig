@@ -11,7 +11,6 @@ const z = @import("c");
 const menu_keys = @import("menu-keys.zig");
 const geometry_lib = @import("geometry.zig");
 const render_device = @import("render-device.zig");
-const ui_files = @import("ui-files");
 const host_reply = @import("host-reply");
 
 // The URL scheme the bundled page is served under. WebKitGTK asks the shell for each file instead of reading a directory.
@@ -58,8 +57,6 @@ pub const AppConfig = struct {
     default_height: c_int,
     // The PNG file of the window icon, or null when the app has none and the window shows the desktop's generic one.
     icon_png: ?[]const u8,
-    // The files of the app's bundled page, embedded in the executable. One of them must be "index.html".
-    ui_files: []const ui_files.UiFile,
 };
 
 //
@@ -187,21 +184,25 @@ fn turnSandboxOffWhenItCannotStart() !void {
 }
 
 //
-// Answers a web view request for one of the bundled page's files, from the files embedded in the executable. A path that
-// is not one of them is answered with a not found error.
+// Answers a web view request for one of the bundled page's files, from the files the core holds. A path that is not one of
+// them is answered with a not found error. The page is loaded only once the core exists.
 //
 fn onUriSchemeRequest(request: *c.WebKitURISchemeRequest, user_data: c.gpointer) callconv(.c) void {
     const shell: *Shell = @ptrCast(@alignCast(user_data.?));
     const request_path = std.mem.span(c.webkit_uri_scheme_request_get_path(request));
-    const file = ui_files.findFile(shell.app_config.ui_files, request_path) orelse {
+    const core = shell.core orelse {
+        fatal("the web view asked for {s} before the core existed", .{request_path});
+    };
+    var file: z.ziggy_ui_file_result = undefined;
+    if (!z.ziggy_ui_file(core, request_path.ptr, request_path.len, &file)) {
         const not_found = c.g_error_new_literal(c.g_io_error_quark(), c.G_IO_ERROR_NOT_FOUND, "the page has no such file");
         c.webkit_uri_scheme_request_finish_error(request, not_found);
         c.g_error_free(not_found);
         return;
-    };
+    }
     // The bytes live in the executable for as long as it runs, so the stream is told not to free them.
-    const stream = c.g_memory_input_stream_new_from_data(file.content.ptr, @intCast(file.content.len), null);
-    c.webkit_uri_scheme_request_finish(request, stream, @intCast(file.content.len), ui_files.contentType(file.path).ptr);
+    const stream = c.g_memory_input_stream_new_from_data(file.content, @intCast(file.content_length), null);
+    c.webkit_uri_scheme_request_finish(request, stream, @intCast(file.content_length), file.content_type);
     c.g_object_unref(stream);
 }
 
@@ -222,9 +223,6 @@ fn start(shell: *Shell, application: *c.GtkApplication) !void {
     const test_hooks = z.ziggy_test_hooks_enabled();
     shell.test_mode = test_hooks and c.g_getenv("ZIGGY_TEST_MODE") != null;
 
-    if (ui_files.findFile(shell.app_config.ui_files, "/") == null) {
-        return error.UiHasNoIndexPage;
-    }
     // The page's own scripts are classic scripts, but a page may also fetch its files, which needs the scheme to be
     // allowed to make cross-origin style requests and to count as a secure context like https does.
     const web_context = c.webkit_web_context_get_default();

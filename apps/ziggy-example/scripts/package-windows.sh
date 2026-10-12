@@ -19,7 +19,7 @@ prefix="$WINDOWS_SHELL_DIR/package/$arch"
 artifact_base="ziggy-example-$version-windows-$arch"
 mkdir -p "$package_dir"
 
-bash "$WINDOWS_SCRIPTS_DIR/sync-windows.sh" --arch "$arch" --prefix "$prefix" --optimize ReleaseSafe
+bash "$WINDOWS_SCRIPTS_DIR/sync-windows.sh" --arch "$arch" --prefix "$prefix" --optimize ReleaseSafe --strip
 
 windows_zip "$package_dir/$artifact_base.zip" "$prefix" "$WINDOWS_APP_DIR_NAME"
 echo "Created $package_dir/$artifact_base.zip"

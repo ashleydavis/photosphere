@@ -10,6 +10,8 @@ arch="x64"
 prefix="$WINDOWS_SHELL_DIR/zig-out"
 optimize="ReleaseSafe"
 test_hooks="false"
+strip="false"
+bundle_arguments=()
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -24,6 +26,14 @@ while [ "$#" -gt 0 ]; do
         --optimize)
             optimize="$2"
             shift 2
+            ;;
+        --minify)
+            bundle_arguments=(--minify)
+            shift
+            ;;
+        --strip)
+            strip="true"
+            shift
             ;;
         --test-hooks)
             test_hooks="true"
@@ -46,6 +56,6 @@ if [ ! -f "$WINDOWS_SDK_DIR/include/WebView2.h" ] || [ ! -f "$WINDOWS_SDK_DIR/$a
     exit 1
 fi
 
-(cd "$WINDOWS_APP_DIR" && bun run bundle:ui)
-(cd "$WINDOWS_APP_DIR/../.." && zig build photosphere-windows "-Dtarget=$zig_target" "-Doptimize=$optimize" "-Dtest-hooks=$test_hooks" -p "$prefix")
+(cd "$WINDOWS_APP_DIR" && bun run bundle:ui "${bundle_arguments[@]+"${bundle_arguments[@]}"}")
+(cd "$WINDOWS_APP_DIR/../.." && zig build photosphere-windows "-Dtarget=$zig_target" "-Doptimize=$optimize" "-Dtest-hooks=$test_hooks" "-Dstrip=$strip" -p "$prefix")
 echo "Built into $prefix/$WINDOWS_APP_DIR_NAME"

@@ -5,7 +5,6 @@
 
 const std = @import("std");
 const shell = @import("ziggy-shell-windows");
-const ui = @import("ui-files");
 
 //
 // Runs the shell with Photosphere's name, window size and embedded page, and returns the exit code.
@@ -18,6 +17,5 @@ pub fn main(init: std.process.Init) !u8 {
         .default_width = 1200,
         .default_height = 800,
         .icon_resource = 1,
-        .ui_files = &ui.files,
     }, args);
 }

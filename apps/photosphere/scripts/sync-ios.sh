@@ -12,6 +12,7 @@ SDK="simulator"
 ARCH="$(apple_host_arch)"
 NATIVE_DIR="$APPLE_APP_DIR/shells/ios/zig-out"
 TEST_HOOKS="no"
+MINIFY="no"
 OPTIMIZE="ReleaseSafe"
 
 while [ $# -gt 0 ]; do
@@ -28,6 +29,10 @@ while [ $# -gt 0 ]; do
             NATIVE_DIR="$2"
             shift 2
             ;;
+        --minify)
+            MINIFY="yes"
+            shift
+            ;;
         --test-hooks)
             TEST_HOOKS="yes"
             shift
@@ -37,7 +42,7 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         *)
-            apple_fail "unknown argument '$1'. Options: --sdk, --arch, --native-dir, --test-hooks, --optimize."
+            apple_fail "unknown argument '$1'. Options: --sdk, --arch, --native-dir, --test-hooks, --minify, --optimize."
             ;;
     esac
 done
@@ -57,5 +62,5 @@ case "$SDK" in
         ;;
 esac
 
-apple_sync_native "$ZIG_TARGET" "$NATIVE_DIR" "$TEST_HOOKS" "$OPTIMIZE"
+apple_sync_native "$ZIG_TARGET" "$NATIVE_DIR" "$TEST_HOOKS" "$OPTIMIZE" "$MINIFY"
 echo "Synced the iOS native files ($SDK, $ARCH) into $NATIVE_DIR"

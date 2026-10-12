@@ -160,7 +160,7 @@ typedef struct ziggy_ui_file_result {
 
 // Finds a file of the app's bundled page by the path of a request, which starts with a slash ("/" is the page itself), and
 // writes it into the struct given. Returns false, leaving the struct unchanged, when the page has no such file. Used by the
-// shells that serve the page by asking the core for each file (MacOS, iOS and Android).
+// shells to serve the page, by asking the core for each file.
 bool ziggy_ui_file(void *handle, const char *path, size_t path_len, ziggy_ui_file_result *result);
 
 // The script a shell injects into the page before the page's own scripts, which exposes window.ziggy (NUL terminated, valid for

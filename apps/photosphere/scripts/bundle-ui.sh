@@ -8,10 +8,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRONTEND_DIR="$(cd "$SCRIPT_DIR/../../photosphere-frontend" && pwd)"
 DIST_DIR="$FRONTEND_DIR/dist"
 
+MINIFY_ARGUMENTS=()
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --minify)
+            MINIFY_ARGUMENTS=(--minify esbuild)
+            shift
+            ;;
+        *)
+            echo "Unknown argument $1. See bundle-ui.md." >&2
+            exit 2
+            ;;
+    esac
+done
+
 BUILD_DIR="$(mktemp -d "$FRONTEND_DIR/dist-build.XXXXXX")"
 trap 'find "$BUILD_DIR" -type f -delete; find "$BUILD_DIR" -depth -type d -empty -delete' EXIT
 
-(cd "$FRONTEND_DIR" && bun run bundle --outDir "$BUILD_DIR" --emptyOutDir)
+(cd "$FRONTEND_DIR" && bun run bundle --outDir "$BUILD_DIR" --emptyOutDir "${MINIFY_ARGUMENTS[@]+"${MINIFY_ARGUMENTS[@]}"}")
 
 # Other builds running at the same moment read dist (the Zig builds embed it), so dist is left untouched when the page has
 # not changed, and a changed file is moved into place whole.
