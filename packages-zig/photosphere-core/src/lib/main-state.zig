@@ -18,6 +18,7 @@ const ziggy = @import("ziggy-core");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 const mobile_worker = @import("mobile-worker-zig");
+const media_tools = @import("media-tools-zig");
 const node_utils = @import("node-utils-zig");
 const storage = @import("storage-zig");
 const config = @import("config-zig");
@@ -62,6 +63,16 @@ pub const ASSET_SERVER_TASK_SOURCE = "asset-server";
 pub const MCP_SERVER_TASK_SOURCE = "mcp-server";
 
 //
+// The source the `check-for-update` task is queued under.
+//
+pub const CHECK_FOR_UPDATE_TASK_SOURCE = "check-for-update";
+
+//
+// The source the `check-for-news` task is queued under.
+//
+pub const CHECK_FOR_NEWS_TASK_SOURCE = "check-for-news";
+
+//
 // The source the `ensure-auto-import` task is queued under. It is not the source of the automatic import tasks, because ensureAutoImport
 // cancels that source and must not cancel itself.
 //
@@ -86,32 +97,6 @@ const TIMER_TICK_MS = 20;
 // How often the first copy of the app looks for the signal a second copy leaves, in milliseconds.
 //
 pub const SINGLE_INSTANCE_CHECK_MS = 500;
-
-//
-// Asks the shell through the core's host request callback, for the code that runs at startup, before there is a task to ask through.
-//
-const CoreHostRequester = struct {
-    // The shell's configuration, with the host request callback.
-    config: *const ziggy.types.ZiggyConfig,
-
-    //
-    // The requester, valid as long as this is and does not move.
-    //
-    fn requester(self: *CoreHostRequester) utils.host_requester.IHostRequester {
-        return .{
-            .ptr = self,
-            .request = request,
-        };
-    }
-
-    //
-    // Asks the shell and returns its answer, allocated with the allocator.
-    //
-    fn request(ptr: *anyopaque, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) anyerror![]const u8 {
-        const self: *CoreHostRequester = @ptrCast(@alignCast(ptr));
-        return ziggy.task_runner.askShell(self.config, allocator, method, request_json);
-    }
-};
 
 //
 // What the main process remembers.
@@ -160,6 +145,8 @@ pub const MainState = struct {
     // Set while ensureAutoImport is part way through, so two config writes arriving together do not both create the default database
     // (`autoImportStarting`).
     auto_import_starting: bool,
+    // Whether the checks made once the page has loaded (for an update and for news) have been queued, which happens once.
+    startup_checks_queued: bool,
     // Whether the asset server task has been queued.
     asset_server_requested: bool,
     // The port the asset server bound, from its asset-server-ready message, or 0 before that (`restApiPort`).
@@ -187,6 +174,8 @@ pub const MainState = struct {
     stopping: std.atomic.Value(bool),
     // The timer thread.
     timer_thread: ?std.Thread,
+    // The tools built into the program (ImageMagick), started before the file logger and stopped after it. Owned.
+    media_tools: *media_tools.MediaTools,
     // The file logger (`fileLogger`), made first when the state is made and closed last when the core is destroyed. Owned.
     logger: *file_logger.FileLogger,
     // The log that was installed before the file logger took its place, put back when the file logger is closed.
@@ -199,17 +188,16 @@ pub const MainState = struct {
         // A core a shell hosts has no `main` to hand it the environment, so it is read from the process (see environment.zig). The map
         // stays for the life of the process, because the tasks still running while the core is destroyed read it too.
         _ = try environment.adoptProcessEnvironment(core.allocator);
-        // Android has no ImageMagick, ffmpeg or ffprobe program to start, so the shell runs them in its own process and the core asks it
-        // through its host request callback. Only the file logger's header needs them here; each task builds its own runner from its
-        // host requester.
-        var startup_host: CoreHostRequester = .{
-            .config = &core.config,
-        };
-        var startup_tools_storage: node_utils.host_tools.HostToolRunner = undefined;
-        const startup_tools = try node_utils.host_tools.toolRunnerFor(if (core.config.host_request != null) startup_host.requester() else null, &startup_tools_storage);
+        // ImageMagick is built into the program and runs in its process, for the tasks (through the queue backend) and for the file
+        // logger's header, which asks it for its version.
+        const media = try core.allocator.create(media_tools.MediaTools);
+        errdefer core.allocator.destroy(media);
+        media.* = media_tools.MediaTools.init(core.io());
+        errdefer media.deinit();
+        core.queue_backend.tool_runner = media.runner();
         // The file logger is made first so everything after it is logged.
         const previous_log = utils.log.log;
-        const logger = try startFileLogger(core.allocator, core.io(), startup_tools);
+        const logger = try startFileLogger(core.allocator, core.io(), media.runner());
         errdefer stopFileLogger(logger, previous_log);
         // The task handlers register with task-queue-zig, which is where the runner finds them.
         try node_api.task_handlers.initTaskHandlers();
@@ -221,6 +209,7 @@ pub const MainState = struct {
         const state = try core.allocator.create(MainState);
         errdefer core.allocator.destroy(state);
         state.* = .{
+            .media_tools = media,
             .logger = logger,
             .previous_log = previous_log,
             .allocator = core.allocator,
@@ -242,6 +231,7 @@ pub const MainState = struct {
             .auto_import_database_path = null,
             .auto_import_settings_json = null,
             .auto_import_starting = false,
+            .startup_checks_queued = false,
             .asset_server_requested = false,
             .asset_server_port = 0,
             .asset_server_ended = false,
@@ -340,6 +330,8 @@ pub const MainState = struct {
             instance.release(self.io);
         }
         stopFileLogger(self.logger, self.previous_log);
+        self.media_tools.deinit();
+        self.allocator.destroy(self.media_tools);
         self.allocator.destroy(self);
     }
 
@@ -688,6 +680,30 @@ pub const MainState = struct {
                 utils.log.log.exception("MCP server failed to start, continuing without it", err);
             };
         }
+    }
+
+    //
+    // Does what is needed once the page has loaded and is listening for events: queues the check for a newer release (on a desktop, as
+    // a phone is updated by its store) and the check of the news feed, which announce what they find to the page as events. Only the
+    // first call does anything, because the checks run once however many times the page loads.
+    //
+    pub fn pageLoaded(self: *MainState) !void {
+        {
+            self.lock();
+            defer self.unlock();
+            if (self.startup_checks_queued) {
+                return;
+            }
+            self.startup_checks_queued = true;
+        }
+        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena_state.deinit();
+        if (builtin.os.tag != .ios and !builtin.abi.isAndroid()) {
+            const update_task_id = try self.uuid_generator.generate(arena_state.allocator(), self.io);
+            try self.core.runner.addTask(update_task_id, "check-for-update", CHECK_FOR_UPDATE_TASK_SOURCE, "null", .background, null);
+        }
+        const news_task_id = try self.uuid_generator.generate(arena_state.allocator(), self.io);
+        try self.core.runner.addTask(news_task_id, "check-for-news", CHECK_FOR_NEWS_TASK_SOURCE, "null", .background, null);
     }
 
     //

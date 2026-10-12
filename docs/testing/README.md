@@ -312,7 +312,7 @@ bun run stories:ios        # Capacitor iOS app (deprecated)
 
 The web build has no scripted runner: start it with `bun run dev:web`, open `http://localhost:8080/#/stories`, and click **▶ Play on automatic** to cycle the stories by hand. The port is `apps/dev-frontend/vite.config.ts`, which pins 8080.
 
-Screenshots go to `stories-screenshots/<platform>/`, with an `index.html` showing each story's light and dark shots side by side. Add `-- --open` to open it when the run finishes.
+Screenshots go to `stories-screenshots/<platform>/` (`ziggy`, `ziggy-android` and `ziggy-ios` for the Photosphere App), with an `index.html` showing each story's light and dark shots side by side. Add `-- --open` to open it when the run finishes.
 
 Running the stories on the Photosphere App on Android or iOS (`stories:ziggy:and`, `stories:ziggy:ios`) renders every page at phone resolution, which is the quickest way to catch a page that does not fit on mobile (content pushed off-screen, buttons out of reach, text clipped).
 

@@ -135,12 +135,27 @@ ziggy_platform_prepare() {
     mkdir -p "$run_dir/test" "$run_dir/release"
     local version
     version="$(ziggy_android_version)"
-    bash "$ANDROID_SCRIPTS_DIR/sync-android.sh" --test-hooks --optimize ReleaseSafe || return 1
-    ziggy_android_gradle assembleDebug "-PziggyVersionName=$version" || return 1
-    cp "$ZIGGY_ANDROID_PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" "$run_dir/test/app.apk" || return 1
-    bash "$ANDROID_SCRIPTS_DIR/sync-android.sh" --skip-ui --optimize ReleaseSmall || return 1
-    ziggy_android_gradle assembleDebug "-PziggyVersionName=$version" || return 1
-    cp "$ZIGGY_ANDROID_PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" "$run_dir/release/app.apk" || return 1
+
+    # Both builds go through the one Gradle project and the one synced library directory of this checkout, so another run
+    # building at the same time would replace the library between this run's sync and its Gradle build, and a test APK could
+    # be packaged with the release library (no control connection). One run builds at a time per checkout, under a lock on
+    # that shared directory. The lock's descriptor is closed for every command, so nothing a build starts (the Gradle daemon)
+    # can keep the lock held after this function returns.
+    local build_lock_fd
+    mkdir -p "$ZIGGY_ANDROID_PROJECT_DIR/app/build"
+    exec {build_lock_fd}<>"$ZIGGY_ANDROID_PROJECT_DIR/app/build/ziggy-smoke-build.lock"
+    flock "$build_lock_fd" || return 1
+    local result=0
+    {
+        bash "$ANDROID_SCRIPTS_DIR/sync-android.sh" --test-hooks --optimize ReleaseSafe &&
+            ziggy_android_gradle assembleDebug "-PziggyVersionName=$version" &&
+            cp "$ZIGGY_ANDROID_PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" "$run_dir/test/app.apk" &&
+            bash "$ANDROID_SCRIPTS_DIR/sync-android.sh" --skip-ui --optimize ReleaseSmall &&
+            ziggy_android_gradle assembleDebug "-PziggyVersionName=$version" &&
+            cp "$ZIGGY_ANDROID_PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" "$run_dir/release/app.apk"
+    } {build_lock_fd}>&- || result=1
+    exec {build_lock_fd}>&-
+    return "$result"
 }
 
 ziggy_platform_start() {

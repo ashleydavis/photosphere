@@ -9,6 +9,8 @@ const node_utils = @import("node-utils-zig");
 const HttpServer = node_utils.http_server.HttpServer;
 const RequestHandler = node_utils.http_server.RequestHandler;
 
+const expectServerStopped = @import("../../../utils-zig/src/test/expect-server-stopped.zig").expectServerStopped;
+
 const io = std.testing.io;
 
 //
@@ -116,8 +118,7 @@ test "close stops the server from accepting connections" {
 
     server.close();
 
-    const address = try std.Io.net.IpAddress.parseIp4("127.0.0.1", port);
-    try std.testing.expect(std.meta.isError(address.connect(io, .{ .mode = .stream })));
+    try expectServerStopped(io, port);
 }
 
 test "close waits for a request that is being answered" {

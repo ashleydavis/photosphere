@@ -136,6 +136,8 @@ pub fn notifyDatabaseEditedHandler(core: *Core, arena: std.mem.Allocator, data: 
 // A generic channel that lets the page trigger named actions in the main process. The commands are:
 //
 //  - toggle-devtools: opens the developer tools, or closes them when they are open, which the shell does as it does for the menu item.
+//  - page-loaded: says the page has loaded and is listening for events, which starts the checks for an update and for news. Only the
+//    first one does anything.
 //  - set-sync-allowed: records whether the page's decision permits syncing automatically (`allowed`), and schedules a sync at once
 //    when it does, to catch up one that was waiting.
 //
@@ -152,6 +154,9 @@ pub fn mainCommandHandler(core: *Core, arena: std.mem.Allocator, data: std.json.
             return utils.errors.throwError("The developer tools are not available on this platform.", .{});
         };
         menu_action(core.config.user_data, "toggle-devtools");
+    }
+    else if (std.mem.eql(u8, command, "page-loaded")) {
+        try main_state.fromCore(core).pageLoaded();
     }
     else if (std.mem.eql(u8, command, "set-sync-allowed")) {
         const state = main_state.fromCore(core);
@@ -630,7 +635,17 @@ fn handleTaskMessage(core: *Core, arena: std.mem.Allocator, sent: ziggy.types.Ta
         try events.sendSyncStarted(core, arena);
     }
     else if (std.mem.eql(u8, message_type, "sync-completed")) {
-        utils.log.log.event("Sync completed");
+        // The suffix says whether the sync moved anything, which is the only way to tell a sync that ran and found both sides
+        // identical from one that pushed changes. "Sync completed" stays the start of the line, so a wait on that text alone still
+        // matches.
+        const synced_field = if (message == .object) message.object.get("synced") else null;
+        const moved_changes = synced_field != null and synced_field.? == .bool and synced_field.?.bool;
+        if (moved_changes) {
+            utils.log.log.event("Sync completed: changes synced");
+        }
+        else {
+            utils.log.log.event("Sync completed: nothing to sync");
+        }
         try events.sendSyncCompleted(core, arena);
     }
     else if (std.mem.eql(u8, message_type, "asset-server-ready")) {

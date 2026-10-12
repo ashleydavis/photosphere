@@ -59,6 +59,12 @@ const WM_ZIGGY_PICK: c.UINT = c.WM_APP + 2;
 const WM_ZIGGY_MENU: c.UINT = c.WM_APP + 3;
 
 //
+// The window message the test control connection's thread posts to ask the UI thread to capture a picture of the window. Its lparam
+// is the address of the request.
+//
+const WM_ZIGGY_SCREENSHOT: c.UINT = c.WM_APP + 4;
+
+//
 
 //
 // The name of the window class the shell registers.
@@ -164,6 +170,10 @@ const DevToolsCallHandler = ComHandler(c.ICoreWebView2CallDevToolsProtocolMethod
 // The handler object for the AcceleratorKey callback, which WebView2 calls on the UI thread before a key press reaches the page.
 //
 const AcceleratorHandler = ComHandler(c.ICoreWebView2AcceleratorKeyPressedEventHandler, c.IID_ICoreWebView2AcceleratorKeyPressedEventHandler);
+//
+// The handler object for the CapturePreview callback, which WebView2 calls on the UI thread when a capture of the window ends.
+//
+const CapturePreviewHandler = ComHandler(c.ICoreWebView2CapturePreviewCompletedHandler, c.IID_ICoreWebView2CapturePreviewCompletedHandler);
 
 //
 // The first command id given to a menu item. An item's id is this plus its place in the shell's list of menu actions.
@@ -269,6 +279,12 @@ const Shell = struct {
     paste_handler: DevToolsCallHandler,
     // Receives the result of running a script that delivers a message.
     script_executed_handler: ScriptExecutedHandler,
+    // Receives the end of a window capture.
+    capture_handler: CapturePreviewHandler,
+    // The capture being made, or null when none is. Touched only by the UI thread.
+    screenshot_request: ?*ScreenshotRequest,
+    // The stream the capture in progress is written to, or null when none is. Touched only by the UI thread.
+    screenshot_stream: ?*c.IStream,
 };
 
 //
@@ -310,6 +326,9 @@ pub fn run(app_config: AppConfig, args: []const [:0]const u8) !u8 {
         .environment = null,
         .script_added_handler = undefined,
         .script_executed_handler = undefined,
+        .capture_handler = undefined,
+        .screenshot_request = null,
+        .screenshot_stream = null,
     };
     initHandlers(&shell);
     const exit_code = try start(&shell, allocator);
@@ -423,6 +442,12 @@ fn initHandlers(shell: *Shell) void {
     shell.script_executed_handler = .{
         .interface = .{
             .lpVtbl = @constCast(&script_executed_vtable),
+        },
+        .shell = shell,
+    };
+    shell.capture_handler = .{
+        .interface = .{
+            .lpVtbl = @constCast(&capture_vtable),
         },
         .shell = shell,
     };
@@ -645,6 +670,10 @@ fn windowProc(window: c.HWND, message: c.UINT, wparam: c.WPARAM, lparam: c.LPARA
             handleMenuRequest(shell, @ptrFromInt(@as(usize, @intCast(lparam))));
             return 0;
         },
+        WM_ZIGGY_SCREENSHOT => {
+            handleScreenshotRequest(shell, @ptrFromInt(@as(usize, @intCast(lparam))));
+            return 0;
+        },
         WM_ZIGGY_PICK => {
             handlePickRequest(shell, @ptrFromInt(@as(usize, @intCast(lparam))));
             return 0;
@@ -856,6 +885,7 @@ fn onControllerCreated(shell: *Shell, controller: *c.ICoreWebView2Controller) vo
     config.quit = quit;
     config.pick_paths = pickPaths;
     config.menu_action = menuAction;
+    config.screenshot = screenshot;
     var system_info: c.SYSTEM_INFO = undefined;
     c.GetSystemInfo(&system_info);
     config.worker_threads = system_info.dwNumberOfProcessors;
@@ -1382,6 +1412,198 @@ fn handleMenuRequest(shell: *Shell, action: [*:0]u8) void {
         return;
     }
     runAction(shell, text);
+}
+
+//
+// A request for a picture of the window, passed from the thread of the test control connection that wants it to the UI thread that
+// makes it. It lives on the heap and is shared by those two threads, each holding a reference, because the caller gives up waiting
+// when the shell is closing and the UI thread may still be making the capture.
+//
+const ScreenshotRequest = struct {
+    // The file to write the PNG to, as UTF-16. Owned.
+    output_path: [:0]u16,
+    // Signalled by the UI thread when it has finished with the request. Owned.
+    done: c.HANDLE,
+    // How many of the two threads still hold the request.
+    references: std.atomic.Value(u32),
+    // Why the picture could not be made, or null when it was written. Set before done is signalled. Owned.
+    failure: ?[]u8,
+};
+
+//
+// Lets go of one reference to a screenshot request, and frees it when the other thread has let go too.
+//
+fn releaseScreenshotRequest(request: *ScreenshotRequest) void {
+    if (request.references.fetchSub(1, .acq_rel) != 1) {
+        return;
+    }
+    const allocator = std.heap.c_allocator;
+    allocator.free(request.output_path);
+    if (request.failure) |failure| {
+        allocator.free(failure);
+    }
+    _ = c.CloseHandle(request.done);
+    allocator.destroy(request);
+}
+
+//
+// The native host callback that writes a PNG of the window to a file. It runs on the thread of the test control connection, so it asks
+// the UI thread to capture the window with WebView2's CapturePreview and waits there. Returns 0 when the file was written, or the
+// number of bytes of the reason written into the buffer, negated.
+//
+fn screenshot(user_data: ?*anyopaque, output_path: [*c]const u8, buffer: [*c]u8, capacity: usize) callconv(.c) isize {
+    const shell: *Shell = @ptrCast(@alignCast(user_data.?));
+    const allocator = std.heap.c_allocator;
+    const wide_path = std.unicode.utf8ToUtf16LeAllocZ(allocator, std.mem.span(@as([*:0]const u8, @ptrCast(output_path)))) catch {
+        return screenshotFailure(buffer, capacity, "the path of the screenshot is not valid text");
+    };
+    const done = c.CreateEventW(null, 1, 0, null) orelse {
+        allocator.free(wide_path);
+        return screenshotFailure(buffer, capacity, "could not create an event to wait for the screenshot");
+    };
+    const request = allocator.create(ScreenshotRequest) catch @panic("out of memory taking a screenshot");
+    request.* = .{
+        .output_path = wide_path,
+        .done = done,
+        .references = .init(2),
+        .failure = null,
+    };
+    defer releaseScreenshotRequest(request);
+    if (c.PostMessageW(shell.window, WM_ZIGGY_SCREENSHOT, 0, @intCast(@intFromPtr(request))) == 0) {
+        releaseScreenshotRequest(request);
+        return screenshotFailure(buffer, capacity, "could not ask the UI thread to capture the window");
+    }
+    // The window can close while the capture runs. Closing waits for this thread, so it must not wait for the capture.
+    while (true) {
+        const waited = c.WaitForSingleObject(request.done, 100);
+        if (waited == c.WAIT_OBJECT_0) {
+            break;
+        }
+        if (waited != c.WAIT_TIMEOUT) {
+            return screenshotFailure(buffer, capacity, "waiting for the screenshot failed");
+        }
+        if (shell.destroyed.load(.acquire)) {
+            return screenshotFailure(buffer, capacity, "the window closed before the screenshot was made");
+        }
+    }
+    if (request.failure) |failure| {
+        return screenshotFailure(buffer, capacity, failure);
+    }
+    return 0;
+}
+
+//
+// Writes the reason a screenshot could not be made into the caller's buffer, cut to fit, and returns its length negated.
+//
+fn screenshotFailure(buffer: [*c]u8, capacity: usize, reason: []const u8) isize {
+    const length = @min(reason.len, capacity);
+    @memcpy(buffer[0..length], reason[0..length]);
+    return -@as(isize, @intCast(length));
+}
+
+//
+// Ends a screenshot request on the UI thread: records why it failed (null when the file was written), releases the stream the capture
+// was written to, wakes the thread waiting for it and lets go of the UI thread's reference.
+//
+fn finishScreenshot(shell: *Shell, request: *ScreenshotRequest, failure: ?[]u8) void {
+    request.failure = failure;
+    if (shell.screenshot_stream) |stream| {
+        _ = stream.lpVtbl.*.Release.?(stream);
+        shell.screenshot_stream = null;
+    }
+    shell.screenshot_request = null;
+    _ = c.SetEvent(request.done);
+    releaseScreenshotRequest(request);
+}
+
+//
+// Formats the reason a screenshot failed, for finishScreenshot.
+//
+fn screenshotReason(comptime format: []const u8, arguments: anytype) []u8 {
+    return std.fmt.allocPrint(std.heap.c_allocator, format, arguments) catch @panic("out of memory describing a screenshot failure");
+}
+
+//
+// Runs on the UI thread: starts a capture of the window into a memory stream. WebView2 calls capturePreviewInvoke when it is done.
+//
+fn handleScreenshotRequest(shell: *Shell, request: *ScreenshotRequest) void {
+    if (shell.destroyed.load(.acquire)) {
+        finishScreenshot(shell, request, screenshotReason("the window is closing", .{}));
+        return;
+    }
+    if (shell.screenshot_request != null) {
+        finishScreenshot(shell, request, screenshotReason("another screenshot is still being made", .{}));
+        return;
+    }
+    const web_view = shell.web_view orelse {
+        finishScreenshot(shell, request, screenshotReason("the window has no web view yet", .{}));
+        return;
+    };
+    var stream: ?*c.IStream = null;
+    const stream_result = c.CreateStreamOnHGlobal(null, 1, &stream);
+    if (stream_result < 0 or stream == null) {
+        finishScreenshot(shell, request, screenshotReason("could not make a stream for the screenshot, HRESULT 0x{x}", .{@as(u32, @bitCast(stream_result))}));
+        return;
+    }
+    shell.screenshot_request = request;
+    shell.screenshot_stream = stream;
+    const capture_result = web_view.lpVtbl.*.CapturePreview.?(web_view, c.COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG, stream, &shell.capture_handler.interface);
+    if (capture_result < 0) {
+        finishScreenshot(shell, request, screenshotReason("CapturePreview failed, HRESULT 0x{x}", .{@as(u32, @bitCast(capture_result))}));
+    }
+}
+
+//
+// WebView2 has captured the window into the stream: writes the stream's PNG to the request's file and ends the request.
+//
+fn capturePreviewInvoke(this: [*c]c.ICoreWebView2CapturePreviewCompletedHandler, error_code: c.HRESULT) callconv(.c) c.HRESULT {
+    const shell = CapturePreviewHandler.fromInterface(this).shell;
+    const request = shell.screenshot_request orelse {
+        fatal("WebView2 finished a capture that was not asked for", .{});
+    };
+    if (error_code < 0) {
+        finishScreenshot(shell, request, screenshotReason("the capture failed, HRESULT 0x{x}", .{@as(u32, @bitCast(error_code))}));
+        return c.S_OK;
+    }
+    finishScreenshot(shell, request, writeCapture(shell.screenshot_stream.?, request.output_path));
+    return c.S_OK;
+}
+
+//
+// Writes everything in a memory stream to a file, and returns null when it worked or the reason it did not.
+//
+fn writeCapture(stream: *c.IStream, path: [:0]const u16) ?[]u8 {
+    var memory: c.HGLOBAL = null;
+    const memory_result = c.GetHGlobalFromStream(stream, &memory);
+    if (memory_result < 0) {
+        return screenshotReason("could not read the capture, HRESULT 0x{x}", .{@as(u32, @bitCast(memory_result))});
+    }
+    // The memory can be larger than what was written to the stream, so the stream says how much of it is the picture.
+    var status = std.mem.zeroes(c.STATSTG);
+    const status_result = stream.lpVtbl.*.Stat.?(stream, &status, c.STATFLAG_NONAME);
+    if (status_result < 0) {
+        return screenshotReason("could not measure the capture, HRESULT 0x{x}", .{@as(u32, @bitCast(status_result))});
+    }
+    const bytes: [*]const u8 = @ptrCast(c.GlobalLock(memory) orelse {
+        return screenshotReason("could not lock the capture's memory, error {d}", .{c.GetLastError()});
+    });
+    defer _ = c.GlobalUnlock(memory);
+    const file = c.CreateFileW(path.ptr, c.GENERIC_WRITE, 0, null, c.CREATE_ALWAYS, c.FILE_ATTRIBUTE_NORMAL, null);
+    if (file == c.INVALID_HANDLE_VALUE) {
+        return screenshotReason("could not create the screenshot file, error {d}", .{c.GetLastError()});
+    }
+    defer _ = c.CloseHandle(file);
+    const total: usize = @intCast(status.cbSize.QuadPart);
+    var written: usize = 0;
+    while (written < total) {
+        var count: c.DWORD = 0;
+        const chunk: c.DWORD = @intCast(@min(total - written, 1 << 20));
+        if (c.WriteFile(file, bytes + written, chunk, &count, null) == 0) {
+            return screenshotReason("could not write the screenshot file, error {d}", .{c.GetLastError()});
+        }
+        written += count;
+    }
+    return null;
 }
 
 //
@@ -2061,4 +2283,14 @@ const paste_vtable = c.struct_ICoreWebView2CallDevToolsProtocolMethodCompletedHa
     .AddRef = DevToolsCallHandler.addRef,
     .Release = DevToolsCallHandler.release,
     .Invoke = pasteInvoke,
+};
+
+//
+// The table of functions of the capture handler.
+//
+const capture_vtable = c.struct_ICoreWebView2CapturePreviewCompletedHandlerVtbl{
+    .QueryInterface = CapturePreviewHandler.queryInterface,
+    .AddRef = CapturePreviewHandler.addRef,
+    .Release = CapturePreviewHandler.release,
+    .Invoke = capturePreviewInvoke,
 };

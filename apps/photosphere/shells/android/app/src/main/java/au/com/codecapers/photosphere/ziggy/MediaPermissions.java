@@ -21,6 +21,13 @@ public final class MediaPermissions {
     // taking them back the moment the app is backgrounded.
     public static final String READ_MEDIA_VISUAL_USER_SELECTED = "android.permission.READ_MEDIA_VISUAL_USER_SELECTED";
 
+    // The permission that lets the app read the location stored in a photo's EXIF. Without it Android strips the GPS tags from the
+    // copy of a library photo the app is given, so the photo imports with no location.
+    public static final String ACCESS_MEDIA_LOCATION = "android.permission.ACCESS_MEDIA_LOCATION";
+
+    // The first Android version with the media location permission.
+    public static final int FIRST_MEDIA_LOCATION_VERSION = 29;
+
     // The first Android version with the per-type media permissions.
     public static final int FIRST_PER_TYPE_MEDIA_VERSION = 33;
 
@@ -33,10 +40,13 @@ public final class MediaPermissions {
     // The permissions to ask for on the given Android version.
     public static String[] permissionsForVersion(int sdkInt) {
         if (sdkInt >= FIRST_PARTIAL_MEDIA_VERSION) {
-            return new String[] { READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, READ_MEDIA_VISUAL_USER_SELECTED };
+            return new String[] { READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, READ_MEDIA_VISUAL_USER_SELECTED, ACCESS_MEDIA_LOCATION };
         }
         if (sdkInt >= FIRST_PER_TYPE_MEDIA_VERSION) {
-            return new String[] { READ_MEDIA_IMAGES, READ_MEDIA_VIDEO };
+            return new String[] { READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, ACCESS_MEDIA_LOCATION };
+        }
+        if (sdkInt >= FIRST_MEDIA_LOCATION_VERSION) {
+            return new String[] { READ_EXTERNAL_STORAGE, ACCESS_MEDIA_LOCATION };
         }
         return new String[] { READ_EXTERNAL_STORAGE };
     }

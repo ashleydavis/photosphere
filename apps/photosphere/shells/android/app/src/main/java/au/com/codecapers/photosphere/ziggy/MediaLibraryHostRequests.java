@@ -3,6 +3,7 @@ package au.com.codecapers.photosphere.ziggy;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
@@ -293,7 +294,14 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
         }
 
         try {
-            InputStream input = resolver.openInputStream(itemUri);
+            // Asking for the original is what keeps the GPS tags; it throws when the location permission is not held, so only
+            // ask when it is. A user who refused it gets the redacted copy.
+            Uri readUri = itemUri;
+            if (Build.VERSION.SDK_INT >= MediaPermissions.FIRST_MEDIA_LOCATION_VERSION
+                && context.checkSelfPermission(MediaPermissions.ACCESS_MEDIA_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                readUri = MediaStore.setRequireOriginal(itemUri);
+            }
+            InputStream input = resolver.openInputStream(readUri);
             if (input == null) {
                 throw new HostRequestException("The photo library would not open item " + itemId + ".");
             }

@@ -549,6 +549,8 @@ fn createBridge(env: *c.JNIEnv, allocator: std.mem.Allocator, arguments: CreateA
         .test_mode = arguments.test_mode != c.JNI_FALSE,
         .test_port_file = if (bridge.test_port_file) |port_file| port_file.ptr else null,
         .host_request = hostRequestCallback,
+        // A phone's screenshot is taken from the host with adb, so the app has no way of taking one itself.
+        .screenshot = null,
     };
     bridge.core = try core_module.Core.create(allocator, config, app);
     installSignalHandlers();

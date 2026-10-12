@@ -20,6 +20,8 @@ pub const FakeShell = struct {
     messages: std.ArrayList([]u8),
     // The menu actions chosen through the menu_action callback, one per line.
     chosen_actions: std.ArrayList(u8),
+    // The paths the screenshot callback was asked to write, one per line.
+    screenshot_paths: std.ArrayList(u8),
     // What the keep_alive callback was told, in order: true to keep the app running, false to stop.
     keep_alive_calls: std.ArrayList(bool),
     // Set by the quit callback.
@@ -33,6 +35,7 @@ pub const FakeShell = struct {
             .messages = .empty,
             .quit_called = .init(false),
             .chosen_actions = .empty,
+            .screenshot_paths = .empty,
             .keep_alive_calls = .empty,
         };
     }
@@ -43,6 +46,7 @@ pub const FakeShell = struct {
         }
         self.messages.deinit(self.allocator);
         self.chosen_actions.deinit(self.allocator);
+        self.screenshot_paths.deinit(self.allocator);
         self.keep_alive_calls.deinit(self.allocator);
     }
 
@@ -132,6 +136,28 @@ pub const FakeShell = struct {
     }
 
     //
+    // The screenshot callback: records the path it was asked to write. A path ending in "refused.png" cannot be written, and
+    // answers with a reason.
+    //
+    pub fn screenshot(user_data: ?*anyopaque, output_path: [*:0]const u8, buffer: [*]u8, capacity: usize) callconv(.c) isize {
+        const self: *FakeShell = @ptrCast(@alignCast(user_data.?));
+        self.mutex.lockUncancelable(self.io());
+        defer self.mutex.unlock(self.io());
+        const path = std.mem.span(output_path);
+        self.screenshot_paths.appendSlice(self.allocator, path) catch @panic("out of memory");
+        self.screenshot_paths.append(self.allocator, '\n') catch @panic("out of memory");
+        if (std.mem.endsWith(u8, path, "refused.png")) {
+            const reason = "The window cannot be captured.";
+            if (capacity < reason.len) {
+                return -1;
+            }
+            @memcpy(buffer[0..reason.len], reason);
+            return -@as(isize, @intCast(reason.len));
+        }
+        return 0;
+    }
+
+    //
     // The keep-alive callback: records what the core asked.
     //
     pub fn keepAlive(user_data: ?*anyopaque, keep_running: bool) callconv(.c) void {
@@ -165,6 +191,7 @@ pub const FakeShell = struct {
             .test_mode = false,
             .test_port_file = null,
             .host_request = hostRequest,
+            .screenshot = screenshot,
         };
     }
 

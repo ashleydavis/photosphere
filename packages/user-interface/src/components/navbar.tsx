@@ -224,6 +224,7 @@ export function Navbar({
                                     color={isActive ? "primary" : "neutral"}
                                     size={isMobile ? "lg" : "md"}
                                     sx={navButtonSx}
+                                    data-id="navbar-import-button"
                                     >
                                     <FileUpload />
                                     {!isMobile && <span className="hidden sm:block ml-2">Import</span>}

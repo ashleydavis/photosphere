@@ -13,7 +13,10 @@ import android.provider.OpenableColumns;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.graphics.Insets;
 import android.util.Log;
+import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
 import android.webkit.RenderProcessGoneDetail;
@@ -205,6 +208,23 @@ public final class ZiggyShell implements ZiggyHost {
             throw new IllegalStateException("This WebView cannot run a script at document start (WebViewFeature.DOCUMENT_START_SCRIPT), which Ziggy needs to expose window.ziggy before the page's scripts.");
         }
         WebViewCompat.addDocumentStartJavaScript(webView, new String(ZiggyNative.injectScript(), StandardCharsets.UTF_8), Collections.singleton("*"));
+
+        // An app targeting Android 15 or later is drawn edge to edge, with the web view running under the status bar, the
+        // navigation bar and the keyboard. The page is shared with platforms that have no such bars, so the shell keeps the web
+        // view's content clear of them by giving it margins of the insets the window reports, which also keeps working once the
+        // platform stops letting an app opt out of edge to edge.
+        // Before Android 11 the window insets have no per-bar types, and before Android 15 the system keeps an app inside the
+        // bars by itself, so there is nothing to do there.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            webView.setOnApplyWindowInsetsListener((view, insets) -> {
+                Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.ime());
+                // Margins, not padding: a web view lays its page out over its padding.
+                ViewGroup.MarginLayoutParams layout = (ViewGroup.MarginLayoutParams) view.getLayoutParams();
+                layout.setMargins(bars.left, bars.top, bars.right, bars.bottom);
+                view.setLayoutParams(layout);
+                return WindowInsets.CONSUMED;
+            });
+        }
 
         webView.addJavascriptInterface(new PageBridge(), "ZiggyAndroid");
         webView.setWebViewClient(new ZiggyWebViewClient());

@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# Enables developer mode from the About page, opens the developer screen and exercises its tools: the stories browser, the FPS
+# indicator and the developer tools toggle. The toggle asks the shell to open its developer tools, which a phone shows as an in-page
+# console.
+
+TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$TEST_DIR/../lib/common.sh"
+
+print_test_header 23 "developer-screen"
+
+trap 'cleanup_apps "$TMP_DIR"' EXIT
+
+start_app "$TMP_DIR"
+wait_for_ready "$APP_PORT"
+
+# Open the About page and wait for the hidden version label to render.
+send_command "$APP_PORT" navigate '{"page":"/about"}' || exit 1
+wait_for_value "$APP_PORT" "about-version" "Version"
+
+# Tap the version label the required number of times to enable developer mode.
+send_command "$APP_PORT" click '{"dataId":"about-version"}' || exit 1
+send_command "$APP_PORT" click '{"dataId":"about-version"}' || exit 1
+send_command "$APP_PORT" click '{"dataId":"about-version"}' || exit 1
+send_command "$APP_PORT" click '{"dataId":"about-version"}' || exit 1
+wait_for_log "$TMP_DIR" "Developer mode enabled"
+
+# The developer screen is now reachable and lists the Stories tool.
+send_command "$APP_PORT" navigate '{"page":"/developer"}' || exit 1
+wait_for_value "$APP_PORT" "developer-page" "Developer"
+wait_for_value "$APP_PORT" "developer-tool-stories" "Stories"
+
+# Open Stories from the developer screen and confirm it rendered. Stories is a top-level route outside Main, so the navigate command
+# (handled inside Main) no longer works here; leave via the in-page back link to remount Main.
+send_command "$APP_PORT" click '{"dataId":"developer-tool-stories"}' || exit 1
+wait_for_value "$APP_PORT" "stories-page" "story"
+send_command "$APP_PORT" click '{"dataId":"stories-back-link"}' || exit 1
+
+# Wait for the back link to actually land before navigating on. It goes to "/", which Main redirects to /gallery once it has remounted,
+# and the app shows the no-database screen there. Navigating while that is still in flight races it: navigate only sets the route
+# hash, so the redirect that lands afterwards replaces it and the developer page never renders.
+wait_for_value "$APP_PORT" "no-database-loaded" "Welcome to Photosphere"
+
+# Return to the developer screen (developer mode is persisted).
+send_command "$APP_PORT" navigate '{"page":"/developer"}' || exit 1
+wait_for_value "$APP_PORT" "developer-page" "Developer"
+
+# The FPS toggle shows the FPS overlay; toggling again hides it. The overlay rendered by <FPSStats> contains the text "FPS" inside the
+# data-id wrapper.
+wait_for_value "$APP_PORT" "developer-tool-fps-toggle" "Show FPS indicator"
+send_command "$APP_PORT" click '{"dataId":"developer-tool-fps-toggle"}' || exit 1
+wait_for_value "$APP_PORT" "fps-indicator" "FPS"
+send_command "$APP_PORT" click '{"dataId":"developer-tool-fps-toggle"}' || exit 1
+wait_for_value_gone "$APP_PORT" "fps-indicator" "FPS" || exit 1
+
+# The Dev Tools item is a persisted toggle. Clicking opens the native DevTools and logs the state change; clicking again closes it.
+# Assert via the log so the test does not depend on inspecting the DevTools window (keeps it non-flaky).
+wait_for_value "$APP_PORT" "developer-tool-devtools" "Developer tools"
+send_command "$APP_PORT" click '{"dataId":"developer-tool-devtools"}' || exit 1
+wait_for_log "$TMP_DIR" "Developer tools opened"
+send_command "$APP_PORT" click '{"dataId":"developer-tool-devtools"}' || exit 1
+wait_for_log "$TMP_DIR" "Developer tools closed"
+
+# Exit developer mode.
+send_command "$APP_PORT" click '{"dataId":"developer-exit"}' || exit 1
+wait_for_log "$TMP_DIR" "Developer mode disabled"
+
+check_no_errors "$TMP_DIR"
+
+stop_app "$APP_PORT" "$TMP_DIR"
+
+log_success "Test 23 passed: developer-screen"

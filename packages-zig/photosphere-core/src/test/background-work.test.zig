@@ -226,31 +226,51 @@ test "a gap of zero or less in a plan is replaced by the fallback" {
 
 test "the sync loop tells the plan what the prefetch is doing, and says why it is not syncing" {
     const plan = "{\"shouldRun\":false,\"reason\":\"syncing is off\",\"pauseBetweenRunsMs\":0,\"steps\":[]}";
-    var host = newHost(&.{plan}, &.{}, 0);
+    var host = newHost(&.{ plan, plan }, &.{}, 1);
     defer host.deinit();
     var state: std.atomic.Value(ReplicaState) = .init(.working);
     background_work.runSyncLoop(std.testing.allocator, host.host(), &state);
     try expectEvents(&host, &.{
         "plan plan-sync",
+        "plan plan-sync",
         "report Not syncing: syncing is off",
     });
     try std.testing.expectEqualStrings("{\"prefetchState\":\"working\"}", host.last_plan_request.?);
-    try std.testing.expectEqual(@as(u64, background_work.SYNC_FALLBACK_PAUSE_MS), host.pauses.items[0]);
+    try std.testing.expectEqual(@as(u64, background_work.SYNC_FALLBACK_PAUSE_MS), host.pauses.items[1]);
 }
 
 test "the sync loop runs the sync step with the phone held awake" {
     const plan = "{\"shouldRun\":true,\"databasePath\":\"photos\",\"pauseBetweenRunsMs\":300,\"steps\":[{\"type\":\"sync-database\",\"data\":{}}]}";
-    var host = newHost(&.{plan}, &.{ok}, 0);
+    var host = newHost(&.{ plan, plan }, &.{ok}, 1);
     defer host.deinit();
     var state: std.atomic.Value(ReplicaState) = .init(.unknown);
     background_work.runSyncLoop(std.testing.allocator, host.host(), &state);
     try expectEvents(&host, &.{
+        "plan plan-sync",
         "plan plan-sync",
         "awake true",
         "report Syncing \"photos\".",
         "step sync-database",
         "awake false",
     });
+    try std.testing.expectEqual(@as(u64, 300), host.pauses.items[1]);
+}
+
+test "the sync loop waits the configured pause before its first sync" {
+    const plan = "{\"shouldRun\":true,\"databasePath\":\"photos\",\"pauseBetweenRunsMs\":300,\"steps\":[{\"type\":\"sync-database\",\"data\":{}}]}";
+    var host = newHost(&.{ plan, plan }, &.{ ok, ok }, 1);
+    defer host.deinit();
+    var state: std.atomic.Value(ReplicaState) = .init(.unknown);
+    background_work.runSyncLoop(std.testing.allocator, host.host(), &state);
+    try expectEvents(&host, &.{
+        "plan plan-sync",
+        "plan plan-sync",
+        "awake true",
+        "report Syncing \"photos\".",
+        "step sync-database",
+        "awake false",
+    });
+    try std.testing.expectEqual(@as(usize, 2), host.pauses.items.len);
     try std.testing.expectEqual(@as(u64, 300), host.pauses.items[0]);
 }
 

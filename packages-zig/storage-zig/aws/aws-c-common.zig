@@ -51,7 +51,7 @@ pub fn commonFlags(context: *const aws_sdk.Context) []const []const u8 {
 //
 pub fn addCommonDefines(context: *const aws_sdk.Context, module: *std.Build.Module) void {
     // HAVE_SYSCONF: the sysconf(_SC_NPROCESSORS_ONLN) check compiles on Linux and macOS, not on Windows.
-    if (context.isLinux or context.isMacos) {
+    if (context.isLinux or context.isApple) {
         module.addCMacro("HAVE_SYSCONF", "1");
     }
     // ANDROID: the Android CMake toolchain defines it for every file, and the libraries test it (aws-c-io's host resolver calls
@@ -83,7 +83,7 @@ pub fn build(context: *const aws_sdk.Context, dependency: *std.Build.Dependency)
         .AWS_HAVE_MSVC_INTRINSICS_X64 = false,
         .AWS_HAVE_POSIX_LARGE_FILE_SUPPORT = true,
         // execinfo.h is in glibc and macOS, not in musl, and in bionic only from API level 33 (the minimum here is lower).
-        .AWS_HAVE_EXECINFO = (context.isLinux and !context.isMusl and !context.isAndroid) or context.isMacos,
+        .AWS_HAVE_EXECINFO = (context.isLinux and !context.isMusl and !context.isAndroid) or context.isApple,
         .AWS_HAVE_WINAPI_DESKTOP = context.isWindows,
         .AWS_HAVE_LINUX_IF_LINK_H = context.isLinux,
         .AWS_HAVE_AVX2_INTRINSICS = extensions and context.isX86_64,
@@ -105,7 +105,7 @@ pub fn build(context: *const aws_sdk.Context, dependency: *std.Build.Dependency)
         try sources.append(b.allocator, "source/platform_fallback_stubs/system_info.c");
         try sources.append(b.allocator, "source/platform_fallback_stubs/file_direct_io.c");
     }
-    else if (context.isMacos) {
+    else if (context.isApple) {
         try sources.appendSlice(b.allocator, try aws_sdk.globCSources(b, dependency, "source/posix"));
         // "source/darwin/*.c" matches nothing in this release (it has no source/darwin directory).
         try sources.appendSlice(b.allocator, try aws_sdk.globCSources(b, dependency, "source/darwin"));
@@ -127,7 +127,7 @@ pub fn build(context: *const aws_sdk.Context, dependency: *std.Build.Dependency)
         try sources.append(b.allocator, "source/arch/intel/cpuid.c");
         try sources.appendSlice(b.allocator, try aws_sdk.globCSources(b, dependency, "source/arch/intel/asm"));
     }
-    else if (extensions and context.isAarch64 and context.isMacos) {
+    else if (extensions and context.isAarch64 and context.isApple) {
         try sources.appendSlice(b.allocator, try aws_sdk.globCSources(b, dependency, "source/arch/arm/darwin"));
     }
     else if (extensions and context.isAarch64) {
@@ -170,7 +170,7 @@ pub fn build(context: *const aws_sdk.Context, dependency: *std.Build.Dependency)
             module.linkSystemLibrary(system_library, .{});
         }
     }
-    else if (context.isMacos) {
+    else if (context.isApple) {
         // PLATFORM_LIBS dl Threads::Threads "-framework CoreFoundation" (PUBLIC). Threads::Threads is empty on macOS,
         // whose C library has the pthread functions.
         module.linkSystemLibrary("dl", .{});
@@ -207,7 +207,7 @@ fn addPrivateSettings(context: *const aws_sdk.Context, module: *std.Build.Module
         // AwsThreadAffinity.cmake: not UNIX.
         module.addCMacro("AWS_AFFINITY_METHOD", "AWS_AFFINITY_METHOD_NONE");
     }
-    else if (context.isMacos) {
+    else if (context.isApple) {
         // _POSIX_C_SOURCE and _XOPEN_SOURCE are not defined on Apple (the CMake file's comment: they would revert the
         // headers to an older version).
         // AwsThreadAffinity.cmake: Apple platforms do not support thread affinity.

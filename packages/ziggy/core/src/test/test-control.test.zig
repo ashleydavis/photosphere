@@ -410,3 +410,143 @@ test "the drop command records a drop the way the shell does, so the page can as
     defer std.testing.allocator.free(expected);
     try shell.expectMessageContaining(expected);
 }
+
+test "a drop that names an element is also sent to the page, and the page's answer is the answer" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "dropped.txt",
+        .data = "xyz",
+    });
+    const directory_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
+    defer std.testing.allocator.free(directory_path);
+    const path = try std.fs.path.join(std.testing.allocator, &.{ directory_path, "dropped.txt" });
+    defer std.testing.allocator.free(path);
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try startControlledCore(&shell, &tmp);
+    defer core.destroy();
+    const line = try ziggy.json_util.stringify(std.testing.allocator, .{
+        .command = "drop",
+        .dataId = "zone",
+        .paths = &[_][]const u8{path},
+    });
+    defer std.testing.allocator.free(line);
+    var client = Client{
+        .allocator = std.testing.allocator,
+        .port = core.control.?.port,
+        .line = line,
+        .answer = null,
+        .closed_without_answer = false,
+    };
+    core.postMessage("{\"channel\":\"test-page-ready\",\"data\":null}");
+    const thread = try std.Thread.spawn(.{}, Client.run, .{&client});
+    try shell.expectMessageContaining("\"channel\":\"test-command\",\"data\":{\"requestId\":1,\"command\":{\"command\":\"drop\",\"dataId\":\"zone\"");
+    core.postMessage("{\"id\":9,\"channel\":\"test-result\",\"data\":{\"requestId\":1,\"result\":{\"dropped\":true}}}");
+    thread.join();
+    defer if (client.answer) |text| std.testing.allocator.free(text);
+    try std.testing.expectEqualStrings("{\"dropped\":true}", client.answer.?);
+    core.postMessage("{\"id\":32,\"channel\":\"get-dropped-paths\",\"data\":null}");
+    const expected = try ziggy.json_util.stringify(std.testing.allocator, .{
+        .id = 32,
+        .ok = true,
+        .data = &[_][]const u8{path},
+    });
+    defer std.testing.allocator.free(expected);
+    try shell.expectMessageContaining(expected);
+}
+
+test "the screenshot command asks the shell to write a picture of the window to the path" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try startControlledCore(&shell, &tmp);
+    defer core.destroy();
+    core.postMessage("{\"channel\":\"test-page-ready\",\"data\":null}");
+    var client = Client{
+        .allocator = std.testing.allocator,
+        .port = core.control.?.port,
+        .line = "{\"command\":\"screenshot\",\"outputPath\":\"/shots/home.png\"}",
+        .answer = null,
+        .closed_without_answer = false,
+    };
+    const thread = try std.Thread.spawn(.{}, Client.run, .{&client});
+    thread.join();
+    defer if (client.answer) |text| std.testing.allocator.free(text);
+    try std.testing.expectEqualStrings("{\"ok\":true}", client.answer.?);
+    try std.testing.expectEqualStrings("/shots/home.png\n", shell.screenshot_paths.items);
+}
+
+test "the screenshot command answers with the reason when the shell cannot capture the window" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try startControlledCore(&shell, &tmp);
+    defer core.destroy();
+    core.postMessage("{\"channel\":\"test-page-ready\",\"data\":null}");
+    var client = Client{
+        .allocator = std.testing.allocator,
+        .port = core.control.?.port,
+        .line = "{\"command\":\"screenshot\",\"outputPath\":\"/shots/refused.png\"}",
+        .answer = null,
+        .closed_without_answer = false,
+    };
+    const thread = try std.Thread.spawn(.{}, Client.run, .{&client});
+    thread.join();
+    defer if (client.answer) |text| std.testing.allocator.free(text);
+    try std.testing.expectEqualStrings("{\"error\":\"The window cannot be captured.\"}", client.answer.?);
+}
+
+test "the screenshot command without an output path is an invalid command and captures nothing" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try startControlledCore(&shell, &tmp);
+    defer core.destroy();
+    var client = Client{
+        .allocator = std.testing.allocator,
+        .port = core.control.?.port,
+        .line = "{\"command\":\"screenshot\"}",
+        .answer = null,
+        .closed_without_answer = false,
+    };
+    const thread = try std.Thread.spawn(.{}, Client.run, .{&client});
+    thread.join();
+    defer if (client.answer) |text| std.testing.allocator.free(text);
+    try std.testing.expectEqualStrings("{\"error\":\"InvalidCommand\"}", client.answer.?);
+    try std.testing.expectEqual(@as(usize, 0), shell.screenshot_paths.items.len);
+}
+
+test "the screenshot command on a shell with no screenshot callback says what is missing" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    var config = shell.config(1, 1);
+    var port_file_buffer: [256]u8 = undefined;
+    const port_file = try std.fmt.bufPrintZ(&port_file_buffer, ".zig-cache/tmp/{s}/port.txt", .{tmp.sub_path});
+    config.test_mode = true;
+    config.test_port_file = port_file.ptr;
+    config.screenshot = null;
+    const core = try ziggy.core.Core.create(std.testing.allocator, config, helpers.app);
+    defer core.destroy();
+    var client = Client{
+        .allocator = std.testing.allocator,
+        .port = core.control.?.port,
+        .line = "{\"command\":\"screenshot\",\"outputPath\":\"/shots/home.png\"}",
+        .answer = null,
+        .closed_without_answer = false,
+    };
+    const thread = try std.Thread.spawn(.{}, Client.run, .{&client});
+    thread.join();
+    defer if (client.answer) |text| std.testing.allocator.free(text);
+    try std.testing.expectEqualStrings("{\"error\":\"HostCallbackMissing\"}", client.answer.?);
+}

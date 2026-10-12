@@ -789,9 +789,8 @@ pub fn osHomedir() []const u8 {
 // every machine. PHOTOSPHERE_CONFIG_DIR overrides it, which is how a test run stays off the
 // developer's real data.
 //
-// A device has no home directory, and the mobile `os` shim returns an empty string from homedir()
-// precisely so derived paths stay inside the app's storage sandbox, so an empty home means the
-// sandbox root.
+// A device keeps everything inside the app's storage sandbox. An empty home directory means the sandbox root, and an Android app's
+// home directory is the sandbox itself (its shell sets HOME to it), so there the home directory is the answer.
 //
 // Rebuildable data does not belong here. See getCacheDir.
 //
@@ -802,6 +801,11 @@ pub fn getConfigDir(allocator: std.mem.Allocator) ![]const u8 {
         }
     }
     const homeDir = osHomedir();
+    // An Android app's home directory is its storage sandbox, which the shell sets as HOME, and the sandbox root is the config
+    // directory there. Every database the app makes sits in the sandbox, so it is the directory that "reset device" empties.
+    if (builtin.abi.isAndroid() and homeDir.len > 0) {
+        return homeDir;
+    }
     if (homeDir.len > 0) {
         return path.join(allocator, &.{ homeDir, ".config", "photosphere" });
     }
@@ -835,6 +839,11 @@ pub fn getCacheDir(allocator: std.mem.Allocator) ![]const u8 {
     const homeDir = osHomedir();
     if (homeDir.len == 0) {
         return ".";
+    }
+
+    // An Android app's home directory is its storage sandbox, which is where a device keeps its caches.
+    if (builtin.abi.isAndroid()) {
+        return homeDir;
     }
 
     if (builtin.os.tag == .macos) {

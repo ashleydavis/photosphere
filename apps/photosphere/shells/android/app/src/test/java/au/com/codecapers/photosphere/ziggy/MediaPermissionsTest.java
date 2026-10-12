@@ -12,7 +12,7 @@ public final class MediaPermissionsTest {
     @Test
     public void android13AsksForBothMediaTypes() {
         assertArrayEquals(
-            new String[] { MediaPermissions.READ_MEDIA_IMAGES, MediaPermissions.READ_MEDIA_VIDEO },
+            new String[] { MediaPermissions.READ_MEDIA_IMAGES, MediaPermissions.READ_MEDIA_VIDEO, MediaPermissions.ACCESS_MEDIA_LOCATION },
             MediaPermissions.permissionsForVersion(33));
     }
 
@@ -22,6 +22,7 @@ public final class MediaPermissionsTest {
             MediaPermissions.READ_MEDIA_IMAGES,
             MediaPermissions.READ_MEDIA_VIDEO,
             MediaPermissions.READ_MEDIA_VISUAL_USER_SELECTED,
+            MediaPermissions.ACCESS_MEDIA_LOCATION,
         };
         assertArrayEquals(expected, MediaPermissions.permissionsForVersion(34));
         assertArrayEquals(expected, MediaPermissions.permissionsForVersion(36));
@@ -29,8 +30,9 @@ public final class MediaPermissionsTest {
 
     @Test
     public void android12AndEarlierAsksForTheStoragePermission() {
-        assertArrayEquals(new String[] { MediaPermissions.READ_EXTERNAL_STORAGE }, MediaPermissions.permissionsForVersion(32));
-        assertArrayEquals(new String[] { MediaPermissions.READ_EXTERNAL_STORAGE }, MediaPermissions.permissionsForVersion(24));
+        assertArrayEquals(new String[] { MediaPermissions.READ_EXTERNAL_STORAGE, MediaPermissions.ACCESS_MEDIA_LOCATION }, MediaPermissions.permissionsForVersion(32));
+        assertArrayEquals(new String[] { MediaPermissions.READ_EXTERNAL_STORAGE, MediaPermissions.ACCESS_MEDIA_LOCATION }, MediaPermissions.permissionsForVersion(29));
+        assertArrayEquals(new String[] { MediaPermissions.READ_EXTERNAL_STORAGE }, MediaPermissions.permissionsForVersion(28));
     }
 
     @Test

@@ -12,6 +12,7 @@ apple_require_xcode
 apple_require_tool ditto jq rsync
 OUTPUT_DIR="$APPLE_APP_DIR/out/ios"
 BUILD_DIR="$APPLE_APP_DIR/shells/ios/zig-out/package"
+VERSION="$(apple_package_version)"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -19,13 +20,16 @@ while [ $# -gt 0 ]; do
             OUTPUT_DIR="$2"
             shift 2
             ;;
+        --version)
+            VERSION="$2"
+            shift 2
+            ;;
         *)
-            apple_fail "unknown argument '$1'. Options: --output-dir."
+            apple_fail "unknown argument '$1'. Options: --output-dir, --version."
             ;;
     esac
 done
 
-VERSION="$(apple_package_version)"
 BASE_NAME="photosphere-$VERSION-ios-arm64"
 mkdir -p "$OUTPUT_DIR" "$BUILD_DIR"
 

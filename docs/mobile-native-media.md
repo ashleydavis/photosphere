@@ -1,38 +1,36 @@
-# Mobile native ImageMagick and ffmpeg
+# Bundled ImageMagick and FFmpeg
 
-The mobile apps run image/video asset operations in-process through three `host.*` bridge functions: `host.imageMagick`, `host.ffmpeg`, `host.ffprobe`. The shared TypeScript builds the argv (see `packages/mobile-worker/src/lib/media-commands.ts`) and the native side runs it against bundled ImageMagick and ffmpeg. Desktop and CLI are unchanged and keep using system-installed binaries.
+The Photosphere App calls ImageMagick and FFmpeg inside its own process on every platform. Nothing is installed on the machine and the app starts no program. The Zig core links both libraries statically (`packages-zig/media-tools-zig`) and runs the same argument lists the TypeScript and Zig code have always built for `magick`, `ffmpeg` and `ffprobe`.
 
-No third-party ImageMagick binaries, source, or headers are committed. The repo carries only Photosphere's own shim/build source (`run_magick.c`, `CMakeLists.txt`, the runners, the `build.gradle` native wiring) plus `scripts/fetch-mobile-media-tools.sh`. That script pulls ImageMagick from downstream and builds what is needed into **git-ignored** locations at build time — the same model on both platforms. ffmpeg needs no fetch: FFmpegKit is a Maven (Android) / SPM (iOS) dependency the platform build resolves.
+## How it fits together
 
-On **Android** the fetch runs automatically as part of `bun run sync` (via the `fetch:media` script), so `bun run build:and` / `bun run test:and` link ImageMagick with no manual step. It: downloads the prebuilt `MolotovCherry/Android-ImageMagick7` `.so` from the GitHub release into `app/src/main/jniLibs/<abi>/`; downloads the matching ImageMagick source for the API headers into `app/src/main/cpp/imagemagick/include`; and runs ImageMagick's `configure` with the NDK once per ABI to generate the per-ABI config headers into `app/src/main/cpp/imagemagick/configs/<abi>`. It is idempotent (skips when the artifacts are already present) and needs the Android NDK `25.1.8937393`. All of it is git-ignored.
+- `MediaTools` (`packages-zig/media-tools-zig/src/lib/media-tools.zig`) owns ImageMagick and FFmpeg and gives out an `InProcessRunner`. The core makes one at startup and hands it to the task queue, so every task context carries it as `toolRunner`. Code that runs a tool with a runner runs it in process; with none (the CLI) it starts the installed program.
+- ImageMagick runs through its own command dispatcher. What a command prints is collected without touching standard output: `identify` hands its text back, `-version` writes to a file, and a command ending in `info:` is pointed at a temporary file. It is thread safe.
+- FFmpeg runs through the `main` functions of `ffmpeg` and `ffprobe` (renamed by compiler flags). They keep state for the whole program, so one command runs at a time, and the counts they leave behind are reset after each run. `ffprobe` writes its report to a temporary file. What FFmpeg logs goes to standard error.
+- Delegates and zlib: libjpeg, libpng and libwebp (single pictures; the animated-picture parts are not built) are built beside ImageMagick, over the same zlib-ng the rest of the core uses. WebP is read and written the same way on every platform, so a WebP picture imports on a phone as it does on a desktop.
 
-On **iOS** `scripts/fetch-mobile-media-tools.sh ios` runs `ios/build-imagemagick.sh`, which builds the static libraries from source into the git-ignored `vendor/im` tree; the App target then links them with the `IMAGEMAGICK_LINKED` build flag. Until that runs (macOS/Xcode), the iOS runners report "not linked".
+## Source, builds and scripts
 
-## iOS (build locally, then activate)
+Vendored source (never edited) is in `vendor/imagemagick`, `vendor/libjpeg`, `vendor/libpng`, `vendor/libwebp` and `vendor/ffmpeg`, each with a `VENDORED_VERSION`. The files each target needs that the libraries' own `configure` writes are kept in `packages-zig/media-tools-zig/imagemagick/config` and `packages-zig/media-tools-zig/ffmpeg/config`.
 
-Files: `apps/ios-frontend/ios/App/App/JsEngine/{run_magick.c,run_magick.h,MediaToolRunner.swift,ImageMagickRunner.swift,FfmpegKitRunner.swift}`, the bridge installs in `HostBridge.swift`, the bridging header `App/App-Bridging-Header.h`, and the build script `ios/build-imagemagick.sh`.
+- Take a version: `scripts/update-imagemagick.sh`, `scripts/update-libjpeg.sh`, `scripts/update-libpng.sh`, `scripts/update-libwebp.sh`, `scripts/update-ffmpeg.sh` (see their `.md` files).
+- Make the generated files for a target: `packages-zig/media-tools-zig/imagemagick/generate-config.sh` and `packages-zig/media-tools-zig/ffmpeg/generate-config.sh`.
+- Build one library alone for a target: `scripts/build-imagemagick.sh` and `scripts/build-ffmpeg.sh`.
 
-1. Build ImageMagick static libraries (device arm64 + simulator) on macOS:
-   `bash apps/ios-frontend/ios/build-imagemagick.sh`
-   This installs headers/libs under `apps/ios-frontend/ios/App/vendor/im/{device,sim}` (git-ignored).
-2. In the App target build settings, point `HEADER_SEARCH_PATHS` and `LIBRARY_SEARCH_PATHS` at the matching `vendor/im` slice, add `OTHER_LDFLAGS = -lMagickWand-7.Q16HDRI -lMagickCore-7.Q16HDRI -ljpeg -lpng16 -lz`, and add `IMAGEMAGICK_LINKED` to `SWIFT_ACTIVE_COMPILATION_CONDITIONS`.
-3. Add the FFmpegKit SPM package `ffmpeg-kit-full-spm` (full variant, for the `mjpeg` screenshot encoder) and its "Embed Frameworks" run-script phase. `FfmpegKitRunner` activates automatically via `#if canImport(ffmpegkit)`.
+Targets with generated files and a build that has been run here: Linux (x86_64, aarch64), Android (x86_64, aarch64), Windows (x86_64, aarch64) and MacOS (x86_64, aarch64); only Linux x86_64 and Android (on the emulator) have also been run. The iOS targets (device, and simulator on arm64 and x86_64) are defined the same way but can only be built and generated on a Mac with Xcode: elsewhere the build stops with a message naming the iOS SDK. Nothing for iOS has been built or run yet. The core library, including the AWS SDK for C and aws-lc, is defined for the iOS targets (device and both simulators, with the iOS SDK from `xcrun`) and for Windows aarch64, which builds from Linux.
 
-## Android (fetched from downstream, nothing committed)
+## Messages from the libraries
 
-Committed source: `apps/android-frontend/android/app/src/main/cpp/{run_magick.c,CMakeLists.txt}`, the runners and bridge in `.../jsengine/`, and the `build.gradle` native wiring. The ImageMagick libs/headers are fetched (not committed) by `scripts/fetch-mobile-media-tools.sh android`, which `bun run sync` invokes. What it produces and what the build uses:
+What ImageMagick and FFmpeg say about a failure goes to standard error and not into the result of the command. Both libraries report it through one callback for the whole process (`SetErrorHandler` and `SetWarningHandler` for ImageMagick, `av_log_set_callback` for FFmpeg) that carries no pointer to the call it belongs to, and ImageMagick clears the exception it keeps for a call before the command returns. Giving the text to the right call would take a variable for the whole process, which the repository does not allow without being asked.
 
-1. Prebuilt `MolotovCherry/Android-ImageMagick7` shared libs (`libmagickcore-7.so`, `libmagickwand-7.so`, `libc++_shared.so`, `libomp.so`) are downloaded from the GitHub release into the git-ignored `app/src/main/jniLibs/<abi>/` for `arm64-v8a` and `x86_64`. The ImageMagick API headers come from the matching source into git-ignored `cpp/imagemagick/include`, and the per-ABI `magick-baseconfig.h`/`version.h` are generated by `configure` (NDK, Q16 HDRI) into git-ignored `cpp/imagemagick/configs/<abi>`.
-2. `app/build.gradle` wires `externalNativeBuild` (CMake 3.22.1, `cpp/CMakeLists.txt`), `ndkVersion "25.1.8937393"`, `-DANDROID_STL=c++_shared`, `abiFilters 'x86_64', 'arm64-v8a'`, and `packagingOptions.jniLibs.pickFirsts += ['**/libc++_shared.so']`. `ImageMagickRunner` loads the libs at runtime.
-3. `app/build.gradle` declares `implementation 'com.moizhassan.ffmpeg:ffmpeg-kit-16kb:6.1.1'` — Gradle pulls it from Maven; `FfmpegKitRunner` reaches it by reflection. The Android Gradle Plugin is pinned to `8.1.4` (`android/build.gradle`) because AGP 8.0's D8 crashes while dexing this FFmpegKit AAR.
-4. `variables.gradle` sets `minSdkVersion 24` (required for the 16KB-page-aligned libs).
+## iOS
 
-To move to newer ImageMagick, bump `IM_VERSION` in `scripts/fetch-mobile-media-tools.sh` (and the ffmpeg version in `build.gradle`); see "Updating the bundled versions" below.
+The iOS scripts (`apps/photosphere/scripts/sync-ios.sh`, and so `build-ios.sh`, `package-ios.sh` and `open-ios.sh`) make the ImageMagick and FFmpeg files for the target when they are missing, by the two `generate-config.sh` scripts and the SDK from `xcrun`, then build the libraries into the core static library. This is written and has not been run: it needs a Mac. The core library itself still does not build for iOS, because `aws-lc.zig` and `aws-sdk.zig` stop the build for any target that is not Linux, Windows or macOS.
 
-## Updating the bundled versions
+## The old mobile apps (deprecated)
 
-To move to newer ImageMagick/ffmpeg releases, see [updating-mobile-imagemagick-ffmpeg.md](updating-mobile-imagemagick-ffmpeg.md) and the helper `scripts/update-mobile-media-tools.sh`.
+The Capacitor apps (`apps/android-frontend`, `apps/ios-frontend`) still use prebuilt ImageMagick libraries and the FFmpegKit forks described in `scripts/fetch-mobile-media-tools.sh` and `apps/ios-frontend/ios/build-imagemagick.sh`. They are removed later and are not changed by the work above.
 
 ## Licensing
 
-The bundled ImageMagick and ffmpeg builds and their delegates are attributed in `THIRD-PARTY-NOTICES.md`, `README.md`, and the release-notes body in `.github/workflows/release.yml`.
+See `THIRD-PARTY-NOTICES.md` and the README.

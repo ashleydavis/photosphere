@@ -76,6 +76,11 @@ pub extern fn g_mkdir_with_parents(pathname: [*:0]const u8, mode: c_int) c_int;
 pub extern fn g_get_num_processors() c_uint;
 
 pub extern fn gtk_application_new(application_id: [*:0]const u8, flags: c_uint) ?*GtkApplication;
+pub extern fn gtk_application_inhibit(application: *GtkApplication, window: ?*GtkWindow, flags: c_uint, reason: [*:0]const u8) c_uint;
+pub extern fn gtk_application_uninhibit(application: *GtkApplication, cookie: c_uint) void;
+
+// GtkApplicationInhibitFlags: GTK_APPLICATION_INHIBIT_SUSPEND.
+pub const GTK_APPLICATION_INHIBIT_SUSPEND: c_uint = 4;
 pub extern fn gtk_application_window_new(application: *GtkApplication) *GtkWidget;
 pub extern fn gtk_window_set_title(window: *GtkWindow, title: [*:0]const u8) void;
 pub extern fn gtk_window_set_icon(window: *GtkWindow, icon: ?*GdkPixbuf) void;
@@ -192,3 +197,34 @@ pub extern fn g_memory_input_stream_new_from_data(data: ?*const anyopaque, len: 
 pub extern fn g_io_error_quark() u32;
 pub extern fn g_error_new_literal(domain: u32, code: c_int, message: [*:0]const u8) *GError;
 pub extern fn g_error_free(err: *GError) void;
+
+pub const GAsyncResult = opaque {};
+pub const CairoSurface = opaque {};
+
+// A GAsyncReadyCallback: called on the thread that started the operation when it finishes.
+pub const GAsyncReadyCallback = *const fn (source_object: gpointer, result: *GAsyncResult, user_data: gpointer) callconv(.c) void;
+
+// What a GError holds, in the order glib declares it: GError is declared as an opaque type above, so this is how its message is read.
+pub const GErrorFields = extern struct {
+    // The error domain.
+    domain: u32,
+    // The error code.
+    code: c_int,
+    // The text of the error, NUL terminated.
+    message: [*:0]const u8,
+};
+
+// WebKitSnapshotRegion: WEBKIT_SNAPSHOT_REGION_VISIBLE is the part of the page the window shows.
+pub const WEBKIT_SNAPSHOT_REGION_VISIBLE: c_uint = 0;
+
+// WebKitSnapshotOptions: WEBKIT_SNAPSHOT_OPTIONS_NONE.
+pub const WEBKIT_SNAPSHOT_OPTIONS_NONE: c_uint = 0;
+
+// cairo_status_t: CAIRO_STATUS_SUCCESS.
+pub const CAIRO_STATUS_SUCCESS: c_int = 0;
+
+pub extern fn webkit_web_view_get_snapshot(web_view: *WebKitWebView, region: c_uint, options: c_uint, cancellable: gpointer, callback: GAsyncReadyCallback, user_data: gpointer) void;
+pub extern fn webkit_web_view_get_snapshot_finish(web_view: *WebKitWebView, result: *GAsyncResult, err: ?*?*GError) ?*CairoSurface;
+pub extern fn cairo_surface_write_to_png(surface: *CairoSurface, filename: [*:0]const u8) c_int;
+pub extern fn cairo_surface_destroy(surface: *CairoSurface) void;
+pub extern fn cairo_status_to_string(status: c_int) [*:0]const u8;

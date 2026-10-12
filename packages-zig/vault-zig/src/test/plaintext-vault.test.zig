@@ -794,3 +794,16 @@ test "getVaultFilePath puts vault.json inside the vault directory" {
     const expected = try node_utils.path.join(allocator, &.{ try std.fs.path.join(allocator, &.{ "home", "vaults", "photosphere" }), "vault.json" });
     try std.testing.expectEqualStrings(expected, try vault_zig.plaintext_vault.getVaultFilePath(allocator, "home/vaults/photosphere"));
 }
+
+test "a vault file that is not JSON throws a sentence that says the vault file could not be read" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+    try writeMalformedVaultFile(io, &temp_dir);
+    try std.testing.expectError(error.Thrown, vault.list(allocator, io));
+    try std.testing.expectEqualStrings("The vault file could not be read (SyntaxError)", utils.errors.lastErrorMessage());
+}

@@ -2506,9 +2506,125 @@ jobs:
           if-no-files-found: error
           retention-days: 2
 
+  package-photosphere-mobile:
+    # The Photosphere App packaged for Android and iOS, unsigned, by the same package scripts a developer runs. The version
+    # comes from the release tag, as in package-photosphere. The Android version code, which has to rise with every build that
+    # replaces another, is the build time in minutes since the epoch. The iOS archive is made by xcodebuild with code signing
+    # off, and only its .ipa is attached to the release, because an .xcarchive is a folder. Both are built and not run:
+    # running them needs an emulator or a simulator, which the smoke test jobs and the local test runs provide.
+    timeout-minutes: 90
+    needs: [prepare-tag, build-aws-sdk]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: android
+            os: ubuntu-latest
+            files: "*.apk"
+          - name: ios
+            os: macos-15
+            files: "*.ipa"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Cache the Android NDK
+        if: matrix.name == 'android'
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk/25.1.8937393
+          key: ${{ runner.os }}-android-ndk-25.1.8937393
+
+      # Retried because the SDK manager downloads from Google and a download can arrive corrupt.
+      - name: Set up the Android SDK and NDK (Android)
+        if: matrix.name == 'android'
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun run --filter=ziggy setup:android
+
+      - name: Check the iOS toolchain (iOS)
+        if: matrix.name == 'ios'
+        run: bun run --filter=ziggy setup:ios
+
+      # The same cache zig-smoke-tests restores, written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
+
+      - name: Set config
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
+            VERSION="${VERSION#v}"
+            VERSION="$(bash ./scripts/set-build-config.sh --tag "$VERSION" --commit "${{ github.sha }}")"
+          else
+            VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Package (Android)
+        if: matrix.name == 'android'
+        shell: bash
+        run: bun run --filter=ziggy package:android -- --version-name "$VERSION" --version-code "$(( $(date +%s) / 60 ))"
+
+      - name: Package (iOS)
+        if: matrix.name == 'ios'
+        shell: bash
+        run: bun run --filter=ziggy package:ios -- --version "$VERSION"
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-app-${{ matrix.name }}
+          path: apps/photosphere/out/${{ matrix.name }}/${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 2
+
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, compile, build-aws-sdk, build-zig-linux-x64, build-zig-windows-x64, build-zig-macos-arm64, build-zig-macos-x64, zig-unit-tests, zig-smoke-tests, ziggy-photosphere-smoke-tests, ziggy-photosphere-ios-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, package-photosphere, android-smoke-tests, ios-smoke-tests]
+    needs: [prepare-tag, compile, build-aws-sdk, build-zig-linux-x64, build-zig-windows-x64, build-zig-macos-arm64, build-zig-macos-x64, zig-unit-tests, zig-smoke-tests, ziggy-photosphere-smoke-tests, ziggy-photosphere-ios-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, package-photosphere, package-photosphere-mobile, android-smoke-tests, ios-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write

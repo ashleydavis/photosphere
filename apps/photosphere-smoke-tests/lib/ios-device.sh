@@ -18,6 +18,13 @@
 IOS_DEVICE_SCRIPTS_DIR="$PHOTOSPHERE_SMOKE_REPO_ROOT/apps/photosphere/scripts"
 source "$IOS_DEVICE_SCRIPTS_DIR/lib/apple-common.sh"
 
+#
+# Prints how many devices scenarios can run on at once. The run uses one device, and a device runs one copy of the app.
+#
+photosphere_platform_device_limit() {
+    echo 1
+}
+
 # The app's bundle identifier.
 IOS_DEVICE_BUNDLE_ID="au.com.codecapers.photosphere.ziggy"
 
@@ -544,4 +551,28 @@ ios_grant_media_permission() {
 
 ios_grant_notification_permission() {
     photosphere_ios_not_available ios_grant_notification_permission
+}
+
+ios_config_file_path() {
+    photosphere_ios_not_available ios_config_file_path
+}
+
+ios_put_config_file() {
+    photosphere_ios_not_available ios_put_config_file
+}
+
+ios_read_config_file() {
+    photosphere_ios_not_available ios_read_config_file
+}
+
+ios_path_exists() {
+    photosphere_ios_not_available ios_path_exists
+}
+
+#
+# Makes the next download end as the user cancelling it. A phone hands a download to the system share sheet, which a test cannot tap,
+# so the sheet's outcome is staged as cancelled through the page. Usage: ios_cancel_next_download <port>
+#
+ios_cancel_next_download() {
+    send_command "$1" stage-export '{"exportOutcome":"cancelled"}'
 }

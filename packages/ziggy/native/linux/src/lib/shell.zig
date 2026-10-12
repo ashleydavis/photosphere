@@ -9,6 +9,7 @@ const std = @import("std");
 const c = @import("gtk.zig");
 const z = @import("c");
 const menu_keys = @import("menu-keys.zig");
+const geometry_lib = @import("geometry.zig");
 const ui_files = @import("ui-files");
 
 // The URL scheme the bundled page is served under. WebKitGTK asks the shell for each file instead of reading a directory.
@@ -18,9 +19,33 @@ const app_scheme = "ziggy-app";
 const app_url_prefix = app_scheme ++ "://app/";
 
 //
+// What a host request handler can ask of the shell.
+//
+pub const Host = struct {
+    // The shell the request came to.
+    shell: *Shell,
+
+    //
+    // Holds the computer from suspending, or lets it go again. Calls nest: the computer may suspend again once every hold has been
+    // let go. Can be called from any thread.
+    //
+    pub fn holdAwake(self: Host, awake: bool) void {
+        _ = c.g_idle_add(if (awake) holdAwakeOnMainThread else releaseAwakeOnMainThread, self.shell);
+    }
+};
+
+//
+// Answers one host request. Gives the JSON text of the answer, null when the app does not know the method, or an error, whose name is
+// the reason the request failed. Called from a worker thread.
+//
+pub const HostRequestFn = *const fn (host: Host, method: []const u8, request_json: []const u8) anyerror!?[]const u8;
+
+//
 // What an app tells the shell about itself.
 //
 pub const AppConfig = struct {
+    // Answers the requests only the platform can do, by method name, or null when the app has none.
+    host_request: ?HostRequestFn,
     // The application id, which also names the app's private data directory.
     app_id: [:0]const u8,
     // The window title.
@@ -71,6 +96,10 @@ const Shell = struct {
     inspector_open: bool,
     // Whether the window is full screen.
     fullscreen: bool,
+    // How many holds on the computer staying awake are in place. Only the main thread touches it.
+    awake_holds: u32,
+    // The cookie of the suspend inhibit, while there is one.
+    inhibit_cookie: c_uint,
 };
 
 //
@@ -94,6 +123,8 @@ pub fn run(app_config: AppConfig, args: []const [:0]const u8) !u8 {
         .menu_arena = std.heap.ArenaAllocator.init(std.heap.c_allocator),
         .inspector_open = false,
         .fullscreen = false,
+        .awake_holds = 0,
+        .inhibit_cookie = 0,
     };
     defer c.g_async_queue_unref(shell.queue);
     _ = c.g_signal_connect_data(application, "activate", @ptrCast(&onActivate), &shell, null, 0);
@@ -208,7 +239,7 @@ fn start(shell: *Shell, application: *c.GtkApplication) !void {
     var height = shell.app_config.default_height;
     for (shell.args) |argument| {
         if (std.mem.startsWith(u8, argument, "-geometry=")) {
-            const geometry = parseGeometry(argument["-geometry=".len..]) orelse {
+            const geometry = geometry_lib.parseGeometry(argument["-geometry=".len..]) orelse {
                 return error.InvalidGeometry;
             };
             width = geometry.width;
@@ -256,6 +287,10 @@ fn start(shell: *Shell, application: *c.GtkApplication) !void {
     config.quit = quit;
     config.pick_paths = pickPaths;
     config.menu_action = menuAction;
+    config.screenshot = screenshot;
+    if (shell.app_config.host_request != null) {
+        config.host_request = hostRequest;
+    }
     config.worker_threads = c.g_get_num_processors();
     config.max_concurrent_child_tasks = 10;
     config.app_url_prefix = app_url_prefix;
@@ -282,38 +317,6 @@ fn start(shell: *Shell, application: *c.GtkApplication) !void {
     c.webkit_web_view_load_uri(web_view, page_url.ptr);
     c.gtk_widget_show_all(window_widget);
     c.gtk_window_present(window);
-}
-
-//
-// The window size the -geometry option asks for.
-//
-const Geometry = struct {
-    // The window width in pixels.
-    width: c_int,
-    // The window height in pixels.
-    height: c_int,
-};
-
-//
-// Parses the WxH or WxH+X+Y text of the -geometry option. GTK gives a program no say over where its window goes, so the
-// position is checked and ignored.
-//
-fn parseGeometry(text: []const u8) ?Geometry {
-    const separator = std.mem.indexOfScalar(u8, text, 'x') orelse {
-        return null;
-    };
-    const width = std.fmt.parseInt(c_int, text[0..separator], 10) catch {
-        return null;
-    };
-    const rest = text[separator + 1 ..];
-    const height_end = std.mem.indexOfAny(u8, rest, "+-") orelse rest.len;
-    const height = std.fmt.parseInt(c_int, rest[0..height_end], 10) catch {
-        return null;
-    };
-    return .{
-        .width = width,
-        .height = height,
-    };
 }
 
 //
@@ -506,6 +509,64 @@ fn osVersion(user_data: ?*anyopaque, buffer: [*c]u8, capacity: usize) callconv(.
         return -1;
     };
     return @intCast(written.len);
+}
+
+//
+// The native host callback that does one thing only the platform can do, by handing it to the app's handler. Writes the answer into
+// the core's buffer and returns its length, or writes the reason and returns its length negated.
+//
+fn hostRequest(user_data: ?*anyopaque, method: [*c]const u8, request_json: [*c]const u8, buffer: [*c]u8, capacity: usize) callconv(.c) isize {
+    const shell: *Shell = @ptrCast(@alignCast(user_data.?));
+    const handler = shell.app_config.host_request.?;
+    const method_name = std.mem.span(@as([*:0]const u8, @ptrCast(method)));
+    const request = std.mem.span(@as([*:0]const u8, @ptrCast(request_json)));
+    var reason_buffer: [256]u8 = undefined;
+    var failed = false;
+    const answer: []const u8 = blk: {
+        const maybe_answer = handler(.{ .shell = shell }, method_name, request) catch |err| {
+            failed = true;
+            break :blk std.fmt.bufPrint(&reason_buffer, "The request {s} failed: {s}", .{ method_name, @errorName(err) }) catch "The request failed.";
+        };
+        if (maybe_answer) |text| {
+            break :blk text;
+        }
+        failed = true;
+        break :blk std.fmt.bufPrint(&reason_buffer, "The Photosphere Linux app cannot do \"{s}\".", .{method_name}) catch "The request is not known.";
+    };
+    if (answer.len > capacity) {
+        return -1;
+    }
+    @memcpy(buffer[0..answer.len], answer);
+    const length: isize = @intCast(answer.len);
+    return if (failed) -length else length;
+}
+
+//
+// Takes one hold on the computer staying awake, run on the main thread. The first one inhibits suspend.
+//
+fn holdAwakeOnMainThread(user_data: ?*anyopaque) callconv(.c) c.gboolean {
+    const shell: *Shell = @ptrCast(@alignCast(user_data.?));
+    shell.awake_holds += 1;
+    if (shell.awake_holds == 1) {
+        shell.inhibit_cookie = c.gtk_application_inhibit(shell.application, shell.window, c.GTK_APPLICATION_INHIBIT_SUSPEND, "Photosphere is working in the background");
+    }
+    return 0;
+}
+
+//
+// Lets go of one hold on the computer staying awake, run on the main thread. Letting go of the last one allows suspend again.
+//
+fn releaseAwakeOnMainThread(user_data: ?*anyopaque) callconv(.c) c.gboolean {
+    const shell: *Shell = @ptrCast(@alignCast(user_data.?));
+    if (shell.awake_holds == 0) {
+        fatal("a hold on the computer staying awake was let go that was never taken", .{});
+    }
+    shell.awake_holds -= 1;
+    if (shell.awake_holds == 0 and shell.inhibit_cookie != 0) {
+        c.gtk_application_uninhibit(shell.application, shell.inhibit_cookie);
+        shell.inhibit_cookie = 0;
+    }
+    return 0;
 }
 
 //
@@ -884,4 +945,92 @@ fn runMenuAction(user_data: ?*anyopaque) callconv(.c) c.gboolean {
     std.heap.c_allocator.free(request.action);
     std.heap.c_allocator.destroy(request);
     return 0;
+}
+
+//
+// One request for a picture of the window, made on the thread of the test control connection and answered on the main thread. It
+// lives on that thread's stack for as long as it waits.
+//
+const ScreenshotRequest = struct {
+    // The shell whose window is captured.
+    shell: *Shell,
+    // The file to write the PNG to.
+    output_path: [*:0]const u8,
+    // Where the reason goes when the picture cannot be taken.
+    buffer: [*]u8,
+    // The size of that buffer.
+    capacity: usize,
+    // 0 when the file was written, or the number of bytes of the reason written to the buffer, negated.
+    result: isize,
+    // The Io the waiting thread waits with.
+    io: std.Io,
+    // Set when the main thread has answered.
+    answered: std.Io.Event,
+};
+
+//
+// The native host callback that writes a PNG of the window to a file. It runs on the thread of the test control connection: it asks
+// the main thread to take the picture with the web view's own snapshot function and waits until the file is written.
+//
+fn screenshot(user_data: ?*anyopaque, output_path: [*c]const u8, buffer: [*c]u8, capacity: usize) callconv(.c) isize {
+    const shell: *Shell = @ptrCast(@alignCast(user_data.?));
+    var threaded: std.Io.Threaded = .init_single_threaded;
+    var request = ScreenshotRequest{
+        .shell = shell,
+        .output_path = @ptrCast(output_path),
+        .buffer = buffer,
+        .capacity = capacity,
+        .result = 0,
+        .io = threaded.io(),
+        .answered = .unset,
+    };
+    _ = c.g_idle_add(startScreenshot, &request);
+    request.answered.waitUncancelable(request.io);
+    return request.result;
+}
+
+//
+// Runs on the main thread: asks the web view for a snapshot of what its window shows.
+//
+fn startScreenshot(user_data: ?*anyopaque) callconv(.c) c.gboolean {
+    const request: *ScreenshotRequest = @ptrCast(@alignCast(user_data.?));
+    const web_view = request.shell.web_view orelse {
+        finishScreenshot(request, "the window has no web view yet", .{});
+        return 0;
+    };
+    c.webkit_web_view_get_snapshot(web_view, c.WEBKIT_SNAPSHOT_REGION_VISIBLE, c.WEBKIT_SNAPSHOT_OPTIONS_NONE, null, onSnapshot, request);
+    return 0;
+}
+
+//
+// Runs on the main thread when the web view has made the snapshot: writes it as a PNG and answers the waiting thread.
+//
+fn onSnapshot(source: c.gpointer, result: *c.GAsyncResult, user_data: c.gpointer) callconv(.c) void {
+    const request: *ScreenshotRequest = @ptrCast(@alignCast(user_data.?));
+    const web_view: *c.WebKitWebView = @ptrCast(@alignCast(source.?));
+    var snapshot_error: ?*c.GError = null;
+    const surface = c.webkit_web_view_get_snapshot_finish(web_view, result, &snapshot_error) orelse {
+        const fields: *const c.GErrorFields = @ptrCast(@alignCast(snapshot_error.?));
+        finishScreenshot(request, "the web view could not make a snapshot: {s}", .{std.mem.span(fields.message)});
+        c.g_error_free(snapshot_error.?);
+        return;
+    };
+    defer c.cairo_surface_destroy(surface);
+    const status = c.cairo_surface_write_to_png(surface, request.output_path);
+    if (status != c.CAIRO_STATUS_SUCCESS) {
+        finishScreenshot(request, "could not write the PNG to {s}: {s}", .{ std.mem.span(request.output_path), std.mem.span(c.cairo_status_to_string(status)) });
+        return;
+    }
+    request.result = 0;
+    request.answered.set(request.io);
+}
+
+//
+// Answers the waiting thread that the picture could not be taken, with the reason written into its buffer. A reason too long for the
+// buffer is cut to fit.
+//
+fn finishScreenshot(request: *ScreenshotRequest, comptime format: []const u8, arguments: anytype) void {
+    const reason = std.fmt.bufPrint(request.buffer[0..request.capacity], format, arguments) catch request.buffer[0..request.capacity];
+    request.result = -@as(isize, @intCast(reason.len));
+    request.answered.set(request.io);
 }

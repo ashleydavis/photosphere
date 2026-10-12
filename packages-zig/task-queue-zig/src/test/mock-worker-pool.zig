@@ -329,6 +329,7 @@ pub const MockWorkerPool = struct {
             .taskId = task.id,
             .maxConcurrentChildTasks = self.baseContext.maxConcurrentChildTasks,
             .hostRequester = null,
+            .toolRunner = null,
             .ptr = task,
             .vtable = &task_context_vtable,
         };

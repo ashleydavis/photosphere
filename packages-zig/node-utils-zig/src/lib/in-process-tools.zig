@@ -4,9 +4,9 @@ const errors = utils.errors;
 const exec = @import("exec.zig");
 
 //
-// Running ImageMagick, ffmpeg and ffprobe inside the app's own process, for a platform that cannot start them as programs of
-// their own (Android has none). A caller that has a runner passes it to exec, which hands it any command that starts one of those
-// three tools instead of starting a shell. With no runner (null) nothing here has any effect.
+// Running ImageMagick, ffmpeg and ffprobe inside the app's own process, for an app that has them built in instead of starting them as programs of
+// their own. A caller that has a runner passes it to exec, which hands it any command that starts one of the tools the runner handles
+// instead of starting a shell. With no runner (null) nothing here has any effect.
 //
 
 //
@@ -26,6 +26,10 @@ pub const ToolOutput = struct {
 pub const InProcessRunner = struct {
     // The runner's own pointer, passed back on every call.
     context: ?*anyopaque,
+
+    // Whether the runner runs the tool (one of `magick`, `ffmpeg` or `ffprobe`). A command for a tool it does not run is started as a
+    // program, as it is when there is no runner.
+    handles: *const fn (context: ?*anyopaque, tool: []const u8) bool,
 
     // Runs the tool (one of `magick`, `ffmpeg` or `ffprobe`) with the arguments.
     run: *const fn (context: ?*anyopaque, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!ToolOutput,
@@ -113,7 +117,7 @@ pub fn splitCommand(allocator: std.mem.Allocator, command: []const u8) ![]const 
 }
 
 //
-// Runs the command in the app's process when there is a runner and the command starts one of the tools, and returns its
+// Runs the command in the app's process when there is a runner that runs the tool the command starts, and returns its
 // stdout (everything the tool printed, which is all the runner reports). Returns null when there is no runner or the command is not
 // for the runner, so the caller starts it as usual. Fails with the message exec fails with when the tool ends with a non-zero code.
 //
@@ -131,7 +135,7 @@ pub fn tryRun(allocator: std.mem.Allocator, tools: ?InProcessRunner, command: []
             is_tool = true;
         }
     }
-    if (!is_tool) {
+    if (!is_tool or !runner.handles(runner.context, command[0..first_word_end])) {
         return null;
     }
     const words = try splitCommand(allocator, command);

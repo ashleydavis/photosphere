@@ -50,7 +50,7 @@ To have Photosphere do it for you, switch on "Automatic import" in the desktop o
 
 ## Bundled tools and licences
 
-The desktop and CLI builds use ImageMagick and ffmpeg installed on the host system. The mobile apps (iOS and Android) instead bundle in-process builds of ImageMagick (ImageMagick licence) and ffmpeg (LGPL-2.1+), together with ImageMagick's libjpeg, libpng, and zlib delegates, so image and video processing works without system binaries. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Photosphere's own code is MIT licensed (see [LICENSE](LICENSE)). To update the bundled versions, see [docs/updating-mobile-imagemagick-ffmpeg.md](docs/updating-mobile-imagemagick-ffmpeg.md) and `scripts/update-mobile-media-tools.sh`.
+The Photosphere App bundles ImageMagick (ImageMagick licence) and FFmpeg (LGPL-2.1+), with ImageMagick's libjpeg, libpng, libwebp and zlib delegates, built from source into the app and called in process, so image and video processing works without anything installed. The CLI and the old Electron desktop app use ImageMagick and ffmpeg installed on the host system. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Photosphere's own code is MIT licensed (see [LICENSE](LICENSE)). To update the bundled versions, see [docs/updating-mobile-imagemagick-ffmpeg.md](docs/updating-mobile-imagemagick-ffmpeg.md).
 
 ## Running Photosphere locally for development
 

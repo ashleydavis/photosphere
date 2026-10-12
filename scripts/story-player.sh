@@ -9,22 +9,30 @@
 # advancing as soon as the capture is done. It finishes when the app emits "STORIES CYCLE
 # COMPLETE". Any "STORIES CYCLE FAILED:" line (a story that crashed while rendering) fails the run.
 #
-# The three platforms differ only in how the app is built, launched, and screenshotted. Each one
-# already has a test harness that exposes the same HTTP command surface (/ready, /navigate,
-# /screenshot, /cycle-advance, /quit), so this script drives them all the same way:
-#   electron -> apps/desktop/smoke-tests/lib/common.sh  (in-app test control server)
-#   android  -> apps/smoke-tests/lib/common.sh          (host control bridge, adb)
-#   ios      -> apps/smoke-tests/lib/common.sh          (host control bridge, simctl)
+# The platforms differ only in how the app is built, launched, and screenshotted. Each one already
+# has a test harness that exposes the same command surface (ready, navigate, screenshot,
+# cycle-advance, quit), so this script drives them all the same way:
+#   electron       -> apps/desktop/smoke-tests/lib/common.sh       (in-app test control server)
+#   android        -> apps/smoke-tests/lib/common.sh               (host control bridge, adb)
+#   ios            -> apps/smoke-tests/lib/common.sh               (host control bridge, simctl)
+#   ziggy          -> apps/photosphere-smoke-tests/lib/common.sh   (the Photosphere App on the host operating system)
+#   ziggy-android  -> apps/photosphere-smoke-tests/lib/common.sh   (the Photosphere App on Android, adb)
+#   ziggy-ios      -> apps/photosphere-smoke-tests/lib/common.sh   (the Photosphere App on the iOS simulator, simctl)
+# The Electron and Capacitor harnesses speak HTTP; the Photosphere App harness speaks the test control
+# connection of Ziggy, whose commands are the same names.
 #
 # Usage:
 #   ./scripts/story-player.sh                              # electron (default)
 #   ./scripts/story-player.sh --platform android           # android emulator or attached device
 #   ./scripts/story-player.sh --platform ios               # ios simulator
+#   ./scripts/story-player.sh --platform ziggy             # the Photosphere App on this operating system
+#   ./scripts/story-player.sh --platform ziggy-android     # the Photosphere App on an Android emulator or device
+#   ./scripts/story-player.sh --platform ziggy-ios         # the Photosphere App on the iOS simulator
 #   ./scripts/story-player.sh --duration 500               # dwell per story (fallback; see below)
 #   ./scripts/story-player.sh --screenshots <dir>          # where the PNGs go
 #   ./scripts/story-player.sh --no-screenshots             # play only, capture nothing
 #   ./scripts/story-player.sh --open                       # open the generated index when done
-#   ./scripts/story-player.sh --headless                   # Electron: hide the window (for CI)
+#   ./scripts/story-player.sh --headless                   # Electron and the Photosphere App on Linux: hide the window (for CI)
 #
 # The app is VISIBLE by default so you can watch the stories play. Pass --headless to run the
 # Electron app under xvfb instead.
@@ -89,21 +97,63 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
+#
+# IS_ZIGGY is true for the three platforms that run the Photosphere App on Ziggy, and ON_HOST is true
+# for the two that run on this machine (Electron and Ziggy on the host operating system), which need
+# no device, no settle time after a story is ready and no cleanup of a device afterwards.
+#
+IS_ZIGGY=false
+ON_HOST=false
 case "$PLATFORM_NAME" in
-    electron|android|ios)
+    electron)
+        ON_HOST=true
+        ;;
+    android|ios)
+        ;;
+    ziggy)
+        IS_ZIGGY=true
+        ON_HOST=true
+        ;;
+    ziggy-android|ziggy-ios)
+        IS_ZIGGY=true
         ;;
     *)
-        echo "Unknown platform: $PLATFORM_NAME (expected electron, android, or ios)" >&2
+        echo "Unknown platform: $PLATFORM_NAME (expected electron, android, ios, ziggy, ziggy-android, or ziggy-ios)" >&2
         exit 2
         ;;
 esac
 
 #
-# Load the platform's test harness. Both harnesses define the same helpers with the same
+# Load the platform's test harness. The harnesses define the same helpers with the same
 # signatures (start_app, wait_for_ready, send_command, wait_for_log, stop_app),
 # which is what lets the rest of this script be platform-neutral.
 #
-if [ "$PLATFORM_NAME" = "electron" ]; then
+if [ "$IS_ZIGGY" = true ]; then
+    # The Photosphere App's harness takes its platform from PHOTOSPHERE_SMOKE_PLATFORM, which names the
+    # operating system for the host and the phone platform for the others.
+    case "$PLATFORM_NAME" in
+        ziggy)
+            case "$(uname -s)" in
+                Linux*)
+                    export PHOTOSPHERE_SMOKE_PLATFORM="linux"
+                    ;;
+                Darwin*)
+                    export PHOTOSPHERE_SMOKE_PLATFORM="macos"
+                    ;;
+                *)
+                    export PHOTOSPHERE_SMOKE_PLATFORM="windows"
+                    ;;
+            esac
+            ;;
+        ziggy-android)
+            export PHOTOSPHERE_SMOKE_PLATFORM="android"
+            ;;
+        ziggy-ios)
+            export PHOTOSPHERE_SMOKE_PLATFORM="ios"
+            ;;
+    esac
+    source "$REPO_DIR/apps/photosphere-smoke-tests/lib/common.sh"
+elif [ "$PLATFORM_NAME" = "electron" ]; then
     DESKTOP_DIR="$REPO_DIR/apps/desktop"
     source "$DESKTOP_DIR/smoke-tests/lib/common.sh"
 else
@@ -113,7 +163,7 @@ else
 fi
 
 if [ -z "$DURATION_MS" ]; then
-    if [ "$PLATFORM_NAME" = "electron" ]; then
+    if [ "$ON_HOST" = true ]; then
         DURATION_MS="$DEFAULT_DURATION_ELECTRON_MS"
     else
         DURATION_MS="$DEFAULT_DURATION_MOBILE_MS"
@@ -125,7 +175,7 @@ fi
 # need it: they capture the device framebuffer from outside the app, so the compositor can still be
 # showing the previous story. See the capture loop for the failure this prevents.
 #
-if [ "$PLATFORM_NAME" = "electron" ]; then
+if [ "$ON_HOST" = true ]; then
     CAPTURE_SETTLE_SECS=0
 else
     CAPTURE_SETTLE_SECS=1
@@ -172,7 +222,9 @@ STORY_DEVICE_FD=""
 # leaves the previous behaviour on the platform that cannot lock anyway.
 #
 claim_story_device() {
-    if [ "$PLATFORM_NAME" = "electron" ]; then
+    # The host platforms have no device. The Photosphere App's phone libraries claim their own device,
+    # under the same lock, when the app is started, and hold it until this script ends.
+    if [ "$ON_HOST" = true ] || [ "$IS_ZIGGY" = true ]; then
         return 0
     fi
 
@@ -213,6 +265,23 @@ claim_story_device() {
 # it. The cycle switches theme at runtime, so one build covers both light and dark.
 #
 build_app() {
+    if [ "$IS_ZIGGY" = true ]; then
+        # The build goes into a directory of its own, which the platform library looks the app up in.
+        PHOTOSPHERE_SMOKE_RUN_DIR="$(photosphere_test_temp_dir "story-player-run")"
+        export PHOTOSPHERE_SMOKE_RUN_DIR
+        photosphere_platform_prepare "$PHOTOSPHERE_SMOKE_RUN_DIR" || return 1
+        if [ "$ON_HOST" = false ]; then
+            #
+            # A phone starts from nothing: wipe the app, then seed the 50-assets fixture into its storage
+            # the way the Photosphere App's own phone scenarios seed theirs.
+            #
+            reset_app_state
+            log_info "Seeding the 50-assets fixture into the app sandbox..."
+            "${PHOTOSPHERE_SMOKE_PLATFORM}_seed_database" "$REPO_DIR/test/dbs/50-assets" "test/dbs/50-assets" || return 1
+        fi
+        return 0
+    fi
+
     if [ "$PLATFORM_NAME" = "electron" ]; then
         # A packaged binary (USE_BINARY=true) is already built, so there is nothing to bundle.
         if [ "${USE_BINARY:-false}" = "true" ]; then
@@ -327,6 +396,22 @@ capture_loop() {
             # cycle. Exiting kills this backgrounded capture loop, so no further screenshots are
             # written and the `screenshot_count > 0` assertion at the end of the run fails loudly.
             #
+            if [ "$IS_ZIGGY" = true ]; then
+                #
+                # The Photosphere App is driven through its test control connection. send_command prints
+                # the app's answer when a command fails, so the cause of a missing screenshot is in the output.
+                #
+                mkdir -p "$(dirname "$out_path")"
+                if ! send_command "$port" screenshot "$(jq -cn --arg outputPath "$out_path" '{outputPath: $outputPath}')" </dev/null; then
+                    log_error "Screenshot request failed for story $story_id ($theme)"
+                    exit 1
+                fi
+                if ! send_command "$port" cycle-advance '{}' </dev/null; then
+                    log_error "Cycle-advance request failed after story $story_id ($theme)"
+                    exit 1
+                fi
+                continue
+            fi
             if ! curl -sS --fail --connect-timeout 5 -X POST "http://127.0.0.1:$port/screenshot" \
                 -H "Content-Type: application/json" \
                 -d "{\"outputPath\":\"$out_path\"}" </dev/null > /dev/null 2>&1; then
@@ -505,7 +590,9 @@ cleanup() {
     # Clear the app's data from the device. A mobile run seeds the 50-assets fixture into the app's
     # storage sandbox; left there, run after run, it fills the device until the next install fails.
     #
-    if [ "$PLATFORM_NAME" != "electron" ]; then
+    if [ "$IS_ZIGGY" = true ]; then
+        photosphere_platform_reset_app_state || true
+    elif [ "$ON_HOST" = false ]; then
         "${PLATFORM_NAME}_cleanup" || true
     fi
 }
@@ -523,8 +610,20 @@ if [ -n "$SCREENSHOTS_DIR" ]; then
     mkdir -p "$SCREENSHOTS_DIR"
 fi
 
+# The app is started from the repository, because the stories that show real media open the relative
+# path test/dbs/50-assets, which the app resolves against its working directory.
+cd "$REPO_DIR" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
+
+#
+# The Photosphere App on Android claims its device when it starts. Its lock descriptor is handed to
+# the capture loop's close below, so nothing the loop starts can keep the device locked.
+#
+if [ "$PLATFORM_NAME" = "ziggy-android" ]; then
+    STORY_DEVICE_FD="$ANDROID_LOCK_FD"
+fi
 
 #
 # Start the capture loop BEFORE navigating so the first READY line is seen even if the app is

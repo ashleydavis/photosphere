@@ -10,6 +10,7 @@ const ui = @import("ui-files");
 pub fn main(init: std.process.Init) !u8 {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     return try shell.run(.{
+        .host_request = null,
         .app_id = "dev.ziggy.example",
         .title = "Ziggy example",
         .default_width = 900,

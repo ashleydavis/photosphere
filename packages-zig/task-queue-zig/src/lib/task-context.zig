@@ -98,6 +98,7 @@ pub const TaskContext = struct {
             .taskId = self.taskId,
             .maxConcurrentChildTasks = self.maxConcurrentChildTasks,
             .hostRequester = null,
+            .toolRunner = null,
             .ptr = self,
             .vtable = &vtable,
         };
