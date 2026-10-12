@@ -1287,6 +1287,11 @@ fn addPhotosphere(
         // Android 15 and later can run with 16 KiB memory pages, and a library is loaded only when its segments are aligned to the page
         // size, so they are aligned to the larger one.
         shared_library.link_z_max_page_size = 16384;
+        // Zig's own linker, which a Debug build uses by default, accesses s2n-tls' hidden thread-local variables in the initial-exec
+        // model, and Android refuses to load a library that does ("TLS symbol "(null)" in dlopened ..."). LLD, which the release
+        // builds use, does not, so every build of the library links with it, and is compiled by LLVM, which LLD needs.
+        shared_library.use_llvm = true;
+        shared_library.use_lld = true;
         core_step.dependOn(&b.addInstallArtifact(shared_library, .{}).step);
     }
 
