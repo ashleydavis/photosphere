@@ -13,6 +13,7 @@
 
 const std = @import("std");
 const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const ITimestampProvider = utils.timestamp_provider.ITimestampProvider;
 
@@ -55,6 +56,12 @@ pub const ITaskContext = struct {
     // Null where there is no such program, which is every desktop and the command line.
     //
     hostRequester: ?utils.host_requester.IHostRequester,
+
+    //
+    // Runs ImageMagick, ffmpeg and ffprobe inside the app's own process, for an app that has them built in. Null where the programs are
+    // started instead, which is the command line.
+    //
+    toolRunner: ?node_utils.in_process_tools.InProcessRunner,
 
     // Pointer to the implementation of sendMessage and isCancelled.
     ptr: *anyopaque,

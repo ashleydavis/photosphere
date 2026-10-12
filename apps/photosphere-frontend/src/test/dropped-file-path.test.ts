@@ -1,8 +1,7 @@
 import { resolveDroppedFilePath, type IDroppedFile } from '../lib/dropped-file-path';
-import { getPlatformCapabilities } from '../lib/platform-capabilities';
 
-const desktop = getPlatformCapabilities({ platformKind: 'desktop', os: 'linux', arch: 'x86_64' });
-const mobile = getPlatformCapabilities({ platformKind: 'mobile', os: 'ios', arch: 'aarch64' });
+const desktop = true;
+const mobile = false;
 
 function fileWith(testPath: string | undefined): IDroppedFile {
     const file = new File([], 'photo.jpg') as IDroppedFile;

@@ -12,7 +12,6 @@ import type { ISecret } from "vault";
 import type { IJsonValue, IZiggyBridge } from "ziggy-bridge";
 import { planBackgroundWork, readPermissionState, resolveMediaPermission, type IRawPermissionResult } from "./background-work";
 import { readAutoImportSettings, readSyncSettings, recordSyncDatabase, seedSyncSettings } from "./mobile-settings";
-import { bundledToolsStatus, getPlatformCapabilities, type IPlatformInfo } from "./platform-capabilities";
 import { resolveDroppedFilePath, type IDroppedFile } from "./dropped-file-path";
 import { interpretMenuAction, logDirectoryOf, type MenuEffect } from "./menu-actions";
 import { buildExportFileRequest, buildExportFilesRequest, saveDownloadsViaShareSheet, type ExportTestOutcome, type IExportFileReply, type IExportFilesReply, type IExportFolderReply, type ISaveAssetTaskData, type ISaveAssetsBatchTaskData } from "./mobile-export";
@@ -48,6 +47,20 @@ const BACKGROUND_WORK_CONFIG_KEYS: string[] = [
 ];
 
 //
+// What the core's get-platform channel replies with.
+//
+export interface IPlatformInfo {
+    // Whether the app is on a desktop or a phone.
+    platformKind: "desktop" | "mobile";
+
+    // The operating system's name as Zig spells it: "linux", "windows", "macos" or "ios". Android reports "linux".
+    os: string;
+
+    // The processor architecture's name as Zig spells it.
+    arch: string;
+}
+
+//
 // Props for the Ziggy platform provider.
 //
 export interface IPlatformProviderZiggyProps {
@@ -76,10 +89,22 @@ interface IErudaState {
 //
 // Platform context provider for the app running on Ziggy, on a desktop or a phone. Everything the core owns (databases,
 // the vault, recents, config and state, tasks, sharing, news and update marks) is reached the same way on both. What differs
-// on a phone is read from the platform capabilities, which the platform kind the core reported decides.
+// on a phone is decided by the platform kind the core reported.
 //
 export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformProviderZiggyProps) {
-    const capabilities = useMemo(() => getPlatformCapabilities(platform), [platform]);
+    // What the automatic import card says about importing while the app is not on screen. A desktop imports while it is open, iOS
+    // decides for itself when a background import runs, and Android keeps importing with the screen off.
+    let backgroundImportDescription: string;
+    if (platform.platformKind === "desktop") {
+        backgroundImportDescription = "Runs whenever Photosphere is open, importing new photos as they appear.";
+    }
+    else if (platform.os === "ios") {
+        backgroundImportDescription = "When the app is not open, iOS decides when to catch up, usually while the phone is charging.";
+    }
+    else {
+        backgroundImportDescription = "Keeps importing when the app is closed and the screen is off, showing a notification while it does.";
+    }
+
 
     // LAN database-sharing methods, dispatched through the shared task queue.
     const { startShareReceive, waitShareReceive, cancelShareReceive, waitForReceiver, sendToReceiver, cancelShareSend } = useLanShareTasks();
@@ -136,25 +161,22 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     // or stop straight away rather than finding out later.
     const autoImportChangedRef = useRef<(() => void) | undefined>(undefined);
 
+    // Called when the open database's content changed in a way the interface was not told about, so it reloads the database.
+    const databaseContentChangedCallbacksRef = useRef<Set<() => void>>(new Set());
+
     // Writes the syncing settings a fresh installation starts from, if nobody has written them yet. The background sync loop reads
     // config.yaml, and a section it cannot read means syncing off, which is the safe answer for a loop that would otherwise push photos
     // over a metered connection on a guess. That leaves a new phone with the two toggles showing syncing on and a file saying nothing,
     // so the app writes what the toggles say the first time it runs. A section that is already there is left alone.
     useEffect(() => {
-        if (!capabilities.runsBackgroundWork) {
-            return;
-        }
         seedSyncSettings()
             .catch(error => log.exception("Failed to write the initial syncing settings", error as Error));
-    }, [capabilities.runsBackgroundWork]);
+    }, []);
 
     // Starts the background work when automatic import or syncing is switched on, and stops it when both are off. The work runs in the
     // core, as keep-alive tasks, so it carries on with the app off screen; this is reduced to telling the core to start or stop and
     // asking for the photo permission first. Nothing here queues an import, so there is never a second driver to race the core's.
     useEffect(() => {
-        if (!capabilities.runsBackgroundWork) {
-            return;
-        }
         let cancelled = false;
 
         // True while a settings read is part way through acting on what it found. Without it a second read arriving during the
@@ -200,13 +222,13 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
             const syncEnabled = syncSettings.written && syncSettings.settings.enabled;
             const syncDatabasePath = syncSettings.databasePath ?? contents.defaultDatabasePath;
             const decision = planBackgroundWork({
-                autoImportEnabled: importPlan.shouldRun,
+                autoImportEnabled: importPlan.shouldRun && platform.platformKind === "mobile",
                 syncEnabled,
                 hasDatabaseToSync: syncDatabasePath !== undefined && syncDatabasePath.length > 0,
             });
 
             const syncWanted = decision.shouldRun && syncEnabled;
-            let importWanted = importPlan.shouldRun;
+            let importWanted = importPlan.shouldRun && platform.platformKind === "mobile";
 
             // The photo permission, for automatic import only, and before anything is said about it starting: without it the library
             // reads nothing, and the setting has to go back off rather than looking as though photos are being backed up when none
@@ -253,11 +275,28 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
             await ziggy.invoke('startBackgroundImport', null);
         };
 
+        ensureAutoImport().catch(error => log.exception("Failed to start automatic import", error as Error));
+
+        autoImportChangedRef.current = () => {
+            ensureAutoImport().catch(error => log.exception("Failed to update automatic import", error as Error));
+        };
+
+        return () => {
+            cancelled = true;
+            autoImportChangedRef.current = undefined;
+
+            // The background work is deliberately left running. It is the whole point of it: the page going away, which is what
+            // happens when the app leaves the screen, must not stop photos being backed up.
+        };
+    }, [platform.platformKind, ziggy]);
+
+    // What automatic import is doing is only visible through the progress it streams back. Logged rather than only shown on
+    // screen, because an import doing nothing and one quietly failing look the same in the interface. On every platform: a phone
+    // streams it from the background work, and a desktop from the import task its core runs.
+    useEffect(() => {
         // The progress line last written to the log, so the same one is not written again.
         let lastProgressLine: string | undefined = undefined;
 
-        // What automatic import is doing is only visible through the progress it streams back. Logged rather than only shown on
-        // screen, because a phone doing nothing and a phone quietly failing look the same in the interface.
         const onProgress = (_taskId: string, message: Record<string, unknown>): void => {
             if (message.type !== "import-progress") {
                 return;
@@ -276,21 +315,10 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         };
         taskMessageCallbacksRef.current.add(onProgress);
 
-        ensureAutoImport().catch(error => log.exception("Failed to start automatic import", error as Error));
-
-        autoImportChangedRef.current = () => {
-            ensureAutoImport().catch(error => log.exception("Failed to update automatic import", error as Error));
-        };
-
         return () => {
-            cancelled = true;
-            autoImportChangedRef.current = undefined;
             taskMessageCallbacksRef.current.delete(onProgress);
-
-            // The background work is deliberately left running. It is the whole point of it: the page going away, which is what
-            // happens when the app leaves the screen, must not stop photos being backed up.
         };
-    }, [capabilities.runsBackgroundWork, ziggy]);
+    }, []);
 
     // Set up message listener for database-opened events
     useEffect(() => {
@@ -515,12 +543,12 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     }, [ziggy, runMenuEffect]);
 
     const openDatabase = useCallback(async (): Promise<void> => {
-        if (!capabilities.opensDatabaseWithDialog) {
+        if (platform.platformKind !== "desktop") {
             // No-op: no database picker on a phone yet.
             return;
         }
         await ziggy.invoke('open-database', null);
-    }, [ziggy, capabilities]);
+    }, [ziggy, platform.platformKind]);
 
     const onDatabaseOpened = useCallback((callback: (databasePath: string) => void): (() => void) => {
         // Add callback to set
@@ -546,24 +574,22 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         // Notify the core to add to recent databases
         await ziggy.invoke('notify-database-opened', databasePath);
 
-        if (capabilities.runsBackgroundWork) {
-            // Remember which database the background sync pushes, which is what makes it work for the database the user is actually
-            // using. Opening a database can be the first thing that gives the background work something to do, so the decision about
-            // whether to run it is worth taking again.
-            recordSyncDatabase(databasePath)
-                .then(() => {
-                    if (autoImportChangedRef.current) {
-                        autoImportChangedRef.current();
-                    }
-                })
-                .catch(error => log.exception("Failed to record the database to sync", error as Error));
-        }
+        // Remember which database the background sync pushes, which is what makes it work for the database the user is actually
+        // using. Opening a database can be the first thing that gives the background work something to do, so the decision about
+        // whether to run it is worth taking again.
+        recordSyncDatabase(databasePath)
+            .then(() => {
+                if (autoImportChangedRef.current) {
+                    autoImportChangedRef.current();
+                }
+            })
+            .catch(error => log.exception("Failed to record the database to sync", error as Error));
 
         // Fire opened callbacks so UI components (e.g. recent databases list) refresh.
         openedCallbacksRef.current.forEach(callback => {
             callback(databasePath);
         });
-    }, [ziggy, capabilities.runsBackgroundWork]);
+    }, [ziggy]);
 
     const notifyDatabaseClosed = useCallback(async (): Promise<void> => {
         // Notify the core to clear config
@@ -624,24 +650,30 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     }, []);
 
     const openFolder = useCallback(async (folderPath: string): Promise<void> => {
-        if (!capabilities.opensFolders) {
+        if (platform.platformKind !== "desktop") {
             // No-op: a phone has no file manager to show a folder in.
             return;
         }
         await ziggy.invoke('open-path', folderPath);
-    }, [ziggy, capabilities]);
+    }, [ziggy, platform.platformKind]);
 
     const getPathForFile = useCallback((file: File): string | undefined => {
-        return resolveDroppedFilePath(file as IDroppedFile, testMode, capabilities, droppedFile => ziggy.getPathForFile(droppedFile));
-    }, [ziggy, capabilities]);
+        return resolveDroppedFilePath(file as IDroppedFile, testMode, platform.platformKind === "desktop", droppedFile => ziggy.getPathForFile(droppedFile));
+    }, [ziggy, platform.platformKind]);
 
     const checkTools = useCallback(async (): Promise<IToolsStatus> => {
-        if (!capabilities.asksCoreForTools) {
+        if (platform.platformKind !== "desktop") {
             // ImageMagick and ffmpeg are bundled inside the phone app, so they are available.
-            return bundledToolsStatus();
+            return {
+                magick: { available: true },
+                ffprobe: { available: true },
+                ffmpeg: { available: true },
+                allAvailable: true,
+                missingTools: [],
+            };
         }
         return await ziggy.invoke<IToolsStatus>('check-tools', null);
-    }, [ziggy, capabilities]);
+    }, [ziggy, platform.platformKind]);
 
     const onTaskMessage = useCallback((handler: (taskId: string, message: Record<string, unknown>) => void): (() => void) => {
         taskMessageCallbacksRef.current.add(handler);
@@ -718,7 +750,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     }, []);
 
     const saveDownloadedFiles = useCallback(async (items: ISaveAssetItem[], databasePath: string): Promise<ISaveDownloadResult> => {
-        if (capabilities.downloadMethod === 'save-dialog') {
+        if (platform.platformKind === "desktop") {
             // One round trip: the core shows the destination dialog, writes the files and reports the outcome.
             return await ziggy.invoke<ISaveDownloadResult>('save-assets', { items: toJsonValue(items), databasePath });
         }
@@ -734,7 +766,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
             exportFile: (path, outcome) => ziggy.invoke<IExportFileReply>('exportFile', toJsonValue(buildExportFileRequest(path, outcome))),
             exportFiles: (paths, outcome) => ziggy.invoke<IExportFilesReply>('exportFiles', toJsonValue(buildExportFilesRequest(paths, outcome))),
         });
-    }, [ziggy, capabilities, runDownloadTask]);
+    }, [ziggy, platform.platformKind, runDownloadTask]);
 
     const listSecrets = useCallback(async (): Promise<ISharedSecretEntry[]> => {
         const allSecrets = await ziggy.invoke<ISecret[]>('vault-list', null);
@@ -802,13 +834,13 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     }, [ziggy]);
 
     const copyToClipboard = useCallback(async (blob: Blob, _contentType: string): Promise<void> => {
-        if (!capabilities.copiesImagesToClipboard) {
+        if (platform.platformKind !== "desktop") {
             // No-op: native clipboard image support is not wired up on a phone.
             return;
         }
         const pngBlob = await convertToPng(blob);
         await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
-    }, [capabilities]);
+    }, [platform.platformKind]);
 
     //
     // Toggles the developer tools. A desktop asks the shell to, through the generic main-command channel, so no
@@ -816,7 +848,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     // reachable from inside its web view.
     //
     const toggleDevTools = useCallback((): void => {
-        if (capabilities.devToolsKind === 'shell') {
+        if (platform.platformKind === "desktop") {
             ziggy.send('main-command', 'toggle-devtools');
             return;
         }
@@ -832,7 +864,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
             eruda.show();
         }
         erudaState.visible = !erudaState.visible;
-    }, [ziggy, capabilities]);
+    }, [ziggy, platform.platformKind]);
 
     //
     // Reports online state and connection type from the browser's Network Information API (navigator.connection).
@@ -856,6 +888,12 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     //
     const setSyncAllowed = useCallback((allowed: boolean): void => {
         ziggy.send('main-command', { command: 'set-sync-allowed', allowed });
+    }, [ziggy]);
+
+    // Tells the core the page has loaded and is listening for events, which starts the checks for an update and for news. The
+    // listeners of the components below this provider are set up before this runs, so the toast a check asks for is not lost.
+    useEffect(() => {
+        ziggy.send('main-command', { command: 'page-loaded' });
     }, [ziggy]);
 
     // In test mode, the shared test driver's window events are turned into the app's own callbacks, so a test exercises the
@@ -906,6 +944,35 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         };
     }, [ziggy, notifyDatabaseEdited, notifyDatabaseOpened]);
 
+    const onDatabaseContentChanged = useCallback((callback: () => void): (() => void) => {
+        databaseContentChangedCallbacksRef.current.add(callback);
+        return () => {
+            databaseContentChangedCallbacksRef.current.delete(callback);
+        };
+    }, []);
+
+    // Tells the interface to reload the open database whenever the app comes back to the screen, on a phone.
+    //
+    // Photos reach the gallery as task messages announcing each one, and those are delivered to whatever is listening at the time.
+    // While the app is off screen the web view is suspended, so every photo the background import takes in is announced to nobody, and
+    // nothing replays them when it wakes. Without this the gallery goes on showing what it held when the user left, however many
+    // photos have been backed up since, until they think to open the database again.
+    //
+    // The whole database is reloaded rather than the missed photos being worked out, because there is no record of what was missed:
+    // the messages were sent while nothing was listening.
+    useEffect(() => {
+        const onVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                return;
+            }
+            databaseContentChangedCallbacksRef.current.forEach(callback => callback());
+        };
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        return () => {
+            document.removeEventListener("visibilitychange", onVisibilityChange);
+        };
+    }, []);
+
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
@@ -917,17 +984,15 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         onSyncStarted,
         onSyncCompleted,
         copyToClipboard,
-        backgroundImportDescription: capabilities.backgroundImportDescription,
+        backgroundImportDescription,
         onShowNotification,
-        // Nothing to fire: the import runs in the core's own process, so the gallery is told about
-        // every photo as it arrives and never falls behind.
-        onDatabaseContentChanged: () => () => {},
+        onDatabaseContentChanged,
         onDatabasesChanged,
         onUpdateAvailable,
         openFolder,
         onPlatformEvent,
         getPathForFile,
-        supportsDragAndDropImport: capabilities.supportsDragAndDropImport,
+        supportsDragAndDropImport: platform.platformKind === "desktop",
         checkTools,
         onTaskMessage,
         onTaskComplete,

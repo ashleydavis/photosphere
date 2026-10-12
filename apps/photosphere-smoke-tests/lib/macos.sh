@@ -38,6 +38,7 @@ photosphere_platform_start() {
         CFFIXED_USER_HOME="$test_dir/home" \
         PHOTOSPHERE_TEST_MODE=1 \
         PHOTOSPHERE_CONFIG_DIR="$test_dir/config" \
+        PHOTOSPHERE_CACHE_DIR="$test_dir/cache" \
         PHOTOSPHERE_VAULT_DIR="$test_dir/vault" \
         PHOTOSPHERE_VAULT_TYPE=plaintext \
         PHOTOSPHERE_LOG_DIR="$test_dir" \

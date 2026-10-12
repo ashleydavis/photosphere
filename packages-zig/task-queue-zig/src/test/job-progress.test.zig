@@ -67,6 +67,7 @@ fn makeContext(recorder: *MessageRecorder, generators: *Generators) ITaskContext
         .taskId = "task-1",
         .maxConcurrentChildTasks = 1,
         .hostRequester = null,
+        .toolRunner = null,
         .ptr = recorder,
         .vtable = &MessageRecorder.vtable,
     };

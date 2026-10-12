@@ -170,3 +170,26 @@ test "checkForUpdate does nothing for a dev or nightly build, or in test mode un
     try std.testing.expectEqual(logged_before, app.console_out.writer.buffered().len);
     try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("update-available"));
 }
+
+test "main-command page-loaded checks the news feed, and does it once however often the page loads" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    try useNewsFeed(&app, two_item_feed);
+    const allocator = std.testing.allocator;
+    allocator.free(try app.requestOk("main-command", "{\"command\":\"page-loaded\"}"));
+    try app.shell.expectMessageContaining("{\"channel\":\"show-notification\",\"data\":{\"message\":\"First news\",\"color\":\"success\",\"duration\":5000,\"newsId\":\"first\"}}");
+    allocator.free(try app.requestOk("main-command", "{\"command\":\"page-loaded\"}"));
+    app.shell.sleepMs(300);
+    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("show-notification"));
+}
+
+test "main-command page-loaded does not check the news in test mode when no feed is named" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    try app.environ_map.put("PHOTOSPHERE_TEST_MODE", "1");
+    std.testing.allocator.free(try app.requestOk("main-command", "{\"command\":\"page-loaded\"}"));
+    try app.shell.expectMessageContaining("\"type\":\"check-for-news\"");
+    try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("show-notification"));
+}

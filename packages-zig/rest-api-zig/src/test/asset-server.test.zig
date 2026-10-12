@@ -10,6 +10,8 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const rest_api = @import("rest-api-zig");
 
+const expectServerStopped = @import("../../../utils-zig/src/test/expect-server-stopped.zig").expectServerStopped;
+
 const io = std.testing.io;
 
 //
@@ -130,6 +132,5 @@ test "createAssetServer serves the routes, with CORS headers, and stops answerin
     try std.testing.expectEqualStrings("Missing 'id' parameter", body.written());
 
     server.close();
-    const address = try std.Io.net.IpAddress.parseIp4("127.0.0.1", port);
-    try std.testing.expect(std.meta.isError(address.connect(io, .{ .mode = .stream })));
+    try expectServerStopped(io, port);
 }

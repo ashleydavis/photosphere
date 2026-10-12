@@ -63,6 +63,7 @@ photosphere_platform_start() {
         LOCALAPPDATA="$(windows_native_path "$test_dir/data")" \
         PHOTOSPHERE_TEST_MODE=1 \
         PHOTOSPHERE_CONFIG_DIR="$(windows_native_path "$test_dir/config")" \
+        PHOTOSPHERE_CACHE_DIR="$(windows_native_path "$test_dir/cache")" \
         PHOTOSPHERE_VAULT_DIR="$(windows_native_path "$test_dir/vault")" \
         PHOTOSPHERE_VAULT_TYPE=plaintext \
         PHOTOSPHERE_LOG_DIR="$(windows_native_path "$test_dir")" \

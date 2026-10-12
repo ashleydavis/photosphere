@@ -50,6 +50,14 @@ pub const PickKind = enum(i32) {
 pub const MenuActionFn = *const fn (user_data: ?*anyopaque, action: [*:0]const u8) callconv(.c) void;
 
 //
+// A native host callback that writes a PNG picture of the app's window to the file at the path (NUL terminated), waits until the
+// file is written, and returns 0. When it cannot, it writes the text of the reason into the buffer and returns the number of bytes
+// written negated. The core calls it, from the thread of the test control connection, only to let a test take a screenshot. The
+// shell does the capture on its UI thread and waits for it, so the window stays responsive.
+//
+pub const ScreenshotFn = *const fn (user_data: ?*anyopaque, output_path: [*:0]const u8, buffer: [*]u8, capacity: usize) callconv(.c) isize;
+
+//
 // Tells the shell whether the app must keep running because tasks marked keep-alive are queued or running. Called with true when the
 // first such task is queued and with false when the last one ends, so the shell can use its platform's way of staying alive (an
 // Android foreground service or an iOS background task; a desktop shell provides none, because closing its window quits the app). Called from any
@@ -113,6 +121,10 @@ pub const ZiggyConfig = extern struct {
     // Native host callback: do one thing only the platform can do (a share sheet, a permission prompt, the keychain), by name. Null when
     // the platform has none. Last in the struct so that a shell that builds it with zeroes needs no change.
     host_request: ?HostRequestFn,
+    // Native host callback: write a PNG of the app's window to a file. Null when the platform has none, and a screenshot is taken from
+    // outside the app instead. Used only by the test control connection. Last in the struct so that a shell that builds it with zeroes
+    // needs no change.
+    screenshot: ?ScreenshotFn,
 };
 
 //

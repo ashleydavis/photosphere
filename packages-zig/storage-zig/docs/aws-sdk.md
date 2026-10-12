@@ -2,7 +2,7 @@
 
 `storage-zig` talks to S3 through the official AWS SDK for C: aws-c-s3 and the libraries under it. `src/lib/s3-client.zig` is a thin binding to it (the SDK signs, sends, resolves endpoints, uploads in parts and parses XML); `src/lib/cloud-storage.zig` uses the binding the way the TypeScript `CloudStorage` uses `@aws-sdk/client-s3` and `@aws-sdk/lib-storage`.
 
-The libraries are ordinary Zig package dependencies: `build.zig.zon` pins each one to the unmodified release archive on GitHub (URL and hash), and `build.zig` compiles their C sources with Zig, so `zig build` needs nothing installed and cross-compiles like the rest of the Zig code for Linux and Windows. macOS is built natively on a Mac with the macOS SDK (see [Platforms](#platforms)). Nothing from the SDK is copied into this repository or patched.
+The libraries are ordinary Zig package dependencies: `build.zig.zon` pins each one to the unmodified release archive on GitHub (URL and hash), and `build.zig` compiles their C sources with Zig, so `zig build` needs nothing installed and cross-compiles like the rest of the Zig code for Linux and Windows (x86_64 and aarch64). macOS is built natively on a Mac with the macOS SDK, and iOS on a Mac with the iOS SDK (see [Platforms](#platforms)). Nothing from the SDK is copied into this repository or patched.
 
 ## Libraries and versions
 
@@ -45,10 +45,11 @@ What differs from a CMake build, and why:
 | Target | Crypto | TLS | Event loop | Built on |
 | --- | --- | --- | --- | --- |
 | x86_64-linux, aarch64-linux | aws-lc | s2n-tls | epoll | any host |
-| x86_64-windows | BCrypt and NCrypt | SChannel | I/O completion ports | any host |
+| x86_64-windows, aarch64-windows | BCrypt and NCrypt | SChannel | I/O completion ports | any host |
 | x86_64-macos, aarch64-macos | CommonCrypto and the Security framework | Secure Transport, or s2n-tls over aws-lc | kqueue (dispatch queue also built) | a Mac of the same architecture |
+| aarch64-ios, aarch64-ios-simulator, x86_64-ios-simulator | CommonCrypto and the Security framework | Secure Transport | dispatch queue | a Mac with Xcode |
 
-Photosphere's core builds from a Linux machine for x86_64 Windows: `zig build photosphere-core -Dtarget=x86_64-windows-gnu`, and `zig build photosphere-windows-check -Dcompile-only=true -Dtarget=x86_64-windows-gnu` for the Windows shell. Linking the shell (`photosphere-windows`) needs Microsoft's toolchain, because WebView2's static loader asks for `uuid.lib`, which Zig does not ship, so it is linked on a Windows machine. aarch64 Windows is not built: the zlib-ng build covers x86_64 only on Windows.
+Photosphere's core builds from a Linux machine for x86_64 and aarch64 Windows: `zig build photosphere-core -Dtarget=x86_64-windows-gnu` (or `aarch64-windows-gnu`), and `zig build photosphere-windows-check -Dcompile-only=true -Dtarget=x86_64-windows-gnu` (or `aarch64-windows-gnu`) for the Windows shell. Linking the shell (`photosphere-windows`) needs Microsoft's toolchain, because WebView2's static loader asks for `uuid.lib`, which Zig does not ship, so it is linked on a Windows machine. aws-lc is built for aarch64 Windows as for x86_64: with `OPENSSL_NO_ASM`, so the C implementations only (its pre-generated `win-aarch64` assembly is not used, as `win-x86_64` is not).
 
 On macOS the files in `aws/` follow the CMake files' `APPLE` branches with their default options:
 
@@ -58,6 +59,12 @@ On macOS the files in `aws/` follow the CMake files' `APPLE` branches with their
 - aws-lc and s2n-tls are built as on Linux (aws-crt-cpp builds them on macOS too), with aws-lc's `generated-src/mac-x86_64` and `generated-src/ios-aarch64` assembly, without the Linux-only `_XOPEN_SOURCE=700` and `HAVE_LINUX_RANDOM_H`, and with s2n-tls' macOS probe results.
 
 On Apple, aws-c-common (`allocator.c`, `common.c`), aws-c-cal and aws-c-io (their `source/darwin` files, and aws-c-io's `s2n_apple_keychain.c` and `s2n_tls_channel_handler.c`) and aws-lc's jitterentropy include headers of the CoreFoundation, CoreServices, Security and Network frameworks, which Zig does not ship. Zig uses the macOS SDK only for a native build: when the target's operating system and ABI are not given, it finds the SDK of Xcode or the Command Line Tools with `xcode-select --print-path` and `xcrun --sdk macosx --show-sdk-path` (`std/zig/system/darwin.zig`) and compiles against the SDK's `usr/include` and `System/Library/Frameworks` (`std/zig/LibCDirs.zig`, `std/zig/system/NativePaths.zig`), which is also what CMake does on a Mac (aws-c-cal's CMakeLists.txt sets the sysroot from `xcrun --show-sdk-path`). So macOS is built on a Mac with no `-Dtarget`; `zig build` for a macOS target given with `-Dtarget` stops with an error that says so, on any host.
+
+iOS follows the same `APPLE` branches, with the differences CMake makes for `CMAKE_SYSTEM_NAME` "iOS", which is not "Darwin":
+
+- aws-c-io: only `AWS_ENABLE_DISPATCH_QUEUE` is defined (kqueue is enabled for "Darwin" only), and `USE_S2N` is off, so `source/s2n` is not built and Secure Transport is the one TLS implementation. aws-c-common's `platform.h` defines `AWS_OS_IOS` itself from `TARGET_OS_IPHONE`.
+- s2n-tls is not built for iOS. aws-lc's libcrypto still is, because `encryption-zig` uses it on every platform: `generated-src/ios-aarch64` for the device and the arm64 simulator, `generated-src/mac-x86_64` for the x86_64 simulator, as aws-lc's `crypto/CMakeLists.txt` chooses for `APPLE`.
+- The SDK is the iOS one: `packages-zig/apple-sdk.zig` finds it with `xcrun --sdk iphoneos --show-sdk-path` (`iphonesimulator` for a simulator target), the call Zig makes for a native macOS build and the generate-config scripts make for iOS, and gives it to every compile step as the sysroot. A `--sysroot` the build is given is kept. Where `xcrun` or the SDK is missing (any machine without Xcode), the build stops with a message that names the SDK.
 
 The Zig CLI (`apps/cli-zig`) is built for macOS with `zig build -Dcpu=baseline --prefix apps/cli-zig/bin/arm64/mac --prefix-exe-dir .` on an Apple Silicon Mac and `zig build -Dcpu=baseline --prefix apps/cli-zig/bin/x64/mac --prefix-exe-dir .` on an Intel Mac, from the root of the repository. Both pass `-Dcpu=baseline`: the operating system and ABI stay native, so the SDK is used, and the CPU is the baseline of the architecture on macOS (Apple M1 for aarch64), the CPU the former `-Dtarget=<arch>-macos` builds had. Being native, the binary's minimum macOS version is the version of the Mac that builds it. Each script builds for the Mac it runs on, so run it on a Mac of the matching architecture (CI checks the architecture with `file`). The Linux and Windows targets cross-compile on any host with `-Dtarget=x86_64-linux`, `-Dtarget=aarch64-linux` and `-Dtarget=x86_64-windows`.
 

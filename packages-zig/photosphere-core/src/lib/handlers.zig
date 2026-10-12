@@ -134,6 +134,8 @@ pub const tasks = [_]ziggy.task_runner.TaskHandlerEntry{
     .{ .name = "secureStoreDelete", .handler = mobile_requests.secureStoreDeleteHandler },
     .{ .name = "secureStoreKeys", .handler = mobile_requests.secureStoreKeysHandler },
     .{ .name = "ensure-auto-import", .handler = main_process.ensureAutoImportTask },
+    .{ .name = "check-for-update", .handler = update_and_news.checkForUpdateTask },
+    .{ .name = "check-for-news", .handler = update_and_news.checkForNewsTask },
     .{ .name = "mcp-server", .handler = mcp_server.mcpServerTask },
     .{ .name = "plan-auto-import", .handler = mobile_planning.planAutoImportTask },
     .{ .name = "plan-sync", .handler = mobile_planning.planSyncTask },

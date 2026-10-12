@@ -1,4 +1,5 @@
 const std = @import("std");
+const apple_sdk = @import("../../apple-sdk.zig");
 
 //
 // Builds aws-lc's libcrypto (the `crypto` target) as its CMakeLists.txt files do for a Release, non-FIPS, static build,
@@ -529,6 +530,9 @@ const Context = struct {
     // True for macOS (CMake: `APPLE`, with `CMAKE_SYSTEM_NAME STREQUAL "Darwin"`).
     isMacos: bool,
 
+    // True for macOS and iOS (CMake: `APPLE`).
+    isApple: bool,
+
     // True for x86_64 (CMake: ARCH "x86_64").
     isX86_64: bool,
 
@@ -658,10 +662,12 @@ fn lessThan(context: void, left: []const u8, right: []const u8) bool {
 pub fn build(b: *std.Build, target: std.Build.ResolvedTarget, dependency: *std.Build.Dependency) !*std.Build.Step.Compile {
     const os = target.result.os.tag;
     const arch = target.result.cpu.arch;
-    if (os != .linux and os != .windows and os != .macos) {
-        std.log.err("aws-lc's libcrypto is only built for Linux, Windows and macOS, not {s}.", .{@tagName(os)});
+    if (os != .linux and os != .windows and os != .macos and os != .ios) {
+        std.log.err("aws-lc's libcrypto is only built for Linux, Windows, macOS and iOS, not {s}.", .{@tagName(os)});
         std.process.exit(1);
     }
+    // jitterentropy includes headers of the Apple SDK, which Zig does not ship for iOS: they come from the iOS SDK of Xcode.
+    try apple_sdk.useSdkForIos(b, target, "aws-lc's libcrypto");
     if (arch != .x86_64 and arch != .aarch64) {
         std.log.err("aws-lc's libcrypto build only covers x86_64 and aarch64, not {s}.", .{@tagName(arch)});
         std.process.exit(1);
@@ -679,14 +685,16 @@ pub fn build(b: *std.Build, target: std.Build.ResolvedTarget, dependency: *std.B
         .isLinux = os == .linux,
         .isWindows = os == .windows,
         .isMacos = os == .macos,
+        .isApple = os == .macos or os == .ios,
         .isX86_64 = arch == .x86_64,
     };
     const flags = context.cFlags();
 
-    // crypto/CMakeLists.txt's ASSEMBLY_SOURCE: ios-aarch64 for aarch64 on Apple, mac-<arch> for the other Apple
-    // architectures, linux-<arch> on Linux (none on Windows, where the build has no assembly).
+    // crypto/CMakeLists.txt's ASSEMBLY_SOURCE: ios-aarch64 for aarch64 on Apple (macOS and iOS alike), mac-<arch> for the
+    // other Apple architectures (macOS x86_64 and the x86_64 iOS simulator), linux-<arch> on Linux (none on Windows, where
+    // the build has no assembly).
     var generated: []const u8 = if (context.isX86_64) "generated-src/linux-x86_64/crypto" else "generated-src/linux-aarch64/crypto";
-    if (context.isMacos) {
+    if (context.isApple) {
         generated = if (context.isX86_64) "generated-src/mac-x86_64/crypto" else "generated-src/ios-aarch64/crypto";
     }
     const s2n_bignum_dir = if (context.isX86_64) "third_party/s2n-bignum/s2n-bignum-imported/x86_att" else "third_party/s2n-bignum/s2n-bignum-imported/arm";
@@ -869,6 +877,7 @@ pub fn buildSsl(b: *std.Build, target: std.Build.ResolvedTarget, dependency: *st
         .isLinux = os == .linux,
         .isWindows = os == .windows,
         .isMacos = os == .macos,
+        .isApple = os == .macos or os == .ios,
         .isX86_64 = target.result.cpu.arch == .x86_64,
     };
     const library = context.createLibrary("ssl");

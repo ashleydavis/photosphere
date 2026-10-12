@@ -25,6 +25,12 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 
     <!--
+      Android removes the GPS location from the EXIF of a library photo unless the app holds this permission and opens the photo as
+      the original. Without it every geotagged photo would import with no location.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
+
+    <!--
       The background work holds a wake lock only while a pass is running, so the CPU keeps working with the screen off. It is
       released between passes: held for the life of the service it would flatten a phone overnight.
     -->
@@ -35,6 +41,7 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="false"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true">
         <!-- exported is required for an activity with an intent filter from Android 12, and the launcher needs it. The

@@ -3,6 +3,7 @@ const utils = @import("utils-zig");
 const support = @import("test-support.zig");
 const main_state = @import("../lib/main-state.zig");
 const file_logger = @import("../lib/file-logger.zig");
+const main_process = @import("../lib/main-process.zig");
 
 const TestApp = support.TestApp;
 
@@ -109,4 +110,38 @@ test "destroying the core logs that the app is shutting down and ends the log fi
     // The footer is the last thing written, after the shutting down line, because the logger is closed last.
     const shutting_down = std.mem.indexOf(u8, text, "Photosphere Desktop shutting down...").?;
     try std.testing.expect(std.mem.indexOf(u8, text[shutting_down..], "--- Log End ---") != null);
+}
+
+test "a sync that moved changes is logged as having synced them" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    main_process.onTaskMessage(app.core, .{
+        .task_id = "sync-1",
+        .task_type = "sync-database",
+        .source = "/db",
+        .message_json = "{\"type\":\"sync-completed\",\"databasePath\":\"/db\",\"synced\":true}",
+    });
+
+    const text = try waitForLogLine(std.testing.allocator, &app, "Sync completed: changes synced");
+    defer std.testing.allocator.free(text);
+
+    try std.testing.expect(std.mem.indexOf(u8, text, "Sync completed: nothing to sync") == null);
+}
+
+test "a sync that found both sides identical is logged as having nothing to sync" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    main_process.onTaskMessage(app.core, .{
+        .task_id = "sync-1",
+        .task_type = "sync-database",
+        .source = "/db",
+        .message_json = "{\"type\":\"sync-completed\",\"databasePath\":\"/db\",\"synced\":false}",
+    });
+
+    const text = try waitForLogLine(std.testing.allocator, &app, "Sync completed: nothing to sync");
+    defer std.testing.allocator.free(text);
+
+    try std.testing.expect(std.mem.indexOf(u8, text, "Sync completed: changes synced") == null);
 }

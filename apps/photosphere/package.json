@@ -32,6 +32,7 @@
     "package:macos": "bash ./scripts/package-macos.sh",
     "package:ios": "bash ./scripts/package-ios.sh",
     "package:android": "bash ./scripts/package-android.sh",
+    "distribute:android": "bash ./scripts/distribute-android.sh",
     "clean:linux": "bash ./scripts/clean-linux.sh",
     "clean:windows": "bash ./scripts/clean-windows.sh",
     "clean:macos": "bash ./scripts/clean-macos.sh",

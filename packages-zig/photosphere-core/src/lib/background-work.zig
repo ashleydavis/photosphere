@@ -14,6 +14,7 @@
 //
 
 const std = @import("std");
+const builtin = @import("builtin");
 const ziggy = @import("ziggy-core");
 const utils = @import("utils-zig");
 const main_state = @import("main-state.zig");
@@ -399,18 +400,25 @@ fn replicaStateName(state: ReplicaState) []const u8 {
 }
 
 //
-// One pass of the sync: asks the plan-sync task whether a sync should run, and runs the tasks it hands back. What the prefetch is
-// doing goes with the question, because a sync that runs while a prefetch is working does the same work slowly and gets in its own way.
+// Asks the plan-sync task whether a sync should run. What the prefetch is doing goes with the question, because a sync that runs while
+// a prefetch is working does the same work slowly and gets in its own way.
 //
-fn syncPass(allocator: std.mem.Allocator, host: LoopHost, replica_state: *std.atomic.Value(ReplicaState), pause_ms: *u64) void {
+fn readSyncPlan(allocator: std.mem.Allocator, host: LoopHost, replica_state: *std.atomic.Value(ReplicaState)) ?IPlan {
     var request: std.json.ObjectMap = .empty;
     request.put(allocator, "prefetchState", .{
         .string = replicaStateName(replica_state.load(.acquire)),
     }) catch {
         host.reportError("The sync loop ran out of memory.");
-        return;
+        return null;
     };
-    const plan = readPlanOrReport(allocator, host, "plan-sync", .{ .object = request }, SYNC_FALLBACK_PAUSE_MS, "whether a sync should run") orelse {
+    return readPlanOrReport(allocator, host, "plan-sync", .{ .object = request }, SYNC_FALLBACK_PAUSE_MS, "whether a sync should run");
+}
+
+//
+// One pass of the sync: asks the plan-sync task whether a sync should run, and runs the tasks it hands back.
+//
+fn syncPass(allocator: std.mem.Allocator, host: LoopHost, replica_state: *std.atomic.Value(ReplicaState), pause_ms: *u64) void {
+    const plan = readSyncPlan(allocator, host, replica_state) orelse {
         return;
     };
     pause_ms.* = plan.pause_ms;
@@ -434,18 +442,25 @@ fn syncPass(allocator: std.mem.Allocator, host: LoopHost, replica_state: *std.at
 // The sync loop. Runs passes until the host says to stop. It never ends itself, because every reason a sync is refused can go away
 // without the app being touched.
 //
+// The first sync waits the configured pause too. The loop starts when a database is opened, and a sync at that moment would push a
+// database the user has only just opened, racing whatever they do to it next. The pause is a setting only the plan reads.
+//
 pub fn runSyncLoop(allocator: std.mem.Allocator, host: LoopHost, replica_state: *std.atomic.Value(ReplicaState)) void {
     var pause_ms: u64 = SYNC_FALLBACK_PAUSE_MS;
-    while (!host.isStopped()) {
+    {
         var arena_state = std.heap.ArenaAllocator.init(allocator);
         defer arena_state.deinit();
-        syncPass(arena_state.allocator(), host, replica_state, &pause_ms);
-        if (host.isStopped()) {
-            return;
+        if (readSyncPlan(arena_state.allocator(), host, replica_state)) |plan| {
+            pause_ms = plan.pause_ms;
         }
+    }
+    while (!host.isStopped()) {
         if (!host.pause(pause_ms)) {
             return;
         }
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
+        defer arena_state.deinit();
+        syncPass(arena_state.allocator(), host, replica_state, &pause_ms);
     }
 }
 
@@ -757,6 +772,11 @@ pub fn startBackgroundWork(context: *TaskContext) !void {
     const state = main_state.fromContext(context);
     inline for (std.meta.fields(Loop)) |field| {
         const loop: Loop = @enumFromInt(field.value);
+
+        // A desktop imports by watching folders (ensureAutoImport), so a second import driver here would import everything twice.
+        if (loop == .import and builtin.os.tag != .ios and !builtin.abi.isAndroid()) {
+            continue;
+        }
         if (state.claimBackgroundLoop(loop)) {
             errdefer state.releaseBackgroundLoop(loop);
             const task_id = try state.uuid_generator.generate(context.arena, context.io());

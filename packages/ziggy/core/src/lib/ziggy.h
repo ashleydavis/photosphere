@@ -29,6 +29,12 @@ typedef void (*ziggy_quit_fn)(void *user_data);
 // menu item. The shell does the work on its UI thread and returns at once.
 typedef void (*ziggy_menu_action_fn)(void *user_data, const char *action);
 
+// Native host callback: writes a PNG picture of the app's window to the file at the path (NUL terminated), waits until the file is
+// written, and returns 0. When it cannot it writes the text of the reason into the buffer and returns the number of bytes written,
+// negated. The core calls it, from the thread of the test control connection, only to let a test take a screenshot. The shell does
+// the capture on its UI thread and waits for it.
+typedef intptr_t (*ziggy_screenshot_fn)(void *user_data, const char *output_path, char *buffer, size_t capacity);
+
 // Tells the shell whether the app must keep running because tasks marked keep-alive are queued or running: true when the first
 // such task is queued, false when the last one ends. Called from any thread while the core holds a lock, so it must return at
 // once and must not call back into the core.
@@ -90,6 +96,9 @@ typedef struct ziggy_config {
     // Native host callback: do one thing only the platform can do, by name. NULL when the platform has none. Last in the struct so that a
     // shell that builds it with zeroes needs no change.
     ziggy_host_request_fn host_request;
+    // Native host callback: write a PNG of the app's window to a file. NULL when the platform has none. Used only by the test control
+    // connection. Last in the struct so that a shell that builds it with zeroes needs no change.
+    ziggy_screenshot_fn screenshot;
 } ziggy_config;
 
 // The result of ziggy_check_url.

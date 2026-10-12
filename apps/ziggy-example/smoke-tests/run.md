@@ -38,3 +38,7 @@ The scenarios in `desktop-only` run on Linux, Windows and macOS and not on a pho
 - `20-drop-files`: a file dropped on the window gets its real path from `getPathForFile`, and a file of another size does not. The drop is faked in two steps, because no tool can drag a file into the window: the `drop` command records it with the core and `drop-file` gives the page a drop event. The shell's own reading of a real drop is tested by hand.
 
 Toggle Full Screen is not smoke tested. The Linux suite runs on a virtual display with no window manager, and nothing honours a request for full screen there, so there is nothing to see change.
+
+## Building on Android
+
+The Android library builds the test APK and the release APK one after the other through the one Gradle project and synced library directory of the checkout. Two runs building at the same time would swap the library under each other, so `ziggy_platform_prepare` in `lib/android.sh` holds a lock file inside that build directory for the whole build. A second run waits for the first to finish building, then builds its own.

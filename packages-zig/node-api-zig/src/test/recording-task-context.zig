@@ -61,6 +61,7 @@ pub const RecordingTaskContext = struct {
             .taskId = "task-1",
             .maxConcurrentChildTasks = 10,
             .hostRequester = null,
+            .toolRunner = null,
             .ptr = self,
             .vtable = &vtable,
         };

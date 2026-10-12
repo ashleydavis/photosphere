@@ -96,6 +96,7 @@ fn bridgedContext(context: *TaskContext, bridge: *ContextBridge, uuid_generator:
         .taskId = context.taskId(),
         .maxConcurrentChildTasks = context.maxConcurrentChildTasks(),
         .hostRequester = context.hostRequester(&bridge.host_requester_storage),
+        .toolRunner = null,
         .ptr = bridge,
         .vtable = &ContextBridge.vtable,
     };

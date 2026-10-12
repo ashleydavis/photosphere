@@ -21,9 +21,6 @@ final class PhotosphereHostRequests: ZiggyHostRequestHandler {
     // Keeps the app running while a background pass is.
     private let wakeHold = BackgroundWakeHold()
 
-    // Runs ImageMagick, ffmpeg and ffprobe.
-    private let mediaTools = MediaTools()
-
     // The log the background work reports to. The background work runs with the app off screen, when the app's own log file (written
     // through the page) is not being written, so what it is doing is told to the system log.
     private let backgroundLog = OSLog(subsystem: Bundle.main.bundleIdentifier ?? "au.com.codecapers.photosphere.ziggy", category: "AutoImportService")
@@ -83,8 +80,6 @@ final class PhotosphereHostRequests: ZiggyHostRequestHandler {
             }
             wakeHold.hold(awake)
             return "null"
-        case "runMagick", "runFfmpeg", "runFfprobe":
-            return try mediaTools.run(method: method, requestJson: requestJson)
         case "backgroundLog":
             let request = try HostJson.object(from: requestJson, method: method)
             let message = try HostJson.string(request, "message", method: method)

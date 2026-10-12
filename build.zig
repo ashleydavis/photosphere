@@ -2,7 +2,10 @@ const std = @import("std");
 const aws_lc = @import("packages-zig/encryption-zig/aws/aws-lc.zig");
 const aws_sdk = @import("packages-zig/storage-zig/aws/aws-sdk.zig");
 const zlib_ng = @import("packages-zig/serialization-zig/zlib-ng/zlib-ng.zig");
+const imagemagick = @import("packages-zig/media-tools-zig/imagemagick/imagemagick.zig");
+const ffmpeg = @import("packages-zig/media-tools-zig/ffmpeg/ffmpeg.zig");
 const android_libc = @import("packages-zig/android-libc.zig");
+const apple_sdk = @import("packages-zig/apple-sdk.zig");
 
 //
 // A Zig package in this directory: its module is the `src/index.zig` of the directory of the same name.
@@ -163,8 +166,13 @@ const packages = [_]IPackage{
         .link_libc = false,
     },
     .{
+        .name = "media-tools-zig",
+        .dependencies = &.{ "utils-zig", "node-utils-zig" },
+        .link_libc = true,
+    },
+    .{
         .name = "photosphere-core",
-        .dependencies = &.{ "utils-zig", "node-utils-zig", "config-zig", "mobile-worker-zig", "tools-zig", "encryption-zig", "storage-zig", "vault-zig", "task-queue-zig", "serialization-zig", "merkle-tree-zig", "bdb-zig", "mcp-zig", "api-zig", "node-api-zig" },
+        .dependencies = &.{ "utils-zig", "node-utils-zig", "config-zig", "mobile-worker-zig", "tools-zig", "media-tools-zig", "encryption-zig", "storage-zig", "vault-zig", "task-queue-zig", "serialization-zig", "merkle-tree-zig", "bdb-zig", "mcp-zig", "api-zig", "node-api-zig" },
         .link_libc = true,
     },
 };
@@ -235,8 +243,16 @@ pub fn build(b: *std.Build) !void {
     // ReleaseSafe by default: the tests keep the safety checks, and the work of the database and storage tests is several times
     // slower in Debug.
     const optimize = b.option(std.builtin.OptimizeMode, "optimize", "Prioritize performance, safety, or binary size (default: ReleaseSafe)") orelse .ReleaseSafe;
-    // The packages, the CLI and their tests are built for the machine running the build only (Windows x86_64 and Android are cross builds of Photosphere's core only, below): the AWS SDK for C builds for Linux
-    // and Windows, and for macOS natively, and zlib-ng for x86_64 on Windows. For any other target (the Ziggy example cross-builds
+    // The media libraries have steps of their own for every target, which build one library by itself (see packages-zig/media-tools-zig).
+    // The files FFmpeg needs for a target are made by a script (ffmpeg/generate-config.sh) that needs zlib built for the target first, and
+    // FFmpeg's steps and the packages need those files, so the script asks for the zlib step alone.
+    const zlib_only = b.option(bool, "zlib-only", "Register only the step that builds zlib, which is what the script that makes FFmpeg's files uses") orelse false;
+    try addMediaToolSteps(b, target, zlib_only);
+    if (zlib_only) {
+        return;
+    }
+    // The packages, the CLI and their tests are built for the machine running the build only (Windows, iOS and Android are cross builds of Photosphere's core only, below): the AWS SDK for C builds for Linux,
+    // Windows, iOS and macOS (iOS with the SDK of Xcode, macOS natively), and zlib-ng for x86_64 and aarch64 on Windows. For any other target (the Ziggy example cross-builds
     // its core for the Apple, Android, Windows and Linux platforms) only Ziggy's steps are registered. The steps of the packages
     // and the tests are not registered, so asking for one fails with an unknown step instead of building a partial set.
     const host = b.graph.host.result;
@@ -247,7 +263,9 @@ pub fn build(b: *std.Build) !void {
         else => false,
     };
     const queue_modules = addQueueModules(b, target, optimize);
-    if (target.result.abi.isAndroid() or (!packages_supported and target.result.os.tag == .windows and target.result.cpu.arch == .x86_64)) {
+    // iOS needs the Apple SDK, which a machine without Xcode lacks: there only Ziggy and the example are registered, and the Photosphere steps say why they cannot be built.
+    const is_cross_core_target = (target.result.os.tag == .ios and apple_sdk.findSdkForIos(b, target) != null) or (target.result.os.tag == .windows and (target.result.cpu.arch == .x86_64 or target.result.cpu.arch == .aarch64));
+    if (target.result.abi.isAndroid() or (!packages_supported and is_cross_core_target)) {
         // An Android build is a cross build of Photosphere's core and the example's core only: the packages are made for Android here (they
         // are built for the machine running the build otherwise), but their tests and the CLI are not, since none can run on the build machine.
         const android_ziggy_core = try addZiggyCore(b, target, optimize, false, queue_modules);
@@ -272,6 +290,16 @@ pub fn build(b: *std.Build) !void {
     test_step.dependOn(test_cli_step);
     const stand_ins = addStandIns(b, target, optimize);
     try addUnitTests(b, test_packages_step, modules, target, optimize, stand_ins);
+    // The tests inside the build helper files (they are compiled by the build itself, so they are not under a package's src/test).
+    const apple_sdk_tests = b.addTest(.{
+        .name = "apple-sdk",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("packages-zig/apple-sdk.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    test_packages_step.dependOn(&b.addRunArtifact(apple_sdk_tests).step);
     try addOwnProcessTests(b, test_packages_step, modules, target, optimize, stand_ins);
     try addStorageIntegrationTests(b, modules, target, optimize);
     try addCli(b, test_cli_step, modules, target, optimize);
@@ -325,6 +353,8 @@ fn addPackageModules(
     var modules = std.StringHashMap(*std.Build.Module).init(b.allocator);
     var crypto: ?*std.Build.Step.Compile = null;
     var ssl: ?*std.Build.Step.Compile = null;
+    // zlib-ng, built once for the packages that use it (serialization-zig and the media tools).
+    var zlib: ?zlib_ng.IZlibNg = null;
 
     for (packages) |package| {
         // The packages Ziggy's core uses were made before it, and are the ones every other package imports.
@@ -354,7 +384,13 @@ fn addPackageModules(
         }
         if (std.mem.eql(u8, package.name, "serialization-zig")) {
             // zlib-ng, which gzip compression and decompression bind to.
-            try zlib_ng.addZlibNg(b, module, target);
+            zlib = try zlib_ng.buildZlibNg(b, target);
+            try zlib_ng.addZlibNg(b, module, target, zlib.?);
+        }
+        if (std.mem.eql(u8, package.name, "media-tools-zig")) {
+            // ImageMagick and FFmpeg, built over the same zlib-ng as serialization-zig's, which the program has one copy of.
+            try imagemagick.addImageMagick(b, module, target, zlib.?);
+            try ffmpeg.addFfmpeg(b, module, target, zlib.?);
         }
         if (std.mem.eql(u8, package.name, "storage-zig")) {
             // The AWS SDK for C, which the S3 client binds to, over the libcrypto that encryption-zig builds. False means a lazy
@@ -1065,6 +1101,10 @@ fn addZiggy(
             .name = "task-queue-zig",
             .module = queue.task_queue,
         },
+        .{
+            .name = "node-utils-zig",
+            .module = queue.node_utils,
+        },
     }, target, optimize, core_test_binary_step);
 
     // The unit tests of the parts of the shells that do not need the platform's libraries.
@@ -1258,15 +1298,58 @@ fn addPhotosphere(
 const photosphere_page_directory = "apps/photosphere-frontend/dist";
 
 //
+// Registers the steps that build one media library by itself as a static library for the target, so a library can be built and
+// checked on its own (`zig build imagemagick -Dtarget=<target>`): ImageMagick (with libjpeg, libpng and zlib), FFmpeg (with zlib), and
+// zlib-ng with its headers (what FFmpeg's configure is pointed at). For a target one cannot be built for, the step says why.
+//
+fn addMediaToolSteps(b: *std.Build, target: std.Build.ResolvedTarget, zlib_only: bool) !void {
+    const zlib_step = b.step("zlib", "Build zlib-ng as a static library, installed with its headers, for the target");
+    const imagemagick_step = b.step("imagemagick", "Build ImageMagick (with libjpeg, libpng and zlib) as a static library for the target");
+    const ffmpeg_step = b.step("ffmpeg", "Build FFmpeg (with the ffmpeg and ffprobe programs compiled in, and zlib) as a static library for the target");
+    if (imagemagick.zlibUnsupportedReason(b, target)) |reason| {
+        zlib_step.dependOn(&b.addFail(reason).step);
+        imagemagick_step.dependOn(&b.addFail(imagemagick.unsupportedReason(b, target).?).step);
+        ffmpeg_step.dependOn(&b.addFail(ffmpeg.unsupportedReason(b, target).?).step);
+        return;
+    }
+    const zlib = try zlib_ng.buildZlibNg(b, target);
+    zlib_step.dependOn(&b.addInstallArtifact(zlib.library, .{}).step);
+    zlib_step.dependOn(&b.addInstallDirectory(.{
+        .source_dir = zlib.include_directory,
+        .install_dir = .prefix,
+        .install_subdir = "include",
+    }).step);
+    if (zlib_only) {
+        return;
+    }
+    if (imagemagick.unsupportedReason(b, target)) |reason| {
+        imagemagick_step.dependOn(&b.addFail(reason).step);
+    }
+    else {
+        const library = try imagemagick.buildImageMagick(b, target, zlib);
+        imagemagick_step.dependOn(&b.addInstallArtifact(library.library, .{}).step);
+    }
+    if (ffmpeg.unsupportedReason(b, target)) |reason| {
+        ffmpeg_step.dependOn(&b.addFail(reason).step);
+    }
+    else {
+        const library = try ffmpeg.buildFfmpeg(b, target, zlib);
+        ffmpeg_step.dependOn(&b.addInstallArtifact(library.library, .{}).step);
+    }
+}
+
+//
 // Registers Photosphere's steps for a target its core cannot be built for, so asking for one says why instead of reporting an unknown
-// step. The packages Photosphere's core is made of include the AWS SDK for C and aws-lc, which are built for Linux, Windows and macOS,
-// each on its own platform.
+// step. The packages Photosphere's core is made of include the AWS SDK for C and aws-lc, which are built for Linux, Windows, macOS and iOS,
+// macOS natively on a Mac and iOS with the SDK of Xcode.
 //
 fn addPhotosphereUnavailable(b: *std.Build, target: std.Build.ResolvedTarget) !void {
-    const message = if (target.result.os.tag == .ios or target.result.os.tag == .macos)
-        "Photosphere's core for an Apple platform can only be built on a Mac: it holds the AWS SDK for C and aws-lc, whose Apple sources include the Security, Network, CoreFoundation and CoreServices headers of the Apple SDK, which Zig does not ship and which this machine does not have. See docs/aws-sdk.md."
+    const message = if (target.result.os.tag == .ios)
+        b.fmt("Photosphere's core for iOS needs Apple's {s} SDK, which comes with Xcode on a Mac and is found with `xcrun --sdk {s} --show-sdk-path`. It was not found here. It holds the AWS SDK for C and aws-lc, whose Apple sources include headers of that SDK, which Zig does not ship. Build for iOS on a Mac with Xcode installed. See docs/aws-sdk.md.", .{ apple_sdk.sdkName(target.result.os.tag, target.result.abi).?, apple_sdk.sdkName(target.result.os.tag, target.result.abi).? })
+    else if (target.result.os.tag == .macos)
+        "Photosphere's core for macOS can only be built on a Mac, natively with no -Dtarget (-Dcpu may be given): it holds the AWS SDK for C and aws-lc, whose Apple sources include the Security, Network, CoreFoundation and CoreServices headers of the macOS SDK, which Zig only uses for a native build. See docs/aws-sdk.md."
     else
-        "Photosphere's core is built for the machine running the build, for Windows (x86_64) and for Android (with the NDK's C library as a libc file). See docs/aws-sdk.md.";
+        "Photosphere's core is built for the machine running the build, for Windows (x86_64 and aarch64), for iOS (on a Mac with Xcode) and for Android (with the NDK's C library as a libc file). See docs/aws-sdk.md.";
     for ([_][]const u8{ "photosphere-core", "photosphere-linux", "photosphere-windows", "photosphere-windows-check" }) |name| {
         const step = b.step(name, "Build Photosphere (only for the machine running the build)");
         step.dependOn(&b.addFail(message).step);
@@ -1286,6 +1369,7 @@ const linux_runtime_libraries = [_][]const u8{
     "libgdk_pixbuf-2.0.so.0",
     "libjavascriptcoregtk-4.1.so.0",
     "libwebkit2gtk-4.1.so.0",
+    "libcairo.so.2",
 };
 
 //
@@ -1479,11 +1563,8 @@ fn addWindowsShell(
         .link_libc = true,
     });
     check_module.addImport("ziggy-shell-windows", shell_module);
-    if (app.windows_resource) |resource| {
-        check_module.addWin32ResourceFile(.{
-            .file = b.path(resource),
-        });
-    }
+    // The icon resource is left out: a resource is not Zig, so it has no type errors to find, and an object cannot hold it ("coff does
+    // not support linking multiple objects into one").
     check_module.addImport("ui-files", try embedPage(b, shell_module, "ziggy-shell-windows", app.page_directory));
     check_step.dependOn(&b.addObject(.{
         .name = b.fmt("{s}-check", .{app.name}),

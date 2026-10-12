@@ -10,6 +10,7 @@ const aws_c_auth = @import("aws-c-auth.zig");
 const aws_c_s3 = @import("aws-c-s3.zig");
 const s2n_tls = @import("s2n-tls.zig");
 const android_libc = @import("../../android-libc.zig");
+const apple_sdk = @import("../../apple-sdk.zig");
 
 //
 // Builds the AWS SDK for C (aws-c-s3 and the libraries under it) from the unmodified upstream sources fetched as the
@@ -40,6 +41,12 @@ pub const Context = struct {
 
     // True for macOS (CMake: `APPLE`, with `CMAKE_SYSTEM_NAME STREQUAL "Darwin"`).
     isMacos: bool,
+
+    // True for iOS, the device and the simulator (CMake: `APPLE`, with `CMAKE_SYSTEM_NAME STREQUAL "iOS"`, which is not "Darwin").
+    isIos: bool,
+
+    // True for macOS and iOS (CMake: `APPLE`).
+    isApple: bool,
 
     // True for x86_64 (CMake: `AWS_ARCH_INTEL` and `AWS_ARCH_INTEL_X64`).
     isX86_64: bool,
@@ -207,10 +214,13 @@ const aws_c_header =
 pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.ResolvedTarget, libcrypto: *std.Build.Step.Compile) !bool {
     const os = target.result.os.tag;
     const arch = target.result.cpu.arch;
-    if (os != .linux and os != .windows and os != .macos) {
-        std.log.err("The AWS SDK for C is only built for Linux, Windows and macOS, not {s}. See docs/aws-sdk.md.", .{@tagName(os)});
+    if (os != .linux and os != .windows and os != .macos and os != .ios) {
+        std.log.err("The AWS SDK for C is only built for Linux, Windows, macOS and iOS, not {s}. See docs/aws-sdk.md.", .{@tagName(os)});
         std.process.exit(1);
     }
+    // Zig has no headers for the Apple frameworks aws-c-cal and aws-c-io include on iOS. They come from the iOS SDK, which only a Mac
+    // with Xcode has.
+    try apple_sdk.useSdkForIos(b, target, "The AWS SDK for C");
     // Zig uses the macOS SDK (Xcode's or the Command Line Tools', found with `xcrun --sdk macosx --show-sdk-path`)
     // only for a native build: a target whose operating system and ABI are not given (see
     // std/zig/system/darwin.zig and std/zig/LibCDirs.zig).
@@ -230,6 +240,8 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
         .isLinux = os == .linux,
         .isWindows = os == .windows,
         .isMacos = os == .macos,
+        .isIos = os == .ios,
+        .isApple = os == .macos or os == .ios,
         .isX86_64 = arch == .x86_64,
         .isAarch64 = arch == .aarch64,
         .isCrossCompiling = host.os.tag != os or host.cpu.arch != arch or host.abi != target.result.abi,
@@ -242,8 +254,9 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
     // The SDK only uses libcrypto and the TLS library on Linux, where aws-c-cal uses aws-lc's libcrypto and aws-c-io
     // uses s2n-tls, and on macOS, where aws-c-io's USE_S2N option is on by default (aws-crt-cpp builds aws-lc and
     // s2n-tls there too, and aws-c-io picks Secure Transport or s2n-tls at run time; aws-c-cal uses CommonCrypto). On
-    // Windows the SDK uses the operating system's BCrypt and SChannel (libcrypto is still linked into the module there,
-    // by encryption-zig, which uses it on every platform).
+    // Windows the SDK uses the operating system's BCrypt and SChannel, and on iOS CommonCrypto and Secure Transport only
+    // (USE_S2N is off there), so neither builds s2n-tls (libcrypto is still linked into the module on both, by
+    // encryption-zig, which uses it on every platform).
     var crypto: ?*std.Build.Step.Compile = null;
     var s2n: ?*std.Build.Step.Compile = null;
     if (context.isLinux or context.isMacos) {
@@ -276,6 +289,12 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
         preprocess.addArg(b.fmt("-D{s}", .{define}));
     }
     try android_libc.addLibcIncludesToCommand(b, preprocess, target);
+    // The headers include CoreFoundation's on Apple (aws/common/allocator.h), so the iOS SDK is the preprocessor's sysroot.
+    if (b.sysroot) |sysroot| {
+        if (target.result.os.tag == .ios) {
+            preprocess.addArgs(&.{ "-isysroot", sysroot });
+        }
+    }
     preprocess.addFileArg(header_files.add("aws-c.h", aws_c_header));
     preprocess.addArg("-o");
     const preprocessed_header = preprocess.addOutputFileArg("aws-c-preprocessed.h");
@@ -287,6 +306,16 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
         .optimize = .Debug,
     });
     try android_libc.addLibcIncludes(b, translate_c, target);
+    if (b.sysroot) |sysroot| {
+        if (target.result.os.tag == .ios) {
+            translate_c.addSystemIncludePath(.{
+                .cwd_relative = b.pathJoin(&.{ sysroot, "usr", "include" }),
+            });
+            translate_c.addSystemFrameworkPath(.{
+                .cwd_relative = b.pathJoin(&.{ sysroot, "System", "Library", "Frameworks" }),
+            });
+        }
+    }
     module.addImport(aws_c_module_name, translate_c.createModule());
 
     for ([_]*std.Build.Step.Compile{ s3, auth, sdkutils, http, compression, io, cal, checksums, common }) |library| {

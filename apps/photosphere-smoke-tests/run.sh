@@ -11,6 +11,7 @@ source "$REPO_ROOT/scripts/lib/test-lib.sh"
 source "$REPO_ROOT/scripts/lib/test-timeout.sh"
 source "$REPO_ROOT/scripts/lib/process-control.sh"
 source "$REPO_ROOT/scripts/lib/test-pool.sh"
+source "$REPO_ROOT/scripts/lib/test-concurrency.sh"
 
 PLATFORM="${1:-}"
 SCENARIO_FILTER="${2:-${PHOTOSPHERE_SMOKE_SCENARIO:-}}"
@@ -59,20 +60,16 @@ if ! photosphere_platform_prepare "$RUN_DIR"; then
 fi
 
 #
-# Prints the scenario directories this platform runs, one per line, in numeric order: the ones every platform runs, and then the ones
-# that belong to a desktop platform (desktop-only) or to a phone (mobile-only).
+# Prints the scenario directories this platform runs, one per line, in numeric order. A scenario that cannot run on a platform exits
+# with the skipped code itself.
 #
 list_scenarios() {
     {
         ls -d "$SMOKE_DIR"/[0-9]*
-        case "$PLATFORM" in
-            linux|windows|macos)
-                ls -d "$SMOKE_DIR"/desktop-only/[0-9]* 2>/dev/null
-                ;;
-            android|ios)
-                ls -d "$SMOKE_DIR"/mobile-only/[0-9]* 2>/dev/null
-                ;;
-        esac
+        # Manual scenarios measure a real device and are never part of an unfiltered run. They run only when named.
+        if [ -n "$SCENARIO_FILTER" ]; then
+            ls -d "$SMOKE_DIR"/manual/[0-9]* 2>/dev/null
+        fi
     } | while IFS= read -r directory; do
         printf '%s\t%s\n' "$(basename "$directory")" "$directory"
     done | sort -V | cut -f2
@@ -136,10 +133,14 @@ while IFS= read -r scenario_dir; do
     scenarios+=("$scenario_dir/test.sh")
 done < <(list_scenarios)
 
-# One scenario per device that can be used at once on a phone platform, one at a time on the others. Never more than there are scenarios.
-pool_width=1
-if declare -F photosphere_platform_parallelism > /dev/null; then
-    pool_width="$(photosphere_platform_parallelism)"
+# As wide as the machine allows on every platform, the same way the other suites decide it. A platform whose scenarios each need a
+# device of their own also says how many it has, and the pool is never wider than that. Never more than there are scenarios.
+pool_width="$(resolve_test_parallel 2)" || exit 1
+if declare -F photosphere_platform_device_limit > /dev/null; then
+    device_limit="$(photosphere_platform_device_limit)"
+    if [ "$device_limit" -lt "$pool_width" ]; then
+        pool_width="$device_limit"
+    fi
 fi
 if [ "$pool_width" -gt "${#scenarios[@]}" ] && [ "${#scenarios[@]}" -gt 0 ]; then
     pool_width="${#scenarios[@]}"

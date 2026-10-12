@@ -8,6 +8,7 @@
     <application
         android:label="Ziggy example"
         android:allowBackup="false"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true">
         <!-- exported is required for an activity with an intent filter from Android 12, and the launcher needs it. The

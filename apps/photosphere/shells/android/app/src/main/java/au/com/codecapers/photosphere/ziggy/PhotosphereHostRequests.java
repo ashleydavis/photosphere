@@ -31,7 +31,6 @@ public final class PhotosphereHostRequests implements HostRequestHandler {
     private final PermissionRequester permissions;
     private final NetworkHost network;
     private final BackgroundWakeLock wakeLock;
-    private final MediaTools mediaTools;
 
     // The handlers other code has registered for methods of their own, by method name.
     private final Map<String, HostRequestHandler> registered = new ConcurrentHashMap<String, HostRequestHandler>();
@@ -41,7 +40,6 @@ public final class PhotosphereHostRequests implements HostRequestHandler {
         this.permissions = permissions;
         this.network = new NetworkHost(activity);
         this.wakeLock = new BackgroundWakeLock(activity);
-        this.mediaTools = new MediaTools(activity.getCacheDir());
     }
 
     // Registers the handler that answers one more method. A method this class answers itself cannot be taken over, and a method
@@ -81,10 +79,6 @@ public final class PhotosphereHostRequests implements HostRequestHandler {
                 case "holdAwake":
                     wakeLock.hold(new JSONObject(requestJson).getBoolean("awake"));
                     return "null";
-                case "runMagick":
-                case "runFfmpeg":
-                case "runFfprobe":
-                    return mediaTools.run(method, requestJson);
                 case "backgroundLog":
                     backgroundLog(new JSONObject(requestJson));
                     return "null";

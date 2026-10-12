@@ -14,6 +14,8 @@ const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 const events = @import("events.zig");
 const test_mode = @import("test-mode.zig");
+const main_state = @import("main-state.zig");
+const config = @import("config-zig");
 
 const Core = ziggy.core.Core;
 const json_util = ziggy.json_util;
@@ -150,6 +152,25 @@ pub fn checkForNews(core: *Core, arena: std.mem.Allocator, io: std.Io) !void {
     announceNews(core, arena, io, news_url) catch |err| {
         log.info(try std.fmt.allocPrint(arena, "News check skipped: {s}", .{utils.errors.errorMessage(err)}));
     };
+}
+
+//
+// check-for-update: no payload. Runs checkForUpdate for the running build, as a task because the check waits on the network.
+//
+pub fn checkForUpdateTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = data;
+    const core = main_state.fromContext(context).core;
+    try checkForUpdate(core, context.arena, context.io(), config.version);
+    return try context.arena.dupe(u8, "null");
+}
+
+//
+// check-for-news: no payload. Runs checkForNews, as a task because the check waits on the network.
+//
+pub fn checkForNewsTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = data;
+    try checkForNews(main_state.fromContext(context).core, context.arena, context.io());
+    return try context.arena.dupe(u8, "null");
 }
 
 //

@@ -150,12 +150,16 @@ fn orderLikeJavaScript(contents: *IVaultFile) void {
 }
 
 //
-// Parses the text of the vault file.
+// Parses the text of the vault file. A file that is not JSON throws, as it must. The message is not the parser's own wording, which
+// Zig's parser does not produce (it gives only an error name), so it is a sentence naming the vault file followed by that name.
 //
 fn parseVaultFile(allocator: std.mem.Allocator, raw: []const u8) !IVaultFile {
-    const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, raw, .{
+    const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, raw, .{
         .duplicate_field_behavior = .use_last,
-    });
+    }) catch |err| {
+        // The sentence is what reaches the user, so it says which file is damaged instead of giving the parser's bare error name.
+        return errors.throwError("The vault file could not be read ({s})", .{@errorName(err)});
+    };
     if (parsed != .object) {
         // (A vault file holding JSON that is not an object cannot be represented.)
         return errors.throwError("The vault file does not hold a JSON object", .{});

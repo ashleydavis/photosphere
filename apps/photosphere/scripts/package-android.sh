@@ -40,7 +40,7 @@ fi
 
 mkdir -p "$output_dir"
 for arch in $arch_list; do
-    bash "$PHOTOSPHERE_ANDROID_SCRIPTS_DIR/sync-android.sh" --arch "$arch" --optimize ReleaseSmall
+    bash "$PHOTOSPHERE_ANDROID_SCRIPTS_DIR/sync-android.sh" --arch "$arch" --optimize ReleaseSafe
     photosphere_android_gradle assembleRelease "-PziggyVersionName=$version" "-PziggyVersionCode=$version_code"
     artifact="$output_dir/photosphere-$version-android-$arch.apk"
     cp "$PHOTOSPHERE_ANDROID_PROJECT_DIR/app/build/outputs/apk/release/app-release.apk" "$artifact"

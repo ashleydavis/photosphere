@@ -39,6 +39,13 @@ ANDROID_LOCK_FD=""
 # Set to 1 once this scenario has installed the app on the claimed device, so the APK is installed once and not on every helper.
 ANDROID_APK_INSTALLED=""
 
+# The first device, set aside while a scenario that needs a second app copy works on a second device (see android_claim_peer_device).
+# Empty when no second device is claimed. The four values are swapped with the current ones by photosphere_android_swap_devices.
+ANDROID_PARKED_SERIAL=""
+ANDROID_PARKED_LOCK_FD=""
+ANDROID_PARKED_APK_INSTALLED=""
+ANDROID_PARKED_DATA_PREPARED=""
+
 # Set to 1 once this scenario has wiped the app's data and may have put state in it from outside (seeded databases, settings), so the
 # first start keeps what is there and does not wipe it. A scenario that never calls the reset gets a wipe at its first start instead.
 ANDROID_DATA_PREPARED=""
@@ -134,9 +141,9 @@ photosphere_android_can_reach_host() {
 }
 
 #
-# Prints how many scenarios may run at once: one per candidate device that can reach this host, and at least one.
+# Prints how many devices scenarios can run on at once: one per candidate device that can reach this host, and at least one.
 #
-photosphere_platform_parallelism() {
+photosphere_platform_device_limit() {
     local serial count=0
     for serial in $(photosphere_android_candidate_devices); do
         if photosphere_android_can_reach_host "$serial"; then
@@ -166,6 +173,10 @@ photosphere_android_claim_device() {
             return 1
         fi
         for serial in $candidates; do
+            # The device set aside for a second claim is already this scenario's.
+            if [ -n "$ANDROID_PARKED_SERIAL" ] && [ "$serial" = "$ANDROID_PARKED_SERIAL" ]; then
+                continue
+            fi
             exec {fd}<>"$(android_device_lock_path "$serial")"
             if flock -n "$fd"; then
                 # A device that cannot reach this host would fail every scenario given to it, so it is let go and passed over.
@@ -184,6 +195,65 @@ photosphere_android_claim_device() {
         sleep 1
         waited=$((waited + 1))
     done
+}
+
+#
+# Swaps the current device with the one set aside, so the helpers that act on "the claimed device" act on the other one.
+#
+photosphere_android_swap_devices() {
+    local serial="$ANDROID_SERIAL_CLAIMED"
+    local lock_fd="$ANDROID_LOCK_FD"
+    local installed="$ANDROID_APK_INSTALLED"
+    local prepared="$ANDROID_DATA_PREPARED"
+    ANDROID_SERIAL_CLAIMED="$ANDROID_PARKED_SERIAL"
+    ANDROID_LOCK_FD="$ANDROID_PARKED_LOCK_FD"
+    ANDROID_APK_INSTALLED="$ANDROID_PARKED_APK_INSTALLED"
+    ANDROID_DATA_PREPARED="$ANDROID_PARKED_DATA_PREPARED"
+    ANDROID_PARKED_SERIAL="$serial"
+    ANDROID_PARKED_LOCK_FD="$lock_fd"
+    ANDROID_PARKED_APK_INSTALLED="$installed"
+    ANDROID_PARKED_DATA_PREPARED="$prepared"
+}
+
+#
+# Makes the device a test directory's app was started on the current one, swapping when it is the one set aside. Does nothing when the
+# directory has no recorded device or only one device is claimed. Usage: photosphere_android_select_device_for_dir <test_dir>
+#
+photosphere_android_select_device_for_dir() {
+    local test_dir="$1"
+    if [ -z "$ANDROID_PARKED_SERIAL" ] || [ ! -s "$test_dir/device.txt" ]; then
+        return 0
+    fi
+    if [ "$(cat "$test_dir/device.txt")" = "$ANDROID_PARKED_SERIAL" ]; then
+        photosphere_android_swap_devices
+    fi
+}
+
+#
+# Claims a second device, under its lock like the first, for a scenario that needs two copies of the app (a phone cannot run two, so
+# the second copy runs on a second device, as a second copy runs in its own directory on a desktop). The first device is set aside and
+# the second becomes the current one, so the next start_app starts on it. Later stop, is-running and wait-exit calls pick the device
+# by the directory they are given. Fails when there is no second device free. Usage: android_claim_peer_device
+#
+android_claim_peer_device() {
+    photosphere_android_claim_device || return 1
+    if [ -n "$ANDROID_PARKED_SERIAL" ]; then
+        echo "A second device is already claimed." >&2
+        return 1
+    fi
+    ANDROID_PARKED_SERIAL="$ANDROID_SERIAL_CLAIMED"
+    ANDROID_PARKED_LOCK_FD="$ANDROID_LOCK_FD"
+    ANDROID_PARKED_APK_INSTALLED="$ANDROID_APK_INSTALLED"
+    ANDROID_PARKED_DATA_PREPARED="$ANDROID_DATA_PREPARED"
+    ANDROID_SERIAL_CLAIMED=""
+    ANDROID_LOCK_FD=""
+    ANDROID_APK_INSTALLED=""
+    ANDROID_DATA_PREPARED=""
+    if ! photosphere_android_claim_device; then
+        photosphere_android_swap_devices
+        ANDROID_PARKED_SERIAL=""
+        return 1
+    fi
 }
 
 #
@@ -296,7 +366,9 @@ photosphere_platform_start() {
     local generation
     generation=$(($(cat "$test_dir/log-generation.txt") + 1))
     echo "$generation" > "$test_dir/log-generation.txt"
-    local log_dir="files/logs-$generation"
+    # In the app's cache directory and not its files directory, which is the storage sandbox that "reset device" empties: a log inside it would
+    # be deleted from under the stream that copies it to app.log, and the lines the app writes after the reset would never reach the host.
+    local log_dir="cache/logs-$generation"
 
     # Every value is quoted for the device's shell, which adb hands the whole command line to.
     local extras="--ez ziggy.testMode true --es ziggy.testPortFile '$ANDROID_PORT_FILE_DEVICE_PATH'"
@@ -372,6 +444,7 @@ photosphere_platform_start() {
 #
 photosphere_platform_stop() {
     local test_dir="$1"
+    photosphere_android_select_device_for_dir "$test_dir"
     if [ -z "$ANDROID_SERIAL_CLAIMED" ]; then
         return 0
     fi
@@ -392,6 +465,7 @@ photosphere_platform_stop() {
 # process that is still listed is not a sign the app is still running. Usage: photosphere_platform_is_running <test_dir>
 #
 photosphere_platform_is_running() {
+    photosphere_android_select_device_for_dir "$1"
     photosphere_adb shell dumpsys activity activities | grep -q "$ANDROID_APP_ID/.MainActivity"
 }
 
@@ -671,6 +745,10 @@ android_grant_media_permission() {
     else
         permissions="android.permission.READ_EXTERNAL_STORAGE"
     fi
+    # Without the media location permission Android strips the GPS tags from the photos the app reads from the library.
+    if [ "${sdk:-0}" -ge 29 ]; then
+        permissions="$permissions android.permission.ACCESS_MEDIA_LOCATION"
+    fi
     local permission
     for permission in $permissions; do
         # The grant is often refused harmlessly because the permission is already held, so the read-back below is the check.
@@ -714,6 +792,386 @@ photosphere_android_grant_notification_permission() {
 }
 
 #
+# True when this target's app data may be wiped, which is every emulator and no phone, unless PHOTOSPHERE_ALLOW_DEVICE_WIPE=1 says the
+# phone is the person's to wipe. Needs a claimed device. Usage: android_may_wipe_app_data
+#
+android_may_wipe_app_data() {
+    photosphere_android_claim_device || return 1
+    photosphere_android_require_wipe_allowed 2>/dev/null
+}
+
+#
+# The directory pushed test photos go into on the device, which is where a camera puts them.
+#
+ANDROID_MEDIA_DIR="/sdcard/DCIM/Camera"
+
+#
+# Puts a photo into the device's photo library, from outside the app.
+#
+# Two steps, and both are needed: pushing the file only puts bytes on the filesystem, and MediaStore is a database that knows nothing
+# about them until it is told. `cmd media rescan` is not available on the emulator image (there is no "media" service), so the scan goes
+# through the provider's own scan_file method, which is. A directory can be named to put the photo somewhere other than the camera
+# folder. MediaStore groups items into albums by the directory they sit in, so a scenario that gives its photos their own directory gets
+# its own album, and can point automatic import at that album alone. On a phone holding somebody else's photo library that is the
+# difference between importing two photos and importing all of them.
+# Usage: android_seed_media <host_file> <remote_name> [remote_dir]
+#
+android_seed_media() {
+    local host_src="$1"
+    local remote_name="$2"
+    local remote_dir="${3:-$ANDROID_MEDIA_DIR}"
+    local remote_path="$remote_dir/$remote_name"
+    photosphere_android_claim_device || return 1
+
+    photosphere_adb shell mkdir -p "$remote_dir" >/dev/null 2>&1 || true
+    photosphere_adb push "$host_src" "$remote_path" >/dev/null || return 1
+
+    local scan_result
+    scan_result="$(photosphere_adb shell content call --uri content://media/external/file --method scan_file --arg "$remote_path" 2>&1 | tr -d '\r')"
+    if ! echo "$scan_result" | grep -q "Result:"; then
+        echo "MediaStore would not scan $remote_path: $scan_result" >&2
+        return 1
+    fi
+
+    # The scan returning a result is not the same as the photo being in MediaStore. On the API 33 emulator the scan answers `Result:` as
+    # it always does and then routes the insert to the internal volume, which refuses anything outside the system media directories, so
+    # the row is never written and the app's query over the external volume finds nothing. Asking the row for itself is the only answer
+    # that means what the log line claims.
+    if ! android_media_store_has "$remote_name"; then
+        # Scanning the volume rather than the file leaves no room for the path to be resolved to the wrong volume, because the volume
+        # is what is named.
+        photosphere_adb shell content call --uri content://media/external --method scan_volume >/dev/null 2>&1 || true
+
+        if ! android_media_store_has "$remote_name"; then
+            # The row is printed when there is one, because "not indexed" and "indexed as something the app does not read" are
+            # different faults with the same symptom.
+            echo "MediaStore does not hold $remote_path as an image or a video, so automatic import will never see it. The scan said: $scan_result" >&2
+            echo "MediaStore row: $(android_media_store_row "$remote_name" || echo "none")" >&2
+            return 1
+        fi
+    fi
+
+    # A pending row belongs to whoever created it and MediaStore hides it from every other app, so the photo is in the library for adb
+    # and invisible to Photosphere. The API 33 emulator indexes a scanned file with is_pending=1, and the app read `files=0 images=0
+    # video=0` from inside its own process while this helper found the row from the shell that owns it.
+    if android_media_store_row "$remote_name" | grep -q "is_pending=1"; then
+        # By the row's own id, against the item's URI. The collection URI refuses this outright with "Movement of content://media/
+        # external/file which isn't part of well-defined collection not allowed".
+        local row_id
+        row_id="$(android_media_store_row "$remote_name" | sed 's/.*_id=\([0-9]*\),.*/\1/')"
+        photosphere_adb shell content update --uri "content://media/external/file/$row_id" --bind is_pending:i:0 >/dev/null 2>&1 || true
+
+        if android_media_store_row "$remote_name" | grep -q "is_pending=1"; then
+            echo "MediaStore holds $remote_path as pending, so no app but its owner can see it, and clearing that failed" >&2
+            echo "MediaStore row: $(android_media_store_row "$remote_name")" >&2
+            return 1
+        fi
+    fi
+
+    echo "Put '$remote_name' into the device photo library: $(android_media_store_row "$remote_name")" >&2
+}
+
+#
+# Prints MediaStore's row for a photo, by the name it was seeded under, or nothing when there is none. Asked of the external volume,
+# which is the collection the app reads. media_type is in the projection because the app does not ask for every file: it selects
+# MEDIA_TYPE IN (image, video), so a row indexed as a plain file is one the app will never see. There is no --where, because its quoting
+# does not survive the trip through adb the same way on every API level, and a where clause the provider rejects is a filter that is
+# not applied. The filtering is a grep. is_pending and owner_package_name are here because a row can be present and still invisible to
+# every app but the one that wrote it.
+# Usage: android_media_store_row <remote_name>
+#
+android_media_store_row() {
+    local remote_name="$1"
+    photosphere_adb shell content query --uri content://media/external/file \
+        --projection _id:_display_name:media_type:volume_name:is_pending:owner_package_name \
+        2>&1 | tr -d '\r' | grep "^Row:" | grep "_display_name=$remote_name,"
+}
+
+#
+# Prints the album id MediaStore has filed a seeded photo under, or nothing when it has none. An album on Android is a bucket, and a
+# bucket is the directory its items sit in: MediaStore derives BUCKET_ID from the path, so every directory is its own album and there
+# is no separate album to create. This is what a scenario asks after seeding its first photo into a directory of its own, so it can
+# point automatic import at that album and nothing else.
+# Usage: android_media_album_id <remote_name>
+#
+android_media_album_id() {
+    local remote_name="$1"
+    photosphere_adb shell content query --uri content://media/external/file \
+        --projection _display_name:bucket_id \
+        2>&1 | tr -d '\r' | grep "^Row:" | grep "_display_name=$remote_name," \
+        | sed 's/.*bucket_id=\([-0-9][0-9]*\).*/\1/' | head -1
+}
+
+#
+# Whether MediaStore holds the photo as media the app can import: present, and typed as an image (1) or a video (3) rather than as an
+# untyped file. Usage: android_media_store_has <remote_name>
+#
+android_media_store_has() {
+    local remote_name="$1"
+    android_media_store_row "$remote_name" | grep -qE "media_type=(1|3)"
+}
+
+#
+# Removes a photo a scenario put into the device photo library, so the next run starts clean. The directory must be given when the photo
+# was seeded into one: the row goes from MediaStore and the file stays on disk otherwise, so the next scan of the volume puts it back.
+# Usage: android_remove_media <remote_name> [remote_dir]
+#
+android_remove_media() {
+    local remote_name="$1"
+    local remote_dir="${2:-$ANDROID_MEDIA_DIR}"
+    photosphere_android_claim_device || return 1
+    photosphere_adb shell rm -f "$remote_dir/$remote_name" >/dev/null 2>&1 || true
+    photosphere_adb shell content delete --uri content://media/external/file --where "_display_name='$remote_name'" >/dev/null 2>&1 || true
+}
+
+#
+# Removes every photo whose name starts with the given prefix from the device photo library. This is for the start of a scenario rather
+# than the end of one: a run killed outright never reaches its exit trap, and the photo it left behind would be imported by the next run
+# and throw its counts out. Safe because a scenario holds its device under a lock for its whole run.
+# Usage: android_remove_media_matching <name_prefix> [remote_dir]
+#
+android_remove_media_matching() {
+    local prefix="$1"
+    local remote_dir="${2:-$ANDROID_MEDIA_DIR}"
+    photosphere_android_claim_device || return 1
+    photosphere_adb shell "rm -f $remote_dir/$prefix*" >/dev/null 2>&1 || true
+    photosphere_adb shell content delete --uri content://media/external/file --where "_display_name LIKE '$prefix%'" >/dev/null 2>&1 || true
+}
+
+#
+# The photo library permissions the app asks for on the claimed device, by API level, one per line. Android 14 added the selected-photos
+# permission to the two per-type ones; Android 13 has only the per-type ones, and older releases the one storage permission.
+#
+photosphere_android_media_permissions() {
+    local sdk
+    sdk="$(photosphere_adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
+    if [ "${sdk:-0}" -ge 34 ]; then
+        echo "android.permission.READ_MEDIA_IMAGES"
+        echo "android.permission.READ_MEDIA_VIDEO"
+        echo "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
+    elif [ "${sdk:-0}" -ge 33 ]; then
+        echo "android.permission.READ_MEDIA_IMAGES"
+        echo "android.permission.READ_MEDIA_VIDEO"
+    else
+        echo "android.permission.READ_EXTERNAL_STORAGE"
+    fi
+}
+
+#
+# Refuses the app the photo library permission, from outside the app, in a way that answers the next request without a dialog. Revoking
+# alone is not enough: the next request would put the system dialog up, and a scenario cannot tap it. The user-fixed flag is what the
+# system sets when a user chooses "Don't allow" and means it, and a request for a user-fixed permission comes straight back as denied.
+# From Android 14 the selected-photos permission goes with them: leaving it would leave the app holding the photos the user picked,
+# which is a partial grant and not the refusal this is asked to set up.
+# Usage: android_refuse_media_permission
+#
+android_refuse_media_permission() {
+    photosphere_android_prepare_for_seeding || return 1
+    local permission result
+    for permission in $(photosphere_android_media_permissions); do
+        photosphere_adb shell pm revoke "$ANDROID_APP_ID" "$permission" >/dev/null 2>&1 || true
+        result="$(photosphere_adb shell pm set-permission-flags "$ANDROID_APP_ID" "$permission" user-fixed 2>&1 | tr -d '\r')"
+        if [ -n "$result" ]; then
+            echo "Could not mark $permission as refused on $ANDROID_SERIAL_CLAIMED: $result" >&2
+            return 1
+        fi
+    done
+    echo "Refused the photo library permission, as a user who chose \"Don't allow\"" >&2
+}
+
+#
+# Gives the app access to only the photos the user picked, from outside the app. This is the third answer Android 14 added to the photo
+# permission, set up the way a refusal is, because a scenario cannot tap the picker either: the two per-type permissions are revoked and
+# marked user-fixed so the next request comes straight back without a dialog, and the selected-photos permission is granted, which is
+# the state the platform leaves behind when a user chooses "Select photos". Refuses on a device older than Android 14 rather than
+# quietly setting up something else.
+# Usage: android_grant_partial_media_permission
+#
+android_grant_partial_media_permission() {
+    photosphere_android_prepare_for_seeding || return 1
+    local sdk
+    sdk="$(photosphere_adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
+    if [ "${sdk:-0}" -lt 34 ]; then
+        echo "Partial photo access needs Android 14 or later, and $ANDROID_SERIAL_CLAIMED is API ${sdk:-unknown}" >&2
+        return 1
+    fi
+
+    local permission result
+    for permission in android.permission.READ_MEDIA_IMAGES android.permission.READ_MEDIA_VIDEO; do
+        photosphere_adb shell pm revoke "$ANDROID_APP_ID" "$permission" >/dev/null 2>&1 || true
+        result="$(photosphere_adb shell pm set-permission-flags "$ANDROID_APP_ID" "$permission" user-fixed 2>&1 | tr -d '\r')"
+        if [ -n "$result" ]; then
+            echo "Could not mark $permission as refused on $ANDROID_SERIAL_CLAIMED: $result" >&2
+            return 1
+        fi
+    done
+
+    photosphere_adb shell pm grant "$ANDROID_APP_ID" android.permission.READ_MEDIA_VISUAL_USER_SELECTED >/dev/null 2>&1 || true
+
+    # Read back, because a `pm grant` that did not take leaves the app with no access at all, which is the refusal path, and the scenario
+    # would then pass for the wrong reason.
+    if ! photosphere_adb shell dumpsys package "$ANDROID_APP_ID" 2>/dev/null | tr -d '\r' | grep -q "android.permission.READ_MEDIA_VISUAL_USER_SELECTED: granted=true"; then
+        echo "android.permission.READ_MEDIA_VISUAL_USER_SELECTED is not granted to $ANDROID_APP_ID after asking for it, so this would test a refusal rather than a partial grant" >&2
+        return 1
+    fi
+    echo "Gave the app access to only the photos the user picked" >&2
+}
+
+#
+# Writes the automatic import settings into the auto_import section of the app's config.yaml in its settings directory, keeping every
+# other section the file already has. This is how a scenario starts with automatic import already on, writing into a database it
+# seeded itself, or off with the album it should watch already chosen. An album id restricts the import to that one album, which is
+# what makes a scenario runnable against a phone with a real photo library. The default database path must be a path the app can
+# open, so a scenario passes android_app_path of the database. Left out, the app makes its own default database. The pause between
+# passes is left out, so the app's default applies, when none is given.
+# Usage: android_seed_auto_import_config <enabled true|false> [default_database_path] [pause_ms] [album_id]
+#
+android_seed_auto_import_config() {
+    local enabled="$1"
+    local default_database_path="${2:-}"
+    local pause_ms="${3:-}"
+    local album_id="${4:-}"
+    if [ "$enabled" != "true" ] && [ "$enabled" != "false" ]; then
+        echo "android_seed_auto_import_config takes true or false for enabled, got: $enabled" >&2
+        return 1
+    fi
+    if [ -n "$pause_ms" ] && ! [[ "$pause_ms" =~ ^[0-9]+$ ]]; then
+        echo "android_seed_auto_import_config takes a whole number of milliseconds for the pause, got: $pause_ms" >&2
+        return 1
+    fi
+    photosphere_android_prepare_for_seeding || return 1
+
+    # The file as it stands, minus its auto_import section, which runs from the line "auto_import:" to the next line that is not indented.
+    local rendered
+    rendered="$(mktemp)"
+    photosphere_adb exec-out run-as "$ANDROID_APP_ID" cat "$ANDROID_CONFIG_DIR_RELATIVE/config.yaml" 2>/dev/null \
+        | tr -d '\r' \
+        | sed -e '/^auto_import:/,/^[^[:space:]]/{/^auto_import:/d;/^[[:space:]]/d}' \
+        | grep -v ': No such file or directory$' > "$rendered" || true
+    {
+        echo "auto_import:"
+        echo "  enabled: $enabled"
+        if [ -n "$pause_ms" ]; then
+            echo "  pause_between_runs_ms: $pause_ms"
+        fi
+        if [ -n "$album_id" ]; then
+            echo "  sources:"
+            echo "    - type: device-album"
+            echo "      album_id: $(jq -n --arg album "$album_id" '$album')"
+        fi
+        if [ -n "$default_database_path" ]; then
+            echo "  default_database_path: $(jq -n --arg path "$default_database_path" '$path')"
+        fi
+    } >> "$rendered"
+    photosphere_android_put_file "$rendered" "$ANDROID_CONFIG_DIR_RELATIVE/config.yaml" || {
+        rm -f "$rendered"
+        return 1
+    }
+    rm -f "$rendered"
+    echo "Wrote the app's automatic import settings to $ANDROID_CONFIG_DIR_RELATIVE/config.yaml (enabled=$enabled)" >&2
+}
+
+#
+# Copies a file of the app's private data directory (a path under /data/data/<app id>) onto this machine, so a scenario can put it back
+# afterwards. This is what lets a scenario run against a real phone without wiping it: `pm clear` is the clean start an emulator gets,
+# and it is not available on a phone that holds somebody's photo library, so a device run borrows the settings and hands them back.
+# Writes the file to the given local path, or removes that path when the device has no such file, so the caller can tell "there was one"
+# from "there was not" by whether the file exists afterwards. A file that is there and cannot be copied fails, because a restore that
+# took that for an absent file would delete the device's own.
+# Usage: android_save_app_data_file <path_under_app_data_dir> <local_path>
+#
+android_save_app_data_file() {
+    local device_path="$1"
+    local local_path="$2"
+    photosphere_android_prepare_for_seeding || return 1
+
+    rm -f "$local_path"
+    if ! photosphere_adb shell run-as "$ANDROID_APP_ID" test -f "$device_path" >/dev/null 2>&1; then
+        echo "The device has no $device_path to save" >&2
+        return 0
+    fi
+    if ! photosphere_adb exec-out run-as "$ANDROID_APP_ID" cat "$device_path" > "$local_path" 2>/dev/null; then
+        rm -f "$local_path"
+        echo "Could not save $device_path from the device, and it is there. Refusing to carry on: this run would have nothing to put back." >&2
+        return 1
+    fi
+    if [ ! -s "$local_path" ]; then
+        rm -f "$local_path"
+        echo "Saving $device_path from the device produced an empty file, and it is not empty there." >&2
+        return 1
+    fi
+    echo "Saved the device's $device_path, to be put back at the end of the scenario" >&2
+}
+
+#
+# Puts back a file saved by android_save_app_data_file, or removes the one this run left when the device had none.
+# Usage: android_restore_app_data_file <path_under_app_data_dir> <local_path>
+#
+android_restore_app_data_file() {
+    local device_path="$1"
+    local local_path="$2"
+    photosphere_android_claim_device || return 1
+    local staged="/data/local/tmp/psphere-restore-$$-$(basename "$device_path")"
+
+    if [ -f "$local_path" ]; then
+        photosphere_adb push "$local_path" "$staged" >/dev/null || return 1
+        photosphere_adb shell run-as "$ANDROID_APP_ID" mkdir -p "$(dirname "$device_path")"
+        photosphere_adb shell run-as "$ANDROID_APP_ID" cp "$staged" "$device_path"
+        photosphere_adb shell rm -f "$staged" >/dev/null 2>&1 || true
+        echo "Put the device's own $device_path back" >&2
+        return 0
+    fi
+    photosphere_adb shell run-as "$ANDROID_APP_ID" rm -f "$device_path" >/dev/null 2>&1 || true
+    echo "Removed $device_path, which the device did not have before this scenario" >&2
+}
+
+#
+# Copies a directory of the app's files directory onto this machine. A whole tree rather than one file, because a database is a
+# directory: a scenario that checks what the app wrote reads it with the CLI, and the CLI needs the whole `.db` folder. It goes through
+# `tar` on the device and adb's stdout, because `adb pull` cannot reach private storage at all.
+# Usage: android_save_sandbox_dir <dir_under_files> <local_dir>
+#
+android_save_sandbox_dir() {
+    local device_dir="$1"
+    local local_dir="$2"
+    photosphere_android_prepare_for_seeding || return 1
+
+    if ! photosphere_adb shell run-as "$ANDROID_APP_ID" test -d "files/$device_dir" >/dev/null 2>&1; then
+        echo "The device has no files/$device_dir to save" >&2
+        return 1
+    fi
+    mkdir -p "$local_dir"
+    local tarball="$local_dir/sandbox-dir.tar"
+    if ! photosphere_adb exec-out run-as "$ANDROID_APP_ID" tar c -C files "$device_dir" > "$tarball" 2>/dev/null; then
+        echo "Could not read files/$device_dir off the device." >&2
+        return 1
+    fi
+    if [ ! -s "$tarball" ]; then
+        echo "files/$device_dir came back empty from the device." >&2
+        return 1
+    fi
+    if ! tar xf "$tarball" -C "$local_dir" 2>/dev/null; then
+        echo "Could not unpack files/$device_dir after copying it off the device." >&2
+        return 1
+    fi
+    rm -f "$tarball"
+}
+
+#
+# Brings the app's screen back to the front after it was sent to the background, without starting it again: the launcher intent resumes
+# the app's task, so the core that was running goes on running. Wakes the screen first, so the activity comes up resumed rather than
+# behind a sleeping screen. Claims the device first.
+# Usage: android_bring_app_to_front
+#
+android_bring_app_to_front() {
+    photosphere_android_claim_device || return 1
+    photosphere_adb shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+    # The launcher intent with the flags new task and reorder to front, so the activity that exists is moved to the front and
+    # no second copy of the activity, and so of the core, is made (without them the activity manager makes one).
+    photosphere_adb shell am start -f 0x10020000 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$ANDROID_APP_ID/.MainActivity" >/dev/null
+}
+
+#
 # Removes a path under the app's files directory so a scenario that creates fresh state there can be run again. Installs the app first,
 # because run-as needs it. Fails when the removal fails. Usage: android_reset_path <relative_path_under_files>
 #
@@ -738,4 +1196,392 @@ android_wait_for_file() {
         sleep "$WAIT_POLL_INTERVAL"
     done
     return 1
+}
+
+#
+# Prints the absolute path, on the device, of a file in the app's settings directory. Usage: android_config_file_path <name>
+#
+android_config_file_path() {
+    echo "/data/data/$ANDROID_APP_ID/$ANDROID_CONFIG_DIR_RELATIVE/$1"
+}
+
+#
+# Puts a file from the host into the app's settings directory from outside the app, replacing one of the same name. Usage: android_put_config_file <host_file> <name>
+#
+android_put_config_file() {
+    photosphere_android_prepare_for_seeding || return 1
+    photosphere_android_put_file "$1" "$ANDROID_CONFIG_DIR_RELATIVE/$2"
+}
+
+#
+# Prints a file of the app's settings directory as it stands on the device, or nothing when there is none. Usage: android_read_config_file <name>
+#
+android_read_config_file() {
+    photosphere_adb exec-out run-as "$ANDROID_APP_ID" cat "$ANDROID_CONFIG_DIR_RELATIVE/$1" 2>/dev/null | grep -v ": No such file or directory$" || true
+}
+
+#
+# Succeeds when a path under the app's files directory exists, whether a file or a directory. Usage: android_path_exists <relative_path_under_files>
+#
+android_path_exists() {
+    photosphere_adb shell run-as "$ANDROID_APP_ID" test -e "files/$1"
+}
+
+#
+# Writes a PNG of the claimed device's screen to a host path, with adb screencap. The app cannot do this itself, because a path it was
+# given is a path on the phone. Fails when nothing was written or what was written is not a PNG.
+# Usage: photosphere_platform_screenshot <output_path>
+#
+photosphere_platform_screenshot() {
+    local output_path="$1"
+    if [ -z "$ANDROID_SERIAL_CLAIMED" ]; then
+        echo "No device is claimed, so there is no screen to capture." >&2
+        return 1
+    fi
+    mkdir -p "$(dirname "$output_path")"
+    if ! photosphere_adb exec-out screencap -p > "$output_path"; then
+        echo "adb screencap failed on $ANDROID_SERIAL_CLAIMED" >&2
+        return 1
+    fi
+    if [ "$(od -An -tx1 -N8 "$output_path" | tr -d ' \n')" != "89504e470d0a1a0a" ]; then
+        echo "adb screencap on $ANDROID_SERIAL_CLAIMED wrote something that is not a PNG to $output_path" >&2
+        return 1
+    fi
+}
+
+#
+# Waits until the background work service is no longer listed for the app, and returns non-zero when it is still listed after the
+# time. Background syncing starts the service for as long as its loop runs and the page starts and stops that loop as the connection
+# settles, so the service can still be listed for a moment after its loop has stopped. A service that something left running stays
+# listed, so waiting tells the two apart.
+# Usage: android_wait_for_background_service_gone [seconds]
+#
+android_wait_for_background_service_gone() {
+    local seconds="$1"
+    local waited=0
+    while [ "$waited" -lt "$seconds" ]; do
+        if ! photosphere_adb shell dumpsys activity services "$ANDROID_APP_ID" 2>/dev/null | tr -d '\r' | grep -q "ZiggyKeepAliveService"; then
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    return 1
+}
+
+#
+# Makes the next download end as the user cancelling it. A phone hands a download to the system share sheet, which a test cannot tap, so
+# the sheet's outcome is staged as cancelled. Usage: android_cancel_next_download <port>
+#
+android_cancel_next_download() {
+    send_command "$1" stage-export '{"exportOutcome":"cancelled"}'
+}
+
+#
+# The photo library helpers below are the names a scenario calls to give the app photos to take in, so one scenario body runs on every
+# platform. A "library" is the folder a scenario puts its photos in and points automatic import at, and nothing else: on a phone watching
+# the whole library would import somebody's photo collection, and a folder of the scenario's own is an album of its own.
+#
+
+#
+# Prints where this run's photo library is: a directory of its own, named so a parallel run cannot collide with it.
+# Usage: android_library_dir <name_prefix>
+#
+android_library_dir() {
+    echo "/sdcard/DCIM/$1-$$"
+}
+
+#
+# Clears out what an earlier run with this prefix left in the device library. A run killed outright never reaches its exit trap, and a
+# photo it left would be imported by this one and throw its counts out. The files go first and the now-empty directories second, because
+# a row removed while its file remains is put back by the next scan of the volume. Usage: android_library_sweep <name_prefix>
+#
+android_library_sweep() {
+    local prefix="$1"
+    photosphere_android_claim_device || return 1
+    photosphere_adb shell "rm -f /sdcard/DCIM/$prefix-*/*" >/dev/null 2>&1 || true
+    photosphere_adb shell "rmdir /sdcard/DCIM/$prefix-*" >/dev/null 2>&1 || true
+    android_remove_media_matching "$prefix-" || true
+}
+
+#
+# Puts a photo into the library. Usage: android_library_add <library> <host_file> <name>
+#
+android_library_add() {
+    android_seed_media "$2" "$3" "$1"
+}
+
+#
+# Takes the named photos out of the library and then the library itself, so a phone is left as it was found. Plain file deletes and an
+# empty-directory removal, never a recursive one. Usage: android_library_remove <library> [name ...]
+#
+android_library_remove() {
+    local library="$1"
+    shift
+    local photo_name
+    for photo_name in "$@"; do
+        android_remove_media "$photo_name" "$library" 2>/dev/null || true
+    done
+    photosphere_adb shell "rm -f $library/*" >/dev/null 2>&1 || true
+    photosphere_adb shell "rmdir $library" >/dev/null 2>&1 || true
+}
+
+#
+# Writes the automatic import settings so the import watches the library and nothing else. The library has to hold the named photo
+# already, because the device only knows an album once something is in it. The other arguments are those of android_seed_auto_import_config.
+# Usage: android_seed_library_auto_import_config <enabled true|false> <default_database_path or ""> <pause_ms> <library> <photo_name_in_it>
+#
+android_seed_library_auto_import_config() {
+    local album_id
+    album_id="$(android_media_album_id "$5")"
+    if [ -z "$album_id" ]; then
+        log_error "MediaStore did not file $5 under an album, so automatic import cannot be pointed at one."
+        log_error "MediaStore row: $(android_media_store_row "$5" || echo "none")"
+        return 1
+    fi
+    log_info "This scenario's photos are in album $album_id ($4)"
+    android_seed_auto_import_config "$1" "$2" "$3" "$album_id"
+}
+
+#
+# Prints how many originals the database named by the given directory name holds, or 0 when there is none yet. Read through run-as, which
+# is the only way to see app-private storage. Usage: android_asset_count <database_dir_name>
+#
+android_asset_count() {
+    photosphere_adb shell run-as "$ANDROID_APP_ID" ls "files/$1/asset" 2>/dev/null | tr -d '\r' | grep -c . || true
+}
+
+#
+# Copies the database in the given directory of the app's files onto this machine, as android_save_sandbox_dir does. The destination is
+# made by the copy. Usage: android_pull_database <dir_name> <local_dir>
+#
+android_pull_database() {
+    android_save_sandbox_dir "$1" "$2"
+}
+
+#
+# Sends the app to the background, as the user pressing Home. Usage: android_send_app_to_background
+#
+android_send_app_to_background() {
+    photosphere_adb shell input keyevent KEYCODE_HOME
+}
+
+#
+# Succeeds when what keeps the background work alive while the app is off screen is running: on a phone, the foreground service.
+# Usage: android_background_work_running
+#
+android_background_work_running() {
+    photosphere_adb shell dumpsys activity services "$ANDROID_APP_ID" 2>/dev/null | tr -d '\r' | grep -q "ZiggyKeepAliveService"
+}
+
+#
+# Prints what the background work has said about itself, for a failure to show. Usage: android_dump_background_diagnostics
+#
+android_dump_background_diagnostics() {
+    photosphere_adb shell dumpsys activity services "$ANDROID_APP_ID" 2>/dev/null | tr -d '\r' | head -30 || true
+    photosphere_adb logcat -d -s AutoImportService:* 2>/dev/null | tail -60 || true
+}
+
+#
+# Prints the lines the background work wrote since the last call to android_clear_background_log, which is where the sync loop says what
+# it is doing with the app off screen. Usage: android_background_log
+#
+android_background_log() {
+    photosphere_adb logcat -d -s "AutoImportService:*" 2>/dev/null | tr -d '\r'
+}
+
+#
+# Forgets what the background work has said so far. Usage: android_clear_background_log
+#
+android_clear_background_log() {
+    photosphere_adb logcat -c >/dev/null 2>&1 || true
+}
+
+#
+# The log line that says automatic import was started, as this platform's app writes it. Usage: android_auto_import_started_log
+#
+android_auto_import_started_log() {
+    echo "Starting automatic import."
+}
+
+#
+# Turns the screen off, as the power button does, and back on. Usage: android_screen_off, android_screen_on
+#
+android_screen_off() {
+    photosphere_adb shell input keyevent KEYCODE_POWER
+}
+
+android_screen_on() {
+    photosphere_adb shell input keyevent KEYCODE_WAKEUP || return 1
+    photosphere_adb shell input keyevent KEYCODE_MENU >/dev/null 2>&1 || true
+}
+
+#
+# Claims the device this run uses. Usage: android_claim_device
+#
+android_claim_device() {
+    photosphere_android_claim_device
+}
+
+#
+# Succeeds when this run is on a real phone rather than an emulator. Needs a claimed device. Usage: android_is_real_device
+#
+android_is_real_device() {
+    case "$ANDROID_SERIAL_CLAIMED" in
+        emulator-*)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+#
+# Succeeds when the device is showing a lock screen. Usage: android_device_is_locked
+#
+android_device_is_locked() {
+    photosphere_adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -q "mDreamingLockscreen=true"
+}
+
+#
+# Fails, saying so, when the device shows a lock screen that cannot be dismissed from here. From Android 12 an app that is not in the
+# foreground may not start a foreground service, and an app launched behind a lock screen is not in the foreground however visible it
+# looks, so nothing would be imported or synced. An emulator, and a phone with no secure lock, are dismissed by waking the screen and
+# swiping up, which is tried first. Usage: android_require_unlocked
+#
+android_require_unlocked() {
+    if android_device_is_locked; then
+        photosphere_adb shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+        photosphere_adb shell input keyevent 82 >/dev/null 2>&1 || true
+        photosphere_adb shell input swipe 540 1800 540 600 >/dev/null 2>&1 || true
+        sleep 1
+    fi
+    if android_device_is_locked; then
+        log_error "$ANDROID_SERIAL_CLAIMED is showing a lock screen that cannot be dismissed from here, so Android will refuse the foreground service and nothing will be imported or synced."
+        log_error "Unlock the device and run this again."
+        return 1
+    fi
+}
+
+#
+# Succeeds when the app's process is still alive. Usage: android_app_process_alive
+#
+android_app_process_alive() {
+    photosphere_adb shell pidof "$ANDROID_APP_ID" >/dev/null 2>&1
+}
+
+#
+# Copies a database in the app's files directory to a directory on the host, so the host's CLI can read what the app wrote. The
+# directory is streamed out of the app's private storage as an archive, because adb cannot pull from it. The destination must not
+# exist. Usage: android_fetch_database <relative_path_under_files> <host_dest>
+#
+android_fetch_database() {
+    local rel_path="$1"
+    local host_dest="$2"
+    photosphere_android_claim_device || return 1
+    mkdir -p "$host_dest" || return 1
+    if ! photosphere_adb exec-out run-as "$ANDROID_APP_ID" tar -cf - -C "files/$rel_path" . | tar -xf - -C "$host_dest"; then
+        echo "Could not copy files/$rel_path out of the app's storage" >&2
+        return 1
+    fi
+    if [ -z "$(ls -A "$host_dest")" ]; then
+        echo "files/$rel_path held nothing, so nothing was copied out of the app's storage" >&2
+        return 1
+    fi
+}
+
+#
+# Succeeds when a file of the app's settings directory exists, even when it is empty. Usage: android_config_file_exists <name>
+#
+android_config_file_exists() {
+    photosphere_adb shell run-as "$ANDROID_APP_ID" test -f "$ANDROID_CONFIG_DIR_RELATIVE/$1"
+}
+
+#
+# Damages the device keychain the app keeps its secrets in, from outside the app, with the app stopped. The keychain is an encrypted
+# preferences file that holds, beside the secrets, the keyset that seals them. The keyset is replaced with something that cannot be
+# opened, which is what a damaged write leaves behind, so opening the keychain fails when the app next starts.
+# Usage: android_damage_vault
+#
+android_damage_vault() {
+    photosphere_android_claim_device || return 1
+    local keychain_file="shared_prefs/photosphere_secure_store.xml"
+    if ! photosphere_adb shell run-as "$ANDROID_APP_ID" test -f "$keychain_file"; then
+        echo "No keychain file at $keychain_file to damage; the secret was never stored" >&2
+        return 1
+    fi
+    printf '%s' "<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map><string name=\"__androidx_security_crypto_encrypted_prefs_key_keyset__\">00ff00ff</string></map>" \
+        | photosphere_adb shell "run-as $ANDROID_APP_ID sh -c 'cat > $keychain_file'" || return 1
+}
+
+#
+# The log line that says syncing was switched off, as this platform's app writes it. Usage: android_sync_stopped_log
+#
+android_sync_stopped_log() {
+    echo "Stopping background syncing."
+}
+
+#
+# Saves the settings files and the keychain of a real phone, so a scenario that changes them can hand them back instead of wiping the
+# phone, which may hold somebody's imported library. The app is stopped so the settings written next are read at its next launch rather
+# than fought over by a copy running with the phone's own. Usage: android_borrow_app_settings <local_dir>
+#
+android_borrow_app_settings() {
+    local saved_dir="$1"
+    mkdir -p "$saved_dir" || return 1
+    android_save_app_data_file "files/config/config.yaml" "$saved_dir/config.yaml" || return 1
+    android_save_app_data_file "files/config/databases.toml" "$saved_dir/databases.toml" || return 1
+    android_save_app_data_file "shared_prefs/photosphere_secure_store.xml" "$saved_dir/secure-store.xml" || return 1
+    photosphere_adb shell am force-stop "$ANDROID_APP_ID" >/dev/null 2>&1 || true
+}
+
+#
+# Hands a real phone the settings android_borrow_app_settings saved, and takes the S3 credentials the scenario added with the keychain.
+# The app offers no way to delete a secret, so this is the only way not to leave one on somebody's phone.
+# Usage: android_return_app_settings <local_dir>
+#
+android_return_app_settings() {
+    local saved_dir="$1"
+    android_restore_app_data_file "files/config/config.yaml" "$saved_dir/config.yaml"
+    android_restore_app_data_file "files/config/databases.toml" "$saved_dir/databases.toml"
+    android_restore_app_data_file "shared_prefs/photosphere_secure_store.xml" "$saved_dir/secure-store.xml"
+}
+
+#
+# Makes the app notice a settings file that was changed from outside it. The phone's background loops read the file again on every
+# pass, so there is nothing to do. Usage: android_apply_settings_change
+#
+android_apply_settings_change() {
+    return 0
+}
+
+#
+# Has the app open the given database when it starts. A phone's background loops work on the database the settings name, and need no
+# database open in the page, so there is nothing to do. Usage: android_open_database_on_launch <database_path>
+#
+android_open_database_on_launch() {
+    return 0
+}
+
+#
+# Succeeds when the background sync loop has said it ran a pass since android_clear_background_log. Usage: android_sync_pass_seen
+#
+android_sync_pass_seen() {
+    android_background_log | grep -qE "Syncing \"|Not syncing"
+}
+
+#
+# The log line that says automatic import was switched off, as this platform's app writes it. Usage: android_auto_import_stopped_log
+#
+android_auto_import_stopped_log() {
+    echo "Stopping automatic import."
+}
+
+#
+# Asks for the open database to be synced now. A phone's background sync loop pushes what an import added on its own, every pass, so there
+# is nothing to ask for. Usage: android_request_sync <port>
+#
+android_request_sync() {
+    return 0
 }

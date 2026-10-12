@@ -317,6 +317,26 @@ pub const TestControl = struct {
             choose(self.config.user_data, action_text.ptr);
             return try self.allocator.dupe(u8, "{\"ok\":true}");
         }
+        if (std.mem.eql(u8, name, "screenshot")) {
+            // Writes a PNG of the app's window to the command's "outputPath" through the shell, which captures what is on screen.
+            // The page must be showing first, or the picture would be of a window with nothing in it.
+            const output_path = json_util.getString(command, "outputPath") orelse {
+                return try self.allocator.dupe(u8, "{\"error\":\"InvalidCommand\"}");
+            };
+            const capture = self.config.screenshot orelse {
+                return try self.allocator.dupe(u8, "{\"error\":\"HostCallbackMissing\"}");
+            };
+            try self.waitForPage();
+            const path_text = try arena.dupeZ(u8, output_path);
+            var reason: [512]u8 = undefined;
+            const result = capture(self.config.user_data, path_text.ptr, &reason, reason.len);
+            if (result < 0) {
+                return try json_util.stringify(self.allocator, .{
+                    .@"error" = reason[0..@intCast(-result)],
+                });
+            }
+            return try self.allocator.dupe(u8, "{\"ok\":true}");
+        }
         if (std.mem.eql(u8, name, "drop")) {
             // Records a drop of files, as the shell does when the user drops files on the window, so a test can use getPathForFile
             // without dragging anything. The files are the command's "paths", an array of strings.
@@ -329,6 +349,12 @@ pub const TestControl = struct {
                     .@"error" = @errorName(err),
                 });
             };
+            // A drop that names a "dataId" is also a drop on that element of the page, so the page is asked to drop the same files on it
+            // and its answer is the answer.
+            if (command.object.get("dataId") != null) {
+                try self.waitForPage();
+                return try self.askPage(arena, command_json);
+            }
             return try self.allocator.dupe(u8, "{\"ok\":true}");
         }
         if (std.mem.eql(u8, name, "pick-answer")) {

@@ -257,6 +257,13 @@ public final class ZiggyBridge: NSObject, WKScriptMessageHandler, WKNavigationDe
                 menu.perform(action: text)
             }
         }
+        config.screenshot = { userData, outputPath, buffer, capacity in
+            guard let userData = userData, let outputPath = outputPath, let buffer = buffer else {
+                ZiggyBridge.fail("the core asked for a screenshot with no bridge, no path or no buffer")
+            }
+            let bridge = Unmanaged<ZiggyBridge>.fromOpaque(userData).takeUnretainedValue()
+            return ZiggyScreenshot.write(webView: bridge.webView, path: String(cString: outputPath), buffer: buffer, capacity: capacity)
+        }
         config.worker_threads = UInt32(ProcessInfo.processInfo.activeProcessorCount)
         config.max_concurrent_child_tasks = 10
 

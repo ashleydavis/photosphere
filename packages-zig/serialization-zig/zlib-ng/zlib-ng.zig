@@ -165,21 +165,45 @@ const KernelGroup = struct {
 };
 
 //
-// Builds zlib-ng for the target, links it into the module and adds the "zlib" module translated from its zlib.h.
+// zlib-ng built for a target.
 //
-pub fn addZlibNg(b: *std.Build, module: *std.Build.Module, target: std.Build.ResolvedTarget) !void {
+pub const IZlibNg = struct {
+    // The static library, which holds zlib's functions (it is built with ZLIB_COMPAT).
+    library: *std.Build.Step.Compile,
+
+    // The directory that holds zlib.h and zconf.h, for the C code that includes them.
+    include_directory: std.Build.LazyPath,
+};
+
+//
+// Links zlib-ng, built once by buildZlibNg so that every module that uses it shares one copy, into the module and adds the "zlib"
+// module translated from its zlib.h.
+//
+pub fn addZlibNg(b: *std.Build, module: *std.Build.Module, target: std.Build.ResolvedTarget, zlib: IZlibNg) !void {
+    const translate_c = b.addTranslateC(.{
+        .root_source_file = zlib.include_directory.path(b, "zlib.h"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    translate_c.addIncludePath(zlib.include_directory);
+    try android_libc.addLibcIncludes(b, translate_c, target);
+    module.addImport(module_name, translate_c.createModule());
+    module.linkLibrary(zlib.library);
+}
+
+//
+// Builds zlib-ng for the target.
+//
+pub fn buildZlibNg(b: *std.Build, target: std.Build.ResolvedTarget) !IZlibNg {
     const os = target.result.os.tag;
     const arch = target.result.cpu.arch;
-    if (os != .linux and os != .windows and os != .macos) {
-        std.log.err("zlib-ng is only built for Linux, Windows and macOS, not {s}.", .{@tagName(os)});
+    // iOS is built as macOS is: both are Darwin, which CMakeLists.txt does not tell apart from any other system that is not Linux or Windows.
+    if (os != .linux and os != .windows and os != .macos and os != .ios) {
+        std.log.err("zlib-ng is only built for Linux, Windows, macOS and iOS, not {s}.", .{@tagName(os)});
         std.process.exit(1);
     }
     if (arch != .x86_64 and arch != .aarch64) {
         std.log.err("The zlib-ng build only covers x86_64 and aarch64, not {s}.", .{@tagName(arch)});
-        std.process.exit(1);
-    }
-    if (os == .windows and arch != .x86_64) {
-        std.log.err("The zlib-ng build only covers x86_64 on Windows, not {s}.", .{@tagName(arch)});
         std.process.exit(1);
     }
     const dependency = b.dependency("zlib-ng", .{});
@@ -235,15 +259,10 @@ pub fn addZlibNg(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
         try addKernelGroup(&context, library, group);
     }
 
-    const translate_c = b.addTranslateC(.{
-        .root_source_file = context.generated.getDirectory().path(b, "zlib.h"),
-        .target = target,
-        .optimize = .ReleaseFast,
-    });
-    translate_c.addIncludePath(context.generated.getDirectory());
-    try android_libc.addLibcIncludes(b, translate_c, target);
-    module.addImport(module_name, translate_c.createModule());
-    module.linkLibrary(library);
+    return .{
+        .library = library,
+        .include_directory = context.generated.getDirectory(),
+    };
 }
 
 //

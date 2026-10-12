@@ -17,6 +17,9 @@ public final class MainActivity extends Activity {
 
     private ZiggyShell shell;
 
+    // The web view the page runs in, kept so the back button can step back through the page's history.
+    private WebView webView;
+
     // Asks the user for permissions on behalf of the core.
     private PermissionRequester permissionRequester;
 
@@ -27,7 +30,7 @@ public final class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prepareEnvironment();
-        WebView webView = new WebView(this);
+        webView = new WebView(this);
         setContentView(webView);
         // Eight worker threads: each of the three background loops (import, sync, prefetch) holds one for as long as it runs, and the
         // page's own requests and the tasks the loops start need the rest.
@@ -94,6 +97,18 @@ public final class MainActivity extends Activity {
         if (!permissionRequester.onRequestPermissionsResult(requestCode)) {
             super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         }
+    }
+
+    // Back steps back through the page's history. With nowhere left to go it sends the app to the background instead of finishing the
+    // activity, because finishing destroys the core and so ends the background import, sync and prefetch that the foreground service
+    // is keeping alive. Swiping the app away from the recent apps list still ends the process, as it does for any app.
+    @Override
+    public void onBackPressed() {
+        if (webView.canGoBack()) {
+            webView.goBack();
+            return;
+        }
+        moveTaskToBack(true);
     }
 
     @Override

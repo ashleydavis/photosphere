@@ -6,6 +6,7 @@
 const std = @import("std");
 const ziggy = @import("ziggy-core");
 const task_queue = @import("task-queue-zig");
+const node_utils = @import("node-utils-zig");
 const helpers = @import("helpers.zig");
 
 const types = task_queue.types;
@@ -362,4 +363,52 @@ test "callbacks for a source fire when a task is added under it and when the sou
     try std.testing.expectEqual(@as(usize, 0), recorder.count("cancelled|"));
     backend.cancelTasks("watched");
     try std.testing.expectEqual(@as(usize, 1), recorder.count("cancelled|"));
+}
+
+//
+// Says whether the context a handler was given has a tool runner, and which tools it handles.
+//
+fn toolRunnerHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+    _ = io;
+    _ = data;
+    var outputs: std.json.ObjectMap = .empty;
+    const runner = context.toolRunner;
+    try outputs.put(allocator, "hasRunner", .{ .bool = runner != null });
+    try outputs.put(allocator, "handlesMagick", .{ .bool = if (runner) |present| present.handles(present.context, "magick") else false });
+    try outputs.put(allocator, "handlesFfmpeg", .{ .bool = if (runner) |present| present.handles(present.context, "ffmpeg") else false });
+    return .{ .object = outputs };
+}
+
+//
+// A tool runner for a test that only looks at which tools it is asked about: it handles magick and is never asked to run anything.
+//
+fn handlesMagickOnly(context: ?*anyopaque, tool: []const u8) bool {
+    _ = context;
+    return std.mem.eql(u8, tool, "magick");
+}
+
+fn neverRuns(context: ?*anyopaque, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!node_utils.in_process_tools.ToolOutput {
+    _ = context;
+    _ = allocator;
+    _ = tool;
+    _ = arguments;
+    return error.NotRunInThisTest;
+}
+
+test "a registered handler is given the tool runner the app set on the backend, and none when the app set none" {
+    try register("registered-tools", toolRunnerHandler);
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try createCore(&shell, 2);
+    defer core.destroy();
+    try addTask(core, "t1", "registered-tools", "s", "null", "background");
+    try shell.expectMessageContaining("\"outputs\":{\"hasRunner\":false,\"handlesMagick\":false,\"handlesFfmpeg\":false}");
+    core.queue_backend.tool_runner = .{
+        .context = null,
+        .handles = handlesMagickOnly,
+        .run = neverRuns,
+    };
+    try addTask(core, "t2", "registered-tools", "s", "null", "background");
+    try shell.expectMessageContaining("\"outputs\":{\"hasRunner\":true,\"handlesMagick\":true,\"handlesFfmpeg\":false}");
 }

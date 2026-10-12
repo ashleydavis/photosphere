@@ -17,8 +17,16 @@ const RecordingRunner = struct {
     // The exit code to answer with.
     exit_code: i32,
 
+    // The tool the runner does not handle, or empty when it handles all three.
+    refused_tool: []const u8,
+
     // The output to answer with.
     output: []const u8,
+
+    fn handles(context: ?*anyopaque, tool: []const u8) bool {
+        const self: *RecordingRunner = @ptrCast(@alignCast(context.?));
+        return !std.mem.eql(u8, tool, self.refused_tool);
+    }
 
     fn run(context: ?*anyopaque, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!in_process_tools.ToolOutput {
         const self: *RecordingRunner = @ptrCast(@alignCast(context.?));
@@ -35,6 +43,7 @@ const RecordingRunner = struct {
     fn runner(self: *RecordingRunner) in_process_tools.InProcessRunner {
         return .{
             .context = self,
+            .handles = handles,
             .run = run,
         };
     }
@@ -46,6 +55,7 @@ fn newRunner(exit_code: i32, output: []const u8) RecordingRunner {
         .arguments = &.{},
         .calls = 0,
         .exit_code = exit_code,
+        .refused_tool = "",
         .output = output,
     };
 }
@@ -136,4 +146,16 @@ test "exec leaves a command for another program to the shell even with a runner"
     const result = try exec(arena.allocator(), std.testing.io, tools, "echo hello");
     try std.testing.expect(std.mem.startsWith(u8, result.stdout, "hello"));
     try std.testing.expectEqual(@as(u32, 0), runner.calls);
+}
+
+test "tryRun leaves a command for a tool the runner does not handle to the caller" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var recorder = newRunner(0, "ignored");
+    recorder.refused_tool = "ffmpeg";
+    try std.testing.expect((try in_process_tools.tryRun(arena.allocator(), recorder.runner(), "ffmpeg -version")) == null);
+    try std.testing.expectEqual(@as(u32, 0), recorder.calls);
+    const result = (try in_process_tools.tryRun(arena.allocator(), recorder.runner(), "magick -version")).?;
+    try std.testing.expectEqualStrings("ignored", result.stdout);
+    try std.testing.expectEqual(@as(u32, 1), recorder.calls);
 }

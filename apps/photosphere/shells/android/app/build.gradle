@@ -3,12 +3,6 @@
 
 apply plugin: 'com.android.application'
 
-// The ImageMagick libraries and headers are fetched by scripts/fetch-mobile-media-tools.sh into git-ignored directories of the
-// Capacitor Android app, and this app links and packages the same ones rather than fetching a second copy.
-def imageMagickMainDir = file('../../../../android-frontend/android/app/src/main')
-def imageMagickDir = new File(imageMagickMainDir, 'cpp/imagemagick').absolutePath
-def imageMagickLibsDir = new File(imageMagickMainDir, 'jniLibs').absolutePath
-
 android {
     namespace "au.com.codecapers.photosphere.ziggy"
     compileSdkVersion rootProject.ext.compileSdkVersion
@@ -24,14 +18,6 @@ android {
             abiFilters 'x86_64', 'arm64-v8a'
         }
 
-        // The run_magick C shim that calls ImageMagick's in-process dispatcher.
-        externalNativeBuild {
-            cmake {
-                arguments "-DANDROID_STL=c++_shared",
-                    "-DIMAGEMAGICK_DIR=${imageMagickDir}",
-                    "-DIMAGEMAGICK_LIBS_DIR=${imageMagickLibsDir}"
-            }
-        }
     }
 
     compileOptions {
@@ -41,22 +27,7 @@ android {
 
     sourceSets {
         main {
-            jniLibs.srcDirs = ['build/ziggy/jniLibs', imageMagickLibsDir]
-        }
-    }
-
-    // Build the run_magick shim with the NDK installed alongside the SDK.
-    externalNativeBuild {
-        cmake {
-            path "src/main/cpp/CMakeLists.txt"
-            version "3.22.1"
-        }
-    }
-
-    // The FFmpegKit AAR and the ImageMagick libraries each bundle libc++_shared.so; keep the first to avoid a duplicate-path packaging error.
-    packagingOptions {
-        jniLibs {
-            pickFirsts += ['**/libc++_shared.so']
+            jniLibs.srcDirs = ['build/ziggy/jniLibs']
         }
     }
 
@@ -71,9 +42,6 @@ android {
 
 dependencies {
     implementation project(':ziggy-shell-android')
-
-    // ffmpeg and ffprobe in-process via FFmpegKit, the 16KB-page-aligned Maven fork. FfmpegKitRunner reaches its com.arthenica API by reflection.
-    implementation 'com.moizhassan.ffmpeg:ffmpeg-kit-16kb:6.1.1'
 
     // Jetpack Security: EncryptedSharedPreferences backed by the Android Keystore, which holds the phone's secrets encrypted at rest.
     implementation "androidx.security:security-crypto:$androidxSecurityCryptoVersion"

@@ -17,8 +17,7 @@ import {
 } from "user-interface";
 import { ZiggyQueueBackend } from "./lib/ziggy-queue-backend";
 import { setQueueBackend } from "task-queue";
-import { PlatformProviderZiggy } from "./lib/platform-provider-ziggy";
-import { getPlatformCapabilities, type IPlatformInfo } from "./lib/platform-capabilities";
+import { PlatformProviderZiggy, type IPlatformInfo } from "./lib/platform-provider-ziggy";
 import type { IZiggyBridge } from "ziggy-bridge";
 import { setLog } from "utils";
 import { createRendererLog } from "./lib/renderer-log";
@@ -39,8 +38,6 @@ interface IAppProps {
 }
 
 export function App({ ziggy, platform }: IAppProps) {
-    const capabilities = getPlatformCapabilities(platform);
-
     // Initialize renderer logging to forward logs to the core
     const rendererLog = createRendererLog(ziggy, isTestMode());
     setLog(rendererLog);
@@ -83,8 +80,8 @@ export function App({ ziggy, platform }: IAppProps) {
                                             <DeleteConfirmationContextProvider>
                                                 <SearchContextProvider>
                                                     <GalleryLayoutContextProvider>
-                                                        {capabilities.showsDesktopChrome && <McpToolHandler ziggy={ziggy} />}
-                                                        {capabilities.showsDesktopChrome && <PreviewBanner />}
+                                                        {platform.platformKind === "desktop" && <McpToolHandler ziggy={ziggy} />}
+                                                        {platform.platformKind === "desktop" && <PreviewBanner />}
                                                         <DeveloperContextProvider>
                                                             <SyncContextProvider>
                                                                 <Main initialTheme={initialTheme} />

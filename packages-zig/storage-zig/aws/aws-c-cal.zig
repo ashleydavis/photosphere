@@ -25,7 +25,7 @@ pub fn build(context: *const aws_sdk.Context, dependency: *std.Build.Dependency,
         // AWS_SUPPORT_WIN7 is off.
         module.linkSystemLibrary("ncrypt", .{});
     }
-    else if (context.isMacos) {
+    else if (context.isApple) {
         try sources.appendSlice(b.allocator, try aws_sdk.globCSources(b, dependency, "source/darwin"));
         try sources.append(b.allocator, "source/shared/ed25519_noop.c");
         try sources.append(b.allocator, "source/shared/ref_hkdf.c");

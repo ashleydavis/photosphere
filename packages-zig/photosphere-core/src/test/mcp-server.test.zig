@@ -10,6 +10,7 @@ const std = @import("std");
 const support = @import("test-support.zig");
 const main_state = @import("../lib/main-state.zig");
 const mcp_server = @import("../lib/mcp-server.zig");
+const expectServerStopped = @import("../../../utils-zig/src/test/expect-server-stopped.zig").expectServerStopped;
 
 const TestApp = support.TestApp;
 const io = std.testing.io;
@@ -322,8 +323,7 @@ test "cancelling the server's source stops it and closes its port" {
         try io.sleep(.fromMilliseconds(10), .awake);
         waited_ms += 10;
     }
-    const address = try std.Io.net.IpAddress.parseIp4("127.0.0.1", port);
-    try std.testing.expect(std.meta.isError(address.connect(io, .{ .mode = .stream })));
+    try expectServerStopped(io, port);
 }
 
 test "the fixed port is the one clients are told to use" {

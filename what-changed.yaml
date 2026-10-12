@@ -215,6 +215,7 @@ targets:
       - apps/photosphere-smoke-tests
       - packages
       - packages-zig
+      - vendor
       - build.zig
       - build.zig.zon
 
@@ -226,6 +227,7 @@ targets:
       - apps/photosphere-smoke-tests
       - packages
       - packages-zig
+      - vendor
       - build.zig
       - build.zig.zon
     platforms:
@@ -239,6 +241,7 @@ targets:
       - apps/photosphere-smoke-tests
       - packages
       - packages-zig
+      - vendor
       - build.zig
       - build.zig.zon
     platforms:
@@ -260,5 +263,6 @@ targets:
       - build.zig
       - build.zig.zon
       - packages-zig
+      - vendor
       - build.zig
       - build.zig.zon

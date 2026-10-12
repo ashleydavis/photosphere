@@ -414,9 +414,8 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
     const googleApiKey = data.googleApiKey;
     const dryRun = data.dryRun orelse false;
 
-    // On a phone the shell runs ImageMagick and ffmpeg, and the task asks it through its host requester.
-    var toolRunnerStorage: node_utils.host_tools.HostToolRunner = undefined;
-    const toolRunner = try node_utils.host_tools.toolRunnerFor(context.hostRequester, &toolRunnerStorage);
+    // An app with ImageMagick and ffmpeg built in runs them in its process through the task's tool runner; with none the programs are started.
+    const toolRunner = context.toolRunner;
     const uuidGenerator = context.uuidGenerator;
 
     const assetId = data.assetId;

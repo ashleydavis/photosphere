@@ -6,7 +6,7 @@ import './tailwind.css';
 import { installTestDriver } from "user-interface";
 import type { IZiggyBridge } from "ziggy-bridge";
 import { isTestMode } from "./lib/test-mode";
-import type { IPlatformInfo } from "./lib/platform-capabilities";
+import type { IPlatformInfo } from "./lib/platform-provider-ziggy";
 import { sendRendererLog } from "./lib/renderer-log";
 import { createZiggyTestTransport } from "./lib/ziggy-test-transport";
 
@@ -94,6 +94,10 @@ if (testMode) {
 //
 async function start(bridge: IZiggyBridge): Promise<void> {
     const platform = await bridge.invoke<IPlatformInfo>('get-platform', null);
+
+    if (platform.platformKind !== "desktop" && platform.platformKind !== "mobile") {
+        throw new Error(`Unknown platform kind "${String(platform.platformKind)}" from get-platform.`);
+    }
 
     const container = document.getElementById('root');
     if (!container) {

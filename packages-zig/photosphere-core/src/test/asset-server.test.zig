@@ -2,6 +2,8 @@ const std = @import("std");
 const ziggy = @import("ziggy-core");
 const support = @import("test-support.zig");
 
+const expectServerStopped = @import("../../../utils-zig/src/test/expect-server-stopped.zig").expectServerStopped;
+
 const TestApp = support.TestApp;
 
 const io = std.testing.io;
@@ -58,7 +60,6 @@ test "the asset-server task serves the asset routes on a loopback port the page 
     app.core.postMessage("{\"channel\":\"cancel-tasks\",\"data\":\"asset-server\"}");
     try app.shell.expectMessageContaining("\"taskId\":\"asset-server-1\",\"result\":{\"taskId\":\"asset-server-1\",\"status\":\"failed\"");
 
-    // The task is over, so the port is closed.
-    const address = try std.Io.net.IpAddress.parseIp4("127.0.0.1", port);
-    try std.testing.expect(std.meta.isError(address.connect(io, .{ .mode = .stream })));
+    // The task is over, so nothing of ours answers on the port.
+    try expectServerStopped(io, port);
 }

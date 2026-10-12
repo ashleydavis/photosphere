@@ -27,6 +27,11 @@
 #   photosphere_platform_is_running <test_dir>
 #       Succeeds when the app's process is running.
 #
+#   photosphere_platform_screenshot <output_path>        (optional)
+#       Writes a PNG of the app's screen to the host path. Defined only by a platform whose app cannot write to a host path, which is a
+#       phone: send_command then takes the screenshot command from the host instead of sending it to the app. A platform that does not
+#       define it has the app write the PNG itself.
+#
 #   photosphere_platform_reset_app_state
 #       Clears everything the app has stored, for a deterministic start. A desktop does nothing, because the scenario's directory is
 #       fresh. A phone wipes the app's storage and keychain. Call it before the start. Returns non-zero when the wipe failed or was refused.
@@ -227,11 +232,73 @@ wait_for_ready() {
             log_info "App is ready"
             return 0
         fi
+        # A desktop app that has already ended will never answer, so waiting out the whole timeout only hides that it ended. The
+        # log says how it ended (a shell prints "Killed" there when something sent it SIGKILL).
+        case "$PLATFORM" in
+            linux|macos|windows)
+                if ! photosphere_platform_is_running "$APP_TMP_DIR"; then
+                    log_error "The app exited before it was ready. Its log:"
+                    tail -30 "$TMP_DIR/app.log" 2>/dev/null
+                    exit 1
+                fi
+                ;;
+        esac
         sleep "$WAIT_POLL_INTERVAL"
     done
     log_error "The app was not ready after ${DEFAULT_WAIT_TIMEOUT}s. Its log:"
     tail -30 "$TMP_DIR/app.log" 2>/dev/null
+    dump_app_stacks "$APP_TMP_DIR"
     exit 1
+}
+
+#
+# Prints the stack of every thread of the app, and of every process it started, so a start-up that hangs says where. It runs
+# before the cleanup kills the app, and only on the path where the app is still running but never became ready. A missing
+# stack tool is said so on the output, never skipped quietly. Usage: dump_app_stacks <test_dir>
+#
+dump_app_stacks() {
+    local test_dir="$1"
+    local root_pid stack_pid thread_dir
+    root_pid="$(cat "$test_dir/app.pid" 2>/dev/null)"
+    if [ -z "$root_pid" ]; then
+        log_error "No stacks: $test_dir/app.pid is missing, so the app's pid is not known."
+        return 0
+    fi
+    case "$PLATFORM" in
+        linux)
+            if ! command -v gdb > /dev/null 2>&1; then
+                log_error "No stacks: gdb is not installed, so the stacks of the hung app cannot be read."
+                return 0
+            fi
+            for stack_pid in $(process_tree_pids "$root_pid"); do
+                log_error "Stacks of pid $stack_pid ($(ps -o comm= -p "$stack_pid" 2>/dev/null)):"
+                if ! gdb -p "$stack_pid" -batch -ex "thread apply all bt" 2>&1 | tee -a "$test_dir/hang-stacks.txt"; then
+                    log_error "gdb failed on pid $stack_pid."
+                fi
+                # With the kernel's default ptrace_scope of 1 a process may attach only to its descendants, and the app was
+                # reparented away from the test when its launcher exited, so gdb is often refused. Each thread's name, state
+                # and the kernel function it waits in are readable without ptrace and show which threads are stuck.
+                log_error "Threads of pid $stack_pid (tid, name, state, waiting in):"
+                for thread_dir in /proc/"$stack_pid"/task/*; do
+                    echo "$(basename "$thread_dir") $(cat "$thread_dir/comm" 2>/dev/null) $(awk '{ print $3 }' "$thread_dir/stat" 2>/dev/null) $(cat "$thread_dir/wchan" 2>/dev/null)" | tee -a "$test_dir/hang-stacks.txt"
+                done
+            done
+            ;;
+        macos)
+            if ! command -v lldb > /dev/null 2>&1; then
+                log_error "No stacks: lldb is not installed, so the stacks of the hung app cannot be read."
+                return 0
+            fi
+            for stack_pid in $(process_tree_pids "$root_pid"); do
+                log_error "Stacks of pid $stack_pid ($(ps -o comm= -p "$stack_pid" 2>/dev/null)):"
+                lldb -p "$stack_pid" -b -o "thread backtrace all" 2>&1 | tee -a "$test_dir/hang-stacks.txt"
+            done
+            ;;
+        *)
+            log_error "No stacks: there is no stack tool for $PLATFORM."
+            ;;
+    esac
+    return 0
 }
 
 #
@@ -284,6 +351,32 @@ wait_for_log() {
 reset_log_cursor() {
     local tmp_dir="$1"
     echo "0" > "$tmp_dir/.log-cursor"
+}
+
+#
+# Polls app.log for the pattern anywhere in the whole log, not only after wait_for_log's cursor, and leaves the cursor where it was. For
+# a line that can arrive either side of the line a previous wait stopped at. Fails the test on timeout.
+# Usage: wait_for_log_anywhere <tmp_dir> <pattern> [timeout]
+#
+wait_for_log_anywhere() {
+    local tmp_dir="$1"
+    local pattern="$2"
+    local timeout="${3:-$DEFAULT_WAIT_TIMEOUT}"
+    log_info "Waiting for log pattern anywhere in the log: $pattern"
+    local deadline=$((SECONDS + timeout))
+    while [ "$SECONDS" -lt "$deadline" ]; do
+        if [ -f "$tmp_dir/app.log" ] && grep -qF -- "$pattern" "$tmp_dir/app.log"; then
+            log_info "Found: $pattern"
+            return 0
+        fi
+        sleep "$WAIT_POLL_INTERVAL"
+    done
+    log_error "Timed out waiting for log pattern: $pattern"
+    log_error "Last 30 lines of app.log:"
+    tail -30 "$tmp_dir/app.log" 2>/dev/null | while IFS= read -r line; do
+        echo "  $line"
+    done
+    exit 1
 }
 
 #
@@ -348,6 +441,29 @@ wait_for_value() {
 }
 
 #
+# Polls the element's value until it matches the extended regular expression. For a value where a substring would also match a wrong
+# one, such as "1 photos" inside "11 photos". Fails the test on timeout.
+# Usage: wait_for_value_matching <port> <data-id> <ere> [timeout]
+#
+wait_for_value_matching() {
+    local port="$1"
+    local data_id="$2"
+    local pattern="$3"
+    local timeout="${4:-$DEFAULT_WAIT_TIMEOUT}"
+    local response=""
+    local deadline=$((SECONDS + timeout))
+    while [ "$SECONDS" -lt "$deadline" ]; do
+        response="$(read_value "$port" "$data_id")"
+        if printf '%s' "$response" | grep -q -E -- "$pattern"; then
+            return 0
+        fi
+        sleep "$WAIT_POLL_INTERVAL"
+    done
+    log_error "Timed out waiting for data-id '$data_id' to match '$pattern' (last value: $response)"
+    exit 1
+}
+
+#
 # The opposite wait: polls the given data-id until its value no longer contains the substring, for watching a control leave a state
 # (a button that says Cancel while a job runs, a dialog that shows a pairing code until it is dismissed). A non-empty value is required
 # first. Without that a dead app, which answers nothing at all, reads exactly like a dialog that has closed, and the test passes on the
@@ -399,6 +515,33 @@ read_pairing_code() {
 }
 
 #
+# Waits until the share dialog stops showing a pairing code, which is how a cancelled share is seen to have stopped: cancelling closes
+# the dialog and takes the code out of the page. Any four digit code means the share is still up, not one particular one, so this is a
+# pattern test rather than the substring test wait_for_value_gone does. The app has to have answered before its value is believed: an
+# app that has died answers nothing, and reads exactly like a dialog that closed, so a run where no request is answered ends in the
+# failure and never in a pass. Returns non-zero when a code is still showing, or nothing answered, when the timeout ends.
+# Usage: wait_for_pairing_code_gone <port> [timeout]
+#
+wait_for_pairing_code_gone() {
+    local port="$1"
+    local timeout="${2:-$DEFAULT_WAIT_TIMEOUT}"
+    local answer
+    local showing=""
+    local deadline=$((SECONDS + timeout))
+    while [ "$SECONDS" -lt "$deadline" ]; do
+        answer="$(control_command "$port" '{"command":"get-value","dataId":"share-pairing-code"}' || true)"
+        if [ "$(printf '%s' "$answer" | jq -r '.ok // empty' 2>/dev/null)" = "true" ]; then
+            showing="$(printf '%s' "$answer" | jq -r '.value // empty' 2>/dev/null)"
+            if ! [[ "$showing" =~ ^[0-9]{4}$ ]]; then
+                return 0
+            fi
+        fi
+        sleep "$WAIT_POLL_INTERVAL"
+    done
+    return 1
+}
+
+#
 # Sends a command to the page (or to the core, for the ones it answers itself) and fails when it did not do what was asked. The body
 # is the JSON object of the command's arguments, and the endpoint is the command's name.
 # Usage: send_command <port> <command> [json_body]
@@ -415,6 +558,18 @@ send_command() {
         log_error "The body of the $endpoint command is not JSON: $body"
         return 1
     }
+    # A platform whose app cannot write a file where the host can read it (a phone's path is on the phone) takes the screenshot from the
+    # host and writes the PNG to the path the command names.
+    if [ "$endpoint" = "screenshot" ] && declare -F photosphere_platform_screenshot > /dev/null; then
+        local output_path
+        output_path="$(printf '%s' "$command_json" | jq -r '.outputPath // empty')"
+        if [ -z "$output_path" ]; then
+            log_error "The screenshot command needs an outputPath: $body"
+            return 1
+        fi
+        photosphere_platform_screenshot "$output_path"
+        return $?
+    fi
     local response
     if ! response="$(control_command "$port" "$command_json")"; then
         log_error "No answer from the control connection on port $port to $endpoint"
@@ -798,4 +953,258 @@ assert_value() {
     fi
     log_info "Value of '$data_id' matched: $value"
     return 0
+}
+
+#
+# Prints the path of a file in the app's settings directory, as the app sees it: the directory the scenario's config files are written
+# to on a desktop, and the app's settings directory on a phone. Usage: config_file_path <name>
+#
+config_file_path() {
+    case "$PLATFORM" in
+        android|ios)
+            "${PLATFORM}_config_file_path" "$1"
+            ;;
+        *)
+            echo "$TMP_DIR/config/$1"
+            ;;
+    esac
+}
+
+#
+# Puts a file from the host into the app's settings directory from outside the app, replacing one of the same name, the way a scenario
+# pre-writes databases.toml. Usage: put_config_file <host_file> <name>
+#
+put_config_file() {
+    case "$PLATFORM" in
+        android|ios)
+            "${PLATFORM}_put_config_file" "$1" "$2"
+            ;;
+        *)
+            mkdir -p "$TMP_DIR/config" && cp "$1" "$TMP_DIR/config/$2"
+            ;;
+    esac
+}
+
+#
+# Prints a file of the app's settings directory as it stands, or nothing when there is none, which is how a scenario asserts on a write
+# the app made. Usage: read_config_file <name>
+#
+read_config_file() {
+    case "$PLATFORM" in
+        android|ios)
+            "${PLATFORM}_read_config_file" "$1"
+            ;;
+        *)
+            if [ -f "$TMP_DIR/config/$1" ]; then
+                cat "$TMP_DIR/config/$1"
+            fi
+            ;;
+    esac
+}
+
+#
+# Opens the page's actions menu, which holds the page's secondary actions on a phone. A desktop page shows those actions directly, so
+# there is no menu to open. Usage: open_page_actions_menu <port>
+#
+open_page_actions_menu() {
+    local port="$1"
+    case "$PLATFORM" in
+        android|ios)
+            send_command "$port" click '{"dataId":"page-actions-menu"}' || return 1
+            ;;
+    esac
+}
+
+#
+# Clicks one of a database row's actions on the Databases page. A phone folds a row's actions into the row's menu, which is opened
+# first, and the open menu holds the one set of action buttons. A desktop shows every row's buttons, so the row is the button's index.
+# Usage: click_database_row_action <port> <row_index> <action_data_id>
+#
+click_database_row_action() {
+    local port="$1"
+    local row_index="$2"
+    local action_data_id="$3"
+    case "$PLATFORM" in
+        android|ios)
+            send_command "$port" click "{\"dataId\":\"entity-actions-menu\",\"nth\":$row_index}" || return 1
+            send_command "$port" click "{\"dataId\":\"$action_data_id\",\"nth\":0}" || return 1
+            ;;
+        *)
+            send_command "$port" click "{\"dataId\":\"$action_data_id\",\"nth\":$row_index}" || return 1
+            ;;
+    esac
+}
+
+#
+# Imports host files into the open database through the import page, which must be showing. A desktop drops the files on the page's
+# drop zone. A phone has no drop zone and its picker is native, so the files are put into the app's import directory from outside the
+# app and the picker is answered with their paths, then the picker button is clicked. The files keep their names.
+# Usage: import_files <port> <host_file>...
+#
+import_files() {
+    local port="$1"
+    shift
+    case "$PLATFORM" in
+        android|ios)
+            local stage_dir="$TMP_DIR/import-stage"
+            rm -rf "$stage_dir" || return 1
+            mkdir -p "$stage_dir" || return 1
+            cp "$@" "$stage_dir/" || return 1
+            "${PLATFORM}_seed_database" "$stage_dir" ".import-tmp" || return 1
+            local import_tmp_path
+            import_tmp_path="$("${PLATFORM}_app_path" ".import-tmp")"
+            local paths_json
+            paths_json="$(for host_file in "$@"; do basename "$host_file"; done | jq -R --arg dir "$import_tmp_path" '$dir + "/" + .' | jq -sc '.')"
+            send_command "$port" pick-answer "$(jq -cn --argjson paths "$paths_json" '{paths: $paths}')" || return 1
+            send_command "$port" click '{"dataId":"import-files-button"}' || return 1
+            ;;
+        *)
+            local paths_json
+            paths_json="$(printf '%s\n' "$@" | jq -R '.' | jq -sc '.')"
+            send_command "$port" drop "$(jq -cn --argjson paths "$paths_json" '{dataId: "import-drop-zone", paths: $paths}')" || return 1
+            ;;
+    esac
+}
+
+#
+# Copies a database in the app's files directory to a directory on the host, replacing what is there, so the host's CLI can read what
+# the app wrote. The app must not be writing to it. Usage: fetch_app_database <relative_path_under_files> <host_dest>
+#
+fetch_app_database() {
+    local rel_path="$1"
+    local host_dest="$2"
+    rm -rf "$host_dest" || return 1
+    mkdir -p "$(dirname "$host_dest")" || return 1
+    case "$PLATFORM" in
+        android|ios)
+            "${PLATFORM}_fetch_database" "$rel_path" "$host_dest" || return 1
+            ;;
+        *)
+            cp -r "$("${PLATFORM}_app_path" "$rel_path")" "$host_dest" || return 1
+            ;;
+    esac
+}
+
+#
+# Succeeds when a file of the app's settings directory exists, even when it is empty. Usage: config_file_exists <name>
+#
+config_file_exists() {
+    case "$PLATFORM" in
+        android|ios)
+            "${PLATFORM}_config_file_exists" "$1"
+            ;;
+        *)
+            [ -f "$TMP_DIR/config/$1" ]
+            ;;
+    esac
+}
+
+#
+# Succeeds when the vault holds a secret of the given name, as the app's own list of secrets has it. A desktop keeps its vault in a
+# file the scenario can read. A phone keeps secrets in the device keychain, which nothing outside the app can read, so the Secrets
+# page, which lists what the vault holds, is read instead. Returns 0 when the vault holds it, 1 when the vault is readable and does not,
+# and 2 when the app could not be asked (so a dead app is never taken for an absent secret). Usage: secret_in_vault <port> <name>
+#
+secret_in_vault() {
+    local port="$1"
+    local secret_name="$2"
+    case "$PLATFORM" in
+        android|ios)
+            send_command "$port" navigate '{"page":"secrets"}' || return 2
+            wait_for_log "$TMP_DIR" "Secrets page loaded" || return 2
+            local answer
+            answer="$(control_command "$port" "$(jq -cn --arg dataId "secret-row-name-$secret_name" '{command: "get-value", dataId: $dataId}')")" || return 2
+            if [ "$(printf '%s' "$answer" | jq -r '.ok // empty' 2>/dev/null)" != "true" ]; then
+                return 2
+            fi
+            [ -n "$(printf '%s' "$answer" | jq -r '.value // empty' 2>/dev/null)" ]
+            ;;
+        *)
+            vault_has_secret "$TMP_DIR/vault" "$secret_name"
+            ;;
+    esac
+}
+
+#
+# Damages the vault the way a truncated write or a damaged disk would, from outside the app, so reading it fails. A desktop app reads
+# its vault file each time, so it is damaged under the running app. A phone app opens its keychain once, when it starts, so the app is
+# stopped, the keychain damaged and the app started again on the same data, which is a new log. Fails when there is no vault to
+# damage. Usage: damage_vault
+#
+damage_vault() {
+    case "$PLATFORM" in
+        android|ios)
+            stop_app "$APP_PORT" "$TMP_DIR"
+            "${PLATFORM}_damage_vault" || return 1
+            start_app "$TMP_DIR"
+            reset_log_cursor "$TMP_DIR"
+            wait_for_ready "$APP_PORT"
+            ;;
+        *)
+            if [ ! -f "$TMP_DIR/vault/vault.json" ]; then
+                echo "No vault file at $TMP_DIR/vault/vault.json to damage; the secret was never stored" >&2
+                return 1
+            fi
+            printf '%s' 'this is not json' > "$TMP_DIR/vault/vault.json" || return 1
+            ;;
+    esac
+}
+
+#
+# Prints an extended regex of the [ERROR] lines an app logs while it runs on a damaged vault, besides the failed reset itself, for
+# check_no_errors. A phone app that was started on a damaged keychain fails to load the secrets its pages show; a desktop app that
+# had its vault damaged while running logs nothing more. Usage: damaged_vault_errors_pattern
+#
+damaged_vault_errors_pattern() {
+    case "$PLATFORM" in
+        android|ios)
+            echo "Device reset failed:|vault|Failed to load app data:"
+            ;;
+        *)
+            echo "Device reset failed:|vault"
+            ;;
+    esac
+}
+
+#
+# Prints the path of the database automatic import writes to, as the app recorded it in its settings, or nothing when none is recorded.
+# The settings file holds one such path, so it can name only one database. Usage: read_default_database_path
+#
+read_default_database_path() {
+    read_config_file config.yaml | tr '\n' ' ' | sed -n 's/.*default_database_path: *\(>-\)\{0,1\} *\([^ ]*\).*/\1\2/p' | sed 's/^>-//'
+}
+
+#
+# Asserts that the row on the Databases page is the database marked as the default, and that no other row is. The app's recorded
+# default is read on every platform. A desktop's table also shows a badge on the default row, so that is read too; a phone's cards show
+# no badge, so there is nothing more to read there. Usage: expect_default_database <port> <row_index> <row_count> <database_path>
+#
+expect_default_database() {
+    local port="$1"
+    local row_index="$2"
+    local row_count="$3"
+    local database_path="$4"
+    local recorded
+    recorded="$(read_default_database_path)"
+    if [ "$recorded" != "$database_path" ]; then
+        log_error "The recorded default database is '$recorded', expected '$database_path'"
+        exit 1
+    fi
+    case "$PLATFORM" in
+        android|ios)
+            ;;
+        *)
+            wait_for_value "$port" "database-default-badge-$row_index" "Default"
+            # Two badges at once would mean the app believes photos are being backed up to two places while only one of them is really
+            # receiving them.
+            local other_index=0
+            while [ "$other_index" -lt "$row_count" ]; do
+                if [ "$other_index" -ne "$row_index" ] && read_value "$port" "database-default-badge-$other_index" | grep -q "Default"; then
+                    log_error "Row $other_index is marked as the default as well as row $row_index"
+                    exit 1
+                fi
+                other_index=$((other_index + 1))
+            done
+            ;;
+    esac
 }

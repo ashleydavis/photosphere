@@ -102,6 +102,10 @@ pub const ZiggyQueueBackend = struct {
     // Identifies this run of the app to the handlers, as `sessionId` of the worker pool options does.
     session_id: []const u8,
 
+    // Runs ImageMagick, ffmpeg and ffprobe in the process for the handlers, when the app has them built in. The app sets it, and it is
+    // read each time a handler starts, so it is set before the first task is queued and not changed while tasks run.
+    tool_runner: @FieldType(ITaskContext, "toolRunner"),
+
     //
     // Makes the backend for a runner. The runner need not be running yet, it is only used once tasks are queued.
     //
@@ -122,6 +126,7 @@ pub const ZiggyQueueBackend = struct {
             .uuid_generator = .{},
             .timestamp_provider = .{},
             .session_id = &.{},
+            .tool_runner = null,
         };
         self.session_id = try self.uuid_generator.generate(allocator, io);
         return self;
@@ -542,6 +547,7 @@ fn runRegisteredHandler(user_data: ?*anyopaque, context: *TaskContext, data: std
         .taskId = context.taskId(),
         .maxConcurrentChildTasks = context.maxConcurrentChildTasks(),
         .hostRequester = context.hostRequester(&host_requester_storage),
+        .toolRunner = backend.tool_runner,
         .ptr = &bridge,
         .vtable = &ContextBridge.vtable,
     };
