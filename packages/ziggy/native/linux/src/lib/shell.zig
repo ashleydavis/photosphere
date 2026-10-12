@@ -10,6 +10,7 @@ const c = @import("gtk.zig");
 const z = @import("c");
 const menu_keys = @import("menu-keys.zig");
 const geometry_lib = @import("geometry.zig");
+const render_device = @import("render-device.zig");
 const ui_files = @import("ui-files");
 const host_reply = @import("host-reply");
 
@@ -107,6 +108,8 @@ const Shell = struct {
 // Runs the app and returns the process's exit code.
 //
 pub fn run(app_config: AppConfig, args: []const [:0]const u8) !u8 {
+    // Before GTK starts any thread, because choosing the card forks.
+    try render_device.chooseRenderDevice();
     const application = c.gtk_application_new(app_config.app_id.ptr, c.G_APPLICATION_NON_UNIQUE) orelse {
         return error.GtkApplicationFailed;
     };
