@@ -1386,6 +1386,8 @@ const linux_runtime_libraries = [_][]const u8{
     "libjavascriptcoregtk-4.1.so.0",
     "libwebkit2gtk-4.1.so.0",
     "libcairo.so.2",
+    "libgbm.so.1",
+    "libEGL.so.1",
 };
 
 //

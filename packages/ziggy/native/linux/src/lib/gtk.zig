@@ -74,6 +74,11 @@ pub extern fn gtk_selection_data_get_uris(selection_data: *GtkSelectionData) [*c
 pub extern fn g_get_user_data_dir() [*:0]const u8;
 pub extern fn g_mkdir_with_parents(pathname: [*:0]const u8, mode: c_int) c_int;
 pub extern fn g_get_num_processors() c_uint;
+pub const GDir = opaque {};
+pub extern fn g_dir_open(path: [*:0]const u8, flags: c_uint, err: ?*?*GError) ?*GDir;
+pub extern fn g_dir_read_name(dir: *GDir) ?[*:0]const u8;
+pub extern fn g_dir_close(dir: *GDir) void;
+pub extern fn g_file_get_contents(filename: [*:0]const u8, contents: *[*c]u8, length: ?*usize, err: ?*?*GError) gboolean;
 
 pub extern fn gtk_application_new(application_id: [*:0]const u8, flags: c_uint) ?*GtkApplication;
 pub extern fn gtk_application_inhibit(application: *GtkApplication, window: ?*GtkWindow, flags: c_uint, reason: [*:0]const u8) c_uint;
