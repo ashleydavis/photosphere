@@ -333,3 +333,20 @@ test "should return this from set method for chaining" {
     try std.testing.expectEqualStrings("value1", (try bufferMap.get(&key1)).?);
     try std.testing.expectEqualStrings("value2", (try bufferMap.get(&key2)).?);
 }
+
+//
+// A key whose bucket is taken by another key is still not in the map: all zeros and a key whose first two 4-byte
+// chunks are equal both XOR to bucket 0, so the get finds the bucket and must not find the key in it.
+//
+test "should return undefined for a non-existent key that shares a bucket with a key in the map" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var bufferMap = BufferMap([]const u8).init(arena.allocator());
+    var present = [_]u8{0} ** 32;
+    @memcpy(present[0..8], &[_]u8{ 1, 2, 3, 4, 1, 2, 3, 4 });
+    const absent = [_]u8{0} ** 32;
+    _ = try bufferMap.set(&present, "value");
+
+    try std.testing.expect((try bufferMap.get(&absent)) == null);
+    try std.testing.expectEqualStrings("value", (try bufferMap.get(&present)).?);
+}

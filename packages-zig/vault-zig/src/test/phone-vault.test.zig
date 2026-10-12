@@ -28,6 +28,9 @@ const MemoryHost = struct {
     // Set to make a secureStoreSet of this key fail.
     failing_set_key: ?[]const u8,
 
+    // Keys secureStoreKeys answers with as well as the items', as if they were deleted after being listed.
+    deleted_after_listing: []const []const u8,
+
     fn init(allocator: std.mem.Allocator) MemoryHost {
         return .{
             .items = .empty,
@@ -35,6 +38,7 @@ const MemoryHost = struct {
             .methods = .empty,
             .failure = null,
             .failing_set_key = null,
+            .deleted_after_listing = &.{},
         };
     }
 
@@ -77,6 +81,7 @@ const MemoryHost = struct {
             while (iterator.next()) |key| {
                 try keys.append(allocator, key.*);
             }
+            try keys.appendSlice(allocator, self.deleted_after_listing);
             return try std.json.Stringify.valueAlloc(allocator, .{
                 .keys = keys.items,
             }, .{});
@@ -195,6 +200,87 @@ test "PhoneVault: list returns every secret and ignores other keychain items" {
         }
     }
     try std.testing.expect(found_a and found_b);
+}
+
+//
+// A delete removes the type before the value, so a list that runs beside one can find a listed type gone while its value is still
+// there. That secret is being deleted and is skipped, as MobileSecretStore.listSecrets skips a type that is gone.
+//
+test "PhoneVault: list skips a secret whose type was deleted after the keys were read, even while its value is still there" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var host = MemoryHost.init(arena.allocator());
+    var phone = PhoneVault.init(host.requester());
+    const vault = phone.vault();
+    try vault.set(arena.allocator(), std.testing.io, .{
+        .name = "kept",
+        .type = "plain",
+        .value = "one",
+    });
+    try host.items.put(arena.allocator(), "photosphere.secret.going", "two");
+    host.deleted_after_listing = &.{"photosphere.secret-type.going"};
+
+    const secrets = try vault.list(arena.allocator(), std.testing.io);
+    try std.testing.expectEqual(@as(usize, 1), secrets.len);
+    try std.testing.expectEqualStrings("kept", secrets[0].name);
+}
+
+//
+// A host that answers every request with the same text.
+//
+const FixedAnswerHost = struct {
+    // The answer to every request.
+    answer: []const u8,
+
+    fn requester(self: *FixedAnswerHost) IHostRequester {
+        return .{
+            .ptr = self,
+            .request = request,
+        };
+    }
+
+    fn request(ptr: *anyopaque, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) anyerror![]const u8 {
+        _ = method;
+        _ = request_json;
+        const self: *FixedAnswerHost = @ptrCast(@alignCast(ptr));
+        return allocator.dupe(u8, self.answer);
+    }
+};
+
+test "PhoneVault: an answer to secureStoreGet that cannot be read, has no value, or has a value that is not text is an error" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const cases = [_][2][]const u8{
+        .{ "not json", "The phone's answer to secureStoreGet could not be read." },
+        .{ "{}", "The phone's answer to secureStoreGet has no value." },
+        .{ "{\"value\":5}", "The phone's answer to secureStoreGet has a value that is not text." },
+    };
+    for (cases) |case| {
+        var host: FixedAnswerHost = .{
+            .answer = case[0],
+        };
+        var phone = PhoneVault.init(host.requester());
+        try std.testing.expectError(error.Thrown, phone.vault().get(arena.allocator(), std.testing.io, "a"));
+        try std.testing.expectEqualStrings(case[1], errors.lastErrorMessage());
+    }
+}
+
+test "PhoneVault: an answer to secureStoreKeys that cannot be read, has no list, or lists a key that is not text is an error" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const cases = [_][2][]const u8{
+        .{ "not json", "The phone's answer to secureStoreKeys could not be read." },
+        .{ "{\"keys\":1}", "The phone's answer to secureStoreKeys has no list of keys." },
+        .{ "{\"keys\":[1]}", "The phone's answer to secureStoreKeys has a key that is not text." },
+    };
+    for (cases) |case| {
+        var host: FixedAnswerHost = .{
+            .answer = case[0],
+        };
+        var phone = PhoneVault.init(host.requester());
+        try std.testing.expectError(error.Thrown, phone.vault().list(arena.allocator(), std.testing.io));
+        try std.testing.expectEqualStrings(case[1], errors.lastErrorMessage());
+    }
 }
 
 test "PhoneVault: a value with no type is an error" {

@@ -1,6 +1,7 @@
 const std = @import("std");
 const ziggy = @import("ziggy-core");
 const helpers = @import("helpers.zig");
+const utils = @import("utils-zig");
 
 fn addTask(core: *ziggy.core.Core, id: []const u8, task_type: []const u8, source: []const u8, data: []const u8, priority: []const u8) !void {
     const message = try ziggy.json_util.stringify(std.testing.allocator, .{
@@ -222,6 +223,26 @@ test "add-task without a task type is an error reply" {
     defer core.destroy();
     core.postMessage("{\"id\":1,\"channel\":\"add-task\",\"data\":{\"taskId\":\"x\",\"source\":\"s\"}}");
     try shell.expectMessageContaining("{\"id\":1,\"ok\":false,\"error\":\"MissingTaskType\"}");
+}
+
+test "add-task without a task id is an error reply" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try helpers.createCore(&shell, 1, 1);
+    defer core.destroy();
+    core.postMessage("{\"id\":1,\"channel\":\"add-task\",\"data\":{\"taskType\":\"quick\",\"source\":\"s\"}}");
+    try shell.expectMessageContaining("{\"id\":1,\"ok\":false,\"error\":\"MissingTaskId\"}");
+}
+
+test "add-task without a source is an error reply" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try helpers.createCore(&shell, 1, 1);
+    defer core.destroy();
+    core.postMessage("{\"id\":1,\"channel\":\"add-task\",\"data\":{\"taskType\":\"quick\",\"taskId\":\"x\"}}");
+    try shell.expectMessageContaining("{\"id\":1,\"ok\":false,\"error\":\"MissingSource\"}");
 }
 
 test "messages sent from several tasks at once all arrive, in order within each task" {
@@ -537,6 +558,98 @@ test "a task on a platform with no host request callback gets HostCallbackMissin
     defer core.destroy();
     core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"h3\",\"taskType\":\"host-request\",\"source\":\"src\",\"data\":{\"method\":\"exportFile\"},\"priority\":\"background\"}}");
     try shell.expectMessageContaining("HostCallbackMissing");
+}
+
+test "askShell gives the shell's answer, and the caller owns exactly what it gives and nothing else" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const config = shell.config(1, 1);
+    const answer = try ziggy.task_runner.askShell(&config, std.testing.allocator, "exportFile", "{\"key\":\"value\"}");
+    defer std.testing.allocator.free(answer);
+    try std.testing.expectEqualStrings("{\"method\":\"exportFile\",\"request\":{\"key\":\"value\"}}", answer);
+}
+
+test "askShell fails with the shell's reason when the shell could not do what was asked" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const config = shell.config(1, 1);
+    try std.testing.expectError(error.Thrown, ziggy.task_runner.askShell(&config, std.testing.allocator, "fail", "null"));
+    try std.testing.expectEqualStrings("fail failed: The phone said no.", utils.errors.lastErrorMessage());
+}
+
+test "askShell fails naming the method when the shell gave no host request callback" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    var config = shell.config(1, 1);
+    config.host_request = null;
+    try std.testing.expectError(error.Thrown, ziggy.task_runner.askShell(&config, std.testing.allocator, "exportFile", "null"));
+    try std.testing.expectEqualStrings("exportFile needs the phone's shell, and this program has none.", utils.errors.lastErrorMessage());
+}
+
+fn hostRequesterTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = data;
+    var storage: ziggy.task_runner.TaskHostRequester = undefined;
+    const requester = context.hostRequester(&storage) orelse {
+        return try context.arena.dupe(u8, "\"no requester\"");
+    };
+    return try requester.call(context.arena, "shareFile", "{\"name\":\"a.jpg\"}");
+}
+
+test "a task's host requester asks the shell through the host request callback" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const host_tasks = helpers.task_handlers ++ [_]ziggy.task_runner.TaskHandlerEntry{
+        .{ .name = "host-requester", .handler = hostRequesterTask },
+    };
+    var host_app = helpers.app;
+    host_app.tasks = &host_tasks;
+    const core = try ziggy.core.Core.create(std.testing.allocator, shell.config(1, 1), host_app);
+    defer core.destroy();
+    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"r1\",\"taskType\":\"host-requester\",\"source\":\"src\",\"data\":null,\"priority\":\"background\"}}");
+    try shell.expectMessageContaining("\"outputs\":{\"method\":\"shareFile\",\"request\":{\"name\":\"a.jpg\"}}");
+}
+
+test "a task has no host requester when the shell gave no host request callback" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const host_tasks = helpers.task_handlers ++ [_]ziggy.task_runner.TaskHandlerEntry{
+        .{ .name = "host-requester", .handler = hostRequesterTask },
+    };
+    var host_app = helpers.app;
+    host_app.tasks = &host_tasks;
+    var config = shell.config(1, 1);
+    config.host_request = null;
+    const core = try ziggy.core.Core.create(std.testing.allocator, config, host_app);
+    defer core.destroy();
+    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"r2\",\"taskType\":\"host-requester\",\"source\":\"src\",\"data\":null,\"priority\":\"background\"}}");
+    try shell.expectMessageContaining("\"outputs\":\"no requester\"");
+}
+
+fn refusingPick(user_data: ?*anyopaque, kind: i32, title: ?[*:0]const u8, initial_name: ?[*:0]const u8, buffer: [*]u8, capacity: usize) callconv(.c) isize {
+    _ = user_data;
+    _ = kind;
+    _ = title;
+    _ = initial_name;
+    _ = buffer;
+    _ = capacity;
+    return -1;
+}
+
+test "a dialog the shell could not show fails the task with HostCallbackFailed" {
+    var shell: helpers.FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    var config = shell.config(1, 1);
+    config.pick_paths = refusingPick;
+    const core = try ziggy.core.Core.create(std.testing.allocator, config, helpers.app);
+    defer core.destroy();
+    core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"p1\",\"taskType\":\"pick-open\",\"source\":\"src\",\"data\":null,\"priority\":\"background\"}}");
+    try shell.expectMessageContaining("\"errorMessage\":\"HostCallbackFailed\"");
 }
 
 test "task-completed carries the full task result: the task's type and its input" {

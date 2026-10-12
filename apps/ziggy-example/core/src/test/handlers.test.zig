@@ -273,3 +273,42 @@ test "the keep-alive background task counts in a file in the data directory and 
     defer shell.mutex.unlock(shell.threaded.io());
     try std.testing.expectEqualSlices(bool, &[_]bool{ true, false }, shell.keep_alive_calls.items);
 }
+
+test "file-roundtrip without text is an error reply" {
+    var shell: FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try createCore(&shell, "/tmp");
+    defer core.destroy();
+    core.postMessage("{\"id\":1,\"channel\":\"file-roundtrip\",\"data\":{}}");
+    try shell.expectMessageContaining("{\"id\":1,\"ok\":false,\"error\":\"MissingText\"}");
+}
+
+fn refusingOsVersion(user_data: ?*anyopaque, buffer: [*]u8, capacity: usize) callconv(.c) isize {
+    _ = user_data;
+    _ = buffer;
+    _ = capacity;
+    return -1;
+}
+
+test "os-version fails clearly when the shell cannot answer" {
+    var shell: FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    var config = shell.config(1, 1);
+    config.os_version = refusingOsVersion;
+    const core = try ziggy.core.Core.create(std.testing.allocator, config, example.app);
+    defer core.destroy();
+    try addTask(core, "t1", "os-version", "null");
+    try shell.expectMessageContaining("\"status\":\"failed\",\"error\":{\"message\":\"HostCallbackFailed\"},\"errorMessage\":\"HostCallbackFailed\"");
+}
+
+test "a background task without a file to count in fails with MissingFile" {
+    var shell: FakeShell = undefined;
+    shell.init(std.testing.allocator);
+    defer shell.deinit();
+    const core = try createCore(&shell, "/tmp");
+    defer core.destroy();
+    try addTask(core, "bm", "background-normal", "{\"durationMs\":300}");
+    try shell.expectMessageContaining("\"errorMessage\":\"MissingFile\"");
+}

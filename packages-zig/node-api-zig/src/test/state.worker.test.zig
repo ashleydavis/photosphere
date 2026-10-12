@@ -412,6 +412,34 @@ test "a feed item naming a colour nobody defined loses the colour and keeps the 
     try expectOneFeedItem("good", "A real item", result, "news.feed");
 }
 
+test "a feed item's colour, duration and link are read back with it" {
+    var sandbox: Sandbox = undefined;
+    try sandbox.init();
+    defer sandbox.deinit();
+    try sandbox.writeStateText(
+        \\news:
+        \\  feed:
+        \\    - id: good
+        \\      message: A real item
+        \\      color: success
+        \\      duration: 5000
+        \\      link: https://example.com/release
+        \\
+    );
+
+    const result = try sandbox.readState(STATE_PATH);
+
+    const feed = at(result, "news.feed").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), feed.len);
+    const item = feed[0].object;
+    try std.testing.expectEqual(@as(usize, 5), item.count());
+    try std.testing.expectEqualStrings("good", item.get("id").?.string);
+    try std.testing.expectEqualStrings("A real item", item.get("message").?.string);
+    try std.testing.expectEqualStrings("success", item.get("color").?.string);
+    try std.testing.expectEqual(@as(i64, 5000), item.get("duration").?.integer);
+    try std.testing.expectEqualStrings("https://example.com/release", item.get("link").?.string);
+}
+
 test "writing the news state leaves the interface's keys alone" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();

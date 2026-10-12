@@ -83,13 +83,6 @@ const SyncBatcher = struct {
     // Accumulates changes and flushes them as sync-batch task messages in groups of SYNC_BATCH_SIZE.
     pendingBatch: std.ArrayList(ISyncChange) = .empty,
 
-    // The error the first failed flush ended with, or null when none has failed. (Zig: onLocalChange returns nothing,
-    // so a flush that fails inside it records its error here and the handler throws it once syncDatabases has returned.)
-    failure: ?anyerror = null,
-
-    // The error message the first failed flush ended with.
-    errorRecord: errors.ErrorRecord = .{},
-
     //
     // Sends the pending changes as one sync-batch message.
     //
@@ -132,21 +125,11 @@ const SyncBatcher = struct {
     //
     // Adds a change to the pending batch, flushing the batch when it is full.
     //
-    fn onLocalChange(callbackContext: ?*anyopaque, change: ISyncChange) void {
+    fn onLocalChange(callbackContext: ?*anyopaque, change: ISyncChange) anyerror!void {
         const self: *SyncBatcher = @ptrCast(@alignCast(callbackContext.?));
-        if (self.failure != null) {
-            return;
-        }
-        self.pendingBatch.append(self.allocator, change) catch |err| {
-            self.failure = err;
-            errors.captureError(&self.errorRecord);
-            return;
-        };
+        try self.pendingBatch.append(self.allocator, change);
         if (self.pendingBatch.items.len >= SYNC_BATCH_SIZE) {
-            self.flushBatch() catch |err| {
-                self.failure = err;
-                errors.captureError(&self.errorRecord);
-            };
+            try self.flushBatch();
         }
     }
 };
@@ -247,11 +230,6 @@ fn syncDatabase(
             .function = SyncBatcher.onLocalChange,
         },
     );
-
-    if (batcher.failure) |failure| {
-        errors.restoreError(&batcher.errorRecord);
-        return failure;
-    }
 
     // Flush any remaining changes that didn't fill a full batch.
     try batcher.flushBatch();

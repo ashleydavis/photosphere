@@ -183,6 +183,27 @@ test "reuse keeps the existing secret and does not overwrite it" {
     try expectStored(&store, "geo-secret", "pre-existing", "pre-existing");
 }
 
+test "reuse keeps every existing secret of each kind and does not overwrite them" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var store = try FakeSecretStore.init(allocator, &.{ "s3-secret", "enc-secret", "geo-secret" });
+    var resolver: FixedResolver = .{
+        .resolution = .{
+            .action = .reuse,
+        },
+    };
+
+    const resolvedKeys = try importShareSecrets(allocator, fullPayload(), store.secretStore(), resolver.resolver());
+
+    try std.testing.expectEqual(@as(usize, 3), resolver.asked.items.len);
+    try std.testing.expectEqualStrings("s3-secret", resolvedKeys.s3Key.?);
+    try std.testing.expectEqualStrings("enc-secret", resolvedKeys.encryptionKey.?);
+    try expectStored(&store, "s3-secret", "pre-existing", "pre-existing");
+    try expectStored(&store, "enc-secret", "pre-existing", "pre-existing");
+    try expectStored(&store, "geo-secret", "pre-existing", "pre-existing");
+}
+
 test "rename stores the incoming secret under the new name" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

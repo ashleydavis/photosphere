@@ -174,9 +174,9 @@ const RepairState = struct {
     //
     // Repairs a single file.
     //
-    fn repairFile(self: *RepairState, fileName: []const u8, expectedHash: []const u8) bool {
+    fn repairFile(self: *RepairState, fileName: []const u8, expectedHash: []const u8) !bool {
         return self.tryRepairFile(fileName, expectedHash) catch |err| {
-            log.@"error"(std.fmt.allocPrint(self.allocator, "Error repairing file {s}: {s}", .{ fileName, errors.errorMessage(err) }) catch "Error repairing file");
+            log.@"error"(try std.fmt.allocPrint(self.allocator, "Error repairing file {s}: {s}", .{ fileName, errors.errorMessage(err) }));
             return false;
         };
     }
@@ -256,7 +256,7 @@ const RepairState = struct {
             // File is missing - try to repair.
             reportProgress(self.progressCallback, "Repairing missing file: {s}", .{fileName});
 
-            const repaired = self.repairFile(fileName, node.contentHash.?);
+            const repaired = try self.repairFile(fileName, node.contentHash.?);
             if (repaired) {
                 try self.repaired.append(allocator, fileName);
             }
@@ -282,7 +282,7 @@ const RepairState = struct {
                 // File is corrupted - try to repair.
                 reportProgress(self.progressCallback, "Repairing corrupted file: {s}", .{fileName});
 
-                const repaired = self.repairFile(fileName, node.contentHash.?);
+                const repaired = try self.repairFile(fileName, node.contentHash.?);
                 if (repaired) {
                     try self.repaired.append(allocator, fileName);
                 }

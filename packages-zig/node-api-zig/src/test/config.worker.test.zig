@@ -779,3 +779,68 @@ test "the settings the interface names: a setting the state file holds is not an
     try expectMissing(result, "settings.gallerySort");
     try expectMissing(result, "settings.sidebar-collapsed-databases");
 }
+
+test "the settings the interface names: a switch is written as a boolean and read back by name" {
+    var sandbox: Sandbox = undefined;
+    try sandbox.init();
+    defer sandbox.deinit();
+    try sandbox.writeConfig(
+        \\{"configPath":"config.yaml","entries":[{"key":"developerMode","value":true}]}
+    );
+
+    try expectBool(true, try sandbox.readConfig(CONFIG_PATH), "settings.developerMode");
+}
+
+test "the settings the interface names: the places automatic import watches are written as sources and read back by name" {
+    var sandbox: Sandbox = undefined;
+    try sandbox.init();
+    defer sandbox.deinit();
+    try sandbox.writeConfig(
+        \\{"configPath":"config.yaml","entries":[{"key":"autoImportSources","value":[{"type":"folder","path":"/photos","recurse":true}]}]}
+    );
+
+    const sources = at(try sandbox.readConfig(CONFIG_PATH), "settings.autoImportSources").?.array.items;
+    try std.testing.expectEqual(@as(usize, 1), sources.len);
+    try std.testing.expectEqualStrings("folder", sources[0].object.get("type").?.string);
+    try std.testing.expectEqualStrings("/photos", sources[0].object.get("path").?.string);
+}
+
+test "bad input to the handlers: a place to watch that is neither a folder nor an album fails rather than being dropped" {
+    var sandbox: Sandbox = undefined;
+    try sandbox.init();
+    defer sandbox.deinit();
+
+    try expectThrown("The config setting \"autoImportSources\" was given a place to watch that is not a folder or a device album.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+        \\{"configPath":"config.yaml","entries":[{"key":"autoImportSources","value":[{"type":"cloud"}]}]}
+    ), sandbox.taskContext.context.taskContext()));
+}
+
+test "bad input to the handlers: a list holding something other than text fails rather than being stored" {
+    var sandbox: Sandbox = undefined;
+    try sandbox.init();
+    defer sandbox.deinit();
+
+    try expectThrown("The config setting \"savedSearches\" was given a list that holds something other than text.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+        \\{"configPath":"config.yaml","entries":[{"key":"savedSearches","value":["beach",3]}]}
+    ), sandbox.taskContext.context.taskContext()));
+}
+
+test "bad input to the handlers: a value no setting can hold fails rather than being stored" {
+    var sandbox: Sandbox = undefined;
+    try sandbox.init();
+    defer sandbox.deinit();
+
+    try expectThrown("The config setting \"theme\" cannot hold that kind of value.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+        \\{"configPath":"config.yaml","entries":[{"key":"theme","value":{"name":"dark"}}]}
+    ), sandbox.taskContext.context.taskContext()));
+}
+
+test "bad input to the handlers: a number for a switch fails rather than being stored" {
+    var sandbox: Sandbox = undefined;
+    try sandbox.init();
+    defer sandbox.deinit();
+
+    try expectThrown("The config setting \"developerMode\" cannot hold a value of that type.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+        \\{"configPath":"config.yaml","entries":[{"key":"developerMode","value":1}]}
+    ), sandbox.taskContext.context.taskContext()));
+}

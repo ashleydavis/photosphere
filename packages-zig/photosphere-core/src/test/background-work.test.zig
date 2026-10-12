@@ -31,6 +31,8 @@ const ScriptedHost = struct {
     events: std.ArrayList([]const u8),
     // The request the last plan was asked with, as JSON text.
     last_plan_request: ?[]const u8,
+    // How many steps run before the host says the loop was stopped, or null when it is never stopped that way.
+    stop_after_steps: ?usize,
 
     const vtable: LoopHost.VTable = .{
         .readPlan = readPlan,
@@ -115,8 +117,11 @@ const ScriptedHost = struct {
     }
 
     fn isStopped(ptr: *anyopaque) bool {
-        _ = ptr;
-        return false;
+        const self: *ScriptedHost = @ptrCast(@alignCast(ptr));
+        const limit = self.stop_after_steps orelse {
+            return false;
+        };
+        return self.steps_run >= limit;
     }
 };
 
@@ -132,6 +137,7 @@ fn newHost(plans: []const []const u8, step_results: []const IStepResult, pauses_
         .pauses = .empty,
         .events = .empty,
         .last_plan_request = null,
+        .stop_after_steps = null,
     };
 }
 
@@ -325,6 +331,39 @@ test "the prefetch loop is stalled and keeps going when a step does not succeed"
     try std.testing.expectEqual(ReplicaState.stalled, state.load(.acquire));
     try std.testing.expectEqualStrings("error Prefetch step \"prefetch-database\" did not succeed.", host.events.items[host.events.items.len - 2]);
     try std.testing.expectEqual(@as(usize, 1), host.pauses.items.len);
+}
+
+test "the import loop reports a step that did not succeed while it was being stopped" {
+    const plan = "{\"shouldRun\":true,\"databasePath\":\"photos\",\"pauseBetweenRunsMs\":10,\"steps\":[{\"type\":\"first\",\"data\":{}},{\"type\":\"second\",\"data\":{}}]}";
+    var host = newHost(&.{plan}, &.{failed}, 5);
+    host.stop_after_steps = 1;
+    defer host.deinit();
+    background_work.runImportLoop(std.testing.allocator, host.host());
+    try expectEvents(&host, &.{
+        "plan plan-auto-import",
+        "awake true",
+        "report Automatic import running into \"photos\".",
+        "step first",
+        "error Automatic import step \"first\" did not succeed.",
+        "awake false",
+    });
+}
+
+test "the prefetch loop is stalled and reports a step that did not succeed while it was being stopped" {
+    var host = newHost(&.{prefetch_plan}, &.{failed}, 5);
+    host.stop_after_steps = 1;
+    defer host.deinit();
+    var state: std.atomic.Value(ReplicaState) = .init(.unknown);
+    background_work.runPrefetchLoop(std.testing.allocator, host.host(), &state);
+    try std.testing.expectEqual(ReplicaState.stalled, state.load(.acquire));
+    try expectEvents(&host, &.{
+        "plan plan-prefetch",
+        "awake true",
+        "report Filling in \"replica\".",
+        "step prefetch-database",
+        "error Prefetch step \"prefetch-database\" did not succeed.",
+        "awake false",
+    });
 }
 
 test "the prefetch loop says why it is not running and keeps asking" {

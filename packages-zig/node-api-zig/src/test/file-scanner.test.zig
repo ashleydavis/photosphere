@@ -144,15 +144,24 @@ const Progress = struct {
     fn record(context: ?*anyopaque, currentlyScanning: ?[]const u8, state: *const ScannerState) void {
         const self: *Progress = @ptrCast(@alignCast(context.?));
         self.reported = true;
-        self.currentPath = if (currentlyScanning) |scanning| (self.allocator.dupe(u8, scanning) catch null) else null;
+        self.currentPath = if (currentlyScanning) |scanning| (self.allocator.dupe(u8, scanning) catch |err| {
+            std.debug.panic("The progress recorder could not copy the current path: {s}", .{@errorName(err)});
+        }) else null;
         if (currentlyScanning) |scanning| {
             if (scanning.len > 0) {
-                self.updates.append(self.allocator, self.allocator.dupe(u8, scanning) catch "") catch {};
+                const copy = self.allocator.dupe(u8, scanning) catch |err| {
+                    std.debug.panic("The progress recorder could not copy a path: {s}", .{@errorName(err)});
+                };
+                self.updates.append(self.allocator, copy) catch |err| {
+                    std.debug.panic("The progress recorder could not keep a path: {s}", .{@errorName(err)});
+                };
             }
         }
         self.numFilesIgnored = state.numFilesIgnored;
         self.numFilesFailed = state.numFilesFailed;
-        self.stateCurrentlyScanning = if (state.currentlyScanning) |scanning| (self.allocator.dupe(u8, scanning) catch null) else null;
+        self.stateCurrentlyScanning = if (state.currentlyScanning) |scanning| (self.allocator.dupe(u8, scanning) catch |err| {
+            std.debug.panic("The progress recorder could not copy the path the state holds: {s}", .{@errorName(err)});
+        }) else null;
     }
 };
 
@@ -1016,9 +1025,15 @@ test "should handle zip file with only directories" {
 //
 fn replaceFileWithDirectory(filePath: []const u8) void {
     const io = std.testing.io;
-    utils.sleep.sleep(io, 10) catch {};
-    std.Io.Dir.cwd().deleteFile(io, filePath) catch {};
-    std.Io.Dir.cwd().createDirPath(io, filePath) catch {};
+    utils.sleep.sleep(io, 10) catch |err| {
+        std.debug.panic("The file changer could not wait: {s}", .{@errorName(err)});
+    };
+    std.Io.Dir.cwd().deleteFile(io, filePath) catch |err| {
+        std.debug.panic("The file changer could not delete the file: {s}", .{@errorName(err)});
+    };
+    std.Io.Dir.cwd().createDirPath(io, filePath) catch |err| {
+        std.debug.panic("The file changer could not make the directory: {s}", .{@errorName(err)});
+    };
 }
 
 test "should handle file that becomes directory during scan" {

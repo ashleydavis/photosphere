@@ -11,7 +11,7 @@ Invoke: `bun run --filter=ziggy sync:android -- [options]`
 
 What it does:
 
-0. Fetches ImageMagick (`scripts/fetch-mobile-media-tools.sh android`), which the app runs inside its own process because Android has no `magick` program. The libraries and headers go into git-ignored directories of `apps/android-frontend` and the Photosphere Android project links and packages them from there; the fetch skips what is already present. ffmpeg and ffprobe come from the FFmpegKit Maven dependency, with no fetch.
+0. Runs `scripts/fetch-mobile-media-tools.sh android`, which fetches prebuilt ImageMagick libraries and headers for Android into git-ignored directories and skips what is already present. Nothing in Photosphere's Android project uses them: ImageMagick and FFmpeg are built from source into the core library by the root `build.zig` (the `media-tools-zig` package) and run in the app's own process.
 1. Writes a libc file per architecture from the NDK's sysroot. Zig has no C library for Android, so `zig build --libc <file>` is given the NDK's headers and libraries (the ones for the app's minimum SDK level).
 2. Builds `libphotosphere.so` per architecture with the `photosphere-core` step of the root `build.zig` (`zig build photosphere-core -Dtarget=<arch>-linux-android`) and copies it to `jniLibs/<abi>/`. A library of an architecture not asked for is removed, by name.
 3. Builds the page (`bun run bundle:ui`) before the library, because the library embeds it. The library is where the shell finds the page, so nothing of the page goes into the assets.

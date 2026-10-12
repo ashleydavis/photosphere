@@ -114,7 +114,7 @@ test "extractScreenshot writes the frame the ffmpeg command writes" {
     std.testing.io.random(&random_bytes);
     const dir = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/video-test-{x}", .{std.mem.readInt(u64, &random_bytes, .little)});
     try std.Io.Dir.cwd().createDirPath(std.testing.io, dir);
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ dir, @errorName(err) });
     const screenshotPath = try std.fs.path.join(allocator, &.{ dir, "screenshot.jpg" });
     const referencePath = try std.fs.path.join(allocator, &.{ dir, "reference.jpg" });
 
@@ -177,7 +177,7 @@ test "getInfo reads the creation time of a silent video" {
     const allocator = arena.allocator();
     try requireFfmpeg(allocator);
     const dir = try makeTempDir(allocator, "creation-time");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ dir, @errorName(err) });
 
     // A tenth of a second of 32x16 video at 10 frames a second, with no audio and a creation_time tag.
     const videoPath = try std.fs.path.join(allocator, &.{ dir, "silent.mp4" });
@@ -203,7 +203,7 @@ test "getInfo fails for a file with no video stream" {
     const allocator = arena.allocator();
     try requireFfmpeg(allocator);
     const dir = try makeTempDir(allocator, "audio-only");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ dir, @errorName(err) });
     const audioPath = try std.fs.path.join(allocator, &.{ dir, "audio.m4a" });
     _ = try runTool(allocator, &.{ "ffmpeg", "-v", "quiet", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.1", "-y", audioPath });
 
@@ -229,7 +229,7 @@ test "extractScreenshot fails loudly when ffmpeg cannot write the screenshot" {
     const allocator = arena.allocator();
     try requireFfmpeg(allocator);
     const dir = try makeTempDir(allocator, "screenshot-fails");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ dir, @errorName(err) });
     const screenshotPath = try std.fs.path.join(allocator, &.{ dir, "missing", "screenshot.jpg" });
     var video = Video.init(allocator, std.testing.io, null, "../test/multiple-files/test.mp4");
     try std.testing.expectError(error.Thrown, video.extractScreenshot(allocator, std.testing.io, null, screenshotPath, 0));

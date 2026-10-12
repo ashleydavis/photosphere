@@ -58,68 +58,6 @@ pub fn generateKeyPair(allocator: std.mem.Allocator, io: std.Io) !IKeyPair {
 }
 
 //
-// Export a public key to SPKI PEM string (same format as .pub files and .db/encryption.pub).
-//
-pub fn exportPublicKeyToPem(allocator: std.mem.Allocator, publicKey: *const crypto.PublicKey) ![]u8 {
-    return crypto.exportPublicKey(allocator, publicKey, .pem);
-}
-
-//
-// Returns a 32-byte SHA-256 hash of the public key (SPKI format).
-// Used in the encrypted file header to identify which key encrypted the file.
-//
-pub fn hashPublicKey(allocator: std.mem.Allocator, publicKey: *const crypto.PublicKey) ![32]u8 {
-    const spki = try crypto.exportPublicKey(allocator, publicKey, .der);
-    var digest: [32]u8 = undefined;
-    std.crypto.hash.sha2.Sha256.hash(spki, &digest, .{});
-    return digest;
-}
-
-//
-// Load encryption keys from PEM strings without touching the filesystem.
-// Accepts an array of { privateKeyPem, publicKeyPem } objects.
-// The first entry becomes the default encryption (write) key.
-//
-// @param keyPems Array of PEM key pair objects
-// @returns Storage options with encryption keys, or empty object if array is empty
-//
-pub fn loadEncryptionKeysFromPem(allocator: std.mem.Allocator, keyPems: []const IEncryptionKeyPem) !ILoadedEncryptionKeys {
-    if (keyPems.len == 0) {
-        return ILoadedEncryptionKeys{ .options = .{}, .isEncrypted = false };
-    }
-
-    var decryptionKeyMap: IPrivateKeyMap = .empty;
-    var encryptionPublicKey: ?*const crypto.PublicKey = null;
-
-    for (keyPems, 0..) |keyPem, index| {
-        const privateKey = try crypto.createPrivateKey(allocator, keyPem.privateKeyPem);
-        const publicKey = try crypto.createPublicKey(allocator, keyPem.publicKeyPem);
-
-        const keyHash = try hashPublicKey(allocator, publicKey);
-        const keyHashHex = try allocator.dupe(u8, &std.fmt.bytesToHex(keyHash, .lower));
-        try decryptionKeyMap.put(allocator, keyHashHex, privateKey);
-
-        if (index == 0) {
-            try decryptionKeyMap.put(allocator, "default", privateKey);
-            encryptionPublicKey = publicKey;
-        }
-    }
-
-    if (encryptionPublicKey == null or decryptionKeyMap.get("default") == null) {
-        return ILoadedEncryptionKeys{ .options = .{}, .isEncrypted = false };
-    }
-
-    return ILoadedEncryptionKeys{
-        .options = .{
-            .decryptionKeyMap = decryptionKeyMap,
-            .encryptionPublicKey = encryptionPublicKey,
-        },
-        .isEncrypted = true,
-    };
-}
-
-
-//
 // Save a key pair to files: the private key at keyFilePath and the public key beside it at keyFilePath plus ".pub".
 //
 // @param keyPair The key pair to save
@@ -149,11 +87,11 @@ pub fn loadPrivateKey(allocator: std.mem.Allocator, io: std.Io, keyFilePath: []c
     }
 
     const privateKeyPem = node_utils.node_fs.readFile(allocator, io, keyFilePath) catch |err| {
-        logLoadFailure(allocator, "private", keyFilePath, err);
+        utils.console.errorFormat("Error loading private key from {s}: {s}: {s}", .{ keyFilePath, utils.errors.errorName(err), utils.errors.errorMessage(err) });
         return null;
     };
     return crypto.createPrivateKey(allocator, privateKeyPem) catch |err| {
-        logLoadFailure(allocator, "private", keyFilePath, err);
+        utils.console.errorFormat("Error loading private key from {s}: {s}: {s}", .{ keyFilePath, utils.errors.errorName(err), utils.errors.errorMessage(err) });
         return null;
     };
 }
@@ -170,11 +108,11 @@ pub fn loadPublicKey(allocator: std.mem.Allocator, io: std.Io, keyFilePath: []co
     }
 
     const publicKeyPem = node_utils.node_fs.readFile(allocator, io, keyFilePath) catch |err| {
-        logLoadFailure(allocator, "public", keyFilePath, err);
+        utils.console.errorFormat("Error loading public key from {s}: {s}: {s}", .{ keyFilePath, utils.errors.errorName(err), utils.errors.errorMessage(err) });
         return null;
     };
     return crypto.createPublicKey(allocator, publicKeyPem) catch |err| {
-        logLoadFailure(allocator, "public", keyFilePath, err);
+        utils.console.errorFormat("Error loading public key from {s}: {s}: {s}", .{ keyFilePath, utils.errors.errorName(err), utils.errors.errorMessage(err) });
         return null;
     };
 }
@@ -208,9 +146,136 @@ pub fn loadOrGenerateKeyPair(allocator: std.mem.Allocator, io: std.Io, keyFilePa
 }
 
 //
-// Logs that a key file could not be loaded, naming the kind of key and the file.
+// Export a public key to SPKI PEM string (same format as .pub files and .db/encryption.pub).
 //
-fn logLoadFailure(allocator: std.mem.Allocator, keyKind: []const u8, keyFilePath: []const u8, err: anyerror) void {
-    const message = std.mem.concat(allocator, u8, &.{ "Error loading ", keyKind, " key from ", keyFilePath, ":" }) catch "Error loading key:";
-    utils.log.log.exception(message, err);
+pub fn exportPublicKeyToPem(allocator: std.mem.Allocator, publicKey: *const crypto.PublicKey) ![]u8 {
+    return crypto.exportPublicKey(allocator, publicKey, .pem);
+}
+
+//
+// Returns a 32-byte SHA-256 hash of the public key (SPKI format).
+// Used in the encrypted file header to identify which key encrypted the file.
+//
+pub fn hashPublicKey(allocator: std.mem.Allocator, publicKey: *const crypto.PublicKey) ![32]u8 {
+    const spki = try crypto.exportPublicKey(allocator, publicKey, .der);
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(spki, &digest, .{});
+    return digest;
+}
+
+//
+// Load encryption keys from PEM strings without touching the filesystem.
+// Accepts an array of { privateKeyPem, publicKeyPem } objects.
+// The first entry becomes the default encryption (write) key.
+//
+// @param keyPems Array of PEM key pair objects
+// @returns Storage options with encryption keys, or empty object if array is empty
+//
+pub fn loadEncryptionKeysFromPem(allocator: std.mem.Allocator, keyPems: []const IEncryptionKeyPem) !ILoadedEncryptionKeys {
+    if (keyPems.len == 0) {
+        return ILoadedEncryptionKeys{
+            .options = .{},
+            .isEncrypted = false,
+        };
+    }
+
+    var decryptionKeyMap: IPrivateKeyMap = .empty;
+    var encryptionPublicKey: ?*const crypto.PublicKey = null;
+
+    for (keyPems, 0..) |keyPem, index| {
+        const privateKey = try crypto.createPrivateKey(allocator, keyPem.privateKeyPem);
+        const publicKey = try crypto.createPublicKey(allocator, keyPem.publicKeyPem);
+
+        const keyHash = try hashPublicKey(allocator, publicKey);
+        const keyHashHex = try allocator.dupe(u8, &std.fmt.bytesToHex(keyHash, .lower));
+        try decryptionKeyMap.put(allocator, keyHashHex, privateKey);
+
+        if (index == 0) {
+            try decryptionKeyMap.put(allocator, "default", privateKey);
+            encryptionPublicKey = publicKey;
+        }
+    }
+
+    if (encryptionPublicKey == null or decryptionKeyMap.get("default") == null) {
+        return ILoadedEncryptionKeys{
+            .options = .{},
+            .isEncrypted = false,
+        };
+    }
+
+    return ILoadedEncryptionKeys{
+        .options = .{
+            .decryptionKeyMap = decryptionKeyMap,
+            .encryptionPublicKey = encryptionPublicKey,
+        },
+        .isEncrypted = true,
+    };
+}
+
+//
+// Load encryption keys for storage
+//
+// @param keyPaths Array of paths to key files (first is default/write key)
+// @param generateKey Whether to generate a key if it doesn't exist
+// @returns Storage options with encryption keys, or empty object if no key provided
+//
+pub fn loadEncryptionKeys(allocator: std.mem.Allocator, io: std.Io, keyPaths: []const []const u8, generateKey: bool) !ILoadedEncryptionKeys {
+    if (keyPaths.len == 0) {
+        return ILoadedEncryptionKeys{
+            .options = .{},
+            .isEncrypted = false,
+        };
+    }
+
+    var decryptionKeyMap: IPrivateKeyMap = .empty;
+    var encryptionPublicKey: ?*const crypto.PublicKey = null;
+
+    for (keyPaths, 0..) |keyPath, index| {
+        if (generateKey) {
+            const keyPair = (try loadOrGenerateKeyPair(allocator, io, keyPath, true)) orelse {
+                return utils.errors.throwError("Failed to generate key pair at {s}", .{keyPath});
+            };
+
+            const keyHash = try hashPublicKey(allocator, keyPair.publicKey);
+            const keyHashHex = try allocator.dupe(u8, &std.fmt.bytesToHex(keyHash, .lower));
+            try decryptionKeyMap.put(allocator, keyHashHex, keyPair.privateKey);
+
+            if (index == 0) {
+                try decryptionKeyMap.put(allocator, "default", keyPair.privateKey);
+                encryptionPublicKey = keyPair.publicKey;
+            }
+        }
+        else {
+            const privateKey = loadPrivateKey(allocator, io, keyPath) orelse {
+                return utils.errors.throwFatalError("Private key not found: {s}\nUse --generate-key to create a new key or specify an existing key file either in the current directory or in the ~/.config/photosphere/keys directory.", .{keyPath});
+            };
+
+            const publicKeyPath = try std.mem.concat(allocator, u8, &.{ keyPath, ".pub" });
+            const publicKey = loadPublicKey(allocator, io, publicKeyPath) orelse crypto.createPublicKeyFromPrivateKey(privateKey);
+
+            const keyHash = try hashPublicKey(allocator, publicKey);
+            const keyHashHex = try allocator.dupe(u8, &std.fmt.bytesToHex(keyHash, .lower));
+            try decryptionKeyMap.put(allocator, keyHashHex, privateKey);
+
+            if (index == 0) {
+                try decryptionKeyMap.put(allocator, "default", privateKey);
+                encryptionPublicKey = publicKey;
+            }
+        }
+    }
+
+    if (encryptionPublicKey == null or decryptionKeyMap.get("default") == null) {
+        return ILoadedEncryptionKeys{
+            .options = .{},
+            .isEncrypted = false,
+        };
+    }
+
+    return ILoadedEncryptionKeys{
+        .options = .{
+            .decryptionKeyMap = decryptionKeyMap,
+            .encryptionPublicKey = encryptionPublicKey,
+        },
+        .isEncrypted = true,
+    };
 }

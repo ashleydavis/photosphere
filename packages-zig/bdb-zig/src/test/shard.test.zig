@@ -330,6 +330,22 @@ test "BsonShard commit persists records and clears dirty flag" {
     try std.testing.expect(storage.getFile("collections/test/shards/s1.dat") != null);
 }
 
+//
+// The shard file holds each record's own `_id` as 16 bytes, so a record whose `_id` is not a record id cannot be
+// written, even when it was stored under a valid key.
+//
+test "BsonShard commit throws for a record whose _id is not a record id" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    var shard = newTestShard(allocator, "s1", &storage);
+    try shard.setRecord(io, recordId1, try makeRecord(allocator, "not-a-record-id", "hello"));
+
+    try std.testing.expectError(error.Thrown, shard.commit(io));
+    try std.testing.expectEqualStrings("Invalid record ID not-a-record-id with length 0", errors.lastErrorMessage());
+}
+
 test "BsonShard commit round-trips records through storage" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

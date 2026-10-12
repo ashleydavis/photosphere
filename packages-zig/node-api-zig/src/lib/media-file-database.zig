@@ -1024,7 +1024,7 @@ fn removeAssetUnderLock(
     if (removed) {
         var databaseMetadata = merkleTree.databaseMetadata orelse try emptyDatabaseMetadata(allocator);
         const filesImported = databaseMetadata.get("filesImported") orelse BsonValue.undefined;
-        const filesImportedNumber = bdb.js_value.toNumber(allocator, filesImported) catch std.math.nan(f64);
+        const filesImportedNumber = try bdb.js_value.toNumber(allocator, filesImported);
         if (filesImported != .undefined and filesImportedNumber > 0) {
             try databaseMetadata.put(allocator, "filesImported", .{
                 .number = filesImportedNumber - 1,

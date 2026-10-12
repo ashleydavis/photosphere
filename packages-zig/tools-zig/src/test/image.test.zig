@@ -167,7 +167,7 @@ test "resize refuses when the second output path is already taken" {
     const allocator = arena.allocator();
     try requireImageMagick(allocator);
     const tempDir = try makeTempDir(allocator, "resize-second-output");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
     var generator: FixedUuidGenerator = .{ .id = "second" };
     var image = Image.init("../test/test.png");
 
@@ -215,7 +215,7 @@ test "resize writes the image the resize command writes" {
     const allocator = arena.allocator();
     try requireImageMagick(allocator);
     const tempDir = try makeTempDir(allocator, "resize");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
     var generator: FixedUuidGenerator = .{ .id = "fixed-id" };
 
     var image = Image.init("../test/test.jpg");
@@ -246,7 +246,7 @@ test "transform writes the image the transform command writes" {
     const allocator = arena.allocator();
     try requireImageMagick(allocator);
     const tempDir = try makeTempDir(allocator, "transform");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
     var generator: FixedUuidGenerator = .{ .id = "fixed-id" };
 
     var image = Image.init("../test/test.png");
@@ -321,7 +321,7 @@ test "resize to only a width or only a height keeps the aspect ratio" {
     const allocator = arena.allocator();
     try requireImageMagick(allocator);
     const tempDir = try makeTempDir(allocator, "resize-one-side");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
     var image = Image.init("../test/test.png");
 
     // The 100x90 PNG to 50 wide is 50x45 (`-resize 50x`), written in the format of the extension (no format given).
@@ -346,7 +346,7 @@ test "resize refuses a quality outside 0 to 100" {
     const allocator = arena.allocator();
     try requireImageMagick(allocator);
     const tempDir = try makeTempDir(allocator, "resize-quality");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
     var generator: FixedUuidGenerator = .{ .id = "quality" };
     var image = Image.init("../test/test.png");
     try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, null, .{ .width = 10, .height = 0, .quality = 101, .format = null, .ext = "jpg" }, tempDir, generator.uuidGenerator()));
@@ -361,7 +361,7 @@ test "resize of an animation returns the first frame ImageMagick writes" {
     const allocator = arena.allocator();
     try requireImageMagick(allocator);
     const tempDir = try makeTempDir(allocator, "resize-animation");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
 
     // A two frame GIF resized to PNG is written as <base>-0.png and <base>-1.png, so the validation moves on to the
     // second output path.
@@ -383,7 +383,7 @@ test "resize fails loudly when ImageMagick writes nothing" {
     const allocator = arena.allocator();
     try requireImageMagick(allocator);
     const tempDir = try makeTempDir(allocator, "resize-nothing");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
 
     // An output directory that does not exist: ImageMagick fails and nothing is written.
     const missingDir = try std.fs.path.join(allocator, &.{ tempDir, "missing" });
@@ -442,7 +442,7 @@ test "transform fails loudly when ImageMagick writes nothing" {
     const allocator = arena.allocator();
     try requireImageMagick(allocator);
     const tempDir = try makeTempDir(allocator, "transform-nothing");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch {};
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
     const missingDir = try std.fs.path.join(allocator, &.{ tempDir, "missing" });
     var generator: FixedUuidGenerator = .{ .id = "nothing" };
     var image = Image.init("../test/test.png");

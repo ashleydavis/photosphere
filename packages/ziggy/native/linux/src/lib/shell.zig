@@ -11,6 +11,7 @@ const z = @import("c");
 const menu_keys = @import("menu-keys.zig");
 const geometry_lib = @import("geometry.zig");
 const ui_files = @import("ui-files");
+const host_reply = @import("host-reply");
 
 // The URL scheme the bundled page is served under. WebKitGTK asks the shell for each file instead of reading a directory.
 const app_scheme = "ziggy-app";
@@ -531,14 +532,9 @@ fn hostRequest(user_data: ?*anyopaque, method: [*c]const u8, request_json: [*c]c
             break :blk text;
         }
         failed = true;
-        break :blk std.fmt.bufPrint(&reason_buffer, "The Photosphere Linux app cannot do \"{s}\".", .{method_name}) catch "The request is not known.";
+        break :blk std.fmt.bufPrint(&reason_buffer, "The {s} Linux app cannot do \"{s}\".", .{ shell.app_config.title, method_name }) catch "The request is not known.";
     };
-    if (answer.len > capacity) {
-        return -1;
-    }
-    @memcpy(buffer[0..answer.len], answer);
-    const length: isize = @intCast(answer.len);
-    return if (failed) -length else length;
+    return host_reply.writeHostReply(!failed, method_name, answer, buffer, capacity);
 }
 
 //
@@ -548,7 +544,9 @@ fn holdAwakeOnMainThread(user_data: ?*anyopaque) callconv(.c) c.gboolean {
     const shell: *Shell = @ptrCast(@alignCast(user_data.?));
     shell.awake_holds += 1;
     if (shell.awake_holds == 1) {
-        shell.inhibit_cookie = c.gtk_application_inhibit(shell.application, shell.window, c.GTK_APPLICATION_INHIBIT_SUSPEND, "Photosphere is working in the background");
+        const reason = std.fmt.allocPrintSentinel(std.heap.c_allocator, "{s} is working in the background", .{shell.app_config.title}, 0) catch @panic("out of memory holding the computer awake");
+        defer std.heap.c_allocator.free(reason);
+        shell.inhibit_cookie = c.gtk_application_inhibit(shell.application, shell.window, c.GTK_APPLICATION_INHIBIT_SUSPEND, reason.ptr);
     }
     return 0;
 }

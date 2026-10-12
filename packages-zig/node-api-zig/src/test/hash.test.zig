@@ -282,3 +282,17 @@ test "validateAndHash returns undefined for a file that fails its validation" {
 
     try std.testing.expect(try hash.validateAndHash(allocator, io, null, filePath, .{ .length = 17, .lastModified = 42 }, "image/png", "broken.png") == null);
 }
+
+test "computeFileHash passes on a failure to open the file that is not a missing file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const workingDir = try temp_dirs.makeTempDir(allocator, io, "compute-file-hash-not-dir");
+    defer temp_dirs.removeTempDir(io, workingDir);
+    const filePath = try writeTestFile(allocator, io, workingDir, "plain.bin", "plain");
+
+    // A path that runs through a file names nothing that can be opened, and the error says why rather than claiming the
+    // file is missing.
+    try std.testing.expectError(error.NotDir, hash.computeFileHash(allocator, io, try std.fs.path.join(allocator, &.{ filePath, "inner.bin" }), null));
+}

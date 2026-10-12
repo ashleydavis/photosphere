@@ -1,7 +1,7 @@
 const std = @import("std");
-const serialization = @import("serialization-zig");
+const utils = @import("utils-zig");
 
-const js_date = serialization.js_date;
+const js_date = utils.js_date;
 
 //
 // Formats a time value with writeLocaleDateString.

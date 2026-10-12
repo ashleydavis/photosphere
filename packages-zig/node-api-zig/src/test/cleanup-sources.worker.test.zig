@@ -96,8 +96,12 @@ const CleanupTest = struct {
     // Puts the environment back and removes the directory.
     //
     fn deinit(self: *CleanupTest) void {
-        test_environment.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
-        test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
+        test_environment.setEnv("PHOTOSPHERE_TMP_DIR", null) catch |err| {
+            std.debug.panic("PHOTOSPHERE_TMP_DIR could not be put back: {s}", .{@errorName(err)});
+        };
+        test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch |err| {
+            std.debug.panic("PHOTOSPHERE_CACHE_DIR could not be put back: {s}", .{@errorName(err)});
+        };
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
     }

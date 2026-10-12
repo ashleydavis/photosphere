@@ -255,3 +255,163 @@ test "reports unmodified when metadata changed but content hash matches" {
     try std.testing.expectEqual(verify_worker.VerifyFileStatus.unmodified, result.status);
     try std.testing.expect(result.reasons == null);
 }
+
+test "verifyFileDataFromJson reads a value with no node and no storage descriptor as an empty leaf" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, "{}", .{});
+
+    const data = try verify_worker.verifyFileDataFromJson(allocator, parsed);
+
+    try std.testing.expect(data.node.name == null);
+    try std.testing.expect(data.node.contentHash == null);
+    try std.testing.expect(data.node.lastModified == null);
+    try std.testing.expectEqual(@as(u64, 0), data.node.size);
+    try std.testing.expectEqualStrings("", data.storageDescriptor.databasePath);
+    try std.testing.expect(data.storageDescriptor.encryptionKey == null);
+    try std.testing.expect(data.options == null);
+}
+
+//
+// Takes the node's timestamp away.
+//
+fn dropTimestamp(node: *SortNode) void {
+    node.lastModified = null;
+}
+
+test "verifyFileHandler fails like Bun for a changed file whose node has no timestamp" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH }), "changed");
+
+    try std.testing.expectError(error.Thrown, runHandler(allocator, io, databaseDir, THUMB_PATH, dropTimestamp));
+    try std.testing.expectEqualStrings("TypeError", utils.errors.lastErrorName());
+    try std.testing.expectEqualStrings("undefined is not an object (evaluating 'node.lastModified.toLocaleString')", utils.errors.lastErrorMessage());
+}
+
+//
+// A log with verbose logging switched on that keeps the verbose lines and drops everything else.
+//
+const VerboseRecordingLog = struct {
+    // Allocates the kept lines.
+    allocator: std.mem.Allocator,
+
+    // The verbose lines, in order.
+    lines: std.ArrayList([]const u8) = .empty,
+
+    // The log that was active before this one was installed.
+    previousLog: utils.log.ILog = undefined,
+
+    //
+    // Makes this the global log.
+    //
+    fn install(self: *VerboseRecordingLog) void {
+        self.previousLog = utils.log.log;
+        utils.log.setLog(.{
+            .ptr = self,
+            .vtable = &.{
+                .info = dropMessage,
+                .verbose = keepVerbose,
+                .@"error" = dropMessage,
+                .exception = dropException,
+                .warn = dropMessage,
+                .debug = dropMessage,
+                .tool = dropTool,
+                .event = dropMessage,
+                .verboseEnabled = verboseIsOn,
+                .getLogDetails = noLogDetails,
+            },
+        });
+    }
+
+    //
+    // Restores the log that was active before install.
+    //
+    fn uninstall(self: *VerboseRecordingLog) void {
+        utils.log.setLog(self.previousLog);
+    }
+
+    //
+    // Keeps a verbose line.
+    //
+    fn keepVerbose(ptr: *anyopaque, message: []const u8) void {
+        const self: *VerboseRecordingLog = @ptrCast(@alignCast(ptr));
+        const copy = self.allocator.dupe(u8, message) catch {
+            @panic("The test log ran out of memory.");
+        };
+        self.lines.append(self.allocator, copy) catch {
+            @panic("The test log ran out of memory.");
+        };
+    }
+
+    //
+    // Drops a message that is not verbose.
+    //
+    fn dropMessage(ptr: *anyopaque, message: []const u8) void {
+        _ = ptr;
+        _ = message;
+    }
+
+    //
+    // Drops an exception.
+    //
+    fn dropException(_: *anyopaque, _: []const u8, _: anyerror) void {}
+
+    //
+    // Drops tool output.
+    //
+    fn dropTool(ptr: *anyopaque, toolName: []const u8, data: utils.log.IToolOutput) void {
+        _ = ptr;
+        _ = toolName;
+        _ = data;
+    }
+
+    //
+    // Verbose logging is on.
+    //
+    fn verboseIsOn(ptr: *anyopaque) bool {
+        _ = ptr;
+        return true;
+    }
+
+    //
+    // Returns the placeholder log details.
+    //
+    fn noLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!utils.log.ILogDetails {
+        _ = ptr;
+        _ = allocator;
+        _ = io;
+        return utils.log.noLogDetails;
+    }
+};
+
+test "verifyFileHandler logs the reasons a file was modified when verbose logging is on" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH }), "changed");
+    var recordingLog: VerboseRecordingLog = .{
+        .allocator = allocator,
+    };
+    recordingLog.install();
+    defer recordingLog.uninstall();
+
+    _ = try runHandler(allocator, io, databaseDir, THUMB_PATH, changeSizeAndTimestamp);
+
+    var found = false;
+    for (recordingLog.lines.items) |line| {
+        if (std.mem.startsWith(u8, line, "Modified file: " ++ THUMB_PATH ++ " - size changed (1.5 KB → 7 B), timestamp changed (1/1/1970, 12:00:00 AM → ")) {
+            try std.testing.expect(std.mem.endsWith(u8, line, "), content hash changed"));
+            found = true;
+        }
+    }
+    try std.testing.expect(found);
+}

@@ -8,7 +8,7 @@ The `build.zig` at the root of the repository builds the core library for every 
 
 ## Commands
 
-Every command is a `package.json` script in `apps/photosphere`, run with `bun run --filter=ziggy <command>`. The root `package.json` mirrors each as `<job>:ziggy:<platform>`, for example `bun run build:ziggy:linux`, `bun run run:ziggy:android` and `bun run sync:ziggy:ios`. Run them with `bun run`, never by calling the shell script directly. The tool versions are pinned by `mise.toml`, so run `mise install` once from the repository root. Every script has a markdown file beside it in `scripts` that describes its arguments.
+Every command is a `package.json` script in `apps/photosphere`, run with `bun run --filter=ziggy <command>`. The root `package.json` mirrors the platform commands as `<job>:ziggy:<platform>`, for example `bun run build:ziggy:linux`, `bun run run:ziggy:android` and `bun run sync:ziggy:ios`. Run them with `bun run`, never by calling the shell script directly. The tool versions are pinned by `mise.toml`, so run `mise install` once from the repository root. Every script has a markdown file beside it in `scripts` that describes its arguments.
 
 | Command | What it does | Runs on |
 |---|---|---|
@@ -34,4 +34,4 @@ Every platform has its own native project under `shells/`, and every project is 
 
 - Zig: `zig build test` at the root of the repository, which runs the tests of every Zig package, Ziggy, the example and the CLI.
 - TypeScript: the pure functions in `apps/photosphere-frontend/src/lib` have unit tests in `apps/photosphere-frontend/src/test`. React components, contexts and hooks are not unit tested.
-- Smoke tests: [`apps/photosphere-smoke-tests`](../photosphere-smoke-tests/README.md).
+- Smoke tests: `bun run test:ziggy` on the host operating system, `bun run test:ziggy:and` on the Android emulator pool or a device, and `bun run test:ziggy:ios` on the iOS simulator or a connected iOS device (MacOS only), from the repository root. See [`apps/photosphere-smoke-tests`](../photosphere-smoke-tests/README.md).

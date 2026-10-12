@@ -223,7 +223,9 @@ const Hooks = struct {
     //
     fn onProgress(context: ?*anyopaque, progress: IAutoImportScannerProgress) void {
         const self: *Hooks = @ptrCast(@alignCast(context.?));
-        self.progressReports.append(self.allocator, progress.skippedAsAlreadyImported) catch {};
+        self.progressReports.append(self.allocator, progress.skippedAsAlreadyImported) catch |err| {
+            std.debug.panic("The progress report could not be kept: {s}", .{@errorName(err)});
+        };
     }
 
     //

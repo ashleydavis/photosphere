@@ -199,14 +199,15 @@ const MockBackend = struct {
             const idleFor = std.Io.Clock.real.now(io).toMilliseconds() - self.lastAddedAt;
             if (idleFor < self.idleMs) {
                 self.mutex.unlock(io);
-                utils.sleep.sleep(io, @intCast(self.idleMs - idleFor)) catch {};
+                utils.sleep.sleep(io, @intCast(self.idleMs - idleFor)) catch |err| {
+                    std.debug.panic("The mock backend could not wait before completing a task: {s}", .{@errorName(err)});
+                };
                 continue;
             }
             const completion = self.pendingCompletions.orderedRemove(0);
             self.inFlight -= 1;
-            const callbacks = backend_allocator.dupe(?WorkerTaskCompletionCallback, self.completionCallbacks.items) catch {
-                self.mutex.unlock(io);
-                return;
+            const callbacks = backend_allocator.dupe(?WorkerTaskCompletionCallback, self.completionCallbacks.items) catch |err| {
+                std.debug.panic("The mock backend could not copy its completion callbacks: {s}", .{@errorName(err)});
             };
             self.mutex.unlock(io);
             defer backend_allocator.free(callbacks);
@@ -214,12 +215,14 @@ const MockBackend = struct {
 
             var arena = std.heap.ArenaAllocator.init(backend_allocator);
             defer arena.deinit();
-            const result = std.json.parseFromSliceLeaky(ITaskResult, arena.allocator(), completion, .{}) catch {
-                return;
+            const result = std.json.parseFromSliceLeaky(ITaskResult, arena.allocator(), completion, .{}) catch |err| {
+                std.debug.panic("The mock backend could not read back a completion: {s}", .{@errorName(err)});
             };
             for (callbacks) |registration| {
                 if (registration) |callback| {
-                    callback.call(result) catch {};
+                    callback.call(result) catch |err| {
+                        std.debug.panic("The queue failed to take a completion from the mock backend: {s}", .{@errorName(err)});
+                    };
                 }
             }
         }
@@ -574,12 +577,14 @@ const MessageRecorder = struct {
     //
     fn send(context: ?*anyopaque, message: std.json.Value) void {
         const self: *MessageRecorder = @ptrCast(@alignCast(context.?));
-        const text = std.json.Stringify.valueAlloc(backend_allocator, message, .{}) catch {
-            return;
+        const text = std.json.Stringify.valueAlloc(backend_allocator, message, .{}) catch |err| {
+            std.debug.panic("The message recorder could not write a message: {s}", .{@errorName(err)});
         };
         self.mutex.lockUncancelable(std.testing.io);
         defer self.mutex.unlock(std.testing.io);
-        self.messages.append(backend_allocator, text) catch {};
+        self.messages.append(backend_allocator, text) catch |err| {
+            std.debug.panic("The message recorder could not keep a message: {s}", .{@errorName(err)});
+        };
     }
 
     //
@@ -689,8 +694,12 @@ const ImportTest = struct {
         test_environment.restoreQueueBackend();
         self.backend.deinit();
         self.messages.deinit();
-        test_environment.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
-        test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
+        test_environment.setEnv("PHOTOSPHERE_TMP_DIR", null) catch |err| {
+            std.debug.panic("PHOTOSPHERE_TMP_DIR could not be put back: {s}", .{@errorName(err)});
+        };
+        test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch |err| {
+            std.debug.panic("PHOTOSPHERE_CACHE_DIR could not be put back: {s}", .{@errorName(err)});
+        };
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
     }

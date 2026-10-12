@@ -186,7 +186,7 @@ fn refuse(reason: []const u8, settings: ISyncSettings, pauseBetweenRunsMs: std.j
 
 //
 // Handler for the plan-sync task.
-// (Zig: the context is ignored. The host is how the platform is asked for the connection type.)
+// (Zig: the context's host requester goes to openStorage. The host is how the platform is asked for the connection type.)
 //
 pub fn planSyncHandler(
     allocator: std.mem.Allocator,

@@ -535,3 +535,157 @@ test "the route is found with a trailing slash and in any case" {
 
     try std.testing.expectEqual(@as(u16, 200), reply.status);
 }
+
+//
+// Sends the text on a new connection to the server and returns everything it sends back until it closes the connection, for a
+// request the HTTP client of the standard library will not send.
+//
+fn exchange(running: *Running, text: []const u8) ![]u8 {
+    const address = try std.Io.net.IpAddress.parseIp4("127.0.0.1", running.httpServer.port);
+    const stream = try address.connect(io, .{ .mode = .stream });
+    defer stream.close(io);
+    var write_buffer: [1024]u8 = undefined;
+    var writer = stream.writer(io, &write_buffer);
+    try writer.interface.writeAll(text);
+    try writer.interface.flush();
+    var read_buffer: [4096]u8 = undefined;
+    var reader = stream.reader(io, &read_buffer);
+    return reader.interface.allocRemaining(running.arena.allocator(), .unlimited);
+}
+
+// Express hands a HEAD to the GET route, and the SDK's transport refuses a method that is not POST, GET or DELETE with a 405.
+test "a HEAD of the route is refused with 405 and the methods the transport answers" {
+    var running: Running = undefined;
+    try running.start();
+    defer running.stop();
+
+    const reply = try running.send(.HEAD, "/mcp", .{
+        .accept = MCP_ACCEPT,
+        .contentType = null,
+        .protocolVersion = null,
+        .payload = null,
+    });
+
+    try std.testing.expectEqual(@as(u16, 405), reply.status);
+    try std.testing.expectEqualStrings("application/json", reply.contentType.?);
+    try std.testing.expectEqualStrings("GET, POST, DELETE", reply.allow.?);
+    try std.testing.expectEqual(@as(usize, 0), reply.body.len);
+}
+
+// `express.json()` reads a Content-Type in any case, but the SDK's transport looks for "application/json" exactly as it is written.
+test "a POST whose Content-Type names JSON in capitals is refused with 415" {
+    var running: Running = undefined;
+    try running.start();
+    defer running.stop();
+
+    const reply = try running.send(.POST, "/mcp", .{
+        .accept = MCP_ACCEPT,
+        .contentType = "Application/JSON",
+        .protocolVersion = null,
+        .payload =
+        \\{"jsonrpc":"2.0","id":1,"method":"ping"}
+        ,
+    });
+
+    try std.testing.expectEqual(@as(u16, 415), reply.status);
+    try std.testing.expectEqualStrings(
+        "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32000,\"message\":\"Unsupported Media Type: Content-Type must be application/json\"},\"id\":null}",
+        reply.body,
+    );
+}
+
+// With no body `express.json()` leaves the body unset, so the SDK's transport reads the request itself, and an empty request is
+// not JSON.
+test "a POST with no body at all is refused as invalid JSON" {
+    var running: Running = undefined;
+    try running.start();
+    defer running.stop();
+
+    const reply = try exchange(&running, "POST /mcp HTTP/1.1\r\nhost: 127.0.0.1\r\naccept: " ++ MCP_ACCEPT ++ "\r\ncontent-type: application/json\r\nconnection: close\r\n\r\n");
+
+    try std.testing.expect(std.mem.startsWith(u8, reply, "HTTP/1.1 400 "));
+    try std.testing.expect(std.mem.endsWith(u8, reply, "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32700,\"message\":\"Parse error: Invalid JSON\"},\"id\":null}"));
+}
+
+// A Content-Type that holds "application/json" but is not the type `express.json()` reads leaves the body to the SDK's transport,
+// which parses it as it is.
+test "a POST whose body express does not read is parsed by the transport" {
+    var running: Running = undefined;
+    try running.start();
+    defer running.stop();
+
+    const reply = try running.send(.POST, "/mcp", .{
+        .accept = MCP_ACCEPT,
+        .contentType = "application/json-seq; x=application/json",
+        .protocolVersion = null,
+        .payload =
+        \\{"jsonrpc":"2.0","id":1,"method":"ping"}
+        ,
+    });
+
+    try std.testing.expectEqual(@as(u16, 200), reply.status);
+    try std.testing.expectEqualStrings("event: message\ndata: {\"result\":{},\"jsonrpc\":\"2.0\",\"id\":1}\n\n", reply.body);
+}
+
+test "a GET that names a protocol version the server does not support is refused" {
+    var running: Running = undefined;
+    try running.start();
+    defer running.stop();
+
+    const reply = try running.send(.GET, "/mcp", .{
+        .accept = "text/event-stream",
+        .contentType = null,
+        .protocolVersion = "1999-01-01",
+        .payload = null,
+    });
+
+    try std.testing.expectEqual(@as(u16, 400), reply.status);
+    try std.testing.expectEqualStrings(
+        "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32000,\"message\":\"Bad Request: Unsupported protocol version: 1999-01-01 (supported versions: 2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05, 2024-10-07)\"},\"id\":null}",
+        reply.body,
+    );
+}
+
+// The SDK's JSONRPCMessageSchema takes a response of the client's (a result that is an object, or an error with a numeric code and
+// a message) and refuses anything else that has no method.
+test "a POST of responses is accepted and a message that is neither a request nor a response is a parse error" {
+    var running: Running = undefined;
+    try running.start();
+    defer running.stop();
+
+    const accepted = [_][]const u8{
+        \\{"jsonrpc":"2.0","id":1,"result":{}}
+        ,
+        \\{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"Method not found"}}
+        ,
+    };
+    for (accepted) |payload| {
+        const reply = try running.post(payload);
+        try std.testing.expectEqual(@as(u16, 202), reply.status);
+    }
+
+    const refused = [_][]const u8{
+        \\{"jsonrpc":"2.0"}
+        ,
+        \\{"jsonrpc":"2.0","id":1,"result":5}
+        ,
+        \\{"jsonrpc":"2.0","id":1,"error":"failed"}
+        ,
+        \\{"jsonrpc":"2.0","id":1,"error":{"message":"no code"}}
+        ,
+        \\{"jsonrpc":"2.0","id":1,"error":{"code":1}}
+        ,
+        \\{"jsonrpc":"2.0","id":1,"error":{"code":"1","message":"text code"}}
+        ,
+        \\{"jsonrpc":"2.0","id":1}
+        ,
+    };
+    for (refused) |payload| {
+        const reply = try running.post(payload);
+        try std.testing.expectEqual(@as(u16, 400), reply.status);
+        try std.testing.expectEqualStrings(
+            "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32700,\"message\":\"Parse error: Invalid JSON-RPC message\"},\"id\":null}",
+            reply.body,
+        );
+    }
+}

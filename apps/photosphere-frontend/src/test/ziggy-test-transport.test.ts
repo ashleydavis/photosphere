@@ -60,6 +60,14 @@ describe('answerTestCommand', () => {
         expect(result).toEqual({ ok: false, error: 'Test command not implemented on this platform: frobnicate' });
     });
 
+    test('a rejection that is not an Error is a failure with its text', async () => {
+        const result = await answerTestCommand(async () => {
+            throw 'no such element';
+        }, { command: 'click' });
+
+        expect(result).toEqual({ ok: false, error: 'no such element' });
+    });
+
     test('stage-export reaches the driver with its outcome', async () => {
         const seen: { command: string; exportOutcome?: string }[] = [];
 

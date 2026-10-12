@@ -521,3 +521,29 @@ test "checkDatabaseExists does not catch a storage error: it is not reported as 
     try std.testing.expectError(error.Thrown, media_file_database.checkDatabaseExists(allocator, io, databaseDir, null));
     try std.testing.expectEqualStrings("Encryption key \"missing-enc\" not found in vault", errors.lastErrorMessage());
 }
+
+test "getFilesImported reads a count held as a 32 bit integer" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var metadata = try media_file_database.emptyDatabaseMetadata(allocator);
+    try metadata.put(allocator, "filesImported", .{ .int32 = 12 });
+
+    try std.testing.expectEqual(@as(u64, 12), media_file_database.getFilesImported(metadata));
+}
+
+test "openLazyOriginStorage hands back the local storage of a database with no origin" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    _ = try test_environment.setupEnvironment(io);
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
+    const created = try storage_zig.storage_factory.createStorage(allocator, io, databaseDir, null, null);
+
+    const opened = try media_file_database.openLazyOriginStorage(allocator, io, created.storage, created.rawStorage, null);
+
+    try std.testing.expectEqual(created.storage.ptr, opened.ptr);
+    try std.testing.expectEqual(created.storage.vtable, opened.vtable);
+}

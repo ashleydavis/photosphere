@@ -188,6 +188,14 @@ fn elapsedMilliseconds(io: std.Io, start: std.Io.Timestamp) i64 {
 }
 
 //
+// How far the short waits (the back-offs) have moved a virtual clock, in milliseconds. A clock that runs at real speed adds the
+// real time that passed on top, so this, not the elapsed time, is the sum of the sleeps retry made.
+//
+fn sleptMilliseconds(virtual_time: *virtual_time_io.VirtualTimeIo) i64 {
+    return @divTrunc(virtual_time.jumped_nanoseconds.load(.monotonic), std.time.ns_per_ms);
+}
+
+//
 // Captures console.error output for the duration of a test.
 //
 const StderrCapture = struct {
@@ -212,16 +220,17 @@ const StderrCapture = struct {
 };
 
 test "should succeed on first attempt" {
-    const io = std.testing.io;
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
+    const io = backoff_time.io();
     var operation: MockOperation = .{};
-    const start = std.Io.Clock.awake.now(io);
 
-    // A wait long enough that a sleep could not go unnoticed on a slow machine.
-    const result = try retry_module.retry(io, &operation, 3, 10_000, 2, 30_000, null);
+    const result = try retry_module.retry(io, &operation, 3, 1_000, 2, 30_000, null);
 
     try std.testing.expectEqualStrings("success", result);
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(io, start) < 10_000);
+    try std.testing.expectEqual(@as(i64, 0), sleptMilliseconds(&backoff_time));
 }
 
 test "should succeed after retries" {
@@ -234,7 +243,6 @@ test "should succeed after retries" {
     log.install();
     defer log.uninstall();
     var operation: MockOperation = .{ .failuresBeforeSuccess = 2 };
-    const start = std.Io.Clock.awake.now(io);
 
     const result = try retry_module.retry(io, &operation, 3, 20, 2, 30_000, null);
 
@@ -242,7 +250,7 @@ test "should succeed after retries" {
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
 
     // Slept for 20ms then 40ms.
-    try std.testing.expect(elapsedMilliseconds(io, start) >= 60);
+    try std.testing.expectEqual(@as(i64, 60), sleptMilliseconds(&backoff_time));
 }
 
 test "should throw error after all retries exhausted" {
@@ -258,13 +266,12 @@ test "should throw error after all retries exhausted" {
     capture.begin();
     defer capture.end();
     var operation: MockOperation = .{ .alwaysFails = true };
-    const start = std.Io.Clock.awake.now(io);
 
     try std.testing.expectError(error.Thrown, retry_module.retry(io, &operation, 3, 20, 2, 30_000, null));
 
     try std.testing.expectEqualStrings("Operation failed", errors.lastErrorMessage());
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(io, start) >= 60);
+    try std.testing.expectEqual(@as(i64, 60), sleptMilliseconds(&backoff_time));
     try std.testing.expect(std.mem.indexOf(u8, capture.allocating.written(), "Operation failed, no more retries allowed. Last error:") != null);
 }
 
@@ -295,12 +302,11 @@ test "should use default waitTimeMS of 1000" {
     log.install();
     defer log.uninstall();
     var operation: MockOperation = .{ .failuresBeforeSuccess = 1 };
-    const start = std.Io.Clock.awake.now(io);
 
     _ = try retry_module.retry(io, &operation, 2, 1_000, 2, 30_000, null);
 
     try std.testing.expectEqual(@as(u32, 2), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(io, start) >= 1_000);
+    try std.testing.expectEqual(@as(i64, 1_000), sleptMilliseconds(&backoff_time));
 }
 
 test "should use default waitTimeScale of 2" {
@@ -313,12 +319,11 @@ test "should use default waitTimeScale of 2" {
     log.install();
     defer log.uninstall();
     var operation: MockOperation = .{ .failuresBeforeSuccess = 2 };
-    const start = std.Io.Clock.awake.now(io);
 
     _ = try retry_module.retry(io, &operation, 3, 100, 2, 30_000, null);
 
     // Slept for 100ms then 200ms.
-    try std.testing.expect(elapsedMilliseconds(io, start) >= 300);
+    try std.testing.expectEqual(@as(i64, 300), sleptMilliseconds(&backoff_time));
 }
 
 test "should work with custom waitTimeScale" {
@@ -331,12 +336,11 @@ test "should work with custom waitTimeScale" {
     log.install();
     defer log.uninstall();
     var operation: MockOperation = .{ .failuresBeforeSuccess = 2 };
-    const start = std.Io.Clock.awake.now(io);
 
     _ = try retry_module.retry(io, &operation, 3, 100, 3, 30_000, null);
 
     // Slept for 100ms then 300ms.
-    try std.testing.expect(elapsedMilliseconds(io, start) >= 400);
+    try std.testing.expectEqual(@as(i64, 400), sleptMilliseconds(&backoff_time));
 }
 
 test "should not sleep on last attempt" {
@@ -352,21 +356,20 @@ test "should not sleep on last attempt" {
     capture.begin();
     defer capture.end();
     var operation: MockOperation = .{ .alwaysFails = true };
-    const start = std.Io.Clock.awake.now(io);
 
-    // A scale large enough that a sleep after the last attempt could not go unnoticed on a slow machine.
-    try std.testing.expectError(error.Thrown, retry_module.retry(io, &operation, 2, 100, 100, 30_000, null));
+    try std.testing.expectError(error.Thrown, retry_module.retry(io, &operation, 2, 100, 2, 30_000, null));
 
     try std.testing.expectEqual(@as(u32, 2), operation.calls);
 
-    // Only one sleep of 100ms (a sleep after the last attempt would add 10000ms).
-    const elapsed = elapsedMilliseconds(io, start);
-    try std.testing.expect(elapsed >= 100);
-    try std.testing.expect(elapsed < 10_100);
+    // Only one sleep of 100ms (a sleep after the last attempt would add 200ms).
+    try std.testing.expectEqual(@as(i64, 100), sleptMilliseconds(&backoff_time));
 }
 
 test "should throw error immediately when maxAttempts is 1" {
-    const io = std.testing.io;
+    var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
+    backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
+    defer backoff_time.deinit();
+    const io = backoff_time.io();
     // Mock log so the retry warnings do not reach stderr.
     var log: ExceptionLog = .{};
     log.install();
@@ -375,14 +378,12 @@ test "should throw error immediately when maxAttempts is 1" {
     capture.begin();
     defer capture.end();
     var operation: MockOperation = .{ .alwaysFails = true };
-    const start = std.Io.Clock.awake.now(io);
 
-    // A wait long enough that a sleep could not go unnoticed on a slow machine.
-    try std.testing.expectError(error.Thrown, retry_module.retry(io, &operation, 1, 10_000, 2, 30_000, null));
+    try std.testing.expectError(error.Thrown, retry_module.retry(io, &operation, 1, 100, 2, 30_000, null));
 
     try std.testing.expectEqualStrings("Operation failed", errors.lastErrorMessage());
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
-    try std.testing.expect(elapsedMilliseconds(io, start) < 10_000);
+    try std.testing.expectEqual(@as(i64, 0), sleptMilliseconds(&backoff_time));
     try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
     try std.testing.expectEqualStrings("Operation failed, no more retries allowed. Last error: Error: Operation failed\n", capture.allocating.written());
 }
@@ -511,11 +512,10 @@ test "rejectAfter should wait for the given duration" {
     backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.virtual);
     defer backoff_time.deinit();
     const io = backoff_time.io();
-    const start = std.Io.Clock.awake.now(io);
 
     try std.testing.expectError(error.Thrown, retry_module.rejectAfter(void, io, 500));
 
-    try std.testing.expect(elapsedMilliseconds(io, start) >= 500);
+    try std.testing.expectEqual(@as(i64, 500), sleptMilliseconds(&backoff_time));
 }
 
 test "retryOnce should resolve with the operation result" {

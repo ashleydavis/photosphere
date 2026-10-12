@@ -1014,6 +1014,33 @@ test "insertOne stores the fields apart from the id and stamps the write time" {
 }
 
 //
+// insertOne gives a record a new id when its `_id` is falsy (`if (!record._id)`), and a truthy `_id` that is not a
+// string cannot be read as a record id, so it throws instead of being replaced.
+//
+test "insertOne generates an id for a falsy _id and throws for an _id that is not a string" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const collection = try newCollection(allocator, &storage);
+
+    var zeroId = try makeExternalUser(allocator, "", "Jane Doe", 25, "admin");
+    try zeroId.put(allocator, "_id", .{
+        .number = 0,
+    });
+    try collection.insertOne(io, &zeroId, null);
+    try std.testing.expect(zeroId.get("_id").? == .string);
+    try std.testing.expect((try getRecord(collection, zeroId.get("_id").?.string)) != null);
+
+    var numberId = try makeExternalUser(allocator, "", "John Doe", 30, "user");
+    try numberId.put(allocator, "_id", .{
+        .number = 5,
+    });
+    try std.testing.expectError(error.Thrown, collection.insertOne(io, &numberId, null));
+    try std.testing.expectEqualStrings("Record ID must be a string, not number", errors.lastErrorMessage());
+}
+
+//
 // getAll reads its continuation token with `parseInt(next)`: "-2" starts two shards before the first (shards that
 // hold nothing), so the listing still reaches the records in the first shard, and " 0x0" is shard 0 as well.
 //

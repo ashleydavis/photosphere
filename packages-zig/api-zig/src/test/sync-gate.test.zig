@@ -2,7 +2,7 @@ const std = @import("std");
 const api_zig = @import("api-zig");
 const computeSyncAllowed = api_zig.sync_gate.computeSyncAllowed;
 
-test "returns false when syncing is disabled, regardless of other inputs" {
+test "computeSyncAllowed returns false when syncing is disabled, regardless of other inputs" {
     try std.testing.expectEqual(false, computeSyncAllowed(.{
         .syncEnabled = false,
         .syncOnlyOnWifi = false,
@@ -17,7 +17,7 @@ test "returns false when syncing is disabled, regardless of other inputs" {
     }));
 }
 
-test "returns false when offline even if enabled" {
+test "computeSyncAllowed returns false when offline even if enabled" {
     try std.testing.expectEqual(false, computeSyncAllowed(.{
         .syncEnabled = true,
         .syncOnlyOnWifi = false,
@@ -26,7 +26,7 @@ test "returns false when offline even if enabled" {
     }));
 }
 
-test "returns false when the connection type is none" {
+test "computeSyncAllowed returns false when the connection type is none" {
     try std.testing.expectEqual(false, computeSyncAllowed(.{
         .syncEnabled = true,
         .syncOnlyOnWifi = false,
@@ -35,7 +35,7 @@ test "returns false when the connection type is none" {
     }));
 }
 
-test "returns false when Wi-Fi-only is on and the connection is cellular" {
+test "computeSyncAllowed returns false when Wi-Fi-only is on and the connection is cellular" {
     try std.testing.expectEqual(false, computeSyncAllowed(.{
         .syncEnabled = true,
         .syncOnlyOnWifi = true,
@@ -44,7 +44,7 @@ test "returns false when Wi-Fi-only is on and the connection is cellular" {
     }));
 }
 
-test "returns true when Wi-Fi-only is on and the connection is wifi" {
+test "computeSyncAllowed returns true when Wi-Fi-only is on and the connection is wifi" {
     try std.testing.expectEqual(true, computeSyncAllowed(.{
         .syncEnabled = true,
         .syncOnlyOnWifi = true,
@@ -53,7 +53,7 @@ test "returns true when Wi-Fi-only is on and the connection is wifi" {
     }));
 }
 
-test "returns true when Wi-Fi-only is on and the connection type is unknown (desktop/web)" {
+test "computeSyncAllowed returns true when Wi-Fi-only is on and the connection type is unknown (desktop/web)" {
     try std.testing.expectEqual(true, computeSyncAllowed(.{
         .syncEnabled = true,
         .syncOnlyOnWifi = true,
@@ -62,7 +62,7 @@ test "returns true when Wi-Fi-only is on and the connection type is unknown (des
     }));
 }
 
-test "returns true when Wi-Fi-only is off and the connection is cellular" {
+test "computeSyncAllowed returns true when Wi-Fi-only is off and the connection is cellular" {
     try std.testing.expectEqual(true, computeSyncAllowed(.{
         .syncEnabled = true,
         .syncOnlyOnWifi = false,
@@ -71,7 +71,7 @@ test "returns true when Wi-Fi-only is off and the connection is cellular" {
     }));
 }
 
-test "returns true when fully enabled, connected, and on wifi" {
+test "computeSyncAllowed returns true when fully enabled, connected, and on wifi" {
     try std.testing.expectEqual(true, computeSyncAllowed(.{
         .syncEnabled = true,
         .syncOnlyOnWifi = true,

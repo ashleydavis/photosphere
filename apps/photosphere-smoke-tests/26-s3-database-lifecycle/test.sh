@@ -162,9 +162,16 @@ case "$PLATFORM" in
         reset_log_cursor "$TMP_DIR"
         wait_for_ready "$APP_PORT"
 
+        # The app reopens the last database by itself on start. Its load is waited for here, so the load waited for after the click is the
+        # one the click started. Otherwise that wait can match the reopen's load, which finished before the click, and the navigation
+        # below lands straight after the click, while the app's own redirect from "/" to the gallery can still be pending. Navigating to
+        # "/" then replaces that redirect with the route already showing, and the gallery never mounts.
+        wait_for_log "$TMP_DIR" "Load assets task completed: 2 assets loaded"
+
         send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
         wait_for_log "$TMP_DIR" "Open database dialog opened"
         send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
+        wait_for_log "$TMP_DIR" "Opening database"
         wait_for_log "$TMP_DIR" "Load assets task completed: 2 assets loaded"
 
         send_command "$APP_PORT" navigate '{"page":"/"}' || exit 1

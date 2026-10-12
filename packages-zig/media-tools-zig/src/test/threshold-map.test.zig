@@ -27,3 +27,16 @@ test "buildThresholdMap keeps an empty line as a literal that holds a newline" {
         header,
     );
 }
+
+// The declaration is built up in memory, so an allocation that fails part way must free what was built.
+test "buildThresholdMap frees what it built when an allocation fails" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, buildForAllocationFailures, .{});
+}
+
+//
+// Builds a map and frees it, for checkAllAllocationFailures.
+//
+fn buildForAllocationFailures(allocator: std.mem.Allocator) !void {
+    const header = try threshold_map.buildThresholdMap(allocator, "<a>\n  <b c=\"d\"/>\n</a>\n");
+    allocator.free(header);
+}

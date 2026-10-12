@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const media_tools = @import("media-tools-zig");
 
 const MediaTools = media_tools.MediaTools;
@@ -221,4 +222,76 @@ test "commands run on several threads at once all give their own answer" {
     for (workers) |worker| {
         try std.testing.expectEqual(@as(usize, 5), worker.correct);
     }
+}
+
+//
+// A signal handler that does nothing, set before a run so the test can see whether it is still set after.
+//
+fn markerHandler(signal: std.posix.SIG) callconv(.c) void {
+    _ = signal;
+}
+
+//
+// The tests of the signals ffmpeg takes over, which exist where the program has signals to take over (not on Windows).
+//
+const SignalTests = struct {
+    // ffmpeg's term_init sets its own handler on SIGINT, SIGTERM and SIGXCPU and ignores SIGPIPE, which would leave the program's
+    // own handling replaced after every command.
+    test "ffmpeg leaves the handling of every signal it takes over as it was before the run" {
+        var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        const allocator = arena.allocator();
+        var tmp_dir = std.testing.tmpDir(.{});
+        defer tmp_dir.cleanup();
+        var tools = MediaTools.init(std.testing.io);
+        defer tools.deinit();
+        const signals = [_]std.posix.SIG{ .INT, .TERM, .XCPU, .PIPE };
+        var previous: [signals.len]std.posix.Sigaction = undefined;
+        const marker: std.posix.Sigaction = .{
+            .handler = .{
+                .handler = markerHandler,
+            },
+            .mask = std.posix.sigemptyset(),
+            .flags = 0,
+        };
+        for (signals, 0..) |signal, index| {
+            std.posix.sigaction(signal, &marker, &previous[index]);
+        }
+        defer for (signals, 0..) |signal, index| {
+            std.posix.sigaction(signal, &previous[index], null);
+        };
+
+        const picture_path = try tempFilePath(allocator, tmp_dir, "frame.jpg");
+        const result = try tools.ffmpeg.runFfmpeg(allocator, &.{ "-i", test_video, "-ss", "0", "-vframes", "1", "-q:v", "2", "-y", picture_path });
+        try std.testing.expectEqual(@as(i32, 0), result.exit_code);
+
+        for (signals) |signal| {
+            var after: std.posix.Sigaction = undefined;
+            std.posix.sigaction(signal, null, &after);
+            if (after.handler.handler != marker.handler.handler) {
+                std.debug.print("The handling of {s} was not put back.\n", .{@tagName(signal)});
+                return error.TestUnexpectedResult;
+            }
+        }
+    }
+};
+
+comptime {
+    if (builtin.os.tag != .windows) {
+        _ = SignalTests;
+    }
+}
+
+// ffprobe that stops at an option it does not know never opens its report, which is a failed command with nothing printed rather
+// than an error of the runner's.
+test "ffprobe that fails before it writes its report gives a non-zero exit code and no output" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var tools = MediaTools.init(std.testing.io);
+    defer tools.deinit();
+    av_log_set_callback(silentLog);
+    defer av_log_set_callback(@ptrCast(&av_log_default_callback));
+    const result = try tools.ffmpeg.runFfprobe(arena.allocator(), &.{ "-no-such-option", test_video });
+    try std.testing.expect(result.exit_code != 0);
+    try std.testing.expectEqualStrings("", result.output);
 }

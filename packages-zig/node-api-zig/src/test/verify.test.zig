@@ -249,3 +249,15 @@ test "verify reports a database record whose hash is wrong as a record mismatch"
     try std.testing.expectEqual(@as(usize, 1), result.recordMismatches.?.len);
     try std.testing.expectEqualStrings("asset/" ++ ASSET_ID, result.recordMismatches.?[0]);
 }
+
+test "verify fails for a directory that holds no database" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const emptyDir = try temp_dirs.makeTempDir(allocator, io, "verify-no-database");
+    defer temp_dirs.removeTempDir(io, emptyDir);
+
+    try std.testing.expectError(error.Thrown, runVerify(allocator, io, emptyDir, null, null));
+    try std.testing.expectEqualStrings("Failed to load merkle tree", utils.errors.lastErrorMessage());
+}

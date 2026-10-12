@@ -577,14 +577,28 @@ pub const BsonCollection = struct {
     //
     // Insert a new record into the collection.
     // Throws an error if a document with the same ID already exists.
-    // The timestamp parameter is null when not given; a record without an `_id` gets one written into it.
+    // The timestamp parameter is null when not given; a record whose `_id` is missing or falsy (undefined, null,
+    // false, 0, NaN or an empty string) gets one written into it.
+    // An `_id` that is set to anything but a string throws, because the record id is read as a string to find its
+    // shard; the error names the type, where the runtime's own message would name the string method it called.
     //
     pub fn insertOne(self: *BsonCollection, io: std.Io, record: *IRecord, timestamp: ?i64) !void {
-        const existingId = record.get("_id");
-        if (existingId == null or existingId.? != .string or existingId.?.string.len == 0) {
-
-            // TODO: an _id that is not a string is replaced with a new UUID.
-            try record.put(self.allocator, "_id", .{ .string = try self.uuidGenerator.generate(self.allocator, io) });
+        const existingId: bson.BsonValue = record.get("_id") orelse .undefined;
+        const idIsFalsy = switch (existingId) {
+            .undefined, .null => true,
+            .boolean => |boolean| !boolean,
+            .number, .double => |number| number == 0 or std.math.isNan(number),
+            .int32 => |int32| int32 == 0,
+            .string => |string| string.len == 0,
+            else => false,
+        };
+        if (idIsFalsy) {
+            try record.put(self.allocator, "_id", .{
+                .string = try self.uuidGenerator.generate(self.allocator, io),
+            });
+        }
+        else if (existingId != .string) {
+            return errors.throwError("Record ID must be a string, not {s}", .{@tagName(existingId)});
         }
         const recordId = record.get("_id").?.string;
 

@@ -587,3 +587,48 @@ test "setAppStateValue writing nothing removes a ui key rather than leaving it a
     try std.testing.expectEqual(@as(usize, 0), state.ui.?.count());
     try std.testing.expect((try app_state_format.getAppStateValue(allocator, state, "sidebar-collapsed-databases")) == null);
 }
+
+//
+// Writing nothing removes each of the other declared keys too, not only the two above.
+//
+test "setAppStateValue with no value removes the download folder, the devtools state and the gallery row height" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var state: IAppState = .{
+        .lastDownloadFolder = "/downloads",
+        .devToolsOpen = true,
+        .galleryRowHeight = .{
+            .integer = 240,
+        },
+    };
+    try app_state_format.setAppStateValue(allocator, &state, "lastDownloadFolder", null);
+    try app_state_format.setAppStateValue(allocator, &state, "devToolsOpen", null);
+    try app_state_format.setAppStateValue(allocator, &state, "galleryRowHeight", null);
+
+    try std.testing.expect(state.lastDownloadFolder == null);
+    try std.testing.expect(state.devToolsOpen == null);
+    try std.testing.expect(state.galleryRowHeight == null);
+}
+
+//
+// The gallery row height is a number, and a value that is not one is refused rather than handed to the interface.
+//
+test "setAppStateValue stores a number as the gallery row height and refuses anything else" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var state: IAppState = .{};
+    try app_state_format.setAppStateValue(allocator, &state, "galleryRowHeight", .{
+        .integer = 180,
+    });
+    try std.testing.expectEqual(@as(i64, 180), state.galleryRowHeight.?.integer);
+
+    try std.testing.expectError(error.Thrown, app_state_format.setAppStateValue(allocator, &state, "galleryRowHeight", .{
+        .string = "tall",
+    }));
+    try std.testing.expectEqualStrings("The state key \"galleryRowHeight\" cannot hold that value, it holds a number.", utils.errors.lastErrorMessage());
+    try std.testing.expectEqual(@as(i64, 180), state.galleryRowHeight.?.integer);
+}

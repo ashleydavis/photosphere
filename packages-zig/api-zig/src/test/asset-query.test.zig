@@ -361,6 +361,47 @@ test "searchAssets leaves out assets whose photoDate is missing, empty, not a da
     try expectIds(&.{ID_C}, try assetIds(allocator, try searchAssets(allocator, io, database, "", null, "2022-06-01T00:00:00.000Z", "2022-06-01T00:00:00.000Z", 10)));
 }
 
+test "searchAssets reads a text field that is null, false or zero as empty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const assets = [_]IAsset{
+        try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_A } }, .{ .name = "origFileName", .value = .null }, .{ .name = "location", .value = .{ .string = "Beach" } } }),
+        try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_B } }, .{ .name = "origFileName", .value = .{ .boolean = false } }, .{ .name = "location", .value = .{ .number = 0 } } }),
+        try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_C } }, .{ .name = "origFileName", .value = .{ .int32 = 0 } }, .{ .name = "location", .value = .{ .int64 = 0 } } }),
+    };
+    const database = try buildDatabase(allocator, &assets);
+
+    try expectIds(&.{ID_A}, try assetIds(allocator, try searchAssets(allocator, io, database, "beach", null, null, null, 10)));
+}
+
+test "searchAssets throws a TypeError for a text field that holds a number" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const assets = [_]IAsset{
+        try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_A } }, .{ .name = "origFileName", .value = .{ .number = 5 } } }),
+    };
+    const database = try buildDatabase(allocator, &assets);
+
+    try std.testing.expectError(error.Thrown, searchAssets(allocator, io, database, "beach", null, null, null, 10));
+    try std.testing.expectEqualStrings("TypeError", utils.errors.lastErrorName());
+    try std.testing.expectEqualStrings("(asset.origFileName || \"\").toLowerCase is not a function. (In '(asset.origFileName || \"\").toLowerCase()', '(asset.origFileName || \"\").toLowerCase' is undefined)", utils.errors.lastErrorMessage());
+}
+
+test "searchAssets throws a TypeError for a content type that holds a Date" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const assets = [_]IAsset{
+        try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_A } }, .{ .name = "contentType", .value = .{ .date = 1654041600000 } } }),
+    };
+    const database = try buildDatabase(allocator, &assets);
+
+    try std.testing.expectError(error.Thrown, searchAssets(allocator, io, database, "", "image/", null, null, 10));
+    try std.testing.expectEqualStrings("(asset.contentType || \"\").toLowerCase is not a function. (In '(asset.contentType || \"\").toLowerCase()', '(asset.contentType || \"\").toLowerCase' is undefined)", utils.errors.lastErrorMessage());
+}
+
 test "streamAssetToFile maps type 'thumb' to the thumb/ storage prefix" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

@@ -42,10 +42,12 @@ const RecordingContext = struct {
     //
     fn sendMessage(context: ?*anyopaque, message: std.json.Value) void {
         const self: *RecordingContext = @ptrCast(@alignCast(context.?));
-        const text = std.json.Stringify.valueAlloc(self.allocator, message, .{}) catch {
-            return;
+        const text = std.json.Stringify.valueAlloc(self.allocator, message, .{}) catch |err| {
+            std.debug.panic("The recording context could not write a message: {s}", .{@errorName(err)});
         };
-        self.sentMessages.append(self.allocator, text) catch {};
+        self.sentMessages.append(self.allocator, text) catch |err| {
+            std.debug.panic("The recording context could not keep a message: {s}", .{@errorName(err)});
+        };
     }
 };
 

@@ -169,7 +169,7 @@ pub fn buildArgv(allocator: std.mem.Allocator, program: []const u8, leading: []c
 //
 const SavedSignals = struct {
     // The handling each of the signals ffmpeg takes over had.
-    actions: if (builtin.os.tag == .windows) void else [3]std.posix.Sigaction,
+    actions: if (builtin.os.tag == .windows) void else [4]std.posix.Sigaction,
 
     //
     // Saves the handling the signals have now.
@@ -182,6 +182,7 @@ const SavedSignals = struct {
             std.posix.sigaction(std.posix.SIG.INT, null, &self.actions[0]);
             std.posix.sigaction(std.posix.SIG.TERM, null, &self.actions[1]);
             std.posix.sigaction(std.posix.SIG.PIPE, null, &self.actions[2]);
+            std.posix.sigaction(std.posix.SIG.XCPU, null, &self.actions[3]);
         }
     }
 
@@ -196,6 +197,7 @@ const SavedSignals = struct {
             std.posix.sigaction(std.posix.SIG.INT, &self.actions[0], null);
             std.posix.sigaction(std.posix.SIG.TERM, &self.actions[1], null);
             std.posix.sigaction(std.posix.SIG.PIPE, &self.actions[2], null);
+            std.posix.sigaction(std.posix.SIG.XCPU, &self.actions[3], null);
         }
     }
 };

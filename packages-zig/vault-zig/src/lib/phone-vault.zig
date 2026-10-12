@@ -124,6 +124,8 @@ pub const PhoneVault = struct {
 
     //
     // Retrieves a secret by name. Returns null if there is none of that name.
+    // The worker's keychain vault reads the value alone, but IVault returns a whole secret, so the type is read too, and a value
+    // with no type throws rather than return a secret with a made-up type.
     //
     pub fn get(self: *PhoneVault, allocator: std.mem.Allocator, io: std.Io, name: []const u8) !?ISecret {
         _ = io;
@@ -151,19 +153,30 @@ pub const PhoneVault = struct {
     }
 
     //
-    // Returns every secret, starting from the type items.
+    // Returns every secret, starting from the type items. The type is read before the value, and a secret whose type or value is gone
+    // since the keys were read (a delete running beside the list, which removes the type first) is skipped rather than reported.
+    // Unlike listSecrets of the phone's secret store, which lists names and types only, each secret comes with its value, because
+    // IVault.list returns whole secrets.
     //
     pub fn list(self: *PhoneVault, allocator: std.mem.Allocator, io: std.Io) ![]ISecret {
+        _ = io;
         var secrets: std.ArrayList(ISecret) = .empty;
         for (try self.readKeys(allocator)) |key| {
             if (!std.mem.startsWith(u8, key, SECRET_TYPE_KEY_PREFIX)) {
                 continue;
             }
-            // (A secret deleted since the keys were read is skipped.)
-            const secret = try self.get(allocator, io, key[SECRET_TYPE_KEY_PREFIX.len..]) orelse {
+            const name = key[SECRET_TYPE_KEY_PREFIX.len..];
+            const secret_type = try self.readItem(allocator, key) orelse {
                 continue;
             };
-            try secrets.append(allocator, secret);
+            const value = try self.readItem(allocator, try std.mem.concat(allocator, u8, &.{ SECRET_VALUE_KEY_PREFIX, name })) orelse {
+                continue;
+            };
+            try secrets.append(allocator, .{
+                .name = name,
+                .type = secret_type,
+                .value = value,
+            });
         }
         return secrets.items;
     }

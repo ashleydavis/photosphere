@@ -5,6 +5,7 @@
 
 const std = @import("std");
 const types = @import("types.zig");
+const host_reply = @import("host-reply.zig");
 
 //
 // A stand-in for a shell. It records every message the core delivers, and can answer the native host callbacks.
@@ -78,18 +79,15 @@ pub const FakeShell = struct {
     //
     pub fn hostRequest(user_data: ?*anyopaque, method: [*:0]const u8, request_json: [*:0]const u8, buffer: [*]u8, capacity: usize) callconv(.c) isize {
         _ = user_data;
+        const method_name = std.mem.span(method);
+        if (std.mem.eql(u8, method_name, "fail")) {
+            return host_reply.writeHostReply(false, method_name, "The phone said no.", buffer, capacity);
+        }
         var text_buffer: [1024]u8 = undefined;
-        if (std.mem.eql(u8, std.mem.span(method), "fail")) {
-            const reason = "The phone said no.";
-            @memcpy(buffer[0..reason.len], reason);
-            return -@as(isize, @intCast(reason.len));
-        }
-        const answer = std.fmt.bufPrint(&text_buffer, "{{\"method\":\"{s}\",\"request\":{s}}}", .{ std.mem.span(method), std.mem.span(request_json) }) catch return -1;
-        if (capacity < answer.len) {
-            return -1;
-        }
-        @memcpy(buffer[0..answer.len], answer);
-        return @intCast(answer.len);
+        const answer = std.fmt.bufPrint(&text_buffer, "{{\"method\":\"{s}\",\"request\":{s}}}", .{ method_name, std.mem.span(request_json) }) catch {
+            return host_reply.writeHostReply(false, method_name, "The stand-in shell's answer is too long for its buffer.", buffer, capacity);
+        };
+        return host_reply.writeHostReply(true, method_name, answer, buffer, capacity);
     }
 
     //

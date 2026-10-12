@@ -87,7 +87,11 @@ pub const Video = struct {
         const version = version_match.matchAfter(result.stdout, "ffprobe version ", version_match.isVersionNumberCharacter) orelse "unknown";
 
         utils.log.log.verbose("Using system ffprobe: ffprobe");
-        const message = std.fmt.allocPrint(allocator, "ffprobe version: {s}", .{version}) catch return;
+        // Nothing waits for this function, so a failure to make the message is logged rather than returned.
+        const message = std.fmt.allocPrint(allocator, "ffprobe version: {s}", .{version}) catch |err| {
+            utils.log.log.exception("Could not make the message naming the ffprobe version", err);
+            return;
+        };
         utils.log.log.verbose(message);
     }
 

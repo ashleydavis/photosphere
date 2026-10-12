@@ -43,7 +43,9 @@ const RecordTest = struct {
     // Puts the cache directory back the way it was.
     //
     fn deinit(self: *RecordTest) void {
-        test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
+        test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch |err| {
+            std.debug.panic("PHOTOSPHERE_CACHE_DIR could not be put back: {s}", .{@errorName(err)});
+        };
         temp_dirs.removeTempDir(std.testing.io, self.runRoot);
         self.arena.deinit();
     }

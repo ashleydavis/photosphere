@@ -2,9 +2,9 @@
 
 How to set up, run, and work on Photosphere, and where to find the detailed guides.
 
-Photosphere is a Bun-workspaces monorepo with web, desktop (Electron), mobile (iOS/Android), and CLI frontends over a shared React UI (`packages/user-interface`).
+Photosphere is a Bun-workspaces monorepo holding the Photosphere App for desktop and mobile, the `psi` CLI, and the shared React UI (`packages/user-interface`) the app shows.
 
-The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, Android and iOS. It is built on Ziggy, an application shell that shows the shared UI in each platform's web view and runs everything else in Zig. It replaces the Electron and Capacitor apps, and the TypeScript CLI and packages that have a Zig port are replaced by the Zig ones. Everything that is replaced is marked "(deprecated)" in the project layout below. Start with [Ziggy architecture](../packages/ziggy/docs/architecture.md) and the [Photosphere App README](../apps/photosphere/README.md).
+The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, Android and iOS. It is built on Ziggy, an application shell that shows the shared UI in each platform's web view and runs everything else in Zig. The TypeScript CLI and packages that have a Zig port are replaced by the Zig ones. Everything that is replaced is marked "(deprecated)" in the project layout below. Start with [Ziggy architecture](../packages/ziggy/docs/architecture.md) and the [Photosphere App README](../apps/photosphere/README.md).
 
 ## Project layout
 
@@ -49,7 +49,7 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - ziggy/ - Ziggy, the application shell, all in one place. Nothing in it names an app. See its [README](../packages/ziggy/README.md)
             - core - The Zig library: the C interface, message dispatcher, task runner and test hooks
             - bridge - The page side: the `window.ziggy` script every shell injects, and its types
-            - native/ - The framework half of each shell: `linux` (GTK 3 and WebKitGTK), `windows` (WebView2), `apple` (MacOS and iOS, Swift, WKWebView) and `android` (Java, Android WebView)
+            - native/ - The framework half of each shell: `linux` (GTK 3 and WebKitGTK), `windows` (WebView2), `macos` and `ios` (Swift, WKWebView) and `android` (Java, Android WebView)
             - docs - The architecture guide
     - packages-zig/ - The Zig packages, built and tested by the `build.zig` at the root of the repository
         - api-zig - Zig port of api
@@ -60,7 +60,8 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - lan-share-core-zig - Zig port of the core of lan-share
         - lan-share-network-zig - Zig port of the network side of lan-share
         - mcp-zig - The MCP server (JSON-RPC protocol, tool input schemas and the Streamable HTTP transport) that the `psi mcp` command and the desktop app both run
-        - mobile-worker-zig - Zig port of mobile-worker (the planning task handlers the phone runs)
+        - mobile-worker-zig - The planning task handlers the phone runs
+        - media-tools-zig - ImageMagick and FFmpeg (with their libjpeg, libpng, libwebp and zlib delegates), built from source and called in process
         - merkle-tree-zig - Zig port of merkle-tree
         - node-api-zig - Zig port of node-api
         - node-utils-zig - Zig port of node-utils (also the HTTP server glue the asset server runs on)
@@ -75,6 +76,7 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
     - test - Data for testing.
 
 "(deprecated)" marks an app or package that is going to be superseded by the Zig port (the Zig packages in `packages-zig`, the Zig CLI, and the Photosphere App on Ziggy) and removed once the port fully replaces it.
+
 ## Setup
 
 You need [Bun](https://bun.sh/docs/installation) installed. Tested against Bun v1.3.14 on Ubuntu Linux, Windows 10/11, and macOS.
@@ -93,7 +95,7 @@ Then run the one-time, per-platform environment setup:
 bun run setup
 ```
 
-This fans out to each package's own `setup` script (`bun --filter '*' setup`): it installs the Android SDK toolchain on Linux/macOS (`apps/android-frontend`) and the iOS CocoaPods on macOS (`apps/ios-frontend`), each skipping cleanly on a platform it does not apply to, so the command succeeds everywhere. The Android step installs a JDK 17 when none is found, which prompts once for sudo.
+This fans out to each package's own `setup` script (`bun --filter '*' setup`), which for the Photosphere App and the Ziggy example installs the Android SDK and NDK on Linux and macOS, checks Xcode on macOS, and fetches the WebView2 SDK and the WiX Toolset and installs Microsoft's C++ toolchain on Windows, each skipping cleanly on a platform it does not apply to, so the command succeeds everywhere. The Android step installs a JDK 17 when none is found, which prompts once for sudo. See the [Photosphere App README](../apps/photosphere/README.md).
 
 Install the git hooks, which stop a commit that does not compile and a push whose tests fail:
 
@@ -117,18 +119,14 @@ Everything below is run from the repo root.
 |---|---|
 | `bun run build:ziggy:<platform>` / `bun run run:ziggy:<platform>` | Build, or build and launch, the Photosphere App on `linux`, `windows`, `macos`, `android` or `ios`. See the [Photosphere App README](../apps/photosphere/README.md) for every command and where each runs. |
 | `zig build` / `zig build test` | Build the Zig CLI (`zig-out/bin/psi`), or run every Zig test: the packages in `packages-zig`, Ziggy and the example, and the CLI. Both are steps of the one `build.zig` at the root of the repository, which also has `ziggy-example-core`, `ziggy-example-linux` and `ziggy-example-windows`; `zig build --help` lists them. `bun run test:zig` runs the tests. |
-| `bun run test:ziggy` / `bun run test:ziggy:and` / `bun run test:ziggy:ios` | Photosphere App smoke tests, on the host operating system, the Android emulator/device or the iOS simulator. |
+| `bun run test:ziggy` / `bun run test:ziggy:and` / `bun run test:ziggy:ios` | Photosphere App smoke tests, on the host operating system, the Android emulator/device or the iOS simulator/device. `PHOTOSPHERE_SMOKE_SCENARIO=<number or name>` runs one scenario. |
 | `bun run build:ziggy-example:<platform>` / `bun run run:ziggy-example:<platform>` / `bun run package:ziggy-example:<platform>` | Build, build and launch, or package the Ziggy example on `linux`, `windows`, `macos`, `android` or `ios`. See the [Ziggy example README](../apps/ziggy-example/README.md). |
 | `bun run test:ziggy-example` / `bun run test:ziggy-example:and` / `bun run test:ziggy-example:ios` | Ziggy example smoke tests, on the host operating system, the Android emulator/device or the iOS simulator. |
-| `bun run dev` (deprecated) | Start the Electron desktop app in dev mode, with hot reload. |
-| `bun run dev:web` | Start the dev server and web frontend together (no Electron). |
+| `bun run dev:web` | Start the dev server and web frontend together, in a browser. |
 | `bun run compile` | Compile all TypeScript. Optional, but the way to check a change still compiles. |
 | `bun run test` | Unit tests. |
-| `bun run test:all` | Unit tests plus the CLI and Electron smoke tests, one after another. **Covers no mobile suite**, so it can pass while the mobile app is broken. Not the full set despite the name. |
-| `bun run test:everything` (or `bun run tev`) | The actual full set for your platform, all at once: compile, unit, every CLI suite (plain, encrypted, LAN share, sync, write lock, hash cache), Electron, the CLI to desktop LAN share suite, the mobile test harness, and both mobile suites. It stops the moment anything fails. This is what the git hooks run. It covers every Release workflow test job for this platform bar three: the stories runs, the packaging builds, and `perf-tests`. Only the scripts whose watched paths changed since they last passed actually run, so a docs-only change runs nothing; add `-- --force` to run everything, `-- --plan` to see the decision. Pass script names to consider only those, still in parallel. Needs the `what-changed` executable on your PATH, from [its releases page](https://github.com/ashleydavis/what-changed/releases). |
+| `bun run test:everything` (or `bun run tev`) | The full set for your platform, all at once: compile, unit, the Zig tests, every CLI suite, and every Photosphere App and Ziggy example suite this platform can run. It stops the moment anything fails. This is what the git hooks run. It covers every Release workflow test job for this platform bar three: the stories runs, the packaging builds, and `perf-tests`. Only the scripts whose watched paths changed since they last passed actually run, so a docs-only change runs nothing; add `-- --force` to run everything, `-- --plan` to see the decision. Pass script names to consider only those, still in parallel. Needs the `what-changed` executable on your PATH, from [its releases page](https://github.com/ashleydavis/what-changed/releases). |
 | `bun run test:everything:force` | The whole set for this platform, changed or not. The same as `-- --force`. |
-| `bun run test:and` / `bun run test:ios` (deprecated) | Mobile smoke tests, on the Android emulator/device or iOS simulator. `bun run test:and <n>` runs a single test by number, `bun run test:and <name>` by name. |
-| `bun run build` (deprecated) | Production build of the Electron app for distribution. |
 | `bun run clean` | Remove build artifacts. |
 
 The commands that run the app rebuild it first, so what you are running is always built from the current source.
@@ -154,32 +152,29 @@ The [stories browser](../packages/user-interface/src/stories/README.md) mounts e
 
 In the **web** build, run `bun run dev:web` and open `http://localhost:8080/#/stories`. Browse from the ☰ menu, or click **▶ Play on automatic** to cycle every story. In the **desktop** app, open it from the Developer menu; on **Android/iOS**, from the Developer screen.
 
-On the Photosphere App, and on the deprecated Electron and Capacitor apps, the story player does it from the command line: it cycles the live app through every story in light and dark, captures a screenshot of each, and fails if a story crashes while rendering:
+On the Photosphere App, the story player does it from the command line: it cycles the live app through every story in light and dark, captures a screenshot of each, and fails if a story crashes while rendering:
 
 ```bash
 bun run stories:ziggy      # Photosphere App on the host operating system
 bun run stories:ziggy:and  # Photosphere App on the Android emulator or attached device
 bun run stories:ziggy:ios  # Photosphere App on the iOS simulator
-bun run stories            # Electron desktop (deprecated)
-bun run stories:and        # Capacitor Android app (deprecated)
-bun run stories:ios        # Capacitor iOS app (deprecated)
 ```
 
 Screenshots land in `stories-screenshots/<platform>/` with an `index.html` pairing each story's light and dark shots. **The Android and iOS runs render every page at phone resolution, so this is the way to check that pages fit on a small screen.** The same shared UI ships on every platform, so a layout that overflows on a phone is a bug in the shared UI, not a mobile-only concern.
 
 ## Testing
 
-[docs/testing/](testing/README.md) covers the unit tests, the CLI/Electron/mobile smoke tests, the manual end-to-end scripts, and the UI stories. Add unit tests for new code. React components, contexts, and hooks are not unit tested: extract any real logic into a `lib/` function and test that.
+[docs/testing/](testing/README.md) covers the unit tests, the CLI and Photosphere App smoke tests, the manual end-to-end scripts, and the UI stories. Add unit tests for new code. React components, contexts, and hooks are not unit tested: extract any real logic into a `lib/` function and test that.
 
 ## Platform notes
 
-The shared UI in `packages/user-interface` must stay platform-neutral: no Electron IPC, no Capacitor, no iOS/Android specifics. Keep platform code in the relevant app (for example `apps/desktop-frontend`) and pass it into the shared UI through props or an existing platform abstraction.
+The shared UI in `packages/user-interface` must stay platform-neutral: no `window.ziggy`, no shell code, no iOS/Android specifics. Keep platform code in the platform layer (`apps/photosphere-frontend`) or the shells, and pass it into the shared UI through props or an existing platform abstraction. See [Ziggy architecture](../packages/ziggy/docs/architecture.md).
 
-The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why the Capacitor app stays on Capacitor 5 and why the Photosphere App's iOS project must build with that Xcode. Do not raise those versions.
+The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why the Photosphere App's iOS project must build with that Xcode. Do not raise those versions.
 
 ## Guides
 
-- [Ziggy architecture](../packages/ziggy/docs/architecture.md) - The Photosphere App's parts, message protocol, how to add a channel or a task type, and the test hooks.
+- [Ziggy architecture](../packages/ziggy/docs/architecture.md) - Ziggy's parts, message protocol, how to add a channel, a task type or a native host callback, the test hooks, and how Photosphere is built on it.
 - [Ziggy example](../apps/ziggy-example/README.md) - The small complete app built on Ziggy: what it shows, how to build, run, package and test it on each platform.
 - [Photosphere App](../apps/photosphere/README.md) - Building and running the app on each platform.
 - [UI stories](../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player.
@@ -189,7 +184,6 @@ The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why t
 - [Automatic photo backup](automatic-photo-backup.md) - Watching for new photos, importing them, and keeping a remote copy.
 - [Syncing](syncing.md) - What a sync moves, when each platform runs one, and how it keeps working while the app is not on screen.
 - [Background tasks](background-tasks.md) - Adding a new background task type.
-- [Mobile background tasks](mobile-background-tasks.md) - The mobile engine pool: what a slot is, what holds one, and why running out hangs the app.
 - [Delivering the Android app to testers](android-tester-distribution.md) - Getting a Photosphere App build to Android testers through Firebase App Distribution, with `bun run distribute:ziggy:android`.
 - [Setting up Photosphere on Android](android-onboarding.md) - What a user does after installing the app: automatic import, and a private encrypted remote copy to back up to.
 - [Mobile native media tools](mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired up.

@@ -229,7 +229,8 @@ test "extractFileFromZip fails for data that is not a zip" {
         .data = "this is not a zip file",
     });
 
-    try expectThrown("The data is not a zip file", zip_utils.extractFileFromZip(sandbox.allocator(), io, path, "a.txt"));
+    // The message JSZip's loadAsync fails with, which is what the TypeScript throws.
+    try expectThrown("Can't find end of central directory : is this a zip file ? If it is, see https://stuk.github.io/jszip/documentation/howto/read_zip.html", zip_utils.extractFileFromZip(sandbox.allocator(), io, path, "a.txt"));
 }
 
 test "extractNestedZipFromParent returns the nested zip as it is held in the parent" {

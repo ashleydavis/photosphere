@@ -460,3 +460,53 @@ test "parseEncryptionKeyFromVaultValue derives the public key PEM like node:cryp
     const pem = try node_api.resolve_storage_credentials.parseEncryptionKeyFromVaultValue(allocator, try readKey(allocator, io, "ts-private.pem"));
     try std.testing.expectEqualStrings(try readKey(allocator, io, "ts-public.pem"), pem.publicKeyPem);
 }
+
+test "falls back to AWS env vars for an s3: path whose registered vault key holds no secret" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const configDir = try setup(allocator, io, "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = \"s3:my-bucket:/photos\"\ns3_key = \"no-such-s3-secret\"\n");
+    defer temp_dirs.removeTempDir(io, configDir);
+    try test_environment.setEnv("AWS_ACCESS_KEY_ID", "ENV_AKID");
+    try test_environment.setEnv("AWS_SECRET_ACCESS_KEY", "ENV_SECRET");
+    defer for (credential_variables) |name| {
+        test_environment.setEnv(name, null) catch {};
+    };
+
+    const result = try resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null, null);
+
+    try std.testing.expectEqualStrings("ENV_AKID", result.s3Config.?.accessKeyId);
+    try std.testing.expectEqualStrings("ENV_SECRET", result.s3Config.?.secretAccessKey);
+}
+
+test "falls back to GOOGLE_API_KEY for a database whose registered geocoding vault key holds no secret" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const configDir = try setup(allocator, io, "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = \"/local/db\"\ngeocoding_key = \"no-such-geocoding-secret\"\n");
+    defer temp_dirs.removeTempDir(io, configDir);
+    try test_environment.setEnv("GOOGLE_API_KEY", "env-geo-key");
+    defer for (credential_variables) |name| {
+        test_environment.setEnv(name, null) catch {};
+    };
+
+    const result = try resolveStorageCredentials(allocator, io, "/local/db", null, null, null);
+
+    try std.testing.expectEqualStrings("env-geo-key", result.googleApiKey.?);
+}
+
+test "throws a JSON parse error for an S3 secret that is not JSON" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const configDir = try setup(allocator, io, "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = \"s3:my-bucket:/photos\"\ns3_key = \"broken-s3-secret\"\n");
+    defer temp_dirs.removeTempDir(io, configDir);
+    try setSecret(allocator, io, "broken-s3-secret", "s3-credentials", "not json");
+
+    try std.testing.expectError(error.Thrown, resolveStorageCredentials(allocator, io, "s3:my-bucket:/photos", null, null, null));
+    // Bun's JSON.parse names the token it stopped at; std.json names the error it stopped with.
+    try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "JSON Parse error: "));
+}

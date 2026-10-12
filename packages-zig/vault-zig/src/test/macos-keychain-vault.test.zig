@@ -209,6 +209,39 @@ test "returns empty array when no secrets exist" {
     try std.testing.expectEqual(@as(usize, 0), (try vault.list(arena.allocator(), std.testing.io)).len);
 }
 
+//
+// The fake security tool, except that dump-keychain fails.
+//
+fn failingDumpSpawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, stdinData: ?[]const u8) anyerror!keychain_types.ISpawnResult {
+    if (args.len > 1 and std.mem.eql(u8, args[1], "dump-keychain")) {
+        return .{
+            .code = 1,
+            .stdout = "",
+            .stderr = "security: SecKeychainCopyDefault: The specified keychain could not be found.",
+        };
+    }
+    return fakeSpawn(allocator, io, args, stdinData);
+}
+
+//
+// The keychain cannot be listed, so there are no secrets to list (`catch { return []; }` of MacOSKeychainVault.list).
+//
+test "list returns an empty array when the keychain cannot be dumped" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    resetStore();
+    defer restoreSpawn();
+    var vault = MacOSKeychainVault.init();
+    try vault.set(arena.allocator(), std.testing.io, .{
+        .name = "stored",
+        .type = "plain",
+        .value = "v",
+    });
+    keychain_types.setSpawnFunction(failingDumpSpawn);
+
+    try std.testing.expectEqual(@as(usize, 0), (try vault.list(arena.allocator(), std.testing.io)).len);
+}
+
 test "returns all stored secrets" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

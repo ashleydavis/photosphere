@@ -87,7 +87,7 @@ const FakeImageMagickDirectory = struct {
         // `identify` are installed that is a `magick` command nothing can run. This is what
         // tool-verification.test.zig's FakeToolsDirectory does.
         tools.Image.resetInitialization();
-        std.Io.Dir.cwd().deleteTree(io, self.path) catch {};
+        std.Io.Dir.cwd().deleteTree(io, self.path) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ self.path, @errorName(err) });
     }
 };
 
@@ -153,7 +153,7 @@ const FakeOutputTools = struct {
     fn destroy(self: *FakeOutputTools, io: std.Io) void {
         node_utils.process_env.setEnvironMap(null);
         tools.Image.resetInitialization();
-        std.Io.Dir.cwd().deleteTree(io, self.path) catch {};
+        std.Io.Dir.cwd().deleteTree(io, self.path) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ self.path, @errorName(err) });
     }
 };
 

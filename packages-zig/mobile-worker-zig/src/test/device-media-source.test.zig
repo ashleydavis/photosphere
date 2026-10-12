@@ -360,3 +360,53 @@ test "a delete the library refused names the items that are still on the device"
     try std.testing.expectEqual(@as(usize, 1), MediaSourceDeleteError.sourceIds().len);
     try std.testing.expectEqualStrings("two", MediaSourceDeleteError.sourceIds()[0]);
 }
+
+// The import task reaches the library only through IMediaSource, so the source the builder makes is driven through it here.
+test "buildDeviceMediaSource: the source it builds lists, opens, closes and deletes through the media source interface" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var host = newHost(allocator);
+    var generator: utils.test_uuid_generator.TestUuidGenerator = .{};
+    const source = try mobile_worker.device_media_source.buildDeviceMediaSource(allocator, &.{albumSource("cam")}, .{
+        .sessionTempDir = "/tmp/session",
+        .uuidGenerator = generator.uuidGenerator(),
+        .hostRequester = host.requester(),
+    });
+
+    const page = try source.listPage(allocator, std.testing.io, null, 50);
+    try std.testing.expectEqual(@as(usize, 1), page.items.len);
+    try std.testing.expectEqualStrings("1", page.items[0].sourceId);
+    try std.testing.expectEqualStrings("mediaLibraryList", host.last_method);
+
+    try std.testing.expectEqualStrings("/cache/.media-tmp/1.jpg", try source.openItem(allocator, std.testing.io, page.items[0]));
+    try std.testing.expectEqualStrings("mediaLibraryOpen", host.last_method);
+
+    try source.closeItem(allocator, std.testing.io, page.items[0]);
+    try std.testing.expectEqualStrings("mediaLibraryClose", host.last_method);
+
+    try source.deleteItems(allocator, std.testing.io, &.{"1"});
+    try std.testing.expectEqualStrings("mediaLibraryDelete", host.last_method);
+    try std.testing.expectEqualStrings("{\"itemIds\":[\"1\"]}", host.last_request);
+}
+
+test "DeviceMediaSource: an unreadable open answer is an error naming the request" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var host = newHost(arena.allocator());
+    host.open_reply = "not json";
+    var source = try DeviceMediaSource.init(arena.allocator(), &.{}, host.requester());
+    const page = try source.listPage(arena.allocator(), null, 50);
+    try std.testing.expectError(error.Thrown, source.openItem(arena.allocator(), page.items[0]));
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "mediaLibraryOpen") != null);
+}
+
+test "DeviceMediaSource: an unreadable delete answer is an error naming the request" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var host = newHost(arena.allocator());
+    host.delete_reply = "not json";
+    var source = try DeviceMediaSource.init(arena.allocator(), &.{}, host.requester());
+    try std.testing.expectError(error.Thrown, source.deleteItems(arena.allocator(), &.{"1"}));
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "mediaLibraryDelete") != null);
+}

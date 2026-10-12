@@ -1,6 +1,5 @@
 //
-// Stand-in for the parts of `node:readline` used by the clack prompts (this file has no TypeScript
-// counterpart in the repo):
+// Port of the parts of `node:readline` used by the clack prompts:
 // - keypress parsing (`emitKeypressEvents`, which turns input bytes into `(char, key)` events),
 // - the line editing of a terminal `readline.Interface` (`line` and `cursor`, updated by `_ttyWrite`),
 // - PromptInput: the input stream with raw mode handling (`setRawMode`).
@@ -32,7 +31,7 @@ pub const Key = struct {
 };
 
 //
-// A keypress event: the character (undefined in TypeScript for escape sequences) and the key.
+// A keypress event: the character (none for escape sequences) and the key.
 //
 pub const Keypress = struct {
     // The typed character, or null for escape sequences.
@@ -745,7 +744,7 @@ pub const PromptInput = struct {
     allocator: std.mem.Allocator,
 
     // True for process.stdin: at the end of the input nothing keeps the process alive, so it exits with 0
-    // (the prompt promise never resolves in TypeScript). Other inputs return error.EndOfStream.
+    // (the prompt never answers). Other inputs return error.EndOfStream.
     exitAtEnd: bool,
 
     //
@@ -813,8 +812,8 @@ pub const PromptInput = struct {
         return ready > 0;
     }
     //
-    // Discards the rest of the chunk of input that was read last (TypeScript emits its remaining keys to
-    // no listener once the prompt that was reading them has finished).
+    // Discards the rest of the chunk of input that was read last (its remaining keys go to no listener once the
+    // prompt that was reading them has finished).
     //
     pub fn discardChunk(self: *PromptInput) void {
         self.reader.tossBuffered();

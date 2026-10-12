@@ -150,7 +150,7 @@ const ts_key_header = "PSEN" ++ "\x01\x00\x00\x00" ++ "A2CB" ++
 //
 // A golden fixture file, and its plaintext size and encrypted length.
 //
-const TypeScriptEncryptedFile = struct {
+const GoldenEncryptedFile = struct {
     // The fixture file name in encryption-zig/src/test/fixtures.
     fileName: []const u8,
 
@@ -164,7 +164,7 @@ const TypeScriptEncryptedFile = struct {
 //
 // The fixture files written with encryptBuffer (new-*) and createEncryptionStream (stream-*).
 //
-const ts_encrypted_files = [_]TypeScriptEncryptedFile{
+const golden_encrypted_files = [_]GoldenEncryptedFile{
     .{ .fileName = "new-0.bin", .plainSize = 0, .encryptedLength = 588 },
     .{ .fileName = "new-17.bin", .plainSize = 17, .encryptedLength = 604 },
     .{ .fileName = "new-1048576.bin", .plainSize = 1048576, .encryptedLength = 1049164 },
@@ -199,18 +199,18 @@ test "EncryptedStorage reads the files in the golden fixtures" {
     try std.testing.expectEqualSlices(u8, "\x07\x26\x45\x64\x83\xa2\xc1\xe0\xff\x1e\x3d\x5c\x7b\x9a\xb9\xd8\xf7", plain17);
     try std.testing.expectEqualSlices(u8, plain17, try makeFixturePlaintext(allocator, 17));
 
-    for (ts_encrypted_files) |tsFile| {
-        const fixturePath = try std.fs.path.join(allocator, &.{ encryption_fixtures_dir, tsFile.fileName });
+    for (golden_encrypted_files) |goldenFile| {
+        const fixturePath = try std.fs.path.join(allocator, &.{ encryption_fixtures_dir, goldenFile.fileName });
         const encrypted = try std.Io.Dir.cwd().readFileAlloc(io, fixturePath, allocator, .unlimited);
-        try std.testing.expectEqual(tsFile.encryptedLength, encrypted.len);
-        try created.rawStorage.write(allocator, io, tsFile.fileName, null, encrypted);
+        try std.testing.expectEqual(goldenFile.encryptedLength, encrypted.len);
+        try created.rawStorage.write(allocator, io, goldenFile.fileName, null, encrypted);
 
-        const plain = try makeFixturePlaintext(allocator, tsFile.plainSize);
-        try std.testing.expectEqualSlices(u8, plain, (try created.storage.read(allocator, io, tsFile.fileName)).?);
-        const stream = try created.storage.readStream(allocator, io, tsFile.fileName);
+        const plain = try makeFixturePlaintext(allocator, goldenFile.plainSize);
+        try std.testing.expectEqualSlices(u8, plain, (try created.storage.read(allocator, io, goldenFile.fileName)).?);
+        const stream = try created.storage.readStream(allocator, io, goldenFile.fileName);
         defer stream.destroy(io);
         try std.testing.expectEqualSlices(u8, plain, try test_files.readAll(allocator, stream.reader()));
-        try std.testing.expectEqual(@as(u64, tsFile.encryptedLength), (try created.storage.info(allocator, io, tsFile.fileName)).?.length);
+        try std.testing.expectEqual(@as(u64, goldenFile.encryptedLength), (try created.storage.info(allocator, io, goldenFile.fileName)).?.length);
     }
 }
 
@@ -223,20 +223,20 @@ test "EncryptedStorage writes files with the header and length of the golden fix
     defer test_files.removeTempDir(io, dbDir);
     const created = try createStorage(allocator, io, dbDir, null, try loadFixtureOptions(allocator));
 
-    for (ts_encrypted_files) |tsFile| {
-        const plain = try makeFixturePlaintext(allocator, tsFile.plainSize);
-        const writeName = try std.mem.concat(allocator, u8, &.{ "zig-write-", tsFile.fileName });
+    for (golden_encrypted_files) |goldenFile| {
+        const plain = try makeFixturePlaintext(allocator, goldenFile.plainSize);
+        const writeName = try std.mem.concat(allocator, u8, &.{ "zig-write-", goldenFile.fileName });
         try created.storage.write(allocator, io, writeName, null, plain);
-        const streamName = try std.mem.concat(allocator, u8, &.{ "zig-stream-", tsFile.fileName });
+        const streamName = try std.mem.concat(allocator, u8, &.{ "zig-stream-", goldenFile.fileName });
         var input = std.Io.Reader.fixed(plain);
         try created.storage.writeStream(allocator, io, streamName, null, &input, null);
 
         for ([_][]const u8{ writeName, streamName }) |fileName| {
             const raw = (try created.rawStorage.read(allocator, io, fileName)).?;
-            try std.testing.expectEqual(tsFile.encryptedLength, raw.len);
+            try std.testing.expectEqual(goldenFile.encryptedLength, raw.len);
             try std.testing.expectEqualSlices(u8, ts_key_header, raw[0..ts_key_header.len]);
             try std.testing.expectEqualSlices(u8, plain, (try created.storage.read(allocator, io, fileName)).?);
-            try std.testing.expectEqual(@as(u64, tsFile.encryptedLength), (try created.storage.info(allocator, io, fileName)).?.length);
+            try std.testing.expectEqual(@as(u64, goldenFile.encryptedLength), (try created.storage.info(allocator, io, fileName)).?.length);
         }
     }
 }

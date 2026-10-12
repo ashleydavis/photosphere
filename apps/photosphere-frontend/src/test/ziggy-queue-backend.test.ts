@@ -151,6 +151,86 @@ describe('ZiggyQueueBackend', () => {
         expect(firedB).toHaveLength(1);
     });
 
+    test('unsubscribing a task message callback, an any message callback, a task added callback and a cancelled callback removes only that one', async () => {
+        const ziggy = new FakeZiggy();
+        const backend = new ZiggyQueueBackend(ziggy);
+        const typedA: any[] = [];
+        const typedB: any[] = [];
+        const anyA: any[] = [];
+        const anyB: any[] = [];
+        const addedA: string[] = [];
+        const addedB: string[] = [];
+        let cancelledA = 0;
+        let cancelledB = 0;
+        const unsubTyped = backend.onTaskMessage('progress', (data) => { typedA.push(data); });
+        backend.onTaskMessage('progress', (data) => { typedB.push(data); });
+        const unsubAny = backend.onAnyTaskMessage((data) => { anyA.push(data); });
+        backend.onAnyTaskMessage((data) => { anyB.push(data); });
+        const unsubAdded = backend.onTaskAdded('my-source', (taskId) => { addedA.push(taskId); });
+        backend.onTaskAdded('my-source', (taskId) => { addedB.push(taskId); });
+        const unsubCancelled = backend.onTasksCancelled('my-source', () => { cancelledA++; });
+        backend.onTasksCancelled('my-source', () => { cancelledB++; });
+
+        unsubTyped();
+        unsubAny();
+        unsubAdded();
+        unsubCancelled();
+
+        ziggy.emit('task-message', { taskId: 'task-1', message: { type: 'progress' } });
+        await Promise.resolve();
+        await Promise.resolve();
+        backend.addTask('my-type', null, 'my-source', 'task-2');
+        backend.cancelTasks('my-source');
+
+        expect(typedA).toHaveLength(0);
+        expect(typedB).toHaveLength(1);
+        expect(anyA).toHaveLength(0);
+        expect(anyB).toHaveLength(1);
+        expect(addedA).toEqual([]);
+        expect(addedB).toEqual(['task-2']);
+        expect(cancelledA).toBe(0);
+        expect(cancelledB).toBe(1);
+    });
+
+    test('a callback that throws is reported and does not stop the callbacks after it', async () => {
+        const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            const ziggy = new FakeZiggy();
+            const backend = new ZiggyQueueBackend(ziggy);
+            const completed: ITaskResult[] = [];
+            const typed: any[] = [];
+            const any: any[] = [];
+            backend.onTaskComplete(() => { throw new Error('completion broke'); });
+            backend.onTaskComplete((result) => { completed.push(result); });
+            backend.onTaskMessage('progress', () => { throw new Error('message broke'); });
+            backend.onTaskMessage('progress', (data) => { typed.push(data); });
+            backend.onAnyTaskMessage(() => { throw new Error('any broke'); });
+            backend.onAnyTaskMessage((data) => { any.push(data); });
+
+            const taskResult: ITaskResult = {
+                taskId: 'task-1',
+                type: 'my-type',
+                inputs: {},
+                status: TaskStatus.Succeeded,
+            };
+            ziggy.emit('task-completed', { taskId: 'task-1', result: taskResult as any });
+            ziggy.emit('task-message', { taskId: 'task-1', message: { type: 'progress' } });
+            for (let turn = 0; turn < 10; turn++) {
+                await Promise.resolve();
+            }
+
+            expect(completed).toHaveLength(1);
+            expect(typed).toHaveLength(1);
+            expect(any).toHaveLength(1);
+            expect(consoleError).toHaveBeenCalledWith("Error in task completion callback:", new Error('completion broke'));
+            expect(consoleError).toHaveBeenCalledWith("Error in task message callback:", new Error('message broke'));
+            expect(consoleError).toHaveBeenCalledWith("Error in any task message callback:", new Error('any broke'));
+        }
+        finally {
+            consoleError.mockRestore();
+        }
+    });
+
     test('shutdown removes the bridge listeners', () => {
         const ziggy = new FakeZiggy();
         const backend = new ZiggyQueueBackend(ziggy);

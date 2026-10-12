@@ -23,7 +23,8 @@ pub const IGetDatabaseSummaryData = struct {
 // Task handler that computes a summary of the database at the given path.
 // Returns the summary as the task result.
 // (Zig: the task data and output are JSON values holding IGetDatabaseSummaryData and IDatabaseSummary. A summary field
-// that holds no value is left out of the output. The context is ignored.)
+// that holds no value is left out of the output. The context is used only for its host requester, which opens the
+// storage of a database whose credentials the phone's keychain holds.)
 //
 pub fn getDatabaseSummaryHandler(
     allocator: std.mem.Allocator,

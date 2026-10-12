@@ -1,6 +1,6 @@
 //
-// Stand-in for the third-party `strip-ansi` and `string-width` packages used by `wrap-ansi` (this file
-// has no TypeScript counterpart in the repo). The per code point widths come from
+// Port of the third-party `strip-ansi` and `string-width` packages used by `wrap-ansi`. The per code point
+// widths come from
 // string-width-table.zig, which is generated from the real package. Grapheme clusters are approximated:
 // a cluster is a base code point followed by zero width code points (combining marks, variation
 // selectors, zero width joiners and the code point each joiner joins), skin tone modifiers and tags,

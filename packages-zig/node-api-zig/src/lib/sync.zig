@@ -80,13 +80,13 @@ pub const SyncChangeCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, change: ISyncChange) void,
+    function: *const fn (context: ?*anyopaque, change: ISyncChange) anyerror!void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: SyncChangeCallback, change: ISyncChange) void {
-        self.function(self.context, change);
+    pub fn call(self: SyncChangeCallback, change: ISyncChange) anyerror!void {
+        return self.function(self.context, change);
     }
 };
 
@@ -1385,7 +1385,7 @@ const SyncDatabaseState = struct {
             try targetCollection.setInternalRecord(io, merged);
             self.mergedCount += 1;
             if (self.onLocalChange != null and isMetadata) {
-                self.onLocalChange.?.call(.{ .type = .updated, .asset = try toExternal(allocator, merged) });
+                try self.onLocalChange.?.call(.{ .type = .updated, .asset = try toExternal(allocator, merged) });
             }
         }
         else if (diff.sourceRecord) |sourceRecord| {
@@ -1394,12 +1394,12 @@ const SyncDatabaseState = struct {
                 try targetCollection.setInternalRecord(io, sourceRecord);
                 self.mergedCount += 1;
                 if (self.onLocalChange != null and isMetadata) {
-                    self.onLocalChange.?.call(.{ .type = .added, .asset = try toExternal(allocator, sourceRecord) });
+                    try self.onLocalChange.?.call(.{ .type = .added, .asset = try toExternal(allocator, sourceRecord) });
                 }
             }
             else {
                 if (self.onLocalChange != null and isMetadata) {
-                    self.onLocalChange.?.call(.{ .type = .deleted, .assetId = sourceRecord._id });
+                    try self.onLocalChange.?.call(.{ .type = .deleted, .assetId = sourceRecord._id });
                 }
             }
         }

@@ -297,3 +297,31 @@ test "a full repair hashes every file, and puts right the hash of a record" {
     const record = (try target.database.metadataCollection.getOne(io, V6_ASSET_ID)).?;
     try std.testing.expect(!std.mem.eql(u8, "0000", record.get("hash").?.string));
 }
+
+test "logs a file whose restore fails part way and reports it as unrepaired" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const target = try copyV6(allocator, io);
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(target.dir).?);
+    const source = try copyV6(allocator, io);
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(source.dir).?);
+
+    // The source can restore the thumb, but the target has a folder that is not empty where the thumb goes, so writing it fails.
+    const thumbPath = "thumb/" ++ V6_ASSET_ID;
+    try target.storage.deleteFile(allocator, io, thumbPath);
+    try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ target.dir, thumbPath, "in-the-way" }), "in the way");
+
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    console_capture.captureStderr(&stderr_capture.writer);
+    defer console_capture.endConsoleCapture();
+
+    const result = try repair(allocator, io, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
+        .source = source.dir,
+    }, null);
+
+    try std.testing.expect(containsName(result.unrepaired, thumbPath));
+    try std.testing.expect(!containsName(result.repaired, thumbPath));
+    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Error repairing file " ++ thumbPath ++ ": ") != null);
+}

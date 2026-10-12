@@ -777,3 +777,22 @@ test "getDeviceFreeBytes measures the nearest existing ancestor of a directory t
     const measuredAtMissing: f64 = try evict_originals_worker.getDeviceFreeBytes(allocator, io, missing);
     try std.testing.expect(@abs(measuredAtDirectory - measuredAtMissing) < 1024.0 * 1024.0 * 1024.0);
 }
+
+test "getDeviceFreeBytes reports a filesystem it cannot measure rather than guessing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tempDir = try temp_dirs.makeTempDir(allocator, io, "evict-originals-free-bytes");
+    defer temp_dirs.removeTempDir(io, tempDir);
+    const filePath = try std.fs.path.join(allocator, &.{ tempDir, "a-file" });
+    try std.Io.Dir.cwd().writeFile(io, .{
+        .sub_path = filePath,
+        .data = "not a directory",
+    });
+
+    // A path that runs through a file is not a missing directory to walk up from: it cannot be measured at all.
+    const underFile = try std.fs.path.join(allocator, &.{ filePath, "database" });
+    try std.testing.expectError(error.Thrown, evict_originals_worker.getDeviceFreeBytes(allocator, io, underFile));
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "ENOTDIR, statfs '{s}'", .{underFile}), utils.errors.lastErrorMessage());
+}

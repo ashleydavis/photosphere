@@ -814,9 +814,13 @@ test "sits under the platform cache directory, not the process temp directory" {
     const runRoot = try temp_dirs.makeTempDir(allocator, io, "hash-cache-home-check");
     defer temp_dirs.removeTempDir(io, runRoot);
     try test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", try path.join(allocator, &.{ runRoot, "cache" }));
-    defer test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
+    defer test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch |err| {
+        std.debug.panic("PHOTOSPHERE_CACHE_DIR could not be put back: {s}", .{@errorName(err)});
+    };
     try test_environment.setEnv("PHOTOSPHERE_TMP_DIR", try path.join(allocator, &.{ runRoot, "scratch" }));
-    defer test_environment.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
+    defer test_environment.setEnv("PHOTOSPHERE_TMP_DIR", null) catch |err| {
+        std.debug.panic("PHOTOSPHERE_TMP_DIR could not be put back: {s}", .{@errorName(err)});
+    };
 
     const cacheDir = try getHashCacheDir(allocator, "/photos/one");
 
@@ -843,9 +847,13 @@ test "is still found once the process temp directory has been taken away" {
     const runRoot = try temp_dirs.makeTempDir(allocator, io, "hash-cache-survives-temp");
     defer temp_dirs.removeTempDir(io, runRoot);
     try test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", try path.join(allocator, &.{ runRoot, "cache" }));
-    defer test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch {};
+    defer test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch |err| {
+        std.debug.panic("PHOTOSPHERE_CACHE_DIR could not be put back: {s}", .{@errorName(err)});
+    };
     try test_environment.setEnv("PHOTOSPHERE_TMP_DIR", try path.join(allocator, &.{ runRoot, "scratch" }));
-    defer test_environment.setEnv("PHOTOSPHERE_TMP_DIR", null) catch {};
+    defer test_environment.setEnv("PHOTOSPHERE_TMP_DIR", null) catch |err| {
+        std.debug.panic("PHOTOSPHERE_TMP_DIR could not be put back: {s}", .{@errorName(err)});
+    };
     try std.Io.Dir.cwd().createDirPath(io, try getProcessTmpDir(allocator, io));
 
     var writer = try HashCache.init(try getHashCacheDir(allocator, "/photos/one"), false);
@@ -1211,3 +1219,31 @@ test "HashCache.save returns quietly when the update lock is held by somebody el
     try std.testing.expect(test_files.fileExists(io, cachePath));
 }
 
+
+test "HashCache.save rethrows when the update fails for a reason that is not contention" {
+    var context: CacheTest = undefined;
+    try context.init("hash-cache-save-test");
+    defer context.deinit();
+    const io = std.testing.io;
+    _ = try context.hashCache.load(io);
+    try context.hashCache.addHash("a/one.txt", .{
+        .hash = &([_]u8{7} ** 32),
+        .length = 11,
+        .lastModified = localDate(2024, 0, 1),
+    });
+
+    // The cache directory is replaced by a file, so the update lock beside the cache file cannot be
+    // created at all. That is a fault, not another writer in the way, and it has to reach the caller.
+    try std.Io.Dir.cwd().deleteDir(io, context.cacheDir);
+    try test_files.writeFile(io, context.cacheDir, "not a directory");
+    defer {
+        std.Io.Dir.cwd().deleteFile(io, context.cacheDir) catch |err| {
+            std.debug.panic("The file standing in for the cache directory could not be removed: {s}", .{@errorName(err)});
+        };
+        std.Io.Dir.cwd().createDirPath(io, context.cacheDir) catch |err| {
+            std.debug.panic("The cache directory could not be put back: {s}", .{@errorName(err)});
+        };
+    }
+
+    try std.testing.expect(std.meta.isError(context.hashCache.save(io)));
+}

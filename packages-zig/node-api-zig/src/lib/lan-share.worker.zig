@@ -77,8 +77,10 @@ const CancellationWatcher = struct {
         while (!self.isStopped.load(.acquire)) {
             var waited: u64 = 0;
             while (waited < CANCEL_POLL_INTERVAL_MS and !self.isStopped.load(.acquire)) {
-                self.io.sleep(.fromMilliseconds(WATCHER_SLEEP_SLICE_MS), .awake) catch {
-                    return;
+                // The watcher's thread is not a task of the Io, so nothing can cancel its sleep. Should one be cancelled all the
+                // same, the task could no longer be cancelled from the interface, so that is a crash rather than a quiet stop.
+                self.io.sleep(.fromMilliseconds(WATCHER_SLEEP_SLICE_MS), .awake) catch |err| {
+                    std.debug.panic("The cancellation watcher of a LAN share task could not sleep: {s}", .{@errorName(err)});
                 };
                 waited += WATCHER_SLEEP_SLICE_MS;
             }
