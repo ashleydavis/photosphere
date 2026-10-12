@@ -14,6 +14,7 @@ NATIVE_DIR="$APPLE_APP_DIR/shells/macos/zig-out"
 BUILD_DIR="$APPLE_APP_DIR/shells/macos/zig-out/xcode"
 CONFIGURATION="Debug"
 TEST_HOOKS="no"
+MINIFY="no"
 OPTIMIZE="ReleaseSafe"
 
 while [ $# -gt 0 ]; do
@@ -34,6 +35,10 @@ while [ $# -gt 0 ]; do
             CONFIGURATION="$2"
             shift 2
             ;;
+        --minify)
+            MINIFY="yes"
+            shift
+            ;;
         --test-hooks)
             TEST_HOOKS="yes"
             shift
@@ -43,16 +48,19 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         *)
-            apple_fail "unknown argument '$1'. Options: --arch, --native-dir, --build-dir, --configuration, --test-hooks, --optimize."
+            apple_fail "unknown argument '$1'. Options: --arch, --native-dir, --build-dir, --configuration, --test-hooks, --minify, --optimize."
             ;;
     esac
 done
 
+SYNC_ARGUMENTS=(--arch "$ARCH" --native-dir "$NATIVE_DIR" --optimize "$OPTIMIZE")
 if [ "$TEST_HOOKS" = "yes" ]; then
-    bash "$SCRIPT_DIR/sync-macos.sh" --arch "$ARCH" --native-dir "$NATIVE_DIR" --optimize "$OPTIMIZE" --test-hooks
-else
-    bash "$SCRIPT_DIR/sync-macos.sh" --arch "$ARCH" --native-dir "$NATIVE_DIR" --optimize "$OPTIMIZE"
+    SYNC_ARGUMENTS+=(--test-hooks)
 fi
+if [ "$MINIFY" = "yes" ]; then
+    SYNC_ARGUMENTS+=(--minify)
+fi
+bash "$SCRIPT_DIR/sync-macos.sh" "${SYNC_ARGUMENTS[@]}"
 
 xcodebuild \
     -project "$APPLE_APP_DIR/shells/macos/Photosphere.xcodeproj" \

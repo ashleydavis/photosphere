@@ -12,7 +12,6 @@ const std = @import("std");
 const builtin = @import("builtin");
 const c = @import("c");
 const geometry_lib = @import("geometry.zig");
-const ui_files = @import("ui-files");
 const accelerator_lib = @import("accelerator.zig");
 const actions_lib = @import("actions.zig");
 const menu_lib = @import("menu.zig");
@@ -37,8 +36,6 @@ pub const AppConfig = struct {
     default_height: c_int,
     // The number of the icon resource in the executable (the `1 ICON` of a resource script) the window shows, or null when the app has none.
     icon_resource: ?u16,
-    // The files of the app's bundled page, embedded in the executable. One of them must be "index.html".
-    ui_files: []const ui_files.UiFile,
 };
 
 //
@@ -485,9 +482,6 @@ fn start(shell: *Shell, allocator: std.mem.Allocator) !u8 {
         shell.test_mode = test_mode != null;
     }
 
-    if (ui_files.findFile(shell.app_config.ui_files, "/") == null) {
-        return error.UiHasNoIndexPage;
-    }
     var inject_script_length: usize = 0;
     const inject_script = c.ziggy_inject_script(&inject_script_length);
     shell.inject_script = try std.unicode.utf8ToUtf16LeAllocZ(allocator, inject_script[0..inject_script_length]);
@@ -2074,7 +2068,7 @@ fn memoryStream(content: []const u8) *c.IStream {
 }
 
 //
-// Answers a request to the bundled page from the files embedded in the executable, with a header that allows any origin to read the
+// Answers a request to the bundled page from the files the core holds, with a header that allows any origin to read the
 // file (the page script is a module loaded with the crossorigin attribute). A path that is not one of them is
 // answered with a 404.
 //
@@ -2103,11 +2097,15 @@ fn resourceInvoke(this: [*c]c.ICoreWebView2WebResourceRequestedEventHandler, sen
     const path_end = std.mem.indexOfAny(u8, path, "?#") orelse path.len;
     path = path[0..path_end];
 
+    const core = shell.core orelse {
+        fatal("a page request arrived before the core existed", .{});
+    };
     var response: ?*c.ICoreWebView2WebResourceResponse = null;
-    if (ui_files.findFile(shell.app_config.ui_files, path)) |file| {
-        const stream = memoryStream(file.content);
+    var file: c.ziggy_ui_file_result = undefined;
+    if (c.ziggy_ui_file(core, path.ptr, path.len, &file)) {
+        const stream = memoryStream(file.content[0..file.content_length]);
         defer _ = stream.lpVtbl.*.Release.?(stream);
-        const headers = std.fmt.allocPrint(std.heap.c_allocator, "Content-Type: {s}\r\nAccess-Control-Allow-Origin: *", .{ui_files.contentType(file.path)}) catch {
+        const headers = std.fmt.allocPrint(std.heap.c_allocator, "Content-Type: {s}\r\nAccess-Control-Allow-Origin: *", .{std.mem.span(file.content_type)}) catch {
             fatal("the response headers could not be built", .{});
         };
         defer std.heap.c_allocator.free(headers);

@@ -47,9 +47,9 @@ case "$ARCHITECTURE" in
 esac
 BASE_NAME="photosphere-$VERSION-linux-$ARCHITECTURE"
 
-(cd "$APP_DIR" && bun run bundle:ui)
+(cd "$APP_DIR" && bun run bundle:ui --minify)
 STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/photosphere-package-XXXXXX")"
-(cd "$APP_DIR/../.." && zig build photosphere-linux -Doptimize=ReleaseSafe -p "$STAGE_DIR/prefix")
+(cd "$APP_DIR/../.." && zig build photosphere-linux -Doptimize=ReleaseSafe -Dstrip=true -p "$STAGE_DIR/prefix")
 mkdir -p "$OUTPUT_DIR"
 
 # The zip holds the executable, which has the page embedded, in one folder.

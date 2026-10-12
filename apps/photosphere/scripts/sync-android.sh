@@ -10,6 +10,7 @@ arch_list="x86_64 arm64"
 optimize="ReleaseSafe"
 test_hooks="false"
 skip_ui="false"
+bundle_arguments=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --arch)
@@ -24,12 +25,16 @@ while [ $# -gt 0 ]; do
             test_hooks="true"
             shift
             ;;
+        --minify)
+            bundle_arguments=(--minify)
+            shift
+            ;;
         --skip-ui)
             skip_ui="true"
             shift
             ;;
         *)
-            echo "Usage: sync-android.sh [--arch \"x86_64 arm64\"] [--optimize Debug|ReleaseSafe|ReleaseFast|ReleaseSmall] [--test-hooks] [--skip-ui]" >&2
+            echo "Usage: sync-android.sh [--arch \"x86_64 arm64\"] [--optimize Debug|ReleaseSafe|ReleaseFast|ReleaseSmall] [--test-hooks] [--minify] [--skip-ui]" >&2
             exit 2
             ;;
     esac
@@ -89,7 +94,7 @@ fi
 # The page is embedded in the library, so it is built first.
 if [ "$skip_ui" = "false" ]; then
     echo "Building the page..."
-    (cd "$PHOTOSPHERE_APP_DIR" && bun run bundle:ui)
+    (cd "$PHOTOSPHERE_APP_DIR" && bun run bundle:ui "${bundle_arguments[@]+"${bundle_arguments[@]}"}")
 fi
 if [ ! -f "$PHOTOSPHERE_APP_DIR/../photosphere-frontend/dist/index.html" ]; then
     echo "ERROR: $PHOTOSPHERE_APP_DIR/../photosphere-frontend/dist/index.html does not exist. Run without --skip-ui." >&2

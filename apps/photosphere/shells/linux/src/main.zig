@@ -5,7 +5,6 @@
 
 const std = @import("std");
 const shell = @import("ziggy-shell-linux");
-const ui = @import("ui-files");
 
 //
 // What the core says when the background work reports something, as the core sends it.
@@ -65,6 +64,5 @@ pub fn main(init: std.process.Init) !u8 {
         .default_width = 1200,
         .default_height = 800,
         .icon_png = @embedFile("app-icon"),
-        .ui_files = &ui.files,
     }, args);
 }

@@ -9,5 +9,6 @@ Run it on a Mac: `bun run --filter=ziggy sync:ios`.
 - `--sdk <simulator|device>`: default: `simulator`. A device build is arm64 only.
 - `--arch <arm64|x86_64>`: default: this Mac's (the simulator runs the Mac's architecture).
 - `--native-dir <dir>`: default: `shells/ios/zig-out`. The library there is for one SDK and architecture, so sync again after changing either.
+- `--minify`: minify the page, for a release package.
 - `--test-hooks`: build the library with the test control connection. Never use it for a release.
 - `--optimize <mode>`: default: `ReleaseSafe`.

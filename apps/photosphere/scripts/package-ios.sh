@@ -33,7 +33,7 @@ done
 BASE_NAME="photosphere-$VERSION-ios-arm64"
 mkdir -p "$OUTPUT_DIR" "$BUILD_DIR"
 
-bash "$SCRIPT_DIR/sync-ios.sh" --sdk device --arch arm64 --native-dir "$BUILD_DIR/native"
+bash "$SCRIPT_DIR/sync-ios.sh" --sdk device --arch arm64 --minify --native-dir "$BUILD_DIR/native"
 xcodebuild archive \
     -project "$APPLE_APP_DIR/shells/ios/Photosphere.xcodeproj" \
     -scheme Photosphere \

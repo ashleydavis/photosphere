@@ -589,6 +589,7 @@ Zig, in Ziggy's Zig package tests (the dispatcher, the C interface, the task run
 - Investigate why CLI tests (and other tests) take so long (100ms+). Claude has told me that it could not be bothered implementing my request to remove all real io, allocators and the like even though it worked over night doing god knows what.
 - Unit tests depend on the AWS SDK which makes them slow to start in the workflow. They shouldn't need to be dependent on it.
 - Build the embedded FFmpeg and ImageMagick libraries from source for the CLI and every platform, and cache that build in the release workflow the way the `build-aws-sdk` job caches the AWS SDK, as one job that owns the compile so every other job restores it. Today the Android libraries are fetched prebuilt by `scripts/fetch-mobile-media-tools.sh`, so there is no build to cache yet.
+- FFmpeg, ImageMagick and the AWS SDK: we'll need to trim those later.
 - Flaky Ziggy smoke tests to deal with:
   - `26-s3-database-lifecycle` (Linux, parallel run): after the restart the test reopens the database the app already restored and navigates to the gallery; a close and a reload race in `asset-database-source.tsx` and "Gallery loaded: 2 assets" is never logged.
   - `43-receive-secret` (Linux): the app was killed shortly after it became ready, once, during concurrent runs. Cause not found.

@@ -106,16 +106,21 @@ apple_generate_media_config() {
 
 # Bundles Photosphere's page and builds the Zig static library, which embeds the page, so an Xcode build has everything it links.
 # <native_dir> gets lib/libphotosphere.a and include/ziggy.h.
-# Usage: apple_sync_native <zig_target> <native_dir> <yes|no test hooks> <zig optimize mode>
+# Usage: apple_sync_native <zig_target> <native_dir> <yes|no test hooks> <zig optimize mode> <yes|no minify the page>
 apple_sync_native() {
     local zig_target="$1"
     local native_dir="$2"
     local test_hooks="$3"
     local optimize="$4"
+    local minify="$5"
+    local bundle_arguments=()
+    if [ "$minify" = "yes" ]; then
+        bundle_arguments=(--minify)
+    fi
     apple_require_tool bun zig rsync xcrun
     apple_generate_media_config "$zig_target"
     echo "Bundling the page..."
-    (cd "$APPLE_APP_DIR" && bun run bundle:ui) || apple_fail "bundling the page failed."
+    (cd "$APPLE_APP_DIR" && bun run bundle:ui "${bundle_arguments[@]+"${bundle_arguments[@]}"}") || apple_fail "bundling the page failed."
     echo "Building the Zig library for $zig_target (optimize $optimize, test hooks $test_hooks)..."
     if [ "$test_hooks" = "yes" ]; then
         (cd "$APPLE_REPO_ROOT" && zig build photosphere-core -Dtarget="$zig_target" -Doptimize="$optimize" -Dtest-hooks=true -p "$native_dir") || apple_fail "the Zig build failed."

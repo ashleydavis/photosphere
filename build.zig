@@ -240,6 +240,9 @@ pub fn build(b: *std.Build) !void {
     const test_hooks = b.option(bool, "test-hooks", "Build the test hooks (the test control connection) into the app (never for a release)") orelse false;
     // Whether the Windows shells are compiled without linking WebView2's loader, to check them on a machine that cannot link.
     const compile_only = b.option(bool, "compile-only", "Compile the Windows shell without linking the WebView2 loader, to check it on a machine that cannot link") orelse false;
+    // Whether the desktop executables leave out their debug information. Only the release packages do: a dev or test build keeps it, so
+    // a panic there prints where it happened.
+    const strip = b.option(bool, "strip", "Leave the debug information out of the desktop executables (for a release)") orelse false;
     // ReleaseSafe by default: the tests keep the safety checks, and the work of the database and storage tests is several times
     // slower in Debug.
     const optimize = b.option(std.builtin.OptimizeMode, "optimize", "Prioritize performance, safety, or binary size (default: ReleaseSafe)") orelse .ReleaseSafe;
@@ -270,12 +273,12 @@ pub fn build(b: *std.Build) !void {
         // are built for the machine running the build otherwise), but their tests and the CLI are not, since none can run on the build machine.
         const android_ziggy_core = try addZiggyCore(b, target, optimize, false, queue_modules);
         const android_modules = (try addPackageModules(b, target, optimize, queue_modules, android_ziggy_core.module)) orelse return;
-        try addZiggy(b, internalStep(b, "tests of Ziggy"), internalStep(b, "tests of the Ziggy example"), target, optimize, queue_modules, test_hooks, compile_only);
-        try addPhotosphere(b, target, optimize, test_hooks, compile_only, queue_modules, android_modules);
+        try addZiggy(b, internalStep(b, "tests of Ziggy"), internalStep(b, "tests of the Ziggy example"), target, optimize, queue_modules, test_hooks, compile_only, strip);
+        try addPhotosphere(b, target, optimize, test_hooks, compile_only, strip, queue_modules, android_modules);
         return;
     }
     if (!packages_supported) {
-        try addZiggy(b, internalStep(b, "tests of Ziggy"), internalStep(b, "tests of the Ziggy example"), target, optimize, queue_modules, test_hooks, compile_only);
+        try addZiggy(b, internalStep(b, "tests of Ziggy"), internalStep(b, "tests of the Ziggy example"), target, optimize, queue_modules, test_hooks, compile_only, strip);
         try addPhotosphereUnavailable(b, target);
         return;
     }
@@ -307,8 +310,8 @@ pub fn build(b: *std.Build) !void {
     // the Ziggy example's own workflow runs them with the tests of Ziggy through test-ziggy-example.
     const test_ziggy_step = internalStep(b, "tests of Ziggy");
     const test_ziggy_example_step = internalStep(b, "tests of the Ziggy example");
-    try addZiggy(b, test_ziggy_step, test_ziggy_example_step, target, optimize, queue_modules, test_hooks, compile_only);
-    try addPhotosphere(b, target, optimize, test_hooks, compile_only, queue_modules, modules);
+    try addZiggy(b, test_ziggy_step, test_ziggy_example_step, target, optimize, queue_modules, test_hooks, compile_only, strip);
+    try addPhotosphere(b, target, optimize, test_hooks, compile_only, strip, queue_modules, modules);
     test_step.dependOn(test_ziggy_step);
     const test_ziggy_example_named_step = b.step("test-ziggy-example", "Run the tests of Ziggy and of the Ziggy example");
     test_ziggy_example_named_step.dependOn(test_ziggy_step);
@@ -834,9 +837,6 @@ const IZiggyCore = struct {
     // The core, imported as "ziggy-core".
     module: *std.Build.Module,
 
-    // The list of the bundled page's files and the lookup in it, which the shells of the platforms that embed the page import.
-    ui_files_module: *std.Build.Module,
-
     // How a shell hands the core the answer to a host request, which the shells that answer host requests in Zig import.
     host_reply_module: *std.Build.Module,
 };
@@ -868,12 +868,6 @@ fn addZiggyCore(
         .root_source_file = b.path("packages/ziggy/bridge/inject/ziggy-inject.js"),
     });
 
-    const ui_files_module = b.createModule(.{
-        .root_source_file = b.path("packages/ziggy/core/src/lib/ui-files.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
     const host_reply_module = b.createModule(.{
         .root_source_file = b.path("packages/ziggy/core/src/lib/host-reply.zig"),
         .target = target,
@@ -894,14 +888,13 @@ fn addZiggyCore(
     }
     return .{
         .module = module,
-        .ui_files_module = ui_files_module,
         .host_reply_module = host_reply_module,
     };
 }
 
 //
 // Makes the module that holds an app's built page, a list of every file under the page's directory (a path relative to the root of
-// the repository), each embedded with @embedFile. Pass the module to the app's shell code and give the list to AppConfig.ui_files.
+// the repository), each embedded with @embedFile. Pass the module to the app's core, which serves the page to every shell.
 // The directory is read every time the build runs, so whatever the page build produced is what gets embedded, with no list of files
 // to keep up to date. A changed file rebuilds the executable. When the directory is missing or has no index.html, which means the
 // page was not built first, the module does not compile and says so: the build of anything that does not use the page is not
@@ -1096,6 +1089,7 @@ fn addZiggy(
     queue: IQueueModules,
     test_hooks: bool,
     compile_only: bool,
+    strip: bool,
 ) !void {
     const core = try addZiggyCore(b, target, optimize, test_hooks, queue);
     const test_core = try addZiggyCore(b, target, optimize, true, queue);
@@ -1205,12 +1199,11 @@ fn addZiggy(
         .name = "ziggy-example",
         .title = "the Ziggy example",
         .directory = "apps/ziggy-example",
-        .page_directory = "apps/ziggy-example/dist",
         .linux_icon = null,
         .windows_resource = null,
     };
-    try addLinuxShell(b, example_app, target, optimize, core, static_library);
-    try addWindowsShell(b, example_app, compile_only, target, optimize, core, static_library);
+    try addLinuxShell(b, example_app, strip, target, optimize, core, static_library);
+    try addWindowsShell(b, example_app, compile_only, strip, target, optimize, static_library);
 }
 
 //
@@ -1228,6 +1221,7 @@ fn addPhotosphere(
     optimize: std.builtin.OptimizeMode,
     test_hooks: bool,
     compile_only: bool,
+    strip: bool,
     queue: IQueueModules,
     modules: std.StringHashMap(*std.Build.Module),
 ) !void {
@@ -1298,16 +1292,15 @@ fn addPhotosphere(
         .name = "photosphere",
         .title = "Photosphere",
         .directory = "apps/photosphere",
-        .page_directory = photosphere_page_directory,
         .linux_icon = "apps/photosphere/icons/photosphere-512.png",
         .windows_resource = "apps/photosphere/shells/windows/photosphere.rc",
     };
-    try addLinuxShell(b, photosphere_app, target, optimize, core, static_library);
-    try addWindowsShell(b, photosphere_app, compile_only, target, optimize, core, static_library);
+    try addLinuxShell(b, photosphere_app, strip, target, optimize, core, static_library);
+    try addWindowsShell(b, photosphere_app, compile_only, strip, target, optimize, static_library);
 }
 
 //
-// The directory the page of Photosphere's app is built into (`bun run bundle:ui` in apps/photosphere), which each shell embeds.
+// The directory the page of Photosphere's app is built into (`bun run bundle:ui` in apps/photosphere), which the core embeds and serves to every shell.
 //
 const photosphere_page_directory = "apps/photosphere-frontend/dist";
 
@@ -1399,8 +1392,6 @@ const IShellApp = struct {
     // The directory of the app, under which its shells (`shells/linux/src/main.zig`, `shells/windows/src/main.zig`) and the WebView2 SDK
     // (`webview2-sdk`) are.
     directory: []const u8,
-    // The directory of the app's built page, which is embedded in the executable.
-    page_directory: []const u8,
     // The PNG file of the app's window icon on Linux, which the shell's `app-icon` import gives to the app's main file, or null for none.
     linux_icon: ?[]const u8,
     // The Windows resource script of the app's executable icon, or null for none.
@@ -1415,6 +1406,7 @@ const IShellApp = struct {
 fn addLinuxShell(
     b: *std.Build,
     app: IShellApp,
+    strip: bool,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     core: IZiggyCore,
@@ -1448,7 +1440,6 @@ fn addLinuxShell(
         .link_libc = true,
     });
     shell_module.addImport("c", translate_c.createModule());
-    shell_module.addImport("ui-files", core.ui_files_module);
     shell_module.addImport("host-reply", core.host_reply_module);
     for (runtime_library_paths.items) |path| {
         shell_module.addObjectFile(.{
@@ -1461,6 +1452,7 @@ fn addLinuxShell(
         .target = target,
         .optimize = optimize,
         .link_libc = true,
+        .strip = strip,
     });
     module.addImport("ziggy-shell-linux", shell_module);
     if (app.linux_icon) |icon| {
@@ -1468,7 +1460,6 @@ fn addLinuxShell(
             .root_source_file = b.path(icon),
         });
     }
-    module.addImport("ui-files", try embedPage(b, shell_module, "ziggy-shell-linux", app.page_directory));
     module.linkLibrary(core_library);
     const executable = b.addExecutable(.{
         .name = app.name,
@@ -1489,9 +1480,9 @@ fn addWindowsShell(
     b: *std.Build,
     app: IShellApp,
     compile_only: bool,
+    strip: bool,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
-    core: IZiggyCore,
     core_library: *std.Build.Step.Compile,
 ) !void {
     const step = b.step(b.fmt("{s}-windows", .{app.name}), b.fmt("Build {s} for Windows, installed to {s}/{s}.exe", .{ app.title, app.name, app.name }));
@@ -1530,7 +1521,6 @@ fn addWindowsShell(
         .link_libc = true,
     });
     shell_module.addImport("c", translate_c.createModule());
-    shell_module.addImport("ui-files", core.ui_files_module);
     shell_module.linkSystemLibrary("user32", .{});
     shell_module.linkSystemLibrary("kernel32", .{});
     shell_module.linkSystemLibrary("ole32", .{});
@@ -1549,6 +1539,7 @@ fn addWindowsShell(
         .target = target,
         .optimize = optimize,
         .link_libc = true,
+        .strip = strip,
     });
     module.addImport("ziggy-shell-windows", shell_module);
     if (app.windows_resource) |resource| {
@@ -1556,7 +1547,6 @@ fn addWindowsShell(
             .file = b.path(resource),
         });
     }
-    module.addImport("ui-files", try embedPage(b, shell_module, "ziggy-shell-windows", app.page_directory));
     module.linkLibrary(core_library);
     const executable = b.addExecutable(.{
         .name = app.name,
@@ -1582,7 +1572,6 @@ fn addWindowsShell(
     check_module.addImport("ziggy-shell-windows", shell_module);
     // The icon resource is left out: a resource is not Zig, so it has no type errors to find, and an object cannot hold it ("coff does
     // not support linking multiple objects into one").
-    check_module.addImport("ui-files", try embedPage(b, shell_module, "ziggy-shell-windows", app.page_directory));
     check_step.dependOn(&b.addObject(.{
         .name = b.fmt("{s}-check", .{app.name}),
         .root_module = check_module,

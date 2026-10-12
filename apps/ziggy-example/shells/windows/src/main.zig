@@ -5,7 +5,6 @@
 
 const std = @import("std");
 const shell = @import("ziggy-shell-windows");
-const ui = @import("ui-files");
 
 pub fn main(init: std.process.Init) !u8 {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
@@ -15,6 +14,5 @@ pub fn main(init: std.process.Init) !u8 {
         .default_width = 900,
         .default_height = 800,
         .icon_resource = null,
-        .ui_files = &ui.files,
     }, args);
 }

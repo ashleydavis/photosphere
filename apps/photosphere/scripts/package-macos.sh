@@ -38,7 +38,7 @@ done
 BASE_NAME="photosphere-$VERSION-macos-$ARCH"
 mkdir -p "$OUTPUT_DIR" "$BUILD_DIR"
 
-bash "$SCRIPT_DIR/build-macos.sh" --arch "$ARCH" --configuration Release --native-dir "$BUILD_DIR/native" --build-dir "$BUILD_DIR/xcode"
+bash "$SCRIPT_DIR/build-macos.sh" --arch "$ARCH" --configuration Release --minify --native-dir "$BUILD_DIR/native" --build-dir "$BUILD_DIR/xcode"
 APP="$BUILD_DIR/xcode/Build/Products/Release/Photosphere.app"
 
 # The disk image holds the app and a link to /Applications. The staging directory is reused between runs and brought into
