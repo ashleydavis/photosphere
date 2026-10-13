@@ -1,10 +1,10 @@
 //
 // Photosphere's iOS shell: the application delegate, which owns the window and the one view controller. Everything else generic is in
-// ZiggyShellIOS.
+// ZiggyNativeIOS.
 //
 
 import UIKit
-import ZiggyShellIOS
+import ZiggyNativeIOS
 
 // Owns the window for the life of the application.
 @main

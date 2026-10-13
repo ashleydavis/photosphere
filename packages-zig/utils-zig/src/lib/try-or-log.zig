@@ -1,6 +1,6 @@
 const std = @import("std");
 const retry_module = @import("retry.zig");
-const log_module = @import("log.zig");
+const log_module = @import("ziggy-core").task_queue.utils.log;
 const OperationResult = retry_module.OperationResult;
 
 //

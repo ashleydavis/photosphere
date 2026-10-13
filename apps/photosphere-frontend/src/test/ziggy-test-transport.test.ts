@@ -149,11 +149,11 @@ describe('createZiggyTestTransport', () => {
 });
 
 describe('signalTestPageReady', () => {
-    test('sends test-page-ready', () => {
+    test('sends test-ui-ready', () => {
         const ziggy = new FakeZiggy();
 
         signalTestPageReady(ziggy);
 
-        expect(ziggy.sent).toEqual([{ channel: 'test-page-ready', data: null }]);
+        expect(ziggy.sent).toEqual([{ channel: 'test-ui-ready', data: null }]);
     });
 });

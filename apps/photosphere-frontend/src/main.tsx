@@ -4,7 +4,7 @@ import { App } from './app';
 import '@fortawesome/fontawesome-free/css/all.css';
 import './tailwind.css';
 import { installTestDriver } from "user-interface";
-import type { IZiggyBridge } from "ziggy-bridge";
+import type { IZiggyBridge } from "ziggy-ui";
 import { isTestMode } from "./lib/test-mode";
 import type { IPlatformInfo } from "./lib/platform-provider-ziggy";
 import { sendRendererLog } from "./lib/renderer-log";

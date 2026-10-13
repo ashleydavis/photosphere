@@ -3,7 +3,7 @@
 //
 
 import Foundation
-import ZiggyShellIOS
+import ZiggyNativeIOS
 
 // Helpers for the JSON of host requests.
 enum HostJson {

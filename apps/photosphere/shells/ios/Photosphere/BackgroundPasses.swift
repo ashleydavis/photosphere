@@ -16,7 +16,7 @@
 import BackgroundTasks
 import Foundation
 import UIKit
-import ZiggyShellIOS
+import ZiggyNativeIOS
 
 // One of the background processing tasks.
 private struct BackgroundPass {

@@ -1,10 +1,10 @@
 //
 // Photosphere's MacOS shell: a window and Ziggy's web view in the window. Everything else is
-// in ZiggyShellMacOS.
+// in ZiggyNativeMacOS.
 //
 
 import AppKit
-import ZiggyShellMacOS
+import ZiggyNativeMacOS
 
 // Owns the window and Ziggy's bridge for the life of the application.
 final class AppDelegate: NSObject, NSApplicationDelegate {

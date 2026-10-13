@@ -1,4 +1,4 @@
-import type { IJsonValue, IMessageCallback, IZiggyBridge } from "ziggy-bridge";
+import type { IJsonValue, IMessageCallback, IZiggyBridge } from "ziggy-ui";
 
 //
 // A message the page sent with send or invoke.

@@ -87,7 +87,7 @@ Run the CLI to desktop LAN share suite, which shares secrets and databases in bo
 bun run test:lan-share:cli-desktop
 ```
 
-Run the Photosphere App smoke tests, which drive the Photosphere App on Ziggy through its test hooks (see [Ziggy architecture](../../packages/ziggy/docs/architecture.md) and [Photosphere smoke tests](../../apps/photosphere-smoke-tests/README.md)). The desktop suite runs on the host operating system, the mobile suites on the Android emulator pool or device and on the iOS simulator or a connected iOS device. `PHOTOSPHERE_SMOKE_SCENARIO=<number or name>` in front of any of them runs one scenario:
+Run the Photosphere App smoke tests, which drive the Photosphere App on Ziggy through its test hooks (see [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md), [Photosphere on Ziggy](../photosphere-on-ziggy.md) and [Photosphere smoke tests](../../apps/photosphere-smoke-tests/README.md)). The desktop suite runs on the host operating system, the mobile suites on the Android emulator pool or device and on the iOS simulator or a connected iOS device. `PHOTOSPHERE_SMOKE_SCENARIO=<number or name>` in front of any of them runs one scenario:
 
 ```bash
 bun run test:ziggy       # desktop, on the host operating system
@@ -95,17 +95,7 @@ bun run test:ziggy:and   # Android emulator or attached device
 bun run test:ziggy:ios   # iOS simulator or connected device (needs macOS with Xcode)
 ```
 
-Run the Ziggy example's smoke tests. The example is a small complete app built on Ziggy, and its suite is part of every full test run, so a change to Ziggy always runs it (see the [Ziggy example README](../../apps/ziggy-example/README.md), and [its runner's notes](../../apps/ziggy-example/smoke-tests/run.md) for what each scenario checks).
-
-```bash
-bun run test:ziggy-example       # desktop, on the host operating system
-bun run test:ziggy-example:and   # Android emulator or attached device
-bun run test:ziggy-example:ios   # iOS simulator (needs macOS with Xcode)
-```
-
-The example page's TypeScript tests run with `bun run test`, and the Zig tests with `bun run test:zig`. `bun run compile:zig` builds the Zig code and cross-builds it for every platform.
-
-`bun run test:zig` runs `zig build test` at the root of the repository: the unit tests of every package in `packages-zig`, of Ziggy and the example, and the tests of the Zig CLI, in one build. `-Dtest-file=<package>/<file>.test.zig` (for the CLI `-Dcli-test-file=<file>.test.zig`) runs one file.
+`bun run test:zig` runs `zig build test` at the root of the repository: the unit tests of every package in `packages-zig` and the tests of the Zig CLI, in one build. Ziggy's own tests run in its repository. `-Dtest-file=<package>/<file>.test.zig` (for the CLI `-Dcli-test-file=<file>.test.zig`) runs one file.
 
 Run the mobile test harness's own tests, covering the device run lock, the work queue and worker pool, and the timeout helper. They drive shell rather than the app, so they need no device and take seconds:
 
@@ -441,4 +431,3 @@ The one exception is the news feed. `POST /seed-news` still goes through the app
 - [stories README](../../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player
 - `apps/smoke-tests/tests/<n>-<name>/` - Mobile smoke tests (`bun run test:and` / `bun run test:ios`), platform-neutral and numbered
 - `apps/photosphere-smoke-tests/<n>-<name>/` - Photosphere App smoke tests (`bun run test:ziggy` / `bun run test:ziggy:and` / `bun run test:ziggy:ios`), platform-neutral and numbered. See [its README](../../apps/photosphere-smoke-tests/README.md)
-- `apps/ziggy-example/smoke-tests/<n>-<name>/` - Ziggy example smoke tests (`bun run test:ziggy-example` and its `:and` and `:ios` forms), with the desktop-only ones in `desktop-only/`. See [its runner's notes](../../apps/ziggy-example/smoke-tests/run.md)

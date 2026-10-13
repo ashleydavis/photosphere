@@ -21,7 +21,7 @@ runs:
             Linux-X64) asset="what-changed-linux-x64.tar.gz";;
             macOS-ARM64) asset="what-changed-macos-arm64.tar.gz";;
             macOS-X64) asset="what-changed-macos-x64.tar.gz";;
-            # The Ziggy example workflow's Windows jobs failed here with "No what-changed release asset for Windows-X64" because this list
+            # Windows jobs failed here with "No what-changed release asset for Windows-X64" because this list
             # had no Windows entry, although the release publishes what-changed-windows-x64.zip.
             Windows-X64) asset="what-changed-windows-x64.zip";;
             *) echo "::error::No what-changed release asset for $RUNNER_OS-$RUNNER_ARCH"; exit 1;;

@@ -12,7 +12,7 @@
 
 const std = @import("std");
 const utils = @import("utils-zig");
-const task_queue_zig = @import("task-queue-zig");
+const task_queue_zig = @import("ziggy-core").task_queue;
 const errors = utils.errors;
 const log = &utils.log.log;
 const sleep = utils.sleep.sleep;

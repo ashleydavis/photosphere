@@ -1,6 +1,6 @@
 const std = @import("std");
 const utils = @import("utils-zig");
-const task_queue_zig = @import("task-queue-zig");
+const task_queue_zig = @import("ziggy-core").task_queue;
 const media_file_database = @import("media-file-database.zig");
 const open_storage = @import("open-storage.zig");
 const errors = utils.errors;

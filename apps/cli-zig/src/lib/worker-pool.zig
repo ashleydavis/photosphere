@@ -1,6 +1,6 @@
 //
 // The worker pool of the CLI. Each worker is a std.Thread of the CLI process: a dispatched task is handed to
-// the worker thread, which runs the handler registered with task-queue-zig (worker.registerHandler) with an
+// the worker thread, which runs the handler registered with Ziggy's task queue (task_queue.worker.registerHandler) with an
 // arena allocator owned by the task, and reports the completion itself (under the pool lock).
 //
 // Consequences of running workers as threads:
@@ -12,13 +12,13 @@
 // - Workers share the main thread's queue backend, so a handler that queues child tasks adds them to this pool
 //   directly.
 // - Callbacks are invoked on the thread that completes the task (a worker thread or the timeout monitor)
-//   while the pool lock is held (see the threading contract in task-queue-zig queue-backend.zig).
+//   while the pool lock is held (see the threading contract in queue-backend.zig of Ziggy's task queue).
 //
 
 const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
-const task_queue = @import("task-queue-zig");
+const task_queue = @import("ziggy-core").task_queue;
 const node_api = @import("node-api-zig");
 const worker_log_bun = @import("worker-log-bun.zig");
 const initTaskHandlers = node_api.task_handlers.initTaskHandlers;

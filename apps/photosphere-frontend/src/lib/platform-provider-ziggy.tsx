@@ -9,7 +9,7 @@ import type { IImportProgressMessage } from "api/src/lib/import-assets.types";
 import { AUTO_IMPORT_ENABLED_KEY } from "user-interface";
 import type { ISaveAssetItem, IConflictResolution } from "api";
 import type { ISecret } from "vault";
-import type { IJsonValue, IZiggyBridge } from "ziggy-bridge";
+import type { IJsonValue, IZiggyBridge } from "ziggy-ui";
 import { planBackgroundWork, readPermissionState, resolveMediaPermission, type IRawPermissionResult } from "./background-work";
 import { readAutoImportSettings, readSyncSettings, recordSyncDatabase, seedSyncSettings } from "./mobile-settings";
 import { resolveDroppedFilePath, type IDroppedFile } from "./dropped-file-path";

@@ -1,6 +1,6 @@
 # Photosphere smoke tests
 
-One set of smoke tests for the Photosphere App on every platform. See [Ziggy architecture](../../packages/ziggy/docs/architecture.md) for the test hooks the suites are allowed to use.
+One set of smoke tests for the Photosphere App on every platform. See [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md) for the test hooks the suites are allowed to use.
 
 ## Running
 

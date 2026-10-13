@@ -1,5 +1,5 @@
 import type { ITaskResult, IQueueBackend, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn, TaskPriority } from "task-queue";
-import type { IJsonValue, IZiggyBridge } from "ziggy-bridge";
+import type { IJsonValue, IZiggyBridge } from "ziggy-ui";
 
 //
 // Task completion event from the core.

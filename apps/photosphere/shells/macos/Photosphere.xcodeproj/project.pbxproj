@@ -9,7 +9,7 @@
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* AppMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* AppMain.swift */; };
 		A10000000000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* AppDelegate.swift */; };
-		A10000000000000000000004 /* ZiggyShellMacOS in Frameworks */ = {isa = PBXBuildFile; productRef = A60000000000000000000001 /* ZiggyShellMacOS */; };
+		A10000000000000000000004 /* ZiggyNativeMacOS in Frameworks */ = {isa = PBXBuildFile; productRef = A60000000000000000000001 /* ZiggyNativeMacOS */; };
 		A10000000000000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -18,7 +18,6 @@
 		A20000000000000000000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000005 /* Photosphere.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Photosphere.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A20000000000000000000006 /* macos */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = macos; path = "../../../../packages/ziggy/native/macos"; sourceTree = "<group>"; };
 		A20000000000000000000007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -27,7 +26,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000000000000000000004 /* ZiggyShellMacOS in Frameworks */,
+				A10000000000000000000004 /* ZiggyNativeMacOS in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -39,7 +38,6 @@
 			children = (
 				A40000000000000000000002 /* Photosphere */,
 				A40000000000000000000003 /* Resources */,
-				A20000000000000000000006 /* macos */,
 				A40000000000000000000004 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -87,7 +85,7 @@
 			);
 			name = Photosphere;
 			packageProductDependencies = (
-				A60000000000000000000001 /* ZiggyShellMacOS */,
+				A60000000000000000000001 /* ZiggyNativeMacOS */,
 			);
 			productName = Photosphere;
 			productReference = A20000000000000000000005 /* Photosphere.app */;
@@ -111,6 +109,9 @@
 				en,
 			);
 			mainGroup = A40000000000000000000001;
+			packageReferences = (
+				AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */,
+			);
 			productRefGroup = A40000000000000000000004 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -253,10 +254,22 @@
 /* End XCConfigurationList section */
 
 
+/* Begin XCRemoteSwiftPackageReference section */
+		AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ashleydavis/ziggy";
+			requirement = {
+				kind = exactVersion;
+				version = 0.0.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
-		A60000000000000000000001 /* ZiggyShellMacOS */ = {
+		A60000000000000000000001 /* ZiggyNativeMacOS */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = ZiggyShellMacOS;
+			package = AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */;
+			productName = ZiggyNativeMacOS;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -1,4 +1,4 @@
-import type { IJsonValue } from "ziggy-bridge";
+import type { IJsonValue } from "ziggy-ui";
 
 //
 // Converts a value built from interfaces (a database entry, a list of assets) to the JSON value the bridge sends. An interface

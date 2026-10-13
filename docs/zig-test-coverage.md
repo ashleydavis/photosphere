@@ -69,9 +69,9 @@ its end. storage-zig includes its integration tests against MinIO.
 | node-utils-zig | 93.2% (1907/2047) | 96.6% (2156/2232) | 99.2% (2239/2258), the unit tests with the termination child run under kcov |
 | serialization-zig | 96.4% (854/886) | 99.4% (903/908) | 99.5% (909/914) |
 | storage-zig | 50.0% (883/1765) | 92.3% (1653/1791) | 97.4% (1831/1880), the unit tests with the integration tests |
-| task-queue-zig | 92.5% (371/401) | 94.3% (380/403) | 94.3% (380/403) |
+| task queue (now part of Ziggy's core) | 92.5% (371/401) | 94.3% (380/403) | 94.3% (380/403) |
 | tools-zig | 90.5% (334/369) | 97.2% (343/353) | 97.9% (416/425) |
 | utils-zig | 93.1% (619/665) | 96.8% (816/843) | 96.1% (815/848), the unit test program alone |
 | vault-zig | 91.1% (419/460) | 99.0% (493/498) | 98.0% (485/495), the unit test program alone |
 
-The line counts move between the columns because the code changed during the audit. The uncovered lines of the last column are not yet each covered or explained.
+The line counts move between the columns because the code changed during the audit. The uncovered lines of the last column are not yet each covered or explained. The task queue was a package of this repository during the audit and is now part of Ziggy's core, in Ziggy's repository.

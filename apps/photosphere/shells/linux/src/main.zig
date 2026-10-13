@@ -4,7 +4,7 @@
 //
 
 const std = @import("std");
-const shell = @import("ziggy-shell-linux");
+const shell = @import("ziggy-native-linux");
 
 //
 // What the core says when the background work reports something, as the core sends it.

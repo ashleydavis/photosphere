@@ -199,7 +199,7 @@ pub const MainState = struct {
         const previous_log = utils.log.log;
         const logger = try startFileLogger(core.allocator, core.io(), media.runner());
         errdefer stopFileLogger(logger, previous_log);
-        // The task handlers register with task-queue-zig, which is where the runner finds them.
+        // The task handlers register with Ziggy's task queue, which is where the runner finds them.
         try node_api.task_handlers.initTaskHandlers();
         // A phone has a photo library to import from, which only its shell can read.
         if (core.config.host_request != null) {

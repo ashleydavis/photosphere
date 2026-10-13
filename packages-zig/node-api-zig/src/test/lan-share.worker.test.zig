@@ -1,5 +1,5 @@
 const std = @import("std");
-const task_queue_zig = @import("task-queue-zig");
+const task_queue_zig = @import("ziggy-core").task_queue;
 const lan_share_network = @import("lan-share-network-zig");
 const node_api = @import("node-api-zig");
 const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");

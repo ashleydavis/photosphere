@@ -9,7 +9,7 @@
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* ViewController.swift */; };
 		A10000000000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* AppDelegate.swift */; };
-		A10000000000000000000004 /* ZiggyShellIOS in Frameworks */ = {isa = PBXBuildFile; productRef = A60000000000000000000001 /* ZiggyShellIOS */; };
+		A10000000000000000000004 /* ZiggyNativeIOS in Frameworks */ = {isa = PBXBuildFile; productRef = A60000000000000000000001 /* ZiggyNativeIOS */; };
 		B10000000000000000000001 /* SecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* SecureStore.swift */; };
 		B10000000000000000000002 /* NetworkHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* NetworkHost.swift */; };
 		B10000000000000000000003 /* PathSandbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* PathSandbox.swift */; };
@@ -29,7 +29,6 @@
 		A20000000000000000000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000005 /* Photosphere.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Photosphere.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A20000000000000000000006 /* ios */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ios; path = "../../../../packages/ziggy/native/ios"; sourceTree = "<group>"; };
 		B20000000000000000000001 /* SecureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStore.swift; sourceTree = "<group>"; };
 		B20000000000000000000002 /* NetworkHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkHost.swift; sourceTree = "<group>"; };
 		B20000000000000000000003 /* PathSandbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PathSandbox.swift; sourceTree = "<group>"; };
@@ -49,7 +48,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000000000000000000004 /* ZiggyShellIOS in Frameworks */,
+				A10000000000000000000004 /* ZiggyNativeIOS in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -61,7 +60,6 @@
 			children = (
 				A40000000000000000000002 /* Photosphere */,
 				A40000000000000000000003 /* Resources */,
-				A20000000000000000000006 /* ios */,
 				A40000000000000000000004 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -120,7 +118,7 @@
 			);
 			name = Photosphere;
 			packageProductDependencies = (
-				A60000000000000000000001 /* ZiggyShellIOS */,
+				A60000000000000000000001 /* ZiggyNativeIOS */,
 			);
 			productName = Photosphere;
 			productReference = A20000000000000000000005 /* Photosphere.app */;
@@ -144,6 +142,9 @@
 				en,
 			);
 			mainGroup = A40000000000000000000001;
+			packageReferences = (
+				AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */,
+			);
 			productRefGroup = A40000000000000000000004 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -306,10 +307,22 @@
 /* End XCConfigurationList section */
 
 
+/* Begin XCRemoteSwiftPackageReference section */
+		AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ashleydavis/ziggy";
+			requirement = {
+				kind = exactVersion;
+				version = 0.0.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
-		A60000000000000000000001 /* ZiggyShellIOS */ = {
+		A60000000000000000000001 /* ZiggyNativeIOS */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = ZiggyShellIOS;
+			package = AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */;
+			productName = ZiggyNativeIOS;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

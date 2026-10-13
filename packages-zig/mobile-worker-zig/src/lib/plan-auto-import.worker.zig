@@ -1,5 +1,5 @@
 const std = @import("std");
-const task_queue_zig = @import("task-queue-zig");
+const task_queue_zig = @import("ziggy-core").task_queue;
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
 const ITaskContext = task_queue_zig.types.ITaskContext;

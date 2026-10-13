@@ -1,9 +1,9 @@
 const std = @import("std");
-const errors = @import("errors.zig");
-const console = @import("console.zig");
-const log_module = @import("log.zig");
-const sleep_module = @import("sleep.zig");
-const wrapped_error = @import("wrapped-error.zig");
+const errors = @import("ziggy-core").task_queue.utils.errors;
+const console = @import("ziggy-core").task_queue.utils.console;
+const log_module = @import("ziggy-core").task_queue.utils.log;
+const sleep_module = @import("ziggy-core").task_queue.utils.sleep;
+const wrapped_error = @import("ziggy-core").task_queue.utils.wrapped_error;
 
 //
 // An operation is a value (usually a pointer to a struct)
