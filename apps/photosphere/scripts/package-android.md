@@ -13,4 +13,4 @@ The artifacts are named `photosphere-<version>-android-<arch>.apk`.
 
 ## Why ReleaseSafe
 
-`ReleaseSafe` is what the app's other release builds use, and it is the only release mode that keeps Zig's runtime safety checks, so a bug stops the app with a message instead of corrupting data. `ReleaseSmall` was the example's choice with no reason recorded, and one run measured what it buys: the example's x86_64 APK was about 0.75 MB with `ReleaseSmall` and 1.1 to 1.2 MB with `ReleaseSafe` or `ReleaseFast`, this app's x86_64 APK was about 115 MB against 117 MB, and every mode started on an x86_64 emulator.
+`ReleaseSafe` is what the app's other release builds use, and it is the only release mode that keeps Zig's runtime safety checks, so a bug stops the app with a message instead of corrupting data. `ReleaseSmall` was the choice of Ziggy's example app (now the template in Ziggy's repository) with no reason recorded, and one run measured what it buys: that app's x86_64 APK was about 0.75 MB with `ReleaseSmall` and 1.1 to 1.2 MB with `ReleaseSafe` or `ReleaseFast`, this app's x86_64 APK was about 115 MB against 117 MB, and every mode started on an x86_64 emulator.

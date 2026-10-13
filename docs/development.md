@@ -4,7 +4,7 @@ How to set up, run, and work on Photosphere, and where to find the detailed guid
 
 Photosphere is a Bun-workspaces monorepo holding the Photosphere App for desktop and mobile, the `psi` CLI, and the shared React UI (`packages/user-interface`) the app shows.
 
-The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, Android and iOS. It is built on Ziggy, an application shell that shows the shared UI in each platform's web view and runs everything else in Zig. The TypeScript CLI and packages that have a Zig port are replaced by the Zig ones. Everything that is replaced is marked "(deprecated)" in the project layout below. Start with [Ziggy architecture](../packages/ziggy/docs/architecture.md) and the [Photosphere App README](../apps/photosphere/README.md).
+The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, Android and iOS. It is built on [Ziggy](https://github.com/ashleydavis/ziggy), an application framework in its own repository that shows the shared UI in each platform's web view and runs everything else in Zig. The TypeScript CLI and packages that have a Zig port are replaced by the Zig ones. Everything that is replaced is marked "(deprecated)" in the project layout below. Start with [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md), [Photosphere on Ziggy](photosphere-on-ziggy.md) and the [Photosphere App README](../apps/photosphere/README.md).
 
 ## Project layout
 
@@ -23,7 +23,6 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - photosphere - Photosphere App: the Ziggy shells for each platform and the scripts that build and run them
         - photosphere-frontend - The web view UI of the Photosphere App
         - photosphere-smoke-tests - Smoke tests for the Photosphere App on every platform
-        - ziggy-example - The Ziggy example: a small complete app built on Ziggy, kept as the reference for building an app on it, with its page, Zig core, native projects, scripts and smoke tests
         - smoke-tests (deprecated) - Host-driven UI smoke tests for the mobile apps
     - packages/
         - api (deprecated) - Core API for database operations
@@ -46,11 +45,6 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - user-interface - Shared React UI components
         - utils (deprecated) - General utility functions
         - vault (deprecated) - Cross-platform secrets management with multiple vault backends
-        - ziggy/ - Ziggy, the application shell, all in one place. Nothing in it names an app. See its [README](../packages/ziggy/README.md)
-            - core - The Zig library: the C interface, message dispatcher, task runner and test hooks
-            - bridge - The page side: the `window.ziggy` script every shell injects, and its types
-            - native/ - The framework half of each shell: `linux` (GTK 3 and WebKitGTK), `windows` (WebView2), `macos` and `ios` (Swift, WKWebView) and `android` (Java, Android WebView)
-            - docs - The architecture guide
     - packages-zig/ - The Zig packages, built and tested by the `build.zig` at the root of the repository
         - api-zig - Zig port of api
         - bdb-zig - Zig port of bdb
@@ -64,15 +58,14 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - media-tools-zig - ImageMagick and FFmpeg (with their libjpeg, libpng, libwebp and zlib delegates), built from source and called in process
         - merkle-tree-zig - Zig port of merkle-tree
         - node-api-zig - Zig port of node-api
-        - node-utils-zig - Zig port of node-utils (also the HTTP server glue the asset server runs on)
+        - node-utils-zig - Zig port of node-utils (also the HTTP server glue the asset server runs on). The helpers Ziggy's task queue shares with it are exported from Ziggy (see [Photosphere on Ziggy](photosphere-on-ziggy.md))
         - rest-api-zig - Zig port of rest-api (the asset server)
         - serialization-zig - Zig port of serialization
         - storage-zig - Zig port of storage
-        - task-queue-zig - Zig port of task-queue
         - tools-zig - Zig port of tools
-        - utils-zig - Zig port of utils
+        - utils-zig - Zig port of utils. The helpers Ziggy's task queue shares with it are exported from Ziggy (see [Photosphere on Ziggy](photosphere-on-ziggy.md))
         - vault-zig - Zig port of vault
-        - photosphere-core - The Zig library the Photosphere App shells link: Photosphere's channel handlers, task handlers and asset server, built on Ziggy's core (`packages/ziggy/core`)
+        - photosphere-core - The Zig library the Photosphere App shells link: Photosphere's channel handlers, task handlers and asset server, built on Ziggy's core (`@import("ziggy-core")`, from the `ziggy` dependency in `build.zig.zon`)
     - test - Data for testing.
 
 "(deprecated)" marks an app or package that is going to be superseded by the Zig port (the Zig packages in `packages-zig`, the Zig CLI, and the Photosphere App on Ziggy) and removed once the port fully replaces it.
@@ -95,7 +88,7 @@ Then run the one-time, per-platform environment setup:
 bun run setup
 ```
 
-This fans out to each package's own `setup` script (`bun --filter '*' setup`), which for the Photosphere App and the Ziggy example installs the Android SDK and NDK on Linux and macOS, checks Xcode on macOS, and fetches the WebView2 SDK and the WiX Toolset and installs Microsoft's C++ toolchain on Windows, each skipping cleanly on a platform it does not apply to, so the command succeeds everywhere. The Android step installs a JDK 17 when none is found, which prompts once for sudo. See the [Photosphere App README](../apps/photosphere/README.md).
+This fans out to each package's own `setup` script (`bun --filter '*' setup`), which for the Photosphere App installs the Android SDK and NDK on Linux and macOS, checks Xcode on macOS, and fetches the WebView2 SDK and the WiX Toolset and installs Microsoft's C++ toolchain on Windows, each skipping cleanly on a platform it does not apply to, so the command succeeds everywhere. The Android step installs a JDK 17 when none is found, which prompts once for sudo. See the [Photosphere App README](../apps/photosphere/README.md).
 
 Install the git hooks, which stop a commit that does not compile and a push whose tests fail:
 
@@ -118,14 +111,12 @@ Everything below is run from the repo root.
 | Command | What it does |
 |---|---|
 | `bun run build:ziggy:<platform>` / `bun run run:ziggy:<platform>` | Build, or build and launch, the Photosphere App on `linux`, `windows`, `macos`, `android` or `ios`. See the [Photosphere App README](../apps/photosphere/README.md) for every command and where each runs. |
-| `zig build` / `zig build test` | Build the Zig CLI (`zig-out/bin/psi`), or run every Zig test: the packages in `packages-zig`, Ziggy and the example, and the CLI. Both are steps of the one `build.zig` at the root of the repository, which also has `ziggy-example-core`, `ziggy-example-linux` and `ziggy-example-windows`; `zig build --help` lists them. `bun run test:zig` runs the tests. |
+| `zig build` / `zig build test` | Build the Zig CLI (`zig-out/bin/psi`), or run every Zig test: the packages in `packages-zig` and the CLI. Both are steps of the one `build.zig` at the root of the repository, which also has `photosphere-core`, `photosphere-linux` and `photosphere-windows`; `zig build --help` lists them. `bun run test:zig` runs the tests. |
 | `bun run test:ziggy` / `bun run test:ziggy:and` / `bun run test:ziggy:ios` | Photosphere App smoke tests, on the host operating system, the Android emulator/device or the iOS simulator/device. `PHOTOSPHERE_SMOKE_SCENARIO=<number or name>` runs one scenario. |
-| `bun run build:ziggy-example:<platform>` / `bun run run:ziggy-example:<platform>` / `bun run package:ziggy-example:<platform>` | Build, build and launch, or package the Ziggy example on `linux`, `windows`, `macos`, `android` or `ios`. See the [Ziggy example README](../apps/ziggy-example/README.md). |
-| `bun run test:ziggy-example` / `bun run test:ziggy-example:and` / `bun run test:ziggy-example:ios` | Ziggy example smoke tests, on the host operating system, the Android emulator/device or the iOS simulator. |
 | `bun run dev:web` | Start the dev server and web frontend together, in a browser. |
 | `bun run compile` | Compile all TypeScript. Optional, but the way to check a change still compiles. |
 | `bun run test` | Unit tests. |
-| `bun run test:everything` (or `bun run tev`) | The full set for your platform, all at once: compile, unit, the Zig tests, every CLI suite, and every Photosphere App and Ziggy example suite this platform can run. It stops the moment anything fails. This is what the git hooks run. It covers every Release workflow test job for this platform bar three: the stories runs, the packaging builds, and `perf-tests`. Only the scripts whose watched paths changed since they last passed actually run, so a docs-only change runs nothing; add `-- --force` to run everything, `-- --plan` to see the decision. Pass script names to consider only those, still in parallel. Needs the `what-changed` executable on your PATH, from [its releases page](https://github.com/ashleydavis/what-changed/releases). |
+| `bun run test:everything` (or `bun run tev`) | The full set for your platform, all at once: compile, unit, the Zig tests, every CLI suite, and every Photosphere App suite this platform can run. It stops the moment anything fails. This is what the git hooks run. It covers every Release workflow test job for this platform bar three: the stories runs, the packaging builds, and `perf-tests`. Only the scripts whose watched paths changed since they last passed actually run, so a docs-only change runs nothing; add `-- --force` to run everything, `-- --plan` to see the decision. Pass script names to consider only those, still in parallel. Needs the `what-changed` executable on your PATH, from [its releases page](https://github.com/ashleydavis/what-changed/releases). |
 | `bun run test:everything:force` | The whole set for this platform, changed or not. The same as `-- --force`. |
 | `bun run clean` | Remove build artifacts. |
 
@@ -168,14 +159,14 @@ Screenshots land in `stories-screenshots/<platform>/` with an `index.html` pairi
 
 ## Platform notes
 
-The shared UI in `packages/user-interface` must stay platform-neutral: no `window.ziggy`, no shell code, no iOS/Android specifics. Keep platform code in the platform layer (`apps/photosphere-frontend`) or the shells, and pass it into the shared UI through props or an existing platform abstraction. See [Ziggy architecture](../packages/ziggy/docs/architecture.md).
+The shared UI in `packages/user-interface` must stay platform-neutral: no `window.ziggy`, no shell code, no iOS/Android specifics. Keep platform code in the platform layer (`apps/photosphere-frontend`) or the shells, and pass it into the shared UI through props or an existing platform abstraction. See [Photosphere on Ziggy](photosphere-on-ziggy.md).
 
 The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why the Photosphere App's iOS project must build with that Xcode. Do not raise those versions.
 
 ## Guides
 
-- [Ziggy architecture](../packages/ziggy/docs/architecture.md) - Ziggy's parts, message protocol, how to add a channel, a task type or a native host callback, the test hooks, and how Photosphere is built on it.
-- [Ziggy example](../apps/ziggy-example/README.md) - The small complete app built on Ziggy: what it shows, how to build, run, package and test it on each platform.
+- [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md) - Ziggy's parts, message protocol, how to add a channel, a task type or a native host callback, and the test hooks.
+- [Photosphere on Ziggy](photosphere-on-ziggy.md) - How Photosphere takes Ziggy at a version tag, how to move to a newer one, and how Photosphere is built on it.
 - [Photosphere App](../apps/photosphere/README.md) - Building and running the app on each platform.
 - [UI stories](../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player.
 - [Testing](testing/README.md) - Running the tests, the manual e2e scripts, and the stories.

@@ -42,6 +42,6 @@ A phone has no file drop. The inject script's drop handling never fires there.
 
 ## How it is tested
 
-- Linux, by hand: drop files and a folder on the example's drop box and read each path in the box.
-- Everywhere: the example's smoke scenario drops a file with the `drop` and `drop-file` test commands, which cover the core and page parts. The shell's reading of a real drop is tested by hand.
+- Linux, by hand: drop files and a folder on the drop box of Ziggy's template app (in Ziggy's repository) and read each path in the box.
+- Everywhere: the smoke scenario of Ziggy's template app drops a file with the `drop` and `drop-file` test commands, which cover the core and page parts. The shell's reading of a real drop is tested by hand.
 - macOS and Windows, by hand on those machines.

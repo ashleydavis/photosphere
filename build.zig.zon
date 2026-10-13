@@ -4,6 +4,12 @@
     .fingerprint = 0x65908dac07b847ab,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        // Ziggy, at a version tag of its repository. Every other place that takes Ziggy (apps/photosphere-frontend/package.json,
+        // the Xcode projects under apps/photosphere/shells and apps/photosphere/shells/android/app/build.gradle) names the same version.
+        .ziggy = .{
+            .url = "git+https://github.com/ashleydavis/ziggy.git#v0.0.1",
+            .hash = "ziggy-0.0.0-Yh04rnvdEwCY6dZ_0jjtNXNYmGHLOJ-Vpp8LIbYKwYk2",
+        },
         // aws-lc, whose libcrypto implements the node:crypto functions encryption-zig uses (see encryption-zig/aws/aws-lc.zig).
         // storage-zig links the same libcrypto into the AWS SDK for C.
         .@"aws-lc" = .{

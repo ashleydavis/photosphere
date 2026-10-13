@@ -4,7 +4,7 @@
 //
 
 const std = @import("std");
-const shell = @import("ziggy-shell-windows");
+const shell = @import("ziggy-native-windows");
 
 //
 // Runs the shell with Photosphere's name, window size and embedded page, and returns the exit code.

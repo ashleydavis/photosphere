@@ -64,9 +64,9 @@ its end. storage-zig includes its integration tests against MinIO.
 | node-utils-zig | 93.2% (1907/2047) | 96.6% (2156/2232) |
 | serialization-zig | 96.4% (854/886) | 99.4% (903/908) |
 | storage-zig | 50.0% (883/1765) | 92.3% (1653/1791) |
-| task-queue-zig | 92.5% (371/401) | 94.3% (380/403) |
+| task queue (now part of Ziggy's core) | 92.5% (371/401) | 94.3% (380/403) |
 | tools-zig | 90.5% (334/369) | 97.2% (343/353) |
 | utils-zig | 93.1% (619/665) | 96.8% (816/843) |
 | vault-zig | 91.1% (419/460) | 99.0% (493/498) |
 
-The line counts move between the two columns because the code changed during the audit.
+The line counts move between the two columns because the code changed during the audit. The task queue was a package of this repository during the audit and is now part of Ziggy's core, in Ziggy's repository.

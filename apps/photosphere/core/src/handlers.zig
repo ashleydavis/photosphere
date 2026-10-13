@@ -5,7 +5,7 @@
 
 const ziggy = @import("ziggy-core");
 const photosphere_core = @import("photosphere-core");
-const page = @import("page-files");
+const page = @import("ui-files");
 
 //
 // Photosphere's channels, task types, menu and page.

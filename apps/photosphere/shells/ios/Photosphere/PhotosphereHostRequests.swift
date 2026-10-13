@@ -8,7 +8,7 @@ import Foundation
 import os.log
 import Photos
 import UserNotifications
-import ZiggyShellIOS
+import ZiggyNativeIOS
 
 // Photosphere's host request handler.
 final class PhotosphereHostRequests: ZiggyHostRequestHandler {

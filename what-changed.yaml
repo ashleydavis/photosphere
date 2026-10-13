@@ -179,35 +179,10 @@ targets:
     platforms:
       - darwin
 
-  # The Ziggy example: a small app built on Ziggy, run on the host and on each phone platform. A change anywhere in
-  # Ziggy or the example runs these, so Ziggy can never change without the example's suite seeing it.
-  - name: test:ziggy-example
-    paths:
-      - apps/ziggy-example
-      - packages/ziggy
-      - build.zig
-      - build.zig.zon
-
-  - name: test:ziggy-example:and
-    paths:
-      - apps/ziggy-example
-      - packages/ziggy
-      - build.zig
-      - build.zig.zon
-    platforms:
-      - linux
-
-  - name: test:ziggy-example:ios
-    paths:
-      - apps/ziggy-example
-      - packages/ziggy
-      - build.zig
-      - build.zig.zon
-    platforms:
-      - darwin
-
-  # The Photosphere App: its smoke tests on the host and on each phone platform. A change anywhere in Ziggy, in the app, in the shared
-  # packages or in the user interface runs these, so the app can never change without its suite seeing it.
+  # The Photosphere App: its smoke tests on the host and on each phone platform. A change anywhere in the app, in the shared packages
+  # or in the user interface runs these, so the app can never change without its suite seeing it. Ziggy is taken from its repository at
+  # the version tag named in build.zig.zon, apps/photosphere-frontend/package.json, apps/photosphere/shells/android/app/build.gradle and
+  # the Xcode projects, which are listed by name so that a change of the Ziggy version runs these.
   - name: test:ziggy
     paths:
       - apps/photosphere
@@ -218,6 +193,10 @@ targets:
       - vendor
       - build.zig
       - build.zig.zon
+      - apps/photosphere-frontend/package.json
+      - apps/photosphere/shells/android/app/build.gradle
+      - apps/photosphere/shells/ios/Photosphere.xcodeproj
+      - apps/photosphere/shells/macos/Photosphere.xcodeproj
 
   # The same suite on the Android emulator pool, for the same changes.
   - name: test:ziggy:and
@@ -230,6 +209,10 @@ targets:
       - vendor
       - build.zig
       - build.zig.zon
+      - apps/photosphere-frontend/package.json
+      - apps/photosphere/shells/android/app/build.gradle
+      - apps/photosphere/shells/ios/Photosphere.xcodeproj
+      - apps/photosphere/shells/macos/Photosphere.xcodeproj
     platforms:
       - linux
 
@@ -244,24 +227,16 @@ targets:
       - vendor
       - build.zig
       - build.zig.zon
+      - apps/photosphere-frontend/package.json
+      - apps/photosphere/shells/android/app/build.gradle
+      - apps/photosphere/shells/ios/Photosphere.xcodeproj
+      - apps/photosphere/shells/macos/Photosphere.xcodeproj
     platforms:
       - darwin
 
-  # The Zig side of the Ziggy example, kept apart from the TypeScript so that a change to one does not wait on the other:
-  # building Ziggy's core and the example's core, and cross-building them for every other platform, and the Zig unit tests.
-  - name: compile:zig
-    paths:
-      - apps/ziggy-example
-      - packages/ziggy
-      - build.zig
-      - build.zig.zon
-
+  # The Zig unit tests of the packages and the CLI. build.zig.zon names the Ziggy version they are built over.
   - name: test:zig
     paths:
-      - apps/ziggy-example
-      - packages/ziggy
-      - build.zig
-      - build.zig.zon
       - packages-zig
       - vendor
       - build.zig

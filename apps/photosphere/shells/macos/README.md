@@ -5,7 +5,7 @@ The MacOS desktop shell is a Swift app that hosts a `WKWebView` and passes messa
 ## What it does
 
 - Creates the window and the application menu (content defined by the core, plus the macOS app menu), the native file, folder and save dialogs, drag and drop, the developer tools toggle and single-instance behaviour, using AppKit.
-- Injects the `window.ziggy` script with a `WKUserScript`, receives page messages in a `WKScriptMessageHandler`, calls `ziggy_create` and `ziggy_post_message` through the `ZiggyShellMacOS` package (`packages/ziggy/native/macos`), and delivers Zig messages to the page on the main thread.
+- Injects the `window.ziggy` script with a `WKUserScript`, receives page messages in a `WKScriptMessageHandler`, calls `ziggy_create` and `ziggy_post_message` through Ziggy's `ZiggyNativeMacOS` package (taken from Ziggy's repository, see [Photosphere on Ziggy](../../../../docs/photosphere-on-ziggy.md)), and delivers Zig messages to the page on the main thread.
 - Blocks navigation away from the bundled page and opens external links in the system browser, asking the core's origin check whether an address is the app's own.
 
 ## Project and build

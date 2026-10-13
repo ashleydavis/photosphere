@@ -1,5 +1,5 @@
 import type { ITestCommandPayload, ITestTransport } from "user-interface";
-import type { IJsonObject, IZiggyBridge } from "ziggy-bridge";
+import type { IJsonObject, IZiggyBridge } from "ziggy-ui";
 import type { LogLevel } from "./renderer-log";
 import { sendRendererLog } from "./renderer-log";
 
@@ -144,5 +144,5 @@ export function createZiggyTestTransport(ziggy: IZiggyBridge): ITestTransport {
 // reach is in place.
 //
 export function signalTestPageReady(ziggy: IZiggyBridge): void {
-    ziggy.send("test-page-ready", null);
+    ziggy.send("test-ui-ready", null);
 }

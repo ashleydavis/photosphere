@@ -4,14 +4,14 @@
 //
 // plan-sync and plan-prefetch ask the platform for the connection type. The shell is asked through the core's host request
 // callback, which only a task in Ziggy's runner can reach, so the three are Ziggy task types registered with the app and not
-// handlers registered with task-queue-zig. They ignore their ITaskContext, so the one they are given is the minimum the
+// handlers registered with Ziggy's task queue. They ignore their ITaskContext, so the one they are given is the minimum the
 // interface needs.
 //
 
 const std = @import("std");
 const ziggy = @import("ziggy-core");
 const utils = @import("utils-zig");
-const task_queue_zig = @import("task-queue-zig");
+const task_queue_zig = @import("ziggy-core").task_queue;
 const node_api = @import("node-api-zig");
 const mobile_worker = @import("mobile-worker-zig");
 

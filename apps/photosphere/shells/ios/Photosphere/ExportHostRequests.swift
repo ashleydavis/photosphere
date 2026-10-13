@@ -7,7 +7,7 @@
 
 import Foundation
 import UIKit
-import ZiggyShellIOS
+import ZiggyNativeIOS
 
 // The export requests.
 final class ExportHostRequests: ZiggyHostRequestHandler {

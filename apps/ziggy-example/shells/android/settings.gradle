@@ -1,6 +1,0 @@
-// The Ziggy example's Android project: the app, and Ziggy's Android shell, which lives outside this directory.
-rootProject.name = 'ziggy-example-android'
-
-include ':app'
-include ':ziggy-shell-android'
-project(':ziggy-shell-android').projectDir = file('../../../../packages/ziggy/native/android')

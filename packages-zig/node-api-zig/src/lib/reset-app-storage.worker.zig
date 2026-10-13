@@ -23,7 +23,7 @@
 
 const std = @import("std");
 const node_utils = @import("node-utils-zig");
-const task_queue_zig = @import("task-queue-zig");
+const task_queue_zig = @import("ziggy-core").task_queue;
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const getConfigDir = node_utils.fs.getConfigDir;
 const getCacheDir = node_utils.fs.getCacheDir;

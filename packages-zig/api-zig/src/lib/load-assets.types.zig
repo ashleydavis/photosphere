@@ -1,5 +1,5 @@
 const std = @import("std");
-const task_queue_zig = @import("task-queue-zig");
+const task_queue_zig = @import("ziggy-core").task_queue;
 const IJobTag = task_queue_zig.types.IJobTag;
 
 //

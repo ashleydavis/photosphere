@@ -1,7 +1,7 @@
 const std = @import("std");
 const retry_module = @import("retry.zig");
-const log_module = @import("log.zig");
-const sleep_module = @import("sleep.zig");
+const log_module = @import("ziggy-core").task_queue.utils.log;
+const sleep_module = @import("ziggy-core").task_queue.utils.sleep;
 const OperationResult = retry_module.OperationResult;
 
 //

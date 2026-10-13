@@ -45,7 +45,7 @@ test "the page's query holds the address of a running asset server and the theme
     try app.start();
     defer app.stop();
 
-    const query = try app.core.pageQuery();
+    const query = try app.core.uiQuery();
 
     const port = try portOf(query);
     try std.testing.expect(port > 0);
@@ -58,9 +58,9 @@ test "asking for the query again does not start another asset server" {
     try app.start();
     defer app.stop();
 
-    const first = try app.core.pageQuery();
+    const first = try app.core.uiQuery();
     const first_port = try portOf(first);
-    const second = try app.core.pageQuery();
+    const second = try app.core.uiQuery();
 
     try std.testing.expectEqual(first_port, try portOf(second));
     try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"message\":{\"type\":\"asset-server-ready\""));
@@ -71,7 +71,7 @@ test "the query says the saved theme" {
     try app.startWithTasksAndConfigFile(&.{}, "theme: dark\n");
     defer app.stop();
 
-    const query = try app.core.pageQuery();
+    const query = try app.core.uiQuery();
 
     try std.testing.expect(std.mem.endsWith(u8, query, "&theme=dark"));
 }
@@ -99,7 +99,7 @@ test "a query is an error when the asset server ended before it said which port 
     state.asset_server_requested = true;
     state.asset_server_ended = true;
 
-    try std.testing.expectError(error.Thrown, app.core.pageQuery());
+    try std.testing.expectError(error.Thrown, app.core.uiQuery());
 }
 
 test "a query is an error when the asset server says nothing within the time allowed" {
@@ -110,7 +110,7 @@ test "a query is an error when the asset server says nothing within the time all
     state.asset_server_requested = true;
     state.asset_server_start_timeout_ms = 50;
 
-    try std.testing.expectError(error.Thrown, app.core.pageQuery());
+    try std.testing.expectError(error.Thrown, app.core.uiQuery());
 }
 
 test "a value of the query is written as encodeURIComponent writes it" {

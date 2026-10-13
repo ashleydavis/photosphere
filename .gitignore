@@ -82,19 +82,7 @@ zig-pkg/
 apps/cli-zig/bin/
 apps/cli/test/tmp-zig/
 
-# The WebView2 SDK and the WiX Toolset fetched by the Ziggy example's setup-windows script, and the build that its
-# package-windows script packages
-apps/ziggy-example/webview2-sdk/
-apps/ziggy-example/wix/
-apps/ziggy-example/shells/windows/package/
-
-# What the Ziggy example's package scripts produce
-apps/ziggy-example/out/
-packages/ziggy/native/android/build/
-packages/ziggy/native/android/.gradle/
-apps/ziggy-example/dist-build.*
-
-# The same for the Photosphere App built on Ziggy: the WebView2 SDK and the WiX Toolset its setup-windows script fetches, the
+# The Photosphere App built on Ziggy: the WebView2 SDK and the WiX Toolset its setup-windows script fetches, the
 # build its package-windows script packages, what its package scripts produce and the page build in progress
 apps/photosphere/webview2-sdk/
 apps/photosphere/wix/

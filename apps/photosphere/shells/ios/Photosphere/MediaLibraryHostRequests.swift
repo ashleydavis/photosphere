@@ -10,7 +10,7 @@
 
 import Foundation
 import Photos
-import ZiggyShellIOS
+import ZiggyNativeIOS
 
 // The photo library requests.
 final class MediaLibraryHostRequests: ZiggyHostRequestHandler {

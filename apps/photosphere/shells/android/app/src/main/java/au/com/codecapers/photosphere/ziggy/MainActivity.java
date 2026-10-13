@@ -7,7 +7,7 @@ import android.os.Bundle;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.webkit.WebView;
-import dev.ziggy.shell.ZiggyShell;
+import dev.ziggy.nativeapp.ZiggyShell;
 
 // Photosphere's one screen: a web view run by Ziggy's shell. What is Photosphere's own is the name of its core library,
 // the mobile limits on the core's threads and the process environment the core reads its settings from.

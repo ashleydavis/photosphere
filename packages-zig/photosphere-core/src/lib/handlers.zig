@@ -186,6 +186,6 @@ pub fn appHandlers(menu_json: []const u8, ui_files: []const ziggy.ui_files.UiFil
         .state = main_state.state_hooks,
         .on_task_end = main_process.onTaskEnd,
         .on_task_message = main_process.onTaskMessage,
-        .page_query = page_query.pageQuery,
+        .ui_query = page_query.pageQuery,
     };
 }

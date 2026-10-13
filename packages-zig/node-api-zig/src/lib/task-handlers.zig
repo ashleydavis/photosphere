@@ -1,4 +1,4 @@
-const task_queue_zig = @import("task-queue-zig");
+const task_queue_zig = @import("ziggy-core").task_queue;
 const verify_worker = @import("verify.worker.zig");
 const check_worker = @import("check.worker.zig");
 const upload_asset_worker = @import("upload-asset.worker.zig");

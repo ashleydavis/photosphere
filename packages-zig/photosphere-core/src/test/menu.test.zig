@@ -97,7 +97,7 @@ test "every action the page handles is in the menu, and so are the developer too
 test "the app handlers carry the menu they are given and a page query" {
     const app = handlers.appHandlers(menu.menu_json, &[_]ziggy.ui_files.UiFile{});
     try std.testing.expectEqualStrings(menu.menu_json, app.menu_json);
-    try std.testing.expect(app.page_query != null);
+    try std.testing.expect(app.ui_query != null);
     try std.testing.expect(app.channels.len > 0);
     try std.testing.expect(app.tasks.len > 0);
     try std.testing.expect(app.task_channels.len > 0);

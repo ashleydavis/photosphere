@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { useNavigate, type NavigateFunction } from "react-router-dom";
-import type { IZiggyBridge } from "ziggy-bridge";
+import type { IZiggyBridge } from "ziggy-ui";
 import { TaskQueue, TaskStatus } from "task-queue";
 import { RandomUuidGenerator } from "utils";
 import { useAssetDatabase, useGallery, useSearch, type IAssetDatabase, type IGalleryContext, type ISearchContext, type IGalleryItem, type IDatabaseEntry } from "user-interface";

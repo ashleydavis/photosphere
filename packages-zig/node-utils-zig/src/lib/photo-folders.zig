@@ -6,7 +6,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const path = @import("path.zig");
+const path = @import("ziggy-core").task_queue.utils.path;
 const fs = @import("fs.zig");
 const js_string = @import("utils-zig").js_string;
 

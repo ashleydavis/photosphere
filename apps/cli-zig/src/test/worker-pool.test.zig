@@ -3,7 +3,7 @@ const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const helpers = @import("test-helpers.zig");
-const task_queue = @import("task-queue-zig");
+const task_queue = @import("ziggy-core").task_queue;
 const WorkerPoolBun = cli.worker_pool.WorkerPoolBun;
 const types = task_queue.types;
 

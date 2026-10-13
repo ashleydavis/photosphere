@@ -46,7 +46,7 @@ fn waitFor(app: *TestApp, text: []const u8) !void {
 // import by hand is not undone by it.
 //
 fn waitForStartupCheck(app: *TestApp) !void {
-    _ = try app.core.pageQuery();
+    _ = try app.core.uiQuery();
     try app.shell.expectMessageContaining("\"status\":\"succeeded\",\"outputs\":null,\"type\":\"ensure-auto-import\"");
 }
 
@@ -484,7 +484,7 @@ test "automatic import that was switched on before the app started is started by
     defer allocator.free(config_yaml);
     try app.startWithTasksAndConfigFile(&auto_import_tasks, config_yaml);
     defer app.stop();
-    _ = try app.core.pageQuery();
+    _ = try app.core.uiQuery();
     try waitFor(&app, "\"importing\":true");
     const state = main_state.fromCore(app.core);
     state.lock();
@@ -502,7 +502,7 @@ test "automatic import is started again by the periodic check after its task die
     defer allocator.free(config_yaml);
     try app.startWithTasksAndConfigFile(&auto_import_tasks, config_yaml);
     defer app.stop();
-    _ = try app.core.pageQuery();
+    _ = try app.core.uiQuery();
     try waitForCount(&app, "\"importing\":true", 1);
     const state = main_state.fromCore(app.core);
     state.lock();
@@ -523,7 +523,7 @@ test "a failure to start automatic import at startup is logged, not lost" {
     // No create-default-database task is registered, so making the default database fails.
     try app.startWithTasksAndConfigFile(&[_]ziggy.task_runner.TaskHandlerEntry{}, config_yaml);
     defer app.stop();
-    _ = try app.core.pageQuery();
+    _ = try app.core.uiQuery();
     var waited_ms: i64 = 0;
     while (std.mem.indexOf(u8, app.console_out.writer.buffered(), "Error starting automatic import") == null and
         std.mem.indexOf(u8, app.console_err.writer.buffered(), "Error starting automatic import") == null)
@@ -710,7 +710,7 @@ test "an asset server that stops while the app runs is started again on the port
     var app: TestApp = undefined;
     try app.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{.{ .name = "asset-server", .handler = assetServerTask }});
     defer app.stop();
-    _ = try app.core.pageQuery();
+    _ = try app.core.uiQuery();
     try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"port\":40001"));
     failAssetServer(&app, "crashed");
     try waitForCount(&app, "\"port\":40001", 2);
@@ -726,7 +726,7 @@ test "an asset server that stops while the app is shutting down is not started a
     var app: TestApp = undefined;
     try app.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{.{ .name = "asset-server", .handler = assetServerTask }});
     defer app.stop();
-    _ = try app.core.pageQuery();
+    _ = try app.core.uiQuery();
     const state = main_state.fromCore(app.core);
     state.stopping.store(true, .release);
     failAssetServer(&app, "crashed");
@@ -744,7 +744,7 @@ test "an asset server that stops before it says which port it bound fails the st
     state.asset_server_requested = true;
     state.unlock();
     failAssetServer(&app, "address in use");
-    try std.testing.expectError(error.Thrown, app.core.pageQuery());
+    try std.testing.expectError(error.Thrown, app.core.uiQuery());
     try std.testing.expectEqualStrings("REST API failed to start: address in use", utils.errors.errorMessage(error.Thrown));
     try std.testing.expect(!consoleHas(&app, "Restarting REST API worker..."));
 }
@@ -758,7 +758,7 @@ test "an asset server that says nothing within the time allowed fails the start 
     state.asset_server_requested = true;
     state.asset_server_start_timeout_ms = 50;
     state.unlock();
-    try std.testing.expectError(error.Thrown, app.core.pageQuery());
+    try std.testing.expectError(error.Thrown, app.core.uiQuery());
     try std.testing.expectEqualStrings("REST API failed to start within timeout", utils.errors.errorMessage(error.Thrown));
 }
 
@@ -771,7 +771,7 @@ test "automatic import is not checked until the main window is created, and crea
     try std.testing.expect(!consoleHas(&app, "Main window created"));
     try waitForStartupCheck(&app);
     try std.testing.expect(consoleHas(&app, "Main window created"));
-    _ = try app.core.pageQuery();
+    _ = try app.core.uiQuery();
     app.shell.sleepMs(200);
     try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"type\":\"ensure-auto-import\""));
     try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, app.console_out.writer.buffered(), "Main window created"));
