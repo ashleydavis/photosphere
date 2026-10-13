@@ -1,7 +1,9 @@
 const std = @import("std");
 
 //
-// Zig ships no headers or libraries for iOS. The C code that includes Apple frameworks (the AWS SDK for C, aws-lc's CPU jitter entropy)
+// Zig ships no headers or libraries for iOS, and uses the macOS SDK only for a native build (a target whose operating system and ABI are not
+// given, see std/zig/system/darwin.zig): not for one that names a minimum version, such as the Photosphere App's macOS core, which is
+// built for the macOS 11.0 its Xcode project targets. The C code that includes Apple frameworks (the AWS SDK for C, aws-lc's CPU jitter entropy)
 // compiles against Apple's SDK, which comes with Xcode and is found with `xcrun --sdk <sdk> --show-sdk-path`: the same call Zig makes
 // for a native macOS build (std/zig/system/darwin.zig), and the one the scripts that make ImageMagick's and FFmpeg's files for iOS make
 // (packages-zig/media-tools-zig/*/generate-config.sh).
@@ -29,12 +31,22 @@ pub fn sdkName(os: std.Target.Os.Tag, abi: std.Target.Abi) ?[]const u8 {
 }
 
 //
-// Finds the SDK of an iOS target with `xcrun --sdk <sdk> --show-sdk-path`, or returns null when there is none: `xcrun` is not installed
-// (any machine but a Mac with Xcode), it fails, or it prints no path. A sysroot the build was given (`--sysroot`) counts as found. Null
-// for a target that is not iOS.
+// True for a target whose C code needs Apple's SDK given to the build: every iOS target, and a macOS target that is not the native one.
 //
-pub fn findSdkForIos(b: *std.Build, target: std.Build.ResolvedTarget) ?[]const u8 {
-    if (target.result.os.tag != .ios) {
+pub fn needsSdk(query: std.Target.Query, result: std.Target) bool {
+    if (result.os.tag == .ios) {
+        return true;
+    }
+    return result.os.tag == .macos and !(query.isNativeOs() and query.isNativeAbi());
+}
+
+//
+// Finds the SDK of a target that needs one (see needsSdk) with `xcrun --sdk <sdk> --show-sdk-path`, or returns null when there is none: `xcrun` is not installed
+// (any machine but a Mac with Xcode), it fails, or it prints no path. A sysroot the build was given (`--sysroot`) counts as found. Null
+// for a target that does not need one.
+//
+pub fn findSdk(b: *std.Build, target: std.Build.ResolvedTarget) ?[]const u8 {
+    if (!needsSdk(target.query, target.result)) {
         return null;
     }
     if (b.sysroot) |sysroot| {
@@ -53,18 +65,18 @@ pub fn findSdkForIos(b: *std.Build, target: std.Build.ResolvedTarget) ?[]const u
 }
 
 //
-// Makes the build compile for an iOS target against Apple's SDK: gives the SDK found by findSdkForIos to every compile step as the
+// Makes the build compile for a target that needs Apple's SDK (see needsSdk) against it: gives the SDK found by findSdk to every compile step as the
 // sysroot (`--sysroot`), which is how Zig then finds the usr/include, the frameworks and the libraries of the SDK instead of its own
 // headers. Does nothing for any other target: a native macOS build finds its SDK by itself. Stops the build with a message that names the
 // SDK when there is none. `what` names the thing being built, for the message.
 //
-pub fn useSdkForIos(b: *std.Build, target: std.Build.ResolvedTarget, what: []const u8) !void {
-    if (target.result.os.tag != .ios) {
+pub fn useSdk(b: *std.Build, target: std.Build.ResolvedTarget, what: []const u8) !void {
+    if (!needsSdk(target.query, target.result)) {
         return;
     }
-    b.sysroot = findSdkForIos(b, target) orelse {
+    b.sysroot = findSdk(b, target) orelse {
         const name = sdkName(target.result.os.tag, target.result.abi).?;
-        std.log.err("{s} for {s} needs Apple's {s} SDK, which comes with Xcode on a Mac and is found with `xcrun --sdk {s} --show-sdk-path`. It was not found here. Build for iOS on a Mac with Xcode installed.", .{ what, try target.result.zigTriple(b.allocator), name, name });
+        std.log.err("{s} for {s} needs Apple's {s} SDK, which comes with Xcode on a Mac and is found with `xcrun --sdk {s} --show-sdk-path`. It was not found here. Build on a Mac with Xcode installed.", .{ what, try target.result.zigTriple(b.allocator), name, name });
         std.process.exit(1);
     };
 }
@@ -78,4 +90,26 @@ test "sdkName gives the SDK of each Apple operating system" {
 test "sdkName gives nothing for an operating system that is not an Apple one" {
     try std.testing.expect(sdkName(.linux, .gnu) == null);
     try std.testing.expect(sdkName(.windows, .gnu) == null);
+}
+
+test "needsSdk is true for every iOS target and a macOS target that is not the native one" {
+    for ([_][]const u8{ "aarch64-ios", "aarch64-ios-simulator", "x86_64-ios-simulator", "aarch64-macos.11.0", "x86_64-macos" }) |name| {
+        const query = try std.Target.Query.parse(.{
+            .arch_os_abi = name,
+        });
+        const result = try std.zig.system.resolveTargetQuery(std.testing.io, query);
+        try std.testing.expect(needsSdk(query, result));
+    }
+}
+
+test "needsSdk is false for the native target and any target that is not an Apple one" {
+    const native_query: std.Target.Query = .{};
+    try std.testing.expect(!needsSdk(native_query, try std.zig.system.resolveTargetQuery(std.testing.io, native_query)));
+    for ([_][]const u8{ "x86_64-linux-gnu", "x86_64-windows-msvc", "aarch64-linux-android" }) |name| {
+        const query = try std.Target.Query.parse(.{
+            .arch_os_abi = name,
+        });
+        const result = try std.zig.system.resolveTargetQuery(std.testing.io, query);
+        try std.testing.expect(!needsSdk(query, result));
+    }
 }

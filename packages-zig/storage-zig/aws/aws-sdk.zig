@@ -219,16 +219,10 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
         std.log.err("The AWS SDK for C is only built for Linux, Windows, macOS and iOS, not {s}. See docs/aws-sdk.md.", .{@tagName(os)});
         std.process.exit(1);
     }
-    // Zig has no headers for the Apple frameworks aws-c-cal and aws-c-io include on iOS. They come from the iOS SDK, which only a Mac
+    // Zig has no headers for the Apple frameworks aws-c-cal and aws-c-io include on iOS, and uses the macOS SDK only for a native build.
+    // For iOS and a macOS target that is not the native one they come from the SDK, which only a Mac
     // with Xcode has.
-    try apple_sdk.useSdkForIos(b, target, "The AWS SDK for C");
-    // Zig uses the macOS SDK (Xcode's or the Command Line Tools', found with `xcrun --sdk macosx --show-sdk-path`)
-    // only for a native build: a target whose operating system and ABI are not given (see
-    // std/zig/system/darwin.zig and std/zig/LibCDirs.zig).
-    if (os == .macos and !(target.query.isNativeOs() and target.query.isNativeAbi())) {
-        std.log.err("The AWS SDK for C is only built for macOS natively on a Mac, with no -Dtarget (-Dcpu may be given). On Apple platforms aws-c-cal and aws-c-io are built from their darwin sources, which include the Security, Network and CoreFoundation framework headers of the macOS SDK; Zig does not ship those headers and only uses the macOS SDK for a native build, so they cannot be compiled for {s} here. See docs/aws-sdk.md.", .{try target.result.zigTriple(b.allocator)});
-        std.process.exit(1);
-    }
+    try apple_sdk.useSdk(b, target, "The AWS SDK for C");
     if (arch != .x86_64 and arch != .aarch64) {
         std.log.err("The AWS SDK for C build only covers x86_64 and aarch64, not {s}.", .{@tagName(arch)});
         std.process.exit(1);
@@ -293,9 +287,9 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
         preprocess.addArg(b.fmt("-D{s}", .{define}));
     }
     try android_libc.addLibcIncludesToCommand(b, preprocess, target);
-    // The headers include CoreFoundation's on Apple (aws/common/allocator.h), so the iOS SDK is the preprocessor's sysroot.
+    // The headers include CoreFoundation's on Apple (aws/common/allocator.h), so the SDK a target needs is the preprocessor's sysroot.
     if (b.sysroot) |sysroot| {
-        if (target.result.os.tag == .ios) {
+        if (apple_sdk.needsSdk(target.query, target.result)) {
             preprocess.addArgs(&.{ "-isysroot", sysroot });
         }
     }
@@ -311,7 +305,7 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
     });
     try android_libc.addLibcIncludes(b, translate_c, target);
     if (b.sysroot) |sysroot| {
-        if (target.result.os.tag == .ios) {
+        if (apple_sdk.needsSdk(target.query, target.result)) {
             translate_c.addSystemIncludePath(.{
                 .cwd_relative = b.pathJoin(&.{ sysroot, "usr", "include" }),
             });
