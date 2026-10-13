@@ -666,17 +666,11 @@ pub fn build(b: *std.Build, target: std.Build.ResolvedTarget, dependency: *std.B
         std.log.err("aws-lc's libcrypto is only built for Linux, Windows, macOS and iOS, not {s}.", .{@tagName(os)});
         std.process.exit(1);
     }
-    // jitterentropy includes headers of the Apple SDK, which Zig does not ship for iOS: they come from the iOS SDK of Xcode.
-    try apple_sdk.useSdkForIos(b, target, "aws-lc's libcrypto");
+    // jitterentropy includes headers of the Apple SDK, which Zig does not ship for iOS and uses for macOS only in a native build: for iOS
+    // and a macOS target that is not the native one they come from the SDK of Xcode.
+    try apple_sdk.useSdk(b, target, "aws-lc's libcrypto");
     if (arch != .x86_64 and arch != .aarch64) {
         std.log.err("aws-lc's libcrypto build only covers x86_64 and aarch64, not {s}.", .{@tagName(arch)});
-        std.process.exit(1);
-    }
-    // Zig uses the macOS SDK (Xcode's or the Command Line Tools') only for a native build: a target whose operating
-    // system and ABI are not given (see std/zig/system/darwin.zig and std/zig/LibCDirs.zig). jitterentropy includes
-    // headers of the macOS SDK that Zig does not ship.
-    if (os == .macos and !(target.query.isNativeOs() and target.query.isNativeAbi())) {
-        std.log.err("aws-lc's libcrypto is only built for macOS natively on a Mac, with no -Dtarget (-Dcpu may be given): it includes headers of the macOS SDK, which Zig only uses for a native build, so it cannot be compiled for {s} here.", .{try target.result.zigTriple(b.allocator)});
         std.process.exit(1);
     }
     const context: Context = .{

@@ -218,8 +218,9 @@ pub fn build(b: *std.Build) !void {
         .macos => target.query.isNativeOs() and target.query.isNativeAbi(),
         else => false,
     };
-    // iOS needs the Apple SDK, which a machine without Xcode lacks: there the Photosphere steps say why they cannot be built.
-    const is_cross_core_target = (target.result.os.tag == .ios and apple_sdk.findSdkForIos(b, target) != null) or (target.result.os.tag == .windows and (target.result.cpu.arch == .x86_64 or target.result.cpu.arch == .aarch64));
+    // iOS, and macOS for a target that is not the native one (the Photosphere App's core is built for the macOS 11.0 its Xcode project
+    // targets), need the Apple SDK, which a machine without Xcode lacks: there the Photosphere steps say why they cannot be built.
+    const is_cross_core_target = ((target.result.os.tag == .ios or target.result.os.tag == .macos) and apple_sdk.findSdk(b, target) != null) or (target.result.os.tag == .windows and (target.result.cpu.arch == .x86_64 or target.result.cpu.arch == .aarch64));
     if (!target.result.abi.isAndroid() and !packages_supported and !is_cross_core_target) {
         try addPhotosphereUnavailable(b, target);
         return;
@@ -882,7 +883,7 @@ fn addPhotosphereUnavailable(b: *std.Build, target: std.Build.ResolvedTarget) !v
     const message = if (target.result.os.tag == .ios)
         b.fmt("Photosphere's core for iOS needs Apple's {s} SDK, which comes with Xcode on a Mac and is found with `xcrun --sdk {s} --show-sdk-path`. It was not found here. It holds the AWS SDK for C and aws-lc, whose Apple sources include headers of that SDK, which Zig does not ship. Build for iOS on a Mac with Xcode installed. See docs/aws-sdk.md.", .{ apple_sdk.sdkName(target.result.os.tag, target.result.abi).?, apple_sdk.sdkName(target.result.os.tag, target.result.abi).? })
     else if (target.result.os.tag == .macos)
-        "Photosphere's core for macOS can only be built on a Mac, natively with no -Dtarget (-Dcpu may be given): it holds the AWS SDK for C and aws-lc, whose Apple sources include the Security, Network, CoreFoundation and CoreServices headers of the macOS SDK, which Zig only uses for a native build. See docs/aws-sdk.md."
+        "Photosphere's core for macOS can only be built on a Mac: it holds the AWS SDK for C and aws-lc, whose Apple sources include the Security, Network, CoreFoundation and CoreServices headers of the macOS SDK, which comes with Xcode or its Command Line Tools and is found with `xcrun --sdk macosx --show-sdk-path`. It was not found here."
     else
         "Photosphere's core is built for the machine running the build, for Windows (x86_64 and aarch64), for iOS (on a Mac with Xcode) and for Android (with the NDK's C library as a libc file). See docs/aws-sdk.md.";
     for ([_][]const u8{ "photosphere-core", "photosphere-linux", "photosphere-windows", "photosphere-windows-check" }) |name| {
