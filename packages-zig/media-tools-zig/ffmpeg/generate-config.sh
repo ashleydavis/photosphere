@@ -38,6 +38,9 @@ esac
 EXTRA_LDFLAGS=""
 # The suffix of a program's file name, which names the programs make is asked to plan.
 EXECUTABLE_SUFFIX=""
+# The prefix and suffix of a static library's file name, which name the libraries make is asked to plan.
+LIBRARY_PREFIX="lib"
+LIBRARY_SUFFIX=".a"
 # Extra arguments for the compiler: the iOS SDK, which Zig does not ship and which Xcode provides.
 SDK_ARGUMENT=""
 case "$ZIG_TARGET" in
@@ -67,6 +70,9 @@ case "$ZIG_TARGET" in
         # for. The compiler is Zig for the MSVC target, which reads the Windows SDK's headers, so this runs only on Windows with
         # Visual Studio or its Build Tools.
         TARGET_ARGUMENTS=(--arch=x86_64 --target-os=win64)
+        # configure names the static libraries of win64 as MSVC does (avutil.lib).
+        LIBRARY_PREFIX=""
+        LIBRARY_SUFFIX=".lib"
         EXECUTABLE_SUFFIX=".exe"
         ;;
     aarch64-windows-gnu)
@@ -183,8 +189,12 @@ make V=1 libavutil/ffversion.h fftools/resources/graph.html.c fftools/resources/
 }
 
 # The commands make would run to build the libraries and the two programs hold which source files are built and with which flags.
-make -n -B V=1 libavutil/libavutil.a libavcodec/libavcodec.a libavformat/libavformat.a libswscale/libswscale.a \
-    libswresample/libswresample.a libavfilter/libavfilter.a "ffmpeg_g$EXECUTABLE_SUFFIX" "ffprobe_g$EXECUTABLE_SUFFIX" > make-plan.log 2>&1 || {
+libraries=()
+for library in avutil avcodec avformat swscale swresample avfilter; do
+    libraries+=("lib$library/$LIBRARY_PREFIX$library$LIBRARY_SUFFIX")
+done
+make -n -B V=1 "${libraries[@]}" \
+    "ffmpeg_g$EXECUTABLE_SUFFIX" "ffprobe_g$EXECUTABLE_SUFFIX" > make-plan.log 2>&1 || {
     echo "ERROR: make could not plan the build. See $WORK_DIR/build/make-plan.log" >&2
     exit 1
 }
