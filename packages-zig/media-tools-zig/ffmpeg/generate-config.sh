@@ -199,8 +199,9 @@ make -n -B V=1 "${libraries[@]}" \
     exit 1
 }
 
-# The plan names the sources relative to the source directory FFmpeg's make was started for ("src/" or "./src/").
-sed -i.bak 's| \./src/| src/|g' make-plan.log
+# The plan names the sources relative to the source directory FFmpeg's make was started for ("src/" or "./src/"), or, on Windows, where
+# configure cannot make the src link, by the source directory's own path.
+sed -i.bak -e 's| \./src/| src/|g' -e "s| $FFMPEG_DIR/| src/|g" make-plan.log
 
 rm -f "$WORK_DIR/lists.txt" "$WORK_DIR/flags.txt" "$WORK_DIR/fftools-flags.txt" "$WORK_DIR/includes.txt"
 {
@@ -224,10 +225,11 @@ rm -f "$WORK_DIR/lists.txt" "$WORK_DIR/flags.txt" "$WORK_DIR/fftools-flags.txt" 
 
 # The compiler flags a file is built with: the preprocessor and optimisation flags of one compile command, without the warnings
 # FFmpeg asks for (the ones that switch a warning off stay, because they keep clang from stopping at code FFmpeg's own build
-# accepts), the dependency files, the include directories (the Zig build adds its own) and the file names. The libraries and the
+# accepts), the dependency files, the include directories (the Zig build adds its own), the file names and -options:strict (an
+# option of Microsoft's compiler, which configure adds when the compiler targets MSVC and which clang reads as -o). The libraries and the
 # command line programs are built with different flags (only the libraries define HAVE_AV_CONFIG_H).
 flags_of() {
-    grep " -c -o $1 " make-plan.log | head -1 | tr ' ' '\n' | grep -v '^$' | grep -v -e '^-I' -e '^-MMD$' -e '^-MF$' -e '^-MT$' -e '^-c$' -e '^-o$' -e '\.d$' -e '\.o$' -e '\.c$' -e '/cc$' -e '^-Q' | awk '!/^-W/ || /^-Wno-/'
+    grep " -c -o $1 " make-plan.log | head -1 | tr ' ' '\n' | grep -v '^$' | grep -v -e '^-I' -e '^-MMD$' -e '^-MF$' -e '^-options:strict$' -e '^-MT$' -e '^-c$' -e '^-o$' -e '\.d$' -e '\.o$' -e '\.c$' -e '/cc$' -e '^-Q' | awk '!/^-W/ || /^-Wno-/'
 }
 flags_of libavutil/adler32.o > "$WORK_DIR/flags.txt"
 flags_of fftools/ffmpeg_opt.o > "$WORK_DIR/fftools-flags.txt"
