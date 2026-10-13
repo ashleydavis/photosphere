@@ -170,11 +170,9 @@ pub fn buildFfmpeg(b: *std.Build, target: std.Build.ResolvedTarget, zlib: zlib_n
         module.addIncludePath(b.path(b.fmt("vendor/ffmpeg/{s}", .{directory})));
     }
 
-    // The sources of the command line programs that have a main function are built with it renamed, and with the names that the two
-    // programs both define as their own renamed in ffprobe, which is built into the same library.
-    const ffmpeg_main_flags = [_][]const u8{"-Dmain=ffmpeg_main"};
+    // The sources of the command line programs that have a main function are built through ffmpeg-main.c and ffprobe-main.c, which rename
+    // it, and ffprobe with the names that the two programs both define as their own renamed, since both are built into the same library.
     const ffprobe_main_flags = [_][]const u8{
-        "-Dmain=ffprobe_main",
         "-Dprogram_name=ffprobe_program_name",
         "-Dprogram_birth_year=ffprobe_program_birth_year",
         "-Dshow_help_default=ffprobe_show_help_default",
@@ -218,13 +216,13 @@ pub fn buildFfmpeg(b: *std.Build, target: std.Build.ResolvedTarget, zlib: zlib_n
         .flags = tool_flags,
     });
     module.addCSourceFiles(.{
-        .root = b.path("vendor/ffmpeg"),
-        .files = &.{"fftools/ffmpeg.c"},
-        .flags = try joinFlags(b, tool_flags, &ffmpeg_main_flags),
+        .root = b.path("packages-zig/media-tools-zig/ffmpeg"),
+        .files = &.{"ffmpeg-main.c"},
+        .flags = tool_flags,
     });
     module.addCSourceFiles(.{
-        .root = b.path("vendor/ffmpeg"),
-        .files = &.{"fftools/ffprobe.c"},
+        .root = b.path("packages-zig/media-tools-zig/ffmpeg"),
+        .files = &.{"ffprobe-main.c"},
         .flags = try joinFlags(b, tool_flags, &ffprobe_main_flags),
     });
 

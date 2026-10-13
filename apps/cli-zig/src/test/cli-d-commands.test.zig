@@ -404,8 +404,8 @@ test "sync refuses an encrypted destination whose key is not in the vault" {
     const root = try setup(allocator, "cli-d-sync-key");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fs.path.join(allocator, &.{ root, "db" });
-    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
+    const db = try std.mem.concat(allocator, u8, &.{ root, "/db" });
+    const dest = try std.mem.concat(allocator, u8, &.{ root, "/dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fs.path.join(allocator, &.{ dest, ".db", "encryption.pub" }), .data = "a public key\n" });
 

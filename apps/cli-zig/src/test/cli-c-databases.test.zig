@@ -164,7 +164,7 @@ test "secrets import --yes stores a key file under its name without the .key ext
     const root = try helpers.makeTempDir(allocator, "clic-secrets-import");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try setup(allocator, root, seed_config);
-    const keyFile = try std.fs.path.join(allocator, &.{ root, "mykey.key" });
+    const keyFile = try std.mem.concat(allocator, u8, &.{ root, "/mykey.key" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = keyFile, .data = "PEM-BODY" });
 
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "import", "--yes", "--private-key", keyFile }), "\u{2713} Key imported as \"mykey\".\n", "", 0);

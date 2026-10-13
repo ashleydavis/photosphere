@@ -10,6 +10,7 @@ const aws_c_auth = @import("aws-c-auth.zig");
 const aws_c_s3 = @import("aws-c-s3.zig");
 const s2n_tls = @import("s2n-tls.zig");
 const android_libc = @import("../../android-libc.zig");
+const translate_target = @import("../../translate-target.zig");
 const apple_sdk = @import("../../apple-sdk.zig");
 
 //
@@ -281,7 +282,10 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
     // headers are left as #include directives (-fkeep-system-includes) for translate-c to read itself, because the
     // glibc headers clang expands declare _Float32 and friends in a way translate-c rejects.
     const header_files = b.addWriteFiles();
-    const preprocess = b.addSystemCommand(&.{ b.graph.zig_exe, "cc", "-E", "-dD", "-fkeep-system-includes", "-target", try target.result.zigTriple(b.allocator) });
+    // The target the headers are translated for, which the preprocessor is given too, so that the macros it expands are the ones translate-c
+    // reads (see packages-zig/translate-target.zig).
+    const translate_for = translate_target.translateTarget(b, target);
+    const preprocess = b.addSystemCommand(&.{ b.graph.zig_exe, "cc", "-E", "-dD", "-fkeep-system-includes", "-target", try translate_for.result.zigTriple(b.allocator) });
     for ([_]*std.Build.Step.Compile{ common, checksums, cal, io, compression, http, sdkutils, auth, s3 }) |library| {
         preprocess.addPrefixedDirectoryArg("-I", library.getEmittedIncludeTree());
     }
@@ -302,7 +306,7 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
     // memset and friends, which translate-c turns into Zig that does not compile. The declarations are the same.
     const translate_c = b.addTranslateC(.{
         .root_source_file = preprocessed_header,
-        .target = target,
+        .target = translate_for,
         .optimize = .Debug,
     });
     try android_libc.addLibcIncludes(b, translate_c, target);

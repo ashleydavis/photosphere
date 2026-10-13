@@ -363,7 +363,7 @@ test "save_media_file writes the original, display or thumbnail file of a media 
     const storagePrefixes = [_][]const u8{ "asset", "display", "thumb" };
     const sizes = [_]usize{ 2049800, 696014, 130591 };
     for (kinds, storagePrefixes, sizes) |kind, storagePrefix, size| {
-        const outputPath = try std.fs.path.join(allocator, &.{ environment.root, "out", kind, "file.bin" });
+        const outputPath = try std.mem.concat(allocator, u8, &.{ environment.root, "/out/", kind, "/file.bin" });
         try environment.expectText(
             "save_media_file",
             try std.fmt.allocPrint(allocator, "{{\"assetId\":\"{s}\",\"outputPath\":\"{s}/out/{s}/file.bin\",\"type\":\"{s}\"}}", .{ v6_asset_id, escapedRoot, kind, kind }),
