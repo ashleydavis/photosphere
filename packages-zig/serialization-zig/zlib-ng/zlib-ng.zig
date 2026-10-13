@@ -1,5 +1,6 @@
 const std = @import("std");
 const android_libc = @import("../../android-libc.zig");
+const translate_target = @import("../../translate-target.zig");
 
 //
 // Builds zlib-ng 2.3.3 from the unmodified upstream release tarball fetched as the "zlib-ng" dependency in
@@ -185,7 +186,7 @@ pub const IZlibNg = struct {
 pub fn addZlibNg(b: *std.Build, module: *std.Build.Module, target: std.Build.ResolvedTarget, zlib: IZlibNg) !void {
     const translate_c = b.addTranslateC(.{
         .root_source_file = zlib.include_directory.path(b, "zlib.h"),
-        .target = target,
+        .target = translate_target.translateTarget(b, target),
         .optimize = .ReleaseFast,
     });
     translate_c.addIncludePath(zlib.include_directory);

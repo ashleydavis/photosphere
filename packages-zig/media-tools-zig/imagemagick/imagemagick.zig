@@ -1,5 +1,6 @@
 const std = @import("std");
 const android_libc = @import("../../android-libc.zig");
+const translate_target = @import("../../translate-target.zig");
 const zlib_ng = @import("../../serialization-zig/zlib-ng/zlib-ng.zig");
 const libjpeg = @import("../libjpeg/libjpeg.zig");
 const libpng = @import("../libpng/libpng.zig");
@@ -299,7 +300,7 @@ pub fn addImageMagick(b: *std.Build, module: *std.Build.Module, target: std.Buil
     const imagemagick = try buildImageMagick(b, target, zlib);
     const translate_c = b.addTranslateC(.{
         .root_source_file = imagemagick.source_directory.path(b, "MagickWand/MagickWand.h"),
-        .target = target,
+        .target = translate_target.translateTarget(b, target),
         .optimize = .ReleaseFast,
     });
     translate_c.addIncludePath(imagemagick.config_directory);

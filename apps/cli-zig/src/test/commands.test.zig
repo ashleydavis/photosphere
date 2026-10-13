@@ -341,8 +341,8 @@ test "compare prints the report" {
     const root = try helpers.makeTempDir(allocator, "cmd-compare");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const source = try std.fs.path.join(allocator, &.{ root, "1-asset" });
-    const destination = try std.fs.path.join(allocator, &.{ root, "1-asset-2" });
+    const source = try std.mem.concat(allocator, u8, &.{ root, "/1-asset" });
+    const destination = try std.mem.concat(allocator, u8, &.{ root, "/1-asset-2" });
     try helpers.copyDirectory(allocator, "../../test/dbs/1-asset", source);
     try helpers.copyDirectory(allocator, "../../test/dbs/1-asset-2", destination);
 
@@ -977,8 +977,8 @@ test "sync synchronizes two databases" {
     const root = try setup(allocator, "cmd-sync");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fs.path.join(allocator, &.{ root, "db" });
-    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
+    const db = try std.mem.concat(allocator, u8, &.{ root, "/db" });
+    const dest = try std.mem.concat(allocator, u8, &.{ root, "/dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
     const assetId = "89171cd9-a652-4047-b869-1154bf2c95a1";
     try expectResult(try runZig(allocator, environment, &.{ "remove", "--db", dest, assetId, "--yes" }), "\u{2713} Successfully removed asset 89171cd9-a652-4047-b869-1154bf2c95a1 from database\n", "", 0);
@@ -1002,8 +1002,8 @@ test "sync does nothing for databases already in sync" {
     const root = try setup(allocator, "cmd-sync-in-sync");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fs.path.join(allocator, &.{ root, "db" });
-    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
+    const db = try std.mem.concat(allocator, u8, &.{ root, "/db" });
+    const dest = try std.mem.concat(allocator, u8, &.{ root, "/dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
 
     // Two copies of one database hold the same files and records, but have no state files yet, so the first
@@ -1022,8 +1022,8 @@ test "sync refuses an encrypted destination without a key" {
     const root = try setup(allocator, "cmd-sync-encrypted");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fs.path.join(allocator, &.{ root, "db" });
-    const dest = try std.fs.path.join(allocator, &.{ root, "dest" });
+    const db = try std.mem.concat(allocator, u8, &.{ root, "/db" });
+    const dest = try std.mem.concat(allocator, u8, &.{ root, "/dest" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", dest);
 
     // The encryption marker is what says a database is encrypted.
@@ -1072,8 +1072,8 @@ test "sync refuses databases that are not related" {
     const root = try setup(allocator, "cmd-sync-unrelated");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fs.path.join(allocator, &.{ root, "db" });
-    const other = try std.fs.path.join(allocator, &.{ root, "other" });
+    const db = try std.mem.concat(allocator, u8, &.{ root, "/db" });
+    const other = try std.mem.concat(allocator, u8, &.{ root, "/other" });
     try helpers.copyDirectory(allocator, "../../test/dbs/1-asset", other);
 
     // The stack of each error of the chain is not printed, because Zig errors do not have one.
@@ -1148,8 +1148,8 @@ test "consolidate creates a remote that does not exist, then finds it already jo
     const root = try setup(allocator, "cmd-consolidate-create");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fs.path.join(allocator, &.{ root, "db" });
-    const remote = try std.fs.path.join(allocator, &.{ root, "remote" });
+    const db = try std.mem.concat(allocator, u8, &.{ root, "/db" });
+    const remote = try std.mem.concat(allocator, u8, &.{ root, "/remote" });
 
     const created = try normalize(allocator, try runZig(allocator, environment, &.{ "consolidate", "--db", db, remote, "--yes" }), root, "<root>");
     try expectResult(created, try std.mem.concat(allocator, u8, &.{ try consolidateHeader(allocator, "remote"),
@@ -1178,8 +1178,8 @@ test "consolidate records a remote that is the same database as the origin" {
     const root = try setup(allocator, "cmd-consolidate-same");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fs.path.join(allocator, &.{ root, "db" });
-    const same = try std.fs.path.join(allocator, &.{ root, "same" });
+    const db = try std.mem.concat(allocator, u8, &.{ root, "/db" });
+    const same = try std.mem.concat(allocator, u8, &.{ root, "/same" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", same);
 
     const result = try normalize(allocator, try runZig(allocator, environment, &.{ "consolidate", "--db", db, same, "--yes" }), root, "<root>");
@@ -1196,8 +1196,8 @@ test "consolidate joins an unrelated remote" {
     const root = try setup(allocator, "cmd-consolidate-unrelated");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fs.path.join(allocator, &.{ root, "db" });
-    const other = try std.fs.path.join(allocator, &.{ root, "other" });
+    const db = try std.mem.concat(allocator, u8, &.{ root, "/db" });
+    const other = try std.mem.concat(allocator, u8, &.{ root, "/other" });
     try helpers.copyDirectory(allocator, "../../test/dbs/1-asset-2", other);
 
     // The warning is the local write lock that replicating the remote down cannot take while consolidation holds it.
@@ -1243,8 +1243,8 @@ test "consolidate reports a remote it cannot lock" {
     const root = try setup(allocator, "cmd-consolidate-locked");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fs.path.join(allocator, &.{ root, "db" });
-    const locked = try std.fs.path.join(allocator, &.{ root, "locked" });
+    const db = try std.mem.concat(allocator, u8, &.{ root, "/db" });
+    const locked = try std.mem.concat(allocator, u8, &.{ root, "/locked" });
     try helpers.copyDirectory(allocator, "../../test/dbs/1-asset-2", locked);
 
     // Another session holds the remote's write lock, with a timestamp that never times out.
@@ -1810,7 +1810,7 @@ test "encrypt reports a missing database" {
     const root = try setup(allocator, "cmd-encrypt-no-db");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const missingDb = try std.fs.path.join(allocator, &.{ root, "nodb" });
+    const missingDb = try std.mem.concat(allocator, u8, &.{ root, "/nodb" });
 
     const result = try normalize(allocator, try runZig(allocator, environment, &.{ "encrypt", "--db", missingDb, "--key", "zig-key", "--generate-key", "--yes" }), root, "<root>");
     try expectEncryptFailure(allocator, result, "✗ No database found at: <root>/nodb\n");
@@ -1835,7 +1835,7 @@ test "decrypt decrypts the database in place" {
     const root = try setup(allocator, "cmd-decrypt");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    const db = try std.mem.concat(allocator, u8, &.{ root, "/db" });
 
     const encrypted = try runZig(allocator, environment, &.{ "encrypt", "--db", db, "--key", "zig-key", "--generate-key", "--yes" });
     try expectResult(encrypted, "\n✅ Encrypted 11 files, 0 were already encrypted.\n", "", 0);
@@ -1886,11 +1886,11 @@ test "decrypt reports a database that is not encrypted" {
     const root = try setup(allocator, "cmd-decrypt-plain");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
-    const db = try std.fs.path.join(allocator, &.{ root, "db" });
-    const missingDb = try std.fs.path.join(allocator, &.{ root, "nodb" });
+    const db = try std.mem.concat(allocator, u8, &.{ root, "/db" });
+    const missingDb = try std.mem.concat(allocator, u8, &.{ root, "/nodb" });
 
     // The key must be in the vault for the database to be checked, so it is generated by encrypting another copy.
-    const other = try std.fs.path.join(allocator, &.{ root, "other" });
+    const other = try std.mem.concat(allocator, u8, &.{ root, "/other" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", other);
     const encryptOther = try runZig(allocator, environment, &.{ "encrypt", "--db", other, "--key", "zig-key", "--generate-key", "--yes" });
     try expectResult(encryptOther, "\n✅ Encrypted 11 files, 0 were already encrypted.\n", "", 0);
@@ -2731,7 +2731,7 @@ test "mcp answers an MCP session" {
     const environment = try helpers.cliEnvironment(allocator, root);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
         .sub_path = try std.fs.path.join(allocator, &.{ root, "config", "databases.toml" }),
-        .data = try helpers.databasesToml(allocator, "photos", "My photos", try std.fs.path.join(allocator, &.{ root, "db" })),
+        .data = try helpers.databasesToml(allocator, "photos", "My photos", try std.mem.concat(allocator, u8, &.{ root, "/db" })),
     });
 
     // src/test/fixtures/mcp-session.jsonl is an MCP session with every tool of test/dbs/v6, <ROOT> standing for the
@@ -2869,7 +2869,7 @@ test "secrets view --raw writes only the bare value" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
     const multiLineValue = "-----BEGIN PRIVATE KEY-----\nABC\n-----END PRIVATE KEY-----";
-    const keyFile = try std.fs.path.join(allocator, &.{ root, "enc.key" });
+    const keyFile = try std.mem.concat(allocator, u8, &.{ root, "/enc.key" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = keyFile, .data = multiLineValue });
     try expectResult(try runZig(allocator, environment, &.{ "secrets", "import", "--yes", "--private-key", keyFile }), "\u{2713} Key imported as \"enc\".\n", "", 0);
 

@@ -6,6 +6,7 @@ const imagemagick = @import("packages-zig/media-tools-zig/imagemagick/imagemagic
 const ffmpeg = @import("packages-zig/media-tools-zig/ffmpeg/ffmpeg.zig");
 const android_libc = @import("packages-zig/android-libc.zig");
 const apple_sdk = @import("packages-zig/apple-sdk.zig");
+const translate_target = @import("packages-zig/translate-target.zig");
 const ziggy_build = @import("ziggy");
 
 //
@@ -255,6 +256,15 @@ pub fn build(b: *std.Build) !void {
         }),
     });
     test_packages_step.dependOn(&b.addRunArtifact(apple_sdk_tests).step);
+    const translate_target_tests = b.addTest(.{
+        .name = "translate-target",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("packages-zig/translate-target.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    test_packages_step.dependOn(&b.addRunArtifact(translate_target_tests).step);
     try addOwnProcessTests(b, test_packages_step, modules, target, optimize, stand_ins);
     try addStorageIntegrationTests(b, modules, target, optimize);
     try addCli(b, test_cli_step, modules, target, optimize);
@@ -361,7 +371,7 @@ fn addPackageModules(
 fn translateHeader(b: *std.Build, target: std.Build.ResolvedTarget, crypto: *std.Build.Step.Compile, header: []const u8) !*std.Build.Module {
     const translate_c = b.addTranslateC(.{
         .root_source_file = b.addWriteFiles().add("openssl.h", header),
-        .target = target,
+        .target = translate_target.translateTarget(b, target),
         .optimize = .Debug,
     });
     translate_c.addIncludePath(crypto.getEmittedIncludeTree());
