@@ -116,7 +116,7 @@ fn createImportFixture(allocator: std.mem.Allocator, io: std.Io, name: []const u
 //
 fn copyTestFile(allocator: std.mem.Allocator, io: std.Io, testFile: []const u8, folder: []const u8, fileName: []const u8) !void {
     try std.Io.Dir.cwd().createDirPath(io, folder);
-    try std.Io.Dir.cwd().copyFile(try std.fmt.allocPrint(allocator, "../../test/{s}", .{testFile}), std.Io.Dir.cwd(), try std.fmt.allocPrint(allocator, "{s}/{s}", .{ folder, fileName }), io, .{});
+    try std.Io.Dir.cwd().copyFile(try std.fmt.allocPrint(allocator, "../test/{s}", .{testFile}), std.Io.Dir.cwd(), try std.fmt.allocPrint(allocator, "{s}/{s}", .{ folder, fileName }), io, .{});
 }
 
 // TypeScript: the import-skipped branch of the onAnyTaskMessage of addPaths. A photo that the database already holds
@@ -216,7 +216,7 @@ test "addPaths queues the Google API key, the options and the encryption key it 
     try std.testing.expectEqual(@as(f64, 1), summary.filesAdded);
 
     // The key reached the upload, which wrote the asset encrypted.
-    const original = try test_files.readFile(allocator, io, "../../test/test.png");
+    const original = try test_files.readFile(allocator, io, "../test/test.png");
     const assetsDir = try std.fmt.allocPrint(allocator, "{s}/asset", .{fixture.databaseDir});
     var assets = try std.Io.Dir.cwd().openDir(io, assetsDir, .{ .iterate = true });
     defer assets.close(io);

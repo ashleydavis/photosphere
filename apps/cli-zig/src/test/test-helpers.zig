@@ -543,9 +543,9 @@ pub fn runPsi(allocator: std.mem.Allocator, environment: *const std.process.Envi
 // Creates a test root whose config holds the databases.toml given (none when it is null) and whose plaintext vault
 // holds the vault.json given, and returns its environment.
 //
-pub fn setupConfigAndVault(allocator: std.mem.Allocator, root: []const u8, databasesToml: ?[]const u8, vaultJson: []const u8) !*std.process.Environ.Map {
+pub fn setupConfigAndVault(allocator: std.mem.Allocator, root: []const u8, databasesTomlText: ?[]const u8, vaultJson: []const u8) !*std.process.Environ.Map {
     const environment = try cliEnvironment(allocator, root);
-    if (databasesToml) |toml| {
+    if (databasesTomlText) |toml| {
         try std.Io.Dir.cwd().writeFile(std.testing.io, .{
             .sub_path = try std.fmt.allocPrint(allocator, "{s}/config/databases.toml", .{root}),
             .data = toml,

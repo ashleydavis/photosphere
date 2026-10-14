@@ -402,7 +402,7 @@ test "encrypt fails with the error of a file that cannot be written" {
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
-    const keyPair = try getEncryptKeyPair();
+    const keyPair = try getEncryptKeyPair(allocator);
     var readStore = MemoryStorage.init(allocator);
     const readStorage = readStore.asStorage();
     const tree = try buildMinimalFilesTree(allocator, &.{"some/file.dat"});
