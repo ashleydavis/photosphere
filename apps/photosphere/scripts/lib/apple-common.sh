@@ -134,24 +134,34 @@ apple_sync_native() {
     # symbols out, so the link then fails with undefined _ziggy_* symbols. So the members are taken out of the archive as files,
     # and libtool writes a new archive from those, which puts every member at an aligned offset.
     # Xcode links only libphotosphere.a, and a Zig static library does not hold the static libraries it links (the AWS SDK for C, aws-lc,
-    # the media libraries), which the build installs under lib/dependencies, so their members go into the new archive too. Members are
-    # taken out one at a time by their full names, which Zig makes unique (.zig-cache/o/<hash>/<file>.o), into numbered files: ar x
-    # writes each under its base name, and one archive can hold several members with the same base name (FFmpeg's 4xm.o, aacdec.o and
-    # others), so all but the last of them would be lost.
+    # the media libraries), which the build installs under lib/dependencies, so their members go into the new archive too. One archive
+    # can hold several members with the same name (an Apple archive keeps only the file's base name, and FFmpeg has several 4xm.o,
+    # aacdec.o and others), so ar x, which writes each under its name, would keep only the last of them. Each member is taken out on its
+    # own into a numbered file instead, as the instance of its name it is (zig ar's N modifier), counted from the names listed before it.
     echo "Aligning the members of the Zig library and adding its dependencies..."
     local library="$native_dir/lib/libphotosphere.a"
     local members_dir
     members_dir="$(mktemp -d "$native_dir/members.XXXXXX")" || apple_fail "could not make a directory for the library's members."
-    local archive member
+    local archive member instance
     local count=0
     for archive in "$library" "$native_dir"/lib/dependencies/*.a; do
         [ -f "$archive" ] || continue
         local names
         names="$(zig ar t "$archive")" || apple_fail "could not list the members of $archive."
+        : > "$members_dir/seen.txt"
         while IFS= read -r member; do
             [ -n "$member" ] || continue
+            printf '%s\n' "$member" >> "$members_dir/seen.txt"
+            instance="$(grep -cxF -- "$member" "$members_dir/seen.txt")"
             count=$((count + 1))
-            zig ar pP "$archive" "$member" > "$members_dir/$count.o" || apple_fail "could not take $member out of $archive."
+            # zig ar takes the instance of a name only with x, which writes the member under its name, so into a directory of its own.
+            mkdir -p "$members_dir/one" || apple_fail "could not make a directory for a member of $archive."
+            zig ar xPN "$instance" "$archive" "$member" --output "$members_dir/one" || apple_fail "could not take $member out of $archive."
+            local extracted
+            extracted="$(find "$members_dir/one" -type f)"
+            [ -n "$extracted" ] || apple_fail "taking $member out of $archive wrote no file."
+            mv "$extracted" "$members_dir/$count.o" || apple_fail "could not move $member out of the extraction directory."
+            find "$members_dir/one" -depth -mindepth 1 -type d -empty -delete
         done <<< "$names"
     done
     local members=()
