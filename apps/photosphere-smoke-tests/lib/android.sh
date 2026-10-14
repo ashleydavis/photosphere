@@ -39,13 +39,6 @@ ANDROID_LOCK_FD=""
 # Set to 1 once this scenario has installed the app on the claimed device, so the APK is installed once and not on every helper.
 ANDROID_APK_INSTALLED=""
 
-# The first device, set aside while a scenario that needs a second app copy works on a second device (see android_claim_peer_device).
-# Empty when no second device is claimed. The four values are swapped with the current ones by photosphere_android_swap_devices.
-ANDROID_PARKED_SERIAL=""
-ANDROID_PARKED_LOCK_FD=""
-ANDROID_PARKED_APK_INSTALLED=""
-ANDROID_PARKED_DATA_PREPARED=""
-
 # Set to 1 once this scenario has wiped the app's data and may have put state in it from outside (seeded databases, settings), so the
 # first start keeps what is there and does not wipe it. A scenario that never calls the reset gets a wipe at its first start instead.
 ANDROID_DATA_PREPARED=""
@@ -75,7 +68,8 @@ photosphere_android_read_port() {
 }
 
 #
-# Prints the devices the run may use, one per line: the named ones, else the pool, else plugged-in devices.
+# Prints the devices the run may use, one per line: the named ones, else the pool, else plugged-in devices, else any other
+# emulator, such as the single hand-testing one.
 #
 photosphere_android_candidate_devices() {
     local adb_command="$ANDROID_HOME/platform-tools/adb"
@@ -88,6 +82,7 @@ photosphere_android_candidate_devices() {
     fi
     local pool=""
     local hardware=""
+    local other_emulators=""
     for serial in $("$adb_command" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }'); do
         case "$serial" in
             emulator-*)
@@ -95,6 +90,9 @@ photosphere_android_candidate_devices() {
                 case "$avd" in
                     "$POOL_AVD_PREFIX"-*)
                         pool="$pool $serial"
+                        ;;
+                    *)
+                        other_emulators="$other_emulators $serial"
                         ;;
                 esac
                 ;;
@@ -109,7 +107,13 @@ photosphere_android_candidate_devices() {
         done
         return 0
     fi
-    for serial in $hardware; do
+    if [ -n "$hardware" ]; then
+        for serial in $hardware; do
+            echo "$serial"
+        done
+        return 0
+    fi
+    for serial in $other_emulators; do
         echo "$serial"
     done
 }
@@ -169,14 +173,10 @@ photosphere_android_claim_device() {
     while true; do
         candidates="$(photosphere_android_candidate_devices)"
         if [ -z "$candidates" ]; then
-            echo "No pool emulator, named device or plugged-in device is attached." >&2
+            echo "No emulator, named device or plugged-in device is attached." >&2
             return 1
         fi
         for serial in $candidates; do
-            # The device set aside for a second claim is already this scenario's.
-            if [ -n "$ANDROID_PARKED_SERIAL" ] && [ "$serial" = "$ANDROID_PARKED_SERIAL" ]; then
-                continue
-            fi
             exec {fd}<>"$(android_device_lock_path "$serial")"
             if flock -n "$fd"; then
                 # A device that cannot reach this host would fail every scenario given to it, so it is let go and passed over.
@@ -195,65 +195,6 @@ photosphere_android_claim_device() {
         sleep 1
         waited=$((waited + 1))
     done
-}
-
-#
-# Swaps the current device with the one set aside, so the helpers that act on "the claimed device" act on the other one.
-#
-photosphere_android_swap_devices() {
-    local serial="$ANDROID_SERIAL_CLAIMED"
-    local lock_fd="$ANDROID_LOCK_FD"
-    local installed="$ANDROID_APK_INSTALLED"
-    local prepared="$ANDROID_DATA_PREPARED"
-    ANDROID_SERIAL_CLAIMED="$ANDROID_PARKED_SERIAL"
-    ANDROID_LOCK_FD="$ANDROID_PARKED_LOCK_FD"
-    ANDROID_APK_INSTALLED="$ANDROID_PARKED_APK_INSTALLED"
-    ANDROID_DATA_PREPARED="$ANDROID_PARKED_DATA_PREPARED"
-    ANDROID_PARKED_SERIAL="$serial"
-    ANDROID_PARKED_LOCK_FD="$lock_fd"
-    ANDROID_PARKED_APK_INSTALLED="$installed"
-    ANDROID_PARKED_DATA_PREPARED="$prepared"
-}
-
-#
-# Makes the device a test directory's app was started on the current one, swapping when it is the one set aside. Does nothing when the
-# directory has no recorded device or only one device is claimed. Usage: photosphere_android_select_device_for_dir <test_dir>
-#
-photosphere_android_select_device_for_dir() {
-    local test_dir="$1"
-    if [ -z "$ANDROID_PARKED_SERIAL" ] || [ ! -s "$test_dir/device.txt" ]; then
-        return 0
-    fi
-    if [ "$(cat "$test_dir/device.txt")" = "$ANDROID_PARKED_SERIAL" ]; then
-        photosphere_android_swap_devices
-    fi
-}
-
-#
-# Claims a second device, under its lock like the first, for a scenario that needs two copies of the app (a phone cannot run two, so
-# the second copy runs on a second device, as a second copy runs in its own directory on a desktop). The first device is set aside and
-# the second becomes the current one, so the next start_app starts on it. Later stop, is-running and wait-exit calls pick the device
-# by the directory they are given. Fails when there is no second device free. Usage: android_claim_peer_device
-#
-android_claim_peer_device() {
-    photosphere_android_claim_device || return 1
-    if [ -n "$ANDROID_PARKED_SERIAL" ]; then
-        echo "A second device is already claimed." >&2
-        return 1
-    fi
-    ANDROID_PARKED_SERIAL="$ANDROID_SERIAL_CLAIMED"
-    ANDROID_PARKED_LOCK_FD="$ANDROID_LOCK_FD"
-    ANDROID_PARKED_APK_INSTALLED="$ANDROID_APK_INSTALLED"
-    ANDROID_PARKED_DATA_PREPARED="$ANDROID_DATA_PREPARED"
-    ANDROID_SERIAL_CLAIMED=""
-    ANDROID_LOCK_FD=""
-    ANDROID_APK_INSTALLED=""
-    ANDROID_DATA_PREPARED=""
-    if ! photosphere_android_claim_device; then
-        photosphere_android_swap_devices
-        ANDROID_PARKED_SERIAL=""
-        return 1
-    fi
 }
 
 #
@@ -342,7 +283,6 @@ photosphere_platform_start() {
     local test_dir="$1"
     mkdir -p "$test_dir"
     photosphere_android_claim_device || return 1
-    echo "$ANDROID_SERIAL_CLAIMED" > "$test_dir/device.txt"
     photosphere_android_ensure_installed "$test_dir" || return 1
     photosphere_adb shell am force-stop "$ANDROID_APP_ID"
     if [ "${2:-}" = "keep-data" ] || [ -f "$test_dir/log-generation.txt" ]; then
@@ -444,7 +384,6 @@ photosphere_platform_start() {
 #
 photosphere_platform_stop() {
     local test_dir="$1"
-    photosphere_android_select_device_for_dir "$test_dir"
     if [ -z "$ANDROID_SERIAL_CLAIMED" ]; then
         return 0
     fi
@@ -465,7 +404,6 @@ photosphere_platform_stop() {
 # process that is still listed is not a sign the app is still running. Usage: photosphere_platform_is_running <test_dir>
 #
 photosphere_platform_is_running() {
-    photosphere_android_select_device_for_dir "$1"
     photosphere_adb shell dumpsys activity activities | grep -q "$ANDROID_APP_ID/.MainActivity"
 }
 
@@ -667,14 +605,6 @@ android_seed_databases_config() {
     }
     rm -f "$rendered"
     echo "Wrote the app's database list to $ANDROID_CONFIG_DIR_RELATIVE/databases.toml" >&2
-}
-
-#
-# Prints the app's databases.toml as it stands on the device, or nothing when there is none yet, which is how a scenario asserts on a
-# write the app made. Usage: android_read_databases_config
-#
-android_read_databases_config() {
-    photosphere_adb exec-out run-as "$ANDROID_APP_ID" cat "$ANDROID_CONFIG_DIR_RELATIVE/databases.toml" 2>/dev/null | grep -v ": No such file or directory$" || true
 }
 
 #

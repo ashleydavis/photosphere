@@ -4,7 +4,7 @@
 # tag as databases, so this covers the secret half of the same cancel-and-restart behaviour that 29 covers for databases.
 #
 # The sender is the app under test on every platform. The receiver of the restarted share is a second copy of the app on a desktop. A
-# phone cannot run two copies of the app, so on Android the receiver is a second emulator, and on iOS it is the psi CLI on the host.
+# phone cannot run two copies of the app, so on Android and iOS the receiver is the psi CLI on the host.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
@@ -65,9 +65,9 @@ second_code=$(read_pairing_code "$SENDER_PORT") || {
 log_info "Second pairing code: $second_code"
 
 case "$PLATFORM" in
-    ios)
+    ios|android)
         log_info "Receiving the secret on the host CLI..."
-        run_cli "$TMP_DIR" secrets receive --yes --code "$second_code" > "$TMP_DIR/receiver.log" 2>&1 || {
+        run_zig_cli "$TMP_DIR" secrets receive --yes --code "$second_code" > "$TMP_DIR/receiver.log" 2>&1 || {
             log_error "The CLI receiver failed. Its output: $TMP_DIR/receiver.log"
             exit 1
         }
@@ -75,11 +75,6 @@ case "$PLATFORM" in
         ;;
     *)
         mkdir -p "$TMP_DIR/receiver/vault" "$TMP_DIR/receiver/config"
-        if [ "$PLATFORM" = "android" ]; then
-            # The broadcast of a host receiver leaves through the host's default interface, not the bridge the emulators share, so the
-            # second copy of the app runs on a second emulator.
-            android_claim_peer_device || exit 1
-        fi
         start_app "$TMP_DIR/receiver"
         RECEIVER_PORT="$APP_PORT"
         wait_for_ready "$RECEIVER_PORT"
@@ -103,15 +98,7 @@ case "$PLATFORM" in
         ;;
 esac
 
-if [ "$PLATFORM" = "android" ]; then
-    # A phone's vault cannot be read from the host, so the secret has to be in the receiver's secrets list. The dialog is a drawer that
-    # stays mounted on its success step over the page, so it is closed before the list behind it is read.
-    send_command "$RECEIVER_PORT" click '{"dataId":"receive-secret-close-button"}' || exit 1
-    wait_for_value "$RECEIVER_PORT" "secret-row-name-test-secret" "test-secret" || {
-        log_error "Receiver has no secret from the restarted share"
-        exit 1
-    }
-elif ! vault_has_secret "$RECEIVER_VAULT_DIR" test-secret; then
+if ! vault_has_secret "$RECEIVER_VAULT_DIR" test-secret; then
     log_error "Receiver vault has no secret from the restarted share"
     exit 1
 fi
@@ -119,7 +106,7 @@ log_success "A share started after a cancelled one paired and delivered the secr
 
 check_no_errors "$TMP_DIR"
 case "$PLATFORM" in
-    ios)
+    ios|android)
         ;;
     *)
         check_no_errors "$TMP_DIR/receiver"

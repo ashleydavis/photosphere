@@ -8,7 +8,7 @@
 # test the point of it rather than padding: the cancel on its own passes whether or not the restart is possible.
 #
 # The sender is the app under test on every platform. The receiver of the restarted share is a second copy of the app on a desktop. A
-# phone cannot run two copies of the app, so on Android the receiver is a second emulator, and on iOS it is the psi CLI on the host.
+# phone cannot run two copies of the app, so on Android and iOS the receiver is the psi CLI on the host.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
@@ -65,18 +65,11 @@ log_success "The cancelled share stopped and the dialog closed"
 # --- 2. Share again and carry it through to a receiver. ---
 
 # The receiving app is started and its dialog opened before the share, because the sender waits for a receiver only for a fixed time.
-# Claiming a second emulator waits for one to come free, which can take minutes while other suites hold the pool, and that wait used
-# to come out of the sender's.
 case "$PLATFORM" in
-    ios)
+    ios|android)
         ;;
     *)
         mkdir -p "$TMP_DIR/receiver/vault" "$TMP_DIR/receiver/config"
-        if [ "$PLATFORM" = "android" ]; then
-            # The broadcast of a host receiver leaves through the host's default interface, not the bridge the emulators share, so the
-            # second copy of the app runs on a second emulator.
-            android_claim_peer_device || exit 1
-        fi
         start_app "$TMP_DIR/receiver"
         RECEIVER_PORT="$APP_PORT"
         wait_for_ready "$RECEIVER_PORT"
@@ -107,13 +100,13 @@ log_info "Second pairing code: $second_code"
 # A code on screen only proves the dialog re-rendered. Pairing with a real receiver is what proves the restarted find-receiver task is
 # running, which is the part a remembered cancellation breaks.
 case "$PLATFORM" in
-    ios)
+    ios|android)
         log_info "Receiving the database on the host CLI..."
-        run_cli "$TMP_DIR" dbs receive --yes --code "$second_code" > "$TMP_DIR/receiver.log" 2>&1 || {
+        run_zig_cli "$TMP_DIR" dbs receive --yes --code "$second_code" > "$TMP_DIR/receiver.log" 2>&1 || {
             log_error "The CLI receiver failed. Its output: $TMP_DIR/receiver.log"
             exit 1
         }
-        if ! run_cli "$TMP_DIR" dbs list | grep -q 'test-db'; then
+        if ! run_zig_cli "$TMP_DIR" dbs list | grep -q 'test-db'; then
             log_error "The CLI receiver's database list does not contain the database sent by the restarted share"
             exit 1
         fi
@@ -126,12 +119,7 @@ case "$PLATFORM" in
         send_command "$RECEIVER_PORT" click '{"dataId":"receive-database-save-button"}' || exit 1
         wait_for_log "$TMP_DIR/receiver" "Database imported"
 
-        if [ "$PLATFORM" = "android" ]; then
-            received_databases="$(android_read_databases_config)"
-        else
-            received_databases="$(cat "$TMP_DIR/receiver/config/databases.toml")"
-        fi
-        if ! printf '%s' "$received_databases" | grep -q 'test-db'; then
+        if ! grep -q 'test-db' "$TMP_DIR/receiver/config/databases.toml"; then
             log_error "Receiver databases.toml does not contain the database sent by the restarted share"
             exit 1
         fi
@@ -141,7 +129,7 @@ log_success "A share started after a cancelled one paired and delivered the data
 
 check_no_errors "$TMP_DIR"
 case "$PLATFORM" in
-    ios)
+    ios|android)
         ;;
     *)
         check_no_errors "$TMP_DIR/receiver"

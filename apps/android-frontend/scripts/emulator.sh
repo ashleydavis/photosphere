@@ -106,6 +106,9 @@ BRIDGE_ADDRESS="192.168.55.1"
 BRIDGE_PREFIX="24"
 BRIDGE_SUBNET="192.168.55.0/24"
 
+# The segment's broadcast address, which the host's 255.255.255.255 broadcasts are copied to (see bridge_up).
+BRIDGE_BROADCAST="192.168.55.255"
+
 # The pool dnsmasq hands out to the guest.
 DHCP_RANGE_START="192.168.55.50"
 DHCP_RANGE_END="192.168.55.150"
@@ -393,6 +396,16 @@ bridge_up() {
         echo "WARNING: no default route or iptables found, skipping NAT. LAN sharing still works, but the emulator will have no internet." >&2
     fi
 
+    # Copy every UDP broadcast the host sends to 255.255.255.255 onto the segment as well. The host sends that broadcast out of
+    # its default route's interface only, which is never this bridge, so without the copy a LAN share receiver on the host (the
+    # psi CLI, or the desktop app) announces itself to the real network and the app in the emulator never hears it. The original
+    # still leaves on the default route, so the real network is unaffected. -C tests for the rule first so re-running does not
+    # stack duplicates.
+    require_command iptables "Install iptables; without it a LAN share receiver on this host cannot be found from the emulator."
+    iptables -t mangle -C OUTPUT -d 255.255.255.255 -p udp -j TEE --gateway "$BRIDGE_BROADCAST" 2>/dev/null \
+        || iptables -t mangle -A OUTPUT -d 255.255.255.255 -p udp -j TEE --gateway "$BRIDGE_BROADCAST"
+    echo "Host broadcasts copied onto $BRIDGE_NAME"
+
     echo "LAN bridge up. Host is $BRIDGE_ADDRESS on $BRIDGE_NAME."
 }
 
@@ -449,6 +462,9 @@ bridge_down() {
         iptables -t nat -D POSTROUTING -s "$BRIDGE_SUBNET" -o "$uplink" -j MASQUERADE 2>/dev/null || true
         iptables -D FORWARD -i "$BRIDGE_NAME" -o "$uplink" -j ACCEPT 2>/dev/null || true
         iptables -D FORWARD -i "$uplink" -o "$BRIDGE_NAME" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
+    fi
+    if command -v iptables >/dev/null 2>&1; then
+        iptables -t mangle -D OUTPUT -d 255.255.255.255 -p udp -j TEE --gateway "$BRIDGE_BROADCAST" 2>/dev/null || true
     fi
 
     if ip link show "$BRIDGE_NAME" >/dev/null 2>&1; then

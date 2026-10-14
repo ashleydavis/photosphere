@@ -877,6 +877,20 @@ run_cli() {
 }
 
 #
+# Runs the psi CLI built from the Zig source (by run.sh, at PHOTOSPHERE_ZIG_CLI), isolated the same way as run_cli.
+# Usage: run_zig_cli <tmp_dir> <cli args...>
+#
+run_zig_cli() {
+    local tmp_dir="$1"
+    shift
+    NO_COLOR=1 \
+    PHOTOSPHERE_VAULT_TYPE="plaintext" \
+    PHOTOSPHERE_VAULT_DIR="$tmp_dir/cli-vault" \
+    PHOTOSPHERE_CONFIG_DIR="$tmp_dir/cli-config" \
+    run_with_timeout 90 "$PHOTOSPHERE_ZIG_CLI" "$@" </dev/null
+}
+
+#
 # Fails the test unless the Android emulator is attached to the host LAN bridge. Host-to-device LAN sharing needs it: under QEMU's
 # default user-mode NAT the guest's discovery broadcast never reaches the host, so a host-side sender would silently wait out its full
 # 60-second timeout and exit 0. Detected from the guest's wlan0 address. Does nothing off Android, and on a real device, which shares

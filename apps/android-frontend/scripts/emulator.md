@@ -177,6 +177,7 @@ What `down` restores:
 | The dnsmasq DHCP server | Killed via its pid file, with a fallback that matches only our bridge so it cannot hit another dnsmasq |
 | `net.ipv4.ip_forward` | Set back to the exact value it had before |
 | The NAT and FORWARD iptables rules | Deleted individually by rule spec |
+| The broadcast copy (`mangle` `OUTPUT` `TEE`) | Deleted by rule spec |
 
 What `down` deliberately does not undo:
 
@@ -186,8 +187,8 @@ What `down` deliberately does not undo:
 ## What it cannot break
 
 - **Your physical network.** `enp131s0` and equivalents are never touched, by design. The bridge is private and shares no port with your real NIC, so no failure here can take your machine off the network.
-- **Your routing to real networks.** The only route added is for `192.168.55.0/24`, chosen to be unlikely to collide with a real LAN. If you do happen to use `192.168.55.x`, change `BRIDGE_ADDRESS` and `BRIDGE_SUBNET` at the top of the script before running it, because that is the one case where this could shadow a network you care about.
-- **Other firewall rules.** The iptables rules are scoped to `br-psphere` by interface match, and are added with a `-C` existence test first, so re-running `up` cannot stack duplicates.
+- **Your routing to real networks.** The only route added is for `192.168.55.0/24`, chosen to be unlikely to collide with a real LAN. If you do happen to use `192.168.55.x`, change `BRIDGE_ADDRESS`, `BRIDGE_SUBNET` and `BRIDGE_BROADCAST` at the top of the script before running it, because that is the one case where this could shadow a network you care about.
+- **Other firewall rules.** The NAT and forwarding rules are scoped to `br-psphere` by interface match. The broadcast copy matches UDP to `255.255.255.255` and only adds a copy, so the original packet goes where it always went. Every rule is added with a `-C` existence test first, so re-running `up` cannot stack duplicates.
 
 ## Trying a share
 
@@ -208,6 +209,7 @@ The host and the guest are now on one segment, so the emulator's broadcast reach
 | Tap | `emu-netcard` | The virtual NIC the emulator attaches to. Owned by your user, since the emulator is not root. |
 | DHCP | `192.168.55.50` to `192.168.55.150` | Android runs a DHCP client on `wlan0` as soon as it associates, so something has to answer or the interface stays unusable. |
 | NAT | via your default route | Gives the guest internet through the host's uplink. Not needed for sharing, but an emulator with no internet is painful and Android flags the network as unvalidated without it. |
+| Broadcast copy | `iptables -t mangle` `TEE` to `192.168.55.255` | The host sends a broadcast to `255.255.255.255` out of its default route's interface only, never onto the bridge, so a LAN share receiver on the host (the `psi` CLI or the desktop app) could not be found by a sender in the emulator. This copies each such UDP broadcast onto the segment. The original still goes out on your real network. Removed with the NAT rules. |
 
 Override the DNS server handed to the guest with `GUEST_DNS` if you would rather it used your own resolver:
 
