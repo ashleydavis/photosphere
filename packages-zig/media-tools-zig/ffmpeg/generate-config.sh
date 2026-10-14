@@ -106,7 +106,10 @@ case "$ZIG_TARGET" in
                 TARGET_ARGUMENTS=(--arch=aarch64 --target-os=darwin)
                 ;;
         esac
-        SDK_ARGUMENT="--sysroot=$(xcrun --sdk "$SDK_NAME" --show-sdk-path)"
+        SDK_PATH="$(xcrun --sdk "$SDK_NAME" --show-sdk-path)"
+        SDK_ARGUMENT="--sysroot=$SDK_PATH"
+        # Zig's linker does not look in the sysroot for the libraries configure's test programs link (libSystem), so the SDK's are named.
+        EXTRA_LDFLAGS="-L$SDK_PATH/usr/lib"
         ;;
     *)
         echo "ERROR: unknown target '$ZIG_TARGET'." >&2
