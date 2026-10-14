@@ -6,7 +6,7 @@ set -euo pipefail
 if [ $# -lt 1 ] || [ "$1" = "--help" ]; then
     echo "Usage: generate-config.sh <zig-target> [<libc-file>]" >&2
     echo "  <zig-target>  x86_64-linux-gnu, aarch64-linux-gnu, x86_64-linux-android, aarch64-linux-android," >&2
-    echo "                x86_64-windows-gnu, aarch64-windows-gnu, x86_64-macos, aarch64-macos," >&2
+    echo "                x86_64-windows-gnu, aarch64-windows-gnu, x86_64-windows-msvc, x86_64-macos, aarch64-macos," >&2
     echo "                aarch64-ios, aarch64-ios-simulator or x86_64-ios-simulator (a Mac with Xcode only)" >&2
     echo "  <libc-file>   Zig's libc file for the NDK, required for the Android targets" >&2
     exit 1
@@ -60,6 +60,13 @@ case "$ZIG_TARGET" in
         ;;
     x86_64-windows-gnu)
         TARGET_ARGUMENTS=(--arch=x86_64 --target-os=mingw32)
+        EXECUTABLE_SUFFIX=".exe"
+        ;;
+    x86_64-windows-msvc)
+        # win64 rather than mingw32, so that configure takes the C library to be Microsoft's, which it also checks the compiler
+        # for. The compiler is Zig for the MSVC target, which reads the Windows SDK's headers, so this runs only on Windows with
+        # Visual Studio or its Build Tools.
+        TARGET_ARGUMENTS=(--arch=x86_64 --target-os=win64)
         EXECUTABLE_SUFFIX=".exe"
         ;;
     aarch64-windows-gnu)
