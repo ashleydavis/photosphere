@@ -1,6 +1,7 @@
 const std = @import("std");
 const android_libc = @import("../../android-libc.zig");
 const translate_target = @import("../../translate-target.zig");
+const host_libc = @import("../../host-libc.zig");
 const zlib_ng = @import("../../serialization-zig/zlib-ng/zlib-ng.zig");
 const libjpeg = @import("../libjpeg/libjpeg.zig");
 const libpng = @import("../libpng/libpng.zig");
@@ -192,6 +193,7 @@ pub fn buildImageMagick(b: *std.Build, target: std.Build.ResolvedTarget, zlib: z
             },
         }),
     });
+    host_libc.useHostLibc(b, threshold_tool);
     const threshold_command = b.addRunArtifact(threshold_tool);
     threshold_command.addFileArg(b.path("vendor/imagemagick/config/thresholds.xml"));
     const threshold_map_header = threshold_command.addOutputFileArg("threshold-map.h");
