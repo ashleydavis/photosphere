@@ -250,6 +250,9 @@ pub fn buildImageMagick(b: *std.Build, target: std.Build.ResolvedTarget, zlib: z
         // is built and asks for dirent.h, which the Windows SDK does not have.
         if (target.result.abi == .msvc) {
             try flags.append(b.allocator, "-DWIN32");
+            // The Windows SDK has no ssize_t (see msvc-ssize-t.h).
+            try flags.append(b.allocator, "-include");
+            try flags.append(b.allocator, b.pathFromRoot("packages-zig/media-tools-zig/imagemagick/msvc-ssize-t.h"));
         }
     }
 

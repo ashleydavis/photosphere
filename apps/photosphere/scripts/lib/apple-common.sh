@@ -133,15 +133,32 @@ apple_sync_native() {
     # archive again with libtool straight from Zig's archive does not work: libtool warns about the same member and leaves its
     # symbols out, so the link then fails with undefined _ziggy_* symbols. So the members are taken out of the archive as files,
     # and libtool writes a new archive from those, which puts every member at an aligned offset.
-    echo "Aligning the members of the Zig library..."
+    # Xcode links only libphotosphere.a, and a Zig static library does not hold the static libraries it links (the AWS SDK for C, aws-lc,
+    # the media libraries), which the build installs under lib/dependencies, so their members go into the new archive too. Members are
+    # taken out one at a time by their full names, which Zig makes unique (.zig-cache/o/<hash>/<file>.o), into numbered files: ar x
+    # writes each under its base name, and one archive can hold several members with the same base name (FFmpeg's 4xm.o, aacdec.o and
+    # others), so all but the last of them would be lost.
+    echo "Aligning the members of the Zig library and adding its dependencies..."
     local library="$native_dir/lib/libphotosphere.a"
     local members_dir
     members_dir="$(mktemp -d "$native_dir/members.XXXXXX")" || apple_fail "could not make a directory for the library's members."
-    (cd "$members_dir" && xcrun ar x "$library") || apple_fail "could not take the members out of the Zig library."
-    # ar x gives each file the mode stored in Zig's archive, which can leave it unreadable, and libtool then warns that it
-    # cannot open the member (EACCES) and the link fails with undefined _ziggy_* symbols.
-    chmod u+rw "$members_dir"/*.o || apple_fail "could not make the Zig library's members readable."
-    xcrun libtool -static -o "$library.aligned" "$members_dir"/*.o || apple_fail "libtool could not write the Zig library again."
+    local archive member
+    local count=0
+    for archive in "$library" "$native_dir"/lib/dependencies/*.a; do
+        [ -f "$archive" ] || continue
+        local names
+        names="$(zig ar t "$archive")" || apple_fail "could not list the members of $archive."
+        while IFS= read -r member; do
+            [ -n "$member" ] || continue
+            count=$((count + 1))
+            zig ar pP "$archive" "$member" > "$members_dir/$count.o" || apple_fail "could not take $member out of $archive."
+        done <<< "$names"
+    done
+    local members=()
+    for ((index = 1; index <= count; index++)); do
+        members+=("$members_dir/$index.o")
+    done
+    xcrun libtool -static -o "$library.aligned" "${members[@]}" || apple_fail "libtool could not write the Zig library again."
     mv "$library.aligned" "$library" || apple_fail "could not replace the Zig library with the aligned one."
     find "$members_dir" -type f -delete
     find "$members_dir" -depth -type d -empty -delete

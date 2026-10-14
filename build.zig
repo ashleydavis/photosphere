@@ -805,6 +805,24 @@ fn addPhotosphere(
     }, target, optimize);
     // The core links the AWS SDK for C, whose libraries link frameworks of the Apple SDK, so it needs them too (see packages-zig/apple-sdk.zig).
     apple_sdk.addSdkFrameworks(b, libraries.static_library.root_module, target);
+    // Xcode links only the core's archive, and a Zig static library does not hold the static libraries it links (the AWS SDK for C,
+    // aws-lc, the media libraries), so for an Apple target each of them is installed beside it, under lib/dependencies, for
+    // apps/photosphere/scripts/lib/apple-common.sh to put their members into the archive Xcode links.
+    if (target.result.os.tag == .ios or target.result.os.tag == .macos) {
+        const core_step = &b.top_level_steps.get("photosphere-core").?.step;
+        for (libraries.static_library.getCompileDependencies(false)) |dependency| {
+            if (dependency == libraries.static_library or dependency.kind != .lib or dependency.linkage != .static) {
+                continue;
+            }
+            core_step.dependOn(&b.addInstallArtifact(dependency, .{
+                .dest_dir = .{
+                    .override = .{
+                        .custom = "lib/dependencies",
+                    },
+                },
+            }).step);
+        }
+    }
     if (libraries.shared_library) |shared_library| {
         // aws-c-common writes its logs to Android's log (CMake: PLATFORM_LIBS log), which is in the C library's directory. It is linked
         // here and not by aws-c-common's static library, which would archive the system library as a member.
