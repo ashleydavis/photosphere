@@ -55,9 +55,12 @@ start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 log_info "Opening database..."
+opened_from_line="$(get_log_cursor "$TMP_DIR")"
 send_command "$APP_PORT" open-database "{\"path\":\"$SOURCE_DB\"}"
 wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded"
-wait_for_log "$TMP_DIR" "Gallery items rendered"
+# The gallery renders its items as the assets arrive, which can be before the load task's completion is logged, so the wait for
+# them looks from where the database was opened.
+wait_for_log_since "$TMP_DIR" "$opened_from_line" "Gallery items rendered"
 log_success "Database opened with 1 asset"
 
 # The thumb uses useLongPress, which only reacts to mousedown/mouseup, so a plain click is not enough.
