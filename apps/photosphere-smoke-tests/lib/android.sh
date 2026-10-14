@@ -1110,6 +1110,14 @@ android_bring_app_to_front() {
 }
 
 #
+# Succeeds when the system photo picker is the activity in front on the claimed device. Android 14 opens it when an app that can see
+# only the photos the user picked asks for photo access again, so the user can pick more. Usage: android_photo_picker_is_open
+#
+android_photo_picker_is_open() {
+    photosphere_adb shell dumpsys activity activities 2>/dev/null | grep "topResumedActivity" | grep -q "photopicker"
+}
+
+#
 # Removes a path under the app's files directory so a scenario that creates fresh state there can be run again. Installs the app first,
 # because run-as needs it. Fails when the removal fails. Usage: android_reset_path <relative_path_under_files>
 #
