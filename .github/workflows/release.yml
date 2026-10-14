@@ -1948,7 +1948,7 @@ jobs:
     # a failure in a test is not reported as a failure of a smoke suite, which is what happens when
     # the two share a job: the job is named after the smoke tests and a red unit test looks like a
     # red smoke test.
-    # Setup takes about 5 minutes and a cold unit test build up to 25.
+    # Setup takes about 5 minutes and a cold unit test build, which compiles ImageMagick and FFmpeg too, up to 40 on the Intel Mac.
     timeout-minutes: 50
     needs: [build-aws-sdk]
     strategy:
@@ -2054,7 +2054,7 @@ jobs:
       # build also compiles aws-lc, zlib-ng and the rest of the AWS SDK for C first, which took longer
       # than 12 minutes (run 700).
       - name: Run the Zig unit tests
-        timeout-minutes: 25
+        timeout-minutes: 40
         shell: bash
         run: |
           # The Zig CLI and every Zig package in one build, so each dependency, the AWS SDK for C among
