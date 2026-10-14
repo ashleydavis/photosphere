@@ -14,7 +14,11 @@ if ! xcrun simctl help > /dev/null 2>&1; then
     apple_fail "xcrun simctl does not work. Install Xcode's iOS simulator support."
 fi
 
-XCODE_VERSION="$(xcodebuild -version | head -n 1 | sed 's/^Xcode //')"
+# The first line of the output, taken in the shell: piping into head would end xcodebuild with a broken pipe once head had its line,
+# which pipefail makes the script's failure (exit 141).
+XCODE_VERSION="$(xcodebuild -version)"
+XCODE_VERSION="${XCODE_VERSION%%$'\n'*}"
+XCODE_VERSION="${XCODE_VERSION#Xcode }"
 MAJOR="${XCODE_VERSION%%.*}"
 REST="${XCODE_VERSION#*.}"
 MINOR="${REST%%.*}"

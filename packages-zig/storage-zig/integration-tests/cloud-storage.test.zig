@@ -749,7 +749,7 @@ test "CloudStorage Zig: a key with a leading slash is the key without it" {
     const bucket = bucketOf(location);
     const plainKey = try pathOf(allocator, &.{ location[bucket.len + 1 ..], "zig-leading-slash", "file.txt" });
     const slashed = try std.mem.concat(allocator, u8, &.{ bucket, "//", plainKey });
-    const plain = try std.fs.path.join(allocator, &.{ bucket, plainKey });
+    const plain = try pathOf(allocator, &.{ bucket, plainKey });
     const slashedDir = try std.mem.concat(allocator, u8, &.{ bucket, "//", std.fs.path.dirnamePosix(plainKey).? });
 
     try shared_storage.write(allocator, io, slashed, "text/plain", "slashed");
