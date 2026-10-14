@@ -608,6 +608,14 @@ android_seed_databases_config() {
 }
 
 #
+# Prints the app's databases.toml as it stands on the device, or nothing when there is none yet, which is how a scenario asserts on a
+# write the app made. Usage: android_read_databases_config
+#
+android_read_databases_config() {
+    photosphere_adb exec-out run-as "$ANDROID_APP_ID" cat "$ANDROID_CONFIG_DIR_RELATIVE/databases.toml" 2>/dev/null | grep -v ": No such file or directory$" || true
+}
+
+#
 # Writes the syncing settings into the sync section of the app's config.yaml in its settings directory, keeping every other section
 # the file already has. A database path says which database the background sync pushes, which the app otherwise records itself when
 # one is opened. The pause is left out, so the app's default applies, when none is given.
