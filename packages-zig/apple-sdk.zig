@@ -79,46 +79,47 @@ pub fn libcFileText(allocator: std.mem.Allocator, sdk_path: []const u8) ![]u8 {
         "gcc_dir=\n",
     });
 }
-
 //
-// Makes the build compile for a target that needs Apple's SDK (see needsSdk) against it: gives the SDK found by findSdk to every compile step as the
-// sysroot (`--sysroot`), and its C library as the libc file (see libcFileText), which is how Zig then finds the usr/include, the frameworks and the libraries of the SDK instead of its own
-// headers. Does nothing for any other target: a native macOS build finds its SDK by itself. Stops the build with a message that names the
-// SDK when there is none. `what` names the thing being built, for the message.
+// Makes the build compile for a target that needs Apple's SDK (see needsSdk) against it: gives the build the SDK's C library as its libc file
+// (see libcFileText), which is how Zig then finds the SDK's usr/include and libSystem instead of its own headers, unless the build was given
+// a libc file. The SDK is not made the build's sysroot, because Zig gives the sysroot to every compile step, the programs the build runs on
+// its own machine among them, and they then look for that machine's libSystem in the SDK. The frameworks are given to each library that
+// needs them (see addSdkFrameworks). Does nothing for any other target: a native macOS build finds its SDK by itself. Stops the build with
+// a message that names the SDK when there is none. `what` names the thing being built, for the message.
 //
 pub fn useSdk(b: *std.Build, target: std.Build.ResolvedTarget, what: []const u8) !void {
     if (!needsSdk(target.query, target.result)) {
         return;
     }
-    b.sysroot = findSdk(b, target) orelse {
+    const sdk_path = findSdk(b, target) orelse {
         const name = sdkName(target.result.os.tag, target.result.abi).?;
         std.log.err("{s} for {s} needs Apple's {s} SDK, which comes with Xcode on a Mac and is found with `xcrun --sdk {s} --show-sdk-path`. It was not found here. Build on a Mac with Xcode installed.", .{ what, try target.result.zigTriple(b.allocator), name, name });
         std.process.exit(1);
     };
-    // The SDK's C library, as a libc file in the build's cache, unless the build was given one.
     if (b.libc_file == null) {
         const file_name = b.fmt("{s}-libc.txt", .{sdkName(target.result.os.tag, target.result.abi).?});
         try b.cache_root.handle.writeFile(b.graph.io, .{
             .sub_path = file_name,
-            .data = try libcFileText(b.allocator, b.sysroot.?),
+            .data = try libcFileText(b.allocator, sdk_path),
         });
         b.libc_file = try b.cache_root.join(b.allocator, &.{file_name});
     }
 }
 //
-// Gives a module the frameworks of the SDK the build was given (System/Library/Frameworks under the sysroot), for a target that needs the
-// SDK. Zig does not look for frameworks in the sysroot, and a library that links one (CoreFoundation, Security, Network) fails with "unable
+// Gives a module the frameworks of the SDK found by findSdk (its System/Library/Frameworks), for a target that needs the
+// SDK. Zig finds no frameworks for such a target by itself, and a library that links one (CoreFoundation, Security, Network), or links a
+// library that does, fails with "unable
 // to find framework" without it. Does nothing for any other target: a native macOS build finds the frameworks by itself.
 //
 pub fn addSdkFrameworks(b: *std.Build, module: *std.Build.Module, target: std.Build.ResolvedTarget) void {
     if (!needsSdk(target.query, target.result)) {
         return;
     }
-    const sysroot = b.sysroot orelse {
+    const sdk_path = findSdk(b, target) orelse {
         return;
     };
     module.addSystemFrameworkPath(.{
-        .cwd_relative = b.pathJoin(&.{ sysroot, "System", "Library", "Frameworks" }),
+        .cwd_relative = b.pathJoin(&.{ sdk_path, "System", "Library", "Frameworks" }),
     });
 }
 

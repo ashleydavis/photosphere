@@ -86,6 +86,8 @@ pub const Context = struct {
             // The libraries end up in Android's shared library, whose code must not depend on where it is loaded.
             .pic = if (target.result.abi.isAndroid()) true else null,
         });
+        // A library that links a framework of the SDK, or links one that does, needs the SDK's frameworks (see packages-zig/apple-sdk.zig).
+        apple_sdk.addSdkFrameworks(self.b, module, target);
         return self.b.addLibrary(.{
             .name = name,
             .linkage = .static,
@@ -288,10 +290,8 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
     }
     try android_libc.addLibcIncludesToCommand(b, preprocess, target);
     // The headers include CoreFoundation's on Apple (aws/common/allocator.h), so the SDK a target needs is the preprocessor's sysroot.
-    if (b.sysroot) |sysroot| {
-        if (apple_sdk.needsSdk(target.query, target.result)) {
-            preprocess.addArgs(&.{ "-isysroot", sysroot });
-        }
+    if (apple_sdk.findSdk(b, target)) |sdk_path| {
+        preprocess.addArgs(&.{ "-isysroot", sdk_path });
     }
     preprocess.addFileArg(header_files.add("aws-c.h", aws_c_header));
     preprocess.addArg("-o");
@@ -304,17 +304,16 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
         .optimize = .Debug,
     });
     try android_libc.addLibcIncludes(b, translate_c, target);
-    if (b.sysroot) |sysroot| {
-        if (apple_sdk.needsSdk(target.query, target.result)) {
-            translate_c.addSystemIncludePath(.{
-                .cwd_relative = b.pathJoin(&.{ sysroot, "usr", "include" }),
-            });
-            translate_c.addSystemFrameworkPath(.{
-                .cwd_relative = b.pathJoin(&.{ sysroot, "System", "Library", "Frameworks" }),
-            });
-        }
+    if (apple_sdk.findSdk(b, target)) |sdk_path| {
+        translate_c.addSystemIncludePath(.{
+            .cwd_relative = b.pathJoin(&.{ sdk_path, "usr", "include" }),
+        });
+        translate_c.addSystemFrameworkPath(.{
+            .cwd_relative = b.pathJoin(&.{ sdk_path, "System", "Library", "Frameworks" }),
+        });
     }
     module.addImport(aws_c_module_name, translate_c.createModule());
+    apple_sdk.addSdkFrameworks(b, module, target);
 
     for ([_]*std.Build.Step.Compile{ s3, auth, sdkutils, http, compression, io, cal, checksums, common }) |library| {
         module.linkLibrary(library);

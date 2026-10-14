@@ -567,6 +567,8 @@ const Context = struct {
             // The libraries end up in Android's shared library, whose code must not depend on where it is loaded.
             .pic = if (target.result.abi.isAndroid()) true else null,
         });
+        // jitterentropy includes headers of the SDK's frameworks (see packages-zig/apple-sdk.zig).
+        apple_sdk.addSdkFrameworks(self.b, module, target);
         return self.b.addLibrary(.{
             .name = name,
             .linkage = .static,

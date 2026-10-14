@@ -1,5 +1,4 @@
 const std = @import("std");
-const apple_sdk = @import("../../apple-sdk.zig");
 const aws_sdk = @import("aws-sdk.zig");
 const aws_c_common = @import("aws-c-common.zig");
 
@@ -31,7 +30,6 @@ pub fn build(context: *const aws_sdk.Context, dependency: *std.Build.Dependency,
         try sources.append(b.allocator, "source/shared/ed25519_noop.c");
         try sources.append(b.allocator, "source/shared/ref_hkdf.c");
         // PLATFORM_LIBS "-framework Security -framework CoreFoundation" (PUBLIC).
-        apple_sdk.addSdkFrameworks(context.b, module, context.target);
         module.linkFramework("Security", .{});
         module.linkFramework("CoreFoundation", .{});
     }
