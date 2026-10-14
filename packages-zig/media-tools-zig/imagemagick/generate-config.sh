@@ -6,7 +6,7 @@ set -euo pipefail
 if [ $# -lt 1 ] || [ "$1" = "--help" ]; then
     echo "Usage: generate-config.sh <zig-target> [<libc-file>]" >&2
     echo "  <zig-target>  x86_64-linux-gnu, aarch64-linux-gnu, x86_64-linux-android, aarch64-linux-android," >&2
-    echo "                x86_64-windows-gnu, aarch64-windows-gnu, x86_64-macos, aarch64-macos," >&2
+    echo "                x86_64-windows-gnu, aarch64-windows-gnu, x86_64-windows-msvc, x86_64-macos, aarch64-macos," >&2
     echo "                aarch64-ios, aarch64-ios-simulator or x86_64-ios-simulator" >&2
     echo "  <libc-file>   Zig's libc file for the NDK, required for the Android targets" >&2
     exit 1
@@ -58,6 +58,12 @@ case "$ZIG_TARGET" in
         LDFLAGS_FOR_TARGET="-dynamic"
         ;;
     x86_64-windows-gnu)
+        CONFIGURE_HOST="x86_64-w64-mingw32"
+        ;;
+    x86_64-windows-msvc)
+        # configure has no host name for the MSVC ABI, so it is told the MinGW one, which gives it Windows. Its checks are answered
+        # by the compiler, which is Zig for the MSVC target and reads the Windows SDK's headers, so this runs only on Windows with
+        # Visual Studio or its Build Tools.
         CONFIGURE_HOST="x86_64-w64-mingw32"
         ;;
     aarch64-windows-gnu)

@@ -85,7 +85,7 @@ pub fn libraryTarget(b: *std.Build, target: std.Build.ResolvedTarget) std.Build.
 
 //
 // The name of the directory of the generated headers for the target, which is the target's name as Zig spells it: for example
-// "x86_64-linux-gnu", "aarch64-linux-android", "x86_64-windows-gnu", "aarch64-macos" or "aarch64-ios-simulator". Fails for a
+// "x86_64-linux-gnu", "aarch64-linux-android", "x86_64-windows-gnu", "x86_64-windows-msvc", "aarch64-macos" or "aarch64-ios-simulator". Fails for a
 // target ImageMagick is not built for.
 //
 pub fn configName(b: *std.Build, target: std.Build.ResolvedTarget) ![]const u8 {
@@ -103,6 +103,11 @@ pub fn configName(b: *std.Build, target: std.Build.ResolvedTarget) ![]const u8 {
         .windows => {
             if (result.abi == .gnu) {
                 return b.fmt("{s}-windows-gnu", .{arch});
+            }
+            // The Photosphere App's Windows shell links WebView2's static loader, which is built for the MSVC ABI, so the app and
+            // every library in it are built for that ABI.
+            if (result.abi == .msvc) {
+                return b.fmt("{s}-windows-msvc", .{arch});
             }
         },
         .macos => {
