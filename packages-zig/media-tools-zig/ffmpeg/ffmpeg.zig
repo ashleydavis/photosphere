@@ -166,6 +166,12 @@ pub fn buildFfmpeg(b: *std.Build, target: std.Build.ResolvedTarget, zlib: zlib_n
     module.addIncludePath(b.path("vendor/ffmpeg"));
     module.addIncludePath(zlib.include_directory);
     module.linkLibrary(zlib.library);
+    // FFmpeg calls write, read, close and fdopen by their POSIX names, which Microsoft's C library has under an underscore (_write and
+    // the like) and maps through oldnames.lib, which Microsoft's compiler names as a default library of every object and Zig's link does
+    // not, so the library links it with the MSVC ABI.
+    if (target.result.os.tag == .windows and target.result.abi == .msvc) {
+        module.linkSystemLibrary("oldnames", .{});
+    }
     // The directories configure adds for what the C library lacks.
     for (include_directories) |directory| {
         module.addIncludePath(b.path(b.fmt("vendor/ffmpeg/{s}", .{directory})));
