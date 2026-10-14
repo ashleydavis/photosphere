@@ -240,6 +240,9 @@ pub fn buildImageMagick(b: *std.Build, target: std.Build.ResolvedTarget, zlib: z
         // configure adds -D_LIB to the preprocessor flags of a static build with MinGW, and -D_MT for a threaded one.
         try flags.append(b.allocator, "-D_LIB");
         try flags.append(b.allocator, "-D_MT");
+        // coders/url.c reads a URL with URLDownloadToFile, from urlmon, which it names with #pragma comment for Microsoft's compiler
+        // only, so the library links it for every Windows build.
+        module.linkSystemLibrary("urlmon", .{});
     }
 
     // MAGICKCORE_BASE_SRCS: every .c file of MagickCore but vms.c, which is for VMS, and MAGICKCORE_PLATFORM_SRCS: nt-base.c and

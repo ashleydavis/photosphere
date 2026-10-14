@@ -191,6 +191,12 @@ pub fn buildFfmpeg(b: *std.Build, target: std.Build.ResolvedTarget, zlib: zlib_n
             }
             continue;
         }
+        // A program FFmpeg's own build runs on the build machine to write two of swscale's aarch64 sources, not part of the library (see
+        // addSwscaleAarch64Ops).
+        if (std.mem.eql(u8, source, "libswscale/aarch64/ops_asmgen.c")) {
+            try addSwscaleAarch64Ops(b, module, library_flags);
+            continue;
+        }
         if (std.mem.eql(u8, source, "fftools/ffmpeg.c") or std.mem.eql(u8, source, "fftools/ffprobe.c")) {
             continue;
         }
@@ -253,4 +259,43 @@ fn joinFlags(b: *std.Build, flags: []const []const u8, extra: []const []const u8
     try joined.appendSlice(b.allocator, flags);
     try joined.appendSlice(b.allocator, extra);
     return joined.items;
+}
+
+//
+// Adds the two sources of swscale's aarch64 operations that FFmpeg's build writes with a program of its own
+// (libswscale/aarch64/Makefile): ops_asmgen is built for the machine running the build and run with -ops for ops_neon.gen.S and with
+// -lookup for ops_lookup.gen.c, which are compiled into the library like its other sources.
+//
+fn addSwscaleAarch64Ops(b: *std.Build, module: *std.Build.Module, flags: []const []const u8) !void {
+    const generator = b.addExecutable(.{
+        .name = "ffmpeg-ops-asmgen",
+        .root_module = b.createModule(.{
+            .target = b.graph.host,
+            .optimize = .ReleaseFast,
+            .link_libc = true,
+        }),
+    });
+    generator.root_module.addIncludePath(b.path("vendor/ffmpeg"));
+    generator.root_module.addCSourceFiles(.{
+        .root = b.path("vendor/ffmpeg"),
+        .files = &.{"libswscale/aarch64/ops_asmgen.c"},
+        // The flags FFmpeg's make compiles its host programs with (HOSTCFLAGS).
+        .flags = &.{ "-D_ISOC11_SOURCE", "-D_POSIX_C_SOURCE=200112", "-D_XOPEN_SOURCE=600", "-std=c17" },
+    });
+    const write_ops = b.addRunArtifact(generator);
+    write_ops.addArg("-ops");
+    const write_lookup = b.addRunArtifact(generator);
+    write_lookup.addArg("-lookup");
+    module.addCSourceFile(.{
+        .file = write_ops.captureStdOut(.{
+            .basename = "ops_neon.gen.S",
+        }),
+        .flags = flags,
+    });
+    module.addCSourceFile(.{
+        .file = write_lookup.captureStdOut(.{
+            .basename = "ops_lookup.gen.c",
+        }),
+        .flags = flags,
+    });
 }
