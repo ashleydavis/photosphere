@@ -803,6 +803,8 @@ fn addPhotosphere(
             },
         },
     }, target, optimize);
+    // The core links the AWS SDK for C, whose libraries link frameworks of the Apple SDK, so it needs them too (see packages-zig/apple-sdk.zig).
+    apple_sdk.addSdkFrameworks(b, libraries.static_library.root_module, target);
     if (libraries.shared_library) |shared_library| {
         // aws-c-common writes its logs to Android's log (CMake: PLATFORM_LIBS log), which is in the C library's directory. It is linked
         // here and not by aws-c-common's static library, which would archive the system library as a member.

@@ -1,5 +1,4 @@
 const std = @import("std");
-const apple_sdk = @import("../../apple-sdk.zig");
 const aws_sdk = @import("aws-sdk.zig");
 
 //
@@ -175,7 +174,6 @@ pub fn build(context: *const aws_sdk.Context, dependency: *std.Build.Dependency)
         // PLATFORM_LIBS dl Threads::Threads "-framework CoreFoundation" (PUBLIC). Threads::Threads is empty on macOS,
         // whose C library has the pthread functions.
         module.linkSystemLibrary("dl", .{});
-        apple_sdk.addSdkFrameworks(context.b, module, context.target);
         module.linkFramework("CoreFoundation", .{});
     }
     else if (context.isAndroid) {
