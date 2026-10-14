@@ -38,8 +38,11 @@ const Configuration = struct {
     // True for Linux (CMake: `CMAKE_SYSTEM_NAME STREQUAL "Linux"`).
     isLinux: bool,
 
-    // True for Windows (CMake: `WIN32` and `MINGW`, since Zig targets Windows with the MinGW-w64 ABI).
+    // True for Windows (CMake: `WIN32`).
     isWindows: bool,
+
+    // True for Windows with the MSVC ABI, which has neither unistd.h nor an off64_t type (CMake: `WIN32` and not `MINGW`).
+    isMsvc: bool,
 
     // True for x86_64 (CMake: `BASEARCH_X86_FOUND` with `ARCH` "x86_64"), false for aarch64 (`BASEARCH_ARM_FOUND`).
     isX86_64: bool,
@@ -65,8 +68,8 @@ const common_defines = [_][]const u8{
 };
 
 //
-// The defines of the large file check, which finds off64_t on Linux and _off64_t on Windows (MinGW-w64), and neither
-// on macOS.
+// The defines of the large file check, which finds off64_t on Linux and _off64_t on Windows with MinGW-w64, and none of
+// them on macOS or on Windows with the MSVC ABI.
 //
 const largefile_defines = [_][]const u8{
     "_LARGEFILE64_SOURCE=1",
@@ -213,6 +216,7 @@ pub fn buildZlibNg(b: *std.Build, target: std.Build.ResolvedTarget) !IZlibNg {
         .configuration = .{
             .isLinux = os == .linux,
             .isWindows = os == .windows,
+            .isMsvc = os == .windows and target.result.abi == .msvc,
             .isX86_64 = arch == .x86_64,
         },
         .dependency = dependency,
@@ -508,7 +512,7 @@ fn createLibrary(context: *const Context, name: []const u8, target: std.Build.Re
     module.addIncludePath(context.dependency.path(""));
     const configuration = context.configuration;
     addDefines(module, &common_defines);
-    if (configuration.isLinux or configuration.isWindows) {
+    if (configuration.isLinux or (configuration.isWindows and !configuration.isMsvc)) {
         addDefines(module, &largefile_defines);
     }
     if (configuration.isLinux) {
