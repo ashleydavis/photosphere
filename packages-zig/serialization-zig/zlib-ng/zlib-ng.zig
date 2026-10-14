@@ -12,7 +12,7 @@ const android_libc = @import("../../android-libc.zig");
 //
 // The feature check results below are what CMake 3.28 finds when zlib-ng's CMakeLists.txt is configured with Zig's C
 // compiler (`zig cc -target <triple>`) for x86_64-linux-gnu, x86_64-linux-musl, aarch64-linux-gnu,
-// aarch64-linux-musl, x86_64-windows-gnu, x86_64-macos and aarch64-macos, read from its compile_commands.json. To
+// aarch64-linux-musl, x86_64-windows-gnu, x86_64-windows-msvc, x86_64-macos and aarch64-macos, read from its compile_commands.json. To
 // re-check them on an upgrade, configure the new release the same way for each target:
 //
 //     cmake -S <zlib-ng> -B <build> -G Ninja -DCMAKE_SYSTEM_NAME=<Linux|Windows|Darwin>
@@ -520,7 +520,7 @@ fn createLibrary(context: *const Context, name: []const u8, target: std.Build.Re
     }
     if (configuration.isX86_64) {
         addDefines(module, &x86_64_defines);
-        // __cpuid (HAVE_CPUID_MS) is only found in MinGW-w64's intrin.h.
+        // __cpuid (HAVE_CPUID_MS) is only found in the intrin.h of Windows (MinGW-w64's and the Windows SDK's).
         if (configuration.isWindows) {
             addDefines(module, &.{"HAVE_CPUID_MS"});
         }
