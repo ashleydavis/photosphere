@@ -29,10 +29,11 @@ pub fn libcIncludeDirectories(b: *std.Build) ![]const []const u8 {
 }
 
 //
-// Gives a translate-c step the C library's include directories when the target is Android, and does nothing for any other target.
+// Gives a translate-c step the C library's include directories when the target is Android or the build has a libc file (the Apple SDK's,
+// see packages-zig/apple-sdk.zig), and does nothing for any other.
 //
 pub fn addLibcIncludes(b: *std.Build, translate_c: *std.Build.Step.TranslateC, target: std.Build.ResolvedTarget) !void {
-    if (!target.result.abi.isAndroid()) {
+    if (!target.result.abi.isAndroid() and b.libc_file == null) {
         return;
     }
     for (try libcIncludeDirectories(b)) |directory| {
@@ -42,15 +43,18 @@ pub fn addLibcIncludes(b: *std.Build, translate_c: *std.Build.Step.TranslateC, t
     }
     // Bionic's ioctl.h declares a second ioctl that takes an unsigned request, using clang overloading attributes translate-c reads as a
     // conflicting redeclaration. The header's own opt-out removes it.
-    translate_c.defineCMacro("BIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD", "1");
+    if (target.result.abi.isAndroid()) {
+        translate_c.defineCMacro("BIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD", "1");
+    }
 }
 
 //
-// Gives a C preprocessor command (zig cc -E) the C library's include directories when the target is Android, and does nothing for any
+// Gives a C preprocessor command (zig cc -E) the C library's include directories when the target is Android or the build has a libc file,
+// and does nothing for any
 // other target.
 //
 pub fn addLibcIncludesToCommand(b: *std.Build, command: *std.Build.Step.Run, target: std.Build.ResolvedTarget) !void {
-    if (!target.result.abi.isAndroid()) {
+    if (!target.result.abi.isAndroid() and b.libc_file == null) {
         return;
     }
     for (try libcIncludeDirectories(b)) |directory| {

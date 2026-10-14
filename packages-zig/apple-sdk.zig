@@ -65,8 +65,24 @@ pub fn findSdk(b: *std.Build, target: std.Build.ResolvedTarget) ?[]const u8 {
 }
 
 //
+// Returns the text of a libc file (see `zig libc`) that names the C library of an Apple SDK: its usr/include for the headers and its usr/lib
+// for libSystem. Zig ships no C library for iOS, and given only the SDK as the sysroot it finds neither, so a build for a target that
+// needs the SDK is given this file too.
+//
+pub fn libcFileText(allocator: std.mem.Allocator, sdk_path: []const u8) ![]u8 {
+    return std.mem.concat(allocator, u8, &.{
+        "include_dir=", sdk_path, "/usr/include\n",
+        "sys_include_dir=", sdk_path, "/usr/include\n",
+        "crt_dir=", sdk_path, "/usr/lib\n",
+        "msvc_lib_dir=\n",
+        "kernel32_lib_dir=\n",
+        "gcc_dir=\n",
+    });
+}
+
+//
 // Makes the build compile for a target that needs Apple's SDK (see needsSdk) against it: gives the SDK found by findSdk to every compile step as the
-// sysroot (`--sysroot`), which is how Zig then finds the usr/include, the frameworks and the libraries of the SDK instead of its own
+// sysroot (`--sysroot`), and its C library as the libc file (see libcFileText), which is how Zig then finds the usr/include, the frameworks and the libraries of the SDK instead of its own
 // headers. Does nothing for any other target: a native macOS build finds its SDK by itself. Stops the build with a message that names the
 // SDK when there is none. `what` names the thing being built, for the message.
 //
@@ -79,6 +95,15 @@ pub fn useSdk(b: *std.Build, target: std.Build.ResolvedTarget, what: []const u8)
         std.log.err("{s} for {s} needs Apple's {s} SDK, which comes with Xcode on a Mac and is found with `xcrun --sdk {s} --show-sdk-path`. It was not found here. Build on a Mac with Xcode installed.", .{ what, try target.result.zigTriple(b.allocator), name, name });
         std.process.exit(1);
     };
+    // The SDK's C library, as a libc file in the build's cache, unless the build was given one.
+    if (b.libc_file == null) {
+        const file_name = b.fmt("{s}-libc.txt", .{sdkName(target.result.os.tag, target.result.abi).?});
+        try b.cache_root.handle.writeFile(b.graph.io, .{
+            .sub_path = file_name,
+            .data = try libcFileText(b.allocator, b.sysroot.?),
+        });
+        b.libc_file = try b.cache_root.join(b.allocator, &.{file_name});
+    }
 }
 
 test "sdkName gives the SDK of each Apple operating system" {
@@ -112,4 +137,10 @@ test "needsSdk is false for the native target and any target that is not an Appl
         const result = try std.zig.system.resolveTargetQuery(std.testing.io, query);
         try std.testing.expect(!needsSdk(query, result));
     }
+}
+
+test "libcFileText names the SDK's headers and libraries" {
+    const text = try libcFileText(std.testing.allocator, "/sdk");
+    defer std.testing.allocator.free(text);
+    try std.testing.expectEqualStrings("include_dir=/sdk/usr/include\nsys_include_dir=/sdk/usr/include\ncrt_dir=/sdk/usr/lib\nmsvc_lib_dir=\nkernel32_lib_dir=\ngcc_dir=\n", text);
 }

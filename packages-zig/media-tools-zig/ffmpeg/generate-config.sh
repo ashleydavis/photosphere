@@ -108,8 +108,11 @@ case "$ZIG_TARGET" in
         esac
         SDK_PATH="$(xcrun --sdk "$SDK_NAME" --show-sdk-path)"
         SDK_ARGUMENT="--sysroot=$SDK_PATH"
-        # Zig's linker does not look in the sysroot for the libraries configure's test programs link (libSystem), so the SDK's are named.
-        EXTRA_LDFLAGS="-L$SDK_PATH/usr/lib"
+        # Zig ships no C library for iOS and finds neither the SDK's headers nor its libSystem from the sysroot alone, so it is given a
+        # libc file naming the SDK's usr/include and usr/lib, as packages-zig/apple-sdk.zig gives the build.
+        mkdir -p "$WORK_DIR"
+        printf 'include_dir=%s/usr/include\nsys_include_dir=%s/usr/include\ncrt_dir=%s/usr/lib\nmsvc_lib_dir=\nkernel32_lib_dir=\ngcc_dir=\n' "$SDK_PATH" "$SDK_PATH" "$SDK_PATH" > "$WORK_DIR/libc.txt"
+        export ZIG_LIBC="$WORK_DIR/libc.txt"
         ;;
     *)
         echo "ERROR: unknown target '$ZIG_TARGET'." >&2
