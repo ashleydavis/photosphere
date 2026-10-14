@@ -861,6 +861,15 @@ const cxx_flags = [_][]const u8{
 const cxx_flags_windows = cxx_flags ++ [_][]const u8{"-fms-extensions"};
 
 //
+// The C++ flags with the MSVC ABI: those on Windows, but C++14, the oldest standard Microsoft's compiler has, which is what aws-lc's CMake
+// build gets there for its C++11, and the oldest Visual Studio's standard headers compile as (clang stopped at them with "deduced return
+// types are a C++14 extension").
+//
+const cxx_flags_msvc = [_][]const u8{
+    "-std=c++14",
+} ++ cxx_flags[1..].* ++ [_][]const u8{"-fms-extensions"};
+
+//
 // Builds libssl (the `ssl` target of ssl/CMakeLists.txt) for the target from the aws-lc dependency, linked with the
 // libcrypto that `build` made from the same dependency. It is C++, so the module links Zig's libc++ (Microsoft's with the MSVC ABI) for the standard
 // headers it includes. Its headers are those of libcrypto (the one include directory of aws-lc).
@@ -882,7 +891,8 @@ pub fn buildSsl(b: *std.Build, target: std.Build.ResolvedTarget, dependency: *st
     // the linker. Zig cannot build its own libc++ for that ABI ("sub-compilation of libcxxabi failed").
     module.link_libcpp = !(context.isWindows and target.result.abi == .msvc);
     addCommonSettings(&context, module, dependency);
-    addSources(module, dependency, "ssl", &ssl_sources_cc, if (context.isWindows) &cxx_flags_windows else &cxx_flags);
+    const ssl_cxx_flags: []const []const u8 = if (context.isWindows and target.result.abi == .msvc) &cxx_flags_msvc else if (context.isWindows) &cxx_flags_windows else &cxx_flags;
+    addSources(module, dependency, "ssl", &ssl_sources_cc, ssl_cxx_flags);
     addSources(module, dependency, "ssl", &.{"ssl_decrepit.c"}, context.cFlags());
     module.linkLibrary(crypto);
     return library;
