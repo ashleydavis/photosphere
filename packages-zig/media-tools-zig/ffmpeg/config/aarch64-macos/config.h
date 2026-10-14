@@ -8,8 +8,8 @@
 #define AVCONV_DATADIR "/usr/local/share/ffmpeg"
 #define CC_IDENT "clang version 21.1.0"
 #define OS_NAME darwin
-#define EXTERN_PREFIX ""
-#define EXTERN_ASM 
+#define EXTERN_PREFIX "_"
+#define EXTERN_ASM _
 #define BUILDSUF ""
 #define SLIBSUF ".dylib"
 #define SWS_MAX_FILTER_SIZE 256
@@ -418,7 +418,7 @@
 #define HAVE_INLINE_ASM_LABELS 1
 #define HAVE_INLINE_ASM_NONLOCAL_LABELS 1
 #define HAVE_PRAGMA_DEPRECATED 1
-#define HAVE_RSYNC_CONTIMEOUT 1
+#define HAVE_RSYNC_CONTIMEOUT 0
 #define HAVE_SYMVER_ASM_LABEL 1
 #define HAVE_SYMVER_GNU_ASM 0
 #define HAVE_VFP_ARGS 0
@@ -479,7 +479,7 @@
 #define HAVE_PERL 1
 #define HAVE_POD2MAN 1
 #define HAVE_TEXI2HTML 0
-#define HAVE_XMLLINT 0
+#define HAVE_XMLLINT 1
 #define HAVE_ZLIB_GZIP 1
 #define HAVE_OPENVINO2 0
 #define CONFIG_DOC 0
