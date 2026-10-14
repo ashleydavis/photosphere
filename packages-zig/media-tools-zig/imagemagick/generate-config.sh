@@ -100,7 +100,10 @@ case "$ZIG_TARGET" in
         if [ "$CONFIGURE_HOST" = "aarch64-apple-darwin" ]; then
             CONFIGURE_HOST="arm-apple-darwin"
         fi
-        SDK_ARGUMENT="--sysroot=$(xcrun --sdk "$SDK_NAME" --show-sdk-path)"
+        SDK_PATH="$(xcrun --sdk "$SDK_NAME" --show-sdk-path)"
+        SDK_ARGUMENT="--sysroot=$SDK_PATH"
+        # Zig's linker does not look in the sysroot for the libraries configure's test programs link (libSystem), so the SDK's are named.
+        LDFLAGS_FOR_TARGET="-L$SDK_PATH/usr/lib"
         ;;
     *)
         echo "ERROR: unknown target '$ZIG_TARGET'." >&2

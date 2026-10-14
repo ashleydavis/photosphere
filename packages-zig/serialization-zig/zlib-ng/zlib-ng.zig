@@ -1,6 +1,7 @@
 const std = @import("std");
 const android_libc = @import("../../android-libc.zig");
 const translate_target = @import("../../translate-target.zig");
+const apple_sdk = @import("../../apple-sdk.zig");
 
 //
 // Builds zlib-ng 2.3.3 from the unmodified upstream release tarball fetched as the "zlib-ng" dependency in
@@ -210,6 +211,9 @@ pub fn buildZlibNg(b: *std.Build, target: std.Build.ResolvedTarget) !IZlibNg {
         std.log.err("The zlib-ng build only covers x86_64 and aarch64, not {s}.", .{@tagName(arch)});
         std.process.exit(1);
     }
+    // Zig ships no C library headers for iOS: they come from the SDK of Xcode. The build of zlib alone, which FFmpeg's generate-config.sh
+    // makes before anything else, has nothing else that gives the build the SDK.
+    try apple_sdk.useSdk(b, target, "zlib-ng");
     const dependency = b.dependency("zlib-ng", .{});
     const context: Context = .{
         .b = b,
