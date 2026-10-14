@@ -39,8 +39,9 @@ esac
 LDFLAGS_FOR_TARGET=""
 # Extra arguments for the compiler: the iOS SDK, which Zig does not ship and which Xcode provides.
 SDK_ARGUMENT=""
-# The machine running configure, which config.guess names, except where it is changed below.
-CONFIGURE_BUILD="$("$IMAGEMAGICK_DIR/config/config.guess")"
+# The machine running configure, which config.guess names, except where it is changed below. config.guess is run with sh, because its
+# first line names /usr/bin/sh, which macOS does not have.
+CONFIGURE_BUILD="$(sh "$IMAGEMAGICK_DIR/config/config.guess")"
 case "$ZIG_TARGET" in
     x86_64-linux-gnu)
         CONFIGURE_HOST="x86_64-pc-linux-gnu"
