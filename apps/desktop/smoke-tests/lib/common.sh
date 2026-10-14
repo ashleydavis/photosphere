@@ -497,6 +497,38 @@ reset_log_cursor() {
 }
 
 #
+# Prints where the next wait_for_log starts looking, so a test can wait from there later with wait_for_log_since.
+# Usage: get_log_cursor <tmp_dir>
+#
+get_log_cursor() {
+    local tmp_dir="$1"
+    if [ -f "$tmp_dir/.log-cursor" ]; then
+        cat "$tmp_dir/.log-cursor"
+    else
+        echo "0"
+    fi
+}
+
+#
+# Waits for a pattern in lines after the given one (taken with get_log_cursor before the action), for an event whose order against the
+# event the test waited for last the app does not fix. The cursor is left past both, so later waits do not see either again.
+# Usage: wait_for_log_since <tmp_dir> <line> <pattern> [timeout_seconds]
+#
+wait_for_log_since() {
+    local tmp_dir="$1"
+    local line="$2"
+    local pattern="$3"
+    local timeout="${4:-$DEFAULT_WAIT_TIMEOUT}"
+    local cursor_before
+    cursor_before="$(get_log_cursor "$tmp_dir")"
+    echo "$line" > "$tmp_dir/.log-cursor"
+    wait_for_log "$tmp_dir" "$pattern" "$timeout" || return 1
+    if [ "$(get_log_cursor "$tmp_dir")" -lt "$cursor_before" ]; then
+        echo "$cursor_before" > "$tmp_dir/.log-cursor"
+    fi
+}
+
+#
 # Polls the test control server's get-value for the given data-id until its value contains the
 # expected substring. Fails the test on timeout. Use this to wait for a control to reach a known
 # state before acting on it: each command the driver receives is handled independently, so a command
