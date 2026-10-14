@@ -216,7 +216,8 @@ pub fn buildZlibNg(b: *std.Build, target: std.Build.ResolvedTarget) !IZlibNg {
             .isX86_64 = arch == .x86_64,
         },
         .dependency = dependency,
-        .generated = try generateHeaders(b, dependency),
+        // unistd.h is found on every supported target but Windows with the MSVC ABI (MinGW-w64 has one).
+        .generated = try generateHeaders(b, dependency, !(os == .windows and target.result.abi == .msvc)),
     };
 
     const library = createLibrary(&context, "z", target);
@@ -570,9 +571,9 @@ fn addDefines(module: *std.Build.Module, defineList: []const []const u8) void {
 // zlib.h and gzread_mangle.h (configure_file) and zlib_name_mangling.h (a copy of zlib_name_mangling.h.empty, since
 // ZLIB_SYMBOL_PREFIX is not set).
 //
-fn generateHeaders(b: *std.Build, dependency: *std.Build.Dependency) !*std.Build.Step.WriteFile {
+fn generateHeaders(b: *std.Build, dependency: *std.Build.Dependency, has_unistd: bool) !*std.Build.Step.WriteFile {
     const generated = b.addWriteFiles();
-    _ = generated.add("zconf.h", try configureFile(b, try generateCmakein(b, try readSource(b, dependency, "zconf.h.in"))));
+    _ = generated.add("zconf.h", try configureFile(b, try generateCmakein(b, try readSource(b, dependency, "zconf.h.in"), has_unistd)));
     _ = generated.add("zlib.h", try configureFile(b, try readSource(b, dependency, "zlib.h.in")));
     _ = generated.add("gzread_mangle.h", try configureFile(b, try readSource(b, dependency, "gzread_mangle.h.in")));
     _ = generated.add("zlib_name_mangling.h", try readSource(b, dependency, "zlib_name_mangling.h.empty"));
@@ -588,11 +589,11 @@ fn readSource(b: *std.Build, dependency: *std.Build.Dependency, name: []const u8
 
 //
 // The generate_cmakein macro of CMakeLists.txt followed by configure_file's filling in of the placeholders it leaves:
-// the rest of the line from `#ifdef HAVE_UNISTD_H` becomes ZCONF_UNISTD_LINE, set to `#if 1` because unistd.h is found
-// on every supported target (MinGW-w64 has one), and the rest of the line from `#ifdef NEED_PTRDIFF_T` becomes
+// the rest of the line from `#ifdef HAVE_UNISTD_H` becomes ZCONF_UNISTD_LINE, set to `#if 1` where unistd.h is found
+// and `#if 0` where it is not (Windows with the MSVC ABI), and the rest of the line from `#ifdef NEED_PTRDIFF_T` becomes
 // ZCONF_PTRDIFF_LINE, which keeps the `#ifdef` because ptrdiff_t is found.
 //
-fn generateCmakein(b: *std.Build, template: []const u8) ![]u8 {
+fn generateCmakein(b: *std.Build, template: []const u8, has_unistd: bool) ![]u8 {
     var output: std.ArrayList(u8) = .empty;
     var lines = std.mem.splitScalar(u8, template, '\n');
     var isFirstLine = true;
@@ -603,7 +604,12 @@ fn generateCmakein(b: *std.Build, template: []const u8) ![]u8 {
         isFirstLine = false;
         if (std.mem.indexOf(u8, line, "#ifdef HAVE_UNISTD_H")) |index| {
             try output.appendSlice(b.allocator, line[0..index]);
-            try output.appendSlice(b.allocator, "#if 1    /* was set to #if 1 by configure/cmake/etc */");
+            if (has_unistd) {
+                try output.appendSlice(b.allocator, "#if 1    /* was set to #if 1 by configure/cmake/etc */");
+            }
+            else {
+                try output.appendSlice(b.allocator, "#if 0    /* was set to #if 0 by configure/cmake/etc */");
+            }
         }
         else if (std.mem.indexOf(u8, line, "#ifdef NEED_PTRDIFF_T")) |index| {
             try output.appendSlice(b.allocator, line[0..index]);
