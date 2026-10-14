@@ -1,6 +1,7 @@
 const std = @import("std");
 const zlib_ng = @import("../../serialization-zig/zlib-ng/zlib-ng.zig");
 const imagemagick = @import("../imagemagick/imagemagick.zig");
+const host_libc = @import("../../host-libc.zig");
 
 //
 // Builds FFmpeg from the unmodified source in vendor/ffmpeg as one static library: libavutil, libavcodec, libavformat, libavfilter,
@@ -282,6 +283,7 @@ fn addSwscaleAarch64Ops(b: *std.Build, module: *std.Build.Module, flags: []const
         // The flags FFmpeg's make compiles its host programs with (HOSTCFLAGS).
         .flags = &.{ "-D_ISOC11_SOURCE", "-D_POSIX_C_SOURCE=200112", "-D_XOPEN_SOURCE=600", "-std=c17" },
     });
+    host_libc.useHostLibc(b, generator);
     const write_ops = b.addRunArtifact(generator);
     write_ops.addArg("-ops");
     const write_lookup = b.addRunArtifact(generator);
