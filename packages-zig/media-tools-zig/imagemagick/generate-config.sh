@@ -39,6 +39,8 @@ esac
 LDFLAGS_FOR_TARGET=""
 # Extra arguments for the compiler: the iOS SDK, which Zig does not ship and which Xcode provides.
 SDK_ARGUMENT=""
+# The machine running configure, which config.guess names, except where it is changed below.
+CONFIGURE_BUILD="$("$IMAGEMAGICK_DIR/config/config.guess")"
 case "$ZIG_TARGET" in
     x86_64-linux-gnu)
         CONFIGURE_HOST="x86_64-pc-linux-gnu"
@@ -65,6 +67,10 @@ case "$ZIG_TARGET" in
         # by the compiler, which is Zig for the MSVC target and reads the Windows SDK's headers, so this runs only on Windows with
         # Visual Studio or its Build Tools.
         CONFIGURE_HOST="x86_64-w64-mingw32"
+        # Git Bash is MSYS2, which config.guess names mingw64, and on a mingw64 build machine configure converts its install paths
+        # with winpath.sh, which fails under Git Bash and writes its error into the headers. Named as MSYS2, the paths are left
+        # as they are for every other target.
+        CONFIGURE_BUILD="x86_64-pc-msys"
         ;;
     aarch64-windows-gnu)
         CONFIGURE_HOST="aarch64-w64-mingw32"
@@ -140,7 +146,7 @@ CC="$WORK_DIR/bin/cc" AR="$WORK_DIR/bin/ar" RANLIB="$WORK_DIR/bin/ranlib" \
     PKG_CONFIG_LIBDIR="$WORK_DIR/no-pkgconfig" PKG_CONFIG_PATH="" \
     ac_cv_lib_jpeg_jpeg_read_header=yes \
     "$IMAGEMAGICK_DIR/configure" \
-    --host="$CONFIGURE_HOST" --build="$("$IMAGEMAGICK_DIR/config/config.guess")" \
+    --host="$CONFIGURE_HOST" --build="$CONFIGURE_BUILD" \
     --disable-shared --enable-static --disable-openmp --disable-opencl \
     --without-magick-plus-plus --without-perl --disable-docs --disable-installed \
     --with-quantum-depth=16 --enable-hdri --without-x --enable-zero-configuration \
