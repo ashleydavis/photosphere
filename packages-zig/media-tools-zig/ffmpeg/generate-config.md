@@ -6,7 +6,7 @@ Runs FFmpeg's own `configure` and `make` for a target, with Zig as the C compile
 packages-zig/media-tools-zig/ffmpeg/generate-config.sh <zig-target> [<libc-file>]
 ```
 
-- `<zig-target>`: the target as Zig names it: `x86_64-linux-gnu`, `aarch64-linux-gnu`, `x86_64-linux-android`, `aarch64-linux-android`, `x86_64-windows-gnu`, `aarch64-windows-gnu`, `x86_64-macos`, `aarch64-macos`, `aarch64-ios`, `aarch64-ios-simulator` or `x86_64-ios-simulator`. The iOS targets need Apple's iOS SDK (found with `xcrun` and given to the compiler as its sysroot), so they can only be generated on a Mac with Xcode.
+- `<zig-target>`: the target as Zig names it: `x86_64-linux-gnu`, `aarch64-linux-gnu`, `x86_64-linux-android`, `aarch64-linux-android`, `x86_64-windows-gnu`, `aarch64-windows-gnu`, `x86_64-windows-msvc`, `x86_64-macos`, `aarch64-macos`, `aarch64-ios`, `aarch64-ios-simulator` or `x86_64-ios-simulator`. The iOS targets need Apple's iOS SDK (found with `xcrun` and given to the compiler as its sysroot), so they can only be generated on a Mac with Xcode. `x86_64-windows-msvc` (what the Photosphere App's Windows shell is built for) needs the Windows SDK's headers, so it can only be generated on Windows with Visual Studio or its Build Tools, in an MSYS2 shell with its make.
 - `<libc-file>`: Zig's libc file for the Android NDK, which the Android targets need. `apps/photosphere/scripts/sync-android.sh` writes one for each ABI.
 
 What it keeps in `config/<target>/`:
