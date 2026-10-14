@@ -5,7 +5,7 @@ Runs Photosphere's smoke test scenarios for one platform. Invoked by the root `p
 ## Arguments
 
 - `<platform>`: `linux`, `windows`, `macos`, `android` or `ios`. Each has a platform library in `lib/<platform>.sh` that builds the app, starts it and stops it.
-- `[scenario]`: optional scenario number or name, to run one scenario. The root scripts cannot pass an argument to this script, so `PHOTOSPHERE_SMOKE_SCENARIO=<number or name> bun run test:ziggy` does the same.
+- `[scenario]`: optional scenario number or full directory name, to run one scenario, as in `bun run test:ziggy:and -- 40`. `PHOTOSPHERE_SMOKE_SCENARIO=<number or name>` does the same. A run of one scenario does not record the what-changed baseline; a full run that passes does.
 
 ## Behaviour
 

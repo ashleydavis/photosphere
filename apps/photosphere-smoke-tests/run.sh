@@ -174,4 +174,23 @@ if [ "$passed" -eq 0 ]; then
     echo "No scenario ran." >&2
     exit 1
 fi
+
+# The baseline is recorded here rather than after this script in package.json, because `bun run` appends the arguments after `--` to
+# the end of the whole command, so a scenario named there reached what-changed instead of this script. It is recorded only for a full
+# run: the baseline says the whole target passed, and stamping it after one scenario would leave every other scenario skipped by
+# test:everything until something else changed.
+if [ -z "$SCENARIO_FILTER" ]; then
+    case "$PLATFORM" in
+        android)
+            baseline_target="test:ziggy:and"
+            ;;
+        ios)
+            baseline_target="test:ziggy:ios"
+            ;;
+        *)
+            baseline_target="test:ziggy"
+            ;;
+    esac
+    (cd "$REPO_ROOT" && what-changed baseline capture "$baseline_target") || exit 1
+fi
 exit 0
