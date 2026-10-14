@@ -105,6 +105,23 @@ pub fn useSdk(b: *std.Build, target: std.Build.ResolvedTarget, what: []const u8)
         b.libc_file = try b.cache_root.join(b.allocator, &.{file_name});
     }
 }
+//
+// Gives a module the frameworks of the SDK the build was given (System/Library/Frameworks under the sysroot), for a target that needs the
+// SDK. Zig does not look for frameworks in the sysroot, and a library that links one (CoreFoundation, Security, Network) fails with "unable
+// to find framework" without it. Does nothing for any other target: a native macOS build finds the frameworks by itself.
+//
+pub fn addSdkFrameworks(b: *std.Build, module: *std.Build.Module, target: std.Build.ResolvedTarget) void {
+    if (!needsSdk(target.query, target.result)) {
+        return;
+    }
+    const sysroot = b.sysroot orelse {
+        return;
+    };
+    module.addSystemFrameworkPath(.{
+        .cwd_relative = b.pathJoin(&.{ sysroot, "System", "Library", "Frameworks" }),
+    });
+}
+
 
 test "sdkName gives the SDK of each Apple operating system" {
     try std.testing.expectEqualStrings("macosx", sdkName(.macos, .none).?);
