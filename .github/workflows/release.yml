@@ -2235,7 +2235,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        # TODO: restore windows-latest once the Photosphere App starts on Windows (it panics with "incorrect alignment" in Ziggy's
+        # shell, allocating with std.heap.c_allocator, when built for x86_64-windows-msvc).
+        os: [macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -2406,10 +2408,12 @@ jobs:
             os: ubuntu-latest
             package: package:linux
             arguments: ""
-          - name: windows
-            os: windows-latest
-            package: package:windows
-            arguments: "x64"
+          # TODO: restore the Windows package once the Photosphere App starts on Windows (it panics with "incorrect alignment" in
+          # Ziggy's shell, allocating with std.heap.c_allocator, when built for x86_64-windows-msvc).
+          # - name: windows
+          #   os: windows-latest
+          #   package: package:windows
+          #   arguments: "x64"
           - name: macos-arm64
             os: macos-latest
             package: package:macos
