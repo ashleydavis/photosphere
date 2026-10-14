@@ -245,6 +245,12 @@ pub fn buildImageMagick(b: *std.Build, target: std.Build.ResolvedTarget, zlib: z
         // coders/url.c reads a URL with URLDownloadToFile, from urlmon, which it names with #pragma comment for Microsoft's compiler
         // only, so the library links it for every Windows build.
         module.linkSystemLibrary("urlmon", .{});
+        // studio.h turns on ImageMagick's Windows code when WIN32, WIN64 or _WIN32_WINNT is defined. MinGW-w64 defines WIN32, but neither
+        // Microsoft's compiler nor clang for the MSVC ABI does (a Visual Studio project gives /D WIN32), and without it the POSIX code
+        // is built and asks for dirent.h, which the Windows SDK does not have.
+        if (target.result.abi == .msvc) {
+            try flags.append(b.allocator, "-DWIN32");
+        }
     }
 
     // MAGICKCORE_BASE_SRCS: every .c file of MagickCore but vms.c, which is for VMS, and MAGICKCORE_PLATFORM_SRCS: nt-base.c and
