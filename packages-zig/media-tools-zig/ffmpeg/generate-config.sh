@@ -139,7 +139,14 @@ WRAPPER
 printf '#!/bin/sh\nexec env -u ZIG_LIBC "%s" cc "$@"\n' "$ZIG" > "$WORK_DIR/bin/host-cc"
 printf '#!/bin/sh\nexec "%s" ar "$@"\n' "$ZIG" > "$WORK_DIR/bin/ar"
 printf '#!/bin/sh\nexec "%s" ranlib "$@"\n' "$ZIG" > "$WORK_DIR/bin/ranlib"
-printf '#!/bin/sh\nexec "%s" nm "$@"\n' "$ZIG" > "$WORK_DIR/bin/nm"
+# Zig has no nm, so the machine's own is used. configure reads the prefix C symbols get in the target's objects from it (an
+# underscore on macOS and iOS), so it must read the target's object format: GNU nm on Linux does not read Mach-O, which is one reason
+# the Apple targets are generated on a Mac.
+NM="$(command -v nm)" || {
+    echo "ERROR: there is no nm on the path, which configure needs to find the prefix of C symbols." >&2
+    exit 1
+}
+printf '#!/bin/sh\nexec "%s" "$@"\n' "$NM" > "$WORK_DIR/bin/nm"
 chmod +x "$WORK_DIR/bin/cc" "$WORK_DIR/bin/host-cc" "$WORK_DIR/bin/ar" "$WORK_DIR/bin/ranlib" "$WORK_DIR/bin/nm"
 
 # zlib is the same zlib-ng the rest of the program is built over, built for the target by the Zig build.
