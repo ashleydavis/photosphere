@@ -1499,6 +1499,15 @@ android_grant_partial_media_permission() {
 }
 
 #
+# Succeeds when the system photo picker is the activity in front. Android 14 opens it when an app
+# that can see only the photos the user picked asks for photo access again, so the user can pick more.
+# Usage: android_photo_picker_is_open
+#
+android_photo_picker_is_open() {
+    adb shell dumpsys activity activities 2>/dev/null | grep "topResumedActivity" | grep -q "photopicker"
+}
+
+#
 # Grants the notification permission from outside the app, for the tests that switch automatic import
 # on.
 #

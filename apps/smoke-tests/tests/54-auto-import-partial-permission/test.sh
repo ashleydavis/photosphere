@@ -59,6 +59,23 @@ wait_for_log "$TMP_DIR" "Automatic import settings loaded"
 
 send_command "$APP_PORT" click '{"dataId":"auto-import-toggle"}' || exit 1
 
+# The app asks for photo access again, which is the user's one way to allow all photos. On Android 14
+# the platform answers that by opening the photo picker so the user can pick more, and the app waits
+# for it to close. The user here picks nothing more and closes it, which leaves the access as partial
+# as it was. A platform that answers without the picker never opens it, and the loop ends when the
+# app's answer is logged.
+for _attempt in $(seq 1 60); do
+    if grep -q "Automatic import switched off" "$TMP_DIR/app.log" 2>/dev/null; then
+        break
+    fi
+    if android_photo_picker_is_open; then
+        log_info "The photo picker opened; closing it without picking more photos"
+        adb shell input keyevent KEYCODE_BACK || exit 1
+        break
+    fi
+    sleep 1
+done
+
 # The setting goes back off, saying what a user can act on: which photos, not whether.
 wait_for_log "$TMP_DIR" "Automatic import switched off: Photosphere can see only the photos you picked" 60 || exit 1
 
