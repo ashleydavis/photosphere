@@ -7,6 +7,7 @@ const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
+const mock_log = @import("mock-log.zig");
 const createAutoImportScanner = node_api.create_auto_import_scanner.createAutoImportScanner;
 const registerFolderMediaSourceBuilder = node_api.create_auto_import_scanner.registerFolderMediaSourceBuilder;
 const IAutoImportScannerProgress = node_api.auto_import_scanner.IAutoImportScannerProgress;
@@ -97,6 +98,10 @@ const ScannerTest = struct {
     // Holds the test's allocations.
     arena: std.heap.ArenaAllocator,
 
+    // Takes the line the scanner logs for each pass. Under `zig build test` standard output is the test program's channel to the build,
+    // so a line written there corrupts it and the build waits for the test's result forever.
+    mutedLog: mock_log.MutedLog,
+
     // The directory of the test.
     tempDir: []const u8,
 
@@ -126,6 +131,9 @@ const ScannerTest = struct {
     //
     fn init(self: *ScannerTest) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+        self.mutedLog = .{};
+        self.mutedLog.install();
+        errdefer self.mutedLog.uninstall();
         const allocator = self.arena.allocator();
         const io = std.testing.io;
         _ = try test_environment.setupEnvironment(io);
@@ -160,6 +168,7 @@ const ScannerTest = struct {
         self.hashCache.deinit();
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
+        self.mutedLog.uninstall();
     }
 
     //
