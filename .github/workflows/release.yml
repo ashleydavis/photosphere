@@ -1582,6 +1582,11 @@ jobs:
               fi
           fi
 
+      # See the same step in build-zig-macos-x64 for why the packages are fetched before the build.
+      - name: Fetch every package Zig needs, lazy ones included, in one pass
+        working-directory: .
+        run: zig build --fetch=all
+
       - name: Build the Zig CLI natively for Linux x64
         working-directory: .
         run: zig build -Dcpu=baseline --prefix apps/cli-zig/bin/x64/linux --prefix-exe-dir .
@@ -1672,6 +1677,11 @@ jobs:
                   echo "Moved it aside to start a fresh one"
               fi
           fi
+
+      # See the same step in build-zig-macos-x64 for why the packages are fetched before the build.
+      - name: Fetch every package Zig needs, lazy ones included, in one pass
+        working-directory: .
+        run: zig build --fetch=all
 
       - name: Build the Zig CLI natively for Windows x64
         working-directory: .
@@ -1764,6 +1774,18 @@ jobs:
               fi
           fi
 
+      # `zig build` keeps one HTTP client for its whole run. It fetches the eager packages, compiles and runs
+      # the build script (about a minute on macos-15-intel), then fetches the lazy packages the script asked
+      # for, reusing the keep-alive connections it pooled during the first fetch. By then the server has
+      # closed them, and Zig 0.16's client takes a pooled connection without checking it is still open and
+      # does not retry, so the lazy s2n-tls download failed with "build.zig.zon:64:20: error: invalid HTTP
+      # response: HttpConnectionClosing" in build-zig-macos-x64 and build-aws-sdk (macos-15-intel), the jobs
+      # whose package cache missed. --fetch=all fetches every package, lazy ones included, in one pass and
+      # exits before the build script runs, so no download waits behind it.
+      - name: Fetch every package Zig needs, lazy ones included, in one pass
+        working-directory: .
+        run: zig build --fetch=all
+
       - name: Build the Zig CLI natively for macOS x64
         working-directory: .
         run: zig build -Dcpu=baseline --prefix apps/cli-zig/bin/x64/mac --prefix-exe-dir .
@@ -1855,6 +1877,11 @@ jobs:
               fi
           fi
 
+      # See the same step in build-zig-macos-x64 for why the packages are fetched before the build.
+      - name: Fetch every package Zig needs, lazy ones included, in one pass
+        working-directory: .
+        run: zig build --fetch=all
+
       - name: Build the Zig CLI natively for macOS arm64
         working-directory: .
         run: zig build -Dcpu=baseline --prefix apps/cli-zig/bin/arm64/mac --prefix-exe-dir .
@@ -1928,6 +1955,11 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
+
+      # See the same step in build-zig-macos-x64 for why the packages are fetched before the build.
+      - name: Fetch every package Zig needs, lazy ones included, in one pass
+        working-directory: .
+        run: zig build --fetch=all
 
       # The CLI's own build, which compiles the AWS SDK for C and runs nothing. Every job that needs the AWS
       # SDK builds in this same mode, so one cache serves all of them: the Zig cache is keyed by optimisation
@@ -2051,6 +2083,11 @@ jobs:
                   echo "Moved it aside to start a fresh one"
               fi
           fi
+
+      # See the same step in build-zig-macos-x64 for why the packages are fetched before the build.
+      - name: Fetch every package Zig needs, lazy ones included, in one pass
+        working-directory: .
+        run: zig build --fetch=all
 
       # With the C libraries cached, a change to a package the others import recompiles the Zig code of
       # nearly every test program, which took 10 to 11 minutes on Windows (runs 685, 697, 699). A cold
