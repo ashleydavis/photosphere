@@ -68,7 +68,8 @@ photosphere_android_read_port() {
 }
 
 # Seconds an adb query (the device list, an emulator's AVD name, a device property) is given before adb or the device counts as not
-# answering. Without it an emulator that has stopped responding leaves the run waiting with no output.
+# answering. Without it an emulator that has stopped responding leaves the run waiting with no output. Every timeout on adb here is
+# --foreground: timeout otherwise puts adb in a process group of its own, which Ctrl-C does not reach, so the run carries on.
 ANDROID_ADB_QUERY_SECONDS=10
 
 #
@@ -88,7 +89,7 @@ photosphere_android_candidate_devices() {
     local pool=""
     local hardware=""
     local other_emulators=""
-    devices_output="$(timeout "$ANDROID_ADB_QUERY_SECONDS" "$adb_command" devices 2>&1)"
+    devices_output="$(timeout --foreground "$ANDROID_ADB_QUERY_SECONDS" "$adb_command" devices 2>&1)"
     status=$?
     if [ "$status" -eq 124 ]; then
         echo "adb devices did not answer within ${ANDROID_ADB_QUERY_SECONDS}s." >&2
@@ -101,7 +102,7 @@ photosphere_android_candidate_devices() {
     for serial in $(printf '%s\n' "$devices_output" | awk 'NR > 1 && $2 == "device" { print $1 }'); do
         case "$serial" in
             emulator-*)
-                avd_output="$(timeout "$ANDROID_ADB_QUERY_SECONDS" "$adb_command" -s "$serial" emu avd name 2>/dev/null)"
+                avd_output="$(timeout --foreground "$ANDROID_ADB_QUERY_SECONDS" "$adb_command" -s "$serial" emu avd name 2>/dev/null)"
                 if [ "$?" -eq 124 ]; then
                     echo "The emulator $serial did not give its AVD name within ${ANDROID_ADB_QUERY_SECONDS}s, so it is not responding." >&2
                     return 1
@@ -157,11 +158,11 @@ photosphere_android_can_reach_host() {
     fi
     case "$serial" in
         emulator-*)
-            timeout "$ANDROID_REACH_PROBE_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$serial" shell "ping -c 1 -W 1 $ANDROID_HOST_BRIDGE_ADDRESS" >/dev/null 2>&1
+            timeout --foreground "$ANDROID_REACH_PROBE_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$serial" shell "ping -c 1 -W 1 $ANDROID_HOST_BRIDGE_ADDRESS" >/dev/null 2>&1
             return $?
             ;;
     esac
-    timeout "$ANDROID_REACH_PROBE_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$serial" shell true >/dev/null 2>&1
+    timeout --foreground "$ANDROID_REACH_PROBE_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$serial" shell true >/dev/null 2>&1
 }
 
 #
@@ -245,7 +246,7 @@ photosphere_android_architectures() {
     candidates="$(photosphere_android_candidate_devices)" || return 1
     for serial in $candidates; do
         echo "Asking $serial for its CPU architecture..." >&2
-        abi="$(timeout "$ANDROID_ADB_QUERY_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$serial" shell getprop ro.product.cpu.abi)"
+        abi="$(timeout --foreground "$ANDROID_ADB_QUERY_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$serial" shell getprop ro.product.cpu.abi)"
         status=$?
         if [ "$status" -eq 124 ]; then
             echo "The device $serial did not give its CPU architecture within ${ANDROID_ADB_QUERY_SECONDS}s, so it is not responding." >&2

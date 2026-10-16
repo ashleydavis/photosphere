@@ -727,8 +727,12 @@ clone_avd() {
 # each one is running, so the filters below cannot drift apart. A real phone has no AVD name and
 # prints an empty second field, which matches neither filter.
 #
+# Returns non-zero, naming the emulator, when one does not give its AVD name in time. It would
+# otherwise print with an empty name and match neither filter, so `down` would skip it and report
+# success while it was still running.
+#
 attached_emulators() {
-    local adb serial avd
+    local adb serial avd avd_output
     adb="$(adb_path)"
     if [ -z "$adb" ]; then
         return 0
@@ -736,8 +740,19 @@ attached_emulators() {
     for serial in $("$adb" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }'); do
         # Capped, because this is on the polling path of every wait: an adb call that wedges here
         # would hang the wait rather than fail it, and a wait that never returns looks like a
-        # machine that has locked up.
-        avd="$(timeout 8 "$adb" -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r')"
+        # machine that has locked up. --foreground keeps adb in the terminal's process group, so
+        # Ctrl-C reaches it.
+        local status=0
+        avd_output="$(timeout --foreground 8 "$adb" -s "$serial" emu avd name 2>&1)" || status=$?
+        if [ "$status" -eq 124 ]; then
+            echo "ERROR: the emulator $serial did not give its AVD name within 8s, so it is not responding and cannot be told apart from any other emulator." >&2
+            return 1
+        fi
+        if [ "$status" -ne 0 ]; then
+            echo "ERROR: asking the emulator $serial for its AVD name failed (exit $status): $avd_output" >&2
+            return 1
+        fi
+        avd="$(printf '%s\n' "$avd_output" | head -1 | tr -d '\r')"
         echo "$serial $avd"
     done
 }
