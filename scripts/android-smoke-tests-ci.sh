@@ -40,4 +40,10 @@ mkdir -p "$LOG_DIR"
 # and a logcat that cannot be read is not a reason to fail a suite that passed.
 adb logcat -d > "$LOG_DIR/logcat.txt" 2>&1 || true
 
+# The adb server's own log, which records every time a device's connection drops and why. In run
+# 38841465328 emulator-5554 went "device offline" for about a second in the middle of 1-load-fixture,
+# failing tests 1 to 5, and nothing the run kept said why: the emulator printed nothing and logcat had
+# rolled past it. adb writes this log to /tmp/adb.<uid>.log. Its absence is said aloud, not hidden.
+cp "/tmp/adb.$(id -u).log" "$LOG_DIR/adb-server.log" || echo "No adb server log at /tmp/adb.$(id -u).log to keep"
+
 exit "$status"
