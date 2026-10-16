@@ -45,4 +45,4 @@ Each test runs in its own temporary directory from `scripts/lib/test-lib.sh`, an
 
 ## CI
 
-The Release workflow runs this suite on Linux in the `zig-smoke-tests` job, like the TypeScript `lan-share-smoke-test` job.
+The Release workflow runs this suite on Linux in the `zig-cli-smoke-tests` job, like the TypeScript `lan-share-smoke-test` job.
