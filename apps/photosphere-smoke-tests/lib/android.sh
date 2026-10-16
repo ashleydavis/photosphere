@@ -67,13 +67,18 @@ photosphere_android_read_port() {
     photosphere_adb exec-out run-as "$ANDROID_APP_ID" cat files/ziggy-control-port.txt 2>/dev/null | tr -d '\r' | grep -E '^[0-9]+$' || true
 }
 
+# Seconds an adb query (the device list, an emulator's AVD name, a device property) is given before adb or the device counts as not
+# answering. Without it an emulator that has stopped responding leaves the run waiting with no output.
+ANDROID_ADB_QUERY_SECONDS=10
+
 #
 # Prints the devices the run may use, one per line: the named ones, else the pool, else plugged-in devices, else any other
-# emulator, such as the single hand-testing one.
+# emulator, such as the single hand-testing one. Returns non-zero, naming what did not answer, when adb or an emulator does not
+# answer within ANDROID_ADB_QUERY_SECONDS.
 #
 photosphere_android_candidate_devices() {
     local adb_command="$ANDROID_HOME/platform-tools/adb"
-    local serial avd
+    local serial avd devices_output avd_output status
     if [ -n "${PHOTOSPHERE_ANDROID_DEVICES:-}" ]; then
         for serial in $PHOTOSPHERE_ANDROID_DEVICES; do
             echo "$serial"
@@ -83,10 +88,25 @@ photosphere_android_candidate_devices() {
     local pool=""
     local hardware=""
     local other_emulators=""
-    for serial in $("$adb_command" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1 }'); do
+    devices_output="$(timeout "$ANDROID_ADB_QUERY_SECONDS" "$adb_command" devices 2>&1)"
+    status=$?
+    if [ "$status" -eq 124 ]; then
+        echo "adb devices did not answer within ${ANDROID_ADB_QUERY_SECONDS}s." >&2
+        return 1
+    fi
+    if [ "$status" -ne 0 ]; then
+        echo "adb devices failed (exit $status): $devices_output" >&2
+        return 1
+    fi
+    for serial in $(printf '%s\n' "$devices_output" | awk 'NR > 1 && $2 == "device" { print $1 }'); do
         case "$serial" in
             emulator-*)
-                avd="$("$adb_command" -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r')"
+                avd_output="$(timeout "$ANDROID_ADB_QUERY_SECONDS" "$adb_command" -s "$serial" emu avd name 2>/dev/null)"
+                if [ "$?" -eq 124 ]; then
+                    echo "The emulator $serial did not give its AVD name within ${ANDROID_ADB_QUERY_SECONDS}s, so it is not responding." >&2
+                    return 1
+                fi
+                avd="$(printf '%s\n' "$avd_output" | head -1 | tr -d '\r')"
                 case "$avd" in
                     "$POOL_AVD_PREFIX"-*)
                         pool="$pool $serial"
@@ -216,25 +236,40 @@ photosphere_android_require_wipe_allowed() {
 }
 
 #
-# Prints the architecture name the build scripts use for each device the run may use, one per line without repeats.
+# Prints the architecture name the build scripts use for each device the run may use, one per line without repeats. Says on stderr
+# which device it is asking, and returns non-zero naming the device when one does not answer within ANDROID_ADB_QUERY_SECONDS.
 #
 photosphere_android_architectures() {
-    local serial abi
-    for serial in $(photosphere_android_candidate_devices); do
-        abi="$("$ANDROID_HOME/platform-tools/adb" -s "$serial" shell getprop ro.product.cpu.abi | tr -d '\r')"
+    local candidates serial abi status
+    local architectures=""
+    candidates="$(photosphere_android_candidate_devices)" || return 1
+    for serial in $candidates; do
+        echo "Asking $serial for its CPU architecture..." >&2
+        abi="$(timeout "$ANDROID_ADB_QUERY_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$serial" shell getprop ro.product.cpu.abi)"
+        status=$?
+        if [ "$status" -eq 124 ]; then
+            echo "The device $serial did not give its CPU architecture within ${ANDROID_ADB_QUERY_SECONDS}s, so it is not responding." >&2
+            return 1
+        fi
+        if [ "$status" -ne 0 ]; then
+            echo "Asking the device $serial for its CPU architecture failed (exit $status)." >&2
+            return 1
+        fi
+        abi="$(printf '%s' "$abi" | tr -d '\r')"
         case "$abi" in
             x86_64)
-                echo "x86_64"
+                architectures="$architectures"$'x86_64\n'
                 ;;
             arm64-v8a)
-                echo "arm64"
+                architectures="$architectures"$'arm64\n'
                 ;;
             *)
                 echo "The device $serial has the ABI '$abi', which Photosphere does not build for." >&2
                 return 1
                 ;;
         esac
-    done | sort -u
+    done
+    printf '%s' "$architectures" | sort -u
 }
 
 photosphere_platform_prepare() {
@@ -242,11 +277,13 @@ photosphere_platform_prepare() {
     photosphere_android_require_commands zig bun jq adb || return 1
     mkdir -p "$run_dir/test"
     local architectures
+    echo "Finding the Android devices to build for..."
     architectures="$(photosphere_android_architectures)" || return 1
     if [ -z "$architectures" ]; then
         echo "No pool emulator, named device or plugged-in device is attached, so there is no architecture to build for." >&2
         return 1
     fi
+    echo "Building for: $(printf '%s ' $architectures)"
     bash "$ANDROID_SCRIPTS_DIR/sync-android.sh" --test-hooks --optimize ReleaseSafe --arch "$(printf '%s ' $architectures)" || return 1
     photosphere_android_gradle assembleDebug "-PziggyVersionName=$(photosphere_android_version)" || return 1
     cp "$PHOTOSPHERE_ANDROID_PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" "$run_dir/test/app.apk" || return 1
