@@ -6,8 +6,8 @@
 // the plan asked for is up (see MainState.runDueTimers). startBackgroundWork, which the page's startBackgroundImport request calls,
 // switches the work on, and stopBackgroundWork, which its stopBackgroundImport request calls, switches it off.
 //
-// While any of the work is switched on the core holds the app running (on Android a foreground service with its notification), so the
-// timer goes on starting passes with the app off screen. Each pass is also a task whose type is registered as keep-alive.
+// Each pass is a task whose type is registered as keep-alive, so the core holds the app running (on Android a foreground service with
+// its notification) while a pass runs.
 //
 // The decisions of a pass are in the functions that take a PassHost, a plain interface over everything that needs the platform or the
 // core, so they are tested with no core and no phone. The passes report what they are doing to the shell, which writes it to the
