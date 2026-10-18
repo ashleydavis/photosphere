@@ -173,6 +173,19 @@ pub fn mainCommandHandler(core: *Core, arena: std.mem.Allocator, data: std.json.
             state.scheduleSync();
         }
     }
+    else if (std.mem.eql(u8, command, "cancel-tasks")) {
+        // The page's cancel, sent here rather than on Ziggy's own cancel-tasks channel. That channel cancels in the runner alone, which
+        // drops a task still waiting for a worker without reporting it, so a task queue that counted it, such as the one an import
+        // waits on for its children, waits for good and the import holds its worker. The queue backend cancels in the runner and
+        // also tells the task queues of the source, which stop waiting, as the original app's worker pool tells its workers
+        // (apps/desktop/src/lib/worker-pool-electron-main.ts cancelTasks, apps/desktop/src/worker.ts "cancel-tasks"). Found by
+        // 33-import-cancel in the Release Zig workflow's desktop smoke tests on ubuntu-latest, whose four workers left the cancelled
+        // import's children queued, so the import after it timed out waiting for "1 assets imported".
+        const source = json_util.getString(data, "source") orelse {
+            return utils.errors.throwError("main-command cancel-tasks needs the source of the tasks to cancel.", .{});
+        };
+        core.queue_backend.cancelTasks(source);
+    }
     else {
         utils.console.errorFormat("Unknown main-command: {s}", .{command});
     }

@@ -219,6 +219,82 @@ test "main-command with an unknown command writes it to the console and replies 
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.writer.buffered(), "Unknown main-command: fly-to-the-moon") != null);
 }
 
+//
+// The source the children of awaitChildrenTask are queued under, and the source it is itself queued under, as an import's are.
+//
+const AWAIT_CHILDREN_SOURCE = "await-children-session";
+
+//
+// A task that does what import-assets does with its children: queues them under its own source through a task queue and waits for
+// them all. More are queued than the test app has workers, so at least one is still waiting for a worker when the source is cancelled.
+//
+fn awaitChildrenTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = data;
+    var uuid_generator: ziggy.task_queue.utils.random_uuid_generator.RandomUuidGenerator = .{};
+    const queue = try ziggy.task_queue.task_queue.TaskQueue.init(context.arena, context.io(), uuid_generator.uuidGenerator(), AWAIT_CHILDREN_SOURCE);
+    defer queue.deinit();
+    var child_index: usize = 0;
+    while (child_index < 4) : (child_index += 1) {
+        _ = try queue.addTask("spin", .null, null, null);
+    }
+    try context.sendMessage(.{
+        .childrenQueued = true,
+    });
+    try queue.awaitAllTasks();
+    return try context.arena.dupe(u8, "null");
+}
+
+test "main-command cancel-tasks lets a task waiting on its children end when some of them never started" {
+    // The cancel the Import page sends. Ziggy's own cancel-tasks channel cancels in the runner alone, which drops a child that was
+    // still waiting for a worker without saying so, and the task queue counting it waits for it for good. That is what the Release
+    // Zig workflow's desktop smoke tests on ubuntu-latest saw in 33-import-cancel: on a runner with four workers the cancelled import
+    // never ended and held a worker, and the import after it timed out waiting for "1 assets imported".
+    var app: TestApp = undefined;
+    try app.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{
+        .{
+            .name = "spin",
+            .handler = spinTask,
+        },
+        .{
+            .name = "await-children",
+            .handler = awaitChildrenTask,
+        },
+    });
+    defer app.stop();
+    // Lets the waiting task go when the cancel below did not, so a failure is reported rather than hanging the stop.
+    errdefer app.core.queue_backend.cancelTasks(AWAIT_CHILDREN_SOURCE);
+    const allocator = std.testing.allocator;
+    const message = try utils.json.stringify(allocator, .{
+        .channel = "add-task",
+        .data = .{
+            .taskId = "await-children-parent",
+            .taskType = "await-children",
+            .source = AWAIT_CHILDREN_SOURCE,
+            .data = null,
+            .priority = "background",
+        },
+    });
+    defer allocator.free(message);
+    app.core.postMessage(message);
+    try waitFor(&app, "childrenQueued");
+    const cancel_json = try utils.json.stringify(allocator, .{
+        .command = "cancel-tasks",
+        .source = AWAIT_CHILDREN_SOURCE,
+    });
+    defer allocator.free(cancel_json);
+    allocator.free(try app.requestOk("main-command", cancel_json));
+    try waitFor(&app, "{\"taskId\":\"await-children-parent\",\"result\"");
+}
+
+test "main-command cancel-tasks without a source is an error" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const reply = try app.requestError("main-command", "{\"command\":\"cancel-tasks\"}");
+    defer std.testing.allocator.free(reply);
+    try std.testing.expect(std.mem.indexOf(u8, reply, "cancel-tasks needs the source") != null);
+}
+
 test "main-command without a command is an unknown command called undefined" {
     var app: TestApp = undefined;
     try app.start();

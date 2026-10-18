@@ -107,13 +107,21 @@ describe('ZiggyQueueBackend', () => {
         expect(typedMessages).toHaveLength(0);
     });
 
-    test('cancelTasks sends the source as a bare string', () => {
+    test('cancelTasks sends the source to the core as the cancel-tasks main-command', () => {
         const ziggy = new FakeZiggy();
         const backend = new ZiggyQueueBackend(ziggy);
 
         backend.cancelTasks('my-source');
 
-        expect(ziggy.sent).toEqual([{ channel: 'cancel-tasks', data: 'my-source' }]);
+        expect(ziggy.sent).toEqual([
+            {
+                channel: 'main-command',
+                data: {
+                    command: 'cancel-tasks',
+                    source: 'my-source',
+                },
+            },
+        ]);
     });
 
     test('cancelTasks fires the onTasksCancelled callbacks of the source', () => {

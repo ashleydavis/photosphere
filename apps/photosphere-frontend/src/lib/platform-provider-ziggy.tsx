@@ -689,8 +689,13 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         };
     }, []);
 
+    // Cancels through the core's queue backend, the cancel-tasks main-command, for the reason ZiggyQueueBackend.cancelTasks gives:
+    // Ziggy's own cancel-tasks channel left a cancelled import waiting for good on children that never started.
     const cancelTasks = useCallback(async (sessionId: string): Promise<void> => {
-        ziggy.send('cancel-tasks', sessionId);
+        ziggy.send('main-command', {
+            command: 'cancel-tasks',
+            source: sessionId,
+        });
     }, [ziggy]);
 
     const getDatabases = useCallback(async (): Promise<IDatabaseEntry[]> => {
