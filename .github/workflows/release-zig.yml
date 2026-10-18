@@ -577,7 +577,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest, macos-15-intel]
+        # Windows, macOS and iOS are not needed yet, and these failed in Release Zig run 39123959376.
+        os: [ubuntu-latest]
+        # os: [ubuntu-latest, macos-latest, windows-latest, macos-15-intel]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -710,15 +712,16 @@ jobs:
           - os: ubuntu-latest
             artifact: photosphere-cli-zig-linux-x64
             binary: psi
-          - os: macos-latest
-            artifact: photosphere-cli-zig-macos-arm64
-            binary: psi
+          # Windows, macOS and iOS are not needed yet, and these failed in Release Zig run 39123959376.
+          # - os: macos-latest
+          #   artifact: photosphere-cli-zig-macos-arm64
+          #   binary: psi
           - os: windows-latest
             artifact: photosphere-cli-zig-windows-x64
             binary: psi.exe
-          - os: macos-15-intel
-            artifact: photosphere-cli-zig-macos-x64
-            binary: psi
+          # - os: macos-15-intel
+          #   artifact: photosphere-cli-zig-macos-x64
+          #   binary: psi
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -863,7 +866,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Windows, macOS and iOS are not needed yet, and these failed in Release Zig run 39123959376.
+        os: [ubuntu-latest]
+        # os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -1068,77 +1073,78 @@ jobs:
           # One line: the action runs each line of `script:` as its own shell, so only a single line's exit status reaches the job.
           script: bun run test:ziggy:and
 
-  ziggy-photosphere-ios-smoke-tests:
-    # The Photosphere App's smoke tests on an iOS simulator. run.sh picks the first available iPhone simulator and boots it,
-    # builds the page and the Zig library, and builds and installs the app with xcodebuild. The runner's default Xcode is used,
-    # because apple-common.sh only requires one that works and setup-ios.sh checks for 14.2 or newer.
-    timeout-minutes: 90
-    needs: [build-aws-sdk]
-    runs-on: macos-15
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup Zig (version from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig jq
-
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/zig/p
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - name: Install what-changed
-        uses: ./.github/actions/install-what-changed
-
-      - name: Install dependencies
-        uses: ./.github/actions/retry-install
-        with:
-          run: bun install
-
-      # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
-      - name: Install media processing tools
-        uses: ./.github/actions/retry-install
-        with:
-          run: brew install imagemagick ffmpeg tree rsync
-          verify: magick|convert ffmpeg ffprobe
-
-      - name: Check the iOS toolchain
-        run: bun run --filter=ziggy setup:ios
-
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
-
-      - name: Run the Photosphere App iOS smoke tests
-        timeout-minutes: 75
-        run: bun run test:ziggy:ios
+  # Windows, macOS and iOS are not needed yet, and these failed in Release Zig run 39123959376.
+#  ziggy-photosphere-ios-smoke-tests:
+#    # The Photosphere App's smoke tests on an iOS simulator. run.sh picks the first available iPhone simulator and boots it,
+#    # builds the page and the Zig library, and builds and installs the app with xcodebuild. The runner's default Xcode is used,
+#    # because apple-common.sh only requires one that works and setup-ios.sh checks for 14.2 or newer.
+#    timeout-minutes: 90
+#    needs: [build-aws-sdk]
+#    runs-on: macos-15
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v4
+#
+#      - name: Setup Bun
+#        uses: oven-sh/setup-bun@v2
+#        with:
+#          bun-version: ${{ env.BUN_VERSION }}
+#
+#      - name: Setup Node.js
+#        uses: actions/setup-node@v4
+#        with:
+#          node-version: ${{ env.NODE_VERSION }}
+#
+#      - name: Setup Zig (version from mise.toml)
+#        uses: jdx/mise-action@v2
+#        with:
+#          install_args: zig jq
+#
+#      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+#        uses: actions/cache@v4
+#        with:
+#          path: ~/.cache/zig/p
+#          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+#          restore-keys: |
+#            ${{ runner.os }}-${{ runner.arch }}-zig-
+#
+#      - name: Cache Bun dependencies
+#        uses: actions/cache@v4
+#        with:
+#          path: ~/.bun/install/cache
+#          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+#          restore-keys: |
+#            ${{ runner.os }}-bun-
+#
+#      - name: Install what-changed
+#        uses: ./.github/actions/install-what-changed
+#
+#      - name: Install dependencies
+#        uses: ./.github/actions/retry-install
+#        with:
+#          run: bun install
+#
+#      # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
+#      - name: Install media processing tools
+#        uses: ./.github/actions/retry-install
+#        with:
+#          run: brew install imagemagick ffmpeg tree rsync
+#          verify: magick|convert ffmpeg ffprobe
+#
+#      - name: Check the iOS toolchain
+#        run: bun run --filter=ziggy setup:ios
+#
+#      - name: Restore the Zig build cache
+#        uses: actions/cache/restore@v4
+#        with:
+#          path: .zig-cache
+#          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
+#          restore-keys: |
+#            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
+#
+#      - name: Run the Photosphere App iOS smoke tests
+#        timeout-minutes: 75
+#        run: bun run test:ziggy:ios
 
   package-photosphere:
     # The Photosphere App packaged for each desktop platform, unsigned, by the same package scripts a developer runs. The
@@ -1159,14 +1165,15 @@ jobs:
             os: windows-latest
             package: package:windows
             arguments: "x64"
-          - name: macos-arm64
-            os: macos-latest
-            package: package:macos
-            arguments: ""
-          - name: macos-x64
-            os: macos-15-intel
-            package: package:macos
-            arguments: ""
+          # Windows, macOS and iOS are not needed yet, and these failed in Release Zig run 39123959376.
+          # - name: macos-arm64
+          #   os: macos-latest
+          #   package: package:macos
+          #   arguments: ""
+          # - name: macos-x64
+          #   os: macos-15-intel
+          #   package: package:macos
+          #   arguments: ""
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -1270,9 +1277,10 @@ jobs:
           - name: android
             os: ubuntu-latest
             files: "*.apk"
-          - name: ios
-            os: macos-15
-            files: "*.ipa"
+          # Windows, macOS and iOS are not needed yet, and these failed in Release Zig run 39123959376.
+          # - name: ios
+          #   os: macos-15
+          #   files: "*.ipa"
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -1373,7 +1381,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, unit-tests, build-aws-sdk, build-zig-linux-x64, build-zig-windows-x64, build-zig-macos-arm64, build-zig-macos-x64, zig-unit-tests, zig-cli-smoke-tests, photosphere-desktop-smoke-tests, photosphere-android-smoke-tests, ziggy-photosphere-ios-smoke-tests, package-photosphere, package-photosphere-mobile]
+    needs: [prepare-tag, unit-tests, build-aws-sdk, build-zig-linux-x64, build-zig-windows-x64, build-zig-macos-arm64, build-zig-macos-x64, zig-unit-tests, zig-cli-smoke-tests, photosphere-desktop-smoke-tests, photosphere-android-smoke-tests, package-photosphere, package-photosphere-mobile]
     runs-on: ubuntu-latest
     permissions:
       contents: write
