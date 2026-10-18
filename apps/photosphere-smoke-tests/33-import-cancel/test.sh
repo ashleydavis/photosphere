@@ -18,7 +18,8 @@ print_test_header 33 "import-cancel"
 trap 'cleanup_apps "$TMP_DIR"' EXIT
 
 # The batch has to be big enough that it is still running when the Cancel button is clicked. Each file is hashed, thumbnailed and
-# written, so this many takes well over the second or two the test needs to see the button and click it.
+# written, so this many full-size photos takes well over the second or two the test needs to see the button and click it. The 100x80
+# test image is no use for this: a batch of them is imported in under a second, before the test can reach the button.
 BATCH_SIZE=60
 
 "${PLATFORM}_reset_app_state" || exit 1
@@ -26,15 +27,17 @@ BATCH_SIZE=60
 log_info "Pre-creating database with CLI..."
 create_database "$TMP_DIR/test-db"
 
-# Build the batch. Each copy is given a distinct name so the importer treats it as its own asset rather than collapsing them, and the
-# images are copied into a fresh directory under tmp. The file imported after the cancel is staged beside them, and is left out of the
-# batch's path list.
+# Build the batch. The importer imports a file's content once per scan and skips any other file in the same scan with the same hash, so
+# a distinct name is not enough: each copy has its index appended after the end of the JPEG data, which makes its content, and so its
+# hash, its own without changing the image. The images are copied into a fresh directory under tmp. The file imported after the cancel
+# is staged beside them, and is left out of the batch's path list.
 mkdir -p "$TMP_DIR/batch"
 cp "$IMAGES_DIR/test-2.png" "$TMP_DIR/batch/"
 batch_paths=""
 file_index=0
 while [ "$file_index" -lt "$BATCH_SIZE" ]; do
-    cp "$IMAGES_DIR/test-1.jpeg" "$TMP_DIR/batch/batch-$file_index.jpeg"
+    cp "$REPO_DIR/test/test.jpg" "$TMP_DIR/batch/batch-$file_index.jpeg"
+    printf '%s' "$file_index" >> "$TMP_DIR/batch/batch-$file_index.jpeg"
     file_index=$((file_index + 1))
 done
 

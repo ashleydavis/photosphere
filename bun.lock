@@ -268,7 +268,7 @@
         "task-queue": "workspace:*",
         "user-interface": "workspace:*",
         "uuid": "^9.0.1",
-        "ziggy-ui": "git+https://github.com/ashleydavis/ziggy.git#v0.0.1",
+        "ziggy-ui": "git+https://github.com/ashleydavis/ziggy.git#v0.0.2",
       },
       "devDependencies": {
         "@fortawesome/fontawesome-free": "^6.2.1",
@@ -2958,7 +2958,7 @@
 
     "ziggy": ["ziggy@workspace:apps/photosphere"],
 
-    "ziggy-ui": ["ziggy@github:ashleydavis/ziggy#b373bc8", {}, "ashleydavis-ziggy-b373bc8", "sha512-Ms5GcjoeSeKC+RR1rmXwW6PhMBkLb6K7kBlW5rykqXk+6WPDDHAH+Rf/zr8Jz7uVng0sMZeQkbHJi622gXfxlA=="],
+    "ziggy-ui": ["ziggy@github:ashleydavis/ziggy#c46564e", {}, "ashleydavis-ziggy-c46564e", "sha512-BYqSXW3f6vXra/25ojEVHw94rkrrAMOBmC0S/6QeQYJrgRN48N15N2QtprsgaQjEQ48n/Ga/cCDiZkXS8Wwiig=="],
 
     "zip-stream": ["zip-stream@4.1.1", "", { "dependencies": { "archiver-utils": "^3.0.4", "compress-commons": "^4.1.2", "readable-stream": "^3.6.0" } }, "sha512-9qv4rlDiopXg4E69k+vMHjNN63YFMe9sZMrdlvKnCjlCRWeCBswPPMPUfx+ipsAWq1LXHe70RcbaHdJJpS6hyQ=="],
 

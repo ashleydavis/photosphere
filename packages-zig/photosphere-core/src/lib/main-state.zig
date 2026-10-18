@@ -300,30 +300,38 @@ pub const MainState = struct {
     }
 
     //
-    // Switches a piece of background work on. A pass that was off is due at once. One that is already on changes nothing.
+    // Switches a piece of background work on. A pass that was off is due at once. One that is already on changes nothing. While any of
+    // the work is on the app is held running, so the passes go on with the app off screen.
     //
     pub fn switchOnBackgroundPass(self: *MainState, pass: background_work.Pass) void {
-        self.lock();
-        defer self.unlock();
-        const index = @intFromEnum(pass);
-        if (self.background_passes_on[index]) {
-            return;
+        {
+            self.lock();
+            defer self.unlock();
+            const index = @intFromEnum(pass);
+            if (self.background_passes_on[index]) {
+                return;
+            }
+            self.background_passes_on[index] = true;
+            self.background_pass_due_at[index] = self.now();
+            if (pass == .sync) {
+                self.first_sync_pass = true;
+            }
         }
-        self.background_passes_on[index] = true;
-        self.background_pass_due_at[index] = self.now();
-        if (pass == .sync) {
-            self.first_sync_pass = true;
-        }
+        // Outside the state's lock, so it is never held while the runner's lock is taken.
+        self.core.runner.holdKeepAlive(true);
     }
 
     //
-    // Switches all the background work off. A pass in flight still ends, and nothing is due after it.
+    // Switches all the background work off, and lets the app go. A pass in flight still ends, and nothing is due after it.
     //
     pub fn switchOffBackgroundPasses(self: *MainState) void {
-        self.lock();
-        defer self.unlock();
-        self.background_passes_on = [_]bool{false} ** background_work.PASS_COUNT;
-        self.background_pass_due_at = [_]?i64{null} ** background_work.PASS_COUNT;
+        {
+            self.lock();
+            defer self.unlock();
+            self.background_passes_on = [_]bool{false} ** background_work.PASS_COUNT;
+            self.background_pass_due_at = [_]?i64{null} ** background_work.PASS_COUNT;
+        }
+        self.core.runner.holdKeepAlive(false);
     }
 
     //
@@ -355,21 +363,30 @@ pub const MainState = struct {
     }
 
     //
-    // Records how a pass ended: the next is due after the gap it asked for, unless the work is finished or has been switched off.
+    // Records how a pass ended: the next is due after the gap it asked for, unless the work is finished or has been switched off. When
+    // the last of the work finishes, the app is let go.
     //
     pub fn backgroundPassEnded(self: *MainState, pass: background_work.Pass, result: background_work.IPassResult) void {
-        self.lock();
-        defer self.unlock();
-        const index = @intFromEnum(pass);
-        if (!self.background_passes_on[index]) {
-            return;
+        {
+            self.lock();
+            defer self.unlock();
+            const index = @intFromEnum(pass);
+            if (!self.background_passes_on[index]) {
+                return;
+            }
+            if (!result.finished) {
+                self.background_pass_due_at[index] = self.now() + @as(i64, @intCast(result.gap_ms));
+                return;
+            }
+            self.background_passes_on[index] = false;
+            self.background_pass_due_at[index] = null;
+            for (self.background_passes_on) |on| {
+                if (on) {
+                    return;
+                }
+            }
         }
-        if (!result.finished) {
-            self.background_pass_due_at[index] = self.now() + @as(i64, @intCast(result.gap_ms));
-            return;
-        }
-        self.background_passes_on[index] = false;
-        self.background_pass_due_at[index] = null;
+        self.core.runner.holdKeepAlive(false);
     }
 
     //

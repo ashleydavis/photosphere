@@ -14,6 +14,26 @@ const sync_index = @intFromEnum(background_work.Pass.sync);
 const prefetch_index = @intFromEnum(background_work.Pass.prefetch);
 
 //
+// Waits until the shell has been told as many keep-alive changes as are expected, and checks they are the ones expected.
+//
+fn expectKeepAliveCalls(app: *TestApp, expected: []const bool) !void {
+    const io = app.shell.threaded.io();
+    var waited_ms: u32 = 0;
+    while (waited_ms < 2_000) : (waited_ms += 1) {
+        app.shell.mutex.lockUncancelable(io);
+        const have = app.shell.keep_alive_calls.items.len;
+        app.shell.mutex.unlock(io);
+        if (have >= expected.len) {
+            break;
+        }
+        try std.Io.sleep(io, .fromMilliseconds(1), .awake);
+    }
+    app.shell.mutex.lockUncancelable(io);
+    defer app.shell.mutex.unlock(io);
+    try std.testing.expectEqualSlices(bool, expected, app.shell.keep_alive_calls.items);
+}
+
+//
 // Stops the state's timer thread, so a test of the background pass bookkeeping is not raced by the timer starting a pass that is due.
 //
 fn stopTimerThread(state: *MainState) void {
@@ -179,6 +199,26 @@ test "a background pass is taken only while it is switched on, due and not runni
     try std.testing.expect(!state.takeDueBackgroundPass(.import, state.now()));
     try std.testing.expect(state.takeDueBackgroundPass(.import, state.now() + 60_000 + 1_000));
     try std.testing.expectEqual(background_work.ReplicaState.unknown, state.prefetch_replica_state.load(.acquire));
+}
+
+test "the app is held running while any background work is switched on, and let go when the last of it finishes or is switched off" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const state = main_state.fromCore(app.core);
+    stopTimerThread(state);
+
+    state.switchOnBackgroundPass(.sync);
+    state.switchOnBackgroundPass(.prefetch);
+    try expectKeepAliveCalls(&app, &[_]bool{true});
+    try std.testing.expect(state.takeDueBackgroundPass(.prefetch, state.now()));
+    state.backgroundPassEnded(.prefetch, .{
+        .gap_ms = 50,
+        .finished = true,
+    });
+    try expectKeepAliveCalls(&app, &[_]bool{true});
+    state.switchOffBackgroundPasses();
+    try expectKeepAliveCalls(&app, &[_]bool{ true, false });
 }
 
 test "a background pass switched on is due at once, and the next is due after the gap the last one asked for" {

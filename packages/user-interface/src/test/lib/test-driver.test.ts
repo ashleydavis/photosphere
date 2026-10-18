@@ -616,6 +616,26 @@ describe("installTestDriver", () => {
         expect(clicked).toBe(1);
     });
 
+    test("a type command waits for an input that renders after the command arrives", async () => {
+        // A hand-driven clock, so the wait is driven deliberately rather than racing the machine.
+        const clock = new ManualClock();
+        setTestDriverClock(clock);
+        try {
+            document.body.innerHTML = ``;
+            const { transport, invoke } = makeTransport();
+            installTestDriver(transport);
+            const typing = invoke("type", { dataId: "late-field", text: "typed" });
+            await clock.advance(50);
+            document.body.innerHTML = `<div data-id="late-field"><input type="text" /></div>`;
+            await clock.advance(50);
+            await typing;
+            expect((document.querySelector(`[data-id="late-field"] input`) as HTMLInputElement).value).toBe("typed");
+        }
+        finally {
+            setTestDriverClock(realTestDriverClock);
+        }
+    });
+
     test("routes a get-value command and returns the value", async () => {
         document.body.innerHTML = `<input data-id="field" value="xyz" />`;
         const { transport, invoke } = makeTransport();

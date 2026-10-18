@@ -565,6 +565,7 @@ export function installTestDriver(transport: ITestTransport): void {
                 await doLongPress(payload.dataId!, payload.nth);
                 return undefined;
             case 'type':
+                await waitForElement(payload.dataId!, 0, 5000);
                 doType(payload.dataId!, payload.text!);
                 return undefined;
             case 'drop':

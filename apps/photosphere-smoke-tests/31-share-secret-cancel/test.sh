@@ -50,6 +50,13 @@ wait_for_pairing_code_gone "$SENDER_PORT" || {
     log_error "Sender is still showing a pairing code after the share was cancelled"
     exit 1
 }
+# The code also leaves the page when the share fails and the dialog moves to its error step, which leaves the dialog open, so a gone
+# code alone does not show the cancel closed it.
+share_error="$(read_value "$SENDER_PORT" share-error-message)"
+if [ -n "$share_error" ]; then
+    log_error "The share failed instead of being cancelled, and the dialog stayed open showing: $share_error"
+    exit 1
+fi
 log_success "The cancelled share stopped and the dialog closed"
 
 # --- 2. Share again and carry it through to a receiver. ---
