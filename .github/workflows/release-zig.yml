@@ -1,0 +1,2826 @@
+name: Release
+
+env:
+  BUN_VERSION: "1.3.14"
+  NODE_VERSION: "24.15.0"
+  WHAT_CHANGED_VERSION: "v0.0.5"
+
+on:
+  push:
+    branches:
+      - "*"
+    tags:
+      - 'v*.*.*'
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Release action. none = nightly build. update-latest = move the latest v*.*.* tag to this commit and re-release it. new-patch = create the next patch tag (e.g. v0.0.8 -> v0.0.9) and release it."
+        type: choice
+        options:
+          - none
+          - update-latest
+          - new-patch
+        default: none
+
+jobs:
+  prepare-tag:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      is-release: ${{ steps.resolve.outputs.is-release }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: resolve
+        run: |
+          RELEASE_INPUT="${{ inputs.release }}"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+            IS_RELEASE="true"
+          elif [ "$RELEASE_INPUT" = "update-latest" ]; then
+            TAG=$(git tag --list 'v*.*.*' --sort=-version:refname | head -1)
+            if [ -z "$TAG" ]; then
+              echo "No existing v*.*.* tag to update"
+              exit 1
+            fi
+            git tag -f "$TAG"
+            git push --force origin "$TAG"
+            IS_RELEASE="true"
+          elif [ "$RELEASE_INPUT" = "new-patch" ]; then
+            LATEST=$(git tag --list 'v*.*.*' --sort=-version:refname | head -1)
+            if [ -z "$LATEST" ]; then
+              LATEST="v0.0.0"
+            fi
+            MAJOR=$(echo "${LATEST#v}" | cut -d. -f1)
+            MINOR=$(echo "${LATEST#v}" | cut -d. -f2)
+            PATCH=$(echo "${LATEST#v}" | cut -d. -f3)
+            TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+            git tag "$TAG"
+            git push origin "$TAG"
+            IS_RELEASE="true"
+          else
+            TAG=""
+            IS_RELEASE="false"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
+          echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
+
+  unit-tests:
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install media processing tools (the Zig CLI unit tests run the real commands)
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Run unit tests
+        timeout-minutes: 35
+        run: |
+          chmod +x ./run-tests.sh
+          ./run-tests.sh
+
+  perf-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Run performance benchmarks
+        timeout-minutes: 12
+        run: bun run perf
+
+  compile:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Compile TypeScript
+        timeout-minutes: 12
+        run: bun run compile
+
+  write-lock-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install media processing tools
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Run write lock smoke tests
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        run: |
+          mkdir -p write-lock-test-logs
+          ./write-lock-smoke-test.sh 2>&1 | tee write-lock-test-logs/write-lock-tests-output.log
+          WRITE_LOCK_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Write lock tests exit code: $WRITE_LOCK_EXIT_CODE"
+          echo "Write lock tests exit code: $WRITE_LOCK_EXIT_CODE" >> write-lock-test-logs/write-lock-tests-output.log
+          exit $WRITE_LOCK_EXIT_CODE
+
+  # The mobile harness's own tests: the run lock, the work queue and worker pool, and the timeout
+  # helper. None of them need a device, so they run here in seconds rather than inside the mobile
+  # smoke jobs. runner.test.sh and timeout.test.sh were not run anywhere before, which is how a
+  # runner fault that only shows up on macOS reached a release run and hung it for 90 minutes.
+  mobile-harness-tests:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Android lock tests
+        timeout-minutes: 5
+        working-directory: ./apps/smoke-tests
+        run: bash ./android-lock.test.sh
+
+      - name: Run test runner tests
+        timeout-minutes: 5
+        working-directory: ./apps/smoke-tests
+        run: bash ./runner.test.sh
+
+      - name: Run timeout helper tests
+        timeout-minutes: 5
+        working-directory: ./apps/smoke-tests
+        run: bash ./timeout.test.sh
+
+  hash-cache-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Run hash cache concurrency smoke tests
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        run: |
+          mkdir -p hash-cache-test-logs
+          ./hash-cache-smoke-test.sh 2>&1 | tee hash-cache-test-logs/hash-cache-tests-output.log
+          HASH_CACHE_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Hash cache tests exit code: $HASH_CACHE_EXIT_CODE"
+          echo "Hash cache tests exit code: $HASH_CACHE_EXIT_CODE" >> hash-cache-test-logs/hash-cache-tests-output.log
+          exit $HASH_CACHE_EXIT_CODE
+
+  sync-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install media processing tools
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Run sync smoke tests
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        run: |
+          ./sync-smoke-test.sh
+
+  smoke-test-encrypted:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install media processing tools
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Run encrypted smoke tests
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        run: |
+          mkdir -p smoke-test-logs
+          ./smoke-tests-encrypted.sh all 2>&1 | tee smoke-test-logs/smoke-tests-encrypted-output.log
+          ENCRYPTED_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE"
+          echo "Encrypted smoke tests exit code: $ENCRYPTED_EXIT_CODE" >> smoke-test-logs/smoke-tests-encrypted-output.log
+          exit $ENCRYPTED_EXIT_CODE
+
+  lan-share-smoke-test:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Run LAN share smoke tests
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        run: |
+          mkdir -p smoke-test-logs
+          ./smoke-tests-lan-share.sh 2>&1 | tee smoke-test-logs/lan-share-tests-output.log
+          LAN_SHARE_EXIT_CODE=${PIPESTATUS[0]}
+          echo "LAN share smoke tests exit code: $LAN_SHARE_EXIT_CODE"
+          echo "LAN share smoke tests exit code: $LAN_SHARE_EXIT_CODE" >> smoke-test-logs/lan-share-tests-output.log
+          exit $LAN_SHARE_EXIT_CODE
+
+  build-linux:
+    timeout-minutes: 20
+    needs: prepare-tag
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set config
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            TAG="${{ needs.prepare-tag.outputs.tag }}"
+          else
+            TAG=""
+          fi
+          bash ./scripts/set-build-config.sh --tag "$TAG" --commit "${{ github.sha }}"
+          echo "Config set to:"
+          cat packages/config/src/index.ts
+
+      - name: Verify runner architecture
+        run: |
+          echo "Architecture: $(uname -m)"
+          echo "Processor: $(uname -p)"
+          lscpu | grep Architecture
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install media processing tools
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+          
+      - name: Verify media tool versions
+        run: |
+          echo "=== Media Tool Versions ==="
+          echo ""
+          echo "ImageMagick (convert):"
+          convert --version | head -1
+          echo ""
+          echo "ImageMagick (identify):"
+          identify --version | head -1
+          echo ""
+          echo "ffmpeg:"
+          ffmpeg -version | head -1
+          echo ""
+          echo "ffprobe:"
+          ffprobe -version | head -1
+          echo ""
+          
+      # The smoke suite builds psi, mk and bdb itself (build_cli_binaries in apps/cli/smoke-tests.sh),
+      # so this job no longer builds them beforehand only for the suite to build them again seconds
+      # later. The chmod that went with each build was doing nothing: bun writes its compiled output
+      # rwxr-xr-x already. The version check runs after the suite, so nothing has executed an
+      # executable that is about to be overwritten, which is what broke build-windows in run
+      # 31911942161.
+      - name: Run smoke tests
+        timeout-minutes: 14
+        working-directory: ./apps/cli
+        run: |
+          mkdir -p smoke-test-logs
+          ./smoke-tests.sh --binary 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
+          exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Test version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/x64/linux/psi version
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-cli-linux-x64
+          path: ./apps/cli/bin/x64/linux/psi
+
+  build-windows:
+    # 30 rather than 20, matching electron-smoke-tests and the unit-test jobs. This job builds three
+    # executables and then runs the whole CLI smoke suite, which has grown from 65 tests to 79. Its
+    # last two runs took 19m41s and 18m27s, so it was within twenty seconds of its limit, and the
+    # next one was killed at 20m11s having reported nothing. A job cancelled on its timeout says less
+    # than one that finishes and lists what failed.
+    timeout-minutes: 30
+    needs: prepare-tag
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set config
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            TAG="${{ needs.prepare-tag.outputs.tag }}"
+          else
+            TAG=""
+          fi
+          bash ./scripts/set-build-config.sh --tag "$TAG" --commit "${{ github.sha }}"
+          echo "Config set to:"
+          cat packages/config/src/index.ts
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      # ffmpeg comes from a pinned GitHub release, not Chocolatey. See the action for why.
+      - name: Install ffmpeg
+        uses: ./.github/actions/install-ffmpeg-windows
+
+      # Only imagemagick, and only because the runner image already has it, so Chocolatey answers from
+      # what is installed rather than fetching. Anything it has to fetch is currently refused: ffmpeg
+      # moved to a GitHub release above for that reason, and tree went the same way immediately after,
+      # failing five attempts with "the package was not found with the source(s) listed".
+      #
+      # tree is not installed at all now. The smoke tests' show_tree already falls back to ls when it
+      # is missing, and Windows ships a tree of its own in cmd, so nothing needed the Chocolatey one.
+      - name: Install media processing tools
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            echo "Installing ImageMagick via Chocolatey..."
+            choco install imagemagick -y
+          verify: magick|convert
+
+      - name: Verify media tool versions
+        run: |
+          echo "=== Media Tool Versions ==="
+          echo ""
+          echo "ImageMagick (magick):"
+          magick --version | Select-Object -First 1
+          echo ""
+          echo "ImageMagick (convert):"
+          magick convert --version | Select-Object -First 1
+          echo ""
+          echo "ffmpeg:"
+          ffmpeg -version 2>&1 | Select-Object -First 1
+          echo ""
+          echo "ffprobe:"
+          ffprobe -version 2>&1 | Select-Object -First 1
+          echo ""
+
+      # The smoke suite builds psi, mk and bdb itself (build_cli_binaries in apps/cli/smoke-tests.sh),
+      # so this job does not build them beforehand and does not run psi until after that build. It
+      # used to do both: build the three executables, run psi.exe to check the version command, and
+      # then have the smoke suite overwrite the same three files a second later. Windows refuses a
+      # rename onto a file anything still holds open, and run 31911942161 failed on exactly that:
+      # "failed to move executable to D:\a\photosphere\photosphere\apps\cli\bin\x64\win\psi.exe:
+      # EPERM", 1.6 seconds after the version step had executed that file. Building each executable
+      # once, with nothing having run it, leaves nothing holding it open to refuse the move.
+      # PHOTOSPHERE_SUITE_TIMEOUT is 18 minutes here rather than the 25 the library defaults to,
+      # because on this job the default is above both caps below it and so can never be the first
+      # thing to act. That is what happened on run 33450001083, the third sighting of the CLI suite
+      # hanging on Windows: the step ran 32 minutes, GitHub's own 24 minute step cap did not end it,
+      # the job cap did, and GitHub discards the log of a job it kills, so the hang left nothing to
+      # read for the third time running. The suite's own ceiling is the only one of the three that
+      # has ever been seen to work, and it needs to fire while there is still time for its report and
+      # its kill to take effect. 18 is clear of the 15 minute healthy run and well short of both caps.
+      - name: Run smoke tests
+        timeout-minutes: 24
+        working-directory: ./apps/cli
+        shell: bash
+        env:
+          PHOTOSPHERE_SUITE_TIMEOUT: 1080
+        run: |
+          mkdir -p smoke-test-logs
+          ./smoke-tests.sh --binary 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
+          exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Test version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/x64/win/psi.exe version
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-cli-windows-x64
+          path: ./apps/cli/bin/x64/win/psi.exe
+
+  build-windows-baseline:
+    timeout-minutes: 20
+    needs: prepare-tag
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set config
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            TAG="${{ needs.prepare-tag.outputs.tag }}"
+          else
+            TAG=""
+          fi
+          bash ./scripts/set-build-config.sh --tag "$TAG" --commit "${{ github.sha }}"
+          echo "Config set to:"
+          cat packages/config/src/index.ts
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Build Windows executable
+        working-directory: ./apps/cli
+        run: |
+          bun run build-win
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-cli-windows-x64-baseline
+          path: ./apps/cli/bin/x64/win/psi.exe
+
+  build-macos-x64:
+    # 30 rather than 20, the same headroom build-windows has. This is the slowest of the build jobs
+    # by a wide margin: its recent runs took 13m36s, 14m24s, 14m26s and 17m09s, and then one took
+    # 20m19s and was killed on the limit having produced nothing. The others on this workflow finish
+    # in six to ten minutes, so nothing else needs this. macos-15-intel is the scarce runner class
+    # here and its pace varies more than the work does.
+    timeout-minutes: 30
+    needs: prepare-tag
+    runs-on: macos-15-intel # x64 architecture
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set config
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            TAG="${{ needs.prepare-tag.outputs.tag }}"
+          else
+            TAG=""
+          fi
+          bash ./scripts/set-build-config.sh --tag "$TAG" --commit "${{ github.sha }}"
+          echo "Config set to:"
+          cat packages/config/src/index.ts
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Verify runner architecture
+        run: |
+          echo "Architecture: $(uname -m)"
+          echo "Processor: $(uname -p)"
+          echo "OS Version: $(sw_vers)"
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install media processing tools
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            echo "Installing ImageMagick, ffmpeg, and tree via Homebrew..."
+            brew install imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Verify media tool versions
+        run: |
+          echo "=== Media Tool Versions ==="
+          echo ""
+          echo "ImageMagick (magick):"
+          magick --version | head -1 || echo "magick command not found"
+          echo ""
+          echo "ImageMagick (convert):"
+          convert --version | head -1 || echo "convert command not found"
+          echo ""
+          echo "ffmpeg:"
+          ffmpeg -version | head -1
+          echo ""
+          echo "ffprobe:"
+          ffprobe -version | head -1
+          echo ""
+
+      # The smoke suite builds psi, mk and bdb itself (build_cli_binaries in apps/cli/smoke-tests.sh),
+      # so this job no longer builds them beforehand only for the suite to build them again seconds
+      # later. The chmod that went with each build was doing nothing: bun writes its compiled output
+      # rwxr-xr-x already. The version check runs after the suite, so nothing has executed an
+      # executable that is about to be overwritten, which is what broke build-windows in run
+      # 31911942161.
+      - name: Run smoke tests
+        timeout-minutes: 24
+        working-directory: ./apps/cli
+        run: |
+          mkdir -p smoke-test-logs
+          ./smoke-tests.sh --binary 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
+          exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Test built version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/x64/mac/psi version
+
+      - name: Upload macOS x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-cli-macos-x64
+          path: ./apps/cli/bin/x64/mac/psi
+
+  build-macos-arm64:
+    timeout-minutes: 20
+    needs: prepare-tag
+    runs-on: macos-latest # ARM64 architecture
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set config
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            TAG="${{ needs.prepare-tag.outputs.tag }}"
+          else
+            TAG=""
+          fi
+          bash ./scripts/set-build-config.sh --tag "$TAG" --commit "${{ github.sha }}"
+          echo "Config set to:"
+          cat packages/config/src/index.ts
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Get lockfile hash
+        id: lockfile-hash
+        run: |
+          HASH=$(shasum -a 256 bun.lock | cut -d' ' -f1)
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ steps.lockfile-hash.outputs.hash }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Verify runner architecture
+        run: |
+          echo "Architecture: $(uname -m)"
+          echo "Processor: $(uname -p)"
+          echo "OS Version: $(sw_vers)"
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install media processing tools
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            echo "Installing ImageMagick, ffmpeg, and tree via Homebrew..."
+            brew install imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Verify media tool versions
+        run: |
+          echo "=== Media Tool Versions ==="
+          echo ""
+          echo "ImageMagick (magick):"
+          magick --version | head -1 || echo "magick command not found"
+          echo ""
+          echo "ImageMagick (convert):"
+          convert --version | head -1 || echo "convert command not found"
+          echo ""
+          echo "ffmpeg:"
+          ffmpeg -version | head -1
+          echo ""
+          echo "ffprobe:"
+          ffprobe -version | head -1
+          echo ""
+
+      # The smoke suite builds psi, mk and bdb itself (build_cli_binaries in apps/cli/smoke-tests.sh),
+      # so this job no longer builds them beforehand only for the suite to build them again seconds
+      # later. The chmod that went with each build was doing nothing: bun writes its compiled output
+      # rwxr-xr-x already. The version check runs after the suite, so nothing has executed an
+      # executable that is about to be overwritten, which is what broke build-windows in run
+      # 31911942161.
+      - name: Run smoke tests
+        timeout-minutes: 14
+        working-directory: ./apps/cli
+        run: |
+          mkdir -p smoke-test-logs
+          ./smoke-tests.sh --binary 2>&1 | tee smoke-test-logs/smoke-tests-output.log
+          SMOKE_TEST_EXIT_CODE=${PIPESTATUS[0]}
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE"
+          echo "Smoke tests exit code: $SMOKE_TEST_EXIT_CODE" >> smoke-test-logs/smoke-tests-output.log
+          exit $SMOKE_TEST_EXIT_CODE
+
+      - name: Test version command
+        working-directory: ./apps/cli
+        run: |
+          echo "Testing version command after building..."
+          ./bin/arm64/mac/psi version
+
+      - name: Upload macOS ARM64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-cli-macos-arm64
+          path: ./apps/cli/bin/arm64/mac/psi
+
+  cli-desktop-lan-share-smoke-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install system dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y xvfb
+          verify: xvfb-run
+
+      - name: Run CLI<->Desktop LAN share smoke tests
+        timeout-minutes: 12
+        run: xvfb-run -a ./cli-desktop-lan-share-smoke-tests.sh
+
+  android-smoke-tests:
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      # AGP 8 requires JDK 17 (the Android build fails on the JDK 21 the runner defaults to).
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # ImageMagick/ffmpeg are needed by the CLI that builds the per-test database fixtures.
+      - name: Install media processing tools
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg
+          verify: magick|convert ffmpeg ffprobe
+
+      # The native ImageMagick build (run_magick shim via CMake) and scripts/fetch-mobile-media-tools.sh
+      # both require this exact NDK, which bun run test:and pulls in via bun run sync.
+      - name: Cache the Android NDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk/25.1.8937393
+          key: ${{ runner.os }}-android-ndk-25.1.8937393
+
+      - name: Install Android NDK
+        uses: ./.github/actions/retry-install
+        with:
+          run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
+
+      # Allow the hardware-accelerated emulator to use KVM on the runner.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # The emulator-runner boots an AVD, then runs the suite against it (run.sh detects the booted
+      # device and builds/installs the app via Gradle/adb).
+      #
+      # PHOTOSPHERE_NO_LAN_BRIDGE declares that this run has no host LAN bridge. The emulator-runner
+      # boots a plain user-mode NAT emulator and attaches no tap device, so the 192.168.55.x segment
+      # that host-to-device LAN sharing needs cannot exist here. The two tests that need it
+      # (26-receive-database, 27-receive-secret) therefore skip with a logged SKIP line instead of
+      # failing, and the run only requires the emulator to be started. Everything else, including the
+      # device-to-device share tests and 28-host-emulator-comms (which works over NAT via 10.0.2.2),
+      # still runs. Those two paths are covered locally with `bun run emu:and:up`.
+      # Gradle re-downloads its distribution and every dependency on a clean runner, and it runs
+      # inside the test step rather than as a step of its own, so its cost is hidden inside that
+      # step's total. Keyed on the Gradle build files and the wrapper properties, which is what
+      # decides the distribution and the dependency set; restore-keys lets a near-miss still reuse
+      # most of it, which is the normal way to cache Gradle.
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('apps/android-frontend/android/**/*.gradle*', 'apps/android-frontend/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      # The emulator runner below downloads this system image once, with no retry, and a download can arrive corrupt:
+      # android-smoke-tests failed with "Error on ZipFile unknown archive" while it prepared the Google APIs Intel x86_64
+      # Atom System Image, before any test ran. Installing it here, retried, leaves the runner an image that is already
+      # installed. The licence step ends in "|| true" because `yes` is killed when sdkmanager stops reading, which
+      # fails a pipeline under pipefail. sdkmanager is called by its full path because a plain step does not have it on PATH
+      # ("sdkmanager: command not found", exit 127), as the NDK install above also does.
+      - name: Install the Android system image
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'system-images;android-35;google_apis;x86_64'
+
+      - name: Run Android smoke tests
+        timeout-minutes: 30
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          PHOTOSPHERE_NO_LAN_BRIDGE: "1"
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          # Emulator 36.6.11, as the Photosphere App Android job pins. On the default 37.2.12 this job failed in 3 of 9 runs the same
+          # way: adb's connection to the emulator ended ("connection terminated: read failed") while test 1-load-fixture read the
+          # logcat, and every test that started in the second before it came back failed with "device offline".
+          emulator-build: 15507667
+          # ONE LINE, and it has to stay one line. This action splits `script:` on newlines and runs
+          # each line as its own `sh -c`, so a multi-line script shares no variables between lines and
+          # each line's exit status dies with it. The four lines that used to be inlined here could
+          # therefore never fail the job however many smoke tests failed. Running the suite and
+          # keeping the logcat now lives in the script below, where it is one shell and can be read.
+          script: bash ./scripts/android-smoke-tests-ci.sh
+
+      # The runner prints only the last 30 lines of a failing test's app log, which is enough to see
+      # that something failed and not enough to see why. Everything the run wrote is kept here so a
+      # failure that cannot be reproduced off the runner can still be read afterwards.
+      - name: Keep the smoke test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-smoke-test-logs
+          path: /tmp/photosphere-tests/
+          retention-days: 7
+          if-no-files-found: warn
+
+  # TODO: restore this job: 4-import-photos timed out waiting for "2 assets imported" on the iOS simulator (run 38510203606).
+#   ios-smoke-tests:
+#     # Higher than the other mobile jobs because `bun run test:ios` resolves the FFmpegKit Swift
+#     # Package on a clean checkout and, whenever the ImageMagick cache below misses, builds
+#     # ImageMagick from source as well.
+#     #
+#     # 125 rather than the 90 it was, because 90 could not hold a cache miss on a slow runner and so
+#     # killed a run that was going to pass. Run 33439567066, the first run on a new branch, which is
+#     # the case that always misses the cache: the step started at 21:06:49, the ImageMagick build ran
+#     # from 21:08:06 to 22:01:54 (55 minutes, not the 37 this comment used to quote), the frontend
+#     # build took another 14, and xcodebuild was still going when the step's cap ended it at 22:22:08
+#     # with the tests never reached. A warm cache does the whole job in 15 to 27 minutes and is
+#     # untouched by this.
+#     timeout-minutes: 125
+#     runs-on: macos-15
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+# 
+#       - name: Setup Bun
+#         uses: oven-sh/setup-bun@v2
+#         with:
+#           bun-version: ${{ env.BUN_VERSION }}
+# 
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: ${{ env.NODE_VERSION }}
+# 
+#       - name: Cache Bun dependencies
+#         uses: actions/cache@v4
+#         with:
+#           path: ~/.bun/install/cache
+#           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+#           restore-keys: |
+#             ${{ runner.os }}-bun-
+# 
+#       - name: Install dependencies
+#         uses: ./.github/actions/retry-install
+#         with:
+#           run: bun install
+# 
+#       # ImageMagick/ffmpeg are needed by the CLI that builds the per-test database fixtures.
+#       - name: Install media processing tools
+#         uses: ./.github/actions/retry-install
+#         with:
+#           run: brew install imagemagick ffmpeg
+#           verify: magick|convert ffmpeg ffprobe
+# 
+#       # ImageMagick has no prebuilt iOS release to download, so scripts/fetch-mobile-media-tools.sh
+#       # compiles it from source into this git-ignored directory, once for the device slice and once
+#       # for the simulator. It is the longest thing in the job by a wide margin and its cost swings
+#       # wildly with the runner: in one run this took 37 minutes here while the same build took 2.5
+#       # minutes in another job. Everything the build produces is decided by build-imagemagick.sh,
+#       # which pins the versions and the source URLs, so hashing that one file is a complete key.
+#       #
+#       # A partial restore is safe: the fetch script only skips the build when both slices' libraries
+#       # are present, and rebuilds from scratch otherwise.
+#       - name: Cache iOS ImageMagick build
+#         uses: actions/cache@v4
+#         with:
+#           path: apps/ios-frontend/ios/App/vendor/im
+#           key: ${{ runner.os }}-ios-imagemagick-${{ hashFiles('apps/ios-frontend/ios/build-imagemagick.sh') }}
+# 
+#       - name: Install what-changed
+#         uses: ./.github/actions/install-what-changed
+# 
+#       # run.sh boots an iOS simulator and builds/installs the app via xcrun/xcodebuild.
+#       #
+#       # 110 rather than something closer to how long this usually takes, because when the ImageMagick
+#       # cache misses this step builds ImageMagick from source, and that build alone has taken 55
+#       # minutes on a slow runner. A cap sized on a cache hit kills a cache miss that was going to
+#       # succeed: 40 did exactly that to the stories-ios job on run 31369570348, 40 minutes after it
+#       # started "Building iOS ImageMagick from source", and 75 did it again to this step on run
+#       # 33439567066, where the build took 55 minutes and the frontend build another 14. The job's own
+#       # budget is 125.
+#       - name: Run iOS smoke tests
+#         timeout-minutes: 110
+#         run: bun run test:ios
+# 
+  build-desktop:
+    timeout-minutes: 60
+    needs: prepare-tag
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            files: |
+              apps/desktop/release/*.deb
+              apps/desktop/release/*.zip
+          - os: windows-latest
+            files: |
+              apps/desktop/release/*.exe
+              apps/desktop/release/*.zip
+          - os: macos-15-intel
+            files: |
+              apps/desktop/release/*.dmg
+              apps/desktop/release/*.zip
+          - os: macos-latest
+            files: |
+              apps/desktop/release/*.dmg
+              apps/desktop/release/*.zip
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set config
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
+            VERSION="${VERSION#v}"
+            VERSION="$(bash ./scripts/set-build-config.sh --tag "$VERSION" --commit "${{ github.sha }}")"
+            DESKTOP_PACKAGE_VERSION="$VERSION"
+          else
+            VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
+            # electron-builder requires semver in package.json; keep dev-nightly.* in config only.
+            DESKTOP_PACKAGE_VERSION="0.0.0-nightly.${VERSION#dev-nightly.}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "DESKTOP_PACKAGE_VERSION=$DESKTOP_PACKAGE_VERSION" >> $GITHUB_ENV
+          echo "Config set to:"
+          cat packages/config/src/index.ts
+
+      - name: Set desktop package.json version (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          jq ".version = \"${{ env.DESKTOP_PACKAGE_VERSION }}\"" apps/desktop/package.json > apps/desktop/package.tmp.json && mv apps/desktop/package.tmp.json apps/desktop/package.json
+          echo "Desktop package.json version set to: ${{ env.DESKTOP_PACKAGE_VERSION }} (app config version: ${{ env.VERSION }})"
+
+      - name: Set desktop package.json version (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $json = Get-Content apps/desktop/package.json | ConvertFrom-Json
+          $json.version = "${{ env.DESKTOP_PACKAGE_VERSION }}"
+          $json | ConvertTo-Json -Depth 10 | Set-Content apps/desktop/package.json
+          Write-Host "Desktop package.json version set to: ${{ env.DESKTOP_PACKAGE_VERSION }} (app config version: ${{ env.VERSION }})"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      # electron-builder downloads the Electron binary for the target platform, plus its own helper
+      # binaries, every time it runs, and the build step costs between 107 and 156 seconds in each of
+      # the four matrix legs. Those downloads are the part of it worth keeping. The paths differ per
+      # platform and this job is a matrix over all of them, so every location is listed here; a path
+      # that does not exist on a given runner is ignored rather than being an error.
+      #
+      # bun.lock pins the Electron version, so hashing it invalidates the cache exactly when the
+      # downloaded binaries would change.
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: ${{ runner.os }}-${{ runner.arch }}-electron-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-electron-
+
+      # Capped because this is where the windows-latest leg hung for the full 60 minute job timeout on
+      # run 31365606896, and a job killed by its own timeout has its log discarded by GitHub rather
+      # than written, so that hang left nothing to read. The build itself costs between 107 and 156
+      # seconds across the four matrix legs (see the cache note below), so 20 minutes is far more than
+      # it can legitimately need.
+      #
+      # The cap keeps the log but still loses the run, which it did again on run 33458818750, the
+      # fourth sighting of WINDOWS-ELECTRON-BUILD-HANGS-ON-NPM-LIST. The script caps each attempt at
+      # seven minutes and retries a stall once, and passes a genuine build failure straight through on
+      # the first attempt. This cap stays as the outer limit.
+      - name: Build Electron app
+        if: runner.os != 'macOS'
+        timeout-minutes: 20
+        shell: bash
+        run: bash ./scripts/build-electron-retry-on-stall.sh
+
+      # macOS packages a DMG, and building one means mounting a volume, laying the app out on it and
+      # ejecting it again. Run 31921700592 failed build-desktop (macos-15-intel) on that eject:
+      # "dmgbuild.core.DMGError: Unable to detach device cleanly: hdiutil: couldn't eject "disk2" -
+      # Resource busy". Nothing in this repository is on that stack, dmgbuild had already made its own
+      # five detach attempts over about twenty seconds, and electron-builder does not expose the
+      # --detach-retries flag that would raise that number, so there is nothing here to fix and no
+      # knob to turn. Whatever held the volume open is not named by the error and was gone before the
+      # step ended, so the build is attempted a second time instead. A build that is genuinely broken
+      # fails both attempts and still reports; the cap is doubled because two attempts fit under it.
+      - name: Build Electron app (macOS)
+        if: runner.os == 'macOS'
+        timeout-minutes: 40
+        shell: bash
+        run: |
+          if ! bun run build; then
+              echo "Packaging failed on the first attempt. Trying once more."
+              bun run build
+          fi
+
+      - name: Show release directory contents
+        run: |
+          echo "Release directory structure:"
+          ls apps/desktop/release
+
+      - name: Install smoke-test dependencies (Linux)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: xvfb imagemagick ffmpeg
+          verify: xvfb-run magick|convert ffmpeg ffprobe
+
+      - name: Install smoke-test dependencies (macOS)
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg
+          verify: magick|convert ffmpeg ffprobe
+
+      # ffmpeg comes from a pinned GitHub release, not Chocolatey. See the action for why.
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/install-ffmpeg-windows
+
+      - name: Install smoke-test dependencies (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/retry-install
+        with:
+          run: choco install -y imagemagick
+          verify: magick|convert
+
+      # Both steps are capped well under the job's 60 minutes, and the cap is the only reason a hang
+      # here is ever diagnosable. When a JOB hits its timeout GitHub hard-kills it and writes no log
+      # blob at all, so the run leaves nothing to read: the API returns 404 for that job's logs. When
+      # a STEP hits its timeout the step fails normally and its log is kept. The windows-latest leg
+      # hung to the full 60 minutes in 4 of the last 20 runs (31268180860, 31297733992, 31303296280,
+      # 31350774149) and every one of them threw away the evidence, which is why the cause is still
+      # unknown. A healthy run of this job is 15 to 20 minutes end to end including the build, so 25
+      # minutes on the smoke tests alone is generous.
+      - name: Run Electron smoke tests against binary (Linux)
+        if: runner.os == 'Linux'
+        timeout-minutes: 25
+        working-directory: ./apps/desktop
+        run: xvfb-run -a ./smoke-tests.sh --binary --sequential
+
+      - name: Run Electron smoke tests against binary (Not Linux)
+        if: runner.os != 'Linux'
+        timeout-minutes: 25
+        working-directory: ./apps/desktop
+        shell: bash
+        run: ./smoke-tests.sh --binary --sequential
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-desktop-${{ matrix.os }}-build
+          path: ${{ matrix.files }}
+          if-no-files-found: warn
+          retention-days: 2
+
+  build-zig-linux-x64:
+    # Builds the Zig CLI for Linux x64 on a runner of that platform, and publishes the binary. Nothing here
+    # cross-compiles, so a build that works is a build that runs on the platform it names.
+    #
+    # This is the only job that builds the Zig CLI: zig-cli-smoke-tests downloads the binary this uploads
+    # and create-release publishes it, so the binary is built once and used by both.
+    timeout-minutes: 40
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-
+
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
+      # See the same step in build-zig-macos-x64 for why the packages are fetched before the build.
+      - name: Fetch every package Zig needs, lazy ones included, in one pass
+        working-directory: .
+        run: zig build --fetch=all
+
+      - name: Build the Zig CLI natively for Linux x64
+        working-directory: .
+        run: zig build -Dcpu=baseline --prefix apps/cli-zig/bin/x64/linux --prefix-exe-dir .
+
+      - name: Check the binary was produced
+        working-directory: ./apps/cli-zig
+        run: |
+          ls -la bin/x64/linux/psi
+          file bin/x64/linux/psi
+
+      # The binary is renamed to say which CLI it is, because the TypeScript CLI is also called psi and
+      # unpacking both releases into one directory would otherwise overwrite one with the other.
+      - name: Collect the Zig CLI binary
+        shell: bash
+        run: |
+          mkdir -p out
+          chmod +x apps/cli-zig/bin/x64/linux/psi
+          cp apps/cli-zig/bin/x64/linux/psi out/photosphere-cli-zig-linux-x64
+          ls -la out
+
+      - name: Upload the Zig CLI binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-cli-zig-linux-x64
+          path: out
+
+      - name: Save the Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+
+  build-zig-windows-x64:
+    # Builds the Zig CLI for Windows x64 on a runner of that platform, and publishes the binary. Nothing here
+    # cross-compiles, so a build that works is a build that runs on the platform it names.
+    #
+    # This is the only job that builds the Zig CLI: zig-cli-smoke-tests downloads the binary this uploads
+    # and create-release publishes it, so the binary is built once and used by both.
+    timeout-minutes: 40
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-
+
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
+      # See the same step in build-zig-macos-x64 for why the packages are fetched before the build.
+      - name: Fetch every package Zig needs, lazy ones included, in one pass
+        working-directory: .
+        run: zig build --fetch=all
+
+      - name: Build the Zig CLI natively for Windows x64
+        working-directory: .
+        run: zig build -Dcpu=baseline --prefix apps/cli-zig/bin/x64/win --prefix-exe-dir .
+
+      - name: Check the binary was produced
+        shell: bash
+        working-directory: ./apps/cli-zig
+        run: |
+          ls -la bin/x64/win/psi.exe
+
+      # The binary is renamed to say which CLI it is, because the TypeScript CLI is also called psi and
+      # unpacking both releases into one directory would otherwise overwrite one with the other.
+      - name: Collect the Zig CLI binary
+        shell: bash
+        run: |
+          mkdir -p out
+          chmod +x apps/cli-zig/bin/x64/win/psi.exe
+          cp apps/cli-zig/bin/x64/win/psi.exe out/photosphere-cli-zig-windows-x64
+          ls -la out
+
+      - name: Upload the Zig CLI binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-cli-zig-windows-x64
+          path: out
+
+      - name: Save the Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+
+  build-zig-macos-x64:
+    # Builds the Zig CLI for macOS x64 on a runner of that platform, and publishes the binary. Nothing here
+    # cross-compiles, so a build that works is a build that runs on the platform it names.
+    #
+    # This is the only job that builds the Zig CLI: zig-cli-smoke-tests downloads the binary this uploads
+    # and create-release publishes it, so the binary is built once and used by both.
+    timeout-minutes: 40
+    runs-on: macos-15-intel
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-
+
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
+      # `zig build` keeps one HTTP client for its whole run. It fetches the eager packages, compiles and runs
+      # the build script (about a minute on macos-15-intel), then fetches the lazy packages the script asked
+      # for, reusing the keep-alive connections it pooled during the first fetch. By then the server has
+      # closed them, and Zig 0.16's client takes a pooled connection without checking it is still open and
+      # does not retry, so the lazy s2n-tls download failed with "build.zig.zon:64:20: error: invalid HTTP
+      # response: HttpConnectionClosing" in build-zig-macos-x64 and build-aws-sdk (macos-15-intel), the jobs
+      # whose package cache missed. --fetch=all fetches every package, lazy ones included, in one pass and
+      # exits before the build script runs, so no download waits behind it.
+      - name: Fetch every package Zig needs, lazy ones included, in one pass
+        working-directory: .
+        run: zig build --fetch=all
+
+      - name: Build the Zig CLI natively for macOS x64
+        working-directory: .
+        run: zig build -Dcpu=baseline --prefix apps/cli-zig/bin/x64/mac --prefix-exe-dir .
+
+      - name: Check the binary was produced
+        working-directory: ./apps/cli-zig
+        run: |
+          ls -la bin/x64/mac/psi
+          file bin/x64/mac/psi
+
+      # The binary is renamed to say which CLI it is, because the TypeScript CLI is also called psi and
+      # unpacking both releases into one directory would otherwise overwrite one with the other.
+      - name: Collect the Zig CLI binary
+        shell: bash
+        run: |
+          mkdir -p out
+          chmod +x apps/cli-zig/bin/x64/mac/psi
+          cp apps/cli-zig/bin/x64/mac/psi out/photosphere-cli-zig-macos-x64
+          ls -la out
+
+      - name: Upload the Zig CLI binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-cli-zig-macos-x64
+          path: out
+
+      - name: Save the Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+
+  build-zig-macos-arm64:
+    # Builds the Zig CLI for macOS arm64 on a runner of that platform, and publishes the binary. Nothing here
+    # cross-compiles, so a build that works is a build that runs on the platform it names.
+    #
+    # This is the only job that builds the Zig CLI: zig-cli-smoke-tests downloads the binary this uploads
+    # and create-release publishes it, so the binary is built once and used by both.
+    timeout-minutes: 40
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-
+
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
+      # See the same step in build-zig-macos-x64 for why the packages are fetched before the build.
+      - name: Fetch every package Zig needs, lazy ones included, in one pass
+        working-directory: .
+        run: zig build --fetch=all
+
+      - name: Build the Zig CLI natively for macOS arm64
+        working-directory: .
+        run: zig build -Dcpu=baseline --prefix apps/cli-zig/bin/arm64/mac --prefix-exe-dir .
+
+      - name: Check the binary was produced
+        working-directory: ./apps/cli-zig
+        run: |
+          ls -la bin/arm64/mac/psi
+          file bin/arm64/mac/psi
+
+      # The binary is renamed to say which CLI it is, because the TypeScript CLI is also called psi and
+      # unpacking both releases into one directory would otherwise overwrite one with the other.
+      - name: Collect the Zig CLI binary
+        shell: bash
+        run: |
+          mkdir -p out
+          chmod +x apps/cli-zig/bin/arm64/mac/psi
+          cp apps/cli-zig/bin/arm64/mac/psi out/photosphere-cli-zig-macos-arm64
+          ls -la out
+
+      - name: Upload the Zig CLI binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-cli-zig-macos-arm64
+          path: out
+
+      - name: Save the Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+
+  build-aws-sdk:
+    # Compiles the AWS SDK for C on each platform and caches the result, because several jobs build Zig and
+    # every one of them would otherwise compile it from cold: it is the longest single build in this
+    # workflow. One job owns it, so the compile happens once per platform per commit and the others
+    # restore what this wrote.
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
+
+      # See the same step in build-zig-macos-x64 for why the packages are fetched before the build.
+      - name: Fetch every package Zig needs, lazy ones included, in one pass
+        working-directory: .
+        run: zig build --fetch=all
+
+      # The CLI's own build, which compiles the AWS SDK for C and runs nothing. Every job that needs the AWS
+      # SDK builds in this same mode, so one cache serves all of them: the Zig cache is keyed by optimisation
+      # mode, and the unit tests and the storage integration tests build in this mode too.
+      - name: Build the Zig CLI, which compiles the AWS SDK
+        working-directory: .
+        run: zig build
+
+      - name: Save the Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
+
+  zig-unit-tests:
+    # The unit tests of the Zig CLI and of every Zig package, on each platform, because the
+    # behaviour of a test that runs an external tool differs between them. This is a job of its own so
+    # a failure in a test is not reported as a failure of a smoke suite, which is what happens when
+    # the two share a job: the job is named after the smoke tests and a red unit test looks like a
+    # red smoke test.
+    # Setup takes about 5 minutes and a cold unit test build, which compiles ImageMagick and FFmpeg too, up to 40 on the Intel Mac.
+    timeout-minutes: 50
+    needs: [build-aws-sdk]
+    strategy:
+      fail-fast: false
+      matrix:
+        # TODO: restore macos-latest, windows-latest and macos-15-intel once their Zig unit tests have been seen to pass with the media
+        # libraries built in.
+        os: [ubuntu-latest]
+        # os: [ubuntu-latest, macos-latest, windows-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install media processing tools (Linux)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Install media processing tools (macOS)
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/install-ffmpeg-windows
+
+      - name: Install media processing tools (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/retry-install
+        with:
+          run: choco install imagemagick -y
+          verify: magick|convert
+
+      # Every run compiled the Zig CLI, every package and the AWS SDK for C from nothing, which took the
+      # Windows unit test step past its timeout. Zig's cache is content addressed, so the one from an
+      # earlier run holds most of what this run compiles. It is saved at the end of every job.
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-
+
+      # Every commit adds a new generation of Zig artifacts and nothing removes the old ones, so the
+      # cache grew from 2.4 GB (run 674) to 6.1 GB (run 699). Saving only under 6 GB then stopped every
+      # save, runs kept restoring an ever staler cache, and once GitHub evicted that last entry run 700
+      # built everything cold and passed the step's timeout. A cache this big is moved out of the way
+      # instead, so this run builds and saves a fresh one.
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
+      # See the same step in build-zig-macos-x64 for why the packages are fetched before the build.
+      - name: Fetch every package Zig needs, lazy ones included, in one pass
+        working-directory: .
+        run: zig build --fetch=all
+
+      # With the C libraries cached, a change to a package the others import recompiles the Zig code of
+      # nearly every test program, which took 10 to 11 minutes on Windows (runs 685, 697, 699). A cold
+      # build also compiles aws-lc, zlib-ng and the rest of the AWS SDK for C first, which took longer
+      # than 12 minutes (run 700).
+      - name: Run the Zig unit tests
+        timeout-minutes: 40
+        shell: bash
+        run: |
+          # The Zig CLI and every Zig package in one build, so each dependency, the AWS SDK for C among
+          # them, is compiled once rather than once in each package that uses it.
+          zig build test --summary all --test-timeout 20m
+
+      # A key of its own, because the smoke job saves under the plain one and actions/cache/save fails
+      # when the key already exists.
+
+  zig-cli-smoke-tests:
+    # The Zig CLI smoke suites on each platform, because the byte-identical output (gzip OS byte, paths, file
+    # times) differs between them. The unit tests are the zig-unit-tests job above, so a failure in one is not
+    # reported as a failure of the other.
+    # The binary is not built here: each build-zig job builds the one for its own platform and this job
+    # downloads it, so the Zig CLI is compiled once per platform and both this job and the release use it.
+    # Every platform the release ships a Zig binary for is in the matrix, so a shipped binary is one the
+    # suites have run against.
+    # Setup takes about 5 minutes and the smoke suites about 15.
+    timeout-minutes: 75
+    needs: [build-aws-sdk, build-zig-linux-x64, build-zig-macos-arm64, build-zig-macos-x64, build-zig-windows-x64]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: photosphere-cli-zig-linux-x64
+            binary: psi
+          # TODO: restore macOS and Windows once their Zig CLI smoke tests have been seen to pass with the media libraries built in.
+          # - os: macos-latest
+          #   artifact: photosphere-cli-zig-macos-arm64
+          #   binary: psi
+          # - os: windows-latest
+          #   artifact: photosphere-cli-zig-windows-x64
+          #   binary: psi.exe
+          # - os: macos-15-intel
+          #   artifact: photosphere-cli-zig-macos-x64
+          #   binary: psi
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+      - name: Install media processing tools (Linux)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+      - name: Install media processing tools (macOS)
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/install-ffmpeg-windows
+      - name: Install media processing tools (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/retry-install
+        with:
+          run: choco install imagemagick -y
+          verify: magick|convert
+      # Every run compiled the Zig CLI, every package and the AWS SDK for C from nothing, which took the
+      # Windows unit test step past its timeout. Zig's cache is content addressed, so the one from an
+      # earlier run holds most of what this run compiles. It is saved at the end of every job.
+      - name: Show the disk space the Zig builds use (each package that builds the AWS SDK for C has its own zig-pkg and .zig-cache)
+        if: always()
+        shell: bash
+        run: |
+          df -h .
+          du -sh packages/*/zig-pkg packages/*/.zig-cache apps/*/zig-pkg apps/*/.zig-cache 2>/dev/null || true
+      # The smoke suites run the built binary rather than `bun run start`, at the path their common.sh reads
+      # (../cli-zig/zig-out/bin/psi from apps/cli). The binary is the one the build job for this platform built.
+      # The Zig CLI is built by the build-zig jobs, but this job still builds Zig itself, and the AWS SDK
+      # for C it needs is compiled once per platform by the zig-unit-tests job and cached under the key
+      # below. Restoring it is what keeps this job from compiling the AWS SDK from cold.
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
+
+      - name: Download the Zig CLI built for this platform
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ./zig-binary
+      - name: Put the Zig CLI where the smoke suites look for it
+        shell: bash
+        run: |
+          mkdir -p zig-out/bin
+          cp zig-binary/${{ matrix.artifact }} zig-out/bin/${{ matrix.binary }}
+          # The artifact is downloaded without the executable bit, and the smoke suites fail with exit 126
+          # (found but not executable) without it.
+          chmod +x zig-out/bin/${{ matrix.binary }}
+          ls -la zig-out/bin
+      - name: Run the Zig CLI smoke tests
+        # 101 tests, and the Windows runner is the slowest: it reached test 100 in 14 minutes, so the
+        # old 14-minute limit killed the step with every test passing.
+        timeout-minutes: 30
+        working-directory: ./apps/cli
+        shell: bash
+        run: ./smoke-tests-zig.sh --binary
+      - name: Test the Zig version command
+        working-directory: ./apps/cli
+        shell: bash
+        run: |
+          echo "Testing version command after building..."
+          ../../zig-out/bin/psi version
+      - name: Run the Zig CLI encrypted smoke tests
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        shell: bash
+        run: ./smoke-tests-encrypted-zig.sh all
+      - name: Run the Zig CLI write lock smoke tests
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        shell: bash
+        run: ./write-lock-smoke-test-zig.sh
+      - name: Run the Zig CLI sync smoke tests
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        shell: bash
+        run: ./sync-smoke-test-zig.sh
+      - name: Run the Zig CLI hash cache smoke tests
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        shell: bash
+        run: ./hash-cache-smoke-test-zig.sh
+      # Linux only, like the TypeScript lan-share-smoke-test job it mirrors.
+      - name: Run the Zig CLI LAN share smoke tests
+        if: runner.os == 'Linux'
+        timeout-minutes: 12
+        working-directory: ./apps/cli
+        shell: bash
+        run: ./smoke-tests-lan-share-zig.sh
+      # Saved on every run, so the newest entry is always one this branch just wrote. It no longer grows
+      # without bound: the step after the restore starts a fresh cache once the restored one is too big.
+  photosphere-desktop-smoke-tests:
+    # The Photosphere App's smoke tests on the host operating system, on Windows and MacOS. Linux and Android run these
+    # suites (test:ziggy and test:ziggy:and) under `bun run tev`, which is not a job of this workflow, so they are not
+    # repeated here. Windows needs the WebView2 SDK and the WiX Toolset, which the setup step fetches, and MacOS opens a real
+    # window on the runner's own display. The Zig build restores the AWS SDK for C that build-aws-sdk compiled, so it is
+    # not compiled again here.
+    timeout-minutes: 75
+    needs: [build-aws-sdk]
+    strategy:
+      fail-fast: false
+      matrix:
+        # TODO: restore macos-latest once the Photosphere App links for macOS (the Apple archive is repacked from members ar leaves
+        # unreadable, so libtool cannot open them and the link finds none of the core's symbols).
+        # TODO: restore windows-latest once the Photosphere App starts on Windows (it panics with "incorrect alignment" in Ziggy's
+        # shell, allocating with std.heap.c_allocator, when built for x86_64-windows-msvc).
+        os: [ubuntu-latest]
+        # os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      # The app's runtime libraries (as in package-photosphere), and xvfb, which lib/linux.sh runs the app under.
+      - name: Install the runtime libraries, xvfb and media processing tools (Linux)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: libgtk-3-0 libwebkit2gtk-4.1-0 libgdk-pixbuf-2.0-0 gstreamer1.0-plugins-good gstreamer1.0-libav xvfb imagemagick ffmpeg
+          verify: xvfb-run magick|convert ffmpeg ffprobe
+
+      # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
+      - name: Install media processing tools (macOS)
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Install ffmpeg (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/install-ffmpeg-windows
+
+      - name: Install media processing tools (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/retry-install
+        with:
+          run: choco install imagemagick -y
+          verify: magick|convert
+
+      - name: Fetch the WebView2 SDK and the WiX Toolset (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: bun run --filter=ziggy setup
+
+      # The same cache zig-cli-smoke-tests restores, written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
+
+      # run-desktop.sh builds the page and the app's shell itself, through sync-windows.sh or build-macos.sh.
+      - name: Run the Photosphere App smoke tests
+        timeout-minutes: 60
+        shell: bash
+        run: bun run test:ziggy
+
+  photosphere-android-smoke-tests:
+    # The Photosphere App's smoke tests on an Android emulator. The emulator has no host LAN bridge, so PHOTOSPHERE_NO_LAN_BRIDGE
+    # makes the scenarios that need one skip with a logged SKIP line, as in android-smoke-tests.
+    timeout-minutes: 90
+    needs: [build-aws-sdk]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
+      - name: Install media processing tools
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Cache the Android NDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk/25.1.8937393
+          key: ${{ runner.os }}-android-ndk-25.1.8937393
+
+      # Retried because the SDK manager downloads from Google and a download can arrive corrupt.
+      - name: Set up the Android SDK and NDK
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun run --filter=ziggy setup:android
+
+      # The same cache zig-cli-smoke-tests restores, written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
+
+      # Allow the hardware-accelerated emulator to use KVM on the runner.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # Installed here, retried, for the reason given on this step in android-smoke-tests.
+      - name: Install the Android system image
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'system-images;android-35;google_apis;x86_64'
+
+      - name: Run the Photosphere App Android smoke tests
+        timeout-minutes: 75
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          PHOTOSPHERE_NO_LAN_BRIDGE: "1"
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          # Emulator 36.6.11, the build the local emulator scripts pin (EMULATOR_BUILD in apps/android-frontend/scripts/emulator-config.sh,
+          # which says why): the newest emulator never gives back the memory of an app it has stopped, and this suite starts the app
+          # many times.
+          emulator-build: 15507667
+          # One line: the action runs each line of `script:` as its own shell, so only a single line's exit status reaches the job.
+          script: bun run test:ziggy:and
+
+  # TODO: restore this job once the Photosphere App links for iOS (the Apple archive is repacked from members ar leaves unreadable, so libtool cannot open them and the link finds none of the core's symbols).
+#   ziggy-photosphere-ios-smoke-tests:
+#     # The Photosphere App's smoke tests on an iOS simulator. run.sh picks the first available iPhone simulator and boots it,
+#     # builds the page and the Zig library, and builds and installs the app with xcodebuild. The runner's default Xcode is used,
+#     # because apple-common.sh only requires one that works and setup-ios.sh checks for 14.2 or newer.
+#     timeout-minutes: 90
+#     needs: [build-aws-sdk]
+#     runs-on: macos-15
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+# 
+#       - name: Setup Bun
+#         uses: oven-sh/setup-bun@v2
+#         with:
+#           bun-version: ${{ env.BUN_VERSION }}
+# 
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: ${{ env.NODE_VERSION }}
+# 
+#       - name: Setup Zig (version from mise.toml)
+#         uses: jdx/mise-action@v2
+#         with:
+#           install_args: zig jq
+# 
+#       - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+#         uses: actions/cache@v4
+#         with:
+#           path: ~/.cache/zig/p
+#           key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+#           restore-keys: |
+#             ${{ runner.os }}-${{ runner.arch }}-zig-
+# 
+#       - name: Cache Bun dependencies
+#         uses: actions/cache@v4
+#         with:
+#           path: ~/.bun/install/cache
+#           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+#           restore-keys: |
+#             ${{ runner.os }}-bun-
+# 
+#       - name: Install what-changed
+#         uses: ./.github/actions/install-what-changed
+# 
+#       - name: Install dependencies
+#         uses: ./.github/actions/retry-install
+#         with:
+#           run: bun install
+# 
+#       # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
+#       - name: Install media processing tools
+#         uses: ./.github/actions/retry-install
+#         with:
+#           run: brew install imagemagick ffmpeg tree rsync
+#           verify: magick|convert ffmpeg ffprobe
+# 
+#       - name: Check the iOS toolchain
+#         run: bun run --filter=ziggy setup:ios
+# 
+#       - name: Restore the Zig build cache
+#         uses: actions/cache/restore@v4
+#         with:
+#           path: .zig-cache
+#           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
+#           restore-keys: |
+#             ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
+# 
+#       - name: Run the Photosphere App iOS smoke tests
+#         timeout-minutes: 75
+#         run: bun run test:ziggy:ios
+# 
+  package-photosphere:
+    # The Photosphere App packaged for each desktop platform, unsigned, by the same package scripts a developer runs. The
+    # version comes from the release tag, the way build-desktop gets it: v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>.
+    # Windows needs the WebView2 SDK and the WiX Toolset, which the setup step fetches. The Zig build restores the AWS SDK for C
+    # that build-aws-sdk compiled, so it is not compiled again here.
+    timeout-minutes: 75
+    needs: [prepare-tag, build-aws-sdk]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-latest
+            package: package:linux
+            arguments: ""
+          # TODO: restore the Windows package once the Photosphere App starts on Windows (it panics with "incorrect alignment" in
+          # Ziggy's shell, allocating with std.heap.c_allocator, when built for x86_64-windows-msvc).
+          # - name: windows
+          #   os: windows-latest
+          #   package: package:windows
+          #   arguments: "x64"
+          # TODO: restore the macOS packages once the Photosphere App links for macOS (the Apple archive is repacked from members ar leaves unreadable, so libtool cannot open them and the link finds none of the core's symbols).
+          # - name: macos-arm64
+          #   os: macos-latest
+          #   package: package:macos
+          #   arguments: ""
+          # - name: macos-x64
+          #   os: macos-15-intel
+          #   package: package:macos
+          #   arguments: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      # The Linux shell links the runtime libraries by file name, so no development packages are needed. WebKitGTK plays video
+      # through GStreamer, so the packaged app depends on those plugins.
+      - name: Install the build and packaging tools (Linux)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: libgtk-3-0 libwebkit2gtk-4.1-0 libgdk-pixbuf-2.0-0 gstreamer1.0-plugins-good gstreamer1.0-libav zip
+          verify: zip
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Fetch the WebView2 SDK and the WiX Toolset (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: bun run --filter=ziggy setup
+
+      # The same cache zig-cli-smoke-tests restores, written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
+
+      - name: Set config
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
+            VERSION="${VERSION#v}"
+            VERSION="$(bash ./scripts/set-build-config.sh --tag "$VERSION" --commit "${{ github.sha }}")"
+          else
+            VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Package
+        shell: bash
+        run: bun run --filter=ziggy ${{ matrix.package }} -- ${{ matrix.arguments }} --version "$VERSION"
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-app-${{ matrix.name }}
+          path: apps/photosphere/out/${{ runner.os == 'Linux' && 'linux' || runner.os == 'Windows' && 'windows' || 'macos' }}/*
+          if-no-files-found: error
+          retention-days: 2
+
+  package-photosphere-mobile:
+    # The Photosphere App packaged for Android and iOS, unsigned, by the same package scripts a developer runs. The version
+    # comes from the release tag, as in package-photosphere. The Android version code, which has to rise with every build that
+    # replaces another, is the build time in minutes since the epoch. The iOS archive is made by xcodebuild with code signing
+    # off, and only its .ipa is attached to the release, because an .xcarchive is a folder. Both are built and not run:
+    # running them needs an emulator or a simulator, which the smoke test jobs and the local test runs provide.
+    timeout-minutes: 90
+    needs: [prepare-tag, build-aws-sdk]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: android
+            os: ubuntu-latest
+            files: "*.apk"
+          # TODO: restore the iOS package once the Photosphere App links for iOS (the Apple archive is repacked from members ar leaves unreadable, so libtool cannot open them and the link finds none of the core's symbols).
+          # - name: ios
+          #   os: macos-15
+          #   files: "*.ipa"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Cache the Android NDK
+        if: matrix.name == 'android'
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk/25.1.8937393
+          key: ${{ runner.os }}-android-ndk-25.1.8937393
+
+      # Retried because the SDK manager downloads from Google and a download can arrive corrupt.
+      - name: Set up the Android SDK and NDK (Android)
+        if: matrix.name == 'android'
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun run --filter=ziggy setup:android
+
+      - name: Check the iOS toolchain (iOS)
+        if: matrix.name == 'ios'
+        run: bun run --filter=ziggy setup:ios
+
+      # The same cache zig-cli-smoke-tests restores, written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-
+
+      - name: Set config
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
+            VERSION="${VERSION#v}"
+            VERSION="$(bash ./scripts/set-build-config.sh --tag "$VERSION" --commit "${{ github.sha }}")"
+          else
+            VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Package (Android)
+        if: matrix.name == 'android'
+        shell: bash
+        run: bun run --filter=ziggy package:android -- --version-name "$VERSION" --version-code "$(( $(date +%s) / 60 ))"
+
+      - name: Package (iOS)
+        if: matrix.name == 'ios'
+        shell: bash
+        run: bun run --filter=ziggy package:ios -- --version "$VERSION"
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-app-${{ matrix.name }}
+          path: apps/photosphere/out/${{ matrix.name }}/${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 2
+
+  create-release:
+    timeout-minutes: 20
+    needs: [prepare-tag, compile, build-aws-sdk, build-zig-linux-x64, build-zig-windows-x64, build-zig-macos-arm64, build-zig-macos-x64, zig-unit-tests, zig-cli-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, package-photosphere, package-photosphere-mobile, android-smoke-tests]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: photosphere-cli-linux-x64
+          path: ./artifacts/linux
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: photosphere-cli-windows-x64
+          path: ./artifacts/windows
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: photosphere-cli-windows-x64-baseline
+          path: ./artifacts/windows-baseline
+
+      - name: Download macOS x64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: photosphere-cli-macos-x64
+          path: ./artifacts/macos-x64
+
+      - name: Download macOS ARM64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: photosphere-cli-macos-arm64
+          path: ./artifacts/macos-arm64
+
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: photosphere-desktop-*-build
+          path: ./artifacts/desktop
+          merge-multiple: true
+
+      - name: Download the Photosphere App packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: photosphere-app-*
+          path: ./artifacts/app
+          merge-multiple: true
+
+      - name: Download the Zig CLI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: photosphere-cli-zig-*
+          path: ./artifacts/zig
+          merge-multiple: true
+
+      - name: Create compressed archives
+        run: |
+          cd ./artifacts/linux && chmod +x psi && tar -czf ../photosphere-cli-linux-x64.tar.gz psi && cd ../..
+          cd ./artifacts/windows && zip ../photosphere-cli-windows-x64.zip psi.exe && cd ../..
+          cd ./artifacts/windows-baseline && zip ../photosphere-cli-windows-x64-baseline.zip psi.exe && cd ../..
+          cd ./artifacts/macos-x64 && chmod +x psi && tar -czf ../photosphere-cli-macos-x64.tar.gz psi && cd ../..
+          cd ./artifacts/macos-arm64 && chmod +x psi && tar -czf ../photosphere-cli-macos-arm64.tar.gz psi && cd ../..
+          # The Zig CLI, one archive per platform, with the binary named after the platform it is for.
+          cd ./artifacts/zig
+          # Every binary the build jobs upload, listed here: a name that is missing or misspelled fails
+          # the step with this message rather than with chmod's, which says nothing about what is wrong.
+          for binary in photosphere-cli-zig-linux-x64 photosphere-cli-zig-windows-x64 \
+                       photosphere-cli-zig-macos-x64 photosphere-cli-zig-macos-arm64; do
+              if [ ! -f "$binary" ]; then
+                  echo "::error::The Zig build jobs did not produce $binary. Uploaded: $(ls)"
+                  exit 1
+              fi
+          done
+          chmod +x photosphere-cli-zig-linux-x64 photosphere-cli-zig-windows-x64 photosphere-cli-zig-macos-x64 photosphere-cli-zig-macos-arm64
+          tar -czf ../photosphere-cli-zig-linux-x64.tar.gz photosphere-cli-zig-linux-x64
+          tar -czf ../photosphere-cli-zig-macos-x64.tar.gz photosphere-cli-zig-macos-x64
+          tar -czf ../photosphere-cli-zig-macos-arm64.tar.gz photosphere-cli-zig-macos-arm64
+          cp photosphere-cli-zig-windows-x64 photosphere-cli-zig-windows-x64.exe
+          zip ../photosphere-cli-zig-windows-x64.zip photosphere-cli-zig-windows-x64.exe
+          cd ../..
+
+      - name: Generate release notes
+        id: release-notes
+        run: |
+          # The CLI commits made since the last release tag, as bullets. The same script produces the
+          # notes for the Android tester builds, so a release and a tester build never describe the
+          # same commits differently. The tag being built is excluded so a tagged release measures
+          # from the tag before it; for a nightly the tag is empty and nothing is excluded.
+          RELEASE_NOTES=$(bash ./scripts/release-notes.sh \
+            --prefix cli \
+            --exclude-tag "${{ needs.prepare-tag.outputs.tag }}" \
+            --empty-message "- No CLI-related commits found")
+
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "Generated release notes:"
+          echo "$RELEASE_NOTES"
+
+      - name: Delete existing nightly release
+        if: needs.prepare-tag.outputs.is-release != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete nightly --yes --cleanup-tag || true
+        continue-on-error: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.prepare-tag.outputs.is-release == 'true' && needs.prepare-tag.outputs.tag || 'nightly' }}
+          name: ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere {0}', needs.prepare-tag.outputs.tag) || 'Photosphere Nightly' }}
+          draft: false
+          prerelease: ${{ needs.prepare-tag.outputs.is-release != 'true' }}
+          files: |
+            ./artifacts/photosphere-cli-linux-x64.tar.gz
+            ./artifacts/photosphere-cli-windows-x64.zip
+            ./artifacts/photosphere-cli-windows-x64-baseline.zip
+            ./artifacts/photosphere-cli-macos-x64.tar.gz
+            ./artifacts/photosphere-cli-macos-arm64.tar.gz
+            ./artifacts/photosphere-cli-zig-linux-x64.tar.gz
+            ./artifacts/photosphere-cli-zig-windows-x64.zip
+            ./artifacts/photosphere-cli-zig-macos-x64.tar.gz
+            ./artifacts/photosphere-cli-zig-macos-arm64.tar.gz
+            ./artifacts/desktop/**/*
+            ./artifacts/app/*
+          body: |
+            ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere release {0}', needs.prepare-tag.outputs.tag) || format('Photosphere nightly build - {0}', github.sha) }}
+
+            ${{ needs.prepare-tag.outputs.is-release != 'true' && '⚠️ **This is a nightly build and may be unstable**' || '' }}
+            ${{ needs.prepare-tag.outputs.is-release != 'true' && format('Built from commit: {0}', github.sha) || '' }}
+
+            ## What's Changed
+            ${{ steps.release-notes.outputs.RELEASE_NOTES }}
+
+            ## CLI Download
+            - **Linux**: `photosphere-cli-linux-x64.tar.gz`
+            - **Windows modern**: `photosphere-cli-windows-x64.zip` (for modern processors, try this one first)
+            - **Windows baseline**: `photosphere-cli-windows-x64-baseline.zip` (for older processors, try this one next)
+            - **macOS (Intel)**: `photosphere-cli-macos-x64.tar.gz`
+            - **macOS (Apple Silicon)**: `photosphere-cli-macos-arm64.tar.gz`
+
+            ## CLI Installation
+            1. Download the appropriate file for your platform
+            2. Extract the archive
+            3. Make the binary executable (Linux/macOS): `chmod +x psi`
+            4. Move to your PATH or run directly
+
+            ## Desktop Download
+            - **Linux**: `.deb` package or `.zip`
+            - **Windows**: `.exe` installer or `.zip`
+            - **macOS**: `.dmg` disk image or `.zip`
+
+            ## Bundled tools and licences
+            The mobile apps bundle in-process builds of ImageMagick (ImageMagick licence, an Apache-2.0-style licence) and ffmpeg (LGPL-2.1+), along with ImageMagick's libjpeg, libpng, and zlib delegates. The desktop and CLI builds use ImageMagick and ffmpeg installed on the host system. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](https://github.com/ashleydavis/photosphere/blob/main/THIRD-PARTY-NOTICES.md).
