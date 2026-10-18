@@ -793,10 +793,10 @@ fn addPhotosphere(
     ziggy: ziggy_build.IZiggy,
     modules: std.StringHashMap(*std.Build.Module),
 ) !void {
-    const libraries = try ziggy_build.addAppCore(b, ziggy, .{
+    const libraries = try ziggy_build.addAppBackend(b, ziggy, .{
         .name = "photosphere",
         .title = "Photosphere",
-        .root_source_file = "apps/photosphere/core/src/index.zig",
+        .backend_source_file = "apps/photosphere/core/src/index.zig",
         .ui_directory = photosphere_page_directory,
         .imports = &.{
             .{
@@ -811,7 +811,7 @@ fn addPhotosphere(
     // aws-lc, the media libraries), so for an Apple target each of them is installed beside it, under lib/dependencies, for
     // apps/photosphere/scripts/lib/apple-common.sh to put their members into the archive Xcode links.
     if (target.result.os.tag == .ios or target.result.os.tag == .macos) {
-        const core_step = &b.top_level_steps.get("photosphere-core").?.step;
+        const core_step = &b.top_level_steps.get("photosphere-backend").?.step;
         for (libraries.static_library.getCompileDependencies(false)) |dependency| {
             if (dependency == libraries.static_library or dependency.kind != .lib or dependency.linkage != .static) {
                 continue;
@@ -908,7 +908,7 @@ fn addPhotosphereUnavailable(b: *std.Build, target: std.Build.ResolvedTarget) !v
         "Photosphere's core for macOS can only be built on a Mac: it holds the AWS SDK for C and aws-lc, whose Apple sources include the Security, Network, CoreFoundation and CoreServices headers of the macOS SDK, which comes with Xcode or its Command Line Tools and is found with `xcrun --sdk macosx --show-sdk-path`. It was not found here."
     else
         "Photosphere's core is built for the machine running the build, for Windows (x86_64 and aarch64), for iOS (on a Mac with Xcode) and for Android (with the NDK's C library as a libc file). See docs/aws-sdk.md.";
-    for ([_][]const u8{ "photosphere-core", "photosphere-linux", "photosphere-windows", "photosphere-windows-check" }) |name| {
+    for ([_][]const u8{ "photosphere-backend", "photosphere-linux", "photosphere-windows", "photosphere-windows-check" }) |name| {
         const step = b.step(name, "Build Photosphere (only for the machine running the build)");
         step.dependOn(&b.addFail(message).step);
     }

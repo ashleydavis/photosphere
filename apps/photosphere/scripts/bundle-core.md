@@ -1,6 +1,6 @@
 # bundle-core.sh
 
-Runs `zig build photosphere-core` from the root of the repository for one target, which builds Photosphere's core as a library (`libphotosphere.a`, with `ziggy.h` beside it). Invoked as `bun run --filter=ziggy bundle:core -- <target>`. The page must already be built (`bundle-ui.sh`), because the core embeds it.
+Runs `zig build photosphere-backend` from the root of the repository for one target, which builds Photosphere's core as a library (`libphotosphere.a`, with `ziggy.h` beside it). Invoked as `bun run --filter=ziggy bundle:core -- <target>`. The page must already be built (`bundle-ui.sh`), because the core embeds it.
 
 ## Arguments
 

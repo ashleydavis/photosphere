@@ -117,7 +117,7 @@ for arch in $arch_list; do
             ;;
     esac
     echo "Building the Zig library for $abi ($optimize, $test_hooks_argument)..."
-    (cd "$PHOTOSPHERE_REPO_ROOT" && zig build photosphere-core \
+    (cd "$PHOTOSPHERE_REPO_ROOT" && zig build photosphere-backend \
         "-Dtarget=$triple" \
         "-Doptimize=$optimize" \
         "$test_hooks_argument" \

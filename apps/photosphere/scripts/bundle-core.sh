@@ -41,4 +41,4 @@ if [ -z "$TARGET" ]; then
     exit 2
 fi
 
-(cd "$REPO_ROOT" && zig build photosphere-core "-Dtarget=$TARGET" "-Doptimize=$OPTIMIZE" "$HOOKS_ARGUMENT" "${PREFIX_ARGUMENTS[@]+"${PREFIX_ARGUMENTS[@]}"}")
+(cd "$REPO_ROOT" && zig build photosphere-backend "-Dtarget=$TARGET" "-Doptimize=$OPTIMIZE" "$HOOKS_ARGUMENT" "${PREFIX_ARGUMENTS[@]+"${PREFIX_ARGUMENTS[@]}"}")
